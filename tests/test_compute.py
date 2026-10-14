@@ -38,3 +38,17 @@ class ComputeTests(unittest.TestCase):
             result = subprocess.run([str(build.tool("glslang")),"-l",str(shader)],capture_output=True,text=True,encoding="utf-8",errors="replace")
             self.assertNotEqual(result.returncode,0)  # 错误必须失败而不是静默通过。
             message = result.stdout+result.stderr; self.assertIn(shader.name,message); self.assertIn(":3",message)  # 报错包含文件名与出错行。
+
+    def test_lpv_grid_and_sampling_registered(self):
+        """光传播体积登记计算传播与片元采样，关闭时保持屏幕空间回退。"""
+        found,_,_ = build.configuration()  # 读取真实原生选项。
+        self.assertEqual(found["OMNI_LPV_ENABLED"].values,("false","true"))  # 体积光为开关选项。
+        self.assertEqual(found["OMNI_LPV_STEPS"].values,("2","4","6"))  # 传播步数保持偶数，末尾回到源图像。
+        scene = build.expand(build.SHADERS/"world0/setup.csh")  # 从计算入口展开。
+        self.assertIn("void omniLpvSeed",scene); self.assertIn("void omniLpvSpreadAB",scene)  # 注入与传播接入计算入口。
+        effect = (build.SHADERS/"effects/lpv.glsl").read_text(encoding="utf-8")  # 效果主体。
+        self.assertIn("vec3 omniLpvSample",effect)  # 片元采样独立成函数。
+        composite = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
+        self.assertIn("omniLpvSample",composite)  # 间接光阶段包含体积采样。
+        settings = options.read_properties(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
+        self.assertIn("image.omniLpvA",settings); self.assertIn("image.omniLpvB",settings)  # 体积格在流程设置登记。

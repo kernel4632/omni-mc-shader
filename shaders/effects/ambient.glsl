@@ -15,6 +15,11 @@
 #include "/common/math.glsl"
 // 时序噪声相位来自统一的抗锯齿模块。
 #include "/effects/antialiasing.glsl"
+// 体积间接光来自统一的效果主体。
+#include "/effects/lpv.glsl"
+#ifdef OMNI_LPV_ENABLED
+uniform sampler3D omniLpvTex; // 体积格读取，计算阶段写入。
+#endif
 // 判断邻点能否参与邻域采样：屏幕内、有有效几何且不是手或叠层。
 bool omniAmbientNeighbor(vec2 sampleUv, out ivec2 samplePixel) {
     if (any(lessThan(sampleUv,vec2(0))) || any(greaterThan(sampleUv,vec2(1))) || omniSkyPixel(sampleUv)) return false; // 屏幕外与天空没有表面。
@@ -121,6 +126,9 @@ vec3 omniAmbient(vec3 color, vec3 view, vec3 normal, vec2 uv) {
 #endif
 #ifdef OMNI_SCREEN_BOUNCE
     color += omniBounce(view,normal,uv); // 一次可见反弹。
+#endif
+#ifdef OMNI_LPV_ENABLED
+    color += omniLpvSample(omniLpvTex,omniWorld(view)) * OMNI_LPV_STRENGTH; // 体积间接光叠加。
 #endif
     return color; // 关闭两个开关后没有邻点采样。
 }
