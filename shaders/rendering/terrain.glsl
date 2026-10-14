@@ -15,6 +15,10 @@ out vec4 tint, bounds; // 顶点色和视差边界。
 out vec3 viewPosition, viewNormal, viewTangent; // 视空间几何。
 out float tangentSign; // 切线手性。
 flat out float materialId; // 不插值的方块分类。
+#if defined OMNI_WATER_PASS && defined OMNI_TERRAIN
+// 顶点位移需要与片元相同的海浪高度来源。
+#include "/effects/water.glsl"
+#endif
 void main() {
     uv=(gl_TextureMatrix[0]*gl_MultiTexCoord0).xy; // 保留贴图变换。
     lightUv=clamp((gl_TextureMatrix[1]*gl_MultiTexCoord1).xy,0.0,1.0); // 保留原版光照。
@@ -24,6 +28,13 @@ void main() {
     vec3 world=omniWorld(view.xyz); // 植物摆动使用世界锚点。
     world=omniVegetation(world,materialId,gl_MultiTexCoord0.y<mc_midTexCoord.y?1.0:0.0); // 只移动允许的植物。
     view=gbufferModelView*vec4(world,1.0); // 变形后回到视空间。
+#endif
+#if defined OMNI_WATER_PASS && defined OMNI_TERRAIN && !defined OMNI_HAND
+    if (materialId==10000.0) {
+        vec3 waterWorld=omniWorld(view.xyz); // 位移前的世界位置。
+        vec3 waterNormalWorld=omniNormalize(mat3(gbufferModelViewInverse)*omniNormalize(gl_NormalMatrix*gl_Normal)); // 世界法线判断顶面。
+        if (waterNormalWorld.y>0.9) { waterWorld.y+=omniOceanHeight((waterWorld+cameraPosition).xz); view=gbufferModelView*vec4(waterWorld,1.0); } // 只抬升水顶面，侧面与瀑布不动。
+    }
 #endif
     viewPosition=view.xyz; viewNormal=omniNormalize(gl_NormalMatrix*gl_Normal); // 保存几何位置和法线。
     viewTangent=omniNormalize(gl_NormalMatrix*at_tangent.xyz); tangentSign=at_tangent.w; // 保存切线。

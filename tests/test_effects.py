@@ -146,3 +146,15 @@ class EffectTests(unittest.TestCase):
         self.assertIn("float omniWaterHeight",text)  # 合成高度独立成函数。
         self.assertIn("omniWaterHeight(p,world.y)",text)  # 法线重心样本使用合成高度。
         self.assertIn("omniWaterHeight(p+vec2(0.08,0),world.y)",text)  # 有限差分包含细节。
+
+    def test_ocean_vertex_displacement_uses_same_height(self):
+        """物理海浪在顶点抬升水面，并与法线共用同一高度函数且可关闭。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_OCEAN_WAVES",found); self.assertEqual(found["OMNI_OCEAN_WAVES"].values,("0","1"))  # 海浪可开关。
+        water = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniOceanHeight",water)  # 海浪高度独立成函数。
+        self.assertIn("omniOceanHeight(p)+omniWave(p,relativeHeight)",water)  # 法线与顶点同源。
+        terrain = (build.SHADERS/"rendering/terrain.glsl").read_text(encoding="utf-8")
+        self.assertIn("omniOceanHeight((waterWorld+cameraPosition).xz)",terrain)  # 顶点按海浪抬升。
+        source = build.expand(build.SHADERS/"world0/gbuffers_water.vsh")  # 从水面顶点入口展开。
+        self.assertIn("omniOceanHeight",source)  # 顶点阶段包含海浪位移。

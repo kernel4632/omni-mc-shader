@@ -12,6 +12,8 @@
 //#define OMNI_PLAYER_RIPPLES
 // @option {"label":{"zh_cn":"水波凹凸细节","en_us":"Water bump detail"},"description":{"zh_cn":"在解析波上叠加多层程序噪声，增加水面细碎起伏。","en_us":"Adds multi-octave procedural noise on top of the analytic waves for fine ripples."}}
 #define OMNI_WATER_BUMP 1 // [0 1]
+// @option {"label":{"zh_cn":"物理海浪","en_us":"Ocean waves"},"description":{"zh_cn":"盖斯特纳波同时抬升顶点与法线，侧面与瀑布保持原法线。","en_us":"Gerstner waves lift vertices and normals together; side faces keep their normals."}}
+#define OMNI_OCEAN_WAVES 1 // [0 1]
 // 反射和坐标重建读取已保存的不透明画面。
 #include "/effects/reflection.glsl"
 float omniWave(vec2 p, float relativeHeight) {
@@ -40,9 +42,25 @@ float omniWaterDetail(vec2 p) {
     d += omniNoise(vec3(p*2.4,-t*1.4))*0.004; // 极细纹理。
     return d*OMNI_WAVE_STRENGTH; // 与波强度共同缩放。
 }
-// 水面高度：解析波与细碎凹凸共同提供法线梯度。
+// 物理海浪高度：多层盖斯特纳波的垂直位移，顶点与法线共用同一来源。
+float omniOceanHeight(vec2 p) {
+#if OMNI_OCEAN_WAVES == 0
+    return 0.0; // 关闭时不位移顶点也不改变法线。
+#else
+    float t = frameTimeCounter; // 游戏时间驱动。
+    float height = 0.0; float amplitude = 0.5; float frequency = 0.08; // 起始振幅与频率。
+    vec2 direction = normalize(vec2(1.0,0.3)); // 主浪方向。
+    for (int i=0;i<4;i++) {
+        height += amplitude*sin(dot(direction,p)*frequency+t*(1.0+frequency)); // 叠加一层方向波。
+        direction = vec2(direction.x*0.6-direction.y*0.8,direction.x*0.8+direction.y*0.6); // 旋转下一层方向。
+        amplitude *= 0.5; frequency *= 1.7; // 逐层衰减并提高频率。
+    }
+    return height*OMNI_WAVE_STRENGTH; // 与波强度共同缩放。
+#endif
+}
+// 水面高度：物理海浪、解析波与细碎凹凸共同提供高度梯度。
 float omniWaterHeight(vec2 p, float relativeHeight) {
-    float height = omniWave(p,relativeHeight); // 大尺度解析波。
+    float height = omniOceanHeight(p)+omniWave(p,relativeHeight); // 大尺度海浪与解析波。
 #if OMNI_WATER_BUMP == 1
     height += omniWaterDetail(p); // 细碎凹凸细节。
 #endif
