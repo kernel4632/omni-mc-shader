@@ -110,7 +110,7 @@ Surface omniReadSurface() {
 vec3 omniShadeSurface(inout Surface s) {
     vec3 albedo=omniLinear(s.base.rgb); // 颜色在这里唯一转线性。
     omniSurface(albedo,s.props,s.normal,s.world,s.lightUv.y); // 应用湿润和积雪。
-    vec3 lit=omniLighting(albedo,s.normal,s.world,s.lightUv,s.props.z,s.materialAo); // AO仅进入环境光。
+    vec3 lit=omniLighting(albedo,s.normal,s.world,s.lightUv,s.props,s.materialAo); // AO仅进入环境光。
 #ifdef OMNI_EMISSIVE
     lit=albedo*2.0; s.props.z=1.0; // 发光保持自身颜色。
 #endif

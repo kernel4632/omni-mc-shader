@@ -50,10 +50,11 @@ void main() {
     if (materialId==DH_BLOCK_WATER) { normal = omniWaterNormal(world,normal); kind = 1.0; } // 远景水也保留侧面原始法线。
 #endif
 #endif
-    scene = vec4(omniLighting(omniLinear(tint.rgb),normal,world,lightUv,emission,1.0),1.0); // DH没有材质AO，使用线性一作为环境遮蔽。
+    vec3 props = vec3(kind==1.0?0.06:0.85,0.04,emission); // 远景基础材质参数。
+    scene = vec4(omniLighting(omniLinear(tint.rgb),normal,world,lightUv,props,1.0),1.0); // DH没有材质AO，使用线性一作为环境遮蔽。
 #ifndef OMNI_WATER_PASS
     normalsOut = vec4(normal*0.5+0.5,kind); // 深度重建由远景深度判定。
-    materialOut = vec4(kind==1.0?0.06:0.85,0.04,emission,lightUv.y); // 明确基础材质回退。
+    materialOut = vec4(props,lightUv.y); // 明确基础材质回退。
     lightOut = vec4(lightUv,0.0,1.0); // 真实光照输入。
 #else
     scene.a = kind==1.0 ? 1.0 : tint.a; // DH 水与近景水同样使用不透明快照法。

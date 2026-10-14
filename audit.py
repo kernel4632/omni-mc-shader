@@ -13,7 +13,7 @@ from pathlib import Path  # 固定项目相对审计范围。
 CHINESE = re.compile(r"[\u3400-\u9fff]")  # 不把英文标识符当中文说明。
 EXCLUDED = {".git",".dev",".venv","references","libraries","vendor","dist","__pycache__"}  # 下载与第三方版权不改写。
 SUFFIXES = {".py",".glsl",".vsh",".fsh",".gsh",".csh",".tcs",".tes",".properties",".yml",".yaml"}  # 自有配置也接受业务说明，生成菜单另行排除。
-TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export".split())  # 只允许明确技术词与接口名，不用少数英语关键词猜自然语言。
+TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith".split())  # 只允许明确技术词与接口名，不用少数英语关键词猜自然语言。
 
 def chinese_explanation(line: str) -> bool:
     """判断一行是否是中文说明，机器接口与可复制代码示例单独识别。"""

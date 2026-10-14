@@ -170,3 +170,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_CLIMATE == 1",text)  # 手动回退路径由选项分派保留。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniTemperature",source)  # 地形表面包含气候覆盖。
+
+    def test_ggx_specular_highlight(self):
+        """镜面高光用 GGX 分布接入直接光，材质粗糙度与金属来自表面参数。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_SPECULAR",found); self.assertEqual(found["OMNI_SPECULAR"].values,("0","1"))  # 镜面可开关。
+        text = (build.SHADERS/"effects/sunlight.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniSpecular",text)  # 镜面独立成函数。
+        self.assertIn("omniSpecular(normal,world,props,sun,shadow)",text)  # 直接光叠加镜面。
+        self.assertIn("props",text)  # 材质参数进入光照。
+        source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
+        self.assertIn("omniSpecular",source)  # 地形光照包含镜面高光。
