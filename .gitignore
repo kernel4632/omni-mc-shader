@@ -7,6 +7,9 @@ __pycache__/
 *.rdc
 *.log
 
+# 用户提供的完整参考光影只用于本地研究。
+/references/
+
 # 这些文件由 build.py 生成，来源在效果和绘制设置中。
 shaders/shaders.properties
 shaders/lang/*.lang
