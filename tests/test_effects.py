@@ -66,3 +66,12 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniCloudShadow(world)",sun)  # 直射光按云影衰减。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniCloudShadow",source)  # 地形照明包含云影。
+
+    def test_planar_cloud_mode_is_selectable(self):
+        """平面云层作为第四种云算法接入，复用分形密度且不改既有模式。"""
+        found,_,_ = build.configuration()
+        self.assertEqual(found["OMNI_CLOUD_MODE"].values,("0","1","2","3"))  # 菜单包含平面模式。
+        text = (build.SHADERS/"effects/cloud.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniPlanarClouds",text)  # 平面云层独立成函数。
+        self.assertIn("float omniPlanarDensity",text)  # 平面密度独立成函数。
+        self.assertIn("OMNI_CLOUD_MODE == 3",text)  # 平面模式由模式选项分派。
