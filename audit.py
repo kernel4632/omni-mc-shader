@@ -13,7 +13,7 @@ from pathlib import Path  # 固定项目相对审计范围。
 CHINESE = re.compile(r"[\u3400-\u9fff]")  # 不把英文标识符当中文说明。
 EXCLUDED = {".git",".dev",".venv","references","libraries","vendor","dist","__pycache__"}  # 下载与第三方版权不改写。
 SUFFIXES = {".py",".glsl",".vsh",".fsh",".gsh",".csh",".tcs",".tes",".properties",".yml",".yaml"}  # 自有配置也接受业务说明，生成菜单另行排除。
-TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith".split())  # 只允许明确技术词与接口名，不用少数英语关键词猜自然语言。
+TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup SSBO".split())  # 只允许明确技术词与接口名，不用少数英语关键词猜自然语言。
 
 def chinese_explanation(line: str) -> bool:
     """判断一行是否是中文说明，机器接口与可复制代码示例单独识别。"""
@@ -27,7 +27,7 @@ def chinese_explanation(line: str) -> bool:
             if isinstance(data.get(field),dict) and isinstance(data[field].get("zh_cn"),str): chinese_explanation(data[field]["zh_cn"])  # 中文字段同样拒绝夹带英语句子。
         return True  # 菜单其余字段由选项扫描器继续检查。
     if re.fullmatch(r"(?:#?define\s+)?[A-Z][A-Z0-9_]*(?:\s+[-\d.]+)?",text) or re.fullmatch(r"RENDERTARGETS:\s*[\d, ]+",text): return False  # 原生宏和附件指令不是中文业务说明。
-    text = re.sub(r"`[^`]*`|https://\S+|[\w./\\:-]+\.(?:py|glsl|vsh|fsh|json|md|zip|txt|exe|properties|lang|ya?ml)\b|\b(?:effects|presets|rendering|common)/", "",text)  # 完整文件示例允许原名，普通英语句子不豁免。
+    text = re.sub(r"`[^`]*`|https://\S+|[\w./\\:-]+\.(?:py|glsl|vsh|fsh|csh|json|md|zip|txt|exe|properties|lang|ya?ml)\b|\b(?:effects|presets|rendering|common)/", "",text)  # 完整文件示例允许原名，普通英语句子不豁免。
     text = re.sub(r"(?:python\s+-m\s+unittest\s+discover\s+-s\s+tests|python\s+(?:build|audit|generate|check|setup|doctor|watch)|--[\w-]+(?:\s+[\w./:-]+)?)", "",text)  # 明确命令示例不是自然语言英文。
     text = re.sub(r"\b[A-Za-z_]\w*\([^\n]*?\)","",text)  # 可复制的函数调用示例不是英语句子。
     words = re.findall(r"[A-Za-z_][A-Za-z_0-9]*",text)  # 混入单个汉字也仍检查所有英文单词。

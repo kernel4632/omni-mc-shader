@@ -19,14 +19,18 @@ import options  # 实际分享迁移接口。
 class PipelineTests(unittest.TestCase):
     """检查自有代码、配置、缓冲和安全发布协议。"""
     def test_entries_have_explicit_flow_and_dimensions(self):
-        """全部生成入口均有配对与显式主体引用。"""
+        """全部生成入口均有配对与显式主体引用，计算入口使用更高版本。"""
         files = build.program_files()  # 读取真实流程表。
         for path,text in files.items():  # 全部入口核对来源。
-            self.assertTrue(text.startswith("#version 330 compatibility"))  # 兼容版本必须第一行。
+            if path.suffix==".csh":  # 计算阶段需要更高版本与计算选择宏。
+                self.assertTrue(text.startswith("#version 430")); self.assertIn("#define OMNI_COMPUTE",text)
+            else:  # 基础绘制入口保持兼容版本。
+                self.assertTrue(text.startswith("#version 330 compatibility"))  # 兼容版本必须第一行。
             self.assertIn('#include "/rendering/',text)  # 不依赖加载器猜回退。
             self.assertEqual(text,path.read_text(encoding="utf-8"))  # 实际入口没有遗漏维度宏。
         for folder in ("world0","world-1","world1"):
             self.assertIn(build.SHADERS/folder/"composite1.fsh",files)  # 时间签名覆盖各维度。
+            self.assertIn(build.SHADERS/folder/"setup.csh",files)  # 每个维度都登记计算入口。
 
     def test_buffer_history_and_snapshot_contract(self):
         """历史不清除，折射从透明阶段无法覆盖的快照读取。"""

@@ -31,5 +31,8 @@
     "composite": ["composite"],
     "composite1": ["temporal"],
     "final": ["final"]
+  },
+  "compute": {
+    "setup": ["lpv"]
   }
 }

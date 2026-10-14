@@ -119,6 +119,7 @@ def program_files() -> dict[Path, str]:
     if set(data.get("dimensions",{}))!={"world0","world-1","world1"}:
         raise ValueError("使用旧维度约定时必须同时提供 world0、world-1、world1；不能混入根目录程序")  # 任意worldN存在时加载器忽略根目录入口。
     result = {}  # 生成入口位置与内容。
+    entry_comments = ["// 选择本程序的绘制阶段或物体类别。", "// 显式引入完整绘制主体。", "// 输出由主体按统一缓冲协议写入。"]  # 各阶段共用同一批生成说明，便于清理比对。
     for dimension, flag in data["dimensions"].items():  # 维度显式接线。
         if dimension not in ("world0", "world-1", "world1"):
             raise ValueError("维度入口位置无效")  # 外部流程表不能越界。
@@ -134,6 +135,17 @@ def program_files() -> dict[Path, str]:
                     lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define]
                 lines += ["// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
                 result[SHADERS / dimension / (name + suffix)] = "\n".join(lines) + "\n"
+        for name, (rendering, *defines) in data.get("compute", {}).items():  # 计算程序单独登记，不生成顶点片元。
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():
+                raise ValueError(f"计算程序名或主体无效：{name}")
+            flags = ["OMNI_COMPUTE", *defines, *([flag] if flag else [])]  # 计算阶段使用受控宏选择主体。
+            if any(not re.fullmatch(r"OMNI_[A-Z_]+", f) for f in flags):
+                raise ValueError("计算程序宏必须使用受控名称")
+            lines = ["#version 430", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 计算阶段需要更高版本。
+            for define in flags:  # 入口只选择类别。
+                lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define]
+            lines += ["// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
+            result[SHADERS / dimension / (name + ".csh")] = "\n".join(lines) + "\n"
     return result  # 核对入口生成结果。
 
 def generate() -> None:
@@ -142,11 +154,11 @@ def generate() -> None:
     files.update(program_files())  # 入口和菜单都由维护的主体生成。
     for folder in (SHADERS,SHADERS/"world0",SHADERS/"world-1",SHADERS/"world1"):
         for path in folder.glob("*"):
-            if path.suffix in (".vsh",".fsh") and path not in files:
+            if path.suffix in (".vsh",".fsh",".csh") and path not in files:
                 text = path.read_text(encoding="utf-8")  # 只删除旧流程生成且没有手动修改的薄入口。
                 comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 选择本程序的绘制阶段或物体类别。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 任何额外手写说明都视为用户修改。
-                untouched = all(line in comments or line=="#version 330 compatibility" or re.fullmatch(r'#define OMNI_[A-Z_]+|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 只接受旧生成器的精确薄入口语法。
-                if not text.startswith("#version 330 compatibility\n// 生成的") or not untouched:
+                untouched = all(line in comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z_]+|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 只接受旧生成器的精确薄入口语法。
+                if not text.startswith("#version ") or not text.splitlines()[1].startswith("// 生成的") or not untouched:
                     raise ValueError(f"旧入口含自有修改，不能自动删除：{path}")  # 保留用户文件并报告具体冲突。
                 path.unlink()  # 移除被新流程明确替代的重复维度入口。
     for path, content in files.items():  # 仅写生成文件。
@@ -271,7 +283,7 @@ def check() -> None:
         if not path.exists() or path.read_text(encoding="utf-8") != expected:
             raise ValueError(f"{path.relative_to(ROOT)} 未生成或已过期，请运行 python build.py generate")
         if path.suffix in (".properties",".lang"): audit.generated_comments(path,expected)  # 自动菜单的说明解码后同样要求中文。
-    if {p for p in entries if p.suffix in (".vsh",".fsh")}!=set(program_files()): raise ValueError("存在流程表之外的旧入口，请重新生成并审查")  # 清理生成入口，不误删配对的几何、细分或独立计算阶段。
+    if {p for p in entries if p.suffix in (".vsh",".fsh",".csh")}!=set(program_files()): raise ValueError("存在流程表之外的旧入口，请重新生成并审查")  # 清理生成入口，不误删配对的几何、细分或独立计算阶段。
     audited = audit.check(ROOT); dependencies()  # 所有自有代码与进入包的第三方声明都必须合格。
     print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
     for source in SHADERS.rglob("*.glsl"):  # 主体全部检查引用。
