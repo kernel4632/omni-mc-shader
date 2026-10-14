@@ -272,7 +272,8 @@ def check() -> None:
             raise ValueError(f"{path.relative_to(ROOT)} 未生成或已过期，请运行 python build.py generate")
         if path.suffix in (".properties",".lang"): audit.generated_comments(path,expected)  # 自动菜单的说明解码后同样要求中文。
     if {p for p in entries if p.suffix in (".vsh",".fsh")}!=set(program_files()): raise ValueError("存在流程表之外的旧入口，请重新生成并审查")  # 清理生成入口，不误删配对的几何、细分或独立计算阶段。
-    audit.check(ROOT); dependencies()  # 所有自有代码与进入包的第三方声明都必须合格。
+    audited = audit.check(ROOT); dependencies()  # 所有自有代码与进入包的第三方声明都必须合格。
+    print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
     for source in SHADERS.rglob("*.glsl"):  # 主体全部检查引用。
         expand(source)  # 未接入文件也不能积累坏引用。
     compile_shaders(entries, found, profiles)
@@ -383,7 +384,10 @@ def main() -> None:
         else: print(notes,end="")
         return
     if args.output: parser.error("--output 只能用于 notes")
-    if args.command=="audit": audit.check(ROOT); return
+    if args.command=="audit":
+        audited = audit.check(ROOT)
+        print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")
+        return
     if args.command=="generate":
         generate()
         print("选项、入口和翻译已生成")

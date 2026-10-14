@@ -12,6 +12,7 @@ import argparse  # 解析独立实例与回归命令。
 import csv  # 读取真实帧间隔采样。
 import json  # 本机设置与测试报告。
 import math  # 拒绝无穷与无效测量值。
+import os  # 规范化Windows短路径和长路径表示。
 import re  # Windows世界名与进程参数在边界检查。
 import shutil  # 复用游戏资源，不复制玩家数据。
 import statistics  # 真实样本汇总。
@@ -26,15 +27,25 @@ SETTINGS = ROOT / ".dev/game.local.json"  # 个人路径不提交。
 
 def development_path(path: Path) -> Path:
     """确认自有输出留在开发目录，并拒绝路径中任何链接或目录联接。"""
-    base = ROOT.resolve()/".dev"  # 固定本项目实际目录，不把.dev链接的目标当作新的安全边界。
-    absolute = path.absolute()
-    if not absolute.is_relative_to(base) or not absolute.resolve().is_relative_to(base):
+    root_absolute = Path(os.path.abspath(os.fspath(ROOT)))  # 词法比较统一短名和长名。
+    base = root_absolute/".dev"
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    if not absolute.is_relative_to(base):
         raise ValueError("输出必须留在本项目 .dev 内")  # 目录链接不能把输出转到玩家目录。
-    current = ROOT.resolve()
-    for part in absolute.relative_to(ROOT.resolve()).parts:
+    current = root_absolute
+    for part in absolute.relative_to(root_absolute).parts:
         current /= part
         if current.is_symlink() or current.is_junction():
             raise ValueError(f"开发输出路径不能包含链接或目录联接：{current}")  # 文件链接与Windows目录联接同样拒绝。
+    existing = absolute
+    missing = []
+    while not existing.exists():
+        missing.append(existing.name)
+        existing = existing.parent
+    canonical_existing = Path(os.path.realpath(os.fspath(existing)))
+    canonical_absolute = canonical_existing.joinpath(*reversed(missing))
+    if not canonical_absolute.is_relative_to(Path(os.path.realpath(os.fspath(base)))):
+        raise ValueError("输出的真实路径越过本项目 .dev")  # 已存在的链接目标也不能逃逸。
     return absolute
 
 

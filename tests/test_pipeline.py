@@ -3,6 +3,8 @@
 离线只检查可观察协议与工具结果，不声称像素、设备或性能通过。
 """
 import json  # 构造版本配置输入。
+import contextlib  # 捕获共享审计调用的输出。
+import io  # 验证库函数不写终端。
 import hashlib  # 包内容与校验文件真实对照。
 import tempfile  # 临时目录不改用户文件。
 import unittest  # 保留标准测试入口。
@@ -89,6 +91,14 @@ class PipelineTests(unittest.TestCase):
             with self.assertRaises(ValueError): audit.check(root)  # 中文界面文案不是注释。
             source.write_text('"""中文接口职责。"""\nvalue=1 # 保留真实业务输入。\n',encoding="utf-8")
             self.assertEqual(audit.check(root)[0]["ratio"],1.0)  # 尾注与文档块都正确计数。
+
+    def test_comment_audit_library_call_does_not_write_stdout(self):
+        """共享审计调用只返回结果，避免Windows非UTF8输出流编码失败。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); (root/"subject.py").write_text('"""中文接口职责。"""\nvalue=1 # 保存业务值。\n',encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                result = audit.check(root)  # 调用库函数不应该打印中文。
+            self.assertEqual(output.getvalue(),""); self.assertEqual(result[0]["ratio"],1.0)  # CLI报告由build入口负责。
 
     def test_release_requires_prompt_without_mutation(self):
         """自动任务没有交互确认时，发布不会写版本或标签。"""

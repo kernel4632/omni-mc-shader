@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse  # 配置分享命令入口。
 import json  # 读取受控配置与机器说明。
+import os  # 规范化Windows短路径和长路径表示。
 import re  # 检查选项名称与数值格式。
 import sys  # 唯一入口报告错误。
 from dataclasses import dataclass  # 保存已检查的选项数据。
@@ -260,14 +261,24 @@ def _older_or_equal(source: str, current: str) -> bool:
 
 def output_path(destination: Path, root: Path, suffix: str) -> Path:
     """验证配置写入边界，开发目录本身的链接也不能扩大边界。"""
-    base = root.resolve()/".dev"  # 使用项目的实际位置，不跟随.dev本身的链接。
-    destination = destination.absolute()
-    if not destination.is_relative_to(base) or not destination.resolve().is_relative_to(base) or destination.suffix!=suffix:
+    root_absolute = Path(os.path.abspath(os.fspath(root)))  # 比较边界先使用同一种词法路径表示，兼容Windows 8.3短名。
+    base = root_absolute/".dev"
+    destination = Path(os.path.abspath(os.fspath(destination)))
+    if not destination.is_relative_to(base) or destination.suffix!=suffix:
         raise ValueError(f"配置输出必须是本项目 .dev 内的 {suffix} 文件")
-    current = root.resolve()
-    for part in destination.relative_to(root.resolve()).parts:
+    current = root_absolute
+    for part in destination.relative_to(root_absolute).parts:
         current /= part
         if current.is_symlink() or current.is_junction(): raise ValueError("配置输出不能经过符号链接或目录联接")  # 所有输出文件在写入前检查一次。
+    existing = destination
+    missing = []
+    while not existing.exists():
+        missing.append(existing.name)
+        existing = existing.parent
+    canonical_existing = Path(os.path.realpath(os.fspath(existing)))
+    canonical_destination = canonical_existing.joinpath(*reversed(missing))
+    if not canonical_destination.is_relative_to(Path(os.path.realpath(os.fspath(base)))):
+        raise ValueError("配置输出的真实路径越过本项目 .dev")  # 既兼容短路径，又保留真实路径边界。
     return destination
 
 def save(destination: Path, values: dict, shader_version: str, root: Path) -> None:
@@ -296,11 +307,11 @@ def main() -> None:
     args = parser.parse_args()  # 参数不匹配时在任何输出文件写入前拒绝。
     if args.legacy and (args.command!="import" or not args.input or args.input.suffix!=".properties"):
         parser.error("--legacy 只能用于 import 的旧properties输入")
-    if args.other and args.command!="diff": parser.error("--other 只能用于 diff")  # 另一份配置只用于只读比较。
+    if args.other and args.command!="diff": parser.error("--other 只能用于 diff")  # 另一份配置只用于只读比较，避免写入第二份用户文件。
     if args.format and args.command not in ("export",): parser.error("--format 只能用于 export")  # 格式选择不改变导入边界。
-    if args.output and args.command=="diff": parser.error("diff 不写入文件，不能指定 --output")
-    if args.format and args.command=="diff": parser.error("diff 不导出文件，不能指定 --format")
-    if args.command in ("import","reset") and args.format=="properties": parser.error("导入和重置保存JSON，加载器properties请使用export")
+    if args.output and args.command=="diff": parser.error("diff 不写入文件，不能指定 --output")  # 对比命令只返回差异文字，不创建配置。
+    if args.format and args.command=="diff": parser.error("diff 不导出文件，不能指定 --format")  # 对比命令不改变配置格式。
+    if args.command in ("import","reset") and args.format=="properties": parser.error("导入和重置保存JSON，加载器properties请使用export")  # 格式转换只由export执行。
     if args.command=="reset" and args.input: parser.error("reset 从源码重置，不接受 --input")
     found,_ = scan(build.SHADERS)  # 当前所有取值仍来自效果原生定义。
     release = build.version()  # 文件目标版本只来自VERSION，不在命令中硬编码。
