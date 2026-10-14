@@ -8,6 +8,8 @@
 #define OMNI_HEIGHT_FOG 0.5 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"体积光","en_us":"Volumetric light"}}
 //#define OMNI_VOLUMETRIC_LIGHT
+// @option {"label":{"zh_cn":"水下体积光","en_us":"Underwater volumetric"},"description":{"zh_cn":"水下沿视线步进阴影可见性生成蓝色光柱。","en_us":"Marches shadow visibility underwater to draw blue light shafts."}}
+#define OMNI_UNDERWATER_FOG 1 // [0 1]
 // 阴影图提供空气是否受光的依据。
 #include "/effects/shadow.glsl"
 #include "/effects/sky.glsl"
@@ -24,7 +26,22 @@ vec3 omniFog(vec3 color, vec3 view, vec3 world) {
     atmosphere = omniSky(omniNormalize(world)); // 末地只使用自定义环境色，不引入太阳光柱。
 #endif
     if (isEyeInWater == 1) {
-        return color * exp(-vec3(0.18,0.065,0.035)*distance) + vec3(0.015,0.09,0.12)*(1.0-exp(-distance*0.08)); // 水下按波段吸收。
+        vec3 water = color * exp(-vec3(0.18,0.065,0.035)*distance) + vec3(0.015,0.09,0.12)*(1.0-exp(-distance*0.08)); // 水下按波段吸收。
+#if OMNI_UNDERWATER_FOG == 1 && !defined OMNI_NETHER && !defined OMNI_END
+        float shaftRange = min(distance,40.0); // 只在近岸短距离累积光柱。
+        float shaft = 0.0; // 沿视线的阴影可见性。
+        for (int i=0;i<8;i++) {
+            float t = (float(i)+0.5)/8.0; // 等距中点积分。
+            vec3 sampleWorld = world*t; // 沿世界空间视线取样，避免把视空间法线误传给阴影。
+            vec3 sampleNormal = omniNormalize(mat3(gbufferModelView)*vec3(0.0,1.0,0.0)); // 阴影接口接收视空间法线。
+            shaft += omniShadow(sampleWorld,sampleNormal)*(1.0-t); // 近处权重更高的光柱。
+        }
+        shaft /= 8.0; // 归一化可见性。
+        vec3 light = omniNormalize(shadowLightPosition); // 当前主光源方向。
+        float phase = 0.1 + pow(max(dot(omniNormalize(view),light),0.0),8.0); // 前向散射强调天体方向。
+        water += vec3(0.05,0.22,0.32)*shaft*phase*(1.0-exp(-shaftRange*0.1)); // 蓝色水下光柱受真实空气密度控制。
+#endif
+        return water; // 水下不再叠加空气距离雾。
     }
 #ifdef OMNI_VOLUMETRIC_LIGHT
 #if !defined OMNI_NETHER && !defined OMNI_END

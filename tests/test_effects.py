@@ -75,3 +75,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("vec3 omniPlanarClouds",text)  # 平面云层独立成函数。
         self.assertIn("float omniPlanarDensity",text)  # 平面密度独立成函数。
         self.assertIn("OMNI_CLOUD_MODE == 3",text)  # 平面模式由模式选项分派。
+
+    def test_underwater_volumetric_shafts(self):
+        """水下体积光沿视线步进阴影，接入合成雾且可关闭。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_UNDERWATER_FOG",found); self.assertEqual(found["OMNI_UNDERWATER_FOG"].values,("0","1"))  # 水下光柱可开关。
+        text = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
+        self.assertIn("isEyeInWater == 1",text)  # 只有水下才执行光柱。
+        self.assertIn("omniShadow(sampleWorld,sampleNormal)",text)  # 光柱来自真实阴影可见性。
+        source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
+        self.assertIn("vec3 omniFog",source)  # 合成阶段包含雾主体。
