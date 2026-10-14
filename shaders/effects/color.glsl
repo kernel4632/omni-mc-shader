@@ -16,6 +16,8 @@
 #define OMNI_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
 // @option {"label":{"zh_cn":"色调映射","en_us":"Tone mapping"},"description":{"zh_cn":"零用简单有理曲线保持原亮度，一用 AgX 压缩高光并保留饱和。","en_us":"Zero keeps the simple rational curve; one uses AgX filmic highlight compression."}}
 #define OMNI_TONE_MAP 1 // [0 1]
+// @option {"label":{"zh_cn":"有序抖动","en_us":"Ordered dither"},"description":{"zh_cn":"用四乘四阈值矩阵打散八位量化色带。","en_us":"A 4x4 ordered matrix breaks 8-bit color banding."}}
+#define OMNI_DITHER 1 // [0 1]
 // 曝光有效性与时间历史共用一个接口。
 #include "/effects/antialiasing.glsl"
 // 简单有理映射：单调压高光，保持既有画面行为。
@@ -48,6 +50,16 @@ vec3 omniToneMap(vec3 color) {
     return omniToneMapSimple(color); // 简单有理映射。
 #endif
 }
+// 四乘四有序阈值矩阵：像素坐标取模后得到零到一的阈值。
+float omniBayer(vec2 pixel) {
+    const float thresholds[16] = float[16]( // 每个格子使用不同的量化阈值。
+        0.0/16.0, 8.0/16.0, 2.0/16.0, 10.0/16.0,
+        12.0/16.0, 4.0/16.0, 14.0/16.0, 6.0/16.0,
+        3.0/16.0, 11.0/16.0, 1.0/16.0, 9.0/16.0,
+        15.0/16.0, 7.0/16.0, 13.0/16.0, 5.0/16.0);
+    int x = int(mod(pixel.x,4.0)); int y = int(mod(pixel.y,4.0)); // 像素落在四乘四格内。
+    return thresholds[x+y*4]; // 返回当前格的有序阈值。
+}
 float omniExposure(vec2 uv) {
 #ifdef OMNI_AUTO_EXPOSURE
     float mean = 0.0; // 使用真实场景亮度的对数均值。
@@ -67,6 +79,10 @@ vec3 omniColor(vec3 color, float exposure) {
     color = omniToneMap(color); // 按选项映射高动态范围，保持单调不剪切。
     color = mix(vec3(omniLuminance(color)),color,OMNI_SATURATION); // 以亮度轴调整色彩。
     color = (color-0.5)*OMNI_CONTRAST+0.5; // 围绕中间亮度调整对比。
-    return clamp(omniSrgb(clamp(color,0.0,1.0)),0.0,1.0); // 最终一步才编码到屏幕颜色。
+    color = omniSrgb(clamp(color,0.0,1.0)); // 最终一步才编码到屏幕颜色。
+#if OMNI_DITHER == 1
+    color += (omniBayer(gl_FragCoord.xy)-0.5)/255.0; // 有序抖动打散八位量化色带。
+#endif
+    return clamp(color,0.0,1.0); // 抖动之后仍限制在屏幕颜色范围。
 }
 #endif

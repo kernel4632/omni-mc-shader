@@ -15,3 +15,12 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniToneMapAgx",source)  # 最终显示包含 AgX 曲线。
         self.assertIn("omniToneMapSimple",source)  # 简单有理映射没有被删除。
         self.assertIn("omniToneMap(color)",source)  # 计算路径由选项统一分派。
+
+    def test_ordered_dither_applies_before_clamp(self):
+        """有序抖动在显示编码之后打散色带，选项可关闭。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_DITHER",found); self.assertEqual(found["OMNI_DITHER"].values,("0","1"))  # 默认与关闭值来自原生定义。
+        text = (build.SHADERS/"effects/color.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniBayer",text)  # 有序矩阵阈值独立成函数。
+        self.assertIn("omniSrgb(clamp(color,0.0,1.0))",text)  # 抖动发生在显示编码之后。
+        self.assertIn("gl_FragCoord.xy",text)  # 抖动按真实像素坐标取样。
