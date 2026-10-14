@@ -97,8 +97,9 @@ def extract(archive: Path, destination: Path) -> None:
     else:
         with tarfile.open(archive) as package:
             for member in package.getmembers():
-                if not member.isfile() and not member.isdir():
-                    raise ValueError(f"压缩包不能包含链接或特殊文件：{member.name}")
+                if not (member.isfile() or member.isdir() or member.issym() or member.islnk()):
+                    raise ValueError(f"压缩包不能包含特殊文件：{member.name}")
+            # Python 的 data 过滤器允许包内链接，拒绝指向解压目录外的链接。
             package.extractall(destination, filter="data")
 
 

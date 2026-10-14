@@ -5,6 +5,8 @@
 """
 
 import json
+import io
+import tarfile
 import tempfile
 import unittest
 from pathlib import Path
@@ -93,6 +95,27 @@ class BuildTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 dev.extract(package, folder / "tools")
             self.assertFalse((folder / "escape").exists())
+
+    def test_tar_internal_link_and_external_link(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            for target, valid in (("tool", True), ("../../outside", False)):
+                with self.subTest(target=target):
+                    package = folder / ("safe.tar.gz" if valid else "unsafe.tar.gz")
+                    with tarfile.open(package, "w:gz") as output:
+                        member = tarfile.TarInfo("tool")
+                        member.size = 4
+                        output.addfile(member, io.BytesIO(b"test"))
+                        link = tarfile.TarInfo("alias")
+                        link.type = tarfile.SYMTYPE
+                        link.linkname = target
+                        output.addfile(link)
+                    if not valid:
+                        with self.assertRaises(tarfile.FilterError):
+                            dev.extract(package, folder / "unsafe")
+                    elif __import__("sys").platform != "win32":
+                        dev.extract(package, folder / "safe")
+                        self.assertEqual((folder / "safe/alias").read_bytes(), b"test")
 
 
 class OptionTests(unittest.TestCase):
