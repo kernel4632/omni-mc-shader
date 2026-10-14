@@ -65,15 +65,15 @@ def source_path(reference: str, parent: Path, shaders: Path) -> Path:
         raise ValueError(f"{parent}：引用越界或文件不存在：{reference}")
     return source
 
-def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), mapping: dict | None = None, cache: dict | None = None) -> str:
+def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), sourceNumbers: dict | None = None, cache: dict | None = None) -> str:
     """展开引用并保留数字行映射，循环路径直接报错。"""
     source = source.resolve()  # 规范化后识别循环。
     if source in stack:
         raise ValueError("循环引用：" + " → ".join(path.name for path in (*stack, source)))  # 展开前拒绝无限递归。
     if cache is None: cache = {}  # 一次展开共享已读取内容，不反复访问磁盘。
     if source in cache: return cache[source]  # 循环已在缓存查询之前检查。
-    if mapping is None:
-        mapping = {p.resolve(): i + 1 for i, p in enumerate(sorted(shaders.rglob("*"))) if p.is_file()}  # 同一项目的映射稳定。
+    if sourceNumbers is None:
+        sourceNumbers = {p.resolve(): i + 1 for i, p in enumerate(sorted(shaders.rglob("*"))) if p.is_file()}  # 同一项目的编号映射稳定。
     text = source.read_text(encoding="utf-8")  # 实际维护源码。
     masked = re.sub(r"/\*.*?\*/", lambda m: "".join("\n" if c == "\n" else " " for c in m[0]), text, flags=re.DOTALL)  # 注释示例不展开。
     for line in masked.splitlines():  # 检查真实引用语法。
@@ -81,11 +81,11 @@ def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), 
             raise ValueError(f"{source}：#include 行只保留引用，说明放到上一行以兼容 Iris")
     for match in reversed(list(INCLUDE.finditer(masked))):  # 倒序保持源位置。
         included = source_path(match[1], source, shaders)  # 检查外部文件引用一次。
-        content = expand(included, shaders, (*stack, source), mapping, cache)
+        content = expand(included, shaders, (*stack, source), sourceNumbers, cache)
         if re.search(r"^\s*#version", content, re.MULTILINE):
             raise ValueError(f"{included}：被引用文件不能再次声明 #version")
         line = text[:match.start()].count("\n") + 2  # 引用后的原始下一行。
-        replacement = f"#line 1 {mapping[included]}\n{content.rstrip()}\n#line {line} {mapping[source]}"
+        replacement = f"#line 1 {sourceNumbers[included]}\n{content.rstrip()}\n#line {line} {sourceNumbers[source]}"
         text = text[:match.start()] + replacement + text[match.end():]  # 编译错误可回到原文件与行号。
     cache[source] = text  # 缓存完整展开，仍保留所有条件包含与行映射。
     return text
@@ -95,7 +95,7 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
     entries = sorted(p for p in shaders.rglob("*") if p.suffix in STAGES)  # 包含各维度。
     if not entries:
         raise ValueError("光影包至少需要一组可执行入口")
-    mapping = {p.resolve():i+1 for i,p in enumerate(sorted(shaders.rglob("*"))) if p.is_file()}  # 所有入口共用源文件编号。
+    sourceNumbers = {p.resolve():i+1 for i,p in enumerate(sorted(shaders.rglob("*"))) if p.is_file()}  # 所有入口共用源文件编号。
     cache = {}  # 同一检查共享已展开的效果文本。
     for source in entries:  # 阶段伙伴逐一检查。
         if not source.read_text(encoding="utf-8").startswith("#version "):
@@ -104,7 +104,7 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
         for partner in partners:  # 细分阶段必须成对。
             if not source.with_suffix(partner).is_file():
                 raise ValueError(f"{source}：缺少配对入口 {partner}")
-        expand(source, shaders, mapping=mapping, cache=cache)  # 入口配对检查不跳过引用。
+        expand(source, shaders, sourceNumbers=sourceNumbers, cache=cache)  # 入口配对检查不跳过引用。
     return entries  # 下游链接真实入口。
 
 def configuration() -> tuple[dict, list, dict]:
@@ -197,9 +197,9 @@ def variants(found: dict, profiles: list) -> list[tuple[str, dict]]:
 def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
     """链接所有唯一程序配置，并补齐加载器提供的离线宏。"""
     validator = tool("glslang")  # 真正执行编译器。
-    mapping = {p.resolve():i+1 for i,p in enumerate(sorted(SHADERS.rglob("*"))) if p.is_file()}  # 全部程序一次建立映射。
+    sourceNumbers = {p.resolve():i+1 for i,p in enumerate(sorted(SHADERS.rglob("*"))) if p.is_file()}  # 全部程序一次建立映射。
     cache = {}
-    expanded = {source: expand(source,mapping=mapping,cache=cache) for source in entries}  # 展开后错误保留原始文件编号。
+    expanded = {source: expand(source,sourceNumbers=sourceNumbers,cache=cache) for source in entries}  # 展开后错误保留原始文件编号。
     print("入口展开完成，开始检查选项接入",flush=True)
     for name in found:  # 验证选项接入算法。
         reachable = [text for text in expanded.values() if re.search(r"^\s*(?://\s*)?#define\s+" + name + r"\b|^\s*const\s+\w+\s+" + name + r"\b", text, re.MULTILINE)]
@@ -212,26 +212,26 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
     seen, count = set(), 0  # 唯一编译内容计数。
     cache_file = ROOT / ".dev/reports/glsl-cache.json"  # 成功源码缓存只服务开发，不进入发行包。
     compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 工具升级必须重新链接。
-    previous = json.loads(cache_file.read_text(encoding="utf-8")) if cache_file.is_file() else {}  # 只复用同编译器的成功内容。
-    successful = set(previous.get("programs",[])) if previous.get("compiler")==compiler_digest else set()
+    cached = json.loads(cache_file.read_text(encoding="utf-8")) if cache_file.is_file() else {}  # 只复用同编译器的成功内容。
+    knownGood = set(cached.get("programs",[])) if cached.get("compiler")==compiler_digest else set()
     reused = 0  # 缓存不把不同源码误计为通过。
-    formats = "#define RGBA16F 34842\n#define RGBA32F 34836\n"  # 离线模拟加载器格式名称。
-    modes = [("base", ""), ("iris_dh", "#define IS_IRIS\n#define IRIS_FEATURE_ENTITY_TRANSLUCENT\n#define DISTANT_HORIZONS\n#define DH_BLOCK_WATER 13\n#define DH_BLOCK_LAVA 8\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 两种环境覆盖实体分离可用与不可用路径。
+    formatDefines = "#define RGBA16F 34842\n#define RGBA32F 34836\n"  # 离线模拟加载器格式名称。
+    environments = [("base", ""), ("iris_dh", "#define IS_IRIS\n#define IRIS_FEATURE_ENTITY_TRANSLUCENT\n#define DISTANT_HORIZONS\n#define DH_BLOCK_WATER 13\n#define DH_BLOCK_LAVA 8\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 两种环境覆盖实体分离可用与不可用路径。
     with tempfile.TemporaryDirectory(prefix="omni-glsl-") as temporary:
         folder = Path(temporary)  # 不污染源码。
         for label, values in variants(found, profiles):  # 代表组合逐项执行。
-            for mode, defines in modes:  # 基础与远景均检查。
+            for environment, defines in environments:  # 基础与远景均检查。
                 for program, sources in programs.items():  # 各维度不遗漏。
                     texts = [option_source(expanded[p], found, values) for p in sources]
-                    texts = [t.replace("#version 330 compatibility", "#version 330 compatibility\n" + formats + defines, 1) for t in texts]  # 仅离线检查环境注入。
-                    if program.name.startswith("dh_") and mode == "iris_dh":
+                    texts = [t.replace("#version 330 compatibility", "#version 330 compatibility\n" + formatDefines + defines, 1) for t in texts]  # 仅离线检查环境注入。
+                    if program.name.startswith("dh_") and environment == "iris_dh":
                         texts = [t.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1) if p.suffix == ".vsh" else t for p, t in zip(sources, texts)]  # 官方自动属性由离线环境模拟。
                     signature = tuple((p.suffix, re.sub(r"^#line[^\n]*|//[^\n]*|/\*.*?\*/", "", t, flags=re.MULTILINE|re.DOTALL)) for p, t in zip(sources, texts))  # 别名入口的注释不影响编译内容。
                     digest = hashlib.sha256(repr(signature).encode()).digest()
                     if digest in seen:
                         continue  # 相同维度或别名程序只链接一次。
                     seen.add(digest)  # 新内容实际链接。
-                    if digest.hex() in successful:
+                    if digest.hex() in knownGood:
                         count += 1; reused += 1; continue  # 完整展开源码与配置完全相同才复用先前链接。
                     targets = []  # 本程序阶段文件。
                     for p, text in zip(sources, texts):  # 标准编译阶段扩展。
@@ -239,13 +239,13 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
                         target.write_text(text, encoding="utf-8"); targets.append(target)  # 临时文件只属于本次检查。
                     result = subprocess.run([str(validator), "-l", *map(str, targets)], capture_output=True, text=True, encoding="utf-8", errors="replace")
                     if result.returncode:  # 失败保留源位置。
-                        mapping = {str(i+1): p.relative_to(SHADERS).as_posix() for i,p in enumerate(sorted(SHADERS.rglob("*"))) if p.is_file()}
-                        message = re.sub(r"(ERROR|WARNING): (\d+):(\d+):", lambda m: f"{m[1]}: {mapping.get(m[2],m[2])}:{m[3]}:", result.stdout + result.stderr)
-                        raise ValueError(f"GLSL 编译/链接失败：{program.relative_to(SHADERS)} / {label} / {mode}\n{message}")
+                        numberToPath = {str(i+1): p.relative_to(SHADERS).as_posix() for i,p in enumerate(sorted(SHADERS.rglob("*"))) if p.is_file()}
+                        message = re.sub(r"(ERROR|WARNING): (\d+):(\d+):", lambda m: f"{m[1]}: {numberToPath.get(m[2],m[2])}:{m[3]}:", result.stdout + result.stderr)
+                        raise ValueError(f"GLSL 编译/链接失败：{program.relative_to(SHADERS)} / {label} / {environment}\n{message}")
                     count += 1  # 通过才计数。
-                    successful.add(digest.hex())  # 失败组永远不进入缓存。
+                    knownGood.add(digest.hex())  # 失败组永远不进入缓存。
             cache_file.parent.mkdir(parents=True,exist_ok=True)
-            cache_file.write_text(json.dumps({"compiler":compiler_digest,"programs":sorted(successful)})+"\n",encoding="utf-8")  # 每配置保存已成功的链接，不隐藏下一配置失败。
+            cache_file.write_text(json.dumps({"compiler":compiler_digest,"programs":sorted(knownGood)})+"\n",encoding="utf-8")  # 每配置保存已成功的链接，不隐藏下一配置失败。
             print(f"离线配置通过：{label}", flush=True)  # 长检查持续报告当前进度。
     print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{count} 组唯一程序，复用 {reused} 组相同源码")
 

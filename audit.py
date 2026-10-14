@@ -38,32 +38,32 @@ def chinese_explanation(line: str) -> bool:
 def comments(source: Path) -> tuple[set[int], list[tuple[int,str]]]:
     """解析真实注释和文档块，返回有效中文行与说明片段。"""
     text = source.read_text(encoding="utf-8")  # 审计实际源文件，不读生成报告。
-    parts = []  # 保留片段原始行号用于报错。
+    fragments = []  # 保留片段原始行号用于报错。
     if source.suffix==".py":  # Python 使用标准词法与语法，避免把字符串算注释。
         tree = ast.parse(text)  # 无法解析的代码也不能通过审计。
         for node in ast.walk(tree):  # 只有模块、类、函数开头的说明是文档字符串。
             if isinstance(node,(ast.Module,ast.FunctionDef,ast.AsyncFunctionDef,ast.ClassDef)) and node.body and isinstance(node.body[0],ast.Expr) and isinstance(node.body[0].value,ast.Constant) and isinstance(node.body[0].value.value,str):
                 value = node.body[0].value  # 接口文档位置来自实际语法树。
-                parts.append((value.lineno,ast.get_source_segment(text,value)))  # 仅接口文档字符串。
+                fragments.append((value.lineno,ast.get_source_segment(text,value)))  # 仅接口文档字符串。
         for token in tokenize.generate_tokens(io.StringIO(text).readline):
-            if token.type==tokenize.COMMENT: parts.append((token.start[0],token.string))  # 排除普通字符串中的中文。
+            if token.type==tokenize.COMMENT: fragments.append((token.start[0],token.string))  # 排除普通字符串中的中文。
     elif source.suffix in {".properties",".yml",".yaml",".lang"}:
         pattern = re.compile(r'"(?:\\.|[^"\\])*"|\x27(?:\x27\x27|[^\x27])*\x27|#[^\n]*',re.DOTALL)  # 字符串中的井号不计，YAML尾随说明仍是有效业务注释。
         for match in pattern.finditer(text):
-            if match[0].startswith("#"): parts.append((text[:match.start()].count("\n")+1,match[0]))
+            if match[0].startswith("#"): fragments.append((text[:match.start()].count("\n")+1,match[0]))
     else:
         pattern = re.compile(r'"(?:\\.|[^"\\])*"|/\*.*?\*/|//[^\n]*',re.DOTALL)  # 字符串、块注释与尾注分别识别。
         for match in pattern.finditer(text):
-            if match[0].startswith(("//","/*")): parts.append((text[:match.start()].count("\n")+1,match[0]))
+            if match[0].startswith(("//","/*")): fragments.append((text[:match.start()].count("\n")+1,match[0]))
     lines = set()  # 同一行有多个中文片段也只算一次。
-    for begin, part in parts:
+    for startLine, fragment in fragments:
         # 菜单中的中文名称与帮助属于有效接口说明，英文机器翻译不接受自然语言审计。
-        for offset,line in enumerate(part.splitlines()):  # 块注释按真正带中文的非空行统计。
+        for lineOffset,line in enumerate(fragment.splitlines()):  # 块注释按真正带中文的非空行统计。
             try:
-                if chinese_explanation(line): lines.add(begin+offset)  # 只有真实中文说明进入比例分子。
+                if chinese_explanation(line): lines.add(startLine+lineOffset)  # 只有真实中文说明进入比例分子。
             except ValueError:
                 pass  # 统一检查阶段报告原始文件与行号，失败注释不计入比例。
-    return lines,parts
+    return lines,fragments
 
 def check(root: Path) -> list[dict]:
     """拒绝注释不足与未实现标记，报告每个文件真实比例。"""
@@ -72,20 +72,20 @@ def check(root: Path) -> list[dict]:
         relative_path = source.relative_to(root).as_posix()
         if not source.is_file() or source.suffix not in SUFFIXES or EXCLUDED.intersection(source.relative_to(root).parts) or relative_path=="shaders/shaders.properties": continue
         nonempty = {i for i,line in enumerate(source.read_text(encoding="utf-8").splitlines(),1) if line.strip()}  # 不把空行当分母。
-        commented,parts = comments(source)
+        commented,fragments = comments(source)
         ratio = len(commented & nonempty)/max(len(nonempty),1)  # 尾注代码行同时贡献分子与分母。
         relative = source.relative_to(root).as_posix()  # 报告不暴露本机绝对路径。
         result.append({"file":relative,"nonempty":len(nonempty),"chineseCommentLines":len(commented & nonempty),"ratio":ratio})
         if ratio<0.5: errors.append(f"{relative}：中文有效注释 {ratio:.1%}，至少需要 50%")
-        for line,part in parts:
-            if part.lstrip().startswith(("// @option ","// @effect ")):
-                try: chinese_explanation(part)
+        for line,fragment in fragments:
+            if fragment.lstrip().startswith(("// @option ","// @effect ")):
+                try: chinese_explanation(fragment)
                 except (ValueError,TypeError) as error: errors.append(f"{relative}:{line}：机器说明无效：{error}")
                 continue  # 只对合法机器说明豁免英文翻译。
-            if re.search(r"\b(?:TODO|FIXME)\b|待实现|尚未实现|未接入的占位",part): errors.append(f"{relative}:{line}：存在未实现标记")  # 检查维护者真实说明。
-            for offset,text in enumerate(part.splitlines()):
+            if re.search(r"\b(?:TODO|FIXME)\b|待实现|尚未实现|未接入的占位",fragment): errors.append(f"{relative}:{line}：存在未实现标记")  # 检查维护者真实说明。
+            for lineOffset,text in enumerate(fragment.splitlines()):
                 try: chinese_explanation(text)
-                except ValueError as error: errors.append(f"{relative}:{line+offset}：{error}")  # 中英混合和纯英文说明使用同一严格规则。
+                except ValueError as error: errors.append(f"{relative}:{line+lineOffset}：{error}")  # 中英混合和纯英文说明使用同一严格规则。
     if errors: raise ValueError("源码审计失败\n"+"\n".join(errors))
     return result
 
