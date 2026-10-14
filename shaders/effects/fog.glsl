@@ -10,9 +10,19 @@
 //#define OMNI_VOLUMETRIC_LIGHT
 // @option {"label":{"zh_cn":"水下体积光","en_us":"Underwater volumetric"},"description":{"zh_cn":"水下沿视线步进阴影可见性生成蓝色光柱。","en_us":"Marches shadow visibility underwater to draw blue light shafts."}}
 #define OMNI_UNDERWATER_FOG 1 // [0 1]
+// @option {"label":{"zh_cn":"末地雾","en_us":"End fog"},"description":{"zh_cn":"末地紫色漩涡雾叠加虚空暗色，替代单纯天空色。","en_us":"Adds purple end haze with void darkening instead of a plain sky colour."}}
+#define OMNI_END_FOG 1 // [0 1]
 // 阴影图提供空气是否受光的依据。
 #include "/effects/shadow.glsl"
 #include "/effects/sky.glsl"
+// 末地雾：紫色漩涡雾叠加虚空暗色，按绝对位置与高度变化。
+vec3 omniEndFog(vec3 world) {
+    vec3 p = world+cameraPosition; // 绝对位置让雾团稳定不随相机滑动。
+    float swirl = omniNoise(p*0.004+vec3(frameTimeCounter*0.01)); // 缓慢移动的雾团。
+    float height = smoothstep(-40.0,20.0,p.y); // 低处是虚空。
+    vec3 haze = mix(vec3(0.02,0.01,0.05),vec3(0.32,0.16,0.45),swirl); // 深紫到亮紫。
+    return mix(haze,vec3(0.10,0.04,0.16),1.0-height); // 虚空更暗。
+}
 // 调用位置：rendering/composite.glsl；示例：omniFog(color, view, world)。
 vec3 omniFog(vec3 color, vec3 view, vec3 world) {
     float distance = min(length(view),32000.0); // 避免背景重建造成指数溢出。
@@ -23,7 +33,12 @@ vec3 omniFog(vec3 color, vec3 view, vec3 world) {
     density *= 4.0; // 下界浓雾。
     atmosphere = omniLinear(fogColor); // 下界保留实际生物群系雾色。
 #elif defined OMNI_END
+#if OMNI_END_FOG == 1
+    atmosphere = omniEndFog(world); // 末地紫雾与虚空。
+    density *= 1.5; // 末地雾更浓。
+#else
     atmosphere = omniSky(omniNormalize(world)); // 末地只使用自定义环境色，不引入太阳光柱。
+#endif
 #endif
     if (isEyeInWater == 1) {
         vec3 water = color * exp(-vec3(0.18,0.065,0.035)*distance) + vec3(0.015,0.09,0.12)*(1.0-exp(-distance*0.08)); // 水下按波段吸收。

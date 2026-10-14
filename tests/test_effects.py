@@ -126,3 +126,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniAirScattering(direction)",text)  # 氛围阶段叠加散射。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
         self.assertIn("omniAirScattering",source)  # 合成阶段包含散射。
+
+    def test_end_fog_is_selectable(self):
+        """末地雾提供紫色漩涡与虚空暗色，接入末地雾路径且可回退。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_END_FOG",found); self.assertEqual(found["OMNI_END_FOG"].values,("0","1"))  # 末地雾可开关。
+        text = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniEndFog",text)  # 末地雾独立成函数。
+        self.assertIn("OMNI_END_FOG == 1",text)  # 回退路径由选项分派保留。
+        source = build.expand(build.SHADERS/"world1/composite.fsh")  # 从末地合成入口展开。
+        self.assertIn("omniEndFog",source)  # 末地雾进入合成阶段。
