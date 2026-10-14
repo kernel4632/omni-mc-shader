@@ -11,6 +11,8 @@
 #define OMNI_VIGNETTE 0.0 // [0.0 0.1 0.25 0.5]
 // @option {"label":{"zh_cn":"色差强度","en_us":"Chromatic aberration"}}
 #define OMNI_CHROMATIC 0.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"镜头耀斑","en_us":"Lens flare"},"description":{"zh_cn":"从屏幕太阳亮部生成鬼影与光环，被遮挡时自动减弱。","en_us":"Draws ghosts and a halo from the on-screen sun highlight, fading when occluded."}}
+#define OMNI_LENS_FLARE 1 // [0 1]
 // 时间重投影、深度和镜头颜色来自统一的屏幕协议。
 #include "/effects/antialiasing.glsl"
 
@@ -89,6 +91,36 @@ vec3 omniMotionBlur(vec3 color, vec2 uv) {
 #endif
 }
 
+// 屏幕太阳位置：把视空间太阳方向投影到屏幕，背后或屏幕外返回假。
+bool omniSunScreen(out vec2 sunUv) {
+    vec3 sunView = omniNormalize(sunPosition); // 加载器提供的视空间太阳方向。
+    if (sunView.z>=0.0) return false; // 太阳在相机后方不产生耀斑。
+    vec4 clip = gbufferProjection*vec4(sunView,0.0); // 方向投影到裁剪空间。
+    sunUv = clip.xy/clip.w*0.5+0.5; // 归一化到屏幕坐标。
+    return all(greaterThanEqual(sunUv,vec2(0))) && all(lessThanEqual(sunUv,vec2(1))); // 只保留屏幕内太阳。
+}
+// 镜头耀斑：从太阳亮部生成鬼影与光环，遮挡时由亮部自动减弱。
+vec3 omniLensFlare(vec2 uv) {
+#if OMNI_LENS_FLARE == 0
+    return vec3(0.0); // 关闭时没有额外采样。
+#else
+    vec2 sunUv; // 屏幕太阳坐标。
+    if (!omniSunScreen(sunUv)) return vec3(0.0); // 太阳不在画面内不产生耀斑。
+    float source = max(omniLuminance(texture(colortex0,sunUv).rgb)-1.0,0.0); // 现有亮部提供光源强度。
+    vec2 aspect = vec2(viewWidth/viewHeight,1.0); // 圆形柔光使用屏幕宽高比。
+    vec2 axis = sunUv-0.5; // 屏幕中心到太阳的方向。
+    vec3 flare = vec3(0.0); // 累加鬼影与光环。
+    for (int i=1;i<=4;i++) {
+        vec2 ghostUv = 0.5-axis*float(i)*0.6; // 沿中心反向排列的鬼影位置。
+        float d = length((uv-ghostUv)*aspect); // 到鬼影中心的距离。
+        flare += exp(-d*d*80.0)*vec3(0.6,0.75,1.0)/float(i+1); // 冷色渐弱的圆形鬼影。
+    }
+    float halo = exp(-pow(length((uv-sunUv)*aspect),2.0)*6.0); // 太阳近旁的柔光环。
+    flare += halo*vec3(1.0,0.86,0.62); // 暖色主耀光。
+    float daylight = smoothstep(-0.15,0.1,dot(omniNormalize(sunPosition),omniNormalize(upPosition))); // 太阳高度限制白昼耀斑。
+    return flare*source*daylight; // 遮挡与夜晚自动减弱。
+#endif
+}
 // 最终镜头顺序：景深、运动模糊、暗角；调用位置是 rendering/final.glsl。
 vec3 omniLens(vec3 color, vec2 uv) {
 #if defined OMNI_DOF || defined OMNI_MOTION_BLUR
@@ -97,6 +129,7 @@ vec3 omniLens(vec3 color, vec2 uv) {
     if (OMNI_CHROMATIC>0.0) color = omniLensSample(uv); // 只有色差时跳过景深循环。
 #endif
     color = omniMotionBlur(color,uv); // 运动模糊函数内部处理关闭和所有早返回。
+    color += omniLensFlare(uv); // 镜头耀斑在暗角之前叠加。
     return color*(1.0-OMNI_VIGNETTE*smoothstep(0.1,0.7,length(uv-0.5))); // 最后才应用暗角。
 }
 #endif

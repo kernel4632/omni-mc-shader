@@ -35,3 +35,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniHorizonCosine",text)  # 每方向地平线搜索独立成函数。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开全部引用。
         self.assertIn("omniHorizonOcclusion",source)  # 合成阶段包含地平线遮蔽。
+
+    def test_lens_flare_uses_scene_highlight(self):
+        """镜头耀斑在最终显示叠加，光源强度取自现有亮部且可关闭。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_LENS_FLARE",found); self.assertEqual(found["OMNI_LENS_FLARE"].values,("0","1"))  # 耀斑可开关。
+        text = (build.SHADERS/"effects/lens.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniLensFlare",text)  # 耀斑独立成函数。
+        self.assertIn("bool omniSunScreen",text)  # 屏幕太阳位置独立成函数。
+        self.assertIn("texture(colortex0,sunUv)",text)  # 光源强度来自现有亮部而非新附件。
+        source = build.expand(build.SHADERS/"world0/final.fsh")  # 从实际最终入口展开。
+        self.assertIn("omniLensFlare",source)  # 最终显示包含耀斑。
