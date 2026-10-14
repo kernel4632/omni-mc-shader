@@ -158,3 +158,15 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniOceanHeight((waterWorld+cameraPosition).xz)",terrain)  # 顶点按海浪抬升。
         source = build.expand(build.SHADERS/"world0/gbuffers_water.vsh")  # 从水面顶点入口展开。
         self.assertIn("omniOceanHeight",source)  # 顶点阶段包含海浪位移。
+
+    def test_climate_snow_and_wet(self):
+        """气候温度按高度与噪声估计，驱动自然积雪与湿润且可回退手动值。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_CLIMATE",found); self.assertEqual(found["OMNI_CLIMATE"].values,("0","1"))  # 气候覆盖可开关。
+        text = (build.SHADERS/"effects/material.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniTemperature",text)  # 温度估计独立成函数。
+        self.assertIn("smoothstep(0.30,0.10,temperature)",text)  # 冷处自然积雪。
+        self.assertIn("wetness*(0.5+0.5*(1.0-temperature))",text)  # 温度影响积水。
+        self.assertIn("OMNI_CLIMATE == 1",text)  # 手动回退路径由选项分派保留。
+        source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
+        self.assertIn("omniTemperature",source)  # 地形表面包含气候覆盖。

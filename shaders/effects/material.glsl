@@ -8,8 +8,10 @@
 #define OMNI_PARALLAX 0.0 // [0.0 0.02 0.05 0.1]
 // @option {"label":{"zh_cn":"湿润表面","en_us":"Wet surfaces"}}
 #define OMNI_WET_SURFACES
-// @option {"label":{"zh_cn":"积雪覆盖","en_us":"Snow coverage"},"description":{"zh_cn":"手动外观选项，按天空光与表面朝上程度覆盖；不推断生物群系温度。","en_us":"Artistic coverage based on skylight and surface orientation, not biome temperature."}}
+// @option {"label":{"zh_cn":"积雪覆盖","en_us":"Snow coverage"},"description":{"zh_cn":"手动额外覆盖，按天空光与表面朝上程度叠加；不推断生物群系温度。","en_us":"Extra artistic coverage based on skylight and surface orientation, not biome temperature."}}
 #define OMNI_SNOW 0.0 // [0.0 0.25 0.5 1.0]
+// @option {"label":{"zh_cn":"气候积雪湿润","en_us":"Climate snow/wet"},"description":{"zh_cn":"按高度与空间噪声估计温度，冷处自然积雪、温暖处更易积水；不读取真实生物群系数据。","en_us":"Estimates temperature from altitude and spatial noise for natural snow and wetness, without biome data."}}
+#define OMNI_CLIMATE 1 // [0 1]
 // 贴图编码和天气输入共用。
 #include "/common/math.glsl"
 #include "/common/uniforms.glsl"
@@ -45,18 +47,32 @@ void omniMaterial(inout vec4 base, inout vec3 normal, inout vec3 props, out floa
     base *= texture(gtexture,uv); // 无材质资源包时不采样未提供的材质纹理。
 #endif
 }
+// 气候温度：高度降低温度，空间噪声模拟生物群系差异。
+float omniTemperature(vec3 world) {
+    vec3 p = world+cameraPosition; // 绝对位置让温度带稳定。
+    float base = 0.5+(omniNoise(p*0.01)-0.5)*0.8; // 空间温度带。
+    float altitude = (p.y-64.0)/128.0; // 海平面以上每格趋冷。
+    return clamp(base-altitude*0.8,0.0,1.0); // 零为寒冷，一为炎热。
+}
 void omniSurface(inout vec3 color, inout vec3 props, vec3 normal, vec3 world, float skylight) {
     float up = max((mat3(gbufferModelViewInverse)*normal).y,0.0); // 朝上表面接收雨雪。
+    float snow = OMNI_SNOW; // 手动额外覆盖量。
+    float wetnessAmount = wetness; // 默认使用加载器湿润度。
+#if OMNI_CLIMATE == 1
+    float temperature = omniTemperature(world); // 估计气候温度。
+    snow = max(snow,smoothstep(0.30,0.10,temperature)); // 冷处自然积雪。
+    wetnessAmount = wetness*(0.5+0.5*(1.0-temperature)); // 温暖或低温都影响积水。
+#endif
 #ifdef OMNI_WET_SURFACES
-    float wet = wetness * up * smoothstep(0.7,1.0,skylight); // 洞穴与垂直墙面不凭空湿润。
+    float wet = wetnessAmount * up * smoothstep(0.7,1.0,skylight); // 洞穴与垂直墙面不凭空湿润。
     color *= 1.0-wet*0.25; // 湿润表面变暗。
     props.x = mix(props.x,0.08,wet); // 积水提高光滑程度。
 #endif
-    if (OMNI_SNOW>0.0) { // 零覆盖常量移除空间噪声计算。
-        float snow = OMNI_SNOW * up * smoothstep(0.7,1.0,skylight) * smoothstep(0.3,0.7,omniNoise((world+cameraPosition)*0.2)); // 空间纹理控制雪边缘。
-        color = mix(color,vec3(0.85,0.9,0.96),snow); // 手动雪覆盖使用线性底色。
-        props.x = mix(props.x,0.85,snow); // 雪为粗糙非金属表面。
-        props.y = mix(props.y,0.04,snow); // 积雪降低金属反射。
+    if (snow>0.0) { // 零覆盖常量移除空间噪声计算。
+        float cover = snow * up * smoothstep(0.7,1.0,skylight) * smoothstep(0.3,0.7,omniNoise((world+cameraPosition)*0.2)); // 空间纹理控制雪边缘。
+        color = mix(color,vec3(0.85,0.9,0.96),cover); // 积雪覆盖使用线性底色。
+        props.x = mix(props.x,0.85,cover); // 雪为粗糙非金属表面。
+        props.y = mix(props.y,0.04,cover); // 积雪降低金属反射。
     }
 }
 #endif
