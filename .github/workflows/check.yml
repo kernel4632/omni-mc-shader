@@ -1,0 +1,40 @@
+# 每次推送或 PR 都使用同一套本地命令检查与打包。
+name: 检查与构建
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: 检查 (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - name: 读取代码
+        uses: actions/checkout@v6
+      - name: 准备 Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: 安装锁定检查工具
+        run: python dev.py setup
+      - name: 检查自动化工具
+        run: python -m unittest discover -s tests
+      - name: 检查并打包光影
+        run: python build.py build
+      - name: 上传检查产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: Omni-${{ runner.os }}
+          path: dist/
+          if-no-files-found: error

@@ -1,0 +1,17 @@
+{
+  "files.associations": {
+    "*.vsh": "glsl",
+    "*.fsh": "glsl",
+    "*.gsh": "glsl",
+    "*.csh": "glsl"
+  },
+  "files.exclude": {
+    "**/__pycache__": true
+  },
+  "search.exclude": {
+    ".dev": true,
+    ".venv": true,
+    "dist": true
+  },
+  "python.defaultInterpreterPath": "${workspaceFolder}/.venv/Scripts/python.exe"
+}

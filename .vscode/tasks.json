@@ -1,0 +1,30 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Omni：检查并打包",
+      "type": "process",
+      "command": "python",
+      "args": ["build.py", "build"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "group": {"kind": "build", "isDefault": true},
+      "problemMatcher": []
+    },
+    {
+      "label": "Omni：准备全部调试工具",
+      "type": "process",
+      "command": "python",
+      "args": ["dev.py", "setup", "--graphics"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": []
+    },
+    {
+      "label": "Omni：观察并同步",
+      "type": "process",
+      "command": "python",
+      "args": ["dev.py", "watch"],
+      "options": {"cwd": "${workspaceFolder}"},
+      "problemMatcher": []
+    }
+  ]
+}

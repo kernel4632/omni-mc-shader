@@ -1,0 +1,16 @@
+# 项目内下载的工具、游戏环境与本机路径。
+.dev/
+.venv/
+dist/
+__pycache__/
+*.pyc
+*.rdc
+*.log
+
+# 这些文件由 build.py 生成，来源在效果和绘制设置中。
+shaders/shaders.properties
+shaders/lang/*.lang
+
+# 编辑器的个人状态。
+.idea/
+.vscode/*.local.json

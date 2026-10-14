@@ -1,0 +1,9 @@
+# 定期提出工具升级 PR，升级后仍由自动检查验证。
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: 'ci(deps)'
