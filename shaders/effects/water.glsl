@@ -10,6 +10,8 @@
 #define OMNI_RAIN_RIPPLES
 // @option {"label":{"zh_cn":"玩家互动水纹","en_us":"Player ripples"},"description":{"zh_cn":"相机靠近水面移动时生成解析圆环；不是物理模拟，不读取其他实体。","en_us":"Analytic rings near a moving camera, not a fluid simulation or other entity tracking."}}
 //#define OMNI_PLAYER_RIPPLES
+// @option {"label":{"zh_cn":"水波凹凸细节","en_us":"Water bump detail"},"description":{"zh_cn":"在解析波上叠加多层程序噪声，增加水面细碎起伏。","en_us":"Adds multi-octave procedural noise on top of the analytic waves for fine ripples."}}
+#define OMNI_WATER_BUMP 1 // [0 1]
 // 反射和坐标重建读取已保存的不透明画面。
 #include "/effects/reflection.glsl"
 float omniWave(vec2 p, float relativeHeight) {
@@ -30,12 +32,28 @@ float omniWave(vec2 p, float relativeHeight) {
 #endif
     return wave*OMNI_WAVE_STRENGTH; // 零强度消除法线变化。
 }
+// 水面细碎凹凸：多层程序噪声提供高频涟漪细节。
+float omniWaterDetail(vec2 p) {
+    float t = frameTimeCounter; // 与解析波共享时间。
+    float d = omniNoise(vec3(p*0.35,t*0.6))*0.02; // 中频涟漪。
+    d += omniNoise(vec3(p*1.1,t*1.1))*0.008; // 高频细节。
+    d += omniNoise(vec3(p*2.4,-t*1.4))*0.004; // 极细纹理。
+    return d*OMNI_WAVE_STRENGTH; // 与波强度共同缩放。
+}
+// 水面高度：解析波与细碎凹凸共同提供法线梯度。
+float omniWaterHeight(vec2 p, float relativeHeight) {
+    float height = omniWave(p,relativeHeight); // 大尺度解析波。
+#if OMNI_WATER_BUMP == 1
+    height += omniWaterDetail(p); // 细碎凹凸细节。
+#endif
+    return height;
+}
 vec3 omniWaterNormal(vec3 world, vec3 originalNormal) {
     vec3 worldNormal = omniNormalize(mat3(gbufferModelViewInverse)*originalNormal); // 原表面朝向由真实几何提供。
     if (OMNI_WAVE_STRENGTH<=0.0 || worldNormal.y<0.9) return originalNormal; // 瀑布侧面和底面保留原法线，零强度不造波。
     vec2 p = (world+cameraPosition).xz; // 世界锚定的波浪。
-    float center = omniWave(p,world.y); // 高度中心样本使用相机相对水面高度。
-    vec3 n = omniNormalize(vec3((center-omniWave(p+vec2(0.08,0),world.y))/0.08,1.0,(center-omniWave(p+vec2(0,0.08),world.y))/0.08)); // 有限差分只扰动顶面。
+    float center = omniWaterHeight(p,world.y); // 高度中心样本使用相机相对水面高度。
+    vec3 n = omniNormalize(vec3((center-omniWaterHeight(p+vec2(0.08,0),world.y))/0.08,1.0,(center-omniWaterHeight(p+vec2(0,0.08),world.y))/0.08)); // 有限差分只扰动顶面。
     return omniNormalize(mat3(gbufferModelView)*n); // 合成使用视空间法线。
 }
 // 调用位置：rendering/composite.glsl；示例：omniWater(color, view, waterNormal, texcoord)。

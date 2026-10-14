@@ -136,3 +136,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_END_FOG == 1",text)  # 回退路径由选项分派保留。
         source = build.expand(build.SHADERS/"world1/composite.fsh")  # 从末地合成入口展开。
         self.assertIn("omniEndFog",source)  # 末地雾进入合成阶段。
+
+    def test_water_bump_detail_feeds_normal(self):
+        """水波凹凸细节叠加到解析波高度，参与法线有限差分且可关闭。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_WATER_BUMP",found); self.assertEqual(found["OMNI_WATER_BUMP"].values,("0","1"))  # 凹凸细节可开关。
+        text = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniWaterDetail",text)  # 细节独立成函数。
+        self.assertIn("float omniWaterHeight",text)  # 合成高度独立成函数。
+        self.assertIn("omniWaterHeight(p,world.y)",text)  # 法线重心样本使用合成高度。
+        self.assertIn("omniWaterHeight(p+vec2(0.08,0),world.y)",text)  # 有限差分包含细节。
