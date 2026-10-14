@@ -13,6 +13,8 @@
 #define OMNI_CHROMATIC 0.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"镜头耀斑","en_us":"Lens flare"},"description":{"zh_cn":"从屏幕太阳亮部生成鬼影与光环，被遮挡时自动减弱。","en_us":"Draws ghosts and a halo from the on-screen sun highlight, fading when occluded."}}
 #define OMNI_LENS_FLARE 1 // [0 1]
+// @option {"label":{"zh_cn":"散景光圈形状","en_us":"Bokeh aperture"},"description":{"zh_cn":"零为圆形散景，一为六边形光圈，使失焦高光成多边形。","en_us":"Zero is a circular blur; one is a hexagonal aperture for polygonal highlights."}}
+#define OMNI_BOKEH_SHAPE 1 // [0 1]
 // 时间重投影、深度和镜头颜色来自统一的屏幕协议。
 #include "/effects/antialiasing.glsl"
 
@@ -26,6 +28,17 @@ vec3 omniLensSample(vec2 uv) {
     return color; // 返回已经完成色差的线性颜色。
 }
 
+// 光圈形状半径：多边形光圈在给定角度的边界半径比例。
+float omniApertureRadius(float angle) {
+#if OMNI_BOKEH_SHAPE == 0
+    return 1.0; // 圆形光圈边界半径为常数。
+#else
+    const float blades = 6.0; // 六片光圈叶片。
+    float sector = 6.2831853/blades; // 每片占据的角度。
+    float local = abs(mod(angle,sector)-sector*0.5); // 相对最近边中点的角度。
+    return cos(sector*0.5)/cos(local); // 边心距到多边形边界的比例。
+#endif
+}
 // 读取一个景深样本：先拒绝手和无效透明像素，再对有效样本做散焦。
 vec3 omniFocusSample(vec2 uv) {
     ivec2 pixel = clamp(ivec2(uv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 所有类别读取最近元数据。
@@ -44,8 +57,9 @@ vec3 omniFocusSample(vec2 uv) {
     float radius = min(abs(distance-focus)/max(distance,0.1)*8.0,8.0); // 弥散范围保持有限。
     vec3 sum = color; float weight = 1.0; // 当前样本先参与平均。
     for (int i=0;i<8;i++) {
-        float angle = float(i)*2.399963; // 圆形散焦样本角度。
-        vec2 sampleUv = clamp(uv+vec2(cos(angle),sin(angle))*radius/vec2(viewWidth,viewHeight),0.0,1.0); // 生成屏幕内样本。
+        float angle = float(i)*2.399963; // 散焦样本角度。
+        float shaped = radius*omniApertureRadius(angle); // 光圈形状调制样本半径。
+        vec2 sampleUv = clamp(uv+vec2(cos(angle),sin(angle))*shaped/vec2(viewWidth,viewHeight),0.0,1.0); // 生成屏幕内样本。
         ivec2 samplePixel = clamp(ivec2(sampleUv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 样本元数据使用最近像素。
         if (texelFetch(colortex1,samplePixel,0).a==2.0 || texelFetch(colortex7,samplePixel,0).a<0.5 || length(omniSceneView(sampleUv,false))<distance*0.75) continue; // 手、覆盖层和前景遮挡不泄漏。
         sum += omniLensSample(sampleUv); weight += 1.0; // 色差和景深顺序保持一致。

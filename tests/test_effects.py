@@ -46,3 +46,11 @@ class EffectTests(unittest.TestCase):
         self.assertIn("texture(colortex0,sunUv)",text)  # 光源强度来自现有亮部而非新附件。
         source = build.expand(build.SHADERS/"world0/final.fsh")  # 从实际最终入口展开。
         self.assertIn("omniLensFlare",source)  # 最终显示包含耀斑。
+
+    def test_bokeh_aperture_shape_modulates_focus(self):
+        """散景光圈形状通过选项调制失焦采样半径，圆形路径仍可保留。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_BOKEH_SHAPE",found); self.assertEqual(found["OMNI_BOKEH_SHAPE"].values,("0","1"))  # 光圈形状可切换。
+        text = (build.SHADERS/"effects/lens.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniApertureRadius",text)  # 多边形边界半径独立成函数。
+        self.assertIn("radius*omniApertureRadius(angle)",text)  # 景深采样半径被光圈形状调制。
