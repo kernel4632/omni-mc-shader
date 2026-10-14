@@ -39,6 +39,21 @@ def validate_tag(tag: str, root: Path = ROOT) -> None:
         raise ValueError(f"发布标签 {tag!r} 与 VERSION 不一致")
 
 
+def release_notes(release: str, root: Path = ROOT) -> str:
+    """提取指定版本的中文更新记录，保留小标题，拒绝缺失、空白或重复记录。"""
+    text = (root / "CHANGELOG.md").read_text(encoding="utf-8")
+    headings = list(re.finditer(r"^##[ \t]+(.+?)[ \t]*$", text, re.MULTILINE))
+    matches = [index for index, heading in enumerate(headings) if heading[1] == release]
+    if len(matches) != 1:
+        raise ValueError(f"CHANGELOG.md 必须包含且只包含一个 ## {release} 更新记录")
+    index = matches[0]
+    end = headings[index + 1].start() if index + 1 < len(headings) else len(text)
+    body = text[headings[index].end():end].strip()
+    if not body:
+        raise ValueError(f"CHANGELOG.md 中 {release} 的更新记录不能为空")
+    return f"## 本次修改\n\n{body}\n"
+
+
 def tool(name: str) -> Path:
     """寻找项目内已安装的检查器；缺失时给出准备命令。"""
     names = {"glslang": ("glslangValidator", "glslang"), "actionlint": ("actionlint",)}
@@ -174,7 +189,7 @@ def compile_shaders(entries: list[Path], options: dict, profiles: list) -> None:
 
 def check() -> None:
     """验证版本、入口、选项、预设、生成文件及工作流，失败直接中止。"""
-    version()
+    release_notes(version()) # 每个待发布版本都必须有对应的修改说明。
     entries = entrypoints()
     options, profiles, files = configuration()
     for path, expected in files.items():
@@ -240,13 +255,24 @@ def sync() -> None:
 def main() -> None:
     """处理命令参数，并在唯一入口报告可读错误。"""
     parser = argparse.ArgumentParser(description="Omni 光影构建与检查")
-    parser.add_argument("command", choices=("generate", "check", "build", "sync", "version"))
+    parser.add_argument("command", choices=("generate", "check", "build", "sync", "version", "notes"))
     parser.add_argument("--tag", help="检查发布标签是否与 VERSION 一致")
+    parser.add_argument("--output", type=Path, help="将 notes 说明写入指定文件")
     args = parser.parse_args()
+    if args.output and args.command != "notes":
+        parser.error("--output 只能用于 notes 命令")
     if args.tag:
         validate_tag(args.tag)
     if args.command == "version":
         print(version())
+        return
+    if args.command == "notes":
+        notes = release_notes(version())
+        if args.output:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(notes, encoding="utf-8", newline="\n")
+        else:
+            print(notes, end="")
         return
     if args.command == "generate":
         generate()

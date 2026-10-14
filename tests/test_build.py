@@ -67,6 +67,26 @@ class BuildTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 build.version(folder)
 
+    def test_release_notes_only_include_selected_version(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            (folder / "CHANGELOG.md").write_text(
+                "# 更新记录\n\n## 未发布\n\n- 后续修改\n\n## 1.0.0\n\n"
+                "### 修复\n\n- 修复水面闪烁。\n\n## 0.9.0\n\n- 旧修改\n", encoding="utf-8")
+            self.assertEqual(build.release_notes("1.0.0", folder),
+                             "## 本次修改\n\n### 修复\n\n- 修复水面闪烁。\n")
+            self.assertEqual(build.release_notes("0.9.0", folder), "## 本次修改\n\n- 旧修改\n")
+
+    def test_release_notes_reject_missing_empty_and_duplicate_versions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            for text in ("## 0.9.0\n- 旧修改", "## 1.0.0\n\n## 0.9.0\n- 旧修改",
+                         "## 1.0.0\n- 修改一\n## 1.0.0\n- 修改二"):
+                with self.subTest(text=text):
+                    (folder / "CHANGELOG.md").write_text(text, encoding="utf-8")
+                    with self.assertRaises(ValueError):
+                        build.release_notes("1.0.0", folder)
+
     def test_deterministic_archive(self):
         with tempfile.TemporaryDirectory() as temporary:
             first, second = Path(temporary) / "one.zip", Path(temporary) / "two.zip"

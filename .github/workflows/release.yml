@@ -48,6 +48,8 @@ jobs:
         run: python -m unittest discover -s tests
       - name: 检查并打包
         run: python build.py build
+      - name: 从当前版本更新记录生成发行说明
+        run: python build.py notes --output dist/release-notes.md
       - name: 创建 GitHub 版本并上传文件
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -55,7 +57,7 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           RELEASE_DRAFT: ${{ inputs.draft || false }}
         run: |
-          args=(--verify-tag --generate-notes --title "Omni $RELEASE_TAG")
+          args=(--verify-tag --notes-file dist/release-notes.md --title "Omni $RELEASE_TAG")
           if [[ "$RELEASE_TAG" == *-* ]]; then args+=(--prerelease); fi
           if [[ "$RELEASE_DRAFT" == "true" ]]; then args+=(--draft); fi
           gh release create "$RELEASE_TAG" dist/*.zip dist/SHA256SUMS.txt "${args[@]}"
