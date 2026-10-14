@@ -24,3 +24,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("float omniBayer",text)  # 有序矩阵阈值独立成函数。
         self.assertIn("omniSrgb(clamp(color,0.0,1.0))",text)  # 抖动发生在显示编码之后。
         self.assertIn("gl_FragCoord.xy",text)  # 抖动按真实像素坐标取样。
+
+    def test_horizon_ao_is_selectable_and_expands(self):
+        """地平线环境遮蔽通过算法选项接入合成，螺旋路径仍然保留。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_AO_MODE",found); self.assertEqual(found["OMNI_AO_MODE"].values,("0","1"))  # 两种遮蔽算法可选。
+        text = (build.SHADERS/"effects/ambient.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniHorizonOcclusion",text)  # 地平线积分独立成函数。
+        self.assertIn("float omniSpiralOcclusion",text)  # 旧螺旋路径没有被删除。
+        self.assertIn("omniHorizonCosine",text)  # 每方向地平线搜索独立成函数。
+        source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开全部引用。
+        self.assertIn("omniHorizonOcclusion",source)  # 合成阶段包含地平线遮蔽。
