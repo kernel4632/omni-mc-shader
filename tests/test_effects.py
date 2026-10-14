@@ -116,3 +116,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_NETHER_COLOR == 1",text)  # 回退路径由选项分派保留。
         source = build.expand(build.SHADERS/"world-1/composite.fsh")  # 从下界合成入口展开。
         self.assertIn("omniNetherColor",source)  # 下界天空包含程序化氛围色。
+
+    def test_analytic_atmosphere_scattering(self):
+        """解析大气散射作为可选近似接入氛围，不依赖外部查找表。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_ATMOSPHERE_SCATTER",found); self.assertEqual(found["OMNI_ATMOSPHERE_SCATTER"].values,("0","1"))  # 散射可开关。
+        text = (build.SHADERS/"effects/atmosphere.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniAirScattering",text)  # 散射独立成函数。
+        self.assertIn("omniAirScattering(direction)",text)  # 氛围阶段叠加散射。
+        source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
+        self.assertIn("omniAirScattering",source)  # 合成阶段包含散射。
