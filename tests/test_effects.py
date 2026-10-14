@@ -106,3 +106,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniTemporalNoise(vec2(gl_FragCoord.xy))",ambient)  # 遮蔽相位使用时序噪声。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
         self.assertIn("omniTemporalNoise",source)  # 合成阶段包含时序重建。
+
+    def test_nether_palette_is_selectable(self):
+        """下界氛围色按方向噪声混合，接入下界天空且可回退到加载器雾色。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_NETHER_COLOR",found); self.assertEqual(found["OMNI_NETHER_COLOR"].values,("0","1"))  # 下界氛围色可开关。
+        text = (build.SHADERS/"effects/sky.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniNetherColor",text)  # 下界色独立成函数。
+        self.assertIn("OMNI_NETHER_COLOR == 1",text)  # 回退路径由选项分派保留。
+        source = build.expand(build.SHADERS/"world-1/composite.fsh")  # 从下界合成入口展开。
+        self.assertIn("omniNetherColor",source)  # 下界天空包含程序化氛围色。
