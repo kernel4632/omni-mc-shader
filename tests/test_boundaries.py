@@ -3,6 +3,7 @@
 运行示例 python -m unittest discover -s tests；发布和采样进程全部用模拟替代。
 """
 import contextlib  # 参数错误输出不污染测试结果。
+import ctypes  # Windows短路径回归使用系统规范化接口。
 import io  # 收集统一入口的可读错误。
 import json  # 构造外部依赖与配置输入。
 import subprocess  # 使用真实命令行检查不会执行动作的非法参数。
@@ -76,9 +77,23 @@ class BoundaryTests(unittest.TestCase):
             actual = {"ExecutablePath":str(java),"CommandLine":f'java --gameDir "{directory}"'}  # 模拟实际系统进程身份，而不是只看pid记录。
             with patch.object(game,"ROOT",root),patch.object(game.subprocess,"run",return_value=Mock(stdout=json.dumps(actual))) as run:
                 game.development_process(7)  # 正确专用实例身份通过。
+                actual["CommandLine"] = f"java --gameDir {directory}"  # 无空格目录可以不带引号。
+                run.return_value.stdout=json.dumps(actual); game.development_process(7)  # 两种合法命令行格式都保持身份检查。
+                if sys.platform=="win32":
+                    buffer = ctypes.create_unicode_buffer(32768); length = ctypes.windll.kernel32.GetShortPathNameW(str(directory),buffer,len(buffer))  # 取得同一目录的Windows短名。
+                    if length and buffer.value.casefold()!=str(directory).casefold():
+                        actual["CommandLine"] = f'java --gameDir "{buffer.value}"'; run.return_value.stdout=json.dumps(actual); game.development_process(7)  # 短名与长名必须指向同一真实目录。
                 actual["CommandLine"] = f'java --gameDir "{root}/player"'; run.return_value.stdout=json.dumps(actual)
                 with self.assertRaisesRegex(ValueError,"开发游戏目录"): game.development_process(7)
                 with self.assertRaisesRegex(ValueError,"进程号"): game.development_process(8)  # 记录之外的任意pid直接失败。
+
+    def test_sample_context_precedes_invalid_tool_boundary(self):
+        """非法性能上下文先报告上下文，不能被工具路径错误遮盖。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); context = root/"bad.json"; context.write_text("[]",encoding="utf-8")
+            with patch.object(game,"ROOT",root),patch.object(game.sys,"platform","win32"),patch.object(game,"development_process") as identity,patch.object(game.subprocess,"run") as run:
+                with self.assertRaisesRegex(ValueError,"性能上下文"): game.sample(root/"outside.exe",0,1,context)
+                identity.assert_not_called(); run.assert_not_called()  # 上下文失败不触碰工具和进程。
 
     def test_current_properties_and_explicit_legacy_migration(self):
         """当前属性不冒充旧版；旧版只迁移原来存在的调试接口。"""

@@ -216,22 +216,68 @@ def performance_context(context: dict) -> None:
     if not isinstance(context,dict) or set(context)!=required or any(not isinstance(v,str) or not v.strip() for v in context.values()):
         raise ValueError("性能上下文必须填写设备、驱动、场景、分辨率、预设、游戏与加载器")
 
+def command_arguments(command_line: str) -> list[str]:
+    """按Windows启动参数规则拆分命令行，拒绝未闭合或粘连引号。"""
+    if not isinstance(command_line,str): raise ValueError("实际进程没有可读的命令行")
+    result, token = [], []  # 保存已经拆出的参数和当前参数。
+    quoted = False  # 跟踪当前是否处于带引号的参数。
+    started = False  # 空引号也要被识别为一个参数。
+    closed_quote = False  # 引号结束后不接受粘连字符。
+    for character in command_line:
+        if character=='"':
+            if closed_quote: raise ValueError("实际进程命令包含歧义引号")
+            quoted = not quoted; started = True  # 路径空格只在引号范围内保留。
+        elif character.isspace() and not quoted:
+            if started:
+                result.append("".join(token)); token=[]; started=False; closed_quote=False  # 空白结束当前参数。
+        else:
+            if closed_quote: raise ValueError("实际进程命令包含粘连参数")
+            token.append(character); started=True  # 普通字符直接保留，不改写路径。
+        if not quoted and started and character=='"': closed_quote=True
+    if quoted: raise ValueError("实际进程命令包含未闭合引号")
+    if started: result.append("".join(token))
+    return result
+
+def game_directory_argument(command_line: str) -> str:
+    """从实际命令行取出唯一的--gameDir值，支持带引号和无空格参数。"""
+    arguments = command_arguments(command_line)  # 先完成完整命令行边界检查。
+    values = []  # 同名参数超过一个就拒绝身份判断。
+    for index, argument in enumerate(arguments):
+        if argument=="--gameDir":
+            if index+1>=len(arguments) or not arguments[index+1]: raise ValueError("实际进程命令缺少游戏目录")
+            values.append(arguments[index+1])
+        elif argument.startswith("--gameDir="):
+            values.append(argument[len("--gameDir="):])
+    if len(values)!=1 or not values[0]: raise ValueError("实际进程命令的游戏目录不唯一")
+    return values[0]
+
+def normalized_path(path: str | Path) -> Path:
+    """统一绝对路径、真实路径和Windows大小写，兼容短路径与长路径。"""
+    return Path(os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path)))))
+
+def same_existing_directory(path: str | Path, expected: Path) -> bool:
+    """比较两个已存在目录的真实身份，并确认目录仍在开发实例边界内。"""
+    candidate = Path(path)
+    if not candidate.is_absolute() or not candidate.is_dir() or not expected.is_dir(): return False
+    candidate_real, expected_real = normalized_path(candidate), normalized_path(expected)  # 短名和长名归一到真实目录。
+    development_real = normalized_path(ROOT/".dev")  # 身份比较仍限制在项目开发区。
+    return candidate_real==expected_real and candidate_real.is_relative_to(development_real)
+
 def development_process(pid: int) -> None:
     """核对工具启动记录与当前实际进程，拒绝任意进程号与号复用。"""
     record = json.loads(development_path(ROOT/".dev/game-process.json").read_text(encoding="utf-8"))  # 只有工具自己启动的开发实例可采样。
     if not isinstance(record,dict) or record.get("pid")!=pid or not isinstance(record.get("java"),str) or not isinstance(record.get("gameDirectory"),str):
         raise ValueError("进程号不属于记录的 Omni 开发实例")
-    expected_directory = development_path(ROOT/".dev/minecraft").resolve()  # 数据目录仍需实际边界检查。
-    if Path(record["gameDirectory"]).resolve()!=expected_directory:
+    expected_directory = development_path(ROOT/".dev/minecraft")  # 数据目录仍需实际边界检查。
+    if not same_existing_directory(record["gameDirectory"],expected_directory):
         raise ValueError("记录的进程不使用本项目开发目录")
     command = f"Get-CimInstance Win32_Process -Filter 'ProcessId={pid}' | Select-Object ExecutablePath,CommandLine | ConvertTo-Json -Compress"  # pid已检查为正整数，没有字符串命令注入。
     result = subprocess.run(["powershell","-NoProfile","-Command",command],check=True,capture_output=True,text=True,encoding="utf-8",errors="replace")
     actual = json.loads(result.stdout or "null")  # 权限不足或进程不存在时拒绝，不猜测身份。
     if not isinstance(actual,dict) or not actual.get("ExecutablePath") or Path(actual["ExecutablePath"]).resolve()!=Path(record["java"]).resolve():
         raise ValueError("实际进程与开发运行时不匹配")
-    arguments = actual.get("CommandLine","").replace("\\","/").lower()  # 比较标准化后的受控启动参数。
-    target = str(expected_directory).replace("\\","/").lower()
-    if not re.search(r'--gameDir\s+"?'+re.escape(target)+r'(?:"|\s|$)',arguments,re.I):
+    actual_directory = game_directory_argument(actual.get("CommandLine"))
+    if not same_existing_directory(actual_directory,expected_directory):
         raise ValueError("实际进程命令没有匹配的开发游戏目录")
 
 def frame_report(source: Path, pid: int, context: dict) -> dict:
@@ -254,11 +300,12 @@ def frame_report(source: Path, pid: int, context: dict) -> dict:
 
 def sample(binary: Path, pid: int, seconds: int, context: Path) -> Path:
     """调用官方采样器捕获专用游戏进程，固定写入开发目录。"""
-    binary = binary.resolve()
-    if sys.platform!="win32" or not binary.is_file() or not binary.is_relative_to(development_path(ROOT/".dev/tools")) or type(pid) is not int or pid<=0 or type(seconds) is not int or not 5<=seconds<=600:
-        raise ValueError("采样需要开发目录内的 Windows PresentMon、游戏进程号与五至六百秒时长")
-    data = json.loads(context.read_text(encoding="utf-8"))  # 输入场景信息先保留原始记录。
+    data = json.loads(context.read_text(encoding="utf-8"))  # 性能上下文先于工具与进程边界，错误输入不产生外部动作。
     performance_context(data)  # 无效上下文必须在进程检查与采样之前失败。
+    binary = binary.resolve()
+    tools = development_path(ROOT/".dev/tools")
+    if sys.platform!="win32" or not binary.is_file() or not normalized_path(binary).is_relative_to(normalized_path(tools)) or type(pid) is not int or pid<=0 or type(seconds) is not int or not 5<=seconds<=600:
+        raise ValueError("采样需要开发目录内的 Windows PresentMon、游戏进程号与五至六百秒时长")
     folder = development_path(ROOT / ".dev/reports/performance")
     output = development_path(folder / "frames.csv")  # 真实原始采样文件不能是链接。
     destination = development_path(folder / "summary.json")
