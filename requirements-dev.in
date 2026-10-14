@@ -1,4 +1,4 @@
-# 仅用于本机显卡绘制测试；构建工具使用 Python 标准库。
+# 用于本机显卡测试与独立游戏启动；构建工具使用 Python 标准库。
 glfw==2.9.0
 PyOpenGL==3.1.10
 minecraft-launcher-lib==8.0

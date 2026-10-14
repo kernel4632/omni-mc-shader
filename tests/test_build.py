@@ -6,6 +6,7 @@
 
 import json
 import io
+import sys
 import tarfile
 import tempfile
 import unittest
@@ -72,6 +73,9 @@ class BuildTests(unittest.TestCase):
             build.archive(first, {"b": b"two", "a": b"one"})
             build.archive(second, {"a": b"one", "b": b"two"})
             self.assertEqual(first.read_bytes(), second.read_bytes())
+            import zipfile
+            with zipfile.ZipFile(first) as package:
+                self.assertTrue(all(member.create_system == 3 for member in package.infolist()))
 
     def test_generated_files_match_sources(self):
         _, _, files = build.configuration()
@@ -113,7 +117,7 @@ class BuildTests(unittest.TestCase):
                     if not valid:
                         with self.assertRaises(tarfile.FilterError):
                             dev.extract(package, folder / "unsafe")
-                    elif __import__("sys").platform != "win32":
+                    elif sys.platform != "win32":
                         dev.extract(package, folder / "safe")
                         self.assertEqual((folder / "safe/alias").read_bytes(), b"test")
 

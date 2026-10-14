@@ -16,8 +16,8 @@
 | 本地选项、引用和打包检查 | 由 `python build.py check` 验证 |
 | 本地构建工具回归测试 | 由 `python -m unittest discover -s tests` 验证 |
 | 真实显卡 final 绘制 | Intel Arc 核显：正常画面、深度与坐标三个视图通过 |
-| NVIDIA RTX 5060 | 设备存在；尚未指定该设备完成绘制测试，未验证 |
-| Minecraft / Iris 场景绘制 | 未验证，不能用离线或独立 OpenGL 测试代替 |
+| NVIDIA RTX 5060 | Minecraft 26.3、Fabric 0.19.5、Iris 1.11.7、Sodium 0.9.2 启动并加载 Omni 成功 |
+| Minecraft / Iris 世界内画面 | 未验证，当前仅验证到启动与光影包加载 |
 | RenderDoc 游戏捕获 | 便携程序已安装并验证官方签名；游戏捕获未验证 |
 | OptiFine | 未验证 |
 | AMD、macOS、其他游戏版本 | 未验证 |
@@ -25,6 +25,8 @@
 
 本机 GPU 报告放 `.dev/reports/gpu.json`，包含实际设备与驱动的 OpenGL 信息。
 GitHub 自动检查的结果以 Actions 运行记录为准。
+Windows 与 Linux 的检查、测试和构建均已通过；标签自动发布已实际成功。
+开发测试身份的在线账号查询会失败，这不属于光影编译错误。正常登录由启动器处理。
 
 ## 后续适配记录
 
