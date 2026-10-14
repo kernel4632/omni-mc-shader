@@ -8,9 +8,27 @@
 #define OMNI_SSR_STEPS 24 // [12 24 48]
 // @option {"label":{"zh_cn":"反射强度","en_us":"Reflection strength"},"slider":true}
 #define OMNI_REFLECTION_STRENGTH 1.0 // [0.0 0.5 1.0]
+// @option {"label":{"zh_cn":"反射去噪","en_us":"Reflection denoise"},"description":{"zh_cn":"按命中深度相似度加权多点，减少屏幕反射噪点。","en_us":"Weights multiple taps by hit depth similarity to reduce SSR noise."}}
+#define OMNI_REFLECTION_DENOISE 1 // [0 1]
 // 天空回退与屏幕重建共享输入。
 #include "/effects/sky.glsl"
 #include "/common/coordinates.glsl"
+// 反射去噪：按命中深度相似度加权多个旋转采样，深度差大的邻点不参与。
+vec3 omniReflectionFilter(vec2 hitUv, float hitDepth, float roughness) {
+    float radius = mix(1.0,4.0,roughness); // 粗糙表面使用更大的过滤足迹。
+    vec2 pixel = radius/vec2(viewWidth,viewHeight); // 采样步长折算到屏幕。
+    vec3 sum = texture(colortex3,hitUv).rgb; float weight = 1.0; // 中心样本先参与平均。
+    for (int i=0;i<8;i++) {
+        float angle = float(i)*2.399963; // 旋转采样减少方向性条纹。
+        vec2 sampleUv = clamp(hitUv+vec2(cos(angle),sin(angle))*pixel,0.0,1.0); // 屏幕内样本。
+        float sampleDepth = texture(depthtex1,sampleUv).r; // 不透明深度。
+        if (sampleDepth>=0.999999) continue; // 天空不参与去噪。
+        vec3 sampleView = omniView(sampleUv,sampleDepth); // 邻点真实位置。
+        float similarity = exp(-abs(sampleView.z-hitDepth)*2.0); // 深度相近才混合。
+        sum += texture(colortex3,sampleUv).rgb*similarity; weight += similarity; // 加权累积。
+    }
+    return sum/max(weight,1e-4); // 按有效权重归一化。
+}
 vec3 omniReflected(vec3 view, vec3 normal, float roughness) {
     vec3 ray = reflect(omniNormalize(view),normal); // 视空间反射方向。
     vec3 reflected = omniSky(mat3(gbufferModelViewInverse)*ray); // 屏幕外或被遮挡时有明确环境回退。
@@ -36,12 +54,16 @@ vec3 omniReflected(vec3 view, vec3 normal, float roughness) {
         }
 #endif
         if (hit && length(target-view)>0.2) {
+#if OMNI_REFLECTION_DENOISE == 1
+            vec3 sampleColor = omniReflectionFilter(hitUv,target.z,roughness); // 深度感知去噪。
+#else
             vec2 blur = vec2(roughness*roughness*0.025); // 粗糙度控制反射足迹。
             vec3 sampleColor = texture(colortex3,hitUv).rgb * 0.4; // 命中颜色必须使用与命中深度相同的屏幕坐标。
             sampleColor += texture(colortex3,clamp(hitUv+vec2(blur.x,0),0.0,1.0)).rgb*0.15;
             sampleColor += texture(colortex3,clamp(hitUv-vec2(blur.x,0),0.0,1.0)).rgb*0.15;
             sampleColor += texture(colortex3,clamp(hitUv+vec2(0,blur.y),0.0,1.0)).rgb*0.15;
             sampleColor += texture(colortex3,clamp(hitUv-vec2(0,blur.y),0.0,1.0)).rgb*0.15;
+#endif
             float edge = smoothstep(0.01,0.12,min(min(hitUv.x,hitUv.y),min(1.0-hitUv.x,1.0-hitUv.y))); // 边缘淡入回退。
             reflected = mix(reflected,sampleColor,edge); // 正确保留屏幕外天空。
             break; // 首个可用交点结束步进。

@@ -85,3 +85,12 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniShadow(sampleWorld,sampleNormal)",text)  # 光柱来自真实阴影可见性。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
         self.assertIn("vec3 omniFog",source)  # 合成阶段包含雾主体。
+
+    def test_reflection_denoise_filters_by_depth(self):
+        """反射去噪按命中深度加权邻点，旧五点路径仍可保留。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_REFLECTION_DENOISE",found); self.assertEqual(found["OMNI_REFLECTION_DENOISE"].values,("0","1"))  # 去噪可开关。
+        text = (build.SHADERS/"effects/reflection.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniReflectionFilter",text)  # 去噪独立成函数。
+        self.assertIn("omniReflectionFilter(hitUv,target.z,roughness)",text)  # 使用命中深度做相似度判断。
+        self.assertIn("OMNI_REFLECTION_DENOISE == 1",text)  # 旧路径由选项分派保留。
