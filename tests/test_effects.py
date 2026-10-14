@@ -54,3 +54,15 @@ class EffectTests(unittest.TestCase):
         text = (build.SHADERS/"effects/lens.glsl").read_text(encoding="utf-8")
         self.assertIn("float omniApertureRadius",text)  # 多边形边界半径独立成函数。
         self.assertIn("radius*omniApertureRadius(angle)",text)  # 景深采样半径被光圈形状调制。
+
+    def test_cloud_shadow_uses_density(self):
+        """云影从地表沿光线步进云密度，只衰减主世界直射光且可关闭。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_CLOUD_SHADOW",found); self.assertEqual(found["OMNI_CLOUD_SHADOW"].values,("0","1"))  # 云影可开关。
+        text = (build.SHADERS/"effects/cloud.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniCloudShadow",text)  # 云影独立成函数。
+        self.assertIn("omniCloudDensity(p)",text)  # 复用同一云密度来源。
+        sun = (build.SHADERS/"effects/sunlight.glsl").read_text(encoding="utf-8")
+        self.assertIn("omniCloudShadow(world)",sun)  # 直射光按云影衰减。
+        source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
+        self.assertIn("omniCloudShadow",source)  # 地形照明包含云影。

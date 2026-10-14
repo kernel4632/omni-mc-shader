@@ -12,6 +12,8 @@
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"云颜色冷暖","en_us":"Cloud color temperature"},"slider":true}
 #define OMNI_CLOUD_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
+// @option {"label":{"zh_cn":"云影","en_us":"Cloud shadow"},"description":{"zh_cn":"地表直射光沿光线方向按云密度衰减。","en_us":"Attenuates direct sunlight by cloud density along the light direction."}}
+#define OMNI_CLOUD_SHADOW 1 // [0 1]
 // 天空颜色与云照明共享天体输入。
 #include "/effects/sky.glsl"
 // 成熟无纹理梯度噪声直接构建体积云密度，不为库增加只转手的包装。
@@ -20,6 +22,25 @@ float omniCloudDensity(vec3 p) {
     p.x += frameTimeCounter * OMNI_CLOUD_SPEED * 2.0; // 风随时间移动噪声。
     float n = 0.5+0.5*(snoise(p * vec3(0.004,0.018,0.004)) * 0.7 + snoise(p * 0.013) * 0.3); // 单纯形梯度噪声降低规则格点痕迹，不宣称未测的性能改善。
     return smoothstep(0.8 - OMNI_CLOUD_COVERAGE * 0.5, 0.95 - OMNI_CLOUD_COVERAGE * 0.5, n); // 覆盖率实际改变密度。
+}
+// 云影透射：从地表沿光线方向步进到云层，按密度估计遮挡。
+float omniCloudShadow(vec3 world) {
+#if OMNI_CLOUD_SHADOW == 0 || defined OMNI_NETHER || defined OMNI_END
+    return 1.0; // 关闭或其他维度不做云影遮挡。
+#else
+    vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition); // 当前天体世界方向。
+    if (sun.y<=0.03) return 1.0; // 天体贴近地平线不产生云影。
+    float surfaceY = world.y+cameraPosition.y; // 地表绝对高度。
+    float travel = (OMNI_CLOUD_HEIGHT-surfaceY)/sun.y; // 到云层下界的行进距离。
+    if (travel<=0.0) return 1.0; // 地表已在云上或光线不向上。
+    float optical = 0.0; // 累计云层光学厚度。
+    for (int i=0;i<4;i++) {
+        vec3 p = world+cameraPosition+sun*travel*((float(i)+0.5)/4.0); // 云层内的采样点。
+        optical += omniCloudDensity(p); // 稀疏采样估计密度。
+    }
+    float fade = smoothstep(0.03,0.15,sun.y); // 低角度淡出避免拉长阴影。
+    return mix(1.0,exp(-optical*0.12),fade); // 密度越高直射越暗。
+#endif
 }
 vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
 #if OMNI_CLOUD_MODE > 0 && !defined OMNI_NETHER && !defined OMNI_END

@@ -10,6 +10,8 @@
 #define OMNI_HELD_LIGHT
 // 阴影与环境输入只有共同来源。
 #include "/effects/shadow.glsl"
+// 云影需要云密度，主世界直射光按云层衰减。
+#include "/effects/cloud.glsl"
 // 调用位置：rendering/terrain.glsl和rendering/distant.glsl；示例：omniLighting(albedo, normal, world, lightUv, emission, materialAo)。
 vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, float emission, float materialAo) {
     vec3 sun = omniNormalize(shadowLightPosition); // 当前阴影天体可为太阳或月亮。
@@ -34,7 +36,11 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, float emissi
     diffuse *= omniShadow(world, normal); // 主世界直接光和阴影共同控制亮面。
 #endif
     vec3 lightColor = (ambient * materialAo + vec3(0.012)) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * block; // 材质遮蔽只压低环境光，不削弱直接光。
+#if OMNI_CLOUD_SHADOW == 1 && !defined OMNI_NETHER && !defined OMNI_END
+    lightColor += direct * diffuse * sky * (1.0 - rainStrength * 0.65) * OMNI_SUNLIGHT_STRENGTH * omniCloudShadow(world); // 云影只遮挡主世界直射光。
+#else
     lightColor += direct * diffuse * sky * (1.0 - rainStrength * 0.65) * OMNI_SUNLIGHT_STRENGTH; // 雨天削弱直射光。
+#endif
     lightColor = mix(lightColor, max(lightColor, vec3(0.65)), nightVision); // 保留夜视能力。
     return albedo * lightColor + albedo * emission * 4.0; // 自发光不被材质遮蔽乘暗。
 }
