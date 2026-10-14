@@ -13,6 +13,8 @@
 // 坐标与空间随机序列共用。
 #include "/common/coordinates.glsl"
 #include "/common/math.glsl"
+// 时序噪声相位来自统一的抗锯齿模块。
+#include "/effects/antialiasing.glsl"
 // 判断邻点能否参与邻域采样：屏幕内、有有效几何且不是手或叠层。
 bool omniAmbientNeighbor(vec2 sampleUv, out ivec2 samplePixel) {
     if (any(lessThan(sampleUv,vec2(0))) || any(greaterThan(sampleUv,vec2(1))) || omniSkyPixel(sampleUv)) return false; // 屏幕外与天空没有表面。
@@ -52,7 +54,11 @@ float omniHorizonCosine(vec3 view, vec3 viewDirection, vec2 sampleUv) {
 float omniHorizonOcclusion(vec3 view, vec3 normal, vec2 uv) {
     const int slices = 3; // 环绕视线的切片数量。
     const int steps = 6; // 每个方向的地平线搜索步数。
-    float phase = omniHash(vec2(gl_FragCoord.xy)); // 每像素稳定相位减少条带。
+#if defined OMNI_ANTIALIASING && OMNI_AA_MODE == 2 && OMNI_TEMPORAL_DENOISE == 1
+    float phase = omniTemporalNoise(vec2(gl_FragCoord.xy)); // 时间抗锯齿开启时逐帧旋转，历史帧重建去噪。
+#else
+    float phase = omniHash(vec2(gl_FragCoord.xy)); // 没有时间重建时保持空间稳定。
+#endif
     vec3 viewDirection = omniNormalize(-view); // 表面指向相机的方向。
     float occlusion = 0.0; // 累计半球可见缺口。
     for (int slice=0;slice<slices;slice++) {

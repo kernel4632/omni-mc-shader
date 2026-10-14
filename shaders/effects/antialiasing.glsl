@@ -6,6 +6,8 @@
 #define OMNI_AA_MODE 1 // [0 1 2]
 // @option {"label":{"zh_cn":"时间历史权重","en_us":"History weight"}}
 #define OMNI_TAA_WEIGHT 0.85 // [0.5 0.7 0.85 0.95]
+// @option {"label":{"zh_cn":"时序噪声重建","en_us":"Temporal denoise"},"description":{"zh_cn":"每帧旋转屏幕噪声相位，配合时间抗锯齿重建去噪。","en_us":"Rotates screen noise each frame so TAA reconstructs a denoised result."}}
+#define OMNI_TEMPORAL_DENOISE 1 // [0 1]
 vec2 omniJitter(int frame) {
     int i = frame % 8; // 八帧固定低差异序列。
     const vec2 samples[8] = vec2[8](vec2(0.5,0.3333),vec2(0.25,0.6667),vec2(0.75,0.1111),vec2(0.125,0.4444),vec2(0.625,0.7778),vec2(0.375,0.2222),vec2(0.875,0.5556),vec2(0.0625,0.8889));
@@ -27,6 +29,10 @@ bool omniHistoryValid() {
     vec4 size = texelFetch(colortex5,ivec2(0,0),0); // 固定位置保存尺寸和场景信息。
     vec4 camera = texelFetch(colortex5,ivec2(1,0),0); // 上一帧真实相机位置。
     return size.x==viewWidth && size.y==viewHeight && size.z==omniDimension() && size.w==float(frameCounter-1) && camera.w==size.w && length(camera.xyz-cameraPosition)<8.0; // 拒绝缩放、切维度、重载、断帧与传送。
+}
+// 时序噪声：每帧用黄金比例平移屏幕噪声，时间抗锯齿可重建去噪。
+float omniTemporalNoise(vec2 pixel) {
+    return fract(omniHash(pixel)+0.6180339887*float(frameCounter%64)); // 空间稳定且逐帧旋转。
 }
 vec3 omniFxaa(vec2 uv) {
     vec2 pixel = 1.0/vec2(viewWidth,viewHeight); // 使用当前分辨率。

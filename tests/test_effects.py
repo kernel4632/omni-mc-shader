@@ -94,3 +94,15 @@ class EffectTests(unittest.TestCase):
         self.assertIn("vec3 omniReflectionFilter",text)  # 去噪独立成函数。
         self.assertIn("omniReflectionFilter(hitUv,target.z,roughness)",text)  # 使用命中深度做相似度判断。
         self.assertIn("OMNI_REFLECTION_DENOISE == 1",text)  # 旧路径由选项分派保留。
+
+    def test_temporal_denoise_rotates_noise(self):
+        """时序噪声逐帧旋转相位，地平线遮蔽在时间抗锯齿下可重建去噪。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_TEMPORAL_DENOISE",found); self.assertEqual(found["OMNI_TEMPORAL_DENOISE"].values,("0","1"))  # 时序重建可开关。
+        aa = (build.SHADERS/"effects/antialiasing.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniTemporalNoise",aa)  # 时序噪声独立成函数。
+        self.assertIn("frameCounter%64",aa)  # 相位逐帧旋转。
+        ambient = (build.SHADERS/"effects/ambient.glsl").read_text(encoding="utf-8")
+        self.assertIn("omniTemporalNoise(vec2(gl_FragCoord.xy))",ambient)  # 遮蔽相位使用时序噪声。
+        source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
+        self.assertIn("omniTemporalNoise",source)  # 合成阶段包含时序重建。
