@@ -181,3 +181,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("props",text)  # 材质参数进入光照。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniSpecular",source)  # 地形光照包含镜面高光。
+
+    def test_edge_adaptive_upscale_is_optional(self):
+        """边缘自适应重采样作为最终显示前的可选滤波，默认关闭保持原行为。"""
+        found,_,_ = build.configuration()
+        self.assertEqual(found["OMNI_UPSCALE"].values,("false","true"))  # 上采样为开关选项。
+        text = (build.SHADERS/"effects/upscale.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniUpscale",text)  # 重采样独立成函数。
+        self.assertIn("mix(color,sum/weight,strength)",text)  # 平坦区收敛为原颜色。
+        source = build.expand(build.SHADERS/"world0/final.fsh")  # 从最终显示入口展开。
+        self.assertIn("omniUpscale",source)  # 最终显示包含可选重采样。

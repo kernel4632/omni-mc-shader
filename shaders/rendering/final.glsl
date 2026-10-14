@@ -8,12 +8,16 @@ void main() { gl_Position = ftransform(); texcoord = gl_MultiTexCoord0.xy; } // 
 #include "/effects/color.glsl"
 #include "/effects/bloom.glsl"
 #include "/effects/lens.glsl"
+#include "/effects/upscale.glsl"
 #include "/effects/debug.glsl"
 #include "/rendering/buffers.glsl"
 in vec2 texcoord; // 当前屏幕位置。
 layout(location=0) out vec4 color; // 显示颜色。
 void main() {
     vec3 scene = texture(colortex0,texcoord).rgb; // 最后一次线性场景读取。
+#ifdef OMNI_UPSCALE // 只有开启超分时才重采样。
+    scene = omniUpscale(scene,texcoord); // 可选边缘自适应重采样。
+#endif // 结束超分分支。
     scene = omniLens(scene,texcoord)+omniBloom(texcoord); // 镜头计算仍在线性空间。
     float exposure = texture(colortex5,vec2(0.5)).g; // 时间合成保存的真实曝光。
     scene = omniColor(scene,exposure); // 色调映射后只编码一次。
