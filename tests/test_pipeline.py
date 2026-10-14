@@ -81,7 +81,7 @@ class PipelineTests(unittest.TestCase):
             loadable = root/".dev/load.properties"
             options.save_properties(loadable,migrated["values"],build.version(),root)  # 导出路径保持加载器使用的properties格式。
             text = loadable.read_text(encoding="ascii")
-            self.assertIn("# @shaderVersion 0.0.0-dev.4",text); self.assertEqual(options.shared(loadable,found,build.version()),migrated)  # properties能再次导入且版本来自当前源码。
+            self.assertIn(f"# @shaderVersion {build.version()}",text); self.assertEqual(options.shared(loadable,found,build.version()),migrated)  # properties能再次导入且版本来自当前源码。
 
     def test_comment_audit_ignores_normal_strings(self):
         """只有注释和接口文档算中文，字符串不能凑比例。"""
