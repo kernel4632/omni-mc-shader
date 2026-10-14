@@ -1,4 +1,6 @@
-// 加载器输入：所有流程共用，示例 texture(colortex0, uv)。
+// 加载器输入：集中声明所有阶段共用的加载器输入变量，效果文件不重复声明这些名字。
+// 调用位置：由 common/coordinates.glsl 引入，进而被各效果与绘制文件间接使用。
+// 可复制示例：`texture(colortex0, uv)`、`cameraPosition`、`gbufferProjection`、`shadowLightPosition`。
 #ifndef OMNI_UNIFORMS
 #define OMNI_UNIFORMS
 uniform sampler2D colortex0, colortex1, colortex2, colortex3; // 场景、法线、材质、不透明快照。
