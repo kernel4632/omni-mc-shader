@@ -17,17 +17,17 @@ in vec2 texcoord; // 全屏采样位置。
 /* RENDERTARGETS: 6 */
 layout(location=0) out vec4 colorOut; // 时间抗锯齿之前的线性结果。
 // 水与反射：水面读自身深度折射，其他表面做环境遮蔽与反射。
-vec3 omniSurfaceWater(vec3 color, vec3 view, vec3 normal, float kind, vec4 water, vec3 material, vec2 uv) {
+vec3 omniSurfaceWater(vec3 color, vec3 view, vec3 normal, float category, vec4 water, vec3 material, vec2 uv) {
     if (water.a<0.0) return omniWater(color,view,normal,uv); // 水折射读取自身真实深度与不透明快照。
-    if (kind!=2.0) { // 手持物不应用世界屏幕遮蔽与反射。
+    if (category!=2.0) { // 手持物不应用世界屏幕遮蔽与反射。
         color = omniAmbient(color,view,normal,uv); // 普通表面的屏幕遮蔽。
         color = omniReflection(color,view,normal,material,uv); // 普通与湿润材质反射。
     }
     return color; // 返回水之前的表面颜色。
 }
 // 云与雾：只有存在几何或独立水面的像素才由云与雾在前方遮挡。
-vec3 omniSurfaceAir(vec3 color, vec3 view, vec3 world, float kind, float waterDepth, vec2 uv) {
-    if (kind==2.0 && waterDepth>=0.0) return color; // 手持物且没有独立水面时不叠加云与雾。
+vec3 omniSurfaceAir(vec3 color, vec3 view, vec3 world, float category, float waterDepth, vec2 uv) {
+    if (category==2.0 && waterDepth>=0.0) return color; // 手持物且没有独立水面时不叠加云与雾。
     color = omniCloud(color,omniNormalize(world),length(view)); // 云在几何之前才遮挡。
     color = omniFog(color,view,world); // 透明表面使用最近可见深度。
     return color; // 返回叠加云与雾之后的颜色。

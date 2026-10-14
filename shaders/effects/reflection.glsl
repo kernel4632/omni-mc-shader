@@ -1,4 +1,4 @@
-// 反射：屏幕深度步进，未命中使用天空；示例 omniReflection(color, view, normal, props, uv)。
+// 反射：屏幕深度步进，未命中使用天空；示例 omniReflection(color, view, normal, materialParams, uv)。
 #ifndef OMNI_REFLECTION
 #define OMNI_REFLECTION
 // @effect {"label":{"zh_cn":"反射","en_us":"Reflections"}}
@@ -73,13 +73,13 @@ vec3 omniReflected(vec3 view, vec3 normal, float roughness) {
     return reflected; // 环境路径无需屏幕空间开关。
 }
 // 调用位置：rendering/composite.glsl；示例：omniReflection(color, view, normal, material.xyz, texcoord)。
-vec3 omniReflection(vec3 color, vec3 view, vec3 normal, vec3 props, vec2 uv) {
+vec3 omniReflection(vec3 color, vec3 view, vec3 normal, vec3 materialParams, vec2 uv) {
     if (OMNI_REFLECTION_STRENGTH<=0.0) return color; // 关闭反射后编译器移除天空和屏幕采样。
-    float metal = step(230.0/255.0,props.y); // 标准高区间是金属标志。
-    vec3 f0 = mix(vec3(props.y),clamp(color,0.0,1.0),metal); // 标准允许的底色金属近似。
+    float metal = step(230.0/255.0,materialParams.y); // 标准高区间是金属标志。
+    vec3 f0 = mix(vec3(materialParams.y),clamp(color,0.0,1.0),metal); // 标准允许的底色金属近似。
     float facing = max(dot(normal,omniNormalize(-view)),0.0); // 掠射角提高反射。
     vec3 fresnel = f0 + (1.0-f0)*pow(1.0-facing,5.0); // 菲涅耳反射率。
-    fresnel *= (1.0-props.x*0.8)*OMNI_REFLECTION_STRENGTH; // 粗糙表面降低镜面峰值。
-    return color*(1.0-fresnel) + omniReflected(view,normal,props.x)*fresnel; // 能量在底色与反射间分配。
+    fresnel *= (1.0-materialParams.x*0.8)*OMNI_REFLECTION_STRENGTH; // 粗糙表面降低镜面峰值。
+    return color*(1.0-fresnel) + omniReflected(view,normal,materialParams.x)*fresnel; // 能量在底色与反射间分配。
 }
 #endif

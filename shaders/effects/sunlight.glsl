@@ -1,4 +1,4 @@
-// 直接与环境光：地形、实体、透明物共用；示例 omniLighting(albedo, normal, world, light, props, ao)。
+// 直接与环境光：地形、实体、透明物共用；示例 omniLighting(albedo, normal, world, light, materialParams, ao)。
 #ifndef OMNI_SUNLIGHT
 #define OMNI_SUNLIGHT
 // @effect {"label":{"zh_cn":"光照","en_us":"Lighting"}}
@@ -15,24 +15,24 @@
 // 云影需要云密度，主世界直射光按云层衰减。
 #include "/effects/cloud.glsl"
 // 镜面高光：GGX 法线分布、施利克菲涅耳与 Smith 可见性，输入来自材质的粗糙度和金属。
-vec3 omniSpecular(vec3 normal, vec3 world, vec3 props, vec3 sun, float shadow) {
+vec3 omniSpecular(vec3 normal, vec3 world, vec3 materialParams, vec3 sun, float shadow) {
     vec3 n = omniNormalize(mat3(gbufferModelViewInverse)*normal); // 世界空间法线。
     vec3 l = omniNormalize(mat3(gbufferModelViewInverse)*sun); // 世界空间光方向。
     vec3 v = omniNormalize(-world); // 表面指向相机。
     vec3 h = omniNormalize(l+v); // 半程向量。
-    float roughness = clamp(props.x,0.05,1.0); // 粗糙度下限避免除零。
+    float roughness = clamp(materialParams.x,0.05,1.0); // 粗糙度下限避免除零。
     float a = roughness*roughness; // GGX 粗糙参数。
     float nh = max(dot(n,h),0.0); float nl = max(dot(n,l),0.0); float nv = max(dot(n,v),1e-4); // 三个夹角余弦。
     float denom = nh*nh*(a*a-1.0)+1.0; // 法线分布分母。
     float distribution = a*a/(3.14159265*denom*denom); // GGX 法线分布。
-    vec3 f0 = mix(vec3(0.04),props.yyy,step(230.0/255.0,props.y)); // 介电或金属底色近似。
+    vec3 f0 = mix(vec3(0.04),materialParams.yyy,step(230.0/255.0,materialParams.y)); // 介电或金属底色近似。
     vec3 fresnel = f0+(1.0-f0)*pow(1.0-max(dot(h,v),0.0),5.0); // 施利克近似。
     float k = a*0.5; // Smith 可见性参数。
     float visibility = (nv/(nv*(1.0-k)+k))*(nl/(nl*(1.0-k)+k)); // 几何可见性。
     return distribution*fresnel*visibility*nl*shadow; // 返回反射率与阴影。
 }
-// 调用位置：rendering/terrain.glsl和rendering/distant.glsl；示例：omniLighting(albedo, normal, world, lightUv, props, materialAo)。
-vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 props, float materialAo) {
+// 调用位置：rendering/terrain.glsl和rendering/distant.glsl；示例：omniLighting(albedo, normal, world, lightUv, materialParams, materialAo)。
+vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materialParams, float materialAo) {
     vec3 sun = omniNormalize(shadowLightPosition); // 当前阴影天体可为太阳或月亮。
     float day = smoothstep(-0.15, 0.1, dot(omniNormalize(sunPosition), omniNormalize(upPosition))); // 黎明平滑过渡。
     vec3 direct = mix(vec3(0.16,0.22,0.34), vec3(1.4,1.23,1.0), day); // 日月能量分开。
@@ -62,9 +62,9 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 props, 
     vec3 lightColor = (ambient * materialAo + vec3(0.012)) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * block; // 材质遮蔽只压低环境光，不削弱直接光。
     lightColor += direct * diffuse * sky * (1.0 - rainStrength * 0.65) * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 漫反射。
 #if OMNI_SPECULAR == 1
-    lightColor += omniSpecular(normal,world,props,sun,shadow) * direct * sky * (1.0 - rainStrength * 0.65) * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 直射镜面高光。
+    lightColor += omniSpecular(normal,world,materialParams,sun,shadow) * direct * sky * (1.0 - rainStrength * 0.65) * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 直射镜面高光。
 #endif
     lightColor = mix(lightColor, max(lightColor, vec3(0.65)), nightVision); // 保留夜视能力。
-    return albedo * lightColor + albedo * props.z * 4.0; // 自发光不被材质遮蔽乘暗。
+    return albedo * lightColor + albedo * materialParams.z * 4.0; // 自发光不被材质遮蔽乘暗。
 }
 #endif

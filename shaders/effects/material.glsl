@@ -18,13 +18,13 @@
 #ifdef OMNI_LABPBR
 uniform sampler2D normals, specular; // 加载器提供资源包法线与表面纹理。
 #endif
-// 调用位置：rendering/terrain.glsl的片元步骤；示例：omniMaterial(base, normal, props, materialAo, uv, bounds, tbn, view, allowParallax)。
-void omniMaterial(inout vec4 base, inout vec3 normal, inout vec3 props, out float materialAo, inout vec2 uv, vec4 bounds, mat3 tbn, vec3 view, bool allowParallax) {
+// 调用位置：rendering/terrain.glsl的片元步骤；示例：omniMaterial(base, normal, materialParams, materialAo, uv, bounds, tangentFrame, view, allowParallax)。
+void omniMaterial(inout vec4 base, inout vec3 normal, inout vec3 materialParams, out float materialAo, inout vec2 uv, vec4 bounds, mat3 tangentFrame, vec3 view, bool allowParallax) {
     materialAo = 1.0; // 普通贴图和缺失PBR资源使用不遮蔽的线性默认值。
 #ifdef OMNI_LABPBR
     vec2 dx = dFdx(uv), dy = dFdy(uv); // 视差循环不使用不稳定的隐式导数。
     if (allowParallax && OMNI_PARALLAX > 0.0) { // 实体与手只解码材质，避免把非图集边界当作视差边界。
-        vec3 tangentView = transpose(tbn) * omniNormalize(-view); // 观察方向转贴图空间。
+        vec3 tangentView = transpose(tangentFrame) * omniNormalize(-view); // 观察方向转贴图空间。
         vec2 stepUv = tangentView.xy / max(abs(tangentView.z),0.15) * OMNI_PARALLAX * (bounds.zw-bounds.xy) / 16.0; // 深度随图块大小缩放。
         float layer = 0.0; // 从表面向内部寻找高度交点。
         for (int i=0;i<16;i++) {
@@ -39,9 +39,9 @@ void omniMaterial(inout vec4 base, inout vec3 normal, inout vec3 props, out floa
     }
     vec4 n = textureGrad(normals,uv,dx,dy); // 标准法线与遮蔽、高度数据。
     vec2 xy = vec2(n.r*2.0-1.0,1.0-n.g*2.0); // 标准使用向下的绿色轴。
-    normal = omniNormalize(tbn * vec3(xy,sqrt(max(1.0-dot(xy,xy),0.0)))); // 重建第三轴。
+    normal = omniNormalize(tangentFrame * vec3(xy,sqrt(max(1.0-dot(xy,xy),0.0)))); // 重建第三轴。
     vec4 s = textureGrad(specular,uv,dx,dy); // 表面数据使用线性值。
-    props = vec3(max(pow(1.0-s.r,2.0),0.025),s.g,s.a < 0.999 ? s.a*255.0/254.0 : 0.0); // 忽略缺省透明通道的自发光。
+    materialParams = vec3(max(pow(1.0-s.r,2.0),0.025),s.g,s.a < 0.999 ? s.a*255.0/254.0 : 0.0); // 忽略缺省透明通道的自发光。
     materialAo = n.b; // 材质遮蔽独立保存，后续只进入环境光。
 #else
     base *= texture(gtexture,uv); // 无材质资源包时不采样未提供的材质纹理。
@@ -54,7 +54,7 @@ float omniTemperature(vec3 world) {
     float altitude = (p.y-64.0)/128.0; // 海平面以上每格趋冷。
     return clamp(base-altitude*0.8,0.0,1.0); // 零为寒冷，一为炎热。
 }
-void omniSurface(inout vec3 color, inout vec3 props, vec3 normal, vec3 world, float skylight) {
+void omniSurface(inout vec3 color, inout vec3 materialParams, vec3 normal, vec3 world, float skylight) {
     float up = max((mat3(gbufferModelViewInverse)*normal).y,0.0); // 朝上表面接收雨雪。
     float snow = OMNI_SNOW; // 手动额外覆盖量。
     float wetnessAmount = wetness; // 默认使用加载器湿润度。
@@ -66,13 +66,13 @@ void omniSurface(inout vec3 color, inout vec3 props, vec3 normal, vec3 world, fl
 #ifdef OMNI_WET_SURFACES
     float wet = wetnessAmount * up * smoothstep(0.7,1.0,skylight); // 洞穴与垂直墙面不凭空湿润。
     color *= 1.0-wet*0.25; // 湿润表面变暗。
-    props.x = mix(props.x,0.08,wet); // 积水提高光滑程度。
+    materialParams.x = mix(materialParams.x,0.08,wet); // 积水提高光滑程度。
 #endif
     if (snow>0.0) { // 零覆盖常量移除空间噪声计算。
         float cover = snow * up * smoothstep(0.7,1.0,skylight) * smoothstep(0.3,0.7,omniNoise((world+cameraPosition)*0.2)); // 空间纹理控制雪边缘。
         color = mix(color,vec3(0.85,0.9,0.96),cover); // 积雪覆盖使用线性底色。
-        props.x = mix(props.x,0.85,cover); // 雪为粗糙非金属表面。
-        props.y = mix(props.y,0.04,cover); // 积雪降低金属反射。
+        materialParams.x = mix(materialParams.x,0.85,cover); // 雪为粗糙非金属表面。
+        materialParams.y = mix(materialParams.y,0.04,cover); // 积雪降低金属反射。
     }
 }
 #endif

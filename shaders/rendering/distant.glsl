@@ -41,21 +41,21 @@ layout(location=1) out vec4 overlayMarker; // 远景透明物不改底层类别�
 layout(location=2) out vec4 waterSurface; // 水面的独立法线与实际视深度。
 #endif
 // 远景类别与自发光：官方小编号映射到水的类别与自发光。
-void omniDistantKind(out float kind, out float emission) {
-    kind = 3.0; // 默认普通远景类别。
+void omniDistantCategory(out float category, out float emission) {
+    category = 3.0; // 默认普通远景类别。
     emission = 0.0; // 默认没有自发光。
 #ifdef DISTANT_HORIZONS
     if (materialId==DH_BLOCK_LAVA || materialId==DH_BLOCK_ILLUMINATED) emission = 1.0; // 官方发光小编号。
 #ifdef OMNI_WATER_PASS
-    if (materialId==DH_BLOCK_WATER) kind = 1.0; // 远景水进入水类别。
+    if (materialId==DH_BLOCK_WATER) category = 1.0; // 远景水进入水类别。
 #endif
 #endif
 }
 // 远景水波：只有水类别才按世界位置造波，侧面保留原始法线。
-void omniDistantWaterNormal(inout vec3 normal, vec3 world, float kind) {
+void omniDistantWaterNormal(inout vec3 normal, vec3 world, float category) {
 #ifdef DISTANT_HORIZONS
 #ifdef OMNI_WATER_PASS
-    if (kind==1.0) normal = omniWaterNormal(world,normal); // 远景水也保留侧面原始法线。
+    if (category==1.0) normal = omniWaterNormal(world,normal); // 远景水也保留侧面原始法线。
 #endif
 #endif
 }
@@ -63,19 +63,19 @@ void main() {
     if (tint.a<0.01) discard; // 完全透明远景片元不写颜色与元数据。
     vec3 world = omniWorld(viewPosition); // 相机相对世界位置。
     vec3 normal = omniNormalize(viewNormal); // 统一视空间法线。
-    float kind, emission; // 远景类别与自发光。
-    omniDistantKind(kind,emission); // 官方小编号映射到类别与自发光。
-    omniDistantWaterNormal(normal,world,kind); // 水类别才造波。
-    vec3 props = vec3(kind==1.0?0.06:0.85,0.04,emission); // 远景基础材质参数。
-    scene = vec4(omniLighting(omniLinear(tint.rgb),normal,world,lightUv,props,1.0),1.0); // 远景照明复用统一光照。
+    float category, emission; // 远景类别与自发光。
+    omniDistantCategory(category,emission); // 官方小编号映射到类别与自发光。
+    omniDistantWaterNormal(normal,world,category); // 水类别才造波。
+    vec3 materialParams = vec3(category==1.0?0.06:0.85,0.04,emission); // 远景基础材质参数。
+    scene = vec4(omniLighting(omniLinear(tint.rgb),normal,world,lightUv,materialParams,1.0),1.0); // 远景照明复用统一光照。
 #ifndef OMNI_WATER_PASS
-    normalsOut = vec4(normal*0.5+0.5,kind); // 深度重建由远景深度判定。
-    materialOut = vec4(props,lightUv.y); // 明确基础材质回退。
+    normalsOut = vec4(normal*0.5+0.5,category); // 深度重建由远景深度判定。
+    materialOut = vec4(materialParams,lightUv.y); // 明确基础材质回退。
     lightOut = vec4(lightUv,0.0,1.0); // 真实光照输入。
 #else
-    scene.a = kind==1.0 ? 1.0 : tint.a; // DH 水与近景水同样使用不透明快照法。
+    scene.a = category==1.0 ? 1.0 : tint.a; // DH 水与近景水同样使用不透明快照法。
     overlayMarker = vec4(0.0); waterSurface = vec4(0.0); // 非水表面拒绝匹配，保留底层类别。
-    if (kind==1.0) { overlayMarker = vec4(lightUv,2.0,1.0); waterSurface = vec4(normal*0.5+0.5,viewPosition.z); } // 远景水写明独立投影来源。
+    if (category==1.0) { overlayMarker = vec4(lightUv,2.0,1.0); waterSurface = vec4(normal*0.5+0.5,viewPosition.z); } // 远景水写明独立投影来源。
 #endif
 }
 #endif

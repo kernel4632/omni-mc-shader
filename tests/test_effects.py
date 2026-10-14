@@ -177,8 +177,8 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_SPECULAR",found); self.assertEqual(found["OMNI_SPECULAR"].values,("0","1"))  # 镜面可开关。
         text = (build.SHADERS/"effects/sunlight.glsl").read_text(encoding="utf-8")
         self.assertIn("vec3 omniSpecular",text)  # 镜面独立成函数。
-        self.assertIn("omniSpecular(normal,world,props,sun,shadow)",text)  # 直接光叠加镜面。
-        self.assertIn("props",text)  # 材质参数进入光照。
+        self.assertIn("omniSpecular(normal,world,materialParams,sun,shadow)",text)  # 直接光叠加镜面。
+        self.assertIn("materialParams",text)  # 材质参数进入光照。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniSpecular",source)  # 地形光照包含镜面高光。
 
