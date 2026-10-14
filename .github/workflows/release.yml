@@ -1,63 +1,63 @@
-# v 标签与 VERSION 一致并通过检查后，自动创建 GitHub 版本。
+# 发行流程：标签与版本一致且离线检查通过后才上传产物。
 name: 发布光影版本
-
-on:
-  push:
-    tags: ['v*']
+on: # 日常代码检查与实际发行明确分开。
+  push: # 代码推送本身不会进入发行任务。
+    tags: ['v*'] # 发布标签仍需与VERSION严格一致。
   workflow_dispatch:
-    inputs:
+    inputs: # 人工核对已经推送的标签，不创建新标签。
       tag:
         description: '已推送的版本标签，例如 v0.0.0-dev.1'
-        required: true
-        type: string
+        required: true # 未选择具体版本时不能发布。
+        type: string # 标签经参数边界检查，不拼接源码。
       draft:
         description: '创建草稿版本，用于验证发布流程'
-        default: true
-        type: boolean
-
+        default: true # 手工触发默认保留草稿供审查。
+        type: boolean # 草稿状态只有明确的两种取值。
 permissions:
-  contents: read
-
+  contents: read # 只读权限是所有步骤的初始边界。
 concurrency:
-  group: release-${{ inputs.tag || github.ref_name }}
-  cancel-in-progress: false
-
+  group: release-${{ inputs.tag || github.ref_name }} # 同标签只允许一条发行任务。
+  cancel-in-progress: false # 不在上传中途取消同版本发行任务。
 jobs:
   release:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: ubuntu-latest # 发布产物使用一套固定系统工具。
+    timeout-minutes: 15 # 编译失败或工具异常不会永久占用运行器。
     permissions:
-      contents: write
+      contents: write # 创建发行版需要明确仓库写权限。
     steps:
       - name: 读取版本代码
-        uses: actions/checkout@v6
+        uses: actions/checkout@v6 # 构建标签实际指向的提交。
         with:
           ref: ${{ inputs.tag || github.ref }}
-          fetch-depth: 0
+          fetch-depth: 0 # 标签核对与版本说明需要完整历史。
       - name: 准备 Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v6 # 与本地离线检查使用相同解释器。
         with:
-          python-version: '3.12'
+          python-version: '3.12' # 与本地构建环境保持同一标准库版本。
       - name: 验证版本标签
         env:
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }} # 用户输入只作为参数，不拼接脚本源码。
         run: python build.py version --tag "$RELEASE_TAG"
       - name: 安装锁定检查工具
-        run: python dev.py setup
+        run: python dev.py setup # 工具版本与下载哈希来自锁定记录。
       - name: 检查自动化工具
-        run: python -m unittest discover -s tests
+        run: python -m unittest discover -s tests # 工具错误不能通过标签发布绕过。
       - name: 检查并打包
-        run: python build.py build
+        run: python build.py build # 只上传检查通过的ZIP与校验文件。
       - name: 从当前版本更新记录生成发行说明
-        run: python build.py notes --output dist/release-notes.md
+        run: python build.py notes --output dist/release-notes.md # 不维护第二份说明来源。
       - name: 创建 GitHub 版本并上传文件
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-          RELEASE_DRAFT: ${{ inputs.draft || false }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} # 使用平台临时凭据，不写入产物。
+          GH_REPO: ${{ github.repository }} # 发行只写入当前仓库。
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }} # 已核对版本的唯一标签。
+          RELEASE_DRAFT: ${{ inputs.draft || false }} # 默认标签触发使用正式发行状态。
         run: |
+          # 只使用已存在标签，不隐式新建或改写标签。
           args=(--verify-tag --notes-file dist/release-notes.md --title "Omni $RELEASE_TAG")
+          # 带版本后缀的发行版明确标为预发布。
           if [[ "$RELEASE_TAG" == *-* ]]; then args+=(--prerelease); fi
+          # 人工指定草稿时保留可审查状态。
           if [[ "$RELEASE_DRAFT" == "true" ]]; then args+=(--draft); fi
+          # 上传当前构建的资源与真实字节校验。
           gh release create "$RELEASE_TAG" dist/*.zip dist/SHA256SUMS.txt "${args[@]}"

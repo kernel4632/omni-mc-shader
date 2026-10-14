@@ -1,9 +1,14 @@
 # 定期提出工具升级 PR，升级后仍由自动检查验证。
-version: 2
+version: 2 # 使用平台当前的依赖更新配置格式。
+# 自动检查只维护GitHub Actions的版本。
 updates:
+# 升级请求使用月度频率，避免频繁打断光影审查。
   - package-ecosystem: github-actions
+# 依赖目录固定为仓库根目录。
     directory: /
+# 只创建升级请求，不直接修改主分支。
     schedule:
+# 月度检查仍会经过完整构建与测试。
       interval: monthly
-    commit-message:
-      prefix: 'ci(deps)'
+    commit-message: # 将工具升级请求与画面功能提交区分。
+      prefix: 'ci(deps)' # 升级仍需人工确认与完整离线检查。

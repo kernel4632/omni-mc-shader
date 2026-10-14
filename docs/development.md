@@ -92,18 +92,18 @@ python build.py build
 .venv\Scripts\python.exe tests\gpu.py
 ```
 
-`check` 检查版本、入口配对、引用路径、循环引用、选项范围、预设取值、生成文件，
-并使用 glslang 编译与链接默认配置、全部预设和每个选项单独改变的配置。
-它不穷举全部选项组合。新增复杂效果时，应增加有代表性的组合预设。
+`check` 检查版本、阶段配对（包括几何、计算、细分）、引用路径、循环引用、选项范围、预设取值、生成文件、有效中文注释与运行依赖白名单，
+并使用 glslang 编译与链接默认配置、全部预设、每个选项单独取值及全部最低／最高代表组合。基础加载器与 Iris、DH 专有分支分别离线检查。
+相同展开源码只链接一次；不穷举指数数量的组合。`#line` 数字编号映射回原始源码路径与行号，循环引用保留完整链。
 actionlint 同时检查 GitHub 工作流语法。
 
-`tests/gpu.py` 在本机 OpenGL 3.3 兼容环境中编译实际 final 入口，并检查三个调试视图的像素。
+`tests/gpu.py` 在本机 OpenGL 3.3 兼容环境中链接全部基础程序，并检查最终深度与坐标调试像素。没有覆盖完整几何画面或远景加载器集成，本轮未运行。
 报告位于 `.dev/reports/gpu.json`，不作为 Minecraft/Iris 集成验证。
 图形测试不能在没有桌面显卡环境的 GitHub 普通 runner 上保证运行，因此 CI 执行离线检查。
 
 ## 选项唯一来源
 
-以下代码写在所属效果文件，不能复制到中央配置表：
+以下代码写在所属效果文件，不能复制到中央配置表。普通效果用原生 `#define`；Iris加载器白名单中的 `const`（例如阴影分辨率和阴影距离）使用字面量和紧邻范围，不能用宏替代：
 
 ```glsl
 // @effect {"label":{"zh_cn":"水面","en_us":"Water"}}
@@ -115,6 +115,8 @@ actionlint 同时检查 GitHub 工作流语法。
 布尔选项使用 `#define WATER_ENABLED`，默认关闭使用 `//#define WATER_ENABLED`。
 每条说明提供 `zh_cn` 和 `en_us`；需要帮助文字时增加同样带两种翻译的 `description`。
 每个有选项的效果定义一次 `@effect` 菜单名称。
+
+`options.py` 同时扫描这两类原生声明，默认值和范围不在工具中另存。Iris当前源码的 `ConstDirectiveParser` 使用字面量解析，`OptionAnnotatedSource` 白名单包含 `shadowMapResolution` 与 `shadowDistance`；构建回归会检查声明类型和生成菜单名称。
 
 构建工具自动收集 `effects/**/*.glsl` 和 `presets/*.properties`，生成：
 
@@ -134,18 +136,16 @@ actionlint 同时检查 GitHub 工作流语法。
 每个版本使用 `## 版本号` 标题，下面用中文说明本次增加、修复或调整了什么。
 发布时自动提取该版本内容作为 GitHub 发行说明；缺失、空白或重复记录会导致检查失败。
 尚未发布的修改先写在 `## 未发布` 下，准备发布时移到对应的新版本标题下。
-尚未进入第一版效果开发，当前使用开发准备版本。
+当前为代码实现审查阶段，使用开发预发布版本；画面、性能、兼容验证分别记录。
 正式版本使用 `x.y.z`；预发布版本使用 `x.y.z-dev.N` 等格式。
 
-发布前修改 `VERSION` 和更新记录，通过检查并提交，再推送对应标签：
+一命令发布入口已经实现，但本轮禁止执行：
 
 ```powershell
-git push origin main
-git tag -a v0.0.0-dev.1 -m "开发准备版本"
-git push origin v0.0.0-dev.1
+python build.py release --new-version 0.0.0-dev.5 --notes-file .dev/release-notes.md
 ```
 
-示例标签只用于说明；实际标签必须等于 `v` 加上当前 `VERSION`，且没有被使用过。
+示例版本只用于说明。命令要求干净 main、合法新版本、非空说明与真实交互输入“发布 版本号”。确认后更新版本、运行 Python 测试、构建、提交、创建新标签并原子推送；失败保留可审查状态，不强推、不改写已有标签。日常代码审查不会触发该命令。
 标签推送自动执行发布工作流，校验失败时中止。
 通过后创建 GitHub Release，上传光影 ZIP、预设 ZIP 与 SHA256 校验文件。
 发行版详情直接显示中文修改清单，内容只在 `CHANGELOG.md` 维护。
@@ -164,6 +164,23 @@ ZIP 平台标记固定为同一值，Windows 与 Linux 不因操作系统标记�
 
 ## 第三方代码
 
-当前未导入 Base-330 或其他光影效果代码。
+本轮采用固定版本 Ashima 三维单纯形噪声用于云密度，MIT 原始声明随包保留；Base-330 评估后因输入输出重复未采用。来源与边界见 `THIRD_PARTY.md`，运行库受 `dependencies.json` 文件白名单与哈希控制，自有注释审计豁免第三方原文。
 第一版参考代码由用户指定。采用前确认许可证，并保留要求的版权声明。
 项目本身的许可证等待用户决定，不从工具的许可证推导。
+
+## 配置分享与回归
+
+```powershell
+python options.py reset
+python options.py import --input presets/realistic.properties --output .dev/config/realistic.json
+python options.py export --input .dev/config/realistic.json --output .dev/config/load.properties
+python options.py export --input .dev/config/realistic.json --output .dev/config/share.json --format json
+python options.py diff --input .dev/config/share.json
+python options.py diff --input .dev/config/share.json --other .dev/config/user.json
+```
+
+JSON格式二保存 `schemaVersion`、`shaderVersion` 和完整 `values`，格式版本只有 `options.SHARE_SCHEMA` 一个来源。无标记properties默认按当前VERSION导入；旧properties必须使用 `--legacy`，只接受旧调试选项。export默认生成可直接供加载器使用的properties，按后缀或 `--format json` 可以导出JSON分享。未知版本、非法取值与重复键报错，所有输出只写本项目 `.dev` 且拒绝符号链接或目录联接。
+
+先在专用实例创建测试世界，再运行 `python game.py regression --world 世界目录名 --pack-format 实际格式编号`。工具只向 `.dev/minecraft/saves/该世界/datapacks/Omni-regression` 写命令，不启动游戏。进入测试世界执行 `/reload` 与 `/function omni:setup`；这会覆盖原点附近的专用测试区域，随后用 `omni:day`、`night`、`rain`、`underwater`、`cave`、`nether`、`end` 固定条件。当前版本的规则名为 `minecraft:advance_time` 和 `minecraft:advance_weather`，相机水下位置在实际深水池内，重复准备只清理带工具标记的实体。报告初始全部是“未运行”，需要实际观察与截图后记录证据。
+
+性能工具使用开发目录内的官方 PresentMon。调用接口与上下文字段见 `docs/performance.md`，未提供有效采样不会生成性能结论。
