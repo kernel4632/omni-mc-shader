@@ -24,10 +24,6 @@
 
 // --- 像素与颜色取样 ---
 
-// 屏幕坐标转成合法像素编号：texelFetch 只能按整数像素取值，夹紧后取样点一定落在画面内，避免越界读到别的缓冲。
-ivec2 omniLensPixel(vec2 uv) {
-    return clamp(ivec2(uv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 边界夹紧，避免越界读取元数据。
-}
 // 取一个镜头颜色样本：先取线性颜色，再让红蓝通道朝相反方向偏移，返回已经完成色差处理的颜色。
 // 为什么色差先做：色差改变的是每个通道各自取样位置，后面的景深和运动模糊都基于这份错开的颜色做平均，顺序反了三种效果会互相打架。
 vec3 omniLensSample(vec2 uv) {
@@ -57,7 +53,7 @@ float omniApertureRadius(float angle) {
 // 读取一个景深样本：先取颜色并拒绝无法判定深度的像素，再对有效方向做散焦平均。
 // 为什么先拒绝手和叠层：手和覆盖层没有单一的表面深度，若参与散焦会把清晰的手或界面糊掉，所以只对普通表面做景深。
 vec3 omniFocusSample(vec2 uv) {
-    ivec2 pixel = omniLensPixel(uv); // 先算出整数像素编号，后面几处类别读取都复用它。
+    ivec2 pixel = omniPixel(uv); // 先算出整数像素编号，后面几处类别读取都复用它。
     vec4 geometry = texelFetch(colortex1,pixel,0); // 精确读取手的类别，类别是离散标记，线性插值会混出不存在的值。
     vec4 surface = texelFetch(colortex7,pixel,0); // 精确读取几何有效标记，同理不能插值。
     vec3 color = omniLensSample(uv); // 先完成色差，保证景深在色差之后处理。
@@ -77,7 +73,7 @@ vec3 omniFocusSample(vec2 uv) {
         float angle = float(i)*2.399963; // 黄金角螺旋分布，八个样本在圆盘上铺得均匀，比规则网格更少出现条纹。
         float shaped = radius*omniApertureRadius(angle); // 用光圈形状调制这个方向的取样半径，得到多边形散景。
         vec2 sampleUv = clamp(uv+vec2(cos(angle),sin(angle))*shaped/vec2(viewWidth,viewHeight),0.0,1.0); // 把像素半径换算成屏幕坐标并夹紧在画面内。
-        ivec2 samplePixel = omniLensPixel(sampleUv); // 样本的类别同样用整数像素精确读取。
+        ivec2 samplePixel = omniPixel(sampleUv); // 样本的类别同样用整数像素精确读取。
         if (texelFetch(colortex1,samplePixel,0).a==2.0 || texelFetch(colortex7,samplePixel,0).a<0.5 || length(omniSceneView(sampleUv,false))<distance*0.75) continue; // 手、覆盖层和明显更近的前景都跳过，避免远处背景糊到近处物体上形成光晕。
         sum += omniLensSample(sampleUv); weight += 1.0; // 有效样本按色差后的颜色累加并计数。
     }
@@ -94,7 +90,7 @@ vec3 omniMotionBlur(vec3 color, vec2 uv) {
 #ifndef OMNI_MOTION_BLUR
     return color; // 关闭运动模糊时没有深度、历史或矩阵读取，直接返回原色。
 #else
-    ivec2 pixel = omniLensPixel(uv); // 当前像素的整数编号，用于精确读取元数据。
+    ivec2 pixel = omniPixel(uv); // 当前像素的整数编号，用于精确读取元数据。
     if (texelFetch(colortex1,pixel,0).a==2.0 || texelFetch(colortex7,pixel,0).a<0.5 || texelFetch(colortex0,pixel,0).a<0.5) return color; // 手、覆盖层和颜色无效的像素保持清晰，它们没有可追踪的历史。
     if (omniSkyPixel(uv)) return color; // 天空没有可追踪的表面，重投影没有意义。
     if (length(cameraPosition-previousCameraPosition)>=8.0) return color; // 一帧跨过八米说明发生了传送或重载，上一帧历史已不属于同一场景。
@@ -118,7 +114,7 @@ vec3 omniMotionBlur(vec3 color, vec2 uv) {
     vec3 sum = color; float weight = 1.0; // 当前像素先进入快门平均。
     for (int i=1;i<6;i++) {
         vec2 sampleUv = clamp(uv-velocity*float(i)/6.0,0.0,1.0); // 沿相机轨迹往回取样，越早的快门时刻偏移越大。
-        ivec2 samplePixel = omniLensPixel(sampleUv); // 采样点的类别同样精确读取。
+        ivec2 samplePixel = omniPixel(sampleUv); // 采样点的类别同样精确读取。
         if (texelFetch(colortex1,samplePixel,0).a==2.0 || texelFetch(colortex7,samplePixel,0).a<0.5) continue; // 手和覆盖层不进入快门，否则静止的手也会被拖模糊。
         sum += omniFocusSample(sampleUv); weight += 1.0; // 每个样本走完整的色差加景深流程，保证整体效果顺序一致。
     }

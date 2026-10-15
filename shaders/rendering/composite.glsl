@@ -77,7 +77,7 @@ vec3 omniSurfaceAir(vec3 color, vec3 view, vec3 world, float category, float wat
 //   缓冲八给水法线与水面深度，缓冲七的有效标志表示这个像素是否真的有几何。
 // 为什么集中读一次：四份元数据对应同一个屏幕像素，一次取齐，后面各步骤共用同一批数值。
 vec3 omniCompositeSurface(vec3 color, vec2 uv) {
-    ivec2 pixel = clamp(ivec2(uv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 连续坐标转整数像素，并夹到屏幕范围内。
+    ivec2 pixel = omniPixel(uv); // 连续坐标转整数像素，按统一坐标模块夹到屏幕范围内。
     if (texelFetch(colortex7,pixel,0).a<0.5) return color; // 没有几何也没有覆盖层，这个像素不需要几何后处理。
     vec3 view = omniSceneView(uv,false); // 从深度还原视空间位置，近景与远景统一。
     vec3 world = omniWorld(view); // 换算成相机相对的世界位置，供云、雾与闪电使用。

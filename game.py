@@ -31,6 +31,7 @@ import sys  # 唯一入口报告错误。
 from pathlib import Path, PureWindowsPath  # 不把Windows驱动相对路径当作世界名。
 
 import build  # 游戏启动前使用同一构建检查。
+import paths  # 开发目录写入边界在专用模块里只检查一次。
 
 ROOT = Path(__file__).resolve().parent  # 不依赖终端工作目录。
 SETTINGS = ROOT / ".dev/game.local.json"  # 个人路径不提交。
@@ -40,28 +41,9 @@ def development_path(path: Path) -> Path:
     """确认开发输出留在 `.dev`，并拒绝符号链接与目录联接逃逸。
 
     开发工具只允许写入本项目的 `.dev`，因为这里的文件可以随时删除，不会
-    污染玩家真实实例。路径在写入前检查，外部传入的路径因此只在边界处理一次。
+    污染玩家真实实例。边界检查集中在 `paths.development_path`，这里只固定本项目的根目录。
     """
-    root_absolute = Path(os.path.abspath(os.fspath(ROOT)))  # 词法比较统一短名和长名。
-    base = root_absolute/".dev"  # 所有工具自有输出都必须在此目录内。
-    absolute = Path(os.path.abspath(os.fspath(path)))
-    if not absolute.is_relative_to(base):
-        raise ValueError("输出必须留在本项目 .dev 内")  # 目录链接不能把输出转到玩家目录。
-    current = root_absolute
-    for part in absolute.relative_to(root_absolute).parts:
-        current /= part
-        if current.is_symlink() or current.is_junction():
-            raise ValueError(f"开发输出路径不能包含链接或目录联接：{current}")  # 文件链接与Windows目录联接同样拒绝。
-    existing = absolute
-    missing = []
-    while not existing.exists():
-        missing.append(existing.name)
-        existing = existing.parent
-    canonical_existing = Path(os.path.realpath(os.fspath(existing)))
-    canonical_absolute = canonical_existing.joinpath(*reversed(missing))
-    if not canonical_absolute.is_relative_to(Path(os.path.realpath(os.fspath(base)))):
-        raise ValueError("输出的真实路径越过本项目 .dev")  # 已存在的链接目标也不能逃逸。
-    return absolute
+    return paths.development_path(path, ROOT)  # 根目录固定为项目自身，调用处不再重复传递。
 
 
 # --- 保存本机配置 ---

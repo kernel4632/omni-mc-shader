@@ -27,6 +27,8 @@
 #define OMNI_CLOUD_COVERAGE 0.5 // [0.25 0.5 0.75 1.0]
 // @option {"label":{"zh_cn":"云高度","en_us":"Cloud altitude"}}
 #define OMNI_CLOUD_HEIGHT 192.0 // [128.0 192.0 256.0 320.0]
+// @option {"label":{"zh_cn":"云层厚度","en_us":"Cloud thickness"},"description":{"zh_cn":"体积云上下界的高度差，也决定云影沿光线要穿过的厚度。","en_us":"Vertical extent of the volume cloud layer; also the depth the cloud shadow marches."}}
+#define OMNI_CLOUD_THICKNESS 32.0 // [16.0 32.0 64.0 128.0]
 // @option {"label":{"zh_cn":"云速度","en_us":"Cloud speed"},"slider":true}
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"云颜色冷暖","en_us":"Cloud color temperature"},"slider":true}
@@ -52,20 +54,24 @@ float omniCloudDensity(vec3 p) {
     float n = 0.5 + 0.5 * (shape + detail); // 噪声原本在负一到一之间，映射到零到一。
     return smoothstep(0.8 - coverage * 0.5, 0.95 - coverage * 0.5, n); // 覆盖率越高阈值越低，云越满。
 }
-// --- 云影遮挡：从地表沿光线走到云层，按密度扣掉直射光 ---
+// --- 云影遮挡：从地表沿光线穿过整层云，按密度扣掉直射光 ---
 // 方向取当前天体（太阳或月亮）的世界方向，所以夜晚的月光同样会被云挡。
+// 关键点：只在云层真实高度区间内取样。旧写法从地表一路走到云底，四个点全部落在云层下方，
+// 相当于对着空气算厚度，云影会和眼见的云对不上；关闭云显示时也要直接返回无遮挡，避免没有云却有云影。
 float omniCloudShadow(vec3 world) {
-#if OMNI_CLOUD_SHADOW == 0 || defined OMNI_NETHER || defined OMNI_END
-    return 1.0; // 关闭云影，或该维度没有自定义云时，直射光完全不受影响。
+#if OMNI_CLOUD_SHADOW == 0 || OMNI_CLOUD_MODE == 0 || defined OMNI_NETHER || defined OMNI_END
+    return 1.0; // 关闭云影、关闭云显示，或该维度没有自定义云时，直射光完全不受影响。
 #else
     vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition); // 天体在世界空间里的方向。
     if (sun.y<=0.03) return 1.0; // 天体贴近地平线时方向太斜，忽略云影避免出现超长阴影。
     float surfaceY = world.y+cameraPosition.y; // 地表的绝对高度，用来算它离云层还有多远。
-    float travel = (OMNI_CLOUD_HEIGHT-surfaceY)/sun.y; // 沿光线从地表走到云层下界的距离。
-    if (travel<=0.0) return 1.0; // 地表已在云层之上或光线不向上，没有云可挡。
+    float lower = (OMNI_CLOUD_HEIGHT-surfaceY)/sun.y; // 光线进入云层下界的距离。
+    float upper = (OMNI_CLOUD_HEIGHT+OMNI_CLOUD_THICKNESS-surfaceY)/sun.y; // 光线离开云层上界的距离。
+    if (upper<=0.0) return 1.0; // 地表已在云层之上或光线不向上，没有云可挡。
+    float begin = max(lower,0.0); // 地表已经进入云层时从零开始，不从云层外空走。
     float optical = 0.0; // 累计的光学厚度，越大表示路上云越多。
     for (int i=0;i<4;i++) {
-        vec3 p = world+cameraPosition+sun*travel*((float(i)+0.5)/4.0); // 在云层段内均匀取四个点。
+        vec3 p = world+cameraPosition+sun*(begin+(upper-begin)*((float(i)+0.5)/4.0)); // 只在实际云层高度区间内均匀取四个点。
         optical += omniCloudDensity(p); // 用少量采样估计整段密度，够表达云下变暗。
     }
     float fade = smoothstep(0.03,0.15,sun.y); // 天体越低云影越淡，避免阴影被拉得很长。
@@ -115,7 +121,7 @@ vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
     vec3 d = omniNormalize(direction); // 米制步进方向。
     if (abs(d.y) < 0.005) return color; // 视线几乎水平，不与云层相交。
     float lowerCross = (OMNI_CLOUD_HEIGHT - cameraPosition.y) / d.y; // 视线穿过云层下界的距离。
-    float upperCross = (OMNI_CLOUD_HEIGHT + 32.0 - cameraPosition.y) / d.y; // 视线穿过云层上界的距离。
+    float upperCross = (OMNI_CLOUD_HEIGHT + OMNI_CLOUD_THICKNESS - cameraPosition.y) / d.y; // 视线穿过云层上界的距离。
     float begin = max(min(lowerCross,upperCross),0.0); // 相机在云层内部时从零开始步进。
     float end = min(max(lowerCross,upperCross),min(sceneDistance,18000.0)); // 步进在地形前或云层上界停下。
     if (end <= begin) return color; // 云在相机身后或被地形挡住，不画。
@@ -126,7 +132,7 @@ vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
     float stride = (end-begin)/16.0; // 固定 16 步，步长写死让编译结果可预测。
     for (int i=0;i<16;i++) {
         vec3 p = cameraPosition + d * (begin+(float(i)+0.5)*stride); // 采样点落在每一步的中心。
-        float height = (p.y-OMNI_CLOUD_HEIGHT)/32.0; // 相对云层中面的高度，用零到一表示。
+        float height = (p.y-OMNI_CLOUD_HEIGHT)/OMNI_CLOUD_THICKNESS; // 相对云层中面的高度，用零到一表示。
         float density = omniCloudDensity(p) * smoothstep(0.0,0.2,height) * (1.0-smoothstep(0.7,1.0,height)); // 上下边缘渐薄，避免云层像一块板。
         opacity += (1.0-opacity) * (1.0-exp(-density*stride*0.07)); // 前向透射积分，后面的采样只影响剩余可见部分。
     }

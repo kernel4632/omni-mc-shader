@@ -39,7 +39,7 @@ bool omniAmbientNeighbor(vec2 sampleUv) {
     // 屏幕外与天空都没有可采样的表面，直接排除。
     if (any(lessThan(sampleUv,vec2(0))) || any(greaterThan(sampleUv,vec2(1))) || omniSkyPixel(sampleUv)) return false;
     // 类别和有效性是离散标记，线性插值会混出并不存在的值，所以固定取最近像素。
-    ivec2 samplePixel = clamp(ivec2(sampleUv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0));
+    ivec2 samplePixel = omniPixel(sampleUv);
     // 叠层和手没有可靠的屏幕几何，它们的深度不能用来重建邻点位置。
     return texelFetch(colortex7,samplePixel,0).a>=0.5 && texelFetch(colortex1,samplePixel,0).a!=2.0;
 }
@@ -70,17 +70,20 @@ float omniSpiralOcclusion(vec3 view, vec3 normal, vec2 uv) {
 }
 
 // --- 地平线环境遮蔽 ---
-// 地平线余弦：某个屏幕方向上的最大地平线角，越接近一表示这个方向被挡得越满。
-float omniHorizonCosine(vec3 view, vec3 viewDirection, vec2 sampleUv) {
-    if (!omniAmbientNeighbor(sampleUv)) return -1.0; // 无效邻点不构成地平线，用负一表示没有遮挡。
+// 地平线样本：某个屏幕方向上邻点给出的地平线余弦，返回 `x` 为余弦、`y` 为是否有有效遮挡证据。
+// 为什么要把“余弦”和“有没有样本”分成两个分量：无有效邻点不等于“地平线压到最低”。旧写法用负一
+// 同时兼任余弦和“没有样本”，两种含义分不开，孤立几何或天空边界上会累积出最强遮挡，把画面压暗到上限。
+vec2 omniHorizon(vec3 view, vec3 viewDirection, vec2 sampleUv) {
+    if (!omniAmbientNeighbor(sampleUv)) return vec2(0.0,0.0); // 无效邻点不构成地平线，也没有证据。
     vec3 delta = omniSceneView(sampleUv,true)-view; // 邻点相对当前表面的方向。
     float distance = length(delta); // 米制距离。
-    if (distance<1e-3 || distance>omniAmbientRadius*3.0) return -1.0; // 太近是自身，太远不参与地平线。
+    if (distance<1e-3 || distance>omniAmbientRadius*3.0) return vec2(0.0,0.0); // 太近是自身，太远不参与地平线。
     float cosine = dot(delta/distance,viewDirection); // 邻点方向与视线方向的夹角余弦。
     float falloff = clamp(1.0-distance/(omniAmbientRadius*3.0),0.0,1.0); // 越远贡献越弱，避免远景把画面压黑。
-    return mix(-1.0,cosine,falloff); // 衰减到零时退回没有遮挡。
+    return vec2(mix(-1.0,cosine,falloff),1.0); // 有效样本给出余弦，衰减到零也仍算有证据。
 }
 // 一个切片方向上的半球可见缺口：把法线投到切片平面，向两侧搜索最大地平线，再积分这一段遮挡。
+// 两侧都没有有效样本时返回零，表示这一片没有遮挡证据，不参与累加，绝不能当成最强遮挡。
 float omniSliceOcclusion(vec3 view, vec3 viewDirection, vec3 normal, vec2 uv, float sliceAngle) {
     const int steps = 6; // 每个方向的地平线搜索步数，越多越贴合真实遮挡。
     vec3 sliceDirection = vec3(cos(sliceAngle),sin(sliceAngle),0.0); // 切片在屏幕平面里的方向。
@@ -90,13 +93,17 @@ float omniSliceOcclusion(vec3 view, vec3 viewDirection, vec3 normal, vec2 uv, fl
     float normalLength = inversesqrt(max(dot(projectedNormal,projectedNormal),1e-6)); // 投影长度的倒数，几乎为零时也不会除零。
     float cosNormalAngle = clamp(dot(projectedNormal,viewDirection)*normalLength,-1.0,1.0); // 投影法线相对视线的夹角余弦。
     float normalAngle = sign(dot(orthogonal,projectedNormal))*acos(cosNormalAngle); // 带符号的法线角，区分切片的左右两侧。
-    float horizonPositive = -1.0, horizonNegative = -1.0; // 两侧搜索到的最大地平线余弦。
+    float horizonPositive = -1.0, horizonNegative = -1.0; // 两侧搜索到的最大地平线余弦，未找到时保持开口值。
+    bool found = false; // 这一片是否找到过任何有效遮挡证据。
     for (int step=1;step<=steps;step++) {
         float fraction = float(step)/float(steps); // 归一化搜索距离。
         vec2 offset = sliceDirection.xy*fraction*fraction*omniAmbientRadius/vec2(viewWidth,viewHeight); // 近密远疏的屏幕偏移。
-        horizonPositive = max(horizonPositive,omniHorizonCosine(view,viewDirection,uv+offset)); // 正向搜索地平线。
-        horizonNegative = max(horizonNegative,omniHorizonCosine(view,viewDirection,uv-offset)); // 反向搜索地平线。
+        vec2 positive = omniHorizon(view,viewDirection,uv+offset); // 正向搜索地平线。
+        vec2 negative = omniHorizon(view,viewDirection,uv-offset); // 反向搜索地平线。
+        if (positive.y>0.0) { horizonPositive = max(horizonPositive,positive.x); found = true; } // 有证据才更新这一侧。
+        if (negative.y>0.0) { horizonNegative = max(horizonNegative,negative.x); found = true; } // 另一侧同理。
     }
+    if (!found) return 0.0; // 没有任何邻点，这一片不产生遮挡，避免把“没有证据”当成“最大遮挡”。
     float anglePositive = acos(clamp(horizonPositive,-1.0,1.0))*2.0; // 正向地平线对应的开口角。
     float angleNegative = -acos(clamp(horizonNegative,-1.0,1.0))*2.0; // 反向地平线对应的开口角。
     return 2.0*cosNormalAngle+(angleNegative+anglePositive)*sin(normalAngle)-cos(angleNegative-normalAngle)-cos(anglePositive-normalAngle); // 这一段切片的半球可见缺口。

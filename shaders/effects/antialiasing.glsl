@@ -122,7 +122,7 @@ vec3 omniTaa(vec3 color, vec2 uv, out vec4 metadata) {
     vec2 previousUv = previous.xy/previous.w*0.5+0.5 + omniJitter(frameCounter-1)/vec2(viewWidth,viewHeight); // 补回上一帧投影时加过的抖动，才能对齐到真实的上一帧像素。
     if (any(lessThan(previousUv,vec2(0))) || any(greaterThan(previousUv,vec2(1)))) return color; // 落在屏幕外说明上一帧看不到这个表面，历史不可用。
     if (previousUv.y<1.0/viewHeight && previousUv.x<2.0/viewWidth) return color; // 跳过保存元数据的固定像素，否则会把元数据当成深度来读取。
-    ivec2 oldPixel = clamp(ivec2(previousUv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 帧号与维度是离散整数，历史状态必须精确采样到整数像素。
+    ivec2 oldPixel = omniPixel(previousUv); // 帧号与维度是离散整数，历史状态必须精确采样到整数像素。
     vec4 old = texelFetch(colortex5,oldPixel,0); // 上一帧该像素的深度与标记。
     if (texelFetch(colortex4,oldPixel,0).a<0.5) return color; // 上一帧这里是覆盖层，深度不可信，不能用它参与历史。
     float expected = length((gbufferPreviousModelView*vec4(world,1.0)).xyz); // 用上一帧视图矩阵算出应有的米制深度。

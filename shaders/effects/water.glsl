@@ -31,6 +31,16 @@
 #define OMNI_OCEAN_WAVES 1 // [0 1]
 // 反射和坐标重建的共用实现：水面反射复用它读取已保存的不透明画面。
 #include "/effects/reflection.glsl"
+// --- 水体光学常数 ---
+// 红衰减最快、绿居中、蓝最慢，所以水越深越偏青绿，最终趋向水体散射色。
+// 只在这一个地方定义：水面合成与水下雾都从这里取，避免两处各写一份而对不上数值。
+const vec3 omniWaterAbsorbance = vec3(0.19,0.065,0.035); // 每米吸收系数，红最高。
+const vec3 omniWaterScatter = vec3(0.015,0.075,0.095); // 水体自身散射色，深度足够时趋向它。
+// 按距离对颜色做分波段吸收并混入散射：`distance` 是光在水里走过的米数。
+vec3 omniWaterTransmit(vec3 color, float distance) {
+    vec3 absorbed = exp(-omniWaterAbsorbance*distance); // 各波段仍然保留的比例。
+    return color*absorbed+omniWaterScatter*(1.0-absorbed); // 被吸收掉的部分趋向散射色。
+}
 // --- 解析波 ---
 // 解析波是直接套公式算出的波，不用模拟，便宜且稳定；这里由三部分组成：
 //   两个方向不同的正弦交叉，形成不会整齐滚动的较大起伏；
@@ -124,9 +134,7 @@ vec3 omniWater(vec3 color, vec3 view, vec3 normal, vec2 uv) {
     vec2 candidate = clamp(uv+normal.xy*0.018*min(thickness,3.0),vec2(0.002),vec2(0.998)); // 浅水折射弱、深水折射强，偏移始终留在屏幕内。
     if (length(omniSceneView(candidate,true))>length(view)+0.05) refracted = candidate; // 只有偏移后仍在水面之后才采用，防止前景颜色漏进水里。
 #endif
-    vec3 transmitted = texture(colortex3,refracted).rgb; // 不透明快照含底面辐射，坐标可能已被折射偏移过。
-    vec3 absorption = exp(-vec3(0.19,0.065,0.035)*thickness); // 红 0.19 最快、绿 0.065，蓝 0.035 最慢，所以越深越偏青绿。
-    transmitted = transmitted*absorption+vec3(0.015,0.075,0.095)*(1.0-absorption); // 透过的光被吸收，剩下的部分趋向水体散射色。
+    vec3 transmitted = omniWaterTransmit(texture(colortex3,refracted).rgb,thickness); // 不透明快照含底面辐射，坐标可能已被折射偏移过；再按水体分波段吸收并趋向散射色。
     if (OMNI_REFLECTION_STRENGTH<=0.0) return transmitted; // 反射关闭时直接返回水色，不采样反射。
     float fresnel = 0.02+0.98*pow(1.0-max(dot(normal,omniNormalize(-view)),0.0),5.0); // 正对水面反射弱，掠射角反射强。
     return mix(transmitted,omniReflected(view,normal,0.06),fresnel*OMNI_REFLECTION_STRENGTH); // 按菲涅耳强度在透射和反射之间混合。

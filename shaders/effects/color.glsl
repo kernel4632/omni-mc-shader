@@ -63,6 +63,7 @@ vec3 omniToneMapSimple(vec3 color) {
     return color/(1.0+color); // 亮部渐近于一，不出现硬剪切。
 }
 // AgX 色调映射：先把颜色转到宽色域工作空间，取对数压缩高动态范围，再用 S 曲线成形。
+// 矩阵、曝光范围与多项式系数取自公开的最小 AgX 实现（`Troy Sobotka` 提出的 AgX），这里按公开公式独立实现，未复制任何光影源码。
 // 为什么脱开线性空间：AgX 的曲线定义在归一化曝光上，直接对线性值套曲线会变形。
 // 为什么要转宽色域：压缩过程中保住色相，过亮处不会一起褪成白色。
 vec3 omniToneMapAgx(vec3 color) {

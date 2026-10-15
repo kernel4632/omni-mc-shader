@@ -39,9 +39,10 @@ vec3 omniBloom(vec2 uv) {
         result += omniBloomSample(sampleColor); // 累加这一环的光晕贡献。
     }
     result *= OMNI_BLOOM_STRENGTH / 16.0; // 除以采样数再乘强度，得到平均光晕。
-    // 出现无效值时回退零贡献，避免一个坏点污染整幅画面：GLSL 330 没有 `isnan()`，
-    // `mix` 也不接受布尔向量，所以让 `result` 与自身比较（无效时为假）再转成 0 或 1，兼容且可移植。
-    result *= float(all(equal(result, result)));
+    // 出现非有限值时直接清零，避免一个坏点污染整幅画面。
+    // 为什么不能写成 `result *= float(all(equal(result, result)))`：非数乘零仍是非数，而无穷大自身比较又为真，
+    // 那种写法既清不掉非数也拦不住无穷大。`isnan` 与 `isinf` 在 GLSL 330 就可用，直接赋值才能可靠归零。
+    if (any(isnan(result)) || any(isinf(result))) result = vec3(0.0);
 #endif
     return result; // 关闭泛光时没有纹理读取，直接返回零贡献。
 }

@@ -21,6 +21,8 @@
 #include "/effects/sky.glsl"
 // 雾直接使用归一化、线性色与噪声，显式声明依赖而不依赖间接引用。
 #include "/common/math.glsl"
+// 水下吸收与水面合成共用同一份光学常数，所以引用水效果主体，避免两处各写一套数值。
+#include "/effects/water.glsl"
 // 非负取零：`float` 的 `max(NaN,0.0)` 结果由显卡决定，用比较写法保证 NaN 也回退为 0，避免污染整幅画面。
 // 只服务本文件，所以留在原地；深度重建等边界数据先经过它，再参与后面的指数计算。
 float omniNonNegative(float value) { return value >= 0.0 ? value : 0.0; }
@@ -92,7 +94,7 @@ vec3 omniFog(vec3 color, vec3 view, vec3 world) {
 #endif
     float fogAmount = 1.0-exp(-density*distance); // 消光与散射共同的混合权重，随距离趋向一。
     if (isEyeInWater == 1) { // 水下单独处理，分波段吸收后不再叠加空气距离雾。
-        vec3 water = color * exp(-vec3(0.18,0.065,0.035)*distance) + vec3(0.015,0.09,0.12)*(1.0-exp(-distance*0.08)); // 红衰减最快、蓝最慢，对应水对波段的吸收差异。
+        vec3 water = omniWaterTransmit(color,distance); // 与水面合成共用同一份吸收与散射常数，避免两处数值不一致。
         water += omniUnderwaterShafts(view,world,distance); // 叠加水下体积光柱。
         return water; // 提前返回，水下不参与后面的空气雾与体积光。
     }

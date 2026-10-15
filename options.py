@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import argparse  # 配置分享命令入口。
 import json  # 读取受控配置与机器说明。
-import os  # 规范化系统路径，并在真实路径比较时处理短文件名。
 import re  # 检查选项名称与数值格式。
 import sys  # 唯一入口报告错误。
 from dataclasses import dataclass  # 保存已检查的选项数据。
 from pathlib import Path  # 所有用户输出限制在开发目录。
+import paths  # 开发目录写入边界在专用模块里只检查一次。
 
 LOCALES = ("zh_cn", "en_us")  # 菜单同时支持中文与英文玩家。
 SHARE_SCHEMA = 2  # JSON分享与打包清单共用这一个格式版本。
@@ -396,41 +396,13 @@ def _older_or_equal(source: str, current: str) -> bool:
     return source_order <= current_order  # 相同版本也可按已有规则导入。
 
 
-def output_path(destination: Path, root: Path, suffix: str) -> Path:
-    """验证配置写入边界，防止路径或链接把输出带出 `.dev`。
-
-    输入边界：`destination` 是命令行给出的目标路径，`root` 是项目根目录，`suffix` 是允许
-    的输出格式后缀。先检查词法路径，再检查已有目录联接、符号链接和真实路径，不能只相信文件名。
-    """
-    root_absolute = Path(os.path.abspath(os.fspath(root)))  # 先整理路径文字中的相对段，不在此处跟随链接。
-    base = root_absolute / ".dev"  # 开发目录是唯一允许写入配置的位置。
-    destination = Path(os.path.abspath(os.fspath(destination)))  # 沿用命令行相对当前工作目录的解释方式。
-    if not destination.is_relative_to(base) or destination.suffix != suffix:
-        raise ValueError(f"配置输出必须是本项目 .dev 内的 {suffix} 文件")
-    current = root_absolute  # 从项目内第一段开始检查，开发目录本身也不能是跳向别处的链接。
-    for part in destination.relative_to(root_absolute).parts:  # 最终文件也检查，不能只检查它的父目录。
-        current /= part  # 每一段都保留原始路径，避免解析链接后失去检查对象。
-        if current.is_symlink() or current.is_junction():
-            raise ValueError("配置输出不能经过符号链接或目录联接")  # 链接即使指回开发目录，也不作为合法输出通道。
-    existing = destination  # 尚未创建的路径不能直接依赖存在性获取真实位置。
-    missing = []  # 暂存缺少的尾段，等找到已有祖先后再按原顺序拼回。
-    while not existing.exists():
-        missing.append(existing.name)  # 从末端向上收集，不在边界确认前建立目录。
-        existing = existing.parent  # 绝对路径最终会到达已有祖先，保持原有查找规则。
-    canonical_existing = Path(os.path.realpath(os.fspath(existing)))  # 真实路径统一系统短名与长名，并解析已有路径。
-    canonical_destination = canonical_existing.joinpath(*reversed(missing))  # 未创建的尾段接在已确认的真实祖先后。
-    if not canonical_destination.is_relative_to(Path(os.path.realpath(os.fspath(base)))):
-        raise ValueError("配置输出的真实路径越过本项目 .dev")  # 既兼容短路径，又保留真实路径边界。
-    return destination  # 返回整理后的原输出路径，保存函数随后才能建目录和写文件。
-
-
 def save(destination: Path, values: dict, shader_version: str, root: Path) -> None:
     """把完整分享 `JSON` 写入项目 `.dev`，不修改玩家设置。
 
-    输入边界：本函数用 `output_path` 检查 `destination`；`values` 必须是已经检查过的完整选项，
+    输入边界：本函数用 `paths.development_path` 检查 `destination`；`values` 必须是已经检查过的完整选项，
     `shader_version` 必须来自当前版本来源。`JSON` 保存格式版本和目标光影版本，便于分享与迁移。
     """
-    destination = output_path(destination, root, ".json")  # 格式与路径同时在写入边界检查。
+    destination = paths.development_path(destination, root, ".json")  # 格式与路径同时在写入边界检查。
     destination.parent.mkdir(parents=True, exist_ok=True)  # 只在确认边界后建立输出目录。
     content = {"schemaVersion": SHARE_SCHEMA, "shaderVersion": shader_version, "values": values}  # 版本信息与值一起分享，读取者才知道该用哪套规则解释。
     destination.write_text(json.dumps(content, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")  # 保留中文和稳定缩进，方便人阅读与比较。
@@ -439,11 +411,11 @@ def save(destination: Path, values: dict, shader_version: str, root: Path) -> No
 def save_properties(destination: Path, values: dict[str, str], shader_version: str, root: Path) -> None:
     """写出可直接交给加载器的完整 `properties`，并保留工具版本标记。
 
-    输入边界：目标路径必须通过 `output_path`，`values` 必须是完整且已检查的选项值。
+    输入边界：目标路径必须通过 `paths.development_path`，`values` 必须是完整且已检查的选项值。
     格式取舍：这里输出加载器能直接读取的单行键值，而不是带对象结构的分享 `JSON`；版本注释
     只供本工具迁移读取，不改变加载器的选项语法。
     """
-    destination = output_path(destination, root, ".properties")  # 加载器配置沿用同一受控输出边界。
+    destination = paths.development_path(destination, root, ".properties")  # 加载器配置沿用同一受控输出边界。
     destination.parent.mkdir(parents=True, exist_ok=True)  # 输出边界检查后才创建目录。
     content = [
         f"# @shaderVersion {shader_version}",  # 版本放注释里，加载器仍只接收原来的选项键值。

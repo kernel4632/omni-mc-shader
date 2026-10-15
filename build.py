@@ -100,6 +100,17 @@ def source_path(reference: str, parent: Path, shaders: Path) -> Path:
         raise ValueError(f"{parent}：引用越界或文件不存在：{reference}")
     return source  # 后续展开信任这个已经检查过的引用目标。
 
+# --- 源文件编号：同一目录顺序只在一处生成 ---
+def numbered_sources(shaders: Path | None = None) -> dict[Path, int]:
+    """返回 `shaders` 下每个文件分辨路径到稳定编号的映射，编译器报错与展开共用它。
+
+    编号由排好序的目录顺序决定，同一份源码在展开和错误回译时得到同一个号，
+    不会因为两处各写一次顺序而对不上；内部数据互相信任，不做存在性兜底。
+    `shaders` 省略时在调用时取当前项目光影目录，测试替换目录后仍指向替换值。
+    """
+    shaders = SHADERS if shaders is None else shaders  # 在调用时读取，不能在函数定义时固定。
+    return {path.resolve(): index + 1 for index, path in enumerate(sorted(shaders.rglob("*"))) if path.is_file()}  # 一次排序生成全部编号。
+
 # --- 展开引用：编译一份完整源码，同时保留每段原文的位置 ---
 def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), sourceNumbers: dict | None = None, cache: dict | None = None) -> str:
     """展开 `source` 中的真实引用，返回含 `#line` 原文件编号和行号的编译文本。
@@ -116,7 +127,7 @@ def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), 
     if source in cache:
         return cache[source]  # 循环已在缓存查询之前检查。
     if sourceNumbers is None:  # 调用方没有共享表时，为本次引用树建立固定编号。
-        sourceNumbers = {path.resolve(): index + 1 for index, path in enumerate(sorted(shaders.rglob("*"))) if path.is_file()}  # 同一项目的编号映射稳定。
+        sourceNumbers = numbered_sources(shaders)  # 编号来源只有一处，展开与报错回译共用同一顺序。
     text = source.read_text(encoding="utf-8")  # 实际维护源码。
     masked = re.sub(r"/\*.*?\*/", lambda match: "".join("\n" if character == "\n" else " " for character in match[0]), text, flags=re.DOTALL)  # 屏蔽块注释但保留长度和换行，文档里的引用示例不参与展开。
     for line in masked.splitlines():  # 检查真实引用语法。
@@ -142,7 +153,7 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
     entries = sorted(path for path in shaders.rglob("*") if path.suffix in STAGES)  # 同时检查主世界、下界和末地入口。
     if not entries:  # 空目录不应被当作一个通过检查的光影包。
         raise ValueError("光影包至少需要一组可执行入口")
-    source_numbers = {path.resolve(): index + 1 for index, path in enumerate(sorted(shaders.rglob("*"))) if path.is_file()}  # 所有入口共用源文件编号。
+    source_numbers = numbered_sources(shaders)  # 所有入口共用源文件编号，顺序只在这里生成一次。
     cache = {}  # 同一检查共享已展开的效果文本。
     for source in entries:  # 阶段伙伴逐一检查。
         if not source.read_text(encoding="utf-8").startswith("#version "):
@@ -266,7 +277,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
     缓存位于开发报告目录，并同时核对编译器文件摘要和展开后源码摘要。
     """
     validator = tool("glslang")  # 真正执行编译器。
-    source_numbers = {path.resolve(): index + 1 for index, path in enumerate(sorted(SHADERS.rglob("*"))) if path.is_file()}  # 所有入口共用编号，编译器报错可指回原文件。
+    source_numbers = numbered_sources()  # 所有入口共用编号，编译器报错可指回原文件。
     expanded_cache = {}  # 本次检查共享读取结果，不把源码缓存带到下次运行。
     expanded = {source: expand(source, sourceNumbers=source_numbers, cache=expanded_cache) for source in entries}  # 展开后保留原始文件编号。
     print("入口展开完成，开始检查选项接入", flush=True)  # 长时间离线检查期间及时给出阶段状态。
@@ -305,7 +316,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
                     reused += 1  # 记录本次跳过的成功链接组。
                     continue  # 完整展开源码与配置完全相同才复用先前链接。
                 jobs.append({"digest": source_digest, "label": label, "environment": environment, "program": program, "sources": sources, "texts": texts})  # 保留错误报告需要的配置、程序与源码。
-    number_to_path = {str(index + 1): source.relative_to(SHADERS).as_posix() for index, source in enumerate(sorted(SHADERS.rglob("*"))) if source.is_file()}  # 编译器数字编号反查为项目内相对路径。
+    number_to_path = {str(index): path.relative_to(SHADERS).as_posix() for path, index in numbered_sources().items()}  # 编译器数字编号反查为项目内相对路径。
     failures = []  # 收集全部失败，一次报告，避免只看到第一条。
     workers = max(1, len(jobs))  # 任务数量已主动缩减，所有独立链接一次并行启动，不再人为排成长队。
     with tempfile.TemporaryDirectory(prefix="omni-glsl-") as temporary:
@@ -393,7 +404,7 @@ def check() -> None:
     audited = audit.check(ROOT)  # 自有源码先通过中文说明与未实现标记审计。
     dependencies()  # 发行包中的第三方文件与许可也必须满足白名单。
     print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
-    source_numbers = {path.resolve(): index + 1 for index, path in enumerate(sorted(SHADERS.rglob("*"))) if path.is_file()}  # 全部主体共享编号与展开缓存，避免反复扫描目录。
+    source_numbers = numbered_sources()  # 全部主体共享编号与展开缓存，避免反复扫描目录。
     expanded_cache = {}  # 一次检查只读取每份共用源码一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
         expand(source, sourceNumbers=source_numbers, cache=expanded_cache)  # 不为每个文件重新扫描整棵引用树。

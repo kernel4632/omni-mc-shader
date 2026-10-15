@@ -67,7 +67,7 @@ void omniWriteMetadata() {
 // --- 时间合成主流程：颜色、历史、元数据各写各的画面 ---
 void main() {
     vec3 color = texture(colortex6,texcoord).rgb; // 合成阶段准备好的线性颜色，作为时间合成的输入。
-    ivec2 pixel = clamp(ivec2(texcoord*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 与颜色采样同一像素的整数坐标，供精确读取水面标记。
+    ivec2 pixel = omniPixel(texcoord); // 与颜色采样同一像素的整数坐标，供精确读取水面标记。
     bool overlay = omniRejectsHistory(texcoord,pixel); // 这个像素是否不能复用几何历史。
 #if OMNI_AA_MODE == 1
     color = omniFxaa(texcoord); // 快速边缘平滑不读取历史，独立于时间算法。
