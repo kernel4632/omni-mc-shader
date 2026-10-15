@@ -20,7 +20,7 @@ jobs:
       - name: 读取代码
         uses: actions/checkout@v6 # 检查当前提交，不读取玩家目录。
       - name: 准备 Python
-        uses: actions/setup-python@v6 # 使用项目要求的解释器版本。
+        uses: actions/setup-python@v7 # 使用项目要求的解释器版本。
         with:
           python-version: '3.12' # 保持安全解压等标准库接口一致。
       - name: 缓存编译工具与结果

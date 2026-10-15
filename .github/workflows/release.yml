@@ -31,7 +31,7 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0 # 标签核对与版本说明需要完整历史。
       - name: 准备 Python
-        uses: actions/setup-python@v6 # 与本地离线检查使用相同解释器。
+        uses: actions/setup-python@v7 # 与本地离线检查使用相同解释器。
         with:
           python-version: '3.12' # 与本地构建环境保持同一标准库版本。
       - name: 验证版本标签
