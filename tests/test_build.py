@@ -82,7 +82,7 @@ class BuildTests(unittest.TestCase):
             source = shaders / "probe.csh"  # 计算入口只需一个阶段即可链接。
             valid = "#version 430\nlayout(local_size_x=1) in;\nuniform float xy,x,y;\nvoid main(){ float value=xy; }\n"  # 连在一起的名字是已声明变量。
             source.write_text(valid, encoding="utf-8")  # 第一次确实编译成功，建立可复用缓存。
-            with patch.object(build, "ROOT", root), patch.object(build, "SHADERS", shaders), patch.object(build, "tool", return_value=validator):
+            with patch.object(build, "ROOT", root), patch.object(build, "SHADERS", shaders), patch.object(build, "tool", return_value=validator), patch("sys.stdout", new_callable=io.StringIO):  # 进度收进内存，不依赖测试终端是否能显示中文。
                 build.compile_shaders([source], {}, [])  # 通过实际编译而非模拟成功结果。
                 source.write_text(valid.replace("value=xy", "value=x/**/y"), encoding="utf-8")  # 注释隔开两个变量，没有运算符，应当报错。
                 with self.assertRaisesRegex(ValueError, "GLSL 编译/链接失败"):
