@@ -163,6 +163,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("*OMNI_RAINBOW_STRENGTH",text)  # 彩虹强度参与着色。
         self.assertIn("*OMNI_SCATTER_STRENGTH",text)  # 散射强度参与着色。
 
+    def test_vegetation_wind_parameters_are_adjustable(self):
+        """植被摆动强度与速度都是可调参数，替换原先写死的振幅与频率。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_WIND_STRENGTH",found); self.assertIn("OMNI_WIND_SPEED",found)  # 两个参数由植被源码定义。
+        text = (build.SHADERS/"effects/vegetation.glsl").read_text(encoding="utf-8")
+        self.assertIn("*OMNI_WIND_SPEED",text)  # 速度参与相位。
+        self.assertIn("*OMNI_WIND_STRENGTH",text)  # 强度参与位移。
+
     def test_temporal_denoise_rotates_noise(self):
         """时序噪声逐帧旋转相位，地平线遮蔽在时间抗锯齿下可重建去噪。"""
         found,_,_ = build.configuration()
