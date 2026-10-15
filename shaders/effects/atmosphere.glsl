@@ -16,6 +16,12 @@
 #define OMNI_LIGHTNING
 // @option {"label":{"zh_cn":"解析大气散射","en_us":"Analytic atmosphere"},"description":{"zh_cn":"用解析单次散射近似天空，不引入外部查找表纹理。","en_us":"Approximates the sky with analytic single scattering, no external lookup table."}}
 #define OMNI_ATMOSPHERE_SCATTER 1 // [0 1]
+// @option {"label":{"zh_cn":"极光强度","en_us":"Aurora strength"},"slider":true}
+#define OMNI_AURORA_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"彩虹强度","en_us":"Rainbow strength"},"slider":true}
+#define OMNI_RAINBOW_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"散射强度","en_us":"Scatter strength"},"slider":true}
+#define OMNI_SCATTER_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // 共用颜色与天气输入：天空色、云与太阳方向都来自这里的定义。
 #include "/effects/sky.glsl"
 #ifdef IS_IRIS
@@ -32,14 +38,14 @@ vec3 omniAirScattering(vec3 direction) {
     float daylight = smoothstep(-0.15,0.15,sun.y); // 太阳落到地平线以下就归零。
     vec3 rayleigh = vec3(0.0058,0.0135,0.0331)*(1.0+mu*mu)*thickness*daylight; // 瑞利散射偏蓝，随夹角变化。
     vec3 mie = vec3(1.0,0.9,0.75)*pow(max(mu,0.0),8.0)*thickness*daylight*0.15; // 前向米氏光晕偏暖白。
-    return (rayleigh+mie)*0.5; // 半强度叠加，与现有天空量级匹配。
+    return (rayleigh+mie)*0.5*OMNI_SCATTER_STRENGTH; // 半强度叠加，与现有天空量级匹配；散射强度可调。
 }
 // 极光：主世界夜晚高空的缓慢帘幕，雨天被云遮挡。
 vec3 omniAurora(vec3 color, vec3 direction) {
 #ifdef OMNI_AURORA
     float night = 1.0-smoothstep(-0.2,0.1,omniNormalize(mat3(gbufferModelViewInverse)*sunPosition).y); // 太阳越低夜色越浓，极光越亮。
     float curtain = pow(max(0.0,sin(direction.x*18.0+omniNoise(direction*8.0+frameTimeCounter*0.02)*6.0)),8.0); // 帘幕随位置起伏、随时间缓慢移动。
-    color += vec3(0.08,0.35,0.20)*curtain*smoothstep(0.1,0.5,direction.y)*(1.0-rainStrength)*night; // 绿色帘幕只露在高空，雨云之下熄灭。
+    color += vec3(0.08,0.35,0.20)*curtain*smoothstep(0.1,0.5,direction.y)*(1.0-rainStrength)*night*OMNI_AURORA_STRENGTH; // 绿色帘幕只露在高空，雨云之下熄灭；强度可调。
 #endif
     return color; // 关闭时不改动颜色。
 }
@@ -51,7 +57,7 @@ vec3 omniRainbow(vec3 color, vec3 direction) {
     float offset = (angle-0.733)/0.018; // 相对约四十二度彩虹角的偏移，单位是弧度。
     float band = exp(-offset*offset); // 窄带：只用乘法构成，避开对负数取幂的未定义结果。
     vec3 spectrum = 0.5+0.5*cos((angle-0.72)*120.0+vec3(0,2.1,4.2)); // 角度到红橙黄绿的彩色谱。
-    color += spectrum*band*wetness*(1.0-rainStrength)*smoothstep(0.0,0.1,direction.y); // 只在雨停后仍湿润时出现。
+    color += spectrum*band*wetness*(1.0-rainStrength)*smoothstep(0.0,0.1,direction.y)*OMNI_RAINBOW_STRENGTH; // 只在雨停后仍湿润时出现；强度可调。
 #endif
     return color; // 关闭时不改动颜色。
 }

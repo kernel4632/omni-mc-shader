@@ -153,6 +153,16 @@ class EffectTests(unittest.TestCase):
         self.assertIn("* OMNI_SUN_DISK",text)  # 太阳亮度参与着色。
         self.assertIn("* OMNI_MOON_DISK",text)  # 月亮亮度参与着色。
 
+    def test_atmosphere_strengths_are_adjustable(self):
+        """极光、彩虹与散射强度都是可调参数，替换原先写死的倍率。"""
+        found,_,_ = build.configuration()
+        for name in ("OMNI_AURORA_STRENGTH","OMNI_RAINBOW_STRENGTH","OMNI_SCATTER_STRENGTH"):
+            self.assertIn(name,found)  # 每个参数都由氛围源码定义。
+        text = (build.SHADERS/"effects/atmosphere.glsl").read_text(encoding="utf-8")
+        self.assertIn("*OMNI_AURORA_STRENGTH",text)  # 极光强度参与着色。
+        self.assertIn("*OMNI_RAINBOW_STRENGTH",text)  # 彩虹强度参与着色。
+        self.assertIn("*OMNI_SCATTER_STRENGTH",text)  # 散射强度参与着色。
+
     def test_temporal_denoise_rotates_noise(self):
         """时序噪声逐帧旋转相位，地平线遮蔽在时间抗锯齿下可重建去噪。"""
         found,_,_ = build.configuration()
