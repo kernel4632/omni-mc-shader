@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.0.0-dev.71
+
+- 用浏览器核实许可：AMD FidelityFX（CACAO）与 Sebastian Lague Clouds 均为 MIT。
+- 明确区分两类来源：能直接接入的独立 GLSL 库（Ashima、SMAA、XeGTAO、glsl-atmosphere）与只能作参考、按原理重写的引擎源码（Filament、Godot、three.js、FidelityFX、Bruneton）。
+- 更新 `docs/libraries.md` 与 `docs/references.md` 的许可与分类。
+- 本版本只写文档，未改效果代码。
+
+本版本只执行离线验证，不启动 Minecraft，不运行 GPU 或性能测试。
+
 ## 0.0.0-dev.70
 
 - 新增算法参考清单 `docs/references.md`：按效果列出可参考实现、语言、许可与处理方式（直接用 / 按原理重写 / 小库直接重写）。

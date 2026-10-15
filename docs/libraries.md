@@ -9,23 +9,36 @@
 - **可以合法采用的库不少**，但都集中在「通用图形函数」层面；光影与 MC 绘制流程的对接（程序、缓冲、选项、光照合成）仍然要我们自己写。
 - **「自己只写几百行」可以实现的是数学/工具层**，不是整套真实感效果。真实感主体（PBR、水、体积云/雾、SSR、GI、SSS）没有可直接引用的宽松许可库，只能按公开论文独立实现。
 
-## 已核实许可、可直接采用
+## 能直接接入的独立 GLSL 库
 
-| 库 / 来源 | 提供什么 | 许可 | 备注 |
+这些是单文件、能用 `#include` 引入、许可宽松的库，优先直接采用。
+
+| 库 | 提供什么 | 许可 | 接入方式 |
 | --- | --- | --- | --- |
-| Ashima 三维单纯形噪声 | 噪声 | MIT | 项目已采用，随包许可 |
-| SMAA（iryoku/smaa） | 形态学抗锯齿 | MIT | 需要自带 AreaTex/SearchTex 查找表纹理 |
-| XeGTAO（GameTechDev） | 环境光遮蔽 | MIT（Intel） | 可直接做「缝隙变暗」 |
-| glsl-atmosphere（wwwtyro） | 瑞利/米氏天空散射 | 公有领域（Unlicense） | 可直接做「大气颜色」 |
-| Bruneton 预计算大气散射 | 物理大气 | BSD-3-Clause | 需要预计算 LUT 纹理；非商业/商业都可用但要保留声明 |
-| AgX / ACES / Uchimura 高光压缩 | 高光还原 | 公开算法 | 我们已按公开公式独立实现，不复制源码 |
+| Ashima 三维单纯形噪声 | 噪声 | MIT | 已采用，随包许可 |
+| SMAA（iryoku/smaa） | 形态学抗锯齿 | MIT | 引入 GLSL，另带 AreaTex/SearchTex 查找表纹理 |
+| XeGTAO（GameTechDev） | 环境光遮蔽 | MIT（Intel） | 以着色器方式接入，需适配 Iris |
+| glsl-atmosphere（wwwtyro） | 瑞利/米氏天空散射 | 公有领域（Unlicense） | 单函数，直接 `#include` |
+| AgX / ACES / Uchimura 高光压缩 | 高光还原 | 公开算法 | 代码很短，按 HOP 重写进项目 |
+
+## 引擎/框架源码（只作参考，按原理重写）
+
+这些不是能接入的库，而是宽松许可的**引擎实现**。读它们的 GLSL/HLSL 算法，按 HOP 重写进项目，不能整包搬。
+
+| 来源 | 语言 | 许可 | 可参考的效果 |
+| --- | --- | --- | --- |
+| Google Filament | GLSL/C++ | Apache-2.0 | PBR、IBL、SSAO、SSR、TAA、DOF、泛光、体积雾、色调映射、色彩分级 |
+| Godot Engine | GLSL 风格 | MIT | SSAO、SSR、SDFGI 全局光、体积雾、辉光、景深散景、运动模糊、TAA/FSR、天空、雾 |
+| three.js | GLSL | MIT | BSDF、色调映射、雾、灯光模式；后处理含 SMAA、泛光、散景、SSR、GTAO、TAA、FXAA |
+| AMD FidelityFX（FSR/CACAO/SSSR/LPM/SPD） | HLSL/GLSL | MIT（CACAO 已核实） | 超分、环境光遮蔽、随机屏幕反射、色调映射 |
+| Sebastian Lague Clouds | C# 着色器 | MIT（已核实） | 体积云 |
+| Bruneton 预计算大气散射 | C++ | BSD-3-Clause | 物理大气（需预计算 LUT） |
 
 ## 采用前需再核实许可
 
 | 库 / 来源 | 提供什么 | 现状 |
 | --- | --- | --- |
-| AMD FidelityFX FSR1（GPUOpen-Effects） | 超分（EASU/RCAS） | AMD 一般用 MIT，具体许可文件路径未取到，采用前必须核对 |
-| yiwenl/glsl-utils、hughsk、jamieowen/glsl-blend、hiepgaf/GLSL_libs | 噪声、混合、颜色、曝光 | 多为 MIT，但需逐个核对并记录来源 |
+| yiwenl/glsl-utils、hughsk、jamieowen/glsl-blend、hiepgaf/GLSL_libs | 噪声、混合、颜色、曝光 | 多为 MIT，需逐个核对并记录来源 |
 
 ## 明确不能用（许可限制）
 

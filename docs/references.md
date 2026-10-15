@@ -12,7 +12,7 @@
 | Google Filament | GLSL/C++ | Apache-2.0 | PBR、IBL、SSAO、SSR、TAA、DOF、泛光、体积雾、色调映射、色彩分级 |
 | Godot Engine | GLSL 风格 | MIT | SSAO、SSR、SDFGI 全局光、体积雾、辉光、景深散景、运动模糊、TAA/FSR、天空、雾 |
 | three.js | GLSL | MIT | BSDF、色调映射、雾、灯光；后处理含 SMAAPass、UnrealBloomPass、BokehPass、SSRPass、GTAOPass、TAARenderPass、FXAA |
-| AMD FidelityFX | HLSL/GLSL | MIT（采用前核对许可文件） | FSR 超分、CACAO 环境光遮蔽、SSSR 随机屏幕反射、SPD、LPM 色调映射、CAS、降噪器 |
+| AMD FidelityFX | HLSL/GLSL | MIT（已核实 CACAO 等） | FSR 超分、CACAO 环境光遮蔽、SSSR 随机屏幕反射、SPD、LPM 色调映射、CAS、降噪器 |
 
 ## 按效果查表
 
@@ -26,7 +26,7 @@
 | 超分 | FidelityFX FSR（EASU/RCAS）、SGSR | HLSL/GLSL | MIT（核对） | 直接采用或按原理重写 |
 | 环境光遮蔽 | Intel XeGTAO、FidelityFX CACAO、three.js GTAOPass、Filament SSAO | GLSL/HLSL | MIT / Apache-2.0 | 直接采用 XeGTAO |
 | 大气 / 天空 | Bruneton 预计算、wwwtyro glsl-atmosphere、Hosek-Wilkie、Preetham、Nishita | 多语言 | BSD-3 / 公有领域 / 公开论文 | 已用解析近似；后续换 Bruneton 或 Hosek-Wilkie |
-| 云（体积） | Sebastian Lague Clouds、shadertoy 体积云、Horizon Zero Dawn 方案、Frostbite | C#/GLSL/论文 | 需核实 / 公开论文 | 按原理重写 |
+| 云（体积） | Sebastian Lague Clouds、shadertoy 体积云、Horizon Zero Dawn 方案、Frostbite | C#/GLSL/论文 | MIT（SebLague 已核实）/ 公开论文 | 按原理重写 |
 | 云（平面） | 各 shadertoy | GLSL | 公开 | 按原理重写 |
 | 雾（体积） | Filament froxel fog、Godot volumetric fog、Frostbite volumetrics | GLSL/论文 | Apache-2.0 / MIT / 公开 | 按原理重写 |
 | 阳光光柱 | GPU Gems 3 第 13 章、shadertoy god rays | GLSL/论文 | 公开 | 按原理重写 |
