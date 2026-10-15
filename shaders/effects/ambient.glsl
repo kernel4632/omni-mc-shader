@@ -1,6 +1,12 @@
-// 环境遮蔽与屏幕反弹光：读取邻点视空间位置、法线与已照明辐射，只压暗或叠加可见反弹，不产生虚构照明。
-// 调用位置：rendering/composite.glsl 的普通表面后处理显式 #include 后调用 omniAmbient。
-// 可复制示例：`color = omniAmbient(color, omniSceneView(uv,false), normal, uv);`
+// 环境遮蔽与屏幕空间反弹光：读取邻点视空间位置、法线与已着色辐射，只压暗或叠加屏幕里看得到的反弹，不虚构照明。
+// 调用位置：由 rendering/composite.glsl 的普通表面后处理显式引用，对已经着色的表面调用 omniAmbient。
+// 可复制示例：
+//   `color = omniAmbient(color, omniSceneView(uv,false), normal, uv);`
+// 关键取舍：
+//   只使用当前屏幕里可见的邻点，屏幕外和背面的表面看不到，缺少信息时不假装知道，宁可少压一点暗。
+//   环境遮蔽与反弹是两条独立开关，都关闭时不采样任何邻点，画面回到没有间接光的原始亮度。
+//   地平线算法比螺旋算法更贴合真实遮挡但更耗性能，保留螺旋路径供旧画面和低配设备回退。
+// 防止被多个绘制文件重复引用，头文件保护只声明一次。
 #ifndef OMNI_AMBIENT
 #define OMNI_AMBIENT
 // @effect {"label":{"zh_cn":"间接照明","en_us":"Indirect light"}}
@@ -12,125 +18,152 @@
 //#define OMNI_SCREEN_BOUNCE
 // @option {"label":{"zh_cn":"环境采样半径","en_us":"Ambient radius"}}
 #define OMNI_AMBIENT_RADIUS 1.5 // [0.5 1.0 1.5 3.0]
-// 坐标与空间随机序列共用。
+// 屏幕坐标换算、视空间重建与天空判定由统一坐标模块提供。
 #include "/common/coordinates.glsl"
+// 归一化与可重复随机数由统一数学模块提供。
 #include "/common/math.glsl"
-// 时序噪声相位来自统一的抗锯齿模块。
+// 逐帧噪声相位由统一抗锯齿模块提供，让遮蔽在时序重建开启时逐帧抖动。
 #include "/effects/antialiasing.glsl"
-// 体积间接光来自统一的效果主体。
+// 体积间接光由统一效果主体提供，缺少计算能力时只保留屏幕路径。
 #include "/effects/lpv.glsl"
 #ifdef OMNI_LPV_ENABLED
-uniform sampler3D omniLpvTex; // 体积格读取，计算阶段写入。
+uniform sampler3D omniLpvTex; // 体积格只读采样，实际写入发生在计算阶段。
 #endif
-// 采样半径边界：用户选项为零或异常时保守回退，后续除法始终安全；所有半径计算共用此值。
+// 采样半径边界：用户选项为零或异常时回退到一个极小正值，后续除法始终安全，所有半径计算共用此值。
 const float omniAmbientRadius = max(OMNI_AMBIENT_RADIUS, 1e-3);
-// 判断邻点能否参与邻域采样：屏幕内、有有效几何且不是手或叠层。
+
+// --- 邻点筛选 ---
+// 判断一个邻点能否参与邻域采样：必须落在屏幕内、有有效几何，而且不是手或叠层。
 bool omniAmbientNeighbor(vec2 sampleUv) {
-    if (any(lessThan(sampleUv,vec2(0))) || any(greaterThan(sampleUv,vec2(1))) || omniSkyPixel(sampleUv)) return false; // 屏幕外与天空没有表面。
-    ivec2 samplePixel = clamp(ivec2(sampleUv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 元数据固定到最近像素。
-    return texelFetch(colortex7,samplePixel,0).a>=0.5 && texelFetch(colortex1,samplePixel,0).a!=2.0; // 叠层与手没有可靠屏幕几何。
+    // 屏幕外与天空都没有可采样的表面，直接排除。
+    if (any(lessThan(sampleUv,vec2(0))) || any(greaterThan(sampleUv,vec2(1))) || omniSkyPixel(sampleUv)) return false;
+    // 类别和有效性是离散标记，线性插值会混出并不存在的值，所以固定取最近像素。
+    ivec2 samplePixel = clamp(ivec2(sampleUv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0));
+    // 叠层和手没有可靠的屏幕几何，它们的深度不能用来重建邻点位置。
+    return texelFetch(colortex7,samplePixel,0).a>=0.5 && texelFetch(colortex1,samplePixel,0).a!=2.0;
 }
-// 螺旋采样环境遮蔽：保留原有固定圆盘采样，供旧画面路径使用。
+
+// --- 屏幕圆盘采样 ---
+// 一次螺旋采样在屏幕上的偏移：遮蔽和反弹共用同一组角度，两条路径的采样位置保持对齐。
+vec2 omniSpiralOffset(vec2 uv, float radius, int i) {
+    float angle = float(i)*2.399963 + omniHash(floor(uv*vec2(viewWidth,viewHeight)))*6.283185; // 黄金角让相邻样本不重叠。
+    return vec2(cos(angle),sin(angle))*radius*sqrt((float(i)+0.5)/12.0); // 开方让样本均匀铺满圆盘。
+}
+
+// --- 螺旋环境遮蔽 ---
+// 螺旋采样环境遮蔽：在固定圆盘内取十二个样本，统计被几何挡住的比重，供旧画面路径使用。
 float omniSpiralOcclusion(vec3 view, vec3 normal, vec2 uv) {
-    float occlusion = 0.0, weight = 0.0; // 累计几何遮挡与采样权重。
-    float radius = min(0.08,omniAmbientRadius/max(-view.z,1.0)); // 米制半径投影到屏幕。
+    float occlusion = 0.0, weight = 0.0; // 累计遮挡强度与有效样本数。
+    float radius = min(0.08,omniAmbientRadius/max(-view.z,1.0)); // 米制半径投影到屏幕，设上限避免近处摊得过大。
     for (int i=0;i<12;i++) {
-        float angle = float(i)*2.399963 + omniHash(floor(uv*vec2(viewWidth,viewHeight)))*6.283185; // 稳定螺旋采样。
-        vec2 sampleUv = uv+vec2(cos(angle),sin(angle))*radius*sqrt((float(i)+0.5)/12.0); // 均匀覆盖圆盘。
-        if (!omniAmbientNeighbor(sampleUv)) continue; // 无效邻点不参与归一化。
-        vec3 delta = omniSceneView(sampleUv,true)-view; // 邻点到当前表面的方向。
-        float distance = length(delta); // 米制距离。
-        if (distance<0.05 || distance>omniAmbientRadius*2.0) continue; // 排除自身与远处无关表面。
-        float receiver = max(dot(normal,delta/distance)-0.1,0.0); // 接收表面的半球可见性。
-        occlusion += receiver*exp(-distance/omniAmbientRadius); // 距离衰减的遮蔽依据。
-        weight += 1.0; // 屏幕边缘按有效样本归一化。
+        vec2 sampleUv = uv+omniSpiralOffset(uv,radius,i); // 圆盘内第 i 个样本。
+        if (!omniAmbientNeighbor(sampleUv)) continue; // 无效邻点不计入，归一化只用有效样本。
+        vec3 delta = omniSceneView(sampleUv,true)-view; // 邻点相对当前表面的方向。
+        float distance = length(delta); // 米制距离，用来判断远近和衰减。
+        if (distance<0.05 || distance>omniAmbientRadius*2.0) continue; // 太近是自身，太远与当前点无关。
+        float receiver = max(dot(normal,delta/distance)-0.1,0.0); // 邻点落在法线正半球才可能挡光。
+        occlusion += receiver*exp(-distance/omniAmbientRadius); // 越远的遮挡贡献越弱。
+        weight += 1.0; // 记录一个有效样本。
     }
-    return clamp(occlusion/max(weight,1.0)*1.6,0.0,0.65); // 只压暗，不添加虚构照明。
+    return clamp(occlusion/max(weight,1.0)*1.6,0.0,0.65); // 平均后放大并封顶，只压暗不添加照明。
 }
-// 地平线邻点余弦：一个屏幕方向上的最大地平线角。
+
+// --- 地平线环境遮蔽 ---
+// 地平线余弦：某个屏幕方向上的最大地平线角，越接近一表示这个方向被挡得越满。
 float omniHorizonCosine(vec3 view, vec3 viewDirection, vec2 sampleUv) {
-    if (!omniAmbientNeighbor(sampleUv)) return -1.0; // 无效邻点不构成地平线。
-    vec3 delta = omniSceneView(sampleUv,true)-view; // 邻点到当前表面的方向。
+    if (!omniAmbientNeighbor(sampleUv)) return -1.0; // 无效邻点不构成地平线，用负一表示没有遮挡。
+    vec3 delta = omniSceneView(sampleUv,true)-view; // 邻点相对当前表面的方向。
     float distance = length(delta); // 米制距离。
-    if (distance<1e-3 || distance>omniAmbientRadius*3.0) return -1.0; // 排除自身与超范围邻点。
-    float cosine = dot(delta/distance,viewDirection); // 该邻点的地平线余弦。
-    float falloff = clamp(1.0-distance/(omniAmbientRadius*3.0),0.0,1.0); // 远处邻点贡献减弱。
-    return mix(-1.0,cosine,falloff); // 避免远景几何把画面压黑。
+    if (distance<1e-3 || distance>omniAmbientRadius*3.0) return -1.0; // 太近是自身，太远不参与地平线。
+    float cosine = dot(delta/distance,viewDirection); // 邻点方向与视线方向的夹角余弦。
+    float falloff = clamp(1.0-distance/(omniAmbientRadius*3.0),0.0,1.0); // 越远贡献越弱，避免远景把画面压黑。
+    return mix(-1.0,cosine,falloff); // 衰减到零时退回没有遮挡。
 }
-// 地平线环境遮蔽：围绕法线切片，按两侧最大地平线角积分半球可见度。
+// 一个切片方向上的半球可见缺口：把法线投到切片平面，向两侧搜索最大地平线，再积分这一段遮挡。
+float omniSliceOcclusion(vec3 view, vec3 viewDirection, vec3 normal, vec2 uv, float sliceAngle) {
+    const int steps = 6; // 每个方向的地平线搜索步数，越多越贴合真实遮挡。
+    vec3 sliceDirection = vec3(cos(sliceAngle),sin(sliceAngle),0.0); // 切片在屏幕平面里的方向。
+    vec3 orthogonal = sliceDirection-dot(sliceDirection,viewDirection)*viewDirection; // 切片方向正交到视线的分量。
+    vec3 axis = cross(sliceDirection,viewDirection); // 切片平面的法向，用来把法线投影进来。
+    vec3 projectedNormal = normal-dot(normal,axis)*axis; // 法线投影到切片平面，得到二维遮挡几何。
+    float normalLength = inversesqrt(max(dot(projectedNormal,projectedNormal),1e-6)); // 投影长度的倒数，几乎为零时也不会除零。
+    float cosNormalAngle = clamp(dot(projectedNormal,viewDirection)*normalLength,-1.0,1.0); // 投影法线相对视线的夹角余弦。
+    float normalAngle = sign(dot(orthogonal,projectedNormal))*acos(cosNormalAngle); // 带符号的法线角，区分切片的左右两侧。
+    float horizonPositive = -1.0, horizonNegative = -1.0; // 两侧搜索到的最大地平线余弦。
+    for (int step=1;step<=steps;step++) {
+        float fraction = float(step)/float(steps); // 归一化搜索距离。
+        vec2 offset = sliceDirection.xy*fraction*fraction*omniAmbientRadius/vec2(viewWidth,viewHeight); // 近密远疏的屏幕偏移。
+        horizonPositive = max(horizonPositive,omniHorizonCosine(view,viewDirection,uv+offset)); // 正向搜索地平线。
+        horizonNegative = max(horizonNegative,omniHorizonCosine(view,viewDirection,uv-offset)); // 反向搜索地平线。
+    }
+    float anglePositive = acos(clamp(horizonPositive,-1.0,1.0))*2.0; // 正向地平线对应的开口角。
+    float angleNegative = -acos(clamp(horizonNegative,-1.0,1.0))*2.0; // 反向地平线对应的开口角。
+    return 2.0*cosNormalAngle+(angleNegative+anglePositive)*sin(normalAngle)-cos(angleNegative-normalAngle)-cos(anglePositive-normalAngle); // 这一段切片的半球可见缺口。
+}
+// 地平线环境遮蔽：绕视线均匀切片，累加每个切片方向的可见缺口，得到整个半球被挡住的比重。
 float omniHorizonOcclusion(vec3 view, vec3 normal, vec2 uv) {
-    const int slices = 3; // 环绕视线的切片数量。
-    const int steps = 6; // 每个方向的地平线搜索步数。
+    const int slices = 3; // 环绕视线的切片数量，越多越稳但越贵。
 #if defined OMNI_ANTIALIASING && OMNI_AA_MODE == 2 && OMNI_TEMPORAL_DENOISE == 1
     float phase = omniTemporalNoise(vec2(gl_FragCoord.xy)); // 时间抗锯齿开启时逐帧旋转，历史帧重建去噪。
 #else
     float phase = omniHash(vec2(gl_FragCoord.xy)); // 没有时间重建时保持空间稳定。
 #endif
-    vec3 viewDirection = omniNormalize(-view); // 表面指向相机的方向。
-    float occlusion = 0.0; // 累计半球可见缺口。
+    vec3 viewDirection = omniNormalize(-view); // 从表面指向相机的方向。
+    float occlusion = 0.0; // 累计各切片的半球可见缺口。
     for (int slice=0;slice<slices;slice++) {
-        float sliceAngle = (float(slice)+phase)*3.14159265/float(slices); // 围绕视线均匀分布切片。
-        vec3 sliceDirection = vec3(cos(sliceAngle),sin(sliceAngle),0.0); // 切片参考方向。
-        vec3 orthogonal = sliceDirection-dot(sliceDirection,viewDirection)*viewDirection; // 正交到视线。
-        vec3 axis = cross(sliceDirection,viewDirection); // 切片平面法向。
-        vec3 projectedNormal = normal-dot(normal,axis)*axis; // 法线投影到切片平面。
-        float normalLength = inversesqrt(max(dot(projectedNormal,projectedNormal),1e-6)); // 投影长度倒数。
-        float cosNormalAngle = clamp(dot(projectedNormal,viewDirection)*normalLength,-1.0,1.0); // 投影法线角余弦。
-        float normalAngle = sign(dot(orthogonal,projectedNormal))*acos(cosNormalAngle); // 投影法线角。
-        float horizonPositive = -1.0, horizonNegative = -1.0; // 两侧最大地平线余弦。
-        for (int step=1;step<=steps;step++) {
-            float fraction = float(step)/float(steps); // 归一化搜索距离。
-            vec2 offset = sliceDirection.xy*fraction*fraction*omniAmbientRadius/vec2(viewWidth,viewHeight); // 近密远疏的屏幕偏移。
-            horizonPositive = max(horizonPositive,omniHorizonCosine(view,viewDirection,uv+offset)); // 正向搜索。
-            horizonNegative = max(horizonNegative,omniHorizonCosine(view,viewDirection,uv-offset)); // 反向搜索。
-        }
-        float anglePositive = acos(clamp(horizonPositive,-1.0,1.0))*2.0; // 正向地平线角。
-        float angleNegative = -acos(clamp(horizonNegative,-1.0,1.0))*2.0; // 反向地平线角。
-        occlusion += 2.0*cosNormalAngle+(angleNegative+anglePositive)*sin(normalAngle)-cos(angleNegative-normalAngle)-cos(anglePositive-normalAngle); // 半球可见积分。
+        float sliceAngle = (float(slice)+phase)*3.14159265/float(slices); // 把切片围绕视线均匀分布。
+        occlusion += omniSliceOcclusion(view,viewDirection,normal,uv,sliceAngle); // 累加这一个切片方向。
     }
-    float visibility = occlusion*0.25/float(slices); // 平均可见度。
-    return clamp(1.0-clamp(visibility,0.0,1.0),0.0,1.0)*0.65; // 归一化为遮挡系数。
+    float visibility = occlusion*0.25/float(slices); // 平均到每个切片，得到半球可见度。
+    return clamp(1.0-clamp(visibility,0.0,1.0),0.0,1.0)*0.65; // 转成遮挡系数并封顶，只压暗。
 }
-// 屏幕反弹光：从可见邻点辐射估计一次漫反射反弹。
+
+// --- 屏幕反弹光 ---
+// 用邻点四周的不透明深度重建该邻点的表面法线：屏幕没有直接给出邻点法线，而反弹需要知道它朝哪。
+vec3 omniDonorNormal(vec3 target, vec2 sampleUv) {
+    vec2 pixel = 1.0/vec2(viewWidth,viewHeight); // 取邻点几何要和当前阶段用同一份数据。
+    vec3 right = omniSceneView(clamp(sampleUv+vec2(pixel.x,0),0.0,1.0),true); // 邻点水平方向的几何位置。
+    vec3 upper = omniSceneView(clamp(sampleUv+vec2(0,pixel.y),0.0,1.0),true); // 邻点垂直方向的几何位置。
+    vec3 donor = omniNormalize(cross(right-target,upper-target)); // 相邻两点叉乘重建表面法线。
+    if (dot(donor,-target)<0.0) donor = -donor; // 使重建法线朝向可见面。
+    return donor;
+}
+// 屏幕反弹光：从屏幕里可见的邻点辐射估计一次漫反射反弹，只是轻量近似，不是完整全局光。
 vec3 omniBounce(vec3 view, vec3 normal, vec2 uv) {
-    vec3 bounce = vec3(0.0); float weight = 0.0; // 只累积实际邻点辐射。
+    vec3 bounce = vec3(0.0); float weight = 0.0; // 累计反弹颜色与有效样本数。
     float radius = min(0.08,omniAmbientRadius/max(-view.z,1.0)); // 与螺旋遮蔽一致的屏幕半径。
     for (int i=0;i<12;i++) {
-        float angle = float(i)*2.399963 + omniHash(floor(uv*vec2(viewWidth,viewHeight)))*6.283185; // 复用同一稳定采样。
-        vec2 sampleUv = uv+vec2(cos(angle),sin(angle))*radius*sqrt((float(i)+0.5)/12.0); // 均匀覆盖圆盘。
+        vec2 sampleUv = uv+omniSpiralOffset(uv,radius,i); // 与遮蔽共用的圆盘样本。
         if (!omniAmbientNeighbor(sampleUv)) continue; // 无效邻点不参与反弹。
-        vec3 delta = omniSceneView(sampleUv,true)-view; // 邻点到当前表面的方向。
+        vec3 delta = omniSceneView(sampleUv,true)-view; // 邻点相对当前表面的方向。
         float distance = length(delta); // 米制距离。
-        if (distance<0.05 || distance>omniAmbientRadius*2.0) continue; // 排除自身与远处无关表面。
-        vec3 direction = delta/distance; // 传播方向归一化。
-        float receiver = max(dot(normal,direction)-0.1,0.0); // 接收表面的半球可见性。
-        float attenuation = exp(-distance/omniAmbientRadius); // 距离衰减。
-        vec2 pixel = 1.0/vec2(viewWidth,viewHeight); // 邻点几何必须取同一阶段的数据。
-        vec3 target = view+delta; // 当前邻点不透明位置。
-        vec3 right = omniSceneView(clamp(sampleUv+vec2(pixel.x,0),0.0,1.0),true); // 邻点水平几何。
-        vec3 upper = omniSceneView(clamp(sampleUv+vec2(0,pixel.y),0.0,1.0),true); // 邻点垂直几何。
-        vec3 donor = omniNormalize(cross(right-target,upper-target)); // 用不透明深度重建法线。
-        if (dot(donor,-target)<0.0) donor = -donor; // 使重建法线朝向可见面。
+        if (distance<0.05 || distance>omniAmbientRadius*2.0) continue; // 太近是自身，太远与当前点无关。
+        vec3 direction = delta/distance; // 沿邻点方向的传播方向。
+        float receiver = max(dot(normal,direction)-0.1,0.0); // 当前表面朝向邻点才接收反弹。
+        float attenuation = exp(-distance/omniAmbientRadius); // 距离越远反弹越弱。
+        vec3 donor = omniDonorNormal(view+delta,sampleUv); // 邻点表面法线决定它往哪反弹。
         bounce += texture(colortex3,sampleUv).rgb*receiver*max(dot(donor,-direction),0.0)*attenuation; // 有方向与辐射输入的单次反弹。
-        weight += 1.0; // 按有效样本归一化。
+        weight += 1.0; // 记录一个有效样本。
     }
-    return bounce/max(weight,1.0)*0.35; // 明确轻量屏幕估计范围。
+    return bounce/max(weight,1.0)*0.35; // 平均后按轻量系数返回，避免屏幕估计过亮。
 }
-// 环境遮蔽与反弹光入口：按选项选择遮蔽算法，反弹独立累加。
+
+// --- 入口 ---
+// 环境遮蔽与反弹光入口：按选项选择遮蔽算法，反弹与体积间接光各自独立叠加，返回修改后的颜色。
 vec3 omniAmbient(vec3 color, vec3 view, vec3 normal, vec2 uv) {
 #ifdef OMNI_SSAO
 #if OMNI_AO_MODE == 1
-    color *= 1.0-omniHorizonOcclusion(view,normal,uv); // 地平线遮挡。
+    color *= 1.0-omniHorizonOcclusion(view,normal,uv); // 地平线遮挡更贴合真实遮挡。
 #else
     color *= 1.0-omniSpiralOcclusion(view,normal,uv); // 螺旋遮挡保持旧画面。
 #endif
 #endif
 #ifdef OMNI_SCREEN_BOUNCE
-    color += omniBounce(view,normal,uv); // 一次可见反弹。
+    color += omniBounce(view,normal,uv); // 屏幕里可见的一次反弹。
 #endif
 #ifdef OMNI_LPV_ENABLED
     color += omniLpvSample(omniLpvTex,omniWorld(view)) * OMNI_LPV_STRENGTH; // 体积间接光叠加。
 #endif
-    return color; // 关闭两个开关后没有邻点采样。
+    return color; // 两个开关都关闭时没有邻点采样，颜色不变。
 }
 #endif
