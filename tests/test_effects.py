@@ -101,6 +101,14 @@ class EffectTests(unittest.TestCase):
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
         self.assertIn("vec3 omniFog",source)  # 合成阶段包含雾主体。
 
+    def test_height_fog_parameters_are_adjustable(self):
+        """高度雾的基准高度与衰减是可调参数，替换原先写死的数值。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_FOG_HEIGHT",found); self.assertIn("OMNI_FOG_SCALE",found)  # 两个参数由雾源码定义。
+        text = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
+        self.assertIn("- OMNI_FOG_HEIGHT",text)  # 高度基准参与密度计算。
+        self.assertIn("*OMNI_FOG_SCALE)",text)  # 衰减参与密度计算。
+
     def test_reflection_denoise_filters_by_depth(self):
         """反射去噪按命中深度加权邻点，旧五点路径仍可保留。"""
         found,_,_ = build.configuration()

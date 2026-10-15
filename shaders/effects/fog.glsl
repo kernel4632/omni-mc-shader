@@ -10,6 +10,10 @@
 #define OMNI_FOG_DENSITY 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"高度雾强度","en_us":"Height fog"},"slider":true}
 #define OMNI_HEIGHT_FOG 0.5 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"高度雾基准高度","en_us":"Height fog base"},"description":{"zh_cn":"低于此高度雾更浓，用来贴合海平面；单位世界格。","en_us":"Below this altitude fog thickens; measured in world blocks."}}
+#define OMNI_FOG_HEIGHT 64.0 // [0.0 32.0 64.0 96.0 128.0]
+// @option {"label":{"zh_cn":"高度雾衰减","en_us":"Height fog falloff"},"slider":true}
+#define OMNI_FOG_SCALE 0.035 // [0.01 0.02 0.035 0.06]
 // @option {"label":{"zh_cn":"体积光","en_us":"Volumetric light"}}
 //#define OMNI_VOLUMETRIC_LIGHT
 // @option {"label":{"zh_cn":"水下体积光","en_us":"Underwater volumetric"},"description":{"zh_cn":"水下沿视线步进阴影可见性生成蓝色光柱。","en_us":"Marches shadow visibility underwater to draw blue light shafts."}}
@@ -78,7 +82,7 @@ vec3 omniFog(vec3 color, vec3 view, vec3 world) {
     float distance = omniNonNegative(length(view)); // 边界数据：深度重建异常给出 NaN 或负值时先归零。
     distance = min(distance,32000.0); // 背景重建可能给出超大距离，截断避免指数运算溢出。
     float density = (0.0015 + rainStrength * 0.004) * OMNI_FOG_DENSITY; // 基础密度，雨天更浓以缩短能见度。
-    density += exp(-max(cameraPosition.y + world.y * 0.5 - 64.0,-40.0)*0.035) * 0.001 * OMNI_HEIGHT_FOG; // 用视线中点高度近似，越低越浓。
+    density += exp(-max(cameraPosition.y + world.y * 0.5 - OMNI_FOG_HEIGHT,-40.0)*OMNI_FOG_SCALE) * 0.001 * OMNI_HEIGHT_FOG; // 用视线中点高度近似，低于基准高度越浓；基准与衰减都可调。
     density = omniNonNegative(density); // 保证密度非负，避免负指数把雾算成负值。
     vec3 atmosphere = omniSky(omniNormalize(world)); // 默认空气色与天空一致，天地不脱节。
 #ifdef OMNI_NETHER
