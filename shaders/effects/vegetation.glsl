@@ -2,9 +2,9 @@
 #ifndef OMNI_VEGETATION
 #define OMNI_VEGETATION
 // @effect {"label":{"zh_cn":"植被","en_us":"Vegetation"}}
-// @option {"label":{"zh_cn":"植被摆动","en_us":"Vegetation wind"}}
+// @option {"label":{"zh_cn":"植物摆动开关","en_us":"Vegetation wind"}}
 #define OMNI_VEGETATION_WIND
-// @option {"label":{"zh_cn":"摆动强度","en_us":"Wind strength"},"slider":true}
+// @option {"label":{"zh_cn":"摆动幅度","en_us":"Wind strength"},"slider":true}
 #define OMNI_WIND_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"摆动速度","en_us":"Wind speed"},"slider":true}
 #define OMNI_WIND_SPEED 1.0 // [0.5 1.0 1.5 2.0]
