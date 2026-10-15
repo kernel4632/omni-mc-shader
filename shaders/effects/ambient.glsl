@@ -81,8 +81,8 @@ float omniSliceOcclusion(vec3 view, vec3 viewDirection, vec3 normal, vec2 uv, fl
     vec3 orthogonal = sliceDirection-dot(sliceDirection,viewDirection)*viewDirection; // 切片方向正交到视线的分量。
     vec3 axis = cross(sliceDirection,viewDirection); // 切片平面的法向，用来把法线投影进来。
     vec3 projectedNormal = normal-dot(normal,axis)*axis; // 法线投影到切片平面，得到二维遮挡几何。
-    float normalLength = inversesqrt(max(dot(projectedNormal,projectedNormal),1e-6)); // 投影长度的倒数，几乎为零时也不会除零。
-    float cosNormalAngle = clamp(dot(projectedNormal,viewDirection)*normalLength,-1.0,1.0); // 投影法线相对视线的夹角余弦。
+    float inverseNormalLength = inversesqrt(max(dot(projectedNormal,projectedNormal),1e-6)); // 投影长度的倒数，几乎为零时也不会除零。
+    float cosNormalAngle = clamp(dot(projectedNormal,viewDirection)*inverseNormalLength,-1.0,1.0); // 投影法线相对视线的夹角余弦。
     float normalAngle = sign(dot(orthogonal,projectedNormal))*acos(cosNormalAngle); // 带符号的法线角，区分切片的左右两侧。
     float horizonPositive = -1.0, horizonNegative = -1.0; // 两侧搜索到的最大地平线余弦，未找到时保持开口值。
     bool found = false; // 这一片是否找到过任何有效遮挡证据。

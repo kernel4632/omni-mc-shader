@@ -27,8 +27,11 @@
 // 云影需要云密度，主世界直射光按云层衰减。
 #include "/effects/cloud.glsl"
 // 镜面高光：GGX 法线分布、施利克菲涅耳与 Smith 可见性，输入来自材质的粗糙度和金属。
-// 法线或光方向退化时归一化返回零向量，漫反射与镜面随之收敛为零，不产生 NaN。
-vec3 omniSpecular(vec3 normal, vec3 world, vec3 materialParams, vec3 sun, float shadow) {
+// 反射率口径与 effects/reflection.glsl 一致：labPBR 绿色通道在二百三十以下直接存非金属反射率，
+// 没有材质包时地形默认零点零四、水是零点零二；二百三十及以上表示金属，金属的反射色就是它的底色。
+// 返回值已经是高光亮度本身，调用方不能再乘底色，否则深色方块没有高光、非金属高光也会被染色。
+// 法线或光方向退化时归一化返回零向量，镜面随之收敛为零，不产生 NaN。
+vec3 omniSpecular(vec3 albedo, vec3 normal, vec3 world, vec3 materialParams, vec3 sun, float shadow) {
     vec3 n = omniNormalize(mat3(gbufferModelViewInverse)*normal); // 世界空间法线。
     vec3 l = omniNormalize(mat3(gbufferModelViewInverse)*sun); // 世界空间光方向。
     vec3 v = omniNormalize(-world); // 表面指向相机，相机处退化为零向量。
@@ -40,12 +43,12 @@ vec3 omniSpecular(vec3 normal, vec3 world, vec3 materialParams, vec3 sun, float 
     float nv = max(dot(n,v),1e-4); // 法线与视线夹角余弦，保留非零下限。
     float denom = nh*nh*(alpha*alpha-1.0)+1.0; // 法线分布分母，恒不小于 alpha 平方。
     float distribution = alpha*alpha/(3.14159265*denom*denom); // GGX 法线分布。
-    float metal = clamp(materialParams.y,0.0,1.0); // 金属标志限制在零到一，越界输入不放大反射率。
-    vec3 f0 = mix(vec3(0.04),vec3(metal),step(230.0/255.0,metal)); // 介电或金属底色近似。
+    float metal = step(230.0/255.0,materialParams.y); // 材质标准约定的金属标记。
+    vec3 f0 = mix(vec3(clamp(materialParams.y,0.0,1.0)),clamp(albedo,0.0,1.0),metal); // 非金属用材质反射率，金属用底色。
     vec3 fresnel = f0+(1.0-f0)*pow(1.0-max(dot(h,v),0.0),5.0); // 施利克近似。
     float k = alpha*0.5; // Smith 可见性参数，恒为正。
     float visibility = (nv/(nv*(1.0-k)+k))*(nl/(nl*(1.0-k)+k)); // 几何可见性，分母由 k 保证不为零。
-    return distribution*fresnel*visibility*nl*shadow; // 返回反射率与阴影。
+    return distribution*fresnel*visibility*nl*shadow; // 返回高光亮度与阴影。
 }
 // 用一份色温偏移乘到光色上：正值偏暖（加红减蓝），负值偏冷（减红加蓝），零保持中性。
 // 只让红蓝反向移动，绿色不动，避免调整色温时整体亮度变化；振幅固定，选项只控制方向与幅度。
@@ -84,11 +87,13 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
 #endif
     vec3 lightColor = (ambient * materialAo + vec3(0.012)) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * omniTint(OMNI_BLOCKLIGHT_TINT) * block * OMNI_BLOCKLIGHT_STRENGTH; // 材质遮蔽只压低环境光，不削弱直接光；方块光颜色与强度可调。
     float weather = 1.0 - rainStrength * 0.65; // 雨天统一压低直射能量，漫反射与镜面共用。
-    lightColor += direct * diffuse * sky * weather * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 漫反射。
-#if OMNI_SPECULAR == 1
-    lightColor += omniSpecular(normal,world,materialParams,sun,shadow) * direct * sky * weather * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 直射镜面高光。
-#endif
+    float metal = step(230.0/255.0, materialParams.y); // 金属不产生直射漫反射，直射光只以高光形式出现。
+    lightColor += direct * diffuse * sky * weather * OMNI_SUNLIGHT_STRENGTH * cloudShade * (1.0 - metal); // 直射漫反射；环境光与方块光仍保留，近似金属对周围环境的反光。
     lightColor = mix(lightColor, max(lightColor, vec3(0.65)), nightVision); // 保留夜视能力。
-    return albedo * lightColor + albedo * materialParams.z * 4.0; // 自发光不被材质遮蔽乘暗。
+    vec3 specular = vec3(0.0); // 关闭高光时为零。
+#if OMNI_SPECULAR == 1
+    specular = omniSpecular(albedo,normal,world,materialParams,sun,shadow) * direct * sky * weather * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 直射镜面高光，颜色已经包含在反射率里。
+#endif
+    return albedo * lightColor + specular + albedo * materialParams.z * 4.0; // 漫反射乘底色，高光单独相加；自发光不被材质遮蔽乘暗。
 }
 #endif

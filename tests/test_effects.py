@@ -328,7 +328,11 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_SPECULAR",found); self.assertEqual(found["OMNI_SPECULAR"].values,("0","1"))  # 镜面可开关。
         text = (build.SHADERS/"effects/sunlight.glsl").read_text(encoding="utf-8")
         self.assertIn("vec3 omniSpecular",text)  # 镜面独立成函数。
-        self.assertIn("omniSpecular(normal,world,materialParams,sun,shadow)",text)  # 直接光叠加镜面。
+        self.assertIn("omniSpecular(albedo,normal,world,materialParams,sun,shadow)",text)  # 直接光叠加镜面。
+        self.assertIn("vec3 f0 = mix(vec3(clamp(materialParams.y,0.0,1.0)),clamp(albedo,0.0,1.0),metal);",text)  # 反射率口径与屏幕反射一致：非金属读材质反射率，金属用底色。
+        self.assertIn("return albedo * lightColor + specular +",text)  # 高光单独相加，不再被底色乘暗或染色。
+        reflection = (build.SHADERS/"effects/reflection.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 f0 = mix(vec3(materialParams.y),clamp(color,0.0,1.0),metal);",reflection)  # 两处使用同一种反射率口径。
         self.assertIn("materialParams",text)  # 材质参数进入光照。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniSpecular",source)  # 地形光照包含镜面高光。
