@@ -22,6 +22,10 @@
 #define OMNI_BLOCKLIGHT_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"火把光色温","en_us":"Torch light tint"},"description":{"zh_cn":"正值更暖、负值更冷，零保持默认暖色；只改方块光颜色。","en_us":"Positive warms the block light, negative cools it, zero keeps the default warm tone."},"slider":true}
 #define OMNI_BLOCKLIGHT_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
+// @option {"label":{"zh_cn":"方向性方块光","en_us":"Directional block light"},"description":{"zh_cn":"让方块光按表面朝向光的方向略微变亮，光照更立体；主要在有凹凸贴图的表面上看得出。","en_us":"Brightens surfaces facing the light so block light reads as directional; most visible on bumpy textured surfaces."},"values":{"0":{"zh_cn":"关","en_us":"Off"},"1":{"zh_cn":"开","en_us":"On"}}}
+#define OMNI_DIRECTIONAL_BLOCKLIGHT 1 // [0 1]
+// @option {"label":{"zh_cn":"方向性强度","en_us":"Directional strength"},"description":{"zh_cn":"方向性方块光的作用强度；越大越立体，取零等于关闭。","en_us":"How strong the directional effect is; higher is more sculpted, zero disables it."},"slider":true}
+#define OMNI_DIRECTIONAL_BLOCKLIGHT_STRENGTH 0.5 // [0.1 0.2 0.3 0.5 0.7 1.0]
 // @option {"label": {"zh_cn": "手持光开关", "en_us": "Held light"}, "description": {"zh_cn": "手里拿着光源会不会照亮周围。", "en_us": "Whether a held light lights the surroundings."}}
 #define OMNI_HELD_LIGHT
 // @option {"label": {"zh_cn": "手持光亮度", "en_us": "Held light strength"}, "slider": true, "description": {"zh_cn": "手持光多亮。", "en_us": "How bright the held light is."}}
@@ -65,6 +69,25 @@ vec3 omniSpecular(vec3 albedo, vec3 normal, vec3 world, vec3 materialParams, vec
 vec3 omniTint(float amount) {
     return vec3(1.0+0.25*amount,1.0,1.0-0.25*amount); // 零偏移返回全一，等于不改颜色。
 }
+// 方向性方块光：按方块光在表面上的变化方向，让朝光的一面略亮、背光的一面略暗，光照更有立体感。
+// iterationT 的做法是把方块光等级在屏幕上的梯度，经切线基还原成一个沿表面的世界方向，再和表面法线比较。
+// 这里用世界位置的两条屏幕导数还原同一个方向，不依赖纹理切线基；平坦表面的梯度落在切平面内、点乘接近零，
+// 所以效果主要出现在有凹凸贴图的表面，和参考行为一致。越暗的地方方向感越强，也是参考的口径。
+float omniDirectionalBlock(float level, vec3 normal, vec3 world, vec2 light) {
+#ifdef OMNI_DIRECTIONAL_BLOCKLIGHT
+    vec2 gradient = vec2(dFdx(light.x), dFdy(light.x)); // 方块光等级在屏幕横纵方向的斜率。
+    if (dot(gradient, gradient) < 1e-10) return level; // 均匀受光面没有方向，原样返回。
+    vec3 alongU = dFdx(world); // 屏幕横向对应的世界位移。
+    vec3 alongV = dFdy(world); // 屏幕纵向对应的世界位移。
+    vec3 toLight = omniNormalize(alongU * gradient.x + alongV * gradient.y); // 沿表面指向更亮处的世界方向。
+    vec3 worldNormal = omniNormalize(mat3(gbufferModelViewInverse) * normal); // 表面法线转到世界空间。
+    float facing = dot(toLight, worldNormal); // 越朝向光越接近一，背光为负。
+    float weight = 1.0 + OMNI_DIRECTIONAL_BLOCKLIGHT_STRENGTH * facing * (1.0 - level * 0.95); // 越暗方向感越强。
+    return clamp(level * weight, 0.0, 0.9999); // 收敛到有效等级，不超过满亮。
+#else
+    return level; // 关闭时不计算导数，编译移除这一支。
+#endif
+}
 // 调用位置：rendering/terrain.glsl和rendering/distant.glsl；示例：omniLighting(albedo, normal, world, lightUv, materialParams, materialAo)。
 vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materialParams, float materialAo) {
     vec3 sun = omniNormalize(shadowLightPosition); // 当前阴影天体可为太阳或月亮；退化时为零向量，直接光收敛为零。
@@ -79,7 +102,8 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
     vec3 skyLight = mix(vec3(0.035,0.047,0.075) * OMNI_NIGHT_BRIGHTNESS, vec3(0.24,0.32,0.43), day) * sky;
     // 无光地板：既没有天光也没有方块光时的最低亮度，靠它让洞穴不是纯黑；取零表示允许完全黑。
     vec3 noLight = vec3(0.02,0.022,0.03) * OMNI_NOLIGHT_BRIGHTNESS;
-    float block = pow(clamp(light.x, 0.0, 1.0), 3.0); // 方块光保留局部衰减。
+    float blockLevel = omniDirectionalBlock(clamp(light.x, 0.0, 1.0), normal, world, light); // 方向性方块光：朝光略亮。
+    float block = pow(blockLevel, 3.0); // 方块光保留局部衰减。
 #ifdef OMNI_HELD_LIGHT
     float held = float(max(heldBlockLightValue, heldBlockLightValue2)) / 15.0; // 双手取实际较亮光源。
     block = max(block, held * OMNI_HELD_BRIGHTNESS * max(1.0 - length(world) / 12.0, 0.0) * max(1.0 - length(world) / 12.0, 0.0)); // 无遮挡的手持近似；亮度可调，不声称局部阴影。

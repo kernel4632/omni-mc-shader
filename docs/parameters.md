@@ -130,6 +130,8 @@
 | OMNI_NOLIGHT_BRIGHTNESS | 无光亮度 | 环境光 | 数值 | 0.0–2.0 | 洞穴深处的最低亮度 | 已有 |
 | OMNI_BLOCKLIGHT_STRENGTH | 火把光强度 | 火把光 | 数值 | 0.0–2.0 | 火把照亮范围多亮 | 已有 |
 | OMNI_BLOCKLIGHT_TINT | 火把光色温 | 火把光 | 数值 | -1–1 | 火把光偏橙还是偏白 | 已有 |
+| OMNI_DIRECTIONAL_BLOCKLIGHT | 方向性方块光 | 火把光 | 开关 | 开/关 | 方块光会不会按表面朝向光的方向变亮 | 已有 |
+| OMNI_DIRECTIONAL_BLOCKLIGHT_STRENGTH | 方向性强度 | 火把光 | 数值 | 0.1–1.0 | 方向性方块光的强弱 | 已有 |
 | OMNI_HELD_LIGHT | 手持光开关 | 手持光 | 开关 | 开/关 | 手里拿着光源会不会照亮周围 | 已有 |
 | OMNI_HELD_BRIGHTNESS | 手持光亮度 | 手持光 | 数值 | 0.0–2.0 | 手持光多亮 | 已有 |
 | OMNI_BOUNCE_STRENGTH | 物体反光强度 | 物体反光 | 数值 | 0.0–2.0 | 旁边物体把光反到别处多强 | 已有 |

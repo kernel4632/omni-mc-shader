@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.0.0-dev.115
+
+对齐 iterationT 3.2.0 的光照与阴影第三步：方向性方块光。
+
+- `shaders/effects/sunlight.glsl` 新增 `omniDirectionalBlock`：把方块光等级在屏幕上的梯度，用世界位置的两条屏幕导数还原成一个沿表面的世界方向，再和表面法线比较。朝光的一面略亮、背光的一面略暗，火把附近的立体感更强。参考做法见 `references/iterationT/.../Terrain_FS.glsl` 的方向性方块光分支，按本项目口径重写。
+- 新增 `OMNI_DIRECTIONAL_BLOCKLIGHT`（方向性方块光，默认开）与 `OMNI_DIRECTIONAL_BLOCKLIGHT_STRENGTH`（方向性强度，默认 0.5）。
+- 顺带修一处接线：`shaders/rendering/distant.glsl` 原先在文件顶部引入 `effects/sunlight.glsl`，会连顶点阶段一起编译；光照用到屏幕导数，顶点阶段没有该函数。现把该引用移进片元块，只让片元编译到它。
+- 选项总数 175 → 177（不删除任何现有选项）。
+
+只做过离线编译与逻辑审查；世界内画面与性能未验证。
+
 ## 0.0.0-dev.114
 
 对齐 iterationT 3.2.0 的光照与阴影第二步：给阴影加上可变半影。

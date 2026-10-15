@@ -13,9 +13,8 @@
 //   所以顶点用 dhProjection 投影、重建时用 dhProjectionInverse；普通地形那边用 gl_ProjectionMatrix 与普通逆投影，两者不能混用。
 //   远景不读普通地形贴图：加载器只给一个小编号（例如水、岩浆）加顶点色，材质因此是保守的默认值，不做 labPBR 解码。
 //   内部数据互相信任：本文件只信任加载器已经给好的输入，不在层与层之间重复检查。
-// 顶点抖动来自抗锯齿文件，统一光照来自光照文件，水波来自水面文件，行星曲率来自世界文件，四者都显式引入。
+// 顶点抖动来自抗锯齿文件，水波来自水面文件，行星曲率来自世界文件，三者顶点与片元都要用，显式引入。
 #include "/effects/antialiasing.glsl"
-#include "/effects/sunlight.glsl"
 #include "/effects/water.glsl"
 #include "/effects/world.glsl"
 #ifdef OMNI_VERTEX
@@ -47,6 +46,8 @@ void main() {
 }
 #endif
 #ifdef OMNI_FRAGMENT
+// 统一光照只在片元用到（会计算屏幕导数），放进片元块，避免顶点阶段编译到导数调用。
+#include "/effects/sunlight.glsl"
 in vec3 viewPosition, viewNormal; // 顶点传下来的视空间位置与法线。
 in vec4 tint; in vec2 lightUv; // 顶点色与原版光照坐标。
 flat in int materialId; // 远景小编号，不插值。
