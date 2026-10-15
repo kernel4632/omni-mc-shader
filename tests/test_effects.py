@@ -616,6 +616,21 @@ class EffectTests(unittest.TestCase):
                     with self.assertRaises(ValueError):  # 可能同时生效的重复和缺少结尾都拒绝。
                         options.read_pipeline(source)
 
+    def test_weather_splash_and_wet_response(self):
+        """雨滴溅射强度乘在水面雨点圈上，地表湿润响应乘在地面湿润量上。"""
+        found,_,_ = build.configuration()
+        for name in ("OMNI_RAIN_SPLASH","OMNI_RAIN_WET_RESPONSE"):
+            self.assertIn(name,found)  # 每个天气细分参数由天气源码定义。
+        weather = (build.SHADERS/"effects/weather.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniRainSplash",weather)  # 溅射强度独立成函数。
+        self.assertIn("float omniRainWetResponse",weather)  # 湿润响应独立成函数。
+        water = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")
+        self.assertIn("*omniRainSplash()",water)  # 溅射强度参与雨点圈振幅。
+        material = (build.SHADERS/"effects/material.glsl").read_text(encoding="utf-8")
+        self.assertIn("wetness*omniRainWetResponse()",material)  # 湿润响应参与地面湿润量。
+        source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
+        self.assertIn("omniRainWetResponse",source)  # 地形表面包含湿润响应。
+
     def test_rain_darkening_applies_in_composite(self):
         """雨天变暗在合成阶段整体压暗，默认取零不改变画面。"""
         found,_,_ = build.configuration()

@@ -26,6 +26,10 @@
 #define OMNI_RAIN_WIND 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"落点密度","en_us":"Ripple density"},"description":{"zh_cn":"雨点砸在水面上多密；取零等于没有雨点圈。","en_us":"How dense the rain ripples on water are; zero removes them."},"slider":true}
 #define OMNI_RAIN_DENSITY 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"雨滴溅射强度","en_us":"Rain splash strength"},"description":{"zh_cn":"雨点砸在水面上溅起的圈有多明显；取零等于关掉雨点圈，但保留落点密度选项。","en_us":"How strong the splash rings from raindrops are; zero removes the rings while keeping the density option."},"slider":true}
+#define OMNI_RAIN_SPLASH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"地表湿润响应","en_us":"Surface wetness response"},"description":{"zh_cn":"下雨时地面变湿的快慢与深浅；取零时地面不因下雨变湿。","en_us":"How quickly and deeply surfaces get wet in rain; zero leaves surfaces dry."},"slider":true}
+#define OMNI_RAIN_WET_RESPONSE 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"雨天变暗","en_us":"Rain darkening"},"description":{"zh_cn":"下雨时画面整体压暗多少；取零完全不变。","en_us":"How much the scene darkens while it rains; zero keeps it unchanged."},"slider":true}
 #define OMNI_RAIN_DARKEN 0.0 // [0.0 0.25 0.5 0.75 1.0]
 // 降雨强度来自统一输入。
@@ -34,6 +38,14 @@ uniform int biome_precipitation; // Iris 给的玩家所在群系降水类型：
 // 雨点落点的空间频率：密度越高，格子越细，同样面积上的落点越多；取零时由调用方跳过雨点。
 float omniRippleGrid() {
     return 0.7 * OMNI_RAIN_DENSITY; // 密度一时约一点四米一格，与原有手感一致。
+}
+// 雨滴溅射强度：乘在水面雨点圈的振幅上，单独控制圈多明显；取零仍保留落点密度，等价于关掉圈。
+float omniRainSplash() {
+    return max(OMNI_RAIN_SPLASH,0.0); // 越界配置收敛到非负，负值不会把圈翻成凹陷。
+}
+// 地表湿润响应：乘在加载器给的湿润度上，单独控制雨天地面变湿的快慢与深浅。
+float omniRainWetResponse() {
+    return max(OMNI_RAIN_WET_RESPONSE,0.0); // 越界配置收敛到非负，负值不会产生负的湿润量。
 }
 // 颗粒可见度：群系下雪用雪的可见度，其余用雨的可见度。
 float omniWeatherVisibility() {

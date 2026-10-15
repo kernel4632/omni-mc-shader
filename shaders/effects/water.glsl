@@ -88,7 +88,7 @@ float omniWave(vec2 p, float relativeHeight) {
         vec2 center = (cell+vec2(omniHash(cell),omniHash(cell+8.2)))/grid; // 用格坐标算落点，同一格永远落在同一点，波纹可重复。
         float age = fract(t*0.8+omniHash(cell+1.3)); // 每格起始相位不同，雨滴不会同时出现。
         float radius = length(p-center); // 当前点到本格落点的水平距离。
-        wave += rainStrength*sin(radius*22.0-age*14.0)*exp(-radius*3.0)*(1.0-age)*0.025*OMNI_RIPPLE_STRENGTH; // 向外扩散的环，随时间变淡，雨越大越明显；强度可调。
+        wave += rainStrength*sin(radius*22.0-age*14.0)*exp(-radius*3.0)*(1.0-age)*0.025*OMNI_RIPPLE_STRENGTH*omniRainSplash(); // 向外扩散的环，随时间变淡，雨越大越明显；总强度与溅射强度都可调。
     }
 #endif
 #ifdef OMNI_PLAYER_RIPPLES

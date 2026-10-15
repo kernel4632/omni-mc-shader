@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.0.0-dev.122
+
+对齐 iterationT 3.2.0 的云与天气第四步：雨滴溅射与地表湿润的细分参数。
+
+- `shaders/effects/weather.glsl` 新增 `omniRainSplash`：雨滴落在水面上溅起的圈，振幅单独可调，不再与「波纹强度」绑在一起；取零时仍保留落点密度选项。
+- 新增 `omniRainWetResponse`：下雨时地面变湿的快慢与深浅，乘在加载器给的湿润度上，取零时地面不因下雨变湿。
+- `shaders/effects/water.glsl` 的雨点圈振幅乘上溅射强度；`shaders/effects/material.glsl` 显式引入天气效果并把湿润响应乘进地面湿润量，不再依赖地形文件的引入顺序。
+- 新增选项：`OMNI_RAIN_SPLASH`（雨滴溅射强度，默认 1.0）、`OMNI_RAIN_WET_RESPONSE`（地表湿润响应，默认 1.0）。
+- 选项总数 194 → 196（不删除任何现有选项）。
+
+只做过离线编译与逻辑审查；世界内画面与性能未验证。
+
 ## 0.0.0-dev.121
 
 对齐 iterationT 3.2.0 的云与天气第三步：云底亮度、外散射、淡出距离与噪声尺度。

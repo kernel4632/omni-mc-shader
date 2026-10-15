@@ -24,6 +24,8 @@
 // 贴图解码和天气叠加共享归一化、噪声等通用计算与相机、湿度等统一输入变量。
 #include "/common/math.glsl"
 #include "/common/uniforms.glsl"
+// 地表湿润响应是天气的一部分，显式引入而不依赖地形文件的引入顺序。
+#include "/effects/weather.glsl"
 #ifdef OMNI_MATERIAL_DETAIL
 uniform sampler2D normals, specular; // 加载器按资源包提供法线与表面两张贴图。
 // 视差步进：沿视线在高度图里向前找可见交点，返回被近处凸起遮住的贴图坐标。
@@ -89,7 +91,7 @@ float omniTemperature(vec3 world) {
 void omniSurface(inout vec3 color, inout vec3 materialParams, vec3 normal, vec3 world, float skylight) {
     float up = max((mat3(gbufferModelViewInverse)*normal).y,0.0); // 法线转到世界空间：只有朝上的面才接得住雨雪。
     float snow = OMNI_SNOW*OMNI_SNOW_STRENGTH; // 手动覆盖量乘强度作为下限，气候只会在它之上追加积雪。
-    float wetnessAmount = wetness; // 加载器湿润度作为默认，气候会再乘一个温度权重。
+    float wetnessAmount = wetness*omniRainWetResponse(); // 加载器湿润度乘地表湿润响应，气候会再乘一个温度权重。
 #if OMNI_CLIMATE_SNOW == 1
     float temperature = omniTemperature(world); // 估计这一处的气候温度。
     snow = max(snow,1.0-smoothstep(0.10,0.30,temperature)); // 正序计算后取反：温度不高于零点一时全雪，不低于零点三时没有气候雪。
