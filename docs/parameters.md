@@ -59,21 +59,21 @@
 
 | 标识符 | 菜单中文名 | 子页 | 类型 | 档位或范围 | 改什么 | 状态 |
 | --- | --- | --- | --- | --- | --- | --- |
-| OMNI_FOG_ENABLED | 雾开关 | 距离雾 | 开关 | 开/关 | 远处有没有雾 | 新 |
+| OMNI_FOG_ENABLED | 雾开关 | 距离雾 | 开关 | 开/关 | 远处有没有雾 | 已有 |
 | OMNI_FOG_DENSITY | 雾浓度 | 距离雾 | 数值 | 0.0–2.0 | 雾浓还是淡，看得多远 | 已有 |
-| OMNI_FOG_TINT | 雾颜色 | 距离雾 | 数值 | -1–1 | 雾偏暖还是偏冷 | 新 |
-| OMNI_HEIGHT_FOG | 高度雾开关 | 高度雾 | 开关 | 开/关 | 低处有没有浓雾 | 需改 |
+| OMNI_FOG_TINT | 雾颜色 | 距离雾 | 数值 | -1–1 | 雾偏暖还是偏冷 | 已有 |
+| OMNI_HEIGHT_FOG_ENABLED | 高度雾开关 | 高度雾 | 开关 | 开/关 | 低处有没有浓雾 | 已有 |
 | OMNI_FOG_HEIGHT | 高度雾起始高度 | 高度雾 | 数值 | 0–128 | 从多高开始起雾 | 已有 |
-| OMNI_HEIGHT_FOG_STRENGTH | 高度雾浓度 | 高度雾 | 数值 | 0.0–2.0 | 低处雾多浓 | 新 |
+| OMNI_HEIGHT_FOG | 高度雾浓度 | 高度雾 | 数值 | 0.0–2.0 | 低处雾多浓 | 已有 |
 | OMNI_VOLUMETRIC_LIGHT | 体积光开关 | 体积光 | 开关 | 开/关 | 阳光有没有穿过空气的光柱 | 已有 |
 | OMNI_VOLUMETRIC_STRENGTH | 阳光光柱强度 | 体积光 | 数值 | 0.0–2.0 | 光柱多亮 | 已有 |
-| OMNI_UNDERWATER_STRENGTH | 水下光柱强度 | 体积光 | 数值 | 0.0–2.0 | 水下光柱多亮 | 新 |
+| OMNI_UNDERWATER_STRENGTH | 水下光柱强度 | 体积光 | 数值 | 0.0–2.0 | 水下光柱多亮 | 已有 |
 | OMNI_VFOG_STEPS | 光柱精细度 | 体积光 | 档位 | 低/中/高 | 光柱更平滑还是更省性能 | 已有 |
-| OMNI_UNDERWATER_DENSITY | 水下雾浓度 | 水下 | 数值 | 0.0–2.0 | 水里能看多远 | 新 |
-| OMNI_UNDERWATER_TINT | 水下颜色 | 水下 | 数值 | -1–1 | 水下偏青绿还是偏蓝 | 新 |
+| OMNI_UNDERWATER_DENSITY | 水下雾浓度 | 水下 | 数值 | 0.0–2.0 | 水里能看多远 | 已有 |
+| OMNI_UNDERWATER_TINT | 水下颜色 | 水下 | 数值 | -1–1 | 水下偏青绿还是偏蓝 | 已有 |
 | OMNI_END_FOG | 末地雾开关 | 末地雾 | 开关 | 开/关 | 末地有没有紫雾 | 已有 |
-| OMNI_END_FOG_DENSITY | 末地雾浓度 | 末地雾 | 数值 | 0.0–2.0 | 末地紫雾多浓 | 新 |
-| OMNI_NETHER_FOG_DENSITY | 下界雾浓度 | 下界雾 | 数值 | 0.0–4.0 | 下界空气多浑浊 | 新 |
+| OMNI_END_FOG_DENSITY | 末地雾浓度 | 末地雾 | 数值 | 0.0–2.0 | 末地紫雾多浓 | 已有 |
+| OMNI_NETHER_FOG_DENSITY | 下界雾浓度 | 下界雾 | 数值 | 0.0–4.0 | 下界空气多浑浊 | 已有 |
 
 ## 水
 

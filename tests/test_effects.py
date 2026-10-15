@@ -151,14 +151,22 @@ class EffectTests(unittest.TestCase):
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
         self.assertIn("vec3 omniFog",source)  # 合成阶段包含雾主体。
 
-    def test_height_fog_parameters_are_adjustable(self):
-        """高度雾的基准高度与衰减是可调参数，替换原先写死的数值。"""
+    def test_fog_parameters_are_adjustable(self):
+        """雾的开关、浓度、颜色与各维度、水下参数都可调。"""
         found,_,_ = build.configuration()
-        self.assertIn("OMNI_FOG_HEIGHT",found); self.assertIn("OMNI_FOG_SCALE",found)  # 两个参数由雾源码定义。
-        self.assertIn("OMNI_VOLUMETRIC_STRENGTH",found)  # 体积光强度同样可调。
+        for name in ("OMNI_FOG_ENABLED","OMNI_FOG_DENSITY","OMNI_FOG_TINT","OMNI_HEIGHT_FOG_ENABLED",
+                     "OMNI_HEIGHT_FOG","OMNI_FOG_HEIGHT","OMNI_FOG_SCALE","OMNI_VOLUMETRIC_STRENGTH",
+                     "OMNI_UNDERWATER_STRENGTH","OMNI_UNDERWATER_DENSITY","OMNI_UNDERWATER_TINT",
+                     "OMNI_END_FOG_DENSITY","OMNI_NETHER_FOG_DENSITY"):
+            self.assertIn(name,found)  # 每个参数由雾源码定义。
         text = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
-        self.assertIn("- OMNI_FOG_HEIGHT",text)  # 高度基准参与密度计算。
+        self.assertIn("- OMNI_FOG_HEIGHT",text)  # 起始高度参与密度计算。
         self.assertIn("*OMNI_FOG_SCALE)",text)  # 衰减参与密度计算。
+        self.assertIn("OMNI_FOG_TINT",text)  # 雾颜色参与着色。
+        self.assertIn("*OMNI_UNDERWATER_DENSITY",text)  # 水下浓度参与吸收。
+        self.assertIn("OMNI_UNDERWATER_TINT",text)  # 水下颜色参与着色。
+        self.assertIn("*OMNI_END_FOG_DENSITY",text)  # 末地雾浓度参与密度。
+        self.assertIn("*OMNI_NETHER_FOG_DENSITY",text)  # 下界雾浓度参与密度。
 
     def test_reflection_denoise_filters_by_depth(self):
         """反射去噪按命中深度加权邻点，旧五点路径仍可保留。"""
@@ -294,7 +302,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("const vec3 omniWaterAbsorbance = vec3(OMNI_WATER_ABSORB_R",water)  # 吸收只由选项组成一处向量。
         self.assertIn("omniWaterTransmit",water)  # 吸收与散射共用一个函数。
         fog = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
-        self.assertIn("omniWaterTransmit(color,distance)",fog)  # 水下雾复用同一份水体光学常数。
+        self.assertIn("omniWaterTransmit(color,distance*OMNI_UNDERWATER_DENSITY)",fog)  # 水下雾复用同一份水体光学常数，并按浓度缩放距离。
 
     def test_climate_snow_and_wet(self):
         """气候温度按高度与噪声估计，驱动自然积雪与湿润且可回退手动值。"""
