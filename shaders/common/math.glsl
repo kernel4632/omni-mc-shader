@@ -1,7 +1,7 @@
 // 共用纯计算：颜色空间转换、感知亮度、安全归一化和可重复空间噪声，不包含任何业务效果。
 // 调用位置：需要这些计算的效果文件，用自己的文件头一行 include 引入本文件。
 // 可复制示例：
-//   #include "/common/math.glsl"                 // 引入本文件全部函数
+//   需要全部数学函数的文件直接引用本文件。
 //   omniLinear(texture)                         // 贴图颜色转到线性空间
 //   omniLuminance(color)                        // 按人眼敏感度取亮度
 //   omniNoise(worldPosition)                    // 可重复的空间噪声

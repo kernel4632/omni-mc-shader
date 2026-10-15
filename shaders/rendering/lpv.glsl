@@ -1,5 +1,5 @@
 // LPV 光传播体积的计算入口：清空、注入和双缓冲传播。
-// 调用位置：各维度的 setup.csh 定义 OMNI_COMPUTE 后引入本文件；示例：`#include "/rendering/lpv.glsl"`。
+// 调用位置：各维度的 setup.csh 定义 OMNI_COMPUTE 后引入本文件。
 // 设计原因：每轮传播先写入一张图像，再用图像内存屏障和工作组屏障让下一轮读到完整结果。
 // 设计取舍：这里只负责计算阶段，不改变 LPV 的选项、体积坐标或缓冲协议；没有计算阶段时由 ambient.glsl 保留屏幕空间路径。
 #ifndef OMNI_LPV_LIB // 防止重复引用造成重复声明。

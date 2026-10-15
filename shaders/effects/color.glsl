@@ -5,7 +5,7 @@
 调用位置：
   rendering/final.glsl     调用 omniColor，把合成好的线性颜色映射成最终屏幕颜色。
   rendering/temporal.glsl  调用 omniExposure，算自动曝光并写进历史像素供下一帧读取。
-  两个文件都通过 #include "/effects/color.glsl" 引入本文件。
+  其它文件直接引用本文件。
 
 可复制示例：
   线性场景颜色映射成屏幕颜色：`vec3 shown = omniColor(color, exposure);`

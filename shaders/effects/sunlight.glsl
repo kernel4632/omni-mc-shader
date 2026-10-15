@@ -1,5 +1,5 @@
 // 职责：直接光、环境光与方块光的统一照明，地形、实体、透明物与远景共用同一份计算。
-// 调用位置：rendering/terrain.glsl 与 rendering/distant.glsl 的片元步骤，由它们显式 #include。
+// 调用位置：rendering/terrain.glsl 与 rendering/distant.glsl 的片元阶段按需引入。
 // 可复制示例：`vec3 lit = omniLighting(albedo, normal, world, lightUv, materialParams, materialAo);`
 #ifndef OMNI_SUNLIGHT
 #define OMNI_SUNLIGHT

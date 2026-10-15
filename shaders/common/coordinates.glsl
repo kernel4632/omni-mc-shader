@@ -1,5 +1,5 @@
 // 坐标：在屏幕深度、视空间、相机相对世界位置和投影之间互相换算，并统一判断远景与天空。
-// 调用位置：effects/ambient.glsl、effects/shadow.glsl、effects/reflection.glsl 与 effects/antialiasing.glsl 显式 #include "/common/coordinates.glsl"。
+// 调用位置：effects/ambient.glsl、effects/shadow.glsl、effects/reflection.glsl 与 effects/antialiasing.glsl 引入本文件。
 // 可复制示例：`vec3 view = omniSceneView(uv,false); vec3 world = omniWorld(view); bool sky = omniSkyPixel(uv);`
 // 关键设计原因与取舍：投影和反投影必须成对使用同一套矩阵，而远景自带另一套近远裁剪面，
 // 所以远近两套各写成一对函数，由调用者按像素来源选择，不用一套矩阵硬套两种裁剪面。

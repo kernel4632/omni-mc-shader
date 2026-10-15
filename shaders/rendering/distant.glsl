@@ -7,7 +7,7 @@
 // 可复制示例（一对薄入口里）：
 //   #define OMNI_VERTEX
 //   #define OMNI_FRAGMENT
-//   #include "/rendering/distant.glsl"
+//   三个维度目录的 dh_terrain 与 dh_water 入口引入本文件。
 // 设计原因与取舍：
 //   近景与远景各用各自的投影与深度：远景由加载器在极远处生成，坐标落在普通近远裁剪面之外，
 //   所以顶点用 dhProjection 投影、重建时用 dhProjectionInverse；普通地形那边用 gl_ProjectionMatrix 与普通逆投影，两者不能混用。

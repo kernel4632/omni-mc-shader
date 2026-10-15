@@ -2,7 +2,7 @@
 // 管什么：顶点阶段把模型坐标变成视空间几何，片元阶段把贴图读成一份表面、算成线性光照，再写进约定的附件。
 // 调用位置：各维度的 gbuffers_terrain、gbuffers_entities、gbuffers_hand、gbuffers_water 等薄入口，
 //   顶点阶段声明 OMNI_VERTEX 后引入一次，片元阶段声明 OMNI_FRAGMENT 后引入一次。
-// 可复制示例：片元入口先 `#define OMNI_FRAGMENT`，再 `#include "/rendering/terrain.glsl"`，最后调用 `main()`；顶点入口同理改用 OMNI_VERTEX。
+// 可复制示例：片元入口先写 #define OMNI_FRAGMENT，再引入本文件，最后调用 main()；顶点入口同理改用 OMNI_VERTEX。
 // 设计原因与取舍：
 //   读取、着色、写入拆成三个函数，中间用一份表面结构传递：omniReadSurface 只管把输入整理成表面，
 //   omniShadeSurface 只管把表面换成颜色，omniWriteSurface 只管把同一份表面写进附件，改一步不会波及其他步。

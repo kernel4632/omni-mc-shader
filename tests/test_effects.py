@@ -506,6 +506,16 @@ class EffectTests(unittest.TestCase):
                     self.assertNotIn(match[1],macros)  # 和程序宏同名会让整段代码被跳过。
                     self.assertNotIn(match[1],found)  # 和选项同名会让玩家开关变成引入标记。
 
+    def test_include_lines_are_bare_references(self):
+        """任何一行出现 #include 都必须是干净的引用行：加载器在去注释之前扫描引用，注释里的示例会被当成本文件自我包含。"""
+        references = re.compile(r'\s*#include\s+"[^"]+"\s*$')
+        for path in build.SHADERS.rglob("*"):
+            if path.suffix not in (".glsl", ".vsh", ".fsh", ".csh"):
+                continue
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                if "#include" in line and not references.fullmatch(line):
+                    self.fail(f"{path.name}:{number} 含 #include 的行不是干净引用：{line.strip()}")
+
     def test_pipeline_conditions_allow_only_exclusive_duplicates(self):
         """绘制设置里同一个键只能出现在互斥分支；同一分支或条件之外重复都要报错。"""
         with tempfile.TemporaryDirectory() as temporary:
