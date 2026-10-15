@@ -9,7 +9,7 @@
   内部按顺序复用两个效果文件：
     effects/antialiasing.glsl  提供时间合成 omniTaa；
     effects/color.glsl         提供自动曝光 omniExposure。
-  抗锯齿模式等由抗锯齿自己的选项决定，本文件不重复定义选项。
+  抗锯齿开关、强度与历史稳定度由抗锯齿自己的选项决定，本文件不重复定义选项。
 
 可复制示例：
   入口侧（粘贴进 `composite1.fsh` 即可）：
@@ -39,7 +39,7 @@ void main() { gl_Position = ftransform(); texcoord = gl_MultiTexCoord0.xy; } // 
 #ifdef OMNI_FRAGMENT
 // 复用中间画面编号约定，下面写入零号、四号、五号画面。
 #include "/rendering/buffers.glsl"
-// 颜色效果提供自动曝光函数，与时间算法各自独立。
+// 颜色效果提供自动曝光函数，与时间合成各自独立。
 #include "/effects/color.glsl"
 in vec2 texcoord; // 当前片元对应的屏幕坐标，由顶点阶段插值得到。
 /* RENDERTARGETS: 0,4,5 */
@@ -70,7 +70,7 @@ void main() {
     ivec2 pixel = omniPixel(texcoord); // 与颜色采样同一像素的整数坐标，供精确读取水面标记。
     bool overlay = omniRejectsHistory(texcoord,pixel); // 这个像素是否不能复用几何历史。
     color = omniTaa(color,texcoord,state); // 时间合成；关闭抗锯齿或强度为零时只准备元数据，颜色保持当前帧。
-    state.g = omniExposure(texcoord); // 曝光单独计算，自动曝光与时间算法可以各自开关。
+    state.g = omniExposure(texcoord); // 曝光单独计算，自动曝光与时间合成可以各自开关。
     history = vec4(color,overlay?0.0:1.0); // 写下一帧颜色历史；叠层写零标记，表示不参与复用。
     scene = vec4(color,!overlay && omniHistoryValid()?1.0:0.0); // 在翻转前把历史有效性写进最终颜色的透明通道。
     omniWriteMetadata(); // 最后覆盖固定像素，保证元数据不被上面的曝光覆盖。

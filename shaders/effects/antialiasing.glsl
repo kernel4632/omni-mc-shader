@@ -7,7 +7,7 @@
 #ifndef OMNI_ANTIALIASING
 #define OMNI_ANTIALIASING
 
-// --- 选项：抗锯齿算法、历史权重与噪声重建 ---
+// --- 选项：抗锯齿开关、强度、历史稳定度与噪声重建 ---
 // @effect {"label":{"zh_cn":"抗锯齿","en_us":"Antialiasing"}}
 // @option {"label":{"zh_cn":"抗锯齿开关","en_us":"Antialiasing"},"description":{"zh_cn":"用逐帧重投影把边缘和噪点叠平滑；关掉只输出当前帧。","en_us":"Reprojects frame history to smooth edges and noise; off returns the current frame."}}
 #define OMNI_AA_ENABLED
@@ -110,7 +110,7 @@ vec3 omniTaa(vec3 color, vec2 uv, out vec4 metadata) {
     float difference = abs(omniLuminance(history)-omniLuminance(color))/max(omniLuminance(color),0.05); // 历史与当前的亮度差，越大越像动态照明或运动物体。
     return mix(color,history,OMNI_TAA_WEIGHT*OMNI_AA_STRENGTH*exp(-motion*0.03)*exp(-difference*2.0)); // 运动、亮度差越大历史权重越低；强度取零等于不接纳历史。
 #else
-    return color; // 关闭时间算法时只输出当前帧，不读取历史画面。
+    return color; // 关闭抗锯齿时只输出当前帧，不读取历史画面。
 #endif
 }
 #endif

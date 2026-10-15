@@ -109,7 +109,7 @@ vec3 omniMotionBlur(vec3 color, vec2 uv) {
 #endif
     if (projected.w<=0.0 || any(isnan(projected))) return color; // 先检查齐次分量再相除，避免相机后方或非有限值算出错误坐标。
     vec2 previousUnjittered = projected.xy/projected.w*0.5+0.5; // 得到未抖动的上一帧屏幕坐标，作为去抖动后的基准。
-    vec2 previousUv = previousUnjittered; // 默认直接用这个基准，非时间抗锯齿模式没有抖动要恢复。
+    vec2 previousUv = previousUnjittered; // 默认直接用这个基准，未开启抗锯齿时没有抖动要恢复。
     vec2 currentUnjittered = uv; // 当前坐标默认保持原位置。
 #if defined OMNI_ANTIALIASING && defined OMNI_AA_ENABLED
     previousUv = previousUnjittered+omniJitter(frameCounter-1)/vec2(viewWidth,viewHeight); // 只有时间抗锯齿开着时，历史坐标才要补回上一帧的抖动。
