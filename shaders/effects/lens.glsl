@@ -7,17 +7,17 @@
 #ifndef OMNI_LENS
 #define OMNI_LENS
 // @effect {"label":{"zh_cn":"镜头","en_us":"Lens"}}
-// @option {"label":{"zh_cn":"景深","en_us":"Depth of field"}}
+// @option {"label":{"zh_cn":"景深开关","en_us":"Depth of field"}}
 //#define OMNI_DOF
-// @option {"label":{"zh_cn":"运动模糊","en_us":"Motion blur"},"description":{"zh_cn":"基于相机运动，手持物不模糊；不包含实体速度。","en_us":"Camera motion only; excludes hands and has no entity velocity."}}
+// @option {"label":{"zh_cn":"运动模糊开关","en_us":"Motion blur"},"description":{"zh_cn":"只有相机移动才模糊，手持物不模糊，也不包含生物自身速度。","en_us":"Camera motion only; excludes hands and has no entity velocity."}}
 //#define OMNI_MOTION_BLUR
 // @option {"label":{"zh_cn":"暗角强度","en_us":"Vignette"},"slider":true}
 #define OMNI_VIGNETTE 0.0 // [0.0 0.1 0.25 0.5]
 // @option {"label":{"zh_cn":"色差强度","en_us":"Chromatic aberration"}}
 #define OMNI_CHROMATIC 0.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"镜头耀斑","en_us":"Lens flare"},"description":{"zh_cn":"从屏幕太阳亮部生成鬼影与光环，被遮挡时自动减弱。","en_us":"Draws ghosts and a halo from the on-screen sun highlight, fading when occluded."}}
+// @option {"label":{"zh_cn":"耀斑开关","en_us":"Lens flare"},"description":{"zh_cn":"从屏幕上的太阳亮部生成鬼影与光环，被挡住时自动减弱。","en_us":"Draws ghosts and a halo from the on-screen sun highlight, fading when occluded."}}
 #define OMNI_LENS_FLARE 1 // [0 1]
-// @option {"label":{"zh_cn":"散景光圈形状","en_us":"Bokeh aperture"},"description":{"zh_cn":"零为圆形散景，一为六边形光圈，使失焦高光成多边形。","en_us":"Zero is a circular blur; one is a hexagonal aperture for polygonal highlights."}}
+// @option {"label":{"zh_cn":"散景形状","en_us":"Bokeh aperture"},"description":{"zh_cn":"零为圆形散景，一为六边形光圈，使失焦高光成多边形。","en_us":"Zero is a circular blur; one is a hexagonal aperture for polygonal highlights."}}
 #define OMNI_BOKEH_SHAPE 1 // [0 1]
 // @option {"label":{"zh_cn":"景深强度","en_us":"Depth of field strength"},"slider":true}
 #define OMNI_DOF_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
