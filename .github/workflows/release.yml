@@ -26,7 +26,7 @@ jobs:
       contents: write # 创建发行版需要明确仓库写权限。
     steps:
       - name: 读取版本代码
-        uses: actions/checkout@v6 # 构建标签实际指向的提交。
+        uses: actions/checkout@v7 # 构建标签实际指向的提交。
         with:
           ref: ${{ inputs.tag || github.ref }}
           fetch-depth: 0 # 标签核对与版本说明需要完整历史。
