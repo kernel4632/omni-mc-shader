@@ -19,6 +19,12 @@
 #define OMNI_LENS_FLARE 1 // [0 1]
 // @option {"label":{"zh_cn":"散景光圈形状","en_us":"Bokeh aperture"},"description":{"zh_cn":"零为圆形散景，一为六边形光圈，使失焦高光成多边形。","en_us":"Zero is a circular blur; one is a hexagonal aperture for polygonal highlights."}}
 #define OMNI_BOKEH_SHAPE 1 // [0 1]
+// @option {"label":{"zh_cn":"景深强度","en_us":"Depth of field strength"},"slider":true}
+#define OMNI_DOF_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"运动模糊强度","en_us":"Motion blur strength"},"slider":true}
+#define OMNI_MOTION_BLUR_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
+// @option {"label":{"zh_cn":"耀斑强度","en_us":"Flare strength"},"slider":true}
+#define OMNI_FLARE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
 // 时间重投影、深度重建和镜头颜色来自统一的屏幕协议；这一行引入坐标、亮度等共用能力。
 #include "/effects/antialiasing.glsl"
 
@@ -66,7 +72,7 @@ vec3 omniFocusSample(vec2 uv) {
     float focus = length(omniSceneView(vec2(0.5),false)); // 默认用中心普通表面的视空间距离作为焦平面。
     if (centerGeometry.a==2.0) focus = length(omniView(vec2(0.5),texture(depthtex2,vec2(0.5)).r)); // 中心被手挡住时改用不透明深度，避免把手当成对焦点。
     float distance = length(omniSceneView(uv,false)); // 当前像素表面的真实视空间距离，作为弥散量的依据。
-    float radius = min(abs(distance-focus)/max(distance,0.1)*8.0,8.0); // 越远离焦平面弥散越大；分母用距离避免近处爆掉，上限八像素防止性能失控。
+    float radius = min(abs(distance-focus)/max(distance,0.1)*8.0*OMNI_DOF_STRENGTH,8.0); // 越远离焦平面弥散越大；强度选项整体放大或缩小，上限八像素防止性能失控。
     if (isnan(radius)) return color; // 深度重建异常时保留清晰原色，不让坏值糊成黑块。
     vec3 sum = color; float weight = 1.0; // 当前像素先计入平均，保证至少有一个有效样本。
     for (int i=0;i<8;i++) {
@@ -110,7 +116,7 @@ vec3 omniMotionBlur(vec3 color, vec2 uv) {
     currentUnjittered -= omniJitter(frameCounter)/vec2(viewWidth,viewHeight); // 当前坐标先撤掉本帧抖动，两帧才对齐在同一基准上。
 #endif
     if (any(lessThan(previousUv,vec2(0))) || any(greaterThan(previousUv,vec2(1)))) return color; // 上一帧坐标跑到屏幕外说明表面刚进入视野，没有历史可平均。
-    vec2 velocity = clamp(currentUnjittered-previousUnjittered,vec2(-0.05),vec2(0.05)); // 用去抖动后的两帧坐标算屏幕位移，抖动不会混进速度；夹紧防止极端值拖出一整条拖影。
+    vec2 velocity = clamp((currentUnjittered-previousUnjittered)*OMNI_MOTION_BLUR_STRENGTH,vec2(-0.05),vec2(0.05)); // 用去抖动后的两帧坐标算屏幕位移，抖动不会混进速度；强度选项整体放大或缩小。
     vec3 sum = color; float weight = 1.0; // 当前像素先进入快门平均。
     for (int i=1;i<6;i++) {
         vec2 sampleUv = clamp(uv-velocity*float(i)/6.0,0.0,1.0); // 沿相机轨迹往回取样，越早的快门时刻偏移越大。
@@ -154,7 +160,7 @@ vec3 omniLensFlare(vec2 uv) {
     float halo = exp(-pow(length((uv-sunUv)*aspect),2.0)*6.0); // 太阳近旁的柔和光环。
     flare += halo*vec3(1.0,0.86,0.62); // 光环用暖色，模拟主角耀光。
     float daylight = smoothstep(-0.15,0.1,dot(omniNormalize(sunPosition),omniNormalize(upPosition))); // 用太阳相对地平线的高度控制白天强度，夜里不出现耀斑。
-    return flare*source*daylight; // 亮部强度、遮挡程度和白昼程度三者相乘，决定最终耀斑。
+    return flare*source*daylight*OMNI_FLARE_STRENGTH; // 亮部强度、遮挡程度、白昼程度与强度选项相乘，决定最终耀斑。
 #endif
 }
 

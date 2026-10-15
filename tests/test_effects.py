@@ -72,6 +72,11 @@ class EffectTests(unittest.TestCase):
         text = (build.SHADERS/"effects/lens.glsl").read_text(encoding="utf-8")
         self.assertIn("vec3 omniLensFlare",text)  # 耀斑独立成函数。
         self.assertIn("bool omniSunScreen",text)  # 屏幕太阳位置独立成函数。
+        for name in ("OMNI_DOF_STRENGTH","OMNI_MOTION_BLUR_STRENGTH","OMNI_FLARE_STRENGTH"):
+            self.assertIn(name,found)  # 景深、运动模糊与耀斑强度都是可调参数。
+        self.assertIn("*OMNI_DOF_STRENGTH",text)  # 景深强度参与弥散半径。
+        self.assertIn("*OMNI_MOTION_BLUR_STRENGTH",text)  # 运动模糊强度参与屏幕位移。
+        self.assertIn("*OMNI_FLARE_STRENGTH",text)  # 耀斑强度参与合成。
         self.assertIn("texture(colortex0,sunUv)",text)  # 光源强度来自现有亮部而非新附件。
         source = build.expand(build.SHADERS/"world0/final.fsh")  # 从实际最终入口展开。
         self.assertIn("omniLensFlare",source)  # 最终显示包含耀斑。
