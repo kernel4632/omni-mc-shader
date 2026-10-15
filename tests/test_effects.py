@@ -131,6 +131,7 @@ class EffectTests(unittest.TestCase):
         """高度雾的基准高度与衰减是可调参数，替换原先写死的数值。"""
         found,_,_ = build.configuration()
         self.assertIn("OMNI_FOG_HEIGHT",found); self.assertIn("OMNI_FOG_SCALE",found)  # 两个参数由雾源码定义。
+        self.assertIn("OMNI_VOLUMETRIC_STRENGTH",found)  # 体积光强度同样可调。
         text = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
         self.assertIn("- OMNI_FOG_HEIGHT",text)  # 高度基准参与密度计算。
         self.assertIn("*OMNI_FOG_SCALE)",text)  # 衰减参与密度计算。

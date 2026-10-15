@@ -16,6 +16,8 @@
 #define OMNI_FOG_SCALE 0.035 // [0.01 0.02 0.035 0.06]
 // @option {"label":{"zh_cn":"体积光","en_us":"Volumetric light"}}
 //#define OMNI_VOLUMETRIC_LIGHT
+// @option {"label":{"zh_cn":"体积光强度","en_us":"Volumetric strength"},"slider":true}
+#define OMNI_VOLUMETRIC_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"水下体积光","en_us":"Underwater volumetric"},"description":{"zh_cn":"水下沿视线步进阴影可见性生成蓝色光柱。","en_us":"Marches shadow visibility underwater to draw blue light shafts."}}
 #define OMNI_UNDERWATER_FOG 1 // [0 1]
 // @option {"label":{"zh_cn":"末地雾","en_us":"End fog"},"description":{"zh_cn":"末地紫色漩涡雾叠加虚空暗色，替代单纯天空色。","en_us":"Adds purple end haze with void darkening instead of a plain sky colour."}}
@@ -54,7 +56,7 @@ vec3 omniUnderwaterShafts(vec3 view, vec3 world, float distance) {
     shaft /= 8.0; // 取平均得到归一化可见性。
     vec3 light = omniNormalize(shadowLightPosition); // 当前主光源方向，决定光柱朝向。
     float phase = 0.1 + pow(max(dot(omniNormalize(view),light),0.0),8.0); // 正向面对光源时更亮，强调天体方向。
-    return vec3(0.05,0.22,0.32)*shaft*phase*(1.0-exp(-shaftRange*0.1)); // 蓝色光柱强度随可见性、相位和近处距离变化。
+    return vec3(0.05,0.22,0.32)*shaft*phase*(1.0-exp(-shaftRange*0.1))*OMNI_VOLUMETRIC_STRENGTH; // 蓝色光柱强度随可见性、相位和近处距离变化；强度可调。
 #else
     return vec3(0.0); // 关闭选项或非主世界时不加光柱。
 #endif
@@ -72,7 +74,7 @@ vec3 omniVolumetricLight(vec3 view, vec3 world, float distance, float density, f
     }
     vec3 light = omniNormalize(shadowLightPosition); // 当前主光源方向。
     float phase = 0.04 + pow(max(dot(omniNormalize(view),light),0.0),8.0); // 正向面对光源时更亮，强调天体方向。
-    return vec3(0.75,0.68,0.5)*scattering/12.0*fogAmount*phase; // 暖白阳光光柱，强度受雾量与相位控制。
+    return vec3(0.75,0.68,0.5)*scattering/12.0*fogAmount*phase*OMNI_VOLUMETRIC_STRENGTH; // 暖白阳光光柱，强度受雾量、相位与强度选项控制。
 #else
     return vec3(0.0); // 关闭选项或非主世界时不加光柱。
 #endif
