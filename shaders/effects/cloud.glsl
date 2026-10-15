@@ -33,6 +33,8 @@
 #define OMNI_CLOUD_DENSITY 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"云块大小","en_us":"Cloud size"},"description":{"zh_cn":"大于一云块更小更碎，小于一云块更大更整。","en_us":"Above one makes smaller broken clouds, below one makes larger solid clouds."},"slider":true}
 #define OMNI_CLOUD_SCALE 1.0 // [0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"云噪声尺度","en_us":"Cloud noise scale"},"description":{"zh_cn":"云块边缘碎边噪声的尺度；调高碎边更细更碎。","en_us":"Scale of the fine noise on cloud edges; higher makes the edges finer and more broken."},"slider":true}
+#define OMNI_CLOUD_NOISE_SCALE 1.0 // [0.5 1.0 1.5 2.0]
 // @option {"label": {"zh_cn": "云速", "en_us": "Cloud speed"}, "slider": true, "description": {"zh_cn": "云飘得快慢。", "en_us": "How fast the clouds drift."}}
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label": {"zh_cn": "云亮度", "en_us": "Cloud brightness"}, "slider": true, "description": {"zh_cn": "云整体亮暗。", "en_us": "Overall cloud brightness."}}
@@ -41,6 +43,10 @@
 #define OMNI_CLOUD_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"云边缘透光","en_us":"Cloud edge glow"},"description":{"zh_cn":"对着太阳看云时边缘发亮、背对时偏暗。","en_us":"Cloud edges brighten toward the sun and dim away from it."},"slider":true}
 #define OMNI_CLOUD_SILVER 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"云底亮度","en_us":"Cloud base light"},"description":{"zh_cn":"云背光面（夜里、阴雨、背对太阳）留下的底光；取零时背光云会变很暗。","en_us":"Base light kept on shaded cloud sides (night, overcast, away from the sun); zero lets them go very dark."},"slider":true}
+#define OMNI_CLOUD_BOTTOM 0.15 // [0.0 0.05 0.1 0.15 0.25 0.4]
+// @option {"label":{"zh_cn":"云外散射","en_us":"Cloud outscatter"},"description":{"zh_cn":"阳光透过云向四周散开的集中程度；调高光更集中在太阳方向。","en_us":"How tightly light spreads out of the clouds toward the sun; higher concentrates it around the sun."},"slider":true}
+#define OMNI_CLOUD_OUTSCATTER 4.0 // [1.0 2.0 3.0 4.0 6.0 8.0]
 // @option {"label":{"zh_cn":"云受光","en_us":"Cloud direct light"},"description":{"zh_cn":"晴天阳光照在云顶上的强度；调低云更灰更沉。","en_us":"How strongly the sun lights the cloud tops in clear weather; lower makes them greyer."},"slider":true}
 #define OMNI_CLOUD_SUNLIGHT 1.0 // [0.0 0.5 0.75 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"云天光","en_us":"Cloud skylight"},"description":{"zh_cn":"晴天云背光面与夜里剩下的底光。","en_us":"The sky light left on shaded cloud sides and at night in clear weather."},"slider":true}
@@ -57,6 +63,8 @@
 #define OMNI_CLOUD_RAIN_SUNLIGHT 0.4 // [0.0 0.1 0.25 0.4 0.6 0.8 1.0]
 // @option {"label":{"zh_cn":"雨天云天光","en_us":"Rain cloud skylight"},"description":{"zh_cn":"下雨时云受的天光，决定阴云的底色。","en_us":"Sky light on clouds while it rains, setting the base tone of overcast clouds."},"slider":true}
 #define OMNI_CLOUD_RAIN_SKYLIGHT 0.8 // [0.0 0.25 0.5 0.8 1.0 1.5]
+// @option {"label":{"zh_cn":"云淡出距离","en_us":"Cloud fade distance"},"description":{"zh_cn":"超过这个距离的云逐渐融进天空，避免远处出现硬边。","en_us":"Clouds fade into the sky beyond this distance, avoiding hard edges far away."}}
+#define OMNI_CLOUD_FADE 18000.0 // [4000.0 8000.0 12000.0 18000.0 24000.0]
 // @option {"label": {"zh_cn": "云影开关", "en_us": "Cloud shadow"}, "description": {"zh_cn": "云要不要在地上投下阴影。", "en_us": "Whether clouds cast shadows on the ground."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_CLOUD_SHADOW 1 // [0 1]
 // @option {"label": {"zh_cn": "云影浓淡", "en_us": "Cloud shadow strength"}, "slider": true, "description": {"zh_cn": "云影有多明显。", "en_us": "How dark the cloud shadows are."}}
@@ -108,7 +116,7 @@ float omniCloudDensity(vec3 p) {
     if (coverage<=0.0) return 0.0; // 云量为零时明确没有云，也省下噪声采样。
     p.x += frameTimeCounter*OMNI_CLOUD_SPEED*2.0; // 风沿水平方向推移噪声，云看起来在飘。
     float shape = snoise(p*vec3(0.004,0.018,0.004)*omniCloudScale())*0.7; // 低频决定云块大轮廓，竖直方向压缩让云更扁。
-    float detail = snoise(p*0.013*omniCloudScale())*0.3; // 高频给云块加碎边，避免轮廓太光滑。
+    float detail = snoise(p*0.013*omniCloudScale()*OMNI_CLOUD_NOISE_SCALE)*0.3; // 高频给云块加碎边，碎边尺度由噪声尺度单独控制。
     float n = 0.5+0.5*(shape+detail); // 噪声从负一到一映射到零到一。
     return smoothstep(0.8-coverage*0.5,0.95-coverage*0.5,n); // 云量越高阈值越低，云越满。
 }
@@ -174,7 +182,7 @@ vec3 omniCloudColor(vec3 nightColor, vec3 dayColor) {
     float lit = smoothstep(-0.15,0.1,up); // 天体越接近天顶，云越亮。
     vec3 direct = dayColor*lit*omniCloudSunlight(); // 直射分量：太阳照亮的云顶。
     vec3 ambient = nightColor*(1.0-lit)*omniCloudSkylight(); // 天光分量：背光面与夜晚的底色。
-    vec3 color = direct+ambient; // 两项相加，晴天默认下等于 mix(nightColor,dayColor,lit)。
+    vec3 color = max(direct+ambient,dayColor*OMNI_CLOUD_BOTTOM*(1.0-lit*0.5)); // 云底亮度：受光越弱底光越明显，背光云底不会全黑。
     color *= OMNI_CLOUD_BRIGHTNESS; // 整体亮度，取一保持原有明暗。
     return color*exp(vec3(0.2,0.0,-0.2)*OMNI_CLOUD_TINT); // 冷暖偏移，取零保持中性。
 }
@@ -183,7 +191,7 @@ vec3 omniCloudColor(vec3 nightColor, vec3 dayColor) {
 float omniCloudSilver(vec3 direction) {
     vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*sunPosition); // 太阳在世界空间的方向。
     float facing = max(dot(omniNormalize(direction),sun),0.0); // 视线与太阳方向夹角余弦。
-    return 1.0+OMNI_CLOUD_SILVER*(pow(facing,4.0)*1.2-0.4); // 正向增亮、背向压暗；取零恒为一。
+    return 1.0+OMNI_CLOUD_SILVER*(pow(facing,OMNI_CLOUD_OUTSCATTER)*1.2-0.4); // 正向增亮、背向压暗；指数由外散射控制，取银边零时恒为一。
 }
 // --- 平面云入口：视线与云平面相交后只取一次密度 ---
 // 为什么不做体积步进：平面云本身就是一层贴片，取一次交点密度就够，代价与云厚度无关。
@@ -196,8 +204,10 @@ vec3 omniPlanarCloud(vec3 color, vec3 direction) {
     float density = omniPlanarDensity(hit.xz); // 交点处的云密度。
     if (density<=0.0) return color; // 交点落在云缝里，直接透出天空。
     float horizon = smoothstep(0.02,0.15,d.y); // 越靠地平线云压得越扁，淡出避免拉花。
+    float far = max(OMNI_CLOUD_FADE,1000.0); // 云的可见最远距离，至少一千米避免配置错误时整片消失。
+    float fade = 1.0-smoothstep(far*0.5,far,travel); // 越接近淡出距离越透明，远处云融进天空。
     vec3 cloudColor = omniCloudColor(vec3(0.035,0.047,0.07),vec3(0.85,0.86,0.88))*omniCloudSilver(d); // 与体积云共用同一套昼夜颜色与银边。
-    return mix(color,cloudColor,clamp(density*horizon,0.0,1.0)); // 用不透明度把云混到天空上。
+    return mix(color,cloudColor,clamp(density*horizon*fade,0.0,1.0)); // 用不透明度把云混到天空上。
 }
 // --- 云入口：按做法选择体积步进或平面取点 ---
 vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
@@ -211,7 +221,8 @@ vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
     float lowerCross = (OMNI_CLOUD_HEIGHT-cameraPosition.y)/d.y; // 视线穿过云层下界的距离。
     float upperCross = (OMNI_CLOUD_HEIGHT+omniCloudThickness()-cameraPosition.y)/d.y; // 视线穿过云层上界的距离。
     float begin = max(min(lowerCross,upperCross),0.0); // 相机在云层内部时从零开始步进。
-    float end = min(max(lowerCross,upperCross),min(sceneDistance,18000.0)); // 步进在地形前或云层上界停下。
+    float far = max(OMNI_CLOUD_FADE,1000.0); // 云的可见最远距离，至少一千米避免配置错误时整片消失。
+    float end = min(max(lowerCross,upperCross),min(sceneDistance,far)); // 步进在地形前、云层上界或云淡出距离停下。
     if (end<=begin) return color; // 云在相机身后或被地形挡住，不画。
     float stride = (end-begin)/float(OMNI_CLOUD_STEPS); // 步数可调，步长按区间均分。
     float opacity = 0.0; // 累计体积透射损失，零表示完全透明。
@@ -221,6 +232,7 @@ vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
         float density = omniCloudDensity(p)*smoothstep(0.0,0.2,height)*(1.0-smoothstep(0.7,1.0,height)); // 上下边缘渐薄，避免云层像一块板。
         opacity += (1.0-opacity)*(1.0-exp(-density*stride*0.07*omniCloudDensityMul())); // 前向透射积分，后面的采样只影响剩余可见部分；密度倍率按晴雨切换。
     }
+    opacity *= 1.0-smoothstep(far*0.5,far,end); // 越接近淡出距离越透明，远处云融进天空不留硬边。
     vec3 cloudColor = omniCloudColor(vec3(0.035,0.047,0.07),vec3(0.85,0.86,0.88))*omniCloudSilver(d); // 体积云偏灰，并按银边受光调整明暗。
     return mix(color,cloudColor,clamp(opacity,0.0,1.0)); // 用不透明度把云混到天空上。
 #endif

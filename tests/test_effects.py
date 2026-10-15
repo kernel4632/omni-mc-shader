@@ -148,6 +148,19 @@ class EffectTests(unittest.TestCase):
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
         self.assertIn("omniPlanarCloud",source)  # 合成阶段能取到平面云做法。
 
+    def test_cloud_base_outscatter_fade_and_noise(self):
+        """云底亮度、外散射、淡出距离与噪声尺度都是可调参数并参与计算。"""
+        found,_,_ = build.configuration()
+        for name in ("OMNI_CLOUD_BOTTOM","OMNI_CLOUD_OUTSCATTER","OMNI_CLOUD_FADE","OMNI_CLOUD_NOISE_SCALE"):
+            self.assertIn(name,found)  # 每个参数由云源码定义。
+        text = (build.SHADERS/"effects/cloud.glsl").read_text(encoding="utf-8")
+        self.assertIn("dayColor*OMNI_CLOUD_BOTTOM",text)  # 云底亮度参与颜色下限。
+        self.assertIn("pow(facing,OMNI_CLOUD_OUTSCATTER)",text)  # 外散射参与银边指数。
+        self.assertIn("smoothstep(far*0.5,far,",text)  # 淡出距离参与可见度。
+        self.assertIn("*OMNI_CLOUD_NOISE_SCALE",text)  # 噪声尺度参与碎边频率。
+        source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
+        self.assertIn("OMNI_CLOUD_FADE",source)  # 合成阶段能取到淡出距离。
+
     def test_cloud_weather_sets_and_lighting(self):
         """云在晴天与雨天各有一套覆盖/厚度/密度/尺度/受光，按湿润度切换。"""
         found,_,_ = build.configuration()

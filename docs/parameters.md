@@ -53,10 +53,13 @@
 | OMNI_CLOUD_THICKNESS | 云厚度 | 形状 | 数值 | 16–128 | 云层有多厚 | 已有 |
 | OMNI_CLOUD_DENSITY | 云密度 | 形状 | 数值 | 0.0–2.0 | 晴天云本身多不透光 | 新 |
 | OMNI_CLOUD_SCALE | 云块大小 | 形状 | 数值 | 0.5–2.0 | 云块更大更整还是更小更碎 | 已有 |
+| OMNI_CLOUD_NOISE_SCALE | 云噪声尺度 | 形状 | 数值 | 0.5–2.0 | 云边缘碎边更细还是更粗 | 新 |
 | OMNI_CLOUD_SPEED | 云速 | 运动 | 数值 | 0.0–2.0 | 云飘得快慢 | 已有 |
 | OMNI_CLOUD_BRIGHTNESS | 云亮度 | 颜色 | 数值 | 0.5–1.5 | 云整体亮暗 | 已有 |
 | OMNI_CLOUD_TINT | 云色冷暖 | 颜色 | 数值 | -1–1 | 云偏暖还是偏冷 | 已有 |
 | OMNI_CLOUD_SILVER | 云边缘透光 | 颜色 | 数值 | 0.0–2.0 | 对着太阳看云时边缘多亮 | 已有 |
+| OMNI_CLOUD_BOTTOM | 云底亮度 | 颜色 | 数值 | 0.0–0.4 | 云背光面留下的底光 | 新 |
+| OMNI_CLOUD_OUTSCATTER | 云外散射 | 颜色 | 数值 | 1.0–8.0 | 阳光透过云的集中程度 | 新 |
 | OMNI_CLOUD_SUNLIGHT | 云受光 | 颜色 | 数值 | 0.0–2.0 | 晴天阳光照在云顶多强 | 新 |
 | OMNI_CLOUD_SKYLIGHT | 云天光 | 颜色 | 数值 | 0.0–2.0 | 晴天云背光面和夜里的底光 | 新 |
 | OMNI_CLOUD_RAIN_COVERAGE | 雨天云量 | 雨天 | 数值 | 0.0–1.0 | 下雨时的云量 | 新 |
@@ -65,6 +68,7 @@
 | OMNI_CLOUD_RAIN_SCALE | 雨天云块大小 | 雨天 | 数值 | 0.5–2.0 | 下雨时的云块大小 | 新 |
 | OMNI_CLOUD_RAIN_SUNLIGHT | 雨天云受光 | 雨天 | 数值 | 0.0–1.0 | 下雨时云的直射光 | 新 |
 | OMNI_CLOUD_RAIN_SKYLIGHT | 雨天云天光 | 雨天 | 数值 | 0.0–1.5 | 下雨时云的天光 | 新 |
+| OMNI_CLOUD_FADE | 云淡出距离 | 形状 | 数值 | 4000–24000 | 多远之外的云融进天空 | 新 |
 | OMNI_CLOUD_SHADOW | 云影开关 | 云影 | 开关 | 开/关 | 云要不要在地上投下阴影 | 已有 |
 | OMNI_CLOUD_SHADOW_STRENGTH | 云影浓淡 | 云影 | 数值 | 0.0–1.5 | 云影有多明显 | 已有 |
 | OMNI_CLOUD_SHADOW_AMBIENT | 云影影响天光 | 云影 | 数值 | 0.0–1.0 | 云挡住太阳时环境光跟着暗多少 | 已有 |
