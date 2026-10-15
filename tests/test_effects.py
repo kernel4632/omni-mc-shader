@@ -37,6 +37,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniSrgb(clamp(color,0.0,1.0))",text)  # 抖动发生在显示编码之后。
         self.assertIn("gl_FragCoord.xy",text)  # 抖动按真实像素坐标取样。
 
+    def test_bloom_threshold_and_radius_are_adjustable(self):
+        """泛光阈值与半径都是可调参数，替换原先写死的数值。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_BLOOM_THRESHOLD",found); self.assertIn("OMNI_BLOOM_RADIUS",found)  # 两个参数由泛光源码定义。
+        text = (build.SHADERS/"effects/bloom.glsl").read_text(encoding="utf-8")
+        self.assertIn("lum - OMNI_BLOOM_THRESHOLD",text)  # 阈值参与光晕筛选。
+        self.assertIn("* OMNI_BLOOM_RADIUS",text)  # 半径参与采样偏移。
+
     def test_horizon_ao_is_selectable_and_expands(self):
         """地平线环境遮蔽通过算法选项接入合成，螺旋路径仍然保留。"""
         found,_,_ = build.configuration()

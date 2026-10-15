@@ -11,6 +11,10 @@
 //#define OMNI_BLOOM_ENABLED
 // @option {"label":{"zh_cn":"泛光强度","en_us":"Bloom strength"},"slider":true}
 #define OMNI_BLOOM_STRENGTH 0.25 // [0.1 0.25 0.5 1.0]
+// @option {"label":{"zh_cn":"泛光阈值","en_us":"Bloom threshold"},"description":{"zh_cn":"亮度超过此值才产生光晕；低于一时高光也会泛光，高于一时只有强光源泛光。","en_us":"Only luminance above this value blooms; below one highlights also glow, above one only strong sources do."},"slider":true}
+#define OMNI_BLOOM_THRESHOLD 1.0 // [0.5 0.8 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"泛光半径","en_us":"Bloom radius"},"slider":true}
+#define OMNI_BLOOM_RADIUS 1.0 // [0.5 1.0 1.5 2.0]
 // 需要的共用输入：omniLuminance 亮度计算，以及 colortex0 颜色、viewWidth 与 viewHeight 尺寸。
 #include "/common/math.glsl"
 #include "/common/uniforms.glsl"
@@ -21,7 +25,7 @@
 // 为什么除数保持正数：纯黑样本亮度为零，直接相除会得到无效值，所以下限取一个极小正数。
 vec3 omniBloomSample(vec3 sampleColor) {
     float lum = omniLuminance(sampleColor); // 亮度同时用于筛选和归一化，只算一次。
-    return sampleColor * max(lum - 1.0, 0.0) / max(lum, 0.001); // 亮度不超过白色时贡献为零。
+    return sampleColor * max(lum - OMNI_BLOOM_THRESHOLD, 0.0) / max(lum, 0.001); // 亮度不超过阈值时贡献为零。
 }
 
 // --- 泛光主入口 ---
@@ -33,7 +37,7 @@ vec3 omniBloom(vec2 uv) {
     vec2 bufferSize = max(vec2(viewWidth, viewHeight), vec2(1.0)); // 尺寸为零按一像素处理，避免除零。
     for (int i = 0; i < 16; i++) {
         float angle = float(i) * 2.399963; // 取黄金角让 16 个样本均匀铺开成一圈。
-        float radius = 2.0 + float(i) * 1.5; // 半径由近到远递增，近处强光扩散更明显。
+        float radius = (2.0 + float(i) * 1.5) * OMNI_BLOOM_RADIUS; // 半径由近到远递增，近处强光扩散更明显；半径选项整体放大或缩小。
         vec2 offset = vec2(cos(angle), sin(angle)) * radius / bufferSize; // 转成与分辨率无关的屏幕偏移。
         vec3 sampleColor = texture(colortex0, clamp(uv + offset, 0.0, 1.0)).rgb; // 时间合成后的稳定线性颜色。
         result += omniBloomSample(sampleColor); // 累加这一环的光晕贡献。
