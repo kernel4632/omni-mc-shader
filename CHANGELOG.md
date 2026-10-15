@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.0.0-dev.111
+
+按 `docs/algorithms.md` 的第一项，把主世界天空换成物理大气散射：
+
+- `shaders/effects/sky.glsl` 用公开的 `Bruneton` 预计算散射模型独立实现：沿视线数值积分得到视线透过率、瑞利与米氏单次散射（相位函数）、太阳方向透过率和一份多次散射近似；公式与常数取自公开论文，未复制参考光影源码，也不引入查找表纹理。
+- 大气散射的两项原有选项（`OMNI_ATMOSPHERE_SCATTER`、`OMNI_SCATTER_STRENGTH`）从 `atmosphere.glsl` 移到 `sky.glsl`，名字、默认值和范围不变，现在控制真实模型；`atmosphere.glsl` 只保留极光与彩虹，避免同一片天空算两遍。
+- 新增选项：`OMNI_ATMOSPHERE_STEPS`（散射精细度，默认中 16）、`OMNI_ATMOSPHERE_MIE_G`（米氏方向性，默认 0.8）、`OMNI_ATMOSPHERE_OZONE`（臭氧强度，默认 1.0）、`OMNI_ATMOSPHERE_MULTIPLE`（多次散射强度，默认 1.0）。
+- 选项总数 165 → 169（不删除任何现有选项）。
+
+只做过离线编译与逻辑审查；世界内画面与性能未验证。
+
 ## 0.0.0-dev.110
 
 - 新增 `docs/algorithms.md`：记录 iterationT 3.2.0 的大气模型常数、各算法的计算内容、Omni 对应文件与要补的选项，以及执行顺序。下一步按它逐模块实现。

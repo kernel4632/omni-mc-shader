@@ -209,15 +209,16 @@ class EffectTests(unittest.TestCase):
         self.assertIn("* OMNI_END_SKY_BRIGHTNESS",text)  # 末地天空亮度参与着色。
 
     def test_atmosphere_strengths_are_adjustable(self):
-        """极光、彩虹与散射强度都是可调参数，替换原先写死的倍率。"""
+        """极光、彩虹、散射与闪电强度都是可调参数，替换原先写死的倍率。"""
         found,_,_ = build.configuration()
         for name in ("OMNI_AURORA_STRENGTH","OMNI_RAINBOW_STRENGTH","OMNI_SCATTER_STRENGTH","OMNI_LIGHTNING_STRENGTH"):
-            self.assertIn(name,found)  # 每个参数都由氛围源码定义。
+            self.assertIn(name,found)  # 每个参数都由氛围或天空源码定义。
         text = (build.SHADERS/"effects/atmosphere.glsl").read_text(encoding="utf-8")
         self.assertIn("*OMNI_AURORA_STRENGTH",text)  # 极光强度参与着色。
         self.assertIn("*OMNI_RAINBOW_STRENGTH",text)  # 彩虹强度参与着色。
-        self.assertIn("*OMNI_SCATTER_STRENGTH",text)  # 散射强度参与着色。
         self.assertIn("*OMNI_LIGHTNING_STRENGTH",text)  # 闪电强度参与着色。
+        sky = (build.SHADERS/"effects/sky.glsl").read_text(encoding="utf-8")  # 散射强度随物理模型一起移到天空源码。
+        self.assertIn("*OMNI_SCATTER_STRENGTH",sky)  # 散射强度参与大气散射亮度。
 
     def test_vegetation_wind_parameters_are_adjustable(self):
         """植被摆动强度与速度都是可调参数，替换原先写死的振幅与频率。"""
@@ -250,14 +251,18 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniNetherColor",source)  # 下界天空包含程序化氛围色。
 
     def test_analytic_atmosphere_scattering(self):
-        """解析大气散射作为可选近似接入氛围，不依赖外部查找表。"""
+        """物理大气散射在天空源码里独立实现，不依赖外部查找表。"""
         found,_,_ = build.configuration()
         self.assertIn("OMNI_ATMOSPHERE_SCATTER",found); self.assertEqual(found["OMNI_ATMOSPHERE_SCATTER"].values,("0","1"))  # 散射可开关。
-        text = (build.SHADERS/"effects/atmosphere.glsl").read_text(encoding="utf-8")
-        self.assertIn("vec3 omniAirScattering",text)  # 散射独立成函数。
-        self.assertIn("omniAirScattering(direction)",text)  # 氛围阶段叠加散射。
+        for name in ("OMNI_ATMOSPHERE_STEPS","OMNI_ATMOSPHERE_MIE_G","OMNI_ATMOSPHERE_OZONE","OMNI_ATMOSPHERE_MULTIPLE"):
+            self.assertIn(name,found)  # 精细度、方向性、臭氧与多次散射各有选项。
+        text = (build.SHADERS/"effects/sky.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniAtmosphereSky",text)  # 大气散射独立成函数。
+        self.assertIn("omniAtmosphereSky(d,sun)",text)  # 天空阶段调用散射。
+        self.assertIn("omniSunTransmittance",text)  # 计算太阳方向透过率。
+        self.assertIn("omniOzoneDensity",text)  # 含臭氧吸收剖面。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
-        self.assertIn("omniAirScattering",source)  # 合成阶段包含散射。
+        self.assertIn("omniAtmosphereSky",source)  # 合成阶段包含大气散射。
 
     def test_end_fog_is_selectable(self):
         """末地雾提供紫色漩涡与虚空暗色，接入末地雾路径且可回退。"""

@@ -1,9 +1,10 @@
-// 氛围：在天空颜色上叠加极光、彩虹和解析大气散射，并提供全场闪电照明。
+// 氛围：在天空颜色上叠加极光和彩虹，并提供全场闪电照明。
 // 调用位置：rendering/lighting.glsl 绘制自定义天空时调用 `omniAtmosphere`；
 //           rendering/composite.glsl 合成阶段对有真实深度与天空光的表面调用 `omniLightning`。
 // 可复制示例：`color = omniAtmosphere(skyColor, worldDirection);` 先在天空上叠加氛围；
 //             `color = omniLightning(color, worldPosition, skylight);` 再按真实闪电照明。
-// 设计取舍：极光、彩虹、散射各自独立成一个函数并各自带开关，关闭的效果连采样都不生成；
+// 设计取舍：极光与彩虹各自独立成一个函数并各自带开关，关闭的效果连采样都不生成；
+//           大气散射已由 effects/sky.glsl 的物理模型统一出图，这里不再重复叠一份，避免同一片天空算两遍；
 //           闪电只在加载器给出真实事件时叠加，缺少输入就原样返回，不凭空制造天气事件。
 #ifndef OMNI_ATMOSPHERE
 #define OMNI_ATMOSPHERE
@@ -14,16 +15,12 @@
 //#define OMNI_RAINBOW
 // @option {"label":{"zh_cn":"闪电照明","en_us":"Lightning illumination"},"description":{"zh_cn":"读取加载器实际闪电强度；没有该输入时关闭，不生成虚假天气事件。","en_us":"Uses Iris lightning strength; disabled without the actual event input."},"page":"weather"}
 #define OMNI_LIGHTNING
-// @option {"label": {"zh_cn": "解析大气散射", "en_us": "Analytic atmosphere"}, "description": {"zh_cn": "用解析单次散射近似天空，不引入外部查找表纹理。", "en_us": "Approximates the sky with analytic single scattering, no external lookup table."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
-#define OMNI_ATMOSPHERE_SCATTER 1 // [0 1]
 // @option {"label": {"zh_cn": "极光强度", "en_us": "Aurora strength"}, "slider": true, "description": {"zh_cn": "极光多亮。", "en_us": "How bright the aurora is."}}
 #define OMNI_AURORA_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"极光颜色","en_us":"Aurora colour"},"description":{"zh_cn":"正值偏绿、负值偏蓝紫。","en_us":"Positive leans green, negative leans blue-purple."},"slider":true}
 #define OMNI_AURORA_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label": {"zh_cn": "彩虹强度", "en_us": "Rainbow strength"}, "slider": true, "description": {"zh_cn": "彩虹多清楚。", "en_us": "How clear the rainbow is."}}
 #define OMNI_RAINBOW_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label": {"zh_cn": "散射强度", "en_us": "Scatter strength"}, "slider": true, "description": {"zh_cn": "天空蓝色有多浓。", "en_us": "How strong the sky's blue scattering is."}}
-#define OMNI_SCATTER_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label": {"zh_cn": "闪电强度", "en_us": "Lightning strength"}, "slider": true, "page": "weather", "description": {"zh_cn": "打雷时闪亮多强。", "en_us": "How bright the lightning flash is."}}
 #define OMNI_LIGHTNING_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // 共用颜色与天气输入：天空色、云与太阳方向都来自这里的定义。
@@ -31,19 +28,6 @@
 #ifdef IS_IRIS
 uniform vec4 lightningBoltPosition; // 闪电的相机相对世界位置与强度。
 #endif
-// 解析大气散射：把天空当成一层空气，用单次散射近似它的颜色。
-// 为什么不用查找表：外部纹理要额外的文件和采样，解析式只靠太阳方向就能出效果，基础路径更轻。
-// 瑞利散射偏蓝、米氏散射偏暖，都随视角和太阳高度变化。
-vec3 omniAirScattering(vec3 direction) {
-    vec3 ray = omniNormalize(direction); // 视线方向；零向量交给安全归一化处理。
-    vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*sunPosition); // 转到世界空间的太阳方向。
-    float mu = dot(ray,sun); // 视线与太阳夹角的余弦，正对太阳时为 1。
-    float thickness = exp(-max(ray.y,0.0)*5.0); // 越贴近地平线，视线穿过的空气越厚。
-    float daylight = smoothstep(-0.15,0.15,sun.y); // 太阳落到地平线以下就归零。
-    vec3 rayleigh = vec3(0.0058,0.0135,0.0331)*(1.0+mu*mu)*thickness*daylight; // 瑞利散射偏蓝，随夹角变化。
-    vec3 mie = vec3(1.0,0.9,0.75)*pow(max(mu,0.0),8.0)*thickness*daylight*0.15; // 前向米氏光晕偏暖白。
-    return (rayleigh+mie)*0.5*OMNI_SCATTER_STRENGTH; // 半强度叠加，与现有天空量级匹配；散射强度可调。
-}
 // 极光：主世界夜晚高空的缓慢帘幕，雨天被云遮挡。
 vec3 omniAurora(vec3 color, vec3 direction) {
 #ifdef OMNI_AURORA
@@ -66,15 +50,12 @@ vec3 omniRainbow(vec3 color, vec3 direction) {
 #endif
     return color; // 关闭时不改动颜色。
 }
-// 天空氛围：主世界按选项叠加极光、彩虹与散射，关闭的效果不生成计算。
-// 为什么下界与末地不加：它们的天空已由天空色和雾接管，不需要太阳散射。
+// 天空氛围：主世界按选项叠加极光和彩虹，关闭的效果不生成计算。
+// 为什么下界与末地不加：它们的天空已由天空色和雾接管，不需要这两层氛围。
 vec3 omniAtmosphere(vec3 color, vec3 direction) {
 #if !defined OMNI_NETHER && !defined OMNI_END
     color = omniAurora(color,direction); // 叠加夜晚极光帘幕。
     color = omniRainbow(color,direction); // 叠加雨后彩虹。
-#if OMNI_ATMOSPHERE_SCATTER == 1
-    color += omniAirScattering(direction); // 解析单次散射近似天空。
-#endif
 #endif
     return color; // 关闭的效果不产生任何采样。
 }
