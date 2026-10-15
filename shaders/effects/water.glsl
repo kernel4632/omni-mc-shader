@@ -17,48 +17,52 @@
 #ifndef OMNI_WATER
 #define OMNI_WATER
 // @effect {"label":{"zh_cn":"水面","en_us":"Water"}}
-// @option {"label":{"zh_cn":"水波强度","en_us":"Wave strength"},"slider":true}
+// @option {"label":{"zh_cn":"波浪大小","en_us":"Wave size"},"slider":true}
 #define OMNI_WAVE_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"水折射","en_us":"Water refraction"}}
+// @option {"label":{"zh_cn":"波浪速度","en_us":"Wave speed"},"slider":true}
+#define OMNI_WAVE_SPEED 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"波浪密度","en_us":"Wave density"},"slider":true}
+#define OMNI_WAVE_SCALE 1.0 // [0.5 1.0 2.0 4.0]
+// @option {"label":{"zh_cn":"水面凹凸细节","en_us":"Water bump detail"},"description":{"zh_cn":"在波浪上叠加多层噪声，让水面近看有小起伏。","en_us":"Adds fine procedural ripples on top of the waves."}}
+#define OMNI_WATER_BUMP 1 // [0 1]
+// @option {"label":{"zh_cn":"水面凹凸深度","en_us":"Bump depth"},"slider":true}
+#define OMNI_WATER_BUMP_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"海浪开关","en_us":"Ocean waves"},"description":{"zh_cn":"起伏极大的海浪，会抬升水面顶点；瀑布与侧面不受影响。","en_us":"Large rolling waves that also lift the water surface; falls and side faces are unaffected."}}
+#define OMNI_OCEAN_WAVES 1 // [0 1]
+// @option {"label":{"zh_cn":"海浪大小","en_us":"Ocean wave size"},"slider":true}
+#define OMNI_OCEAN_HEIGHT 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"水色红","en_us":"Water red"},"description":{"zh_cn":"水里红色消失得快不快；调高水更偏青绿。","en_us":"How fast red fades in water; higher pushes the water toward green-blue."},"slider":true}
+#define OMNI_WATER_ABSORB_R 0.19 // [0.05 0.1 0.19 0.35]
+// @option {"label":{"zh_cn":"水色绿","en_us":"Water green"},"slider":true}
+#define OMNI_WATER_ABSORB_G 0.065 // [0.02 0.04 0.065 0.12]
+// @option {"label":{"zh_cn":"水色蓝","en_us":"Water blue"},"slider":true}
+#define OMNI_WATER_ABSORB_B 0.035 // [0.01 0.02 0.035 0.07]
+// @option {"label":{"zh_cn":"浑水色红","en_us":"Deep water red"},"description":{"zh_cn":"水很深时剩下的红色成分。","en_us":"Residual red tint in very deep water."},"slider":true}
+#define OMNI_WATER_SCATTER_R 0.015 // [0.0 0.015 0.04 0.08]
+// @option {"label":{"zh_cn":"浑水色绿","en_us":"Deep water green"},"slider":true}
+#define OMNI_WATER_SCATTER_G 0.075 // [0.02 0.05 0.075 0.12]
+// @option {"label":{"zh_cn":"浑水色蓝","en_us":"Deep water blue"},"slider":true}
+#define OMNI_WATER_SCATTER_B 0.095 // [0.03 0.06 0.095 0.15]
+// @option {"label":{"zh_cn":"清澈度","en_us":"Water clarity"},"description":{"zh_cn":"大于一更清澈、小于一更浑浊；只改透过多深开始看不清。","en_us":"Above one is clearer, below one is murkier; only changes how far you can see through."},"slider":true}
+#define OMNI_WATER_CLEAR 1.0 // [0.5 1.0 2.0 4.0]
+// @option {"label":{"zh_cn":"水折射开关","en_us":"Water refraction"}}
 #define OMNI_WATER_REFRACTION
 // @option {"label":{"zh_cn":"折射强度","en_us":"Refraction strength"},"slider":true}
 #define OMNI_REFRACTION_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"水面阳光高光","en_us":"Water sun glint"},"description":{"zh_cn":"水面法线朝向太阳时出现窄亮带；取零关闭。未实机验证观感。","en_us":"A narrow bright band when the water normal faces the sun; zero disables it. Not verified in game."},"slider":true}
+// @option {"label":{"zh_cn":"水面高光","en_us":"Water sun glint"},"description":{"zh_cn":"太阳照在水面的亮点；取零关闭。","en_us":"Bright highlight where the sun reflects off the water; zero disables it."},"slider":true}
 #define OMNI_WATER_GLINT 0.5 // [0.0 0.25 0.5 1.0]
-// @option {"label":{"zh_cn":"雨滴水纹","en_us":"Rain ripples"}}
+// @option {"label":{"zh_cn":"雨点波纹开关","en_us":"Rain ripples"}}
 #define OMNI_RAIN_RIPPLES
-// @option {"label":{"zh_cn":"水纹强度","en_us":"Ripple strength"},"slider":true}
+// @option {"label":{"zh_cn":"波纹强度","en_us":"Ripple strength"},"slider":true}
 #define OMNI_RIPPLE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"玩家互动水纹","en_us":"Player ripples"},"description":{"zh_cn":"相机靠近水面移动时生成解析圆环；不是物理模拟，不读取其他实体。","en_us":"Analytic rings near a moving camera, not a fluid simulation or other entity tracking."}}
+// @option {"label":{"zh_cn":"玩家水纹开关","en_us":"Player ripples"},"description":{"zh_cn":"玩家贴水走动时出现一圈圈水纹；不会跟着生物走。","en_us":"Rings appear when the player moves near the water; other mobs are not tracked."}}
 //#define OMNI_PLAYER_RIPPLES
-// @option {"label":{"zh_cn":"水波凹凸细节","en_us":"Water bump detail"},"description":{"zh_cn":"在解析波上叠加多层程序噪声，增加水面细碎起伏。","en_us":"Adds multi-octave procedural noise on top of the analytic waves for fine ripples."}}
-#define OMNI_WATER_BUMP 1 // [0 1]
-// @option {"label":{"zh_cn":"凹凸强度","en_us":"Bump strength"},"slider":true}
-#define OMNI_WATER_BUMP_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"物理海浪","en_us":"Ocean waves"},"description":{"zh_cn":"盖斯特纳波同时抬升顶点与法线，侧面与瀑布保持原法线。","en_us":"Gerstner waves lift vertices and normals together; side faces keep their normals."}}
-#define OMNI_OCEAN_WAVES 1 // [0 1]
-// @option {"label":{"zh_cn":"波速","en_us":"Wave speed"},"slider":true}
-#define OMNI_WAVE_SPEED 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"波尺度","en_us":"Wave scale"},"slider":true}
-#define OMNI_WAVE_SCALE 1.0 // [0.5 1.0 2.0 4.0]
-// @option {"label":{"zh_cn":"红光吸收","en_us":"Red absorption"},"description":{"zh_cn":"每米红光吸收系数，越大越接近青绿色深水。","en_us":"Per-metre red absorption; higher makes deeper water trend green-blue."},"slider":true}
-#define OMNI_WATER_ABSORB_R 0.19 // [0.05 0.1 0.19 0.35]
-// @option {"label":{"zh_cn":"绿光吸收","en_us":"Green absorption"},"slider":true}
-#define OMNI_WATER_ABSORB_G 0.065 // [0.02 0.04 0.065 0.12]
-// @option {"label":{"zh_cn":"蓝光吸收","en_us":"Blue absorption"},"slider":true}
-#define OMNI_WATER_ABSORB_B 0.035 // [0.01 0.02 0.035 0.07]
-// @option {"label":{"zh_cn":"水体散射红","en_us":"Scatter red"},"slider":true}
-#define OMNI_WATER_SCATTER_R 0.015 // [0.0 0.015 0.04 0.08]
-// @option {"label":{"zh_cn":"水体散射绿","en_us":"Scatter green"},"slider":true}
-#define OMNI_WATER_SCATTER_G 0.075 // [0.02 0.05 0.075 0.12]
-// @option {"label":{"zh_cn":"水体散射蓝","en_us":"Scatter blue"},"slider":true}
-#define OMNI_WATER_SCATTER_B 0.095 // [0.03 0.06 0.095 0.15]
 // 反射和坐标重建的共用实现：水面反射复用它读取已保存的不透明画面。
 #include "/effects/reflection.glsl"
 // --- 水体光学常数 ---
 // 红衰减最快、绿居中、蓝最慢，所以水越深越偏青绿，最终趋向水体散射色。
 // 六个系数都来自上方可调选项，只在这里组成向量；水面合成与水下雾都从这里取，避免两处各写一份。
-const vec3 omniWaterAbsorbance = vec3(OMNI_WATER_ABSORB_R,OMNI_WATER_ABSORB_G,OMNI_WATER_ABSORB_B); // 每米分波段吸收系数。
+const vec3 omniWaterAbsorbance = vec3(OMNI_WATER_ABSORB_R,OMNI_WATER_ABSORB_G,OMNI_WATER_ABSORB_B)/clamp(OMNI_WATER_CLEAR,0.1,8.0); // 清澈度越高吸收越弱，水越清澈。
 const vec3 omniWaterScatter = vec3(OMNI_WATER_SCATTER_R,OMNI_WATER_SCATTER_G,OMNI_WATER_SCATTER_B); // 水体自身散射色。
 // 按距离对颜色做分波段吸收并混入散射：`distance` 是光在水里走过的米数。
 vec3 omniWaterTransmit(vec3 color, float distance) {
@@ -116,7 +120,7 @@ float omniOceanHeight(vec2 p) {
         direction = vec2(direction.x*0.6-direction.y*0.8,direction.x*0.8+direction.y*0.6); // 旋转方向，避免四层同向叠成一条。
         amplitude *= 0.5; frequency *= 1.7; // 每层振幅减半、频率变高，形成由大到细的自然层次。
     }
-    return height*OMNI_WAVE_STRENGTH; // 同样随波强度缩放。
+    return height*OMNI_WAVE_STRENGTH*OMNI_OCEAN_HEIGHT; // 随波浪大小与海浪大小共同缩放。
 #endif
 }
 // --- 合成高度 ---
