@@ -14,6 +14,12 @@
 #define OMNI_STAR_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"天空饱和度","en_us":"Sky saturation"},"slider":true}
 #define OMNI_SKY_SATURATION 1.0 // [0.5 0.75 1.0 1.25]
+// @option {"label":{"zh_cn":"日落强度","en_us":"Sunset strength"},"slider":true}
+#define OMNI_SUNSET_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
+// @option {"label":{"zh_cn":"太阳亮度","en_us":"Sun brightness"},"slider":true}
+#define OMNI_SUN_DISK 1.0 // [0.0 0.5 1.0 1.5]
+// @option {"label":{"zh_cn":"月亮亮度","en_us":"Moon brightness"},"slider":true}
+#define OMNI_MOON_DISK 1.0 // [0.0 0.5 1.0 1.5]
 // @option {"label":{"zh_cn":"下界氛围色","en_us":"Nether palette"},"description":{"zh_cn":"用程序化混合替代固定下界雾色，覆盖荒原、灵魂沙谷、绯红与诡异森林和玄武岩。","en_us":"Replaces a fixed nether fog colour with a procedural blend of nether biomes."}}
 #define OMNI_NETHER_COLOR 1 // [0 1]
 // 天体、雾色和噪声都来自这些共用声明，显式引入而不依赖间接包含。
@@ -55,9 +61,9 @@ vec3 omniSky(vec3 direction) {
     vec3 daySky = mix(vec3(0.10,0.28,0.62), vec3(0.62,0.72,0.82), horizon); // 天顶偏蓝、地平线泛白。
     vec3 color = mix(nightSky, daySky, day); // 按昼夜权重插值，天空整天连续变化。
     float sunset = (1.0 - smoothstep(0.0,0.3,abs(sun.y))) * pow(max(dot(d,sun),0.0),8.0); // 只在太阳低且靠近太阳方向时出现，避免全天泛红。
-    color += vec3(0.8,0.22,0.06) * sunset * horizon; // 暖色染在地平线一带。
-    color += vec3(12.0,9.0,5.0) * smoothstep(0.9995,0.9998,dot(d,sun)) * day; // 太阳圆盘：点积极接近 1 才点亮，只占很小一块。
-    color += vec3(0.6,0.7,1.0) * smoothstep(0.9993,0.9997,dot(d,moon)) * (1.0-day); // 月亮圆盘同理，只在夜里出现。
+    color += vec3(0.8,0.22,0.06) * sunset * horizon * OMNI_SUNSET_STRENGTH; // 暖色染在地平线一带，强度可调。
+    color += vec3(12.0,9.0,5.0) * smoothstep(0.9995,0.9998,dot(d,sun)) * day * OMNI_SUN_DISK; // 太阳圆盘：点积极接近 1 才点亮，只占很小一块；亮度可调。
+    color += vec3(0.6,0.7,1.0) * smoothstep(0.9993,0.9997,dot(d,moon)) * (1.0-day) * OMNI_MOON_DISK; // 月亮圆盘同理，只在夜里出现；亮度可调。
     float stars = omniStars(d); // 稳定的星点亮度，还没乘强度和时间。
     color += stars * OMNI_STAR_STRENGTH * (1.0-day) * smoothstep(0.0,0.2,d.y); // 白天和地平线附近隐藏，避免星星压过日光。
     color = mix(color, mix(vec3(0.025),vec3(0.22,0.25,0.29),day), rainStrength * 0.85); // 雨天按权重换成灰色阴天。

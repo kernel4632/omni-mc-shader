@@ -143,6 +143,16 @@ class EffectTests(unittest.TestCase):
         self.assertIn('#include "/effects/cloud.glsl"',text)  # 反射确实引入了云。
         self.assertIn('#include "/effects/atmosphere.glsl"',text)  # 反射确实引入了氛围。
 
+    def test_sky_brightness_parameters_are_adjustable(self):
+        """日落、太阳与月亮亮度都是可调参数，替换原先写死的倍率。"""
+        found,_,_ = build.configuration()
+        for name in ("OMNI_SUNSET_STRENGTH","OMNI_SUN_DISK","OMNI_MOON_DISK"):
+            self.assertIn(name,found)  # 每个参数都由天空源码定义。
+        text = (build.SHADERS/"effects/sky.glsl").read_text(encoding="utf-8")
+        self.assertIn("* OMNI_SUNSET_STRENGTH",text)  # 日落强度参与着色。
+        self.assertIn("* OMNI_SUN_DISK",text)  # 太阳亮度参与着色。
+        self.assertIn("* OMNI_MOON_DISK",text)  # 月亮亮度参与着色。
+
     def test_temporal_denoise_rotates_noise(self):
         """时序噪声逐帧旋转相位，地平线遮蔽在时间抗锯齿下可重建去噪。"""
         found,_,_ = build.configuration()
