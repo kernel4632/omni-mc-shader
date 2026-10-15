@@ -107,6 +107,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_CLOUD_THICKNESS",found)  # 云层厚度是独立可调参数。
         self.assertIn("OMNI_CLOUD_SCALE",found)  # 云块尺度是独立可调参数。
         self.assertIn("OMNI_CLOUD_SILVER",found)  # 银边受光是独立可调参数。
+        self.assertIn("OMNI_CLOUD_STEPS",found)  # 体积云步数是独立可调参数。
         text = (build.SHADERS/"effects/cloud.glsl").read_text(encoding="utf-8")
         self.assertIn("float omniCloudShadow",text)  # 云影独立成函数。
         self.assertIn("OMNI_CLOUD_MODE == 0",text)  # 关闭云显示时不再产生云影。

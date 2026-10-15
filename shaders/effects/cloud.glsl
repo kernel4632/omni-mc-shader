@@ -39,6 +39,8 @@
 #define OMNI_CLOUD_SHADOW 1 // [0 1]
 // @option {"label":{"zh_cn":"云银边受光","en_us":"Cloud silver lining"},"description":{"zh_cn":"视线接近太阳方向时云更亮、背对时更暗，模拟前向散射；取零保持均匀受光。","en_us":"Clouds brighten toward the sun and darken away from it, approximating forward scattering; zero keeps even lighting."},"slider":true}
 #define OMNI_CLOUD_SILVER 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"体积云步数","en_us":"Cloud steps"},"description":{"zh_cn":"体积云沿视线的采样步数；越多越厚实也越耗性能。","en_us":"Samples along the view for the volume cloud; more is denser but costlier."}}
+#define OMNI_CLOUD_STEPS 16 // [8 16 32]
 // 天空颜色与云照明共享天体输入。
 #include "/effects/sky.glsl"
 // 成熟无纹理梯度噪声直接构建体积云密度，不为库增加只转手的包装。
@@ -141,8 +143,8 @@ vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
 #if OMNI_CLOUD_MODE == 1
     opacity = omniCloudDensity(cameraPosition + d * (begin+end) * 0.5) * 0.88; // 单层只采中点一次，省算力。
 #else
-    float stride = (end-begin)/16.0; // 固定 16 步，步长写死让编译结果可预测。
-    for (int i=0;i<16;i++) {
+    float stride = (end-begin)/float(OMNI_CLOUD_STEPS); // 步数可调，步长按区间均分。
+    for (int i=0;i<OMNI_CLOUD_STEPS;i++) {
         vec3 p = cameraPosition + d * (begin+(float(i)+0.5)*stride); // 采样点落在每一步的中心。
         float height = (p.y-OMNI_CLOUD_HEIGHT)/OMNI_CLOUD_THICKNESS; // 相对云层中面的高度，用零到一表示。
         float density = omniCloudDensity(p) * smoothstep(0.0,0.2,height) * (1.0-smoothstep(0.7,1.0,height)); // 上下边缘渐薄，避免云层像一块板。
