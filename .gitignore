@@ -17,3 +17,6 @@ shaders/lang/*.lang
 # 编辑器的个人状态。
 .idea/
 .vscode/*.local.json
+
+# 浏览器工具的本机输出，不属于项目源码。
+.playwright-mcp/

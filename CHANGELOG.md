@@ -1,5 +1,11 @@
 # 更新记录
 
+## 0.0.0-dev.72
+
+- 忽略浏览器工具在仓库内产生的临时目录 `.playwright-mcp/`，避免它被中文注释审计当成源码扫描。
+
+本版本只修改忽略规则，未改动效果代码；不启动 Minecraft，不运行 GPU 或性能测试。
+
 ## 0.0.0-dev.71
 
 - 用浏览器核实许可：AMD FidelityFX（CACAO）与 Sebastian Lague Clouds 均为 MIT。
