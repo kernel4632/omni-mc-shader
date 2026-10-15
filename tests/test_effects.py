@@ -158,6 +158,8 @@ class EffectTests(unittest.TestCase):
         self.assertIn("vec3 omniReflectionFilter",text)  # 去噪独立成函数。
         self.assertIn("omniReflectionFilter(hitUv,target.z,roughness)",text)  # 使用命中深度做相似度判断。
         self.assertIn("OMNI_REFLECTION_DENOISE == 1",text)  # 旧路径由选项分派保留。
+        self.assertIn("OMNI_REFLECTION_BLUR",found)  # 反射模糊半径可调。
+        self.assertIn("*OMNI_REFLECTION_BLUR",text)  # 模糊半径参与计算。
 
     def test_reflection_fallback_uses_full_sky(self):
         """屏幕外反射回退复用天空、云与氛围的同一套合成，而不是只有纯天空色。"""

@@ -38,6 +38,8 @@
 // 开启后按命中深度加权邻点去噪，减少屏幕反射的噪点。
 // @option {"label":{"zh_cn":"反射去噪","en_us":"Reflection denoise"},"description":{"zh_cn":"按命中深度相似度加权多点，减少屏幕反射噪点。","en_us":"Weights multiple taps by hit depth similarity to reduce SSR noise."}}
 #define OMNI_REFLECTION_DENOISE 1 // [0 1]
+// @option {"label":{"zh_cn":"反射模糊","en_us":"Reflection blur"},"description":{"zh_cn":"不去噪路径里十字模糊的半径；越大反射越糊。","en_us":"Cross-blur radius on the non-denoise path; larger blurs the reflection more."},"slider":true}
+#define OMNI_REFLECTION_BLUR 1.0 // [0.0 0.5 1.0 2.0]
 // 天空回退色由天空文件提供。
 #include "/effects/sky.glsl"
 // 屏幕外反射回退要与背景天空一致，所以复用云与氛围的合成，而不是只取纯天空色。
@@ -114,7 +116,7 @@ vec3 omniReflected(vec3 view, vec3 normal, float roughness) {
 #if OMNI_REFLECTION_DENOISE == 1
         vec3 sampleColor = omniReflectionFilter(hitUv,target.z,roughness); // 开启去噪时按深度加权取命中颜色。
 #else
-        vec2 blur = vec2(roughness*roughness*0.025); // 不去噪时用粗糙度决定一个固定的小十字模糊范围。
+        vec2 blur = vec2(roughness*roughness*0.025*OMNI_REFLECTION_BLUR); // 不去噪时用粗糙度决定一个小十字模糊范围，半径可调。
         vec3 sampleColor = texture(colortex3,hitUv).rgb * 0.4; // 命中颜色必须用与命中深度相同的屏幕坐标读取。
         sampleColor += texture(colortex3,clamp(hitUv+vec2(blur.x,0),0.0,1.0)).rgb*0.15; // 右侧相邻像素，权重相同。
         sampleColor += texture(colortex3,clamp(hitUv-vec2(blur.x,0),0.0,1.0)).rgb*0.15; // 左侧相邻像素，权重相同。
