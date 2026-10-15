@@ -11,7 +11,7 @@ jobs:
   check:
     name: 检查 (${{ matrix.os }})
     runs-on: ${{ matrix.os }} # 两个平台都必须检查路径与压缩包差异。
-    timeout-minutes: 15 # 失败构建不能无限占用运行器。
+    timeout-minutes: 30 # 并行编译仍需为慢速运行器留出余量，避免中途被取消。
     strategy:
       fail-fast: false # 一个系统失败仍保留另一个系统结果。
       matrix:
@@ -23,6 +23,15 @@ jobs:
         uses: actions/setup-python@v6 # 使用项目要求的解释器版本。
         with:
           python-version: '3.12' # 保持安全解压等标准库接口一致。
+      - name: 缓存编译工具与结果
+        uses: actions/cache@v4 # 同一源码与工具再次运行时跳过重复编译。
+        with:
+          path: | # 工具按锁定哈希缓存；编译结果按源码内容缓存。
+            .dev/tools
+            .dev/reports/glsl-cache.json
+          key: omni-build-${{ runner.os }}-${{ hashFiles('dev-tools.lock.json','shaders/**','presets/**','build.py','options.py','audit.py') }}
+          restore-keys: | # 内容未命中时退回同系统较新的缓存，仅复用工具。
+            omni-build-${{ runner.os }}-
       - name: 安装锁定检查工具
         run: python dev.py setup # 按哈希安装工具并生成菜单与入口。
       - name: 检查自动化工具

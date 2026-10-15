@@ -52,3 +52,11 @@ class ComputeTests(unittest.TestCase):
         self.assertIn("omniLpvSample",composite)  # 间接光阶段包含体积采样。
         settings = options.read_properties(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
         self.assertIn("image.omniLpvA",settings); self.assertIn("image.omniLpvB",settings)  # 体积格在流程设置登记。
+
+    def test_lpv_image_writes_have_visibility_barriers(self):
+        """每次图像写入后都先做图像屏障再同步工作组，避免传播读取旧数据。"""
+        source = (build.SHADERS/"rendering/lpv.glsl").read_text(encoding="utf-8")  # 读取计算主体而不是复制实现。
+        self.assertEqual(source.count("memoryBarrierImage();"),3)  # 注入、正向传播、反向传播各有一次。
+        self.assertEqual(source.count("barrier();"),3)  # 每个图像屏障后紧跟工作组同步。
+        ambient = (build.SHADERS/"effects/ambient.glsl").read_text(encoding="utf-8")  # 片元路径的能力边界。
+        self.assertIn("defined OMNI_COMPUTE && defined OMNI_LPV_ENABLED",ambient)  # 基础路径不猜测未绑定的三维纹理。

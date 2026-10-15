@@ -1,4 +1,7 @@
-// LPV 光传播体积计算：清空、注入与传播；示例 setup.csh 引入。
+// LPV 光传播体积的计算入口：清空、注入和双缓冲传播。
+// 调用位置：各维度的 setup.csh 定义 OMNI_COMPUTE 后引入本文件；示例：`#include "/rendering/lpv.glsl"`。
+// 设计原因：每轮传播先写入一张图像，再用图像内存屏障和工作组屏障让下一轮读到完整结果。
+// 设计取舍：这里只负责计算阶段，不改变 LPV 的选项、体积坐标或缓冲协议；没有计算阶段时由 ambient.glsl 保留屏幕空间路径。
 #ifndef OMNI_LPV_LIB // 防止重复引用造成重复声明。
 #define OMNI_LPV_LIB // 标记本文件已经引入。
 // 效果选项与采样映射来自效果主体。
@@ -30,7 +33,9 @@ void omniLpvSeed() {
     float height = 0.5 + 0.5 * omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition).y; // 天体高度。
     light = vec3(0.8,0.8,0.9) * height; // 直射光近似颜色。
 #endif // 结束维度判断。
-    imageStore(omniLpvA,cell,vec4(light*0.05,1.0)); // 初始能量写入源图像。
+    imageStore(omniLpvA,cell,vec4(light*0.05,1.0)); // 把方向光近似写入传播源，作为后续每轮扩散的起点。
+    memoryBarrierImage(); // 先提交图像写入，避免同一工作组后续读取到旧的源数据。
+    barrier(); // 再同步整个工作组，保证所有单元都完成初次注入后才开始读取。
 #endif // 结束注入分支。
 }
 // 正向传播一步：从源读取六邻居，写回目标。
@@ -41,7 +46,9 @@ void omniLpvSpreadAB() {
     sum += omniLpvReadA(cell+ivec3(1,0,0)) + omniLpvReadA(cell-ivec3(1,0,0)); // 左右邻居。
     sum += omniLpvReadA(cell+ivec3(0,1,0)) + omniLpvReadA(cell-ivec3(0,1,0)); // 上下邻居。
     sum += omniLpvReadA(cell+ivec3(0,0,1)) + omniLpvReadA(cell-ivec3(0,0,1)); // 前后邻居。
-    imageStore(omniLpvB,cell,vec4(sum/7.0,1.0)); // 归一化后写入目标。
+    imageStore(omniLpvB,cell,vec4(sum/7.0,1.0)); // 把源图像的七个位置平均后写入目标图像。
+    memoryBarrierImage(); // 先让目标图像写入对工作组可见，再允许主流程同步所有工作项。
+    barrier(); // 再同步整个工作组，保证下一轮不会读到尚未写完的目标图像。
 #endif // 结束正向传播分支。
 }
 // 反向传播一步：从目标读取六邻居，写回源图像。
@@ -52,13 +59,15 @@ void omniLpvSpreadBA() {
     sum += omniLpvReadB(cell+ivec3(1,0,0)) + omniLpvReadB(cell-ivec3(1,0,0)); // 左右邻居。
     sum += omniLpvReadB(cell+ivec3(0,1,0)) + omniLpvReadB(cell-ivec3(0,1,0)); // 上下邻居。
     sum += omniLpvReadB(cell+ivec3(0,0,1)) + omniLpvReadB(cell-ivec3(0,0,1)); // 前后邻居。
-    imageStore(omniLpvA,cell,vec4(sum/7.0,1.0)); // 归一化后写回源图像。
+    imageStore(omniLpvA,cell,vec4(sum/7.0,1.0)); // 把目标图像的七个位置平均后写回源图像。
+    memoryBarrierImage(); // 先提交回写结果，避免下一轮再次读取到上一轮的旧源数据。
+    barrier(); // 再同步整个工作组，保证双缓冲轮换时源图像已经完整更新。
 #endif // 结束反向传播分支。
 }
 void main() {
 #ifdef OMNI_LPV_ENABLED // 关闭时计算入口保持空实现。
-    omniLpvSeed(); barrier(); // 先注入，再同步整格。
-    for (int k=0;k<OMNI_LPV_STEPS;k++) { if (k%2==0) omniLpvSpreadAB(); else omniLpvSpreadBA(); barrier(); } // 偶数步后回到源图像，片元读取同一张。
+    omniLpvSeed(); // 初次注入函数内部已经按图像屏障、工作组屏障的顺序完成同步。
+    for (int k=0;k<OMNI_LPV_STEPS;k++) { if (k%2==0) omniLpvSpreadAB(); else omniLpvSpreadBA(); } // 每轮函数内部完成双缓冲传播和同步，奇偶轮次交替使用两张图像。
 #endif // 结束计算入口分支。
 }
 #endif // 结束计算阶段。

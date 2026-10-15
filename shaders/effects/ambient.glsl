@@ -1,10 +1,11 @@
-// 环境遮蔽与屏幕空间反弹光：读取邻点视空间位置、法线与已着色辐射，只压暗或叠加屏幕里看得到的反弹，不虚构照明。
-// 调用位置：由 rendering/composite.glsl 的普通表面后处理显式引用，对已经着色的表面调用 omniAmbient。
+// 环境遮蔽、屏幕空间反弹光和 LPV 体积间接光：只对已经着色的表面叠加可解释的间接光。
+// 调用位置：由 rendering/composite.glsl 的普通表面后处理显式引用；示例：`color = omniAmbient(color, view, normal, uv);`。
 // 可复制示例：
 //   `color = omniAmbient(color, omniSceneView(uv,false), normal, uv);`
 // 关键取舍：
 //   只使用当前屏幕里可见的邻点，屏幕外和背面的表面看不到，缺少信息时不假装知道，宁可少压一点暗。
 //   环境遮蔽与反弹是两条独立开关，都关闭时不采样任何邻点，画面回到没有间接光的原始亮度。
+//   LPV 只有在明确的计算阶段标志存在时才允许读取三维纹理；基础 GLSL 330 合成路径始终保留屏幕空间回退。
 //   地平线算法比螺旋算法更贴合真实遮挡但更耗性能，保留螺旋路径供旧画面和低配设备回退。
 // 防止被多个绘制文件重复引用，头文件保护只声明一次。
 #ifndef OMNI_AMBIENT
@@ -24,9 +25,9 @@
 #include "/common/math.glsl"
 // 逐帧噪声相位由统一抗锯齿模块提供，让遮蔽在时序重建开启时逐帧抖动。
 #include "/effects/antialiasing.glsl"
-// 体积间接光由统一效果主体提供，缺少计算能力时只保留屏幕路径。
+// 体积间接光由统一效果主体提供；这里只在明确的计算能力标志下声明纹理，避免读取未写入的三维图像。
 #include "/effects/lpv.glsl"
-#ifdef OMNI_LPV_ENABLED
+#if defined OMNI_COMPUTE && defined OMNI_LPV_ENABLED
 uniform sampler3D omniLpvTex; // 体积格只读采样，实际写入发生在计算阶段。
 #endif
 // 采样半径边界：用户选项为零或异常时回退到一个极小正值，后续除法始终安全，所有半径计算共用此值。
@@ -161,8 +162,10 @@ vec3 omniAmbient(vec3 color, vec3 view, vec3 normal, vec2 uv) {
 #ifdef OMNI_SCREEN_BOUNCE
     color += omniBounce(view,normal,uv); // 屏幕里可见的一次反弹。
 #endif
-#ifdef OMNI_LPV_ENABLED
-    color += omniLpvSample(omniLpvTex,omniWorld(view)) * OMNI_LPV_STRENGTH; // 体积间接光叠加。
+#if defined OMNI_COMPUTE && defined OMNI_LPV_ENABLED
+    color += omniLpvSample(omniLpvTex,omniWorld(view)) * OMNI_LPV_STRENGTH; // 只有计算路径确认存在时才叠加体积光，避免基础路径读未写入纹理。
+#else
+    // 没有可靠的计算能力标志时不猜测三维纹理状态，保留上面的屏幕反弹或无 LPV 原色路径。
 #endif
     return color; // 两个开关都关闭时没有邻点采样，颜色不变。
 }

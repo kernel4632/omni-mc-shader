@@ -6,12 +6,14 @@ from __future__ import annotations
 import argparse  # 解析明确的构建命令。
 import hashlib  # 固定产物校验与编译去重。
 import json  # 读取显式程序与依赖记录。
+import os  # 按本机核心数决定并行编译线程数。
 import re  # 检查版本与引用边界。
 import shutil  # 同步独立开发实例。
 import subprocess  # 调用真实编译器与版本控制。
 import sys  # 使用当前解释器执行测试。
 import tempfile  # 离线编译不污染源码。
 import zipfile  # 生成玩家使用的光影包。
+from concurrent.futures import ThreadPoolExecutor  # 并行等待多个编译器进程。
 from pathlib import Path  # 路径相对项目定位。
 import options as menu  # 原生选项是配置唯一来源。
 import audit  # 审计自有代码注释与未实现标记。
@@ -209,44 +211,55 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
     programs = {}  # 多阶段一起链接。
     for source in entries:
         programs.setdefault(source.with_suffix(""), []).append(source)  # 细分与几何阶段一起链接。
-    seen, count = set(), 0  # 唯一编译内容计数。
     cache_file = ROOT / ".dev/reports/glsl-cache.json"  # 成功源码缓存只服务开发，不进入发行包。
     compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 工具升级必须重新链接。
     cached = json.loads(cache_file.read_text(encoding="utf-8")) if cache_file.is_file() else {}  # 只复用同编译器的成功内容。
     knownGood = set(cached.get("programs",[])) if cached.get("compiler")==compiler_digest else set()
-    reused = 0  # 缓存不把不同源码误计为通过。
     formatDefines = "#define RGBA16F 34842\n#define RGBA32F 34836\n"  # 离线模拟加载器格式名称。
     environments = [("base", ""), ("iris_dh", "#define IS_IRIS\n#define IRIS_FEATURE_ENTITY_TRANSLUCENT\n#define DISTANT_HORIZONS\n#define DH_BLOCK_WATER 13\n#define DH_BLOCK_LAVA 8\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 两种环境覆盖实体分离可用与不可用路径。
+    # 第一步：把 149 种配置乘两个环境乘全部程序展开成任务，相同编译内容只留一次。
+    # 为什么先收集再编译：这样重复内容能在编译前过滤，并把独立任务交给线程池并行，避免串行等待几千个编译器进程。
+    jobs, seen, reused = [], set(), 0  # 待编译任务、已见内容标记、缓存复用计数。
+    for label, values in variants(found, profiles):  # 代表组合逐项展开。
+        for environment, defines in environments:  # 基础与远景均检查。
+            for program, sources in programs.items():  # 各维度不遗漏。
+                texts = [option_source(expanded[p], found, values) for p in sources]
+                texts = [t.replace("#version 330 compatibility", "#version 330 compatibility\n" + formatDefines + defines, 1) for t in texts]  # 仅离线检查环境注入。
+                if program.name.startswith("dh_") and environment == "iris_dh":
+                    texts = [t.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1) if p.suffix == ".vsh" else t for p, t in zip(sources, texts)]  # 官方自动属性由离线环境模拟。
+                signature = tuple((p.suffix, re.sub(r"^#line[^\n]*|//[^\n]*|/\*.*?\*/", "", t, flags=re.MULTILINE|re.DOTALL)) for p, t in zip(sources, texts))  # 别名入口的注释不影响编译内容。
+                digest = hashlib.sha256(repr(signature).encode()).hexdigest()
+                if digest in seen:
+                    continue  # 相同维度或别名程序只链接一次。
+                seen.add(digest)  # 新内容实际需要编译。
+                if digest in knownGood:
+                    reused += 1; continue  # 完整展开源码与配置完全相同才复用先前链接。
+                jobs.append({"digest":digest,"label":label,"environment":environment,"program":program,"sources":sources,"texts":texts})  # 记录失败定位所需信息。
+    numberToPath = {str(i+1): p.relative_to(SHADERS).as_posix() for i,p in enumerate(sorted(SHADERS.rglob("*"))) if p.is_file()}  # 报错把编号换回源码路径。
+    def compile_one(job: dict):
+        """编译一个唯一程序：写临时阶段文件后调用编译器，返回原始结果。"""
+        targets = []  # 本程序阶段临时文件。
+        for suffix, text in zip((p.suffix for p in job["sources"]), job["texts"]):
+            target = folder / (job["digest"][:16] + STAGES[suffix])  # 摘要前缀保证并发文件名不冲突。
+            target.write_text(text, encoding="utf-8"); targets.append(target)  # 临时文件只属于本次检查。
+        result = subprocess.run([str(validator), "-l", *map(str, targets)], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        return job, result  # 由主线程统一判断成败。
+    failures = []  # 收集全部失败，一次报告，避免只看到第一条。
+    workers = min(32, (os.cpu_count() or 4) * 2)  # 编译器是外部进程，线程数按核心数放大以隐藏等待。
     with tempfile.TemporaryDirectory(prefix="omni-glsl-") as temporary:
         folder = Path(temporary)  # 不污染源码。
-        for label, values in variants(found, profiles):  # 代表组合逐项执行。
-            for environment, defines in environments:  # 基础与远景均检查。
-                for program, sources in programs.items():  # 各维度不遗漏。
-                    texts = [option_source(expanded[p], found, values) for p in sources]
-                    texts = [t.replace("#version 330 compatibility", "#version 330 compatibility\n" + formatDefines + defines, 1) for t in texts]  # 仅离线检查环境注入。
-                    if program.name.startswith("dh_") and environment == "iris_dh":
-                        texts = [t.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1) if p.suffix == ".vsh" else t for p, t in zip(sources, texts)]  # 官方自动属性由离线环境模拟。
-                    signature = tuple((p.suffix, re.sub(r"^#line[^\n]*|//[^\n]*|/\*.*?\*/", "", t, flags=re.MULTILINE|re.DOTALL)) for p, t in zip(sources, texts))  # 别名入口的注释不影响编译内容。
-                    digest = hashlib.sha256(repr(signature).encode()).digest()
-                    if digest in seen:
-                        continue  # 相同维度或别名程序只链接一次。
-                    seen.add(digest)  # 新内容实际链接。
-                    if digest.hex() in knownGood:
-                        count += 1; reused += 1; continue  # 完整展开源码与配置完全相同才复用先前链接。
-                    targets = []  # 本程序阶段文件。
-                    for p, text in zip(sources, texts):  # 标准编译阶段扩展。
-                        target = folder / ("program" + STAGES[p.suffix])  # 后缀识别阶段。
-                        target.write_text(text, encoding="utf-8"); targets.append(target)  # 临时文件只属于本次检查。
-                    result = subprocess.run([str(validator), "-l", *map(str, targets)], capture_output=True, text=True, encoding="utf-8", errors="replace")
-                    if result.returncode:  # 失败保留源位置。
-                        numberToPath = {str(i+1): p.relative_to(SHADERS).as_posix() for i,p in enumerate(sorted(SHADERS.rglob("*"))) if p.is_file()}
-                        message = re.sub(r"(ERROR|WARNING): (\d+):(\d+):", lambda m: f"{m[1]}: {numberToPath.get(m[2],m[2])}:{m[3]}:", result.stdout + result.stderr)
-                        raise ValueError(f"GLSL 编译/链接失败：{program.relative_to(SHADERS)} / {label} / {environment}\n{message}")
-                    count += 1  # 通过才计数。
-                    knownGood.add(digest.hex())  # 失败组永远不进入缓存。
-            cache_file.parent.mkdir(parents=True,exist_ok=True)
-            cache_file.write_text(json.dumps({"compiler":compiler_digest,"programs":sorted(knownGood)})+"\n",encoding="utf-8")  # 每配置保存已成功的链接，不隐藏下一配置失败。
-            print(f"离线配置通过：{label}", flush=True)  # 长检查持续报告当前进度。
+        with ThreadPoolExecutor(max_workers=workers) as pool:  # 并行执行全部唯一程序。
+            for index, (job, result) in enumerate(pool.map(compile_one, jobs), 1):
+                if index % 500 == 0: print(f"离线程序编译进度：{index}/{len(jobs)}", flush=True)  # 长检查持续报告当前进度。
+                if result.returncode:  # 失败保留源位置。
+                    message = re.sub(r"(ERROR|WARNING): (\d+):(\d+):", lambda m: f"{m[1]}: {numberToPath.get(m[2],m[2])}:{m[3]}:", result.stdout + result.stderr)
+                    failures.append(f"GLSL 编译/链接失败：{job['program'].relative_to(SHADERS)} / {job['label']} / {job['environment']}\n{message}")
+                else:
+                    knownGood.add(job["digest"])  # 失败组永远不进入缓存。
+        cache_file.parent.mkdir(parents=True,exist_ok=True)
+        cache_file.write_text(json.dumps({"compiler":compiler_digest,"programs":sorted(knownGood)})+"\n",encoding="utf-8")  # 全部成功后保存已通过的链接。
+    if failures: raise ValueError("\n\n".join(failures[:5]))  # 失败时报告最多五条，附带源码位置。
+    count = len(seen)  # 唯一程序总数等于复用加本次编译。
     print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{count} 组唯一程序，复用 {reused} 组相同源码")
 
 def dependencies() -> dict[str, bytes]:
