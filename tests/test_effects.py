@@ -172,15 +172,21 @@ class EffectTests(unittest.TestCase):
         self.assertIn('#include "/effects/cloud.glsl"',text)  # 反射确实引入了云。
         self.assertIn('#include "/effects/atmosphere.glsl"',text)  # 反射确实引入了氛围。
 
-    def test_sky_brightness_parameters_are_adjustable(self):
-        """日落、太阳与月亮亮度都是可调参数，替换原先写死的倍率。"""
+    def test_sky_parameters_are_adjustable(self):
+        """日月大小与色温、星星数量、日落颜色、天空亮度、末地天空亮度都可调。"""
         found,_,_ = build.configuration()
-        for name in ("OMNI_SUNSET_STRENGTH","OMNI_SUN_DISK","OMNI_MOON_DISK"):
+        for name in ("OMNI_SUN_DISK","OMNI_SUN_SIZE","OMNI_MOON_DISK","OMNI_MOON_SIZE","OMNI_CELESTIAL_TINT",
+                     "OMNI_STAR_STRENGTH","OMNI_STAR_DENSITY","OMNI_SUNSET_STRENGTH","OMNI_SUNSET_TINT",
+                     "OMNI_SKY_SATURATION","OMNI_SKY_BRIGHTNESS","OMNI_END_SKY_BRIGHTNESS"):
             self.assertIn(name,found)  # 每个参数都由天空源码定义。
         text = (build.SHADERS/"effects/sky.glsl").read_text(encoding="utf-8")
-        self.assertIn("* OMNI_SUNSET_STRENGTH",text)  # 日落强度参与着色。
-        self.assertIn("* OMNI_SUN_DISK",text)  # 太阳亮度参与着色。
-        self.assertIn("* OMNI_MOON_DISK",text)  # 月亮亮度参与着色。
+        self.assertIn("OMNI_SUN_SIZE",text)  # 太阳大小参与圆盘阈值。
+        self.assertIn("OMNI_MOON_SIZE",text)  # 月亮大小参与圆盘阈值。
+        self.assertIn("celestialTint",text)  # 日月色温参与圆盘着色。
+        self.assertIn("OMNI_STAR_DENSITY",text)  # 星星数量参与阈值。
+        self.assertIn("OMNI_SUNSET_TINT",text)  # 日落颜色参与着色。
+        self.assertIn("*= OMNI_SKY_BRIGHTNESS",text)  # 天空整体亮度参与着色。
+        self.assertIn("* OMNI_END_SKY_BRIGHTNESS",text)  # 末地天空亮度参与着色。
 
     def test_atmosphere_strengths_are_adjustable(self):
         """极光、彩虹与散射强度都是可调参数，替换原先写死的倍率。"""
