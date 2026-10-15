@@ -91,7 +91,7 @@ class ReviewTests(unittest.TestCase):
         self.assertIn("shaders/libraries/ashima/LICENSE",files)
         self.assertIn(b"Copyright (C) 2011 by Ashima Arts",files["shaders/libraries/ashima/LICENSE"])  # 版权原文没有改成中文。
         cloud = (build.SHADERS/"effects/cloud.glsl").read_text(encoding="utf-8")
-        self.assertIn("snoise(p *",cloud)  # 成熟库直接参与密度计算，不是空包装。
+        self.assertIn("snoise(p*",cloud)  # 成熟库直接参与密度计算，不是空包装。
         manifest = json.loads((build.ROOT/"dependencies.json").read_text(encoding="utf-8"))
         for reference,digest in manifest["libraries"][0]["files"].items():
             self.assertEqual(hashlib.sha256((build.SHADERS/reference).read_bytes()).hexdigest(),digest)  # 源码与声明字节受控。

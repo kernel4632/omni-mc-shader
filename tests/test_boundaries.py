@@ -99,7 +99,7 @@ class BoundaryTests(unittest.TestCase):
         """当前属性不冒充旧版；旧版只迁移原来存在的调试接口。"""
         found,_ = options.scan(build.SHADERS)  # 外部配置值使用真实选项范围。
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary); source = root/"current.properties"; source.write_text("OMNI_CLOUD_MODE=2\n",encoding="ascii")
+            root = Path(temporary); source = root/"current.properties"; source.write_text("OMNI_CLOUD_COVERAGE=0.75\n",encoding="ascii")
             current = options.shared(source,found,build.version())  # 没有标记的加载器配置默认是当前版。
             self.assertEqual(current["shaderVersion"],build.version()); self.assertEqual(current["schemaVersion"],options.SHARE_SCHEMA)
             with self.assertRaisesRegex(ValueError,"旧版配置只能"): options.shared(source,found,build.version(),legacy=True)
