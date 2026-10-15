@@ -11,6 +11,7 @@ import tarfile  # 验证链接逃逸边界。
 import tempfile  # 测试不污染项目或玩家目录。
 import unittest  # 使用已有标准测试入口。
 from pathlib import Path  # 测试路径来自独立临时目录。
+from unittest.mock import patch  # 隔离开发目录，真实编译器仍照常运行。
 
 import build  # 真实构建主体作为被测对象。
 import dev  # 下载和解压边界直接测试。
@@ -71,6 +72,21 @@ class BuildTests(unittest.TestCase):
             (folder / "VERSION").write_text("../../outside\n", encoding="utf-8")
             with self.assertRaises(ValueError):
                 build.version(folder)  # 版本文件不允许任意文件路径。
+
+    def test_compile_cache_does_not_join_tokens_across_comments(self):
+        """先缓存合法程序，再插入分词注释；错误程序必须重新编译并失败。"""
+        validator = build.tool("glslang")  # 在替换测试目录前定位实际编译器。
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)  # 成功缓存和源码都留在测试目录。
+            shaders = root / "shaders"; shaders.mkdir()  # 构造独立计算程序，避免依赖项目效果。
+            source = shaders / "probe.csh"  # 计算入口只需一个阶段即可链接。
+            valid = "#version 430\nlayout(local_size_x=1) in;\nuniform float xy,x,y;\nvoid main(){ float value=xy; }\n"  # 连在一起的名字是已声明变量。
+            source.write_text(valid, encoding="utf-8")  # 第一次确实编译成功，建立可复用缓存。
+            with patch.object(build, "ROOT", root), patch.object(build, "SHADERS", shaders), patch.object(build, "tool", return_value=validator):
+                build.compile_shaders([source], {}, [])  # 通过实际编译而非模拟成功结果。
+                source.write_text(valid.replace("value=xy", "value=x/**/y"), encoding="utf-8")  # 注释隔开两个变量，没有运算符，应当报错。
+                with self.assertRaisesRegex(ValueError, "GLSL 编译/链接失败"):
+                    build.compile_shaders([source], {}, [])  # 不能复用先前合法源码的成功记录。
 
     def test_release_notes_only_include_selected_version(self):
         """说明只取本版章节，并保留中文小标题。"""

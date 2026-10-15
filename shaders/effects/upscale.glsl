@@ -1,13 +1,16 @@
-// 超分：最终显示前的可选边缘自适应重采样；示例 omniUpscale(color)。
-#ifndef OMNI_UPSCALE
-#define OMNI_UPSCALE
+// 最终显示前的可选边缘自适应重采样：这里通过邻域颜色平滑边缘，不承诺真超分辨率重建。
+// 调用位置：final.glsl 的最终颜色输出阶段。
+// 调用示例：vec3 outputColor = omniUpscale(scene, uv);
+// 设计取舍：独立文件保护宏与玩家开关，避免重复包含时错误改写 OMNI_UPSCALE；默认保持关闭。
+#ifndef OMNI_UPSCALE_INCLUDED
+#define OMNI_UPSCALE_INCLUDED
 // @effect {"label":{"zh_cn":"超分","en_us":"Upscaling"}}
 // @option {"label":{"zh_cn":"边缘自适应上采样","en_us":"Edge-adaptive upscale"},"description":{"zh_cn":"按亮度梯度确定边缘方向后用多瓣核重采样；内部渲染分辨率低于输出时最能减少锯齿。","en_us":"Multi-lobe resample guided by luminance edges; most effective when the internal render resolution is below the output."}}
 //#define OMNI_UPSCALE
 // 共用颜色与屏幕输入。
 #include "/common/math.glsl"
 #include "/common/uniforms.glsl"
-// 边缘自适应重采样：沿亮度梯度旋转采样瓣，平坦区收敛为当前颜色。
+// 沿亮度梯度旋转采样瓣，平坦区保留当前颜色；这是重采样，不等同于真超分辨率算法。
 vec3 omniUpscale(vec3 color, vec2 uv) {
     ivec2 center = ivec2(gl_FragCoord.xy); // 输出像素整数坐标。
     ivec2 high = ivec2(viewWidth-1.0,viewHeight-1.0); // 采样上限，避免越界。

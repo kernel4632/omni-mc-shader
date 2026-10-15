@@ -295,7 +295,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
                 texts = [text.replace("#version 330 compatibility", "#version 330 compatibility\n" + format_defines + defines, 1) for text in texts]  # 环境宏只注入临时文本，不修改入口文件。
                 if program.name.startswith("dh_") and environment == "iris_dh":
                     texts = [text.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1) if source.suffix == ".vsh" else text for source, text in zip(sources, texts)]  # 只在顶点阶段模拟加载器自动提供的远景材质编号。
-                source_signature = tuple((source.suffix, re.sub(r"^#line[^\n]*|//[^\n]*|/\*.*?\*/", "", text, flags=re.MULTILINE | re.DOTALL)) for source, text in zip(sources, texts))  # 阶段种类与代码都参与摘要，注释和报错行映射不改变程序。
+                source_signature = tuple((source.suffix, text) for source, text in zip(sources, texts))  # 保留完整源码：删除注释会拼接词，删除行号指令也可能改变预定义行号的结果。
                 source_digest = hashlib.sha256(repr(source_signature).encode()).hexdigest()  # 唯一内容编号用于去重、临时文件名和缓存。
                 if source_digest in seen:  # 别名或不同维度完全相同就不启动第二个编译器。
                     continue  # 相同维度或别名程序只链接一次。

@@ -88,8 +88,8 @@ void omniSurface(inout vec3 color, inout vec3 materialParams, vec3 normal, vec3 
     float wetnessAmount = wetness; // 加载器湿润度作为默认，气候会再乘一个温度权重。
 #if OMNI_CLIMATE == 1
     float temperature = omniTemperature(world); // 估计这一处的气候温度。
-    snow = max(snow,smoothstep(0.30,0.10,temperature)); // 越冷覆盖越接近一，温度低于零点半开始自然积雪。
-    wetnessAmount = wetness*(0.5+0.5*(1.0-temperature)); // 越热越容易积水，最冷处仍保留一半基础湿润。
+    snow = max(snow,1.0-smoothstep(0.10,0.30,temperature)); // 正序计算后取反：温度不高于零点一时全雪，不低于零点三时没有气候雪。
+    wetnessAmount = wetness*(0.5+0.5*temperature); // 按菜单意图让暖处更湿，最冷处保留一半基础湿润。
 #endif
 #ifdef OMNI_WET_SURFACES
     float wet = wetnessAmount * up * smoothstep(0.7,1.0,skylight); // 洞穴和垂直墙面没有天光，不凭空变湿。

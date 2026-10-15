@@ -1,12 +1,24 @@
-"""第一波效果回归：只检查选项接入与展开后的算法骨架，不宣称像素效果。
+"""效果回归：检查选项接入、预处理分支与算法边界，不宣称像素效果。
 
 示例 python -m unittest discover -s tests；全部使用离线展开，不建立显卡上下文。
 """
 import unittest  # 保留标准测试入口。
+import re  # 从实际公式提取固定阈值，拒绝未定义的顺序。
+import subprocess  # 用真实预处理器验证开关分支。
+import tempfile  # 探针源码只写入临时目录。
+from pathlib import Path  # 临时阶段文件交给项目编译器。
 import build  # 读取真实展开源码与原生选项。
 
 class EffectTests(unittest.TestCase):
     """逐个效果核对选项单源、算法接入和默认路径。"""
+    def test_fixed_smoothstep_edges_are_ordered(self):
+        """固定阈值必须严格递增，避免驱动自行解释未定义计算。"""
+        for path in (build.SHADERS/"effects").glob("*.glsl"):
+            text = path.read_text(encoding="utf-8")  # 只检查自有效果，不改第三方源码。
+            for match in re.finditer(r"smoothstep\(\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*,", text):
+                with self.subTest(path=path.name, formula=match[0]):  # 失败直接指出公式所在文件。
+                    self.assertLess(float(match[1]),float(match[2]))  # 相等或反序都不受语言保证。
+
     def test_agx_tone_mapping_is_selectable(self):
         """AgX 通过色调映射选项接入最终显示，简单路径仍然保留。"""
         found,_,_ = build.configuration()  # 原生定义仍是唯一默认值来源。
@@ -165,8 +177,8 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_CLIMATE",found); self.assertEqual(found["OMNI_CLIMATE"].values,("0","1"))  # 气候覆盖可开关。
         text = (build.SHADERS/"effects/material.glsl").read_text(encoding="utf-8")
         self.assertIn("float omniTemperature",text)  # 温度估计独立成函数。
-        self.assertIn("smoothstep(0.30,0.10,temperature)",text)  # 冷处自然积雪。
-        self.assertIn("wetness*(0.5+0.5*(1.0-temperature))",text)  # 温度影响积水。
+        self.assertIn("1.0-smoothstep(0.10,0.30,temperature)",text)  # 正序插值后取反，冷处积雪且不触发未定义计算。
+        self.assertIn("wetness*(0.5+0.5*temperature)",text)  # 暖处湿润权重更高，与菜单说明一致。
         self.assertIn("OMNI_CLIMATE == 1",text)  # 手动回退路径由选项分派保留。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniTemperature",source)  # 地形表面包含气候覆盖。
@@ -186,8 +198,25 @@ class EffectTests(unittest.TestCase):
         """边缘自适应重采样作为最终显示前的可选滤波，默认关闭保持原行为。"""
         found,_,_ = build.configuration()
         self.assertEqual(found["OMNI_UPSCALE"].values,("false","true"))  # 上采样为开关选项。
+        self.assertEqual(found["OMNI_UPSCALE"].default,"false")  # 默认关闭，不由文件保护宏偷偷启用。
         text = (build.SHADERS/"effects/upscale.glsl").read_text(encoding="utf-8")
+        self.assertFalse(any(line.strip() == "#define OMNI_UPSCALE" for line in text.splitlines()))  # 检查未替换选项的原始源码，避免离线配置掩盖重名。
         self.assertIn("vec3 omniUpscale",text)  # 重采样独立成函数。
         self.assertIn("mix(color,sum/weight,strength)",text)  # 平坦区收敛为原颜色。
         source = build.expand(build.SHADERS/"world0/final.fsh")  # 从最终显示入口展开。
         self.assertIn("omniUpscale",source)  # 最终显示包含可选重采样。
+
+    def test_upscale_switch_survives_real_preprocessing(self):
+        """原始默认源码必须关闭，上采样选项开启后才进入启用分支。"""
+        found,_,_ = build.configuration()  # 选项替换沿用真实菜单定义。
+        source = "#version 330 compatibility\n" + build.expand(build.SHADERS/"effects/upscale.glsl")  # 从真实效果文件展开依赖。
+        source += "\n#ifdef OMNI_UPSCALE\nconst bool upscaleEnabled = true;\n#else\nconst bool upscaleEnabled = false;\n#endif\n"  # 用可观察输出标出实际选中的分支。
+        defaults = {name: option.default for name,option in found.items()}  # 开启时仅修改目标选项。
+        with tempfile.TemporaryDirectory() as temporary:
+            shader = Path(temporary)/"probe.frag"  # 不碰项目入口和构建缓存。
+            for enabled,text in ((False,source),(True,build.option_source(source,found,defaults|{"OMNI_UPSCALE":"true"}))):
+                with self.subTest(enabled=enabled):  # 分别检查原始默认和加载器式替换。
+                    shader.write_text(text,encoding="utf-8")  # 每次用同一实际预处理器读取探针。
+                    result = subprocess.run([str(build.tool("glslang")),"-E",str(shader)],capture_output=True,text=True,encoding="utf-8",errors="replace")
+                    self.assertEqual(result.returncode,0,result.stdout+result.stderr)  # 预处理错误同样必须失败。
+                    self.assertRegex(result.stdout,rf"upscaleEnabled\s*=\s*{str(enabled).lower()}\s*;")  # 不仅检查宏名字存在，还检查真正的分支结果。
