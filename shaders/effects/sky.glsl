@@ -51,8 +51,8 @@ vec3 omniNetherColor(vec3 direction, float horizon) {
     tone = mix(tone, vec3(1.00,0.55,0.35), smoothstep(0.40,0.55,region)); // 接着混入绯红森林的红橙。
     tone = mix(tone, vec3(0.50,0.85,0.90), smoothstep(0.55,0.70,region)); // 再混入诡异森林的青蓝。
     tone = mix(tone, vec3(0.70,0.66,0.62), smoothstep(0.70,0.85,region)); // 最后混入玄武岩三角洲的灰。
-    tone *= mix(1.0,0.6,horizon); // 地平线以下压暗，避免向下看比抬头还亮。
-    return tone * (0.5+0.5*horizon) * 0.5; // 再乘系数让亮度与加载器雾色同量级，替换后不突兀。
+    tone *= mix(1.0,0.6,horizon); // 地平线以下（`horizon` 变大）先压一档，避免向下看比抬头还亮。
+    return tone * (1.0-0.5*horizon) * 0.5; // 地平线以下再压一档，整体缩到与加载器雾色同量级，替换后不突兀。
 }
 
 // --- 星点：把球面方向切成细格，只点亮少数格子，得到稳定的星空 ---
@@ -88,7 +88,7 @@ vec3 omniSky(vec3 direction) {
     float stars = omniStars(d); // 稳定的星点亮度，还没乘强度和时间。
     color += stars * OMNI_STAR_STRENGTH * (1.0-day) * smoothstep(0.0,0.2,d.y); // 白天和地平线附近隐藏，避免星星压过日光。
     color = mix(color, mix(vec3(0.025),vec3(0.22,0.25,0.29),day), rainStrength * 0.85); // 雨天按权重换成灰色阴天。
-    color *= OMNI_SKY_BRIGHTNESS; // 天空整体亮度，取一保持原有明暗。
+    color *= OMNI_SKY_BRIGHTNESS; // 天空整体亮度，只作用主世界天空；下界与末地底色不读它。
 #ifdef OMNI_NETHER
 #if OMNI_NETHER_COLOR == 1
     color = omniNetherColor(d,horizon); // 开启选项时用程序化下界氛围色。

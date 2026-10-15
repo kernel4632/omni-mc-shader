@@ -42,7 +42,7 @@ uniform vec3 cameraPosition, previousCameraPosition; // 相机世界绝对位置
 uniform vec3 sunPosition, moonPosition, shadowLightPosition, upPosition; // 依次是太阳方向、月亮方向、当前阴影光源方向、世界上方方向，都是视空间单位向量。
 
 // --- 环境色：加载器按当前维度提供的颜色，用来做雾与天空的混合 ---
-uniform vec3 fogColor, skyColor; // 当前维度的雾色与天色，线性空间颜色。
+uniform vec3 fogColor, skyColor; // 当前维度的雾色与天色，显示空间颜色（sRGB）；进入光照或线性混合前需先转线性。
 
 // --- 屏幕尺寸与裁剪面：重建位置、屏幕抖动和深度换算都要用 ---
 uniform float viewWidth, viewHeight, near, far; // 当前渲染分辨率，单位像素；近裁剪面与远裁剪面距离，单位米。
