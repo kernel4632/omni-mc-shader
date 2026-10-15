@@ -77,15 +77,11 @@ const float omniIsotropicPhase = 0.0795774715; // 各向同性相函数 1/(4π)�
 const float omniSkyScale = 20.0; // 量级匹配：把物理辐射亮度缩到本项目天空的亮度口径，属未实机确认的取值。
 const int omniSunSteps = 8; // 太阳方向透过率的固定段数；它对画面影响小，不再单独开选项。
 
-// --- 大气几何：视线与两层球面在哪里相交 ---
+// --- 大气几何：视线在大气层里走到哪里为止 ---
 // 到大气层顶的交点：解视线与顶球面的方程，取正根；相机在大气内部，这个根一定存在。
 float omniDistanceToTop(float r, float mu) {
     float discriminant = r*r*(mu*mu-1.0) + omniTopRadius*omniTopRadius; // 交点判别式，小于零表示这条视线到不了层顶。
     return -r*mu + sqrt(max(discriminant,0.0)); // 取朝向层顶一侧的远交点。
-}
-// 视线是否打到地面：只有朝下、且与底球面相交时才被行星挡住。
-bool omniRayHitsGround(float r, float mu) {
-    return mu < 0.0 && r*r*(mu*mu-1.0) + omniGroundRadius*omniGroundRadius >= 0.0; // 朝上的方向永远不挡。
 }
 // --- 密度剖面：三种成分各自随高度变化 ---
 // 指数密度：给定标高，高度越高密度越低，涨到标高处剩约三成七。
@@ -113,8 +109,7 @@ float omniMiePhase(float g, float mu) {
 vec3 omniSunTransmittance(vec3 point, vec3 sunDirection) {
     float r = length(point); // 采样点到地心的距离。
     float mu = dot(point, sunDirection)/r; // 太阳方向与当地"向上"的夹角余弦。
-    if (omniRayHitsGround(r, mu)) return vec3(0.0); // 太阳落到地平线以下时，这段光被行星完全挡住。
-    float distance = omniDistanceToTop(r, mu); // 这段视线在大气中的长度。
+    float distance = omniDistanceToTop(r, mu); // 这段视线在大气中的长度；太阳偏到地平线以下时也照算，由下面的渐隐收尾。
     float stepLength = distance/float(omniSunSteps); // 每段长度，段数固定。
     vec3 depthRayleigh = vec3(0.0); // 累积的瑞利密度积分。
     float depthMie = 0.0; // 累积的米氏密度积分。
@@ -129,11 +124,17 @@ vec3 omniSunTransmittance(vec3 point, vec3 sunDirection) {
     vec3 opticalDepth = omniRayleighScattering*depthRayleigh // 瑞利消光。
                       + vec3(omniMieExtinction)*depthMie // 米氏消光。
                       + omniOzoneAbsorption*depthOzone*OMNI_ATMOSPHERE_OZONE; // 臭氧吸收；强度可调。
-    float horizonFade = smoothstep(0.0, omniSunAngularRadius, mu); // 太阳刚滑到地平线时渐隐，避免颜色硬切。
-    return exp(-opticalDepth)*horizonFade; // 透过率等于消光光学的负指数。
+    // 太阳贴到地平线时不直接判零，而是沿当地地平线方向留一段角度过渡：
+    // 采样点越高，地平线方向的余弦越负，过渡带越宽，黄昏时高空仍能收到暖光，不会一瞬变黑。
+    float sinHorizon = omniGroundRadius/r; // 地平线方向相对当地的俯角正弦。
+    float cosHorizon = -sqrt(max(1.0 - sinHorizon*sinHorizon, 0.0)); // 地平线方向的余弦，越高处负得越多。
+    float horizonFade = smoothstep(-sinHorizon*omniSunAngularRadius, sinHorizon*omniSunAngularRadius, mu - cosHorizon); // 过渡带半宽由太阳视半径决定。
+    return exp(-opticalDepth)*horizonFade; // 透过率等于消光光学的负指数，再乘地平线渐隐。
 }
 // --- 大气散射天空：沿视线把空气切成小段，逐段累加收到的阳光，得到这个方向的天空颜色 ---
-// 为什么从地表出发：相机贴地，六十公里厚的大气里玩家海拔可忽略，固定在底半径让结果只和方向有关。
+// 为什么相机半径要加玩家高度：大气厚六十公里，玩家海拔上千米在比例上仍很小，但加上它高空看天空才与低处一致。
+// 为什么用近密远疏的非均匀步长：地平线方向整条视线接近九百公里，而瑞利标高只有八公里、米氏约一点二公里，
+//   等分会把近地这段高密度空气整块跳过，地平线附近偏暗甚至出现断带；按比例平方分布取样，近地段长成倍变短。
 // 为什么朝下的视线要压平：看向地面的方向穿不过整层大气，用水平方向代替，避免雾在地面下方发黑。
 vec3 omniAtmosphereSky(vec3 direction, vec3 sunDirection) {
     vec3 ray = direction; // 先复制一份，下面可能把朝下的方向压平。
@@ -141,11 +142,10 @@ vec3 omniAtmosphereSky(vec3 direction, vec3 sunDirection) {
         vec2 level = ray.xz; // 取水平投影。
         ray = length(level) > 1e-6 ? omniNormalize(vec3(level.x,0.0,level.y)) : vec3(1.0,0.0,0.0); // 退化为正下方时用一个水平方向兜底。
     }
-    float r = omniGroundRadius; // 相机半径取底半径。
+    float r = omniGroundRadius + max(eyeAltitude,0.0)*0.001; // 相机半径＝底半径加玩家高度（米换算成公里）；地下负高度按零处理。
     float mu = dot(ray, vec3(0.0,1.0,0.0)); // 视线与向上的夹角余弦。
     float sunMu = dot(ray, sunDirection); // 视线与太阳的夹角余弦，决定相位函数。
     float distance = omniDistanceToTop(r, mu); // 视线在大气中的长度。
-    float stepLength = distance/float(OMNI_ATMOSPHERE_STEPS); // 每段长度，段数可调。
     float phaseRayleigh = omniRayleighPhase(sunMu); // 瑞利相位。
     float phaseMie = omniMiePhase(OMNI_ATMOSPHERE_MIE_G, sunMu); // 米氏相位；方向性可调。
     vec3 depthRayleigh = vec3(0.0); // 相机到当前采样点的瑞利密度积分。
@@ -153,16 +153,19 @@ vec3 omniAtmosphereSky(vec3 direction, vec3 sunDirection) {
     float depthOzone = 0.0; // 相机到当前采样点的臭氧密度积分。
     vec3 single = vec3(0.0); // 单次散射的累加结果。
     vec3 multiple = vec3(0.0); // 多次散射近似里与方向无关的那一项。
-    for (int i=0;i<OMNI_ATMOSPHERE_STEPS;i++) { // 沿视线分段取中点积分；段数可调。
-        float t = (float(i)+0.5)*stepLength; // 当前段中点距相机的距离。
+    for (int i=0;i<OMNI_ATMOSPHERE_STEPS;i++) { // 沿视线分段积分；段数由选项决定，含义仍是段数。
+        float lower = float(i)/float(OMNI_ATMOSPHERE_STEPS); // 当前段的起始比例。
+        float upper = float(i+1)/float(OMNI_ATMOSPHERE_STEPS); // 当前段的结束比例。
+        float t = (lower*lower + upper*upper)*0.5*distance; // 段中点在比例平方分布上，近地密、远处疏。
+        float segmentLength = (upper*upper - lower*lower)*distance; // 这一段的实际长度，越靠相机越短。
         vec3 point = vec3(0.0,r,0.0) + ray*t; // 采样点位置，相机放在中轴上方。
         float altitude = max(length(point)-omniGroundRadius, 0.0); // 采样点离地面的高度。
         float densityRayleigh = omniExpDensity(altitude, omniRayleighScaleHeight); // 当地瑞利密度。
         float densityMie = omniExpDensity(altitude, omniMieScaleHeight); // 当地米氏密度。
         float densityOzone = omniOzoneDensity(altitude); // 当地臭氧密度。
-        depthRayleigh += densityRayleigh*stepLength; // 累加瑞利密度。
-        depthMie += densityMie*stepLength; // 累加米氏密度。
-        depthOzone += densityOzone*stepLength; // 累加臭氧密度。
+        depthRayleigh += densityRayleigh*segmentLength; // 累加瑞利密度。
+        depthMie += densityMie*segmentLength; // 累加米氏密度。
+        depthOzone += densityOzone*segmentLength; // 累加臭氧密度。
         vec3 viewOptical = omniRayleighScattering*depthRayleigh // 视线消光：瑞利。
                          + vec3(omniMieExtinction)*depthMie // 视线消光：米氏。
                          + omniOzoneAbsorption*depthOzone*OMNI_ATMOSPHERE_OZONE; // 视线消光：臭氧；强度可调。
@@ -170,8 +173,8 @@ vec3 omniAtmosphereSky(vec3 direction, vec3 sunDirection) {
         vec3 sunTransmittance = omniSunTransmittance(point, sunDirection); // 采样点到太阳的透过率。
         vec3 rayleighLight = omniRayleighScattering*densityRayleigh*phaseRayleigh; // 瑞利单次散射。
         vec3 mieLight = vec3(omniMieScattering)*densityMie*phaseMie; // 米氏单次散射。
-        single += (rayleighLight+mieLight)*sunTransmittance*viewTransmittance*stepLength; // 这段贡献给单次散射。
-        multiple += (omniRayleighScattering*densityRayleigh + vec3(omniMieScattering)*densityMie)*sunTransmittance*viewTransmittance*stepLength; // 多次散射用与方向无关的相位。
+        single += (rayleighLight+mieLight)*sunTransmittance*viewTransmittance*segmentLength; // 这段贡献给单次散射。
+        multiple += (omniRayleighScattering*densityRayleigh + vec3(omniMieScattering)*densityMie)*sunTransmittance*viewTransmittance*segmentLength; // 多次散射用与方向无关的相位。
     }
     float multipleFactor = omniIsotropicPhase*(1.0+omniGroundAlbedo)*OMNI_ATMOSPHERE_MULTIPLE; // 各向同性平均相位，再算一次地面反弹；强度可调。
     vec3 radiance = (single + multiple*multipleFactor)*omniSolarIrradiance; // 乘太阳辐照度得到辐射亮度。

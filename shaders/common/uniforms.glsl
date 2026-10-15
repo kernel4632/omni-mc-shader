@@ -39,6 +39,7 @@ uniform mat4 shadowProjection, shadowModelView; // 阴影相机把世界点投�
 
 // --- 相机位置与天体方向：绝对位置用于跨帧对齐，天体方向用于光照与天空 ---
 uniform vec3 cameraPosition, previousCameraPosition; // 相机世界绝对位置与上一帧位置，单位米，用于重投影和判断点距。
+uniform float eyeAltitude; // 眼睛相对海平面的高度，单位米（约等于格）；换成公里加大气底半径，让高空看天空时结果正确。
 uniform vec3 sunPosition, moonPosition, shadowLightPosition, upPosition; // 依次是太阳方向、月亮方向、当前阴影光源方向、世界上方方向，都是视空间单位向量。
 
 // --- 环境色：加载器按当前维度提供的颜色，用来做雾与天空的混合 ---
