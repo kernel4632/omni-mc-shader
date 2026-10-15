@@ -23,6 +23,8 @@
 #define OMNI_WATER_REFRACTION
 // @option {"label":{"zh_cn":"折射强度","en_us":"Refraction strength"},"slider":true}
 #define OMNI_REFRACTION_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"水面阳光高光","en_us":"Water sun glint"},"description":{"zh_cn":"水面法线朝向太阳时出现窄亮带；取零关闭。未实机验证观感。","en_us":"A narrow bright band when the water normal faces the sun; zero disables it. Not verified in game."},"slider":true}
+#define OMNI_WATER_GLINT 0.5 // [0.0 0.25 0.5 1.0]
 // @option {"label":{"zh_cn":"雨滴水纹","en_us":"Rain ripples"}}
 #define OMNI_RAIN_RIPPLES
 // @option {"label":{"zh_cn":"水纹强度","en_us":"Ripple strength"},"slider":true}
@@ -156,8 +158,16 @@ vec3 omniWater(vec3 color, vec3 view, vec3 normal, vec2 uv) {
     if (length(omniSceneView(candidate,true))>length(view)+0.05) refracted = candidate; // 只有偏移后仍在水面之后才采用，防止前景颜色漏进水里。
 #endif
     vec3 transmitted = omniWaterTransmit(texture(colortex3,refracted).rgb,thickness); // 不透明快照含底面辐射，坐标可能已被折射偏移过；再按水体分波段吸收并趋向散射色。
-    if (OMNI_REFLECTION_STRENGTH<=0.0) return transmitted; // 反射关闭时直接返回水色，不采样反射。
-    float fresnel = 0.02+0.98*pow(1.0-max(dot(normal,omniNormalize(-view)),0.0),5.0); // 正对水面反射弱，掠射角反射强。
-    return mix(transmitted,omniReflected(view,normal,0.06),fresnel*OMNI_REFLECTION_STRENGTH); // 按菲涅耳强度在透射和反射之间混合。
+    vec3 surface = transmitted; // 默认只有水色，反射关闭时也走这里。
+    if (OMNI_REFLECTION_STRENGTH>0.0) { // 反射开启时才采样反射，省下关闭时的天空与屏幕调用。
+        float fresnel = 0.02+0.98*pow(1.0-max(dot(normal,omniNormalize(-view)),0.0),5.0); // 正对水面反射弱，掠射角反射强。
+        surface = mix(transmitted,omniReflected(view,normal,0.06),fresnel*OMNI_REFLECTION_STRENGTH); // 按菲涅耳强度在透射和反射之间混合。
+    }
+    // 水面阳光高光：水面法线朝向太阳与视线半程方向时出现一条窄亮带，即俗称的水面鳞光。
+    // 为什么只在白天出现：太阳落到地平线以下就没有直射高光，用太阳高度做过渡，夜里自然消失。
+    vec3 sunDir = omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition); // 太阳在世界空间的方向。
+    vec3 halfway = omniNormalize(omniNormalize(shadowLightPosition)+omniNormalize(-view)); // 光线与视线的半程方向，仍在视空间。
+    float glint = pow(max(dot(normal,halfway),0.0),256.0) * OMNI_WATER_GLINT * smoothstep(-0.1,0.1,sunDir.y); // 高指数让亮带很窄，只在接近镜面方向出现。
+    return surface + vec3(1.0,0.95,0.85)*glint; // 暖白高光叠在最终水面上，取零强度时无变化。
 }
 #endif

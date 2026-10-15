@@ -256,9 +256,10 @@ class EffectTests(unittest.TestCase):
         """水体吸收、散射与波速都是可调参数，且共用同一份光学常数。"""
         found,_,_ = build.configuration()
         for name in ("OMNI_WATER_ABSORB_R","OMNI_WATER_ABSORB_G","OMNI_WATER_ABSORB_B",
-                     "OMNI_WATER_SCATTER_R","OMNI_WATER_SCATTER_G","OMNI_WATER_SCATTER_B","OMNI_WAVE_SPEED","OMNI_WAVE_SCALE","OMNI_REFRACTION_STRENGTH","OMNI_RIPPLE_STRENGTH"):
+                     "OMNI_WATER_SCATTER_R","OMNI_WATER_SCATTER_G","OMNI_WATER_SCATTER_B","OMNI_WAVE_SPEED","OMNI_WAVE_SCALE","OMNI_REFRACTION_STRENGTH","OMNI_RIPPLE_STRENGTH","OMNI_WATER_GLINT"):
             self.assertIn(name,found)  # 每个参数都由效果源码定义。
         water = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")
+        self.assertIn("OMNI_WATER_GLINT * smoothstep",water)  # 阳光高光只在白天出现。
         self.assertIn("const vec3 omniWaterAbsorbance = vec3(OMNI_WATER_ABSORB_R",water)  # 吸收只由选项组成一处向量。
         self.assertIn("omniWaterTransmit",water)  # 吸收与散射共用一个函数。
         fog = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
