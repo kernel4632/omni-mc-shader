@@ -176,12 +176,13 @@ class EffectTests(unittest.TestCase):
     def test_atmosphere_strengths_are_adjustable(self):
         """极光、彩虹与散射强度都是可调参数，替换原先写死的倍率。"""
         found,_,_ = build.configuration()
-        for name in ("OMNI_AURORA_STRENGTH","OMNI_RAINBOW_STRENGTH","OMNI_SCATTER_STRENGTH"):
+        for name in ("OMNI_AURORA_STRENGTH","OMNI_RAINBOW_STRENGTH","OMNI_SCATTER_STRENGTH","OMNI_LIGHTNING_STRENGTH"):
             self.assertIn(name,found)  # 每个参数都由氛围源码定义。
         text = (build.SHADERS/"effects/atmosphere.glsl").read_text(encoding="utf-8")
         self.assertIn("*OMNI_AURORA_STRENGTH",text)  # 极光强度参与着色。
         self.assertIn("*OMNI_RAINBOW_STRENGTH",text)  # 彩虹强度参与着色。
         self.assertIn("*OMNI_SCATTER_STRENGTH",text)  # 散射强度参与着色。
+        self.assertIn("*OMNI_LIGHTNING_STRENGTH",text)  # 闪电强度参与着色。
 
     def test_vegetation_wind_parameters_are_adjustable(self):
         """植被摆动强度与速度都是可调参数，替换原先写死的振幅与频率。"""

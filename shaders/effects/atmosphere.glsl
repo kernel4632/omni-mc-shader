@@ -22,6 +22,8 @@
 #define OMNI_RAINBOW_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"散射强度","en_us":"Scatter strength"},"slider":true}
 #define OMNI_SCATTER_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"闪电强度","en_us":"Lightning strength"},"slider":true}
+#define OMNI_LIGHTNING_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // 共用颜色与天气输入：天空色、云与太阳方向都来自这里的定义。
 #include "/effects/sky.glsl"
 #ifdef IS_IRIS
@@ -79,7 +81,7 @@ vec3 omniLightning(vec3 color, vec3 world, float skylight) {
 #if defined OMNI_LIGHTNING && defined IS_IRIS
     float intensity = lightningBoltPosition.w; // 强度来自实际闪电事件，没有事件时为零。
     float boltDistance = length(world-lightningBoltPosition.xyz); // 表面到闪电的距离，越近越亮。
-    color += vec3(0.55,0.65,0.9)*intensity*skylight/(1.0+boltDistance*0.01); // 冷白色闪光，距离越远越弱。
+    color += vec3(0.55,0.65,0.9)*intensity*skylight/(1.0+boltDistance*0.01)*OMNI_LIGHTNING_STRENGTH; // 冷白色闪光，距离越远越弱；强度可调。
 #endif
     return color; // 没有真实闪电输入时原样返回。
 }
