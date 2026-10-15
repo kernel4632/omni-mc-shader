@@ -10,7 +10,8 @@
 // 引入植物摆动，阴影必须和主画面使用同一套位移，否则影子会和植物错开。
 #include "/effects/vegetation.glsl"
 #ifdef OMNI_VERTEX // 顶点阶段：准备裁切数据，并把顶点投到阴影相机。
-in vec4 mc_Entity, mc_midTexCoord; // 方块类型与图块中点：分类决定能否摆动，中点判断顶点的上下半边。
+in vec4 mc_Entity; // 方块类型：分类决定这个顶点能不能摆动。
+in vec4 mc_midTexCoord; // 图块中点：判断顶点在上半边还是下半边，决定摆动权重。
 out vec2 uv;   // 裁切纹理坐标：片元用它读取贴图并判断透明。
 out vec4 tint; // 顶点颜色：片元用它乘贴图得到真实透明度。
 // 取得阴影相机的世界位置，并让允许的植物摆动。

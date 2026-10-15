@@ -530,13 +530,14 @@ class EffectTests(unittest.TestCase):
                     self.assertEqual(len(arguments), int(match[1][3]))
 
     def test_buffer_format_directives_are_bare_and_defined(self):
-        """格式名在 GLSL 里没有定义，必须自己给常量；格式指令行不能带别的文字，否则加载器可能读不到。"""
+        """格式指令必须放在块注释里、每行只写指令本身：行尾带说明会让加载器读不到，自己定义格式名又会让它读到数字。"""
         text = (build.SHADERS/"rendering/buffers.glsl").read_text(encoding="utf-8")
-        for line in text.splitlines():
-            if re.match(r"\s*const int colortex\d+Format\s*=", line):
-                self.assertRegex(line, r"^const int colortex\d+Format = [A-Z0-9_]+;$")  # 行首无缩进、行尾只有分号。
-        for name in ("RGBA16F", "RGBA32F"):
-            self.assertRegex(text, r"#define " + name + r" \d+")  # 格式名必须自己定义。
+        commented = re.sub(r"/\*.*?\*/", "", text, flags=re.S)  # 去掉块注释后，源码里不应再有格式指令。
+        self.assertNotIn("Format", commented)  # 指令只在块注释里出现。
+        for line in re.findall(r"^const int colortex\d+Format = [A-Z0-9_]+;$", text, re.M):
+            self.assertRegex(line, r"^const int colortex\d+Format = [A-Z0-9_]+;$")  # 每行只写指令本身。
+        self.assertRegex(text, r"const int colortex0Format = RGBA16F;")  # 指令带名字而不是数字。
+        self.assertNotRegex(text, r"#define RGBA\d+F")  # 格式名交由加载器提供，包内不重复定义。
 
     def test_custom_images_feature_is_declared(self):
         """用自定义图像就必须声明能力开关，缺能力时 LPV 回退到屏幕空间间接光。"""

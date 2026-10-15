@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.0.0-dev.107
+
+按实机日志继续修：
+
+- 缓冲格式改为放进块注释：加载器读的是名字，而自己定义名字会被展开成数字、导致格式被忽略；放进块注释后编译器看不到它，加载器仍能按名字读到。行尾注释同时去掉，避免读不到。
+- 阴影顶点把 `mc_Entity` 与 `mc_midTexCoord` 拆成两行声明：合在一行时加载器给加成式阴影程序（`shadow_sodium_terrain_solid`）识别不到 `mc_Entity`，报 `iris_Entity` 未定义。
+- 生成的入口宏改为带值（`#define OMNI_VERTEX 1`）：不带值时加载器把它们当成含义不明的开关并忽略，日志出现“Ignoring ambiguous boolean option”。
+- `terrain.glsl` 里按能力补定义的 `OMNI_OVERLAY` 也改为带值并加存在判断，避免与入口重复定义冲突。
+- 审计：块注释里成行的机器语句（预处理指令、常量声明）不按自然语言检查；普通注释仍要求中文。
+
+本版本只做过离线编译与逻辑审查；加载是否恢复正常需要实机确认。
+
 ## 0.0.0-dev.106
 
 修 `deferred.fsh ... undefined variable "RGBA16F"`：

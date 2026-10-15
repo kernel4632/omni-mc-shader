@@ -19,6 +19,7 @@ from pathlib import Path  # 用项目相对路径固定审计范围并隐藏本�
 
 CHINESE = re.compile(r"[\u3400-\u9fff]")  # 只有汉字能证明说明不是纯英文标识符。
 DIRECTIVE = re.compile(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b")  # 属性文件里的条件指令是机器语句，加载器按选项宏挑选分支。
+MACHINE = re.compile(r"\s*(?:#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include)\b|const\s+\w+\s+\w+\s*=)")  # 注释里成行的机器语句（预处理指令、常量声明）不是给接手者的自然语言说明；普通注释仍按中文检查。
 EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__"}  # 环境、参考和第三方内容不是本项目的维护边界。
 SUFFIXES = {".py", ".glsl", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除。
 TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup SSBO".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
@@ -78,6 +79,7 @@ def comments(source: Path) -> tuple[set[int], list[tuple[int, str]]]:
     for start_line, fragment in fragments:
         # 菜单名称和帮助文本属于接口说明，机器字段必须验证中文值，不能放宽语言规则。
         for line_offset, line in enumerate(fragment.splitlines()):  # 块注释按真实非空行统计，避免一段长注释只算一行。
+            if MACHINE.match(line): continue  # 注释里成行的机器语句不要求中文，也不算有效说明行。
             try:
                 if chinese_explanation(line): valid_lines.add(start_line + line_offset)  # 只有合格中文说明进入比例分子。
             except ValueError:
@@ -108,6 +110,7 @@ def check(root: Path) -> list[dict]:
                 continue  # 只有结构合法的机器字段可以使用机器字段规则，不放宽普通英语说明。
             if re.search(r"\b(?:TODO|FIXME)\b|待实现|尚未实现|未接入的占位", fragment): errors.append(f"{relative_path}:{line_number}：存在未实现标记")  # 未实现标记说明交付边界仍有空缺。
             for line_offset, text in enumerate(fragment.splitlines()):
+                if MACHINE.match(text): continue  # 注释里成行的机器语句不按自然语言检查。
                 try:
                     chinese_explanation(text)
                 except ValueError as error: errors.append(f"{relative_path}:{line_number + line_offset}：{error}")  # 中英混合和纯英文说明使用同一严格规则。

@@ -196,7 +196,7 @@ def program_files() -> dict[Path, str]:
                     raise ValueError("程序宏必须使用受控名称")
                 lines = ["#version 330 compatibility", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 首行必须先声明语言版本，再说明生成来源。
                 for define in flags:  # 入口只选择类别。
-                    lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define]
+                    lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define + " 1"]  # 带值的宏不会被加载器当成布尔开关，避免出现含义不明的同名开关。
                 lines += ["// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
                 result[SHADERS / dimension / (name + suffix)] = "\n".join(lines) + "\n"  # 统一换行使本地与自动检查得到相同文本。
         for name, (rendering, *defines) in data.get("compute", {}).items():  # 计算程序单独登记，不生成顶点片元。
@@ -207,7 +207,7 @@ def program_files() -> dict[Path, str]:
                 raise ValueError("计算程序宏必须使用受控名称")
             lines = ["#version 430", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 计算阶段需要更高版本。
             for define in flags:  # 入口只选择类别。
-                lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define]
+                lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define + " 1"]  # 计算入口的宏也带值，理由同上。
             lines += ["// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
             result[SHADERS / dimension / (name + ".csh")] = "\n".join(lines) + "\n"  # 独立计算阶段不虚构顶点片元配对。
     return result  # 核对入口生成结果。
@@ -225,7 +225,7 @@ def generate() -> None:
             if path.suffix in (".vsh", ".fsh", ".csh") and path not in files:  # 只检查由流程表生成的阶段。
                 text = path.read_text(encoding="utf-8")  # 只删除旧流程生成且没有手动修改的薄入口。
                 generated_comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 选择本程序的绘制阶段或物体类别。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 只有生成器自己的说明才可随旧入口删除。
-                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z_]+|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式，额外内容视为人工修改。
+                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z_]+(?: 1)?|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式（含带值的宏），额外内容视为人工修改。
                 lines = text.splitlines()
                 if len(lines) < 2 or not lines[0].startswith("#version ") or not lines[1].startswith("// 生成的") or not untouched:  # 格式不完整或含人工说明时拒绝删除。
                     raise ValueError(f"旧入口含自有修改，不能自动删除：{path}")  # 保留用户文件并报告具体冲突。

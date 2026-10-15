@@ -19,8 +19,8 @@
 // 雨雪的可见度与斜度。
 #include "/effects/weather.glsl"
 uniform sampler2D gtexture; // 当前物体的底色贴图，材质解码时还要乘上它。
-#if defined OMNI_ENTITIES && !defined IRIS_FEATURE_ENTITY_TRANSLUCENT
-#define OMNI_OVERLAY // 加载器没有透明实体分离能力时，只能把半透明实体当叠层处理，拒绝与深度配对的后处理。
+#if defined OMNI_ENTITIES && !defined IRIS_FEATURE_ENTITY_TRANSLUCENT && !defined OMNI_OVERLAY
+#define OMNI_OVERLAY 1 // 加载器没有透明实体分离能力时，只能把半透明实体当叠层处理，拒绝与深度配对的后处理。
 #endif
 // --- 顶点阶段 ---
 #ifdef OMNI_VERTEX
