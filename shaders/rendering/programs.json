@@ -22,7 +22,7 @@
     "gbuffers_spidereyes": ["terrain", "OMNI_EMISSIVE", "OMNI_OVERLAY"],
     "gbuffers_beaconbeam": ["terrain", "OMNI_EMISSIVE", "OMNI_OVERLAY"],
     "gbuffers_skybasic": ["terrain", "OMNI_BASIC", "OMNI_OVERLAY"],
-    "gbuffers_skytextured": ["terrain", "OMNI_OVERLAY"],
+    "gbuffers_skytextured": ["terrain", "OMNI_SKYTEXTURED", "OMNI_OVERLAY"],
     "gbuffers_clouds": ["terrain", "OMNI_OVERLAY"],
     "shadow": ["shadow"],
     "dh_terrain": ["distant"],

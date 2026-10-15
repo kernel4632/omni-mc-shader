@@ -134,6 +134,11 @@ Surface omniReadSurface() {
     omniMaterial(s.base,s.normal,s.materialParams,s.materialAo,tex,bounds,tangentFrame,viewPosition,false); // 实体和手没有可靠图集，只解码不偏移。
 #endif
     if(s.base.a<0.01) discard; // 整体透明的片元没有表面，直接丢弃，不写任何附件。
+#ifdef OMNI_SKYTEXTURED
+#ifndef OMNI_RESOURCE_SKY
+    discard; // 未开启资源包天空时，原版日月贴图整片丢弃，避免和内置圆盘重叠。
+#endif
+#endif
 #if !defined OMNI_WATER_PASS
     if(s.base.a<0.1) discard; // 不透明阶段把接近透明的裁切物也丢掉，它们不该写进不透明缓冲。
 #endif
@@ -154,6 +159,9 @@ Surface omniReadSurface() {
 }
 // 计算光照：把底色转线性，叠加天气材质，再算环境光、直接光和自发光。
 vec3 omniShadeSurface(inout Surface s) {
+#ifdef OMNI_SKYTEXTURED
+    return s.base.rgb; // 原版日月贴图直接用自身颜色，不参与光照，开启资源包天空时照原样显示。
+#endif
     vec3 albedo=omniLinear(s.base.rgb); // 底色只在这里转一次线性，之后的天气和光照都按线性值算。
     albedo=omniSeason(albedo,materialId); // 草与树叶按季节上色，其余方块不动。
     omniSurface(albedo,s.materialParams,s.normal,s.world,s.lightUv.y); // 按天气叠加湿润与积雪，就地改这处颜色和材质。

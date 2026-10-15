@@ -38,6 +38,8 @@
 #define OMNI_NETHER_COLOR 1 // [0 1]
 // @option {"label":{"zh_cn":"末地天空亮度","en_us":"End sky brightness"},"slider":true}
 #define OMNI_END_SKY_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
+// @option {"label":{"zh_cn":"使用资源包天空","en_us":"Resource-pack sky"},"description":{"zh_cn":"使用资源包自带的日月贴图，而不是内置的日月圆盘。","en_us":"Uses the resource pack's own sun and moon textures instead of the built-in discs."},"page":"world"}
+//#define OMNI_RESOURCE_SKY
 // 天体、雾色和噪声都来自这些共用声明，显式引入而不依赖间接包含。
 #include "/common/math.glsl"
 #include "/common/uniforms.glsl"
@@ -81,10 +83,12 @@ vec3 omniSky(vec3 direction) {
     float sunset = (1.0 - smoothstep(0.0,0.3,abs(sun.y))) * pow(max(dot(d,sun),0.0),8.0); // 只在太阳低且靠近太阳方向时出现，避免全天泛红。
     vec3 sunsetColor = vec3(0.8,0.22,0.06)*exp(vec3(0.3,0.0,-0.3)*OMNI_SUNSET_TINT); // 日落颜色：正值偏红、负值偏紫粉。
     color += sunsetColor * sunset * horizon * OMNI_SUNSET_STRENGTH; // 暖色染在地平线一带，强度可调。
+#ifndef OMNI_RESOURCE_SKY
     float sunRadius = 0.0002*OMNI_SUN_SIZE; // 太阳圆盘的角半径；大小一约等于原阈值。
     color += vec3(12.0,9.0,5.0)*celestialTint * smoothstep(1.0-sunRadius*2.0,1.0-sunRadius,dot(d,sun)) * day * OMNI_SUN_DISK; // 太阳圆盘：越接近太阳方向越亮；大小与亮度可调。
     float moonRadius = 0.0003*OMNI_MOON_SIZE; // 月亮圆盘的角半径；大小一约等于原阈值。
     color += vec3(0.6,0.7,1.0)*celestialTint * smoothstep(1.0-moonRadius*2.0,1.0-moonRadius,dot(d,moon)) * (1.0-day) * OMNI_MOON_DISK; // 月亮圆盘同理，只在夜里出现。
+#endif
     float stars = omniStars(d); // 稳定的星点亮度，还没乘强度和时间。
     color += stars * OMNI_STAR_STRENGTH * (1.0-day) * smoothstep(0.0,0.2,d.y); // 白天和地平线附近隐藏，避免星星压过日光。
     color = mix(color, mix(vec3(0.025),vec3(0.22,0.25,0.29),day), rainStrength * 0.85); // 雨天按权重换成灰色阴天。

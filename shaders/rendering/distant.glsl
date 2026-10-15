@@ -112,7 +112,11 @@ void main() {
     omniDistantCategory(category,emission); // 小编号映射到类别与自发光。
     omniDistantWaterNormal(normal,world,category); // 只有水类别才造波。
     vec3 materialParams = vec3(category==1.0?0.06:0.85,0.04,emission); // 远景基础材质：水更光滑，其余偏粗糙。
-    vec3 lit = omniLighting(omniLinear(tint.rgb),normal,world,lightUv,materialParams,1.0); // 复用统一光照算远景颜色。
+#ifdef OMNI_DH_ENABLED
+    vec3 lit = omniLighting(omniLinear(tint.rgb),normal,world,lightUv,materialParams,1.0); // 开启时复用统一光照算远景颜色。
+#else
+    vec3 lit = omniLinear(tint.rgb)*(0.25+0.75*lightUv.y); // 关闭时只按原版光照亮度上色，不算阴影与高光，作为基础路径。
+#endif
     omniDistantWrite(lit,normal,materialParams,category); // 按协议写全部附件。
 }
 #endif
