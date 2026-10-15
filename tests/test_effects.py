@@ -262,6 +262,9 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniOceanHeight((waterWorld+cameraPosition).xz)",terrain)  # 顶点按海浪抬升。
         source = build.expand(build.SHADERS/"world0/gbuffers_water.vsh")  # 从水面顶点入口展开。
         self.assertIn("omniOceanHeight",source)  # 顶点阶段包含海浪位移。
+        distant = (build.SHADERS/"rendering/distant.glsl").read_text(encoding="utf-8")
+        self.assertIn("DH_BLOCK_WATER && viewNormal.y>0.9",distant)  # 远景顶面水也按同一海浪抬升。
+        self.assertIn("omniOceanHeight((waterWorld+cameraPosition).xz)",distant)  # 与近景共用同一高度函数。
 
     def test_water_optics_are_adjustable(self):
         """水体吸收、散射与波速都是可调参数，且共用同一份光学常数。"""

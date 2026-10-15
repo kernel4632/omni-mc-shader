@@ -53,7 +53,7 @@ layout(location=0) out vec4 colorOut; // 时间抗锯齿之前的线性颜色。
 // 为什么先做这一步：水面会换掉颜色的来源，后面的遮蔽与反射必须叠在水面颜色之上。
 // 手持物为什么不参与：手持物离相机极近，屏幕里找不到可信的邻点，做世界遮蔽与反射会抖动。
 vec3 omniSurfaceWater(vec3 color, vec3 view, vec3 normal, float category, vec4 water, vec3 material, vec2 uv) {
-    if (water.a<0.0) return omniWater(color,view,normal,uv); // 有水就直接做折射与分波段吸收，不再叠屏幕遮蔽。
+    if (water.a<0.0) return omniWater(view,normal,uv); // 有水就直接做折射与分波段吸收，不再叠屏幕遮蔽。
     if (category!=2.0) { // 不是手持物，才用屏幕里的邻点做遮蔽与反射。
         color = omniAmbient(color,view,normal,uv); // 用邻点几何压暗被挡住的部分。
         color = omniReflection(color,view,normal,material,uv); // 叠加屏幕里照到的反射与天空回退。

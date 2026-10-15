@@ -131,7 +131,7 @@ vec3 omniReflected(vec3 view, vec3 normal, float roughness) {
     return reflected; // 关闭屏幕反射时这里直接就是天空回退色。
 }
 // --- 反射入口：把底色和反射按菲涅耳混合 ---
-// 输入：`color` 当前底色，`view` 视空间指向相机的方向，`normal` 视空间法线，
+// 输入：`color` 当前底色，`view` 相机指向表面的视空间矢量（从相机到表面，取负才指向相机），`normal` 视空间法线，
 //       `materialParams` 材质（x 粗糙度、y 金属度），`uv` 屏幕坐标（当前未参与计算，保留给后续）。
 vec3 omniReflection(vec3 color, vec3 view, vec3 normal, vec3 materialParams, vec2 uv) {
     if (OMNI_REFLECTION_STRENGTH<=0.0) return color; // 强度为零时提前返回，编译器会连同天空与屏幕采样一起移除。

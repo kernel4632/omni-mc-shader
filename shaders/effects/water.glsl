@@ -1,4 +1,4 @@
-// 水：解析波浪、盖斯特纳海浪、凹凸细节与水面折射反射的合成。
+// 水：解析波浪、多层正弦海浪、凹凸细节与水面折射反射的合成。
 // 管什么：本文件只管水面这一件事——顶点高度、表面法线和屏幕合成颜色；
 //   它不安排绘制顺序，也不复制其他效果的算法，绘制顺序见 rendering/terrain.glsl 与 rendering/composite.glsl。
 // 调用位置：
@@ -7,7 +7,7 @@
 // 可复制示例：
 //   取某点高度：`float h = omniWaterHeight(p, world.y);`
 //   由高度得到法线：`vec3 n = omniWaterNormal(world, normal);`
-//   合成颜色：`vec3 lit = omniWater(color, view, n, texcoord);`
+//   合成颜色：`vec3 lit = omniWater(view, n, texcoord);`
 // 设计原因与取舍：
 //   高度只有一个来源：顶点位移和片元法线都读 omniWaterHeight，避免两边各写一套公式而对不上。
 //   波浪只作用在顶面：瀑布与水流的侧面法线接近垂直，若也按水平位置造波，水面会和真实几何脱节。
@@ -95,7 +95,7 @@ float omniWave(vec2 p, float relativeHeight) {
     return wave*OMNI_WAVE_STRENGTH; // 波强度为零时整体归零，法线不再变化。
 }
 // --- 凹凸细节 ---
-// 解析波和盖斯特纳海浪负责大起伏，这里用多层程序噪声补高频小涟漪，
+// 解析波和多层正弦海浪负责大起伏，这里用多层程序噪声补高频小涟漪，
 // 频率越高振幅越小，避免近看发花；三层共用同一时间，保证细节和波形一起动。
 float omniWaterDetail(vec2 p) {
     float t = frameTimeCounter; // 与解析波、海浪共享同一时间。
@@ -104,8 +104,8 @@ float omniWaterDetail(vec2 p) {
     d += omniNoise(vec3(p*2.4,-t*1.4))*0.004; // 极细纹理并反向流动，打散规则重复感。
     return d*OMNI_WAVE_STRENGTH*OMNI_WATER_BUMP_STRENGTH; // 与波强度和凹凸强度共同缩放，关到零时细节消失。
 }
-// --- 盖斯特纳海浪 ---
-// 盖斯特纳波给每层波一个方向、频率和振幅，再逐层叠加；这里只做垂直位移，不做水平挤压。
+// --- 海浪 ---
+// 四层方向、频率、振幅都不同的正弦叠加成起伏；只做垂直位移，不做浪尖前倾（真正的盖斯特纳波还会水平挤压顶点）。
 // 为什么单独成函数：海浪是大尺度、慢速、随波强度整体缩放的位移，顶点和法线都要用，
 // 由 omniWaterHeight 调用，保证顶点抬升和片元法线来自同一份高度，不会错位。
 float omniOceanHeight(vec2 p) {
@@ -153,9 +153,8 @@ vec3 omniWaterNormal(vec3 world, vec3 originalNormal) {
 // 防泄漏：若偏移后的位置属于漂在水面前方的物体，用它会显影前景颜色，所以这种情况拒绝偏移。
 // 吸收：水体对红绿蓝的吸收速度不同，红最快、蓝最慢，越深越偏青绿，深水趋近水体散射色。
 // 反射：按菲涅耳强度把水面反射混进来；反射强度开关关掉时整段反射都不参与。
-// 调用位置：rendering/composite.glsl；示例：omniWater(color, view, waterNormal, texcoord)。
-// 第一个参数 `color` 目前不参与运算，保留它是为了和各调用处、以及未来的底色混合保持一致。
-vec3 omniWater(vec3 color, vec3 view, vec3 normal, vec2 uv) {
+// 调用位置：rendering/composite.glsl；示例：omniWater(view, waterNormal, texcoord)。
+vec3 omniWater(vec3 view, vec3 normal, vec2 uv) {
     vec2 refracted = uv; // 默认不折射，直接用原屏幕位置。
     float waterDepth = length(omniSceneView(uv,true))-length(view); // 底面到水面的真实距离：不透明深度减去水面深度。
     float thickness = waterDepth>0.0 ? min(waterDepth,100.0) : 0.0; // 非法或负距离按零厚度，避免 NaN 传播，同时限制在零到一百米。

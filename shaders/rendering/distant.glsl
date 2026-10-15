@@ -28,6 +28,13 @@ void main() {
     tint = gl_Color; lightUv = clamp(gl_MultiTexCoord2.xy/240.0,0.0,1.0); // 远景没有底色纹理，光照坐标按原版等级换算到零一。
 #ifdef DISTANT_HORIZONS
     materialId = dhMaterialId; // 加载器自动声明的小编号，标记这块远景是什么。
+#if defined OMNI_WATER_PASS
+    if (materialId==DH_BLOCK_WATER && viewNormal.y>0.9) { // 远景顶面水按近景同一海浪抬升，近远交界处水面才不断开。
+        vec3 waterWorld = omniWorld(viewPosition); // 位移前的相机相对世界位置。
+        waterWorld.y += omniOceanHeight((waterWorld+cameraPosition).xz); // 与近景共用同一海浪高度函数，只抬朝上的面。
+        viewPosition = (gbufferModelView*vec4(waterWorld,1.0)).xyz; // 世界位移后再变回视空间，投影前完成。
+    }
+#endif
     gl_Position = dhProjection*vec4(viewPosition,1.0); // 远景很远，必须用加载器的远景投影，不能用普通近远裁剪面。
 #else
     materialId = 0; gl_Position = gl_ProjectionMatrix*vec4(viewPosition,1.0); // 未启用远景的离线基础路径仍能编译，运行时不会被调用。

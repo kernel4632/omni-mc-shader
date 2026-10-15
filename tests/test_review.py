@@ -103,7 +103,7 @@ class ReviewTests(unittest.TestCase):
         source = build.option_source(build.expand(build.SHADERS/"effects/water.glsl"),found,values)  # 直接复用生产算法。
         with tempfile.TemporaryDirectory() as temporary:
             folder = Path(temporary); shader = folder/"probe.frag"; output = folder/"probe.spv"  # 离线工具探针不改变生产GLSL330。
-            harness = '#version 450\n'+source+'\nlayout(location=0) out vec4 result;\nvoid main(){vec3 n=omniWaterNormal(vec3(0),vec3(0,1,0));result=vec4(omniWater(vec3(1),vec3(0,0,-2),n,vec2(0.5)),1);}\n'
+            harness = '#version 450\n'+source+'\nlayout(location=0) out vec4 result;\nvoid main(){vec3 n=omniWaterNormal(vec3(0),vec3(0,1,0));result=vec4(omniWater(vec3(0,0,-2),n,vec2(0.5)),1);}\n'
             shader.write_text(harness,encoding="utf-8")  # 工具中间码用较高版本，只验证相同常量分支消除。
             result = subprocess.run([str(build.tool("glslang")),"-G","-Os","-H","--auto-map-bindings","--auto-map-locations","-o",str(output),str(shader)],capture_output=True,text=True,encoding="utf-8",errors="replace")
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)  # 优化结果必须由真实离线编译器生成。
