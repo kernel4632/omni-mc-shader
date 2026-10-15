@@ -53,6 +53,9 @@ void main() {
         if (waterNormalWorld.y>0.9) { waterWorld.y+=omniOceanHeight((waterWorld+cameraPosition).xz); view=gbufferModelView*vec4(waterWorld,1.0); } // 只抬升朝上的水面：侧面和瀑布竖直，抬了会和真实几何脱节。
     }
 #endif
+#ifdef OMNI_WEATHER_PASS
+    view=gbufferModelView*vec4(omniRainSlant(omniWorld(view.xyz)),1.0); // 雨雪几何在世界空间按高度水平推移，雨丝整体倾斜，不随相机俯仰改变方向。
+#endif
     viewPosition=view.xyz; viewNormal=omniNormalize(gl_NormalMatrix*gl_Normal); // 保存视空间位置和归一化法线。
     viewTangent=omniNormalize(gl_NormalMatrix*at_tangent.xyz); tangentSign=at_tangent.w; // 保存切线与手性，片元再拼成切线基。
     vec2 halfTile=abs(gl_MultiTexCoord0.xy-mc_midTexCoord.xy); // 当前贴图坐标离图块中心有多远。
@@ -123,9 +126,6 @@ Surface omniReadSurface() {
     s.normal=dot(viewNormal,viewNormal)>1e-6?omniNormalize(viewNormal):vec3(0,0,1); // 几何法线退化时退到朝向相机的方向，避免后面除零。
     mat3 tangentFrame=omniTangentFrame(s.normal,viewTangent,tangentSign); // 给法线贴图用的切线基。
     s.materialParams=vec3(0.85,0.04,0.0); s.materialAo=1.0; vec2 tex=uv; // 普通表面默认：很粗糙、不金属、不发光、不遮蔽。
-#ifdef OMNI_WEATHER
-    tex.x += OMNI_RAIN_WIND * (uv.y - 0.5); // 雨丝斜度：按贴图纵向位置把采样横向偏移，形成倾斜的雨丝。
-#endif
 #if defined OMNI_BASIC
     // 线条没有可靠的图集边界，只保留上面的顶点色，不采样材质贴图。
 #elif defined OMNI_TERRAIN
@@ -133,12 +133,10 @@ Surface omniReadSurface() {
 #else
     omniMaterial(s.base,s.normal,s.materialParams,s.materialAo,tex,bounds,tangentFrame,viewPosition,false); // 实体和手没有可靠图集，只解码不偏移。
 #endif
+#ifdef OMNI_WEATHER_PASS
+    s.base.a=clamp(s.base.a*omniWeatherVisibility(),0.0,1.0); // 雨雪颗粒按可见度缩放透明度：取零时下一行直接丢弃，不会画成黑条。
+#endif
     if(s.base.a<0.01) discard; // 整体透明的片元没有表面，直接丢弃，不写任何附件。
-#ifdef OMNI_SKYTEXTURED
-#ifndef OMNI_RESOURCE_SKY
-    discard; // 未开启资源包天空时，原版日月贴图整片丢弃，避免和内置圆盘重叠。
-#endif
-#endif
 #if !defined OMNI_WATER_PASS
     if(s.base.a<0.1) discard; // 不透明阶段把接近透明的裁切物也丢掉，它们不该写进不透明缓冲。
 #endif
@@ -152,28 +150,25 @@ Surface omniReadSurface() {
 #ifdef OMNI_WATER_PASS
     if(materialId==10000.0) { s.normal=omniWaterNormal(s.world,s.normal); s.materialParams=vec3(0.06,0.02,0.0); s.category=1.0; s.base.a=1.0; } // 只让水面按世界位置造波并标成光滑不透光的水；侧面和瀑布保留原法线。
 #endif
-#ifdef OMNI_WEATHER
-    s.base.rgb *= omniWeatherVisibility(s.world); // 雨雪颗粒按可见度整体缩明；冷处用雪的可见度，其余用雨的可见度。
-#endif
     return s; // 交回填满的表面。
 }
 // 计算光照：把底色转线性，叠加天气材质，再算环境光、直接光和自发光。
 vec3 omniShadeSurface(inout Surface s) {
 #ifdef OMNI_SKYTEXTURED
-    return s.base.rgb; // 原版日月贴图直接用自身颜色，不参与光照，开启资源包天空时照原样显示。
+    return omniLinear(s.base.rgb); // 日月与天空盒贴图不参与光照，只转成线性颜色；延迟阶段按「使用资源包天空」决定是否叠加。
 #endif
     vec3 albedo=omniLinear(s.base.rgb); // 底色只在这里转一次线性，之后的天气和光照都按线性值算。
-    albedo=omniSeason(albedo,materialId); // 草与树叶按季节上色，其余方块不动。
+    albedo=omniSeason(albedo,tint.rgb); // 按顶点里的群系染色判断植被，草地、树叶与藤蔓随季节变色，其余方块不动。
     omniSurface(albedo,s.materialParams,s.normal,s.world,s.lightUv.y); // 按天气叠加湿润与积雪，就地改这处颜色和材质。
     vec3 lit=omniLighting(albedo,s.normal,s.world,s.lightUv,s.materialParams,s.materialAo); // 环境光、直接光和镜面一起算，遮蔽只影响环境光。
-#ifdef OMNI_ENTITIES
-    lit=omniEntityLight(lit); // 生物整体受光强度与色温。
+#if defined OMNI_ENTITIES && !defined OMNI_BLOCK_ENTITY
+    lit=omniEntityLight(lit); // 只调生物的受光强度与色温；箱子这类方块实体照常受光。
 #endif
 #ifdef OMNI_EMISSIVE
     lit=albedo*2.0; s.materialParams.z=1.0; // 自发光方块无视光照直接用自身颜色，并标记发光供后处理识别。
 #endif
 #ifdef OMNI_GLOWING
-    lit=omniGlow(lit,albedo); s.materialParams.z=max(s.materialParams.z,OMNI_PLAYER_GLOW); // 发光实体按玩家发光遮盖朝自身颜色靠拢。
+    lit=omniGlow(lit,albedo); // 发光实体按玩家发光遮盖朝自身颜色靠拢；它走叠层通路，不写材质附件，所以不设自发光标记。
 #endif
     return lit; // 显示编码留给后面的合成阶段，这里保持线性。
 }

@@ -27,7 +27,7 @@ class BoundaryTests(unittest.TestCase):
         for dimension in ("world0","world-1","world1"):
             self.assertEqual({p.name for p in generated if p.parent.name==dimension},names)  # 每个世界都提供完整程序。
         self.assertFalse(any(p.parent==build.SHADERS for p in generated))  # 根入口是被忽略的重复代码。
-        settings = options.read_properties(build.SHADERS/"rendering/pipeline.properties")  # 阴影开关必须对应实际目录。
+        settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 阴影开关必须对应实际目录。
         for dimension in ("world0","world-1","world1"):
             self.assertEqual(settings[f"program.{dimension}/shadow.enabled"],"OMNI_SHADOW_ENABLED")  # 世界开关与入口路径成对。
 

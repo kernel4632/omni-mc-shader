@@ -3,7 +3,7 @@
 // 选择本程序的绘制阶段或物体类别。
 #define OMNI_FRAGMENT
 // 选择本程序的绘制阶段或物体类别。
-#define OMNI_WEATHER
+#define OMNI_WEATHER_PASS
 // 选择本程序的绘制阶段或物体类别。
 #define OMNI_OVERLAY
 // 选择本程序的绘制阶段或物体类别。

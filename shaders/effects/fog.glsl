@@ -126,7 +126,8 @@ vec3 omniFog(vec3 color, vec3 view, vec3 world) {
 #endif
     float fogAmount = 1.0-exp(-density*distance); // 消光与散射共同的混合权重，随距离趋向一。
 #ifdef DISTANT_HORIZONS
-    fogAmount = mix(fogAmount,max(fogAmount,smoothstep(0.6,1.0,clamp(distance/256.0,0.0,1.0))),OMNI_DH_FOG_BLEND); // 远景雾衔接：很远处额外补雾，抹平近远景交界的雾差；取零保持原状。
+    float seam = smoothstep(far*0.75,far,distance)*(1.0-smoothstep(far,far*1.4,distance)); // 只在近景渲染距离附近形成一圈，更远的远景不受影响。
+    fogAmount = max(fogAmount,seam*OMNI_DH_FOG_BLEND*0.8); // 远景雾衔接：在交界处补一圈雾，遮住近景与远景接缝；取零保持原状，最高八成避免把交界完全涂白。
 #endif
     if (isEyeInWater == 1) { // 水下单独处理，分波段吸收后不再叠加空气距离雾。
         vec3 water = omniWaterTransmit(color,distance*OMNI_UNDERWATER_DENSITY); // 与水面合成共用同一份吸收与散射常数；浓度选项再乘距离。

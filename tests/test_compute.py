@@ -17,7 +17,7 @@ class ComputeTests(unittest.TestCase):
         for dimension in ("world0","world-1","world1"):
             path = build.SHADERS/dimension/"setup.csh"; self.assertIn(path,files)  # 每个维度登记计算入口。
             self.assertTrue(files[path].startswith("#version 430")); self.assertIn("#define OMNI_COMPUTE",files[path])  # 计算阶段需要更高版本与选择宏。
-        settings = options.read_properties(build.SHADERS/"rendering/pipeline.properties")  # 流程设置是唯一来源。
+        settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 流程设置是唯一来源。
         self.assertIn("COMPUTE_SHADERS",settings["iris.features.optional"])  # 计算能力登记为可选。
         _,_,generated = build.configuration(); text = generated[build.SHADERS/"shaders.properties"]  # 生成菜单同样带出能力开关。
         self.assertIn("COMPUTE_SHADERS",text)  # 能力开关不丢失。
@@ -50,7 +50,7 @@ class ComputeTests(unittest.TestCase):
         self.assertIn("vec3 omniLpvSample",effect)  # 片元采样独立成函数。
         composite = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
         self.assertIn("omniLpvSample",composite)  # 间接光阶段包含体积采样。
-        settings = options.read_properties(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
+        settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
         self.assertIn("image.omniLpvA",settings); self.assertIn("image.omniLpvB",settings)  # 体积格在流程设置登记。
 
     def test_lpv_image_writes_have_visibility_barriers(self):

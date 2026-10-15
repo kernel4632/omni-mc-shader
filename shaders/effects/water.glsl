@@ -83,11 +83,13 @@ float omniWave(vec2 p, float relativeHeight) {
     float wave = sin(dot(s,vec2(0.65,0.3))+t*1.2)*0.06 + sin(dot(s,vec2(-0.2,0.8))-t*0.9)*0.04; // 两个方向与速度都不同的正弦，避免看出明显重复。
 #ifdef OMNI_RAIN_RIPPLES
     float grid = omniRippleGrid(); // 落点密度决定格子精细度：密度越高，同一片水面上的落点越多。
-    vec2 cell = floor(p*grid); // 把水面切成约一点四米一格，每格固定一个雨滴落点。
-    vec2 center = (cell+vec2(omniHash(cell),omniHash(cell+8.2)))/grid; // 用格坐标算落点，同一格永远落在同一点，波纹可重复。
-    float age = fract(t*0.8+omniHash(cell+1.3)); // 每格起始相位不同，雨滴不会同时出现。
-    float radius = length(p-center); // 当前点到本格落点的水平距离。
-    wave += rainStrength*sin(radius*22.0-age*14.0)*exp(-radius*3.0)*(1.0-age)*0.025*OMNI_RIPPLE_STRENGTH; // 向外扩散的环，随时间变淡，雨越大越明显；强度可调。
+    if (grid > 0.0) { // 密度取零表示没有雨点圈；先判断，避免下面除以零得到无效值。
+        vec2 cell = floor(p*grid); // 把水面切成格子，每格固定一个雨滴落点。
+        vec2 center = (cell+vec2(omniHash(cell),omniHash(cell+8.2)))/grid; // 用格坐标算落点，同一格永远落在同一点，波纹可重复。
+        float age = fract(t*0.8+omniHash(cell+1.3)); // 每格起始相位不同，雨滴不会同时出现。
+        float radius = length(p-center); // 当前点到本格落点的水平距离。
+        wave += rainStrength*sin(radius*22.0-age*14.0)*exp(-radius*3.0)*(1.0-age)*0.025*OMNI_RIPPLE_STRENGTH; // 向外扩散的环，随时间变淡，雨越大越明显；强度可调。
+    }
 #endif
 #ifdef OMNI_PLAYER_RIPPLES
     float speed = length(cameraPosition-previousCameraPosition)/max(frameTime,0.001); // 由相邻两帧相机位置差得到移动速度。

@@ -418,8 +418,8 @@ def check() -> None:
     expanded_cache = {}  # 一次检查只读取每份共用源码一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
         expand(source, sourceNumbers=source_numbers, cache=expanded_cache)  # 不为每个文件重新扫描整棵引用树。
-    key_programs = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "shadow", "dh_terrain", "dh_water", "deferred", "composite", "composite1", "final", "setup"}  # 编译主要数据通路；其余别名仍检查来源、伙伴和引用。
-    probes = [source for source in entries if source.stem in key_programs and (source.parent.name == "world0" or source.stem == "composite")]  # 两个额外维度只编译维度合成分支，不重复整个流程。
+    key_programs = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "shadow", "dh_terrain", "dh_water", "deferred", "composite", "composite1", "final", "setup"}  # 另外两个维度只编译主要数据通路，维度宏主要影响这些程序。
+    probes = [source for source in entries if source.parent.name == "world0" or source.stem in key_programs]  # 主世界的每个程序都编译：不同程序宏会改变引入结果，只编主路会漏掉宏与引入标记撞名这类错误。
     compile_shaders(probes, found, profiles)
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
     print(f"检查通过：{len(entries)} 个入口，{len(found)} 个选项，{len(profiles)} 套预设")

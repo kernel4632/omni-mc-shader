@@ -9,8 +9,8 @@
 设计原因与取舍：只改整块生物与手持物的亮度、色温、视野和发光强弱，不做逐生物局部光；
 这样接入简单、任何资源包和模组都不受影响，代价是做不到单个生物单独调。
 */
-#ifndef OMNI_ENTITY
-#define OMNI_ENTITY
+#ifndef OMNI_ENTITY_INCLUDED
+#define OMNI_ENTITY_INCLUDED
 // @effect {"label":{"zh_cn":"生物与玩家","en_us":"Mobs & player"}}
 // @option {"label": {"zh_cn": "生物受光强度", "en_us": "Mob light strength"}, "slider": true, "description": {"zh_cn": "生物身上的光照多亮。", "en_us": "How bright the light on mobs is."}}
 #define OMNI_ENTITY_LIGHT 1.0 // [0.0 0.5 1.0 1.5 2.0]
@@ -31,9 +31,11 @@ vec3 omniEntityLight(vec3 lit) {
 vec3 omniGlow(vec3 lit, vec3 albedo) {
     return mix(lit, albedo * 2.5, OMNI_PLAYER_GLOW); // 取零时保持普通受光，取一时按自身颜色明显发光。
 }
-// 手持物缩放的参照视野是七十度；视野越小物品越大，等于原版时缩放是一。
+// 手持物视野：投影的焦距和半视野角的正切成反比，所以把裁剪坐标的横纵乘上两者正切之比，
+// 就等于换了一个视野角去看手，和真实相机改视野完全一样；物品离屏幕中心越远，移动也越明显，这是视野变化本来的样子。
+// 参照值七十度是原版画手时使用的固定视野，取七十时比例正好是一。
 vec4 omniHandZoom(vec4 clip) {
-    clip.xy *= 70.0 / max(OMNI_HAND_FOV, 1.0); // 三十度约放大两倍多，一百二十度缩到约六成。
+    clip.xy *= tan(radians(35.0)) / tan(radians(clamp(OMNI_HAND_FOV, 1.0, 179.0) * 0.5)); // 三十度约放大二点六倍，一百二十度约缩到四成。
     return clip;
 }
 #endif

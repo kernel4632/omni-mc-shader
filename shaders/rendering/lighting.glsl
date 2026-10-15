@@ -43,15 +43,21 @@ layout(location=1) out vec4 snapshot; // 透明阶段动不了的原始不透明
 // --- 天空像素：用本项目的天空、云和氛围重算颜色 ---
 // 为什么单独成函数：主流程只关心"读颜色、补天空、写两个附件"三件事，
 // 天空合成的细节收在这里，读主流程时不必先弄懂云和氛围的计算。
-vec3 omniDeferredSky(vec2 uv) {
+// `textured` 是天空像素上已有的颜色：原版天空几何已关闭、零号画面清成黑色，所以这里只剩日月等贴图。
+// 开启「使用资源包天空」时把它叠在天空上、云下面，资源包的太阳会被云正常挡住；关闭时丢弃，保持内置圆盘。
+vec3 omniDeferredSky(vec2 uv, vec3 textured) {
     vec3 direction = omniNormalize(mat3(gbufferModelViewInverse)*omniView(uv,1.0)); // 用远端深度反投影出这个像素看向的世界方向。
-    return omniAtmosphere(omniCloud(omniSky(direction),direction,32000.0),direction); // 先画天空，再叠云，最后加氛围。
+    vec3 sky = omniSky(direction); // 本项目的天空底色。
+#ifdef OMNI_RESOURCE_SKY
+    sky += textured; // 资源包日月贴图按线性颜色叠加。
+#endif
+    return omniAtmosphere(omniCloud(sky,direction,32000.0),direction); // 先画天空，再叠云，最后加氛围。
 }
 
 // --- 主流程：读不透明颜色，补回天空，写进颜色与快照两个附件 ---
 void main() {
     vec3 color = texture(colortex0,texcoord).rgb; // 取不透明阶段已经画好的颜色。
-    if (omniSkyPixel(texcoord)) color = omniDeferredSky(texcoord); // 天空像素改用本项目天空，覆盖加载器默认色。
+    if (omniSkyPixel(texcoord)) color = omniDeferredSky(texcoord,color); // 天空像素改用本项目天空，按选项保留资源包日月贴图。
     scene = vec4(color,1.0); // 颜色附件继续交给后续合成。
     snapshot = vec4(color,1.0); // 快照附件留一份同样的内容，供透明阶段读取。
 }

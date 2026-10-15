@@ -277,6 +277,51 @@ def read_properties(source: Path) -> dict[str, str]:
     return result  # 不悄悄覆盖重复配置。
 
 
+def read_pipeline(source: Path) -> dict[str, str]:
+    """读取绘制设置，允许同一个键出现在互斥的条件分支里。
+
+    输入边界：`rendering/pipeline.properties` 由维护者编写，可以用 `#if`、`#ifdef`、`#elif`、
+    `#else`、`#endif` 按选项挑选设置，加载器会按玩家选项只保留一支。
+    检查规则：同一个键在同一分支、或在任何条件之外出现两次都报错；只有不同分支各写一次才允许。
+    返回值只用于检查禁止的键，生成时逐行照原样写出，不靠这里的字典决定取哪一支。
+    """
+    seen: dict[str, list[tuple]] = {}  # 键名到它出现过的分支路径。
+    stack: list[list[int]] = []  # 每层条件块记录自身编号和当前分支序号。
+    blocks = 0  # 条件块编号，区分前后两个互不相干的块。
+    result = {}
+    for index, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+        stripped = line.strip()
+        directive = re.match(r"#\s*(if|ifdef|ifndef|elif|else|endif)\b", stripped)
+        if directive:
+            word = directive[1]
+            if word in ("if", "ifdef", "ifndef"):
+                blocks += 1
+                stack.append([blocks, 0])  # 新块从第零支开始。
+            elif not stack:
+                raise ValueError(f"{source}:{index}：条件指令没有对应的开头")
+            elif word in ("elif", "else"):
+                stack[-1][1] += 1  # 同一块换到下一支。
+            else:
+                stack.pop()
+            continue
+        if not stripped or stripped.startswith(("#", "!")):
+            continue  # 空行与说明不影响设置。
+        key, separator, value = stripped.partition("=")
+        key, value = key.strip(), value.strip()
+        if not separator or not key or stripped.endswith("\\"):
+            raise ValueError(f"{source}:{index}：需要单行 key=value")
+        path = tuple(tuple(level) for level in stack)  # 这一行所在的分支路径。
+        for other in seen.get(key, []):
+            exclusive = any(a[0] == b[0] and a[1] != b[1] for a, b in zip(path, other))  # 同一块的不同分支才互斥。
+            if not exclusive:
+                raise ValueError(f"{source}:{index}：{key} 在可能同时生效的位置重复定义")
+        seen.setdefault(key, []).append(path)
+        result[key] = value
+    if stack:
+        raise ValueError(f"{source}：条件指令缺少结尾")
+    return result
+
+
 def presets(folder: Path, options: dict[str, Option]) -> list[Preset]:
     """收集预设并补齐默认值。
 
@@ -357,16 +402,16 @@ def generated(shaders: Path, options: dict[str, Option], groups: dict,
     效果说明生成，避免手工同步遗漏。
     """
     pipeline = shaders / "rendering/pipeline.properties"  # 绘制设置只有一个维护文件。
-    settings = read_properties(pipeline)  # 不手工改生成产物。
+    settings = read_pipeline(pipeline)  # 条件分支里的同名设置由加载器按选项挑选，这里只检查是否互斥。
     if any(key == "sliders" or key.startswith(("screen", "profile.")) for key in settings):
         raise ValueError(f"{pipeline}：菜单、滑块和预设由工具生成，不能重复维护")
     lines = ["# \\u7531 build.py \\u751f\\u6210\\uff1b\\u8bf7\\u4fee\\u6539 effects/\\u3001presets/ \\u6216 rendering/pipeline.properties \\u540e\\u91cd\\u65b0\\u751f\\u6210\\u3002"]  # 转义中文提示，保持生成文件的加载器编码。
-    for line in pipeline.read_text(encoding="utf-8").splitlines():  # 保留流程设置原有顺序和说明，便于追溯来源。
+    for line in pipeline.read_text(encoding="utf-8").splitlines():  # 保留流程设置原有顺序、条件分支和说明，便于追溯来源。
         if line.strip().startswith("#"):
-            lines.append(line.encode("ascii","backslashreplace").decode("ascii"))  # 保留来源的中文业务说明并转成兼容编码。
+            lines.append(line.strip().encode("ascii","backslashreplace").decode("ascii"))  # 保留中文说明与条件指令，并转成兼容编码。
         elif line.strip():
-            key = line.partition("=")[0].strip()  # 值使用已检查结果，不再从原始文字另做一次解析。
-            lines.append(f"{key} = {settings[key]}")  # 已检查的键值保持唯一来源。
+            key, _, value = line.partition("=")  # 每行按自己的值写出，不同分支的同名设置互不覆盖。
+            lines.append(f"{key.strip()} = {value.strip()}")
     pages: dict[str, list[str]] = {}  # 页面名到选项名，顺序沿用源码扫描顺序。
     for option in options.values():
         pages.setdefault(page_of(option), []).append(option.name)  # 每个选项只落在一个页面。
@@ -390,13 +435,6 @@ def generated(shaders: Path, options: dict[str, Option], groups: dict,
         else:
             lines.append(f"screen.{pid.upper()} = " + " ".join(pages[pid]))  # 只有一个效果时不必多一层，直接平铺。
         lines.append(f"screen.{pid.upper()}.columns = 3")  # 多栏排布，利用横向空间。
-    render_scale = options.get("OMNI_RENDER_SCALE")  # 渲染缩放：内部按较低分辨率渲染合成缓冲，再在时间阶段放大。
-    if render_scale:
-        for value in render_scale.values:  # 尺寸只由选项自己的取值决定，不在这里另存一份数值表。
-            if value == "100":
-                continue  # 一百等于不缩放，不需要额外设置，保持几何与合成同分辨率。
-            fraction = f"{int(value) / 100:.4f}".rstrip("0").rstrip(".")  # 百分比换算成相对屏幕的比例，例如七十五变零点七五。
-            lines += [f"#if OMNI_RENDER_SCALE == {value}", f"size.buffer.colortex6 = {fraction} {fraction}", "#endif"]  # 每个取值只在一支条件里写一次，避免同键重复导致读取失败。
     sliders = [option.name for option in options.values() if option.slider]  # 滑块自动从效果说明读取。
     if sliders:
         lines.append("sliders = " + " ".join(sliders))  # 没有滑块时省略设置，不额外生成空菜单项。

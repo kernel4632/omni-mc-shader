@@ -4,6 +4,8 @@
 #define OMNI_VERTEX
 // 选择本程序的绘制阶段或物体类别。
 #define OMNI_ENTITIES
+// 选择本程序的绘制阶段或物体类别。
+#define OMNI_BLOCK_ENTITY
 // 显式引入完整绘制主体。
 #include "/rendering/terrain.glsl"
 // 输出由主体按统一缓冲协议写入。

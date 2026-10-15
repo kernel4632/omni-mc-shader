@@ -43,6 +43,8 @@ const int colortex5Format = RGBA32F; // 帧号、绝对相机位置和米制深�
 // 六号画面：抗锯齿之前的合成颜色。合成阶段写，时间合成与自动曝光读。
 // 通道：三个颜色分量是合成后的线性亮度，透明分量是覆盖层标记。
 // 为什么单独一张：时间阶段要看到未做时间累积的当帧颜色。
+// 尺寸：「渲染缩放」选项会把它缩到一半或四分之三（见 pipeline.properties）。所以写入方必须用 `omniPixel(uv)` 取全分辨率画面的像素，
+//   不能用 `gl_FragCoord`；读取方只能用 `texture(colortex6, uv)` 按比例坐标采样，不能用 `texelFetch`。
 const int colortex6Format = RGBA16F; // 合成颜色。
 
 // 七号画面：原版光照数据。几何写，屏幕后处理、时间阶段与调试读。
@@ -59,6 +61,9 @@ const int colortex8Format = RGBA32F; // 水法线与米制视深度，覆盖远�
 const bool colortex4Clear = false; // 历史跨帧保留。
 const bool colortex5Clear = false; // 历史状态跨帧保留。
 
+// 零号清成黑色：原版天空几何已关闭，天空像素在延迟阶段之前只剩日月等贴图的颜色，
+// 开启「使用资源包天空」时延迟阶段把这部分叠加到自定义天空上；清成雾色会把雾色也一起叠进去。
+const vec4 colortex0ClearColor = vec4(0.0, 0.0, 0.0, 0.0); // 天空像素只保留贴图贡献。
 // 一号清成朝前的浮点法线，天空这类没有几何的像素也有一个无害的默认方向。
 const vec4 colortex1ClearColor = vec4(0.5, 0.5, 1.0, 0.0); // 天空法线采用朝前的无害默认值。
 // 二号清成粗糙非金属，没有材质信息的像素不会反光。

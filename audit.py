@@ -18,6 +18,7 @@ import tokenize  # 让字符串中的井号不会被误判为注释。
 from pathlib import Path  # 用项目相对路径固定审计范围并隐藏本机绝对路径。
 
 CHINESE = re.compile(r"[\u3400-\u9fff]")  # 只有汉字能证明说明不是纯英文标识符。
+DIRECTIVE = re.compile(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b")  # 属性文件里的条件指令是机器语句，加载器按选项宏挑选分支。
 EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__"}  # 环境、参考和第三方内容不是本项目的维护边界。
 SUFFIXES = {".py", ".glsl", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除。
 TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup SSBO".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
@@ -68,7 +69,7 @@ def comments(source: Path) -> tuple[set[int], list[tuple[int, str]]]:
     elif source.suffix in {".properties", ".yml", ".yaml", ".lang"}:
         pattern = re.compile(r'"(?:\\.|[^"\\])*"|\x27(?:\x27\x27|[^\x27])*\x27|#[^\n]*', re.DOTALL)  # 字符串里的井号不计，配置尾注仍是有效说明。
         for match in pattern.finditer(text):
-            if match[0].startswith("#"): fragments.append((text[:match.start()].count("\n") + 1, match[0]))  # 记录注释起始行，保持错误位置可读。
+            if match[0].startswith("#") and not DIRECTIVE.match(match[0]): fragments.append((text[:match.start()].count("\n") + 1, match[0]))  # 记录注释起始行；条件指令是机器语句，不算说明。
     else:
         pattern = re.compile(r'"(?:\\.|[^"\\])*"|/\*.*?\*/|//[^\n]*', re.DOTALL)  # 同时识别字符串、块注释和行尾说明。
         for match in pattern.finditer(text):
@@ -122,6 +123,6 @@ def generated_comments(path: Path, content: str) -> None:
     """
     for line_number, line in enumerate(content.splitlines(), 1):
         if not line.lstrip().startswith("#"): continue  # 菜单值和翻译值是数据，不是给接手者的说明。
-        if re.match(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b", line.lstrip()): continue  # 预处理器指令是机器语句，不是自然语言说明，也不对玩家显示。
+        if DIRECTIVE.match(line.lstrip()): continue  # 预处理器指令是机器语句，不是自然语言说明，也不对玩家显示。
         decoded = re.sub(r"\\u([0-9a-fA-F]{4})", lambda match: chr(int(match[1], 16)), line)  # 只还原 Unicode 中文，避免转义形式绕过语言审计。
         if not chinese_explanation(decoded): raise ValueError(f"{path}:{line_number}：生成说明必须是有效中文")  # 生成文件不豁免英语说明，只豁免比例要求。

@@ -3,6 +3,7 @@
 示例 python -m unittest discover -s tests；全部使用离线展开，不建立显卡上下文。
 """
 import unittest  # 保留标准测试入口。
+import json  # 读取显式绘制流程表。
 import re  # 从实际公式提取固定阈值，拒绝未定义的顺序。
 import subprocess  # 用真实预处理器验证开关分支。
 import tempfile  # 探针源码只写入临时目录。
@@ -386,15 +387,24 @@ class EffectTests(unittest.TestCase):
                     self.assertRegex(result.stdout,rf"upscaleEnabled\s*=\s*{str(enabled).lower()}\s*;")  # 不仅检查宏名字存在，还检查真正的分支结果。
 
     def test_season_shifts_grass_and_leaves(self):
-        """季节只给草和树叶按世界天数上色，接入地形底色且默认关闭。"""
+        """季节按顶点里的群系染色识别植被并随世界天数上色，接入地形底色且默认关闭。"""
         found,_,_ = build.configuration()
-        self.assertIn("OMNI_SEASONS",found); self.assertIn("OMNI_SEASON_TINT",found)  # 开关与颜色都由季节源码定义。
+        self.assertIn("OMNI_SEASONS",found); self.assertEqual(found["OMNI_SEASONS"].default,"false")  # 默认关闭。
+        self.assertIn("OMNI_SEASON_TINT",found)  # 季节颜色由季节源码定义。
         text = (build.SHADERS/"effects/season.glsl").read_text(encoding="utf-8")
-        self.assertIn("vec3 omniSeason",text)  # 季节上色独立成函数。
-        self.assertIn("materialId == 10001.0",text)  # 只处理草。
+        self.assertIn("float omniFoliage",text)  # 植被程度独立成函数。
+        self.assertIn("vertexColor.g - max(vertexColor.r, vertexColor.b)",text)  # 绿色比红蓝多才算植被，白色方块与偏蓝的水都排除。
+        self.assertNotIn("materialId",text)  # 不再靠方块编号，草方块顶面也会一起变色。
         self.assertIn("float(worldDay)",text)  # 相位来自世界天数。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
-        self.assertIn("omniSeason(albedo,materialId)",source)  # 地形底色接入季节。
+        self.assertIn("omniSeason(albedo,tint.rgb)",source)  # 地形底色按顶点色接入季节。
+
+    def test_weather_darkening_and_seam_fog_are_local(self):
+        """雨天变暗只作用露天处；远景雾衔接只在近景渲染距离附近补一圈。"""
+        weather = (build.SHADERS/"effects/weather.glsl").read_text(encoding="utf-8")
+        self.assertIn("eyeBrightnessSmooth.y",weather)  # 按头顶天空光决定变暗程度，洞里不变暗。
+        fog = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
+        self.assertIn("(1.0-smoothstep(far,far*1.4,distance))",fog)  # 雾衔接在交界外侧收回，不把整片远景盖住。
 
     def test_entity_light_and_hand_size_are_adjustable(self):
         """生物受光强度、色温与手持物大小都可调，分别接入实体光照与手持物顶点。"""
@@ -405,11 +415,104 @@ class EffectTests(unittest.TestCase):
         self.assertIn("vec3 omniEntityLight",text)  # 生物受光独立成函数。
         self.assertIn("vec4 omniHandZoom",text)  # 手持物缩放独立成函数。
         self.assertIn("OMNI_ENTITY_TINT",text)  # 色温参与生物受光。
-        self.assertIn("OMNI_HAND_FOV",text)  # 大小参与手持物缩放。
+        self.assertIn("OMNI_HAND_FOV",text)  # 视野参与手持物缩放。
+        self.assertIn("tan(radians(35.0)) / tan(radians(",text)  # 缩放按半视野角正切之比计算，等价于真实改视野。
         entities = build.expand(build.SHADERS/"world0/gbuffers_entities.fsh")  # 从实体入口展开。
         self.assertIn("omniEntityLight",entities)  # 实体光照包含生物受光。
         hand = build.expand(build.SHADERS/"world0/gbuffers_hand.vsh")  # 从手持物顶点入口展开。
         self.assertIn("omniHandZoom",hand)  # 手持物顶点包含缩放。
+        terrain = (build.SHADERS/"rendering/terrain.glsl").read_text(encoding="utf-8")
+        self.assertIn("#if defined OMNI_ENTITIES && !defined OMNI_BLOCK_ENTITY",terrain)  # 箱子这类方块实体不受生物受光影响。
+        programs = json.loads((build.SHADERS/"rendering/programs.json").read_text(encoding="utf-8"))["programs"]
+        self.assertIn("OMNI_BLOCK_ENTITY",programs["gbuffers_block"])  # 方块实体程序带独立标记。
+        self.assertNotIn("OMNI_BLOCK_ENTITY",programs["gbuffers_entities"])  # 生物程序不带。
+
+    def test_player_glow_blends_glowing_entities(self):
+        """发光实体用独立宏，按玩家发光遮盖在普通受光与自身发光色之间插值。"""
+        programs = json.loads((build.SHADERS/"rendering/programs.json").read_text(encoding="utf-8"))["programs"]
+        self.assertIn("OMNI_GLOWING",programs["gbuffers_entities_glowing"])  # 发光实体单独识别。
+        self.assertNotIn("OMNI_EMISSIVE",programs["gbuffers_entities_glowing"])  # 不再被当成固定自发光。
+        source = build.expand(build.SHADERS/"world0/gbuffers_entities_glowing.fsh")
+        self.assertIn("lit=omniGlow(lit,albedo)",source)  # 发光实体入口包含发光插值。
+
+    def test_weather_particles_use_alpha_and_vertex_slant(self):
+        """雨雪可见度缩放透明度，斜度在顶点阶段推移几何，雨雪按群系降水类型区分。"""
+        terrain = (build.SHADERS/"rendering/terrain.glsl").read_text(encoding="utf-8")
+        self.assertIn("s.base.a=clamp(s.base.a*omniWeatherVisibility(),0.0,1.0)",terrain)  # 缩放透明度，取零会被丢弃而不是变黑。
+        self.assertIn("omniRainSlant(omniWorld(view.xyz))",terrain)  # 斜度在世界空间推移顶点。
+        weather = (build.SHADERS/"effects/weather.glsl").read_text(encoding="utf-8")
+        self.assertIn("biome_precipitation == 2",weather)  # 雪由加载器给的降水类型判断。
+        self.assertIn("#ifndef OMNI_WEATHER_INCLUDED",weather)  # 引入标记不与程序宏同名。
+        vertex = build.expand(build.SHADERS/"world0/gbuffers_weather.vsh")
+        self.assertIn("#define OMNI_WEATHER_PASS",vertex)  # 雨雪程序使用独立的程序宏。
+        water = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")
+        self.assertIn("if (grid > 0.0)",water)  # 落点密度取零时不除以零。
+
+    def test_resource_sky_keeps_textures_under_clouds(self):
+        """资源包天空：选项决定加载器是否画日月贴图，延迟阶段把贴图叠在天空上、云下面。"""
+        _,_,files = build.configuration()
+        menu = files[build.SHADERS/"shaders.properties"]
+        self.assertIn("#ifdef OMNI_RESOURCE_SKY\n",menu)  # 绘制设置按选项挑选分支。
+        self.assertIn("sky = false",menu)  # 原版天空几何关闭，天空像素只剩贴图。
+        buffers = (build.SHADERS/"rendering/buffers.glsl").read_text(encoding="utf-8")
+        self.assertIn("const vec4 colortex0ClearColor = vec4(0.0, 0.0, 0.0, 0.0);",buffers)  # 零号画面清成黑色，不把雾色叠进去。
+        lighting = (build.SHADERS/"rendering/lighting.glsl").read_text(encoding="utf-8")
+        self.assertIn("sky += textured;",lighting)  # 贴图叠在云之前。
+        self.assertIn("omniCloud(sky,direction,32000.0)",lighting)  # 云在贴图之后合成，能挡住太阳。
+        terrain = (build.SHADERS/"rendering/terrain.glsl").read_text(encoding="utf-8")
+        self.assertIn("return omniLinear(s.base.rgb);",terrain)  # 贴图写成线性颜色。
+
+    def test_render_scale_only_resizes_composite_buffer(self):
+        """渲染缩放只改六号画面尺寸，合成阶段用全分辨率像素坐标读取其他画面。"""
+        _,_,files = build.configuration()
+        menu = files[build.SHADERS/"shaders.properties"]
+        self.assertIn("#if OMNI_RENDER_SCALE == 50\n",menu)  # 半分辨率分支。
+        self.assertIn("size.buffer.colortex6 = 0.5 0.5",menu)
+        self.assertIn("size.buffer.colortex6 = 0.75 0.75",menu)
+        self.assertNotIn("size.buffer.colortex0",menu)  # 几何写入的画面不能缩放。
+        composite = (build.SHADERS/"rendering/composite.glsl").read_text(encoding="utf-8")
+        self.assertNotIn("gl_FragCoord",composite)  # 合成阶段不用缩放后的片元坐标读画面。
+        for path in build.SHADERS.rglob("*.glsl"):  # 六号画面缩放后只能按比例坐标采样。
+            self.assertNotIn("texelFetch(colortex6",path.read_text(encoding="utf-8"),path.name)
+
+    def test_distant_toggle_and_fog_blend(self):
+        """远景开关决定远景是否走完整光照，远景雾衔接只在远景存在时补雾。"""
+        distant = (build.SHADERS/"rendering/distant.glsl").read_text(encoding="utf-8")
+        self.assertIn("#ifdef OMNI_DH_ENABLED",distant)  # 开关分出完整光照与基础路径。
+        fog = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
+        self.assertIn("OMNI_DH_FOG_BLEND",fog)  # 雾衔接参与雾量。
+
+    def test_frame_time_bar_is_drawn_last(self):
+        """性能计时在最终显示的最后一步叠加，只读整帧时间。"""
+        debug = (build.SHADERS/"effects/debug.glsl").read_text(encoding="utf-8")
+        self.assertIn("frameTime*1000.0",debug)  # 用加载器给的整帧时间换算毫秒。
+        final = (build.SHADERS/"rendering/final.glsl").read_text(encoding="utf-8")
+        self.assertIn("omniProfiler(debugColor(",final)  # 叠在调试视图之后。
+
+    def test_include_guards_never_collide(self):
+        """引入标记不能和程序宏或选项同名，否则定义了该宏的程序会整段跳过这个文件。"""
+        found,_,_ = build.configuration()
+        programs = json.loads((build.SHADERS/"rendering/programs.json").read_text(encoding="utf-8"))
+        macros = {macro for flags in programs["programs"].values() for macro in flags[1:]}  # 每个程序额外定义的宏。
+        macros |= {macro for macro in programs["dimensions"].values() if macro}  # 维度宏。
+        for path in build.SHADERS.rglob("*.glsl"):
+            match = re.search(r"#ifndef (\w+)\s*(?://[^\n]*)?\n#define \1\b",path.read_text(encoding="utf-8"))  # 文件开头的引入标记。
+            if match:
+                with self.subTest(path=path.name):
+                    self.assertNotIn(match[1],macros)  # 和程序宏同名会让整段代码被跳过。
+                    self.assertNotIn(match[1],found)  # 和选项同名会让玩家开关变成引入标记。
+
+    def test_pipeline_conditions_allow_only_exclusive_duplicates(self):
+        """绘制设置里同一个键只能出现在互斥分支；同一分支或条件之外重复都要报错。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary)/"pipeline.properties"
+            source.write_text("#ifdef A\nsun=true\n#else\nsun=false\n#endif\n",encoding="utf-8")
+            self.assertEqual(options.read_pipeline(source)["sun"],"false")  # 互斥分支允许，读取结果只用于检查。
+            for text in ("sun=true\nsun=false\n","#ifdef A\nsun=true\nsun=false\n#endif\n","sun=true\n#ifdef A\nsun=false\n#endif\n","#ifdef A\nsun=true\n"):
+                with self.subTest(text=text):
+                    source.write_text(text,encoding="utf-8")
+                    with self.assertRaises(ValueError):  # 可能同时生效的重复和缺少结尾都拒绝。
+                        options.read_pipeline(source)
 
     def test_rain_darkening_applies_in_composite(self):
         """雨天变暗在合成阶段整体压暗，默认取零不改变画面。"""
@@ -428,6 +531,8 @@ class EffectTests(unittest.TestCase):
         text = (build.SHADERS/"effects/world.glsl").read_text(encoding="utf-8")
         self.assertIn("vec3 omniPlanetCurve",text)  # 曲率独立成函数。
         self.assertIn("OMNI_PLANET_CURVATURE",text)  # 强度参与下沉。
+        self.assertIn("vec3 world = omniWorld(viewPosition);",text)  # 在世界空间里下沉，相机俯仰不改变弯曲方向。
+        self.assertIn("(gbufferModelView * vec4(world, 1.0)).xyz",text)  # 算完换回相机空间。
         source = build.expand(build.SHADERS/"world0/dh_terrain.vsh")  # 从远景顶点入口展开。
         self.assertIn("omniPlanetCurve",source)  # 远景顶点包含曲率。
 
