@@ -30,6 +30,10 @@
 #define OMNI_HELD_LIGHT
 // @option {"label": {"zh_cn": "手持光亮度", "en_us": "Held light strength"}, "slider": true, "description": {"zh_cn": "手持光多亮。", "en_us": "How bright the held light is."}}
 #define OMNI_HELD_BRIGHTNESS 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"手持光模式","en_us":"Held light mode"},"description":{"zh_cn":"点光：以玩家为中心向四周照亮；手电筒：朝视线方向打出一束锥形光。","en_us":"Point: lights around the player; Flashlight: a cone aimed along the view."},"values":{"0":{"zh_cn":"点光","en_us":"Point"},"1":{"zh_cn":"手电筒","en_us":"Flashlight"}}}
+#define OMNI_HELDLIGHT_MODE 0 // [0 1]
+// @option {"label":{"zh_cn":"手持光遮挡","en_us":"Held light shadow"},"description":{"zh_cn":"墙和物体挡住手持光时，它们背后会不会变暗。","en_us":"Whether walls and objects block the held light and darken what is behind them."},"values":{"0":{"zh_cn":"关","en_us":"Off"},"1":{"zh_cn":"开","en_us":"On"}}}
+#define OMNI_HELDLIGHT_SHADOW 1 // [0 1]
 // @option {"label": {"zh_cn": "镜面高光", "en_us": "Specular highlights"}, "description": {"zh_cn": "GGX 分布与施利克菲涅耳提供直射镜面，粗糙度和金属来自材质。", "en_us": "GGX distribution with Schlick Fresnel for direct specular, driven by material roughness and metal."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_SPECULAR 1 // [0 1]
 // @option {"label":{"zh_cn":"自发光亮度","en_us":"Emissiveness brightness"},"description":{"zh_cn":"发光方块自己有多亮；越大越容易过曝。","en_us":"How bright emissive blocks are; higher is more prone to blowing out."},"slider":true}
@@ -88,6 +92,26 @@ float omniDirectionalBlock(float level, vec3 normal, vec3 world, vec2 light) {
     return level; // 关闭时不计算导数，编译移除这一支。
 #endif
 }
+// 手持光遮挡：光源就在相机上，屏幕空间里比射线更靠近相机的几何，就是挡住光的东西。
+// 做法：从表面沿法线抬离一点，向相机方向走几小步；每步读屏幕深度，若那一点的几何比脚步更靠近相机，判定被挡住。
+// 为什么抬离表面：贴着表面起步会把表面自己当成遮挡物，出现整片自遮挡。
+// 为什么只在开启时计算的调用方负责：本函数不做开关判断，调用方用编译分支控制，关闭时整段不编译。
+float omniHeldShadow(vec3 view, vec3 normal) {
+    vec3 start = view + omniNormalize(normal) * 0.05; // 沿法线抬离表面，避免自遮挡。
+    vec3 end = view * 0.06; // 走到相机附近就停下。
+    const int steps = 8; // 固定步数，保证开销可预期。
+    float shadow = 1.0; // 默认未被遮挡。
+    for (int i = 1; i <= steps; i++) {
+        vec3 pos = mix(start, end, float(i) / float(steps)); // 沿射线均匀取样。
+        vec3 screen = omniProject(pos); // 取样的屏幕坐标与深度。
+        if (any(lessThan(screen.xy, vec2(0.0))) || any(greaterThan(screen.xy, vec2(1.0)))) break; // 跑出画面就不再判断。
+        float sceneDepth = texture(depthtex1, screen.xy).r; // 该像素不透明几何的深度。
+        if (sceneDepth >= 1.0) continue; // 天空没有实体，跳过。
+        float sceneZ = omniView(screen.xy, sceneDepth).z; // 还原成视空间深度。
+        if (sceneZ > pos.z + 0.03) { shadow = 0.0; break; } // 更靠近相机的几何挡住了光。
+    }
+    return mix(shadow, 1.0, 0.15); // 留一点底光，避免被遮处全黑。
+}
 // 调用位置：rendering/terrain.glsl和rendering/distant.glsl；示例：omniLighting(albedo, normal, world, lightUv, materialParams, materialAo)。
 vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materialParams, float materialAo) {
     vec3 sun = omniNormalize(shadowLightPosition); // 当前阴影天体可为太阳或月亮；退化时为零向量，直接光收敛为零。
@@ -105,8 +129,24 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
     float blockLevel = omniDirectionalBlock(clamp(light.x, 0.0, 1.0), normal, world, light); // 方向性方块光：朝光略亮。
     float block = pow(blockLevel, 3.0); // 方块光保留局部衰减。
 #ifdef OMNI_HELD_LIGHT
-    float held = float(max(heldBlockLightValue, heldBlockLightValue2)) / 15.0; // 双手取实际较亮光源。
-    block = max(block, held * OMNI_HELD_BRIGHTNESS * max(1.0 - length(world) / 12.0, 0.0) * max(1.0 - length(world) / 12.0, 0.0)); // 无遮挡的手持近似；亮度可调，不声称局部阴影。
+    float held = float(max(heldBlockLightValue, heldBlockLightValue2)) / 15.0; // 双手取实际较亮光源，没拿光源时为零。
+    float heldLight = 0.0; // 没拿光源就不计算，省下衰减与遮挡的开销。
+    if (held > 0.0) {
+        float heldDist = length(world); // 表面离相机（也就是光源）的距离，单位米。
+#if OMNI_HELDLIGHT_MODE == 1
+        vec3 aim = omniNormalize(mat3(gbufferModelViewInverse) * vec3(0.0, 0.0, -1.0)); // 相机看向的世界方向。
+        vec3 toSurface = omniNormalize(world); // 从相机指向表面的方向。
+        float cone = smoothstep(0.6, 0.9, dot(toSurface, aim)); // 锥形范围：越靠视线中心越亮。
+        heldLight = held * cone * max(1.0 - heldDist / 24.0, 0.0); // 手电筒：锥形加距离衰减。
+#else
+        float fade = max(1.0 - heldDist / 16.0, 0.0); // 点光：以相机为中心的球形衰减。
+        heldLight = held * fade * fade; // 平方让边缘更柔和。
+#endif
+#if OMNI_HELDLIGHT_SHADOW == 1
+        heldLight *= omniHeldShadow(mat3(gbufferModelView) * world, normal); // 被墙或物体挡住时变暗；视空间位置由相机矩阵还原。
+#endif
+        block = max(block, heldLight * OMNI_HELD_BRIGHTNESS); // 亮度可调，不声称任意彩色动态光源。
+    }
 #endif
     // 环境光底色：主世界是「天光按天光强度取一份，再加无光地板」，天光与环境光强度分离控制；
     // 下界与末地没有真实天空，直接给一组维度底色，再统一乘环境光强度与色温。

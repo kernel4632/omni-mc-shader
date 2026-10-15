@@ -134,6 +134,8 @@
 | OMNI_DIRECTIONAL_BLOCKLIGHT_STRENGTH | 方向性强度 | 火把光 | 数值 | 0.1–1.0 | 方向性方块光的强弱 | 已有 |
 | OMNI_HELD_LIGHT | 手持光开关 | 手持光 | 开关 | 开/关 | 手里拿着光源会不会照亮周围 | 已有 |
 | OMNI_HELD_BRIGHTNESS | 手持光亮度 | 手持光 | 数值 | 0.0–2.0 | 手持光多亮 | 已有 |
+| OMNI_HELDLIGHT_MODE | 手持光模式 | 手持光 | 档位 | 点光/手电筒 | 手持光是向四周照亮还是打出一束 | 已有 |
+| OMNI_HELDLIGHT_SHADOW | 手持光遮挡 | 手持光 | 开关 | 开/关 | 墙和物体挡住手持光时背后会不会变暗 | 已有 |
 | OMNI_BOUNCE_STRENGTH | 物体反光强度 | 物体反光 | 数值 | 0.0–2.0 | 旁边物体把光反到别处多强 | 已有 |
 | OMNI_BOUNCE_RADIUS | 物体反光范围 | 物体反光 | 数值 | 0.5–3.0 | 反光能影响多远 | 已有 |
 | OMNI_LPV_ENABLED | 空气补光开关 | 空气补光 | 开关 | 开/关 | 有没有光在空气里传播补亮 | 已有 |
