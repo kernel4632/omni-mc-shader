@@ -98,10 +98,10 @@ class BuildTests(unittest.TestCase):
             valid = "#version 430\nlayout(local_size_x=1) in;\nuniform float xy,x,y;\nvoid main(){ float value=xy; }\n"  # 连在一起的名字是已声明变量。
             source.write_text(valid, encoding="utf-8")  # 第一次确实编译成功，建立可复用缓存。
             with patch.object(build, "ROOT", root), patch.object(build, "SHADERS", shaders), patch.object(build, "tool", return_value=validator), patch("sys.stdout", new_callable=io.StringIO):  # 进度收进内存，不依赖测试终端是否能显示中文。
-                build.compile_shaders([source], {}, [])  # 通过实际编译而非模拟成功结果。
+                build.compile_shaders([source], {}, [], {source.stem})  # 通过实际编译而非模拟成功结果。
                 source.write_text(valid.replace("value=xy", "value=x/**/y"), encoding="utf-8")  # 注释隔开两个变量，没有运算符，应当报错。
                 with self.assertRaisesRegex(ValueError, "GLSL 编译/链接失败"):
-                    build.compile_shaders([source], {}, [])  # 不能复用先前合法源码的成功记录。
+                    build.compile_shaders([source], {}, [], {source.stem})  # 不能复用先前合法源码的成功记录。
 
     def test_release_notes_only_include_selected_version(self):
         """说明只取本版章节，并保留中文小标题。"""

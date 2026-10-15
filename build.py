@@ -273,10 +273,11 @@ def variants(found: dict, profiles: list) -> list[tuple[str, dict]]:
     return result  # 不指数穷举。
 
 # --- 编译与链接：多阶段成组检查，缓存只信任成功的相同源码 ---
-def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
+def compile_shaders(entries: list[Path], found: dict, profiles: list, full_programs: set[str]) -> None:
     """对 `entries` 的程序编译并链接代表选项配置，失败时映回光影相对路径。
 
-    `found` 与 `profiles` 来自配置扫描。离线环境只模拟基础与远景宏，不替代游戏验证。
+    `found` 与 `profiles` 来自配置扫描。`full_programs` 列出要在全部代表配置下编译的程序名，
+    其余程序只编译默认配置。离线环境只模拟基础与远景宏，不替代游戏验证。
     缓存位于开发报告目录，并同时核对编译器文件摘要和展开后源码摘要。
     """
     validator = tool("glslang")  # 真正执行编译器。
@@ -313,6 +314,8 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
             if (label == "default" and environment != "base") or (label == "all_high" and environment != "iris_dh"):
                 continue  # 默认检查基础回退，高效果检查可选能力，不重复两组环境乘积。
             for program, sources in programs.items():  # 各维度不遗漏。
+                if label != "default" and program.name not in full_programs:
+                    continue  # 非主要通路只在默认配置下编一次：足以挡住引入与宏撞名错误，又不让十秒预算被挤爆。
                 texts = [option_source(expanded[source], found, option_values) for source in sources]  # 每个阶段使用同一份选项取值。
                 texts = [text.replace("#version 330 compatibility", "#version 330 compatibility\n" + format_defines + defines, 1) for text in texts]  # 环境宏只注入临时文本，不修改入口文件。
                 if program.name.startswith("dh_") and environment == "iris_dh":
@@ -418,9 +421,10 @@ def check() -> None:
     expanded_cache = {}  # 一次检查只读取每份共用源码一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
         expand(source, sourceNumbers=source_numbers, cache=expanded_cache)  # 不为每个文件重新扫描整棵引用树。
-    key_programs = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "shadow", "dh_terrain", "dh_water", "deferred", "composite", "composite1", "final", "setup"}  # 另外两个维度只编译主要数据通路，维度宏主要影响这些程序。
-    probes = [source for source in entries if source.parent.name == "world0" or source.stem in key_programs]  # 主世界的每个程序都编译：不同程序宏会改变引入结果，只编主路会漏掉宏与引入标记撞名这类错误。
-    compile_shaders(probes, found, profiles)
+    key_programs = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "shadow", "dh_terrain", "dh_water", "deferred", "composite", "composite1", "final", "setup"}  # 主要数据通路，在全部代表配置下编译。
+    dimension_programs = {"deferred", "composite"}  # 维度宏改变天空、雾与光照的地方集中在这两个阶段。
+    probes = [source for source in entries if source.parent.name == "world0" or source.stem in dimension_programs]  # 主世界每个程序都编：不同程序宏会改变引入结果，只编主路会漏掉宏与引入标记撞名。
+    compile_shaders(probes, found, profiles, key_programs)
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
     print(f"检查通过：{len(entries)} 个入口，{len(found)} 个选项，{len(profiles)} 套预设")
 
