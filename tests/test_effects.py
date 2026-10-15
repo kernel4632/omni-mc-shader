@@ -364,6 +364,8 @@ class EffectTests(unittest.TestCase):
         self.assertFalse(any(line.strip() == "#define OMNI_UPSCALE" for line in text.splitlines()))  # 检查未替换选项的原始源码，避免离线配置掩盖重名。
         self.assertIn("vec3 omniUpscale",text)  # 重采样独立成函数。
         self.assertIn("mix(color,sum/weight,strength)",text)  # 平坦区收敛为原颜色。
+        self.assertIn("OMNI_UPSCALE_STRENGTH",found)  # 超分强度可调。
+        self.assertIn("*OMNI_UPSCALE_STRENGTH",text)  # 强度参与混合权重。
         source = build.expand(build.SHADERS/"world0/final.fsh")  # 从最终显示入口展开。
         self.assertIn("omniUpscale",source)  # 最终显示包含可选重采样。
 

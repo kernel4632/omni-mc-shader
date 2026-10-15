@@ -7,13 +7,13 @@
 #ifndef OMNI_BLOOM
 #define OMNI_BLOOM
 // @effect {"label":{"zh_cn":"泛光","en_us":"Bloom"}}
-// @option {"label":{"zh_cn":"开启泛光","en_us":"Bloom"}}
+// @option {"label":{"zh_cn":"泛光开关","en_us":"Bloom"}}
 //#define OMNI_BLOOM_ENABLED
 // @option {"label":{"zh_cn":"泛光强度","en_us":"Bloom strength"},"slider":true}
 #define OMNI_BLOOM_STRENGTH 0.25 // [0.1 0.25 0.5 1.0]
-// @option {"label":{"zh_cn":"泛光阈值","en_us":"Bloom threshold"},"description":{"zh_cn":"亮度超过此值才产生光晕；低于一时高光也会泛光，高于一时只有强光源泛光。","en_us":"Only luminance above this value blooms; below one highlights also glow, above one only strong sources do."},"slider":true}
+// @option {"label":{"zh_cn":"泛光起点","en_us":"Bloom threshold"},"description":{"zh_cn":"亮度超过此值才产生光晕；低于一时高光也会泛光，高于一时只有强光源泛光。","en_us":"Only luminance above this value blooms; below one highlights also glow, above one only strong sources do."},"slider":true}
 #define OMNI_BLOOM_THRESHOLD 1.0 // [0.5 0.8 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"泛光半径","en_us":"Bloom radius"},"slider":true}
+// @option {"label":{"zh_cn":"泛光范围","en_us":"Bloom radius"},"slider":true}
 #define OMNI_BLOOM_RADIUS 1.0 // [0.5 1.0 1.5 2.0]
 // 需要的共用输入：omniLuminance 亮度计算，以及 colortex0 颜色、viewWidth 与 viewHeight 尺寸。
 #include "/common/math.glsl"
