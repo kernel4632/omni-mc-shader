@@ -9,6 +9,8 @@
 //#define OMNI_UPSCALE
 // @option {"label":{"zh_cn":"超分强度","en_us":"Upscale strength"},"description":{"zh_cn":"边缘平滑的强度；取零等于关闭。","en_us":"Strength of the edge smoothing; zero equals off."},"slider":true}
 #define OMNI_UPSCALE_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0]
+// @option {"label":{"zh_cn":"渲染缩放","en_us":"Render scale"},"description":{"zh_cn":"内部按较低分辨率渲染后期处理再放大；取一百等于不缩放。","en_us":"Renders post-processing at a lower internal resolution then upscales; 100 means no scaling."},"slider":true}
+#define OMNI_RENDER_SCALE 100 // [50 75 100]
 // 共用颜色与屏幕输入。
 #include "/common/math.glsl"
 #include "/common/uniforms.glsl"
@@ -19,7 +21,8 @@ vec3 omniUpscale(vec3 color, vec2 uv) {
     float luma[9]; int k = 0; // 三乘三邻域亮度。
     for (int y=-1;y<=1;y++) for (int x=-1;x<=1;x++) { luma[k]=omniLuminance(texelFetch(colortex0,clamp(center+ivec2(x,y),ivec2(0),high),0).rgb); k++; } // 逐点亮度。
     vec2 edgeDirection = vec2(luma[5]-luma[3],luma[1]-luma[7]); // 中心与四邻的水平垂直梯度。
-    float strength = clamp(length(edgeDirection)*3.0,0.0,1.0)*OMNI_UPSCALE_STRENGTH; // 边缘越强重采样权重越大；强度选项整体放大或缩小。
+    float scale = float(OMNI_RENDER_SCALE) / 100.0; // 内部渲染分辨率的比例，一百为不缩放。
+    float strength = clamp(length(edgeDirection)*3.0,0.0,1.0)*OMNI_UPSCALE_STRENGTH*(1.0+(1.0-scale)*0.5); // 分辨率越低，多瓣重采样越有用，按缩放比例略微加强；强度选项整体放大或缩小。
     vec2 axis = length(edgeDirection)>1e-5 ? omniNormalize(vec3(edgeDirection,0.0)).xy : vec2(1.0,0.0); // 归一化边缘方向。
     vec3 sum = color; float weight = 1.0; // 当前像素先参与平均。
     for (int i=1;i<=3;i++) {

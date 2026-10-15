@@ -122,5 +122,6 @@ def generated_comments(path: Path, content: str) -> None:
     """
     for line_number, line in enumerate(content.splitlines(), 1):
         if not line.lstrip().startswith("#"): continue  # 菜单值和翻译值是数据，不是给接手者的说明。
+        if re.match(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b", line.lstrip()): continue  # 预处理器指令是机器语句，不是自然语言说明，也不对玩家显示。
         decoded = re.sub(r"\\u([0-9a-fA-F]{4})", lambda match: chr(int(match[1], 16)), line)  # 只还原 Unicode 中文，避免转义形式绕过语言审计。
         if not chinese_explanation(decoded): raise ValueError(f"{path}:{line_number}：生成说明必须是有效中文")  # 生成文件不豁免英语说明，只豁免比例要求。

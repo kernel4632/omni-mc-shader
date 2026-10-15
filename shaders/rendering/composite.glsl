@@ -99,6 +99,6 @@ void main() {
     if (!sky) color = omniCompositeSurface(color,texcoord); // 背景之外的像素才做几何后处理。
     color *= 1.0-clamp(blindness,0.0,1.0); // 保留原版失明效果，让药水依然能压暗画面。
     color = omniWeather(color); // 下雨时整体压暗，天空和地形一起。
-    colorOut = vec4(color,sky || texelFetch(colortex7,ivec2(gl_FragCoord.xy),0).a>=0.5 ? 1.0 : 0.0); // 把天空与精确的几何有效标记传给时间阶段。
+    colorOut = vec4(color,sky || texelFetch(colortex7,omniPixel(texcoord),0).a>=0.5 ? 1.0 : 0.0); // 用全分辨率像素坐标取有效标记，渲染缩放改变本阶段分辨率时仍然读对位置。
 }
 #endif

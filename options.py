@@ -350,6 +350,13 @@ def generated(shaders: Path, options: dict[str, Option], groups: dict,
     for pid in ordered:  # 每页平铺其选项，并固定三栏。
         lines.append(f"screen.{pid.upper()} = " + " ".join(pages[pid]))  # 归属唯一，顺序沿用源码。
         lines.append(f"screen.{pid.upper()}.columns = 3")  # 多栏排布，利用横向空间。
+    render_scale = options.get("OMNI_RENDER_SCALE")  # 渲染缩放：内部按较低分辨率渲染合成缓冲，再在时间阶段放大。
+    if render_scale:
+        for value in render_scale.values:  # 尺寸只由选项自己的取值决定，不在这里另存一份数值表。
+            if value == "100":
+                continue  # 一百等于不缩放，不需要额外设置，保持几何与合成同分辨率。
+            fraction = f"{int(value) / 100:.4f}".rstrip("0").rstrip(".")  # 百分比换算成相对屏幕的比例，例如七十五变零点七五。
+            lines += [f"#if OMNI_RENDER_SCALE == {value}", f"size.buffer.colortex6 = {fraction} {fraction}", "#endif"]  # 每个取值只在一支条件里写一次，避免同键重复导致读取失败。
     sliders = [option.name for option in options.values() if option.slider]  # 滑块自动从效果说明读取。
     if sliders:
         lines.append("sliders = " + " ".join(sliders))  # 没有滑块时省略设置，不额外生成空菜单项。
