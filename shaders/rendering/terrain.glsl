@@ -156,6 +156,9 @@ vec3 omniShadeSurface(inout Surface s) {
 #ifdef OMNI_EMISSIVE
     lit=albedo*2.0; s.materialParams.z=1.0; // 自发光方块无视光照直接用自身颜色，并标记发光供后处理识别。
 #endif
+#ifdef OMNI_GLOWING
+    lit=omniGlow(lit,albedo); s.materialParams.z=max(s.materialParams.z,OMNI_PLAYER_GLOW); // 发光实体按玩家发光遮盖朝自身颜色靠拢。
+#endif
     return lit; // 显示编码留给后面的合成阶段，这里保持线性。
 }
 // 写附件：把同一份表面按当前阶段写进约定的附件。

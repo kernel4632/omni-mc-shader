@@ -8,7 +8,7 @@
     "gbuffers_terrain": ["terrain", "OMNI_TERRAIN"],
     "gbuffers_entities": ["terrain", "OMNI_ENTITIES"],
     "gbuffers_entities_translucent": ["terrain", "OMNI_ENTITIES", "OMNI_OVERLAY"],
-    "gbuffers_entities_glowing": ["terrain", "OMNI_ENTITIES", "OMNI_EMISSIVE", "OMNI_OVERLAY"],
+    "gbuffers_entities_glowing": ["terrain", "OMNI_ENTITIES", "OMNI_GLOWING", "OMNI_OVERLAY"],
     "gbuffers_block": ["terrain", "OMNI_ENTITIES"],
     "gbuffers_block_translucent": ["terrain", "OMNI_ENTITIES", "OMNI_OVERLAY"],
     "gbuffers_hand": ["terrain", "OMNI_HAND"],

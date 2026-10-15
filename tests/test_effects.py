@@ -308,12 +308,12 @@ class EffectTests(unittest.TestCase):
     def test_climate_snow_and_wet(self):
         """气候温度按高度与噪声估计，驱动自然积雪与湿润且可回退手动值。"""
         found,_,_ = build.configuration()
-        self.assertIn("OMNI_CLIMATE",found); self.assertEqual(found["OMNI_CLIMATE"].values,("0","1"))  # 气候覆盖可开关。
+        self.assertIn("OMNI_CLIMATE_SNOW",found); self.assertEqual(found["OMNI_CLIMATE_SNOW"].values,("0","1"))  # 气候覆盖可开关。
         text = (build.SHADERS/"effects/material.glsl").read_text(encoding="utf-8")
         self.assertIn("float omniTemperature",text)  # 温度估计独立成函数。
         self.assertIn("1.0-smoothstep(0.10,0.30,temperature)",text)  # 正序插值后取反，冷处积雪且不触发未定义计算。
         self.assertIn("wetness*(0.5+0.5*temperature)",text)  # 暖处湿润权重更高，与菜单说明一致。
-        self.assertIn("OMNI_CLIMATE == 1",text)  # 手动回退路径由选项分派保留。
+        self.assertIn("OMNI_CLIMATE_SNOW == 1",text)  # 手动回退路径由选项分派保留。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniTemperature",source)  # 地形表面包含气候覆盖。
         for name in ("OMNI_WET_STRENGTH","OMNI_SNOW_STRENGTH"):
@@ -351,7 +351,7 @@ class EffectTests(unittest.TestCase):
         """轻量预设关闭阴影、高光、气候、云影与水面细节等较重的默认效果。"""
         _, profiles, _ = build.configuration()
         lightweight = next(profile for profile in profiles if profile.name == "lightweight")  # 找到轻量预设。
-        for name in ("OMNI_SHADOW_ENABLED","OMNI_SSAO","OMNI_SSR","OMNI_SPECULAR","OMNI_CLIMATE",
+        for name in ("OMNI_SHADOW_ENABLED","OMNI_SSAO","OMNI_SSR","OMNI_SPECULAR","OMNI_CLIMATE_SNOW",
                      "OMNI_CLOUD_SHADOW","OMNI_WATER_BUMP","OMNI_OCEAN_WAVES","OMNI_UNDERWATER_FOG",
                      "OMNI_END_FOG","OMNI_LENS_FLARE","OMNI_VEGETATION_WIND","OMNI_RAIN_RIPPLES"):
             self.assertIn(lightweight.values[name],("false","0"),name)  # 每个较重的效果在轻量预设里都被关闭。
@@ -399,13 +399,13 @@ class EffectTests(unittest.TestCase):
     def test_entity_light_and_hand_size_are_adjustable(self):
         """生物受光强度、色温与手持物大小都可调，分别接入实体光照与手持物顶点。"""
         found,_,_ = build.configuration()
-        for name in ("OMNI_ENTITY_STRENGTH","OMNI_ENTITY_TINT","OMNI_HAND_SIZE"):
+        for name in ("OMNI_ENTITY_LIGHT","OMNI_ENTITY_TINT","OMNI_HAND_FOV"):
             self.assertIn(name,found)  # 每个参数由生物源码定义。
         text = (build.SHADERS/"effects/entity.glsl").read_text(encoding="utf-8")
         self.assertIn("vec3 omniEntityLight",text)  # 生物受光独立成函数。
         self.assertIn("vec4 omniHandZoom",text)  # 手持物缩放独立成函数。
         self.assertIn("OMNI_ENTITY_TINT",text)  # 色温参与生物受光。
-        self.assertIn("OMNI_HAND_SIZE",text)  # 大小参与手持物缩放。
+        self.assertIn("OMNI_HAND_FOV",text)  # 大小参与手持物缩放。
         entities = build.expand(build.SHADERS/"world0/gbuffers_entities.fsh")  # 从实体入口展开。
         self.assertIn("omniEntityLight",entities)  # 实体光照包含生物受光。
         hand = build.expand(build.SHADERS/"world0/gbuffers_hand.vsh")  # 从手持物顶点入口展开。

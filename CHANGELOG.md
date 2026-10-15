@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.0.0-dev.93
+
+- 参数改名对齐参数总表：材质细节 `OMNI_LABPBR`→`OMNI_MATERIAL_DETAIL`、自动积雪 `OMNI_CLIMATE`→`OMNI_CLIMATE_SNOW`、生物受光 `OMNI_ENTITY_STRENGTH`→`OMNI_ENTITY_LIGHT`。
+- 手持物由整体缩放改为视野：`OMNI_HAND_SIZE`→`OMNI_HAND_FOV`（三十到一百二十度，七十度为原版大小）。
+- 新增玩家发光遮盖 `OMNI_PLAYER_GLOW`：发光实体按普通受光与自身发光色之间插值；发光实体改用独立宏 `OMNI_GLOWING`。
+- 旧分享配置里使用旧名称会被当作未知选项拒绝，需按当前名称重新导出。
+
+本版本只做离线编译与逻辑审查，未启动 Minecraft，未运行 GPU 或性能测试。
+
 ## 0.0.0-dev.92
 
 - 修正季节效果里的注释：`block.properties` 中 10001 是树叶、10002 是草与农作物，原注释把两者编号写反了；代码判断本来就同时覆盖两者，只改说明。

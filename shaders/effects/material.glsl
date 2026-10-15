@@ -7,8 +7,8 @@
 #ifndef OMNI_MATERIAL
 #define OMNI_MATERIAL
 // @effect {"label":{"zh_cn":"材质","en_us":"Materials"}}
-// @option {"label":{"zh_cn":"材质细节开关","en_us":"labPBR 1.3"},"description":{"zh_cn":"需要实验室材质标准一点三资源包；关闭时使用普通贴图。预定义金属按标准允许的底色近似。","en_us":"Requires labPBR 1.3 maps; predefined metals use the permitted albedo approximation."}}
-//#define OMNI_LABPBR
+// @option {"label":{"zh_cn":"材质细节开关","en_us":"Material detail"},"description":{"zh_cn":"需要实验室材质标准一点三资源包；关闭时使用普通贴图。预定义金属按标准允许的底色近似。","en_us":"Requires labPBR 1.3 maps; predefined metals use the permitted albedo approximation."}}
+//#define OMNI_MATERIAL_DETAIL
 // @option {"label":{"zh_cn":"凹凸深度","en_us":"Parallax depth"},"slider":true}
 #define OMNI_PARALLAX 0.0 // [0.0 0.02 0.05 0.1]
 // @option {"label":{"zh_cn":"湿润开关","en_us":"Wet surfaces"}}
@@ -20,11 +20,11 @@
 // @option {"label":{"zh_cn":"额外积雪","en_us":"Snow coverage"},"description":{"zh_cn":"手动额外覆盖，按天空光与表面朝上程度叠加；不推断生物群系温度。","en_us":"Extra artistic coverage based on skylight and surface orientation, not biome temperature."}}
 #define OMNI_SNOW 0.0 // [0.0 0.25 0.5 1.0]
 // @option {"label":{"zh_cn":"自动积雪开关","en_us":"Climate snow/wet"},"description":{"zh_cn":"按高度与空间噪声估计温度，冷处自然积雪、温暖处更易积水；不读取真实生物群系数据。","en_us":"Estimates temperature from altitude and spatial noise for natural snow and wetness, without biome data."}}
-#define OMNI_CLIMATE 1 // [0 1]
+#define OMNI_CLIMATE_SNOW 1 // [0 1]
 // 贴图解码和天气叠加共享归一化、噪声等通用计算与相机、湿度等统一输入变量。
 #include "/common/math.glsl"
 #include "/common/uniforms.glsl"
-#ifdef OMNI_LABPBR
+#ifdef OMNI_MATERIAL_DETAIL
 uniform sampler2D normals, specular; // 加载器按资源包提供法线与表面两张贴图。
 // 视差步进：沿视线在高度图里向前找可见交点，返回被近处凸起遮住的贴图坐标。
 // 为什么固定十六步：步数直接决定开销和精度，写死才能让编译器和玩家都预知代价，避免可变长循环。
@@ -54,7 +54,7 @@ vec3 omniDecodeNormal(vec4 texel, mat3 tangentFrame, vec3 geometry) {
 // 参数里的 `bounds` 是图块在整张图集里的边界，`tangentFrame` 是切线基，`allowParallax` 表示调用者是否允许视差。
 void omniMaterial(inout vec4 base, inout vec3 normal, inout vec3 materialParams, out float materialAo, inout vec2 uv, vec4 bounds, mat3 tangentFrame, vec3 view, bool allowParallax) {
     materialAo = 1.0; // 普通贴图或缺失材质时使用不遮蔽的默认值，后续只让环境光读取它。
-#ifdef OMNI_LABPBR
+#ifdef OMNI_MATERIAL_DETAIL
     vec3 geometry = normal; // 先记住几何法线，法线贴图缺失或损坏时回退到它。
     vec2 dx = dFdx(uv), dy = dFdy(uv); // 显式导数：视差循环里坐标会变，循环中不能用隐式导数。
     bool atlasValid = bounds.z > bounds.x && bounds.w > bounds.y; // 只有图块边界有效时才允许视差。
@@ -90,7 +90,7 @@ void omniSurface(inout vec3 color, inout vec3 materialParams, vec3 normal, vec3 
     float up = max((mat3(gbufferModelViewInverse)*normal).y,0.0); // 法线转到世界空间：只有朝上的面才接得住雨雪。
     float snow = OMNI_SNOW*OMNI_SNOW_STRENGTH; // 手动覆盖量乘强度作为下限，气候只会在它之上追加积雪。
     float wetnessAmount = wetness; // 加载器湿润度作为默认，气候会再乘一个温度权重。
-#if OMNI_CLIMATE == 1
+#if OMNI_CLIMATE_SNOW == 1
     float temperature = omniTemperature(world); // 估计这一处的气候温度。
     snow = max(snow,1.0-smoothstep(0.10,0.30,temperature)); // 正序计算后取反：温度不高于零点一时全雪，不低于零点三时没有气候雪。
     wetnessAmount = wetness*(0.5+0.5*temperature); // 按菜单意图让暖处更湿，最冷处保留一半基础湿润。
