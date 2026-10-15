@@ -62,23 +62,26 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_EXPOSURE_TARGET/exp",text)  # 目标亮度参与目标曝光。
         self.assertIn("*OMNI_EXPOSURE_SPEED",text)  # 适应速度参与混合。
 
-    def test_horizon_ao_is_selectable_and_expands(self):
-        """地平线环境遮蔽通过算法选项接入合成，螺旋路径仍然保留。"""
+    def test_corner_darkening_and_bounce_are_adjustable(self):
+        """缝隙变暗只保留一套地平线做法，物体反光强度与范围可调。"""
         found,_,_ = build.configuration()
-        self.assertIn("OMNI_AO_MODE",found); self.assertEqual(found["OMNI_AO_MODE"].values,("0","1"))  # 两种遮蔽算法可选。
+        self.assertIn("OMNI_SSAO",found)  # 缝隙变暗开关。
+        self.assertNotIn("OMNI_AO_MODE",found)  # 遮蔽算法选择已去掉。
         text = (build.SHADERS/"effects/ambient.glsl").read_text(encoding="utf-8")
         self.assertIn("float omniHorizonOcclusion",text)  # 地平线积分独立成函数。
-        self.assertIn("float omniSpiralOcclusion",text)  # 旧螺旋路径没有被删除。
+        self.assertNotIn("omniSpiralOcclusion",text)  # 旧螺旋算法已删除。
         self.assertIn("vec2 omniHorizon",text)  # 每方向地平线搜索独立成函数，并返回有效标记。
         self.assertIn("if (!found) return 0.0;",text)  # 无有效邻点时这一片不得当成最大遮挡。
-        self.assertIn("OMNI_AO_STRENGTH",found); self.assertIn("OMNI_BOUNCE_STRENGTH",found)  # 遮蔽与反弹强度可调。
-        self.assertIn("*OMNI_AO_STRENGTH",text)  # 遮蔽强度参与遮挡系数。
-        self.assertIn("*OMNI_BOUNCE_STRENGTH",text)  # 反弹强度参与反弹叠加。
-        self.assertIn("OMNI_AO_SLICES",found); self.assertIn("OMNI_AO_STEPS",found)  # 遮蔽方向数与步数可调。
+        self.assertIn("OMNI_AO_STRENGTH",found); self.assertIn("OMNI_BOUNCE_STRENGTH",found)  # 变暗与反光强度可调。
+        self.assertIn("*OMNI_AO_STRENGTH",text)  # 变暗强度参与遮挡系数。
+        self.assertIn("*OMNI_BOUNCE_STRENGTH",text)  # 反光强度参与反光叠加。
+        self.assertIn("OMNI_AO_SLICES",found); self.assertIn("OMNI_AO_STEPS",found)  # 变暗方向数与精细度可调。
+        self.assertIn("OMNI_BOUNCE_RADIUS",found)  # 物体反光范围可调。
         self.assertIn("const int steps = OMNI_AO_STEPS",text)  # 步数来自选项。
         self.assertIn("const int slices = OMNI_AO_SLICES",text)  # 方向数来自选项。
+        self.assertIn("omniBounceRadius",text)  # 反光用自己的范围。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开全部引用。
-        self.assertIn("omniHorizonOcclusion",source)  # 合成阶段包含地平线遮蔽。
+        self.assertIn("omniHorizonOcclusion",source)  # 合成阶段包含缝隙变暗。
 
     def test_lens_flare_uses_scene_highlight(self):
         """镜头耀斑在最终显示叠加，光源强度取自现有亮部且可关闭。"""
