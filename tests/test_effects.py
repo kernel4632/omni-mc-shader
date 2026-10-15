@@ -506,6 +506,15 @@ class EffectTests(unittest.TestCase):
                     self.assertNotIn(match[1],macros)  # 和程序宏同名会让整段代码被跳过。
                     self.assertNotIn(match[1],found)  # 和选项同名会让玩家开关变成引入标记。
 
+    def test_custom_images_feature_is_declared(self):
+        """用自定义图像就必须声明能力开关，缺能力时 LPV 回退到屏幕空间间接光。"""
+        settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")
+        self.assertIn("CUSTOM_IMAGES",settings["iris.features.optional"])  # 声明为可选能力，缺少时仍能加载。
+        self.assertIn("image.omniLpvA",settings)  # 自定义图像仍由绘制设置提供。
+        for name in ("effects/lpv.glsl","effects/ambient.glsl","rendering/lpv.glsl"):
+            text = (build.SHADERS/name).read_text(encoding="utf-8")
+            self.assertIn("IRIS_FEATURE_CUSTOM_IMAGES",text)  # 每处图像读写都按能力开关回退。
+
     def test_include_lines_are_bare_references(self):
         """任何一行出现 #include 都必须是干净的引用行：加载器在去注释之前扫描引用，注释里的示例会被当成本文件自我包含。"""
         references = re.compile(r'\s*#include\s+"[^"]+"\s*$')

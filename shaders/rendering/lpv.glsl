@@ -10,7 +10,7 @@
 layout(local_size_x=8, local_size_y=8, local_size_z=8) in; // 单一工作组覆盖整格，可用工作组屏障。
 // 读取源图像的一个单元并夹紧到网格内，避免越界。
 vec3 omniLpvReadA(ivec3 cell) {
-#ifdef OMNI_LPV_ENABLED // 关闭时不做任何图像读取。
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不做任何图像读取。
     return imageLoad(omniLpvA,clamp(cell,ivec3(0),ivec3(lpvSide-1))).rgb; // 边界重复自身。
 #else // 关闭体积光时的安全回退。
     return vec3(0.0); // 不读取图像，返回零能量。
@@ -18,7 +18,7 @@ vec3 omniLpvReadA(ivec3 cell) {
 }
 // 读取目标图像的一个单元并夹紧到网格内。
 vec3 omniLpvReadB(ivec3 cell) {
-#ifdef OMNI_LPV_ENABLED // 关闭时不做任何图像读取。
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不做任何图像读取。
     return imageLoad(omniLpvB,clamp(cell,ivec3(0),ivec3(lpvSide-1))).rgb; // 边界重复自身。
 #else // 关闭体积光时的安全回退。
     return vec3(0.0); // 不读取图像，返回零能量。
@@ -26,7 +26,7 @@ vec3 omniLpvReadB(ivec3 cell) {
 }
 // 清空并注入：给每格写入方向光近似，作为传播起点。
 void omniLpvSeed() {
-#ifdef OMNI_LPV_ENABLED // 关闭时不写图像。
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不写图像。
     ivec3 cell = ivec3(gl_GlobalInvocationID); // 当前单元。
     vec3 light = vec3(0.0); // 没有几何数据时按方向光给基础能量。
 #if !defined OMNI_NETHER && !defined OMNI_END // 其他维度没有主世界方向光。
@@ -40,7 +40,7 @@ void omniLpvSeed() {
 }
 // 正向传播一步：从源读取六邻居，写回目标。
 void omniLpvSpreadAB() {
-#ifdef OMNI_LPV_ENABLED // 关闭时不做传播。
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不做传播。
     ivec3 cell = ivec3(gl_GlobalInvocationID); // 当前单元。
     vec3 sum = omniLpvReadA(cell); // 自身先参与平均。
     sum += omniLpvReadA(cell+ivec3(1,0,0)) + omniLpvReadA(cell-ivec3(1,0,0)); // 左右邻居。
@@ -53,7 +53,7 @@ void omniLpvSpreadAB() {
 }
 // 反向传播一步：从目标读取六邻居，写回源图像。
 void omniLpvSpreadBA() {
-#ifdef OMNI_LPV_ENABLED // 关闭时不做传播。
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不做传播。
     ivec3 cell = ivec3(gl_GlobalInvocationID); // 当前单元。
     vec3 sum = omniLpvReadB(cell); // 自身先参与平均。
     sum += omniLpvReadB(cell+ivec3(1,0,0)) + omniLpvReadB(cell-ivec3(1,0,0)); // 左右邻居。
@@ -65,7 +65,7 @@ void omniLpvSpreadBA() {
 #endif // 结束反向传播分支。
 }
 void main() {
-#ifdef OMNI_LPV_ENABLED // 关闭时计算入口保持空实现。
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时计算入口保持空实现。
     omniLpvSeed(); // 初次注入函数内部已经按图像屏障、工作组屏障的顺序完成同步。
     for (int k=0;k<OMNI_LPV_STEPS;k++) { if (k%2==0) omniLpvSpreadAB(); else omniLpvSpreadBA(); } // 每轮函数内部完成双缓冲传播和同步，奇偶轮次交替使用两张图像。
 #endif // 结束计算入口分支。
