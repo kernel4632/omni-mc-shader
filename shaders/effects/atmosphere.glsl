@@ -18,6 +18,8 @@
 #define OMNI_ATMOSPHERE_SCATTER 1 // [0 1]
 // @option {"label":{"zh_cn":"极光强度","en_us":"Aurora strength"},"slider":true}
 #define OMNI_AURORA_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"极光颜色","en_us":"Aurora colour"},"description":{"zh_cn":"正值偏绿、负值偏蓝紫。","en_us":"Positive leans green, negative leans blue-purple."},"slider":true}
+#define OMNI_AURORA_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"彩虹强度","en_us":"Rainbow strength"},"slider":true}
 #define OMNI_RAINBOW_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"散射强度","en_us":"Scatter strength"},"slider":true}
@@ -47,7 +49,8 @@ vec3 omniAurora(vec3 color, vec3 direction) {
 #ifdef OMNI_AURORA
     float night = 1.0-smoothstep(-0.2,0.1,omniNormalize(mat3(gbufferModelViewInverse)*sunPosition).y); // 太阳越低夜色越浓，极光越亮。
     float curtain = pow(max(0.0,sin(direction.x*18.0+omniNoise(direction*8.0+frameTimeCounter*0.02)*6.0)),8.0); // 帘幕随位置起伏、随时间缓慢移动。
-    color += vec3(0.08,0.35,0.20)*curtain*smoothstep(0.1,0.5,direction.y)*(1.0-rainStrength)*night*OMNI_AURORA_STRENGTH; // 绿色帘幕只露在高空，雨云之下熄灭；强度可调。
+    vec3 auroraColor = mix(vec3(0.12,0.16,0.50),vec3(0.08,0.35,0.20),0.5+0.5*OMNI_AURORA_TINT); // 极光颜色：正值偏绿、负值偏蓝紫，取零为中间绿。
+    color += auroraColor*curtain*smoothstep(0.1,0.5,direction.y)*(1.0-rainStrength)*night*OMNI_AURORA_STRENGTH; // 帘幕只露在高空，雨云之下熄灭；颜色与强度可调。
 #endif
     return color; // 关闭时不改动颜色。
 }

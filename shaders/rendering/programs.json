@@ -14,7 +14,7 @@
     "gbuffers_hand": ["terrain", "OMNI_HAND"],
     "gbuffers_hand_water": ["terrain", "OMNI_HAND", "OMNI_OVERLAY"],
     "gbuffers_water": ["terrain", "OMNI_TERRAIN", "OMNI_WATER_PASS"],
-    "gbuffers_weather": ["terrain", "OMNI_OVERLAY"],
+    "gbuffers_weather": ["terrain", "OMNI_WEATHER", "OMNI_OVERLAY"],
     "gbuffers_particles": ["terrain", "OMNI_OVERLAY"],
     "gbuffers_particles_translucent": ["terrain", "OMNI_OVERLAY"],
     "gbuffers_damagedblock": ["terrain", "OMNI_OVERLAY"],

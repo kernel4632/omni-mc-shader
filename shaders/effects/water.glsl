@@ -59,6 +59,8 @@
 //#define OMNI_PLAYER_RIPPLES
 // 反射和坐标重建的共用实现：水面反射复用它读取已保存的不透明画面。
 #include "/effects/reflection.glsl"
+// 雨点落点密度来自天气效果。
+#include "/effects/weather.glsl"
 // --- 水体光学常数 ---
 // 红衰减最快、绿居中、蓝最慢，所以水越深越偏青绿，最终趋向水体散射色。
 // 六个系数都来自上方可调选项，只在这里组成向量；水面合成与水下雾都从这里取，避免两处各写一份。
@@ -80,8 +82,9 @@ float omniWave(vec2 p, float relativeHeight) {
     vec2 s = p*OMNI_WAVE_SCALE; // 只缩放解析波的空间频率；雨滴与玩家涟漪仍按真实世界坐标定位。
     float wave = sin(dot(s,vec2(0.65,0.3))+t*1.2)*0.06 + sin(dot(s,vec2(-0.2,0.8))-t*0.9)*0.04; // 两个方向与速度都不同的正弦，避免看出明显重复。
 #ifdef OMNI_RAIN_RIPPLES
-    vec2 cell = floor(p*0.7); // 把水面切成约一点四米一格，每格固定一个雨滴落点。
-    vec2 center = (cell+vec2(omniHash(cell),omniHash(cell+8.2)))/0.7; // 用格坐标算落点，同一格永远落在同一点，波纹可重复。
+    float grid = omniRippleGrid(); // 落点密度决定格子精细度：密度越高，同一片水面上的落点越多。
+    vec2 cell = floor(p*grid); // 把水面切成约一点四米一格，每格固定一个雨滴落点。
+    vec2 center = (cell+vec2(omniHash(cell),omniHash(cell+8.2)))/grid; // 用格坐标算落点，同一格永远落在同一点，波纹可重复。
     float age = fract(t*0.8+omniHash(cell+1.3)); // 每格起始相位不同，雨滴不会同时出现。
     float radius = length(p-center); // 当前点到本格落点的水平距离。
     wave += rainStrength*sin(radius*22.0-age*14.0)*exp(-radius*3.0)*(1.0-age)*0.025*OMNI_RIPPLE_STRENGTH; // 向外扩散的环，随时间变淡，雨越大越明显；强度可调。

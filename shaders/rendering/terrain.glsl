@@ -16,6 +16,8 @@
 #include "/effects/season.glsl"
 // 生物受光与手持物大小。
 #include "/effects/entity.glsl"
+// 雨雪的可见度与斜度。
+#include "/effects/weather.glsl"
 uniform sampler2D gtexture; // 当前物体的底色贴图，材质解码时还要乘上它。
 #if defined OMNI_ENTITIES && !defined IRIS_FEATURE_ENTITY_TRANSLUCENT
 #define OMNI_OVERLAY // 加载器没有透明实体分离能力时，只能把半透明实体当叠层处理，拒绝与深度配对的后处理。
@@ -121,6 +123,9 @@ Surface omniReadSurface() {
     s.normal=dot(viewNormal,viewNormal)>1e-6?omniNormalize(viewNormal):vec3(0,0,1); // 几何法线退化时退到朝向相机的方向，避免后面除零。
     mat3 tangentFrame=omniTangentFrame(s.normal,viewTangent,tangentSign); // 给法线贴图用的切线基。
     s.materialParams=vec3(0.85,0.04,0.0); s.materialAo=1.0; vec2 tex=uv; // 普通表面默认：很粗糙、不金属、不发光、不遮蔽。
+#ifdef OMNI_WEATHER
+    tex.x += OMNI_RAIN_WIND * (uv.y - 0.5); // 雨丝斜度：按贴图纵向位置把采样横向偏移，形成倾斜的雨丝。
+#endif
 #if defined OMNI_BASIC
     // 线条没有可靠的图集边界，只保留上面的顶点色，不采样材质贴图。
 #elif defined OMNI_TERRAIN
@@ -141,6 +146,9 @@ Surface omniReadSurface() {
 #endif
 #ifdef OMNI_WATER_PASS
     if(materialId==10000.0) { s.normal=omniWaterNormal(s.world,s.normal); s.materialParams=vec3(0.06,0.02,0.0); s.category=1.0; s.base.a=1.0; } // 只让水面按世界位置造波并标成光滑不透光的水；侧面和瀑布保留原法线。
+#endif
+#ifdef OMNI_WEATHER
+    s.base.rgb *= omniWeatherVisibility(s.world); // 雨雪颗粒按可见度整体缩明；冷处用雪的可见度，其余用雨的可见度。
 #endif
     return s; // 交回填满的表面。
 }

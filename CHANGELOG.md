@@ -1,5 +1,13 @@
 # 更新记录
 
+## 0.0.0-dev.94
+
+- 新增极光颜色 `OMNI_AURORA_TINT`：在绿与蓝紫之间调整极光帘幕颜色。
+- 新增天气参数：雨的可见度 `OMNI_RAIN_VISIBILITY`、雪的可见度 `OMNI_SNOW_VISIBILITY`、雨的斜度 `OMNI_RAIN_WIND`、落点密度 `OMNI_RAIN_DENSITY`。
+- 雨雪几何改用独立宏 `OMNI_WEATHER` 识别；可见度按高度与噪声估计的冷暖在雨雪之间选择，斜度按贴图纵向位置偏移采样，落点密度驱动水面雨点格子的精细度。
+
+可见度的雨雪区分是位置近似，不是真实降水类型；本版本只做离线编译与逻辑审查，未启动 Minecraft。
+
 ## 0.0.0-dev.93
 
 - 参数改名对齐参数总表：材质细节 `OMNI_LABPBR`→`OMNI_MATERIAL_DETAIL`、自动积雪 `OMNI_CLIMATE`→`OMNI_CLIMATE_SNOW`、生物受光 `OMNI_ENTITY_STRENGTH`→`OMNI_ENTITY_LIGHT`。
