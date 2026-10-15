@@ -132,6 +132,7 @@ class EffectTests(unittest.TestCase):
         text = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
         self.assertIn("isEyeInWater == 1",text)  # 只有水下才执行光柱。
         self.assertIn("omniShadow(sampleWorld,sampleNormal)",text)  # 光柱来自真实阴影可见性。
+        self.assertIn("OMNI_VFOG_STEPS",found)  # 体积光步数可调。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开。
         self.assertIn("vec3 omniFog",source)  # 合成阶段包含雾主体。
 

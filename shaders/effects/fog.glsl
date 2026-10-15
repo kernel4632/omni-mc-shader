@@ -18,6 +18,8 @@
 //#define OMNI_VOLUMETRIC_LIGHT
 // @option {"label":{"zh_cn":"体积光强度","en_us":"Volumetric strength"},"slider":true}
 #define OMNI_VOLUMETRIC_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"体积光步数","en_us":"Volumetric steps"},"description":{"zh_cn":"阳光光柱沿视线的采样段数；越多越平滑也越耗性能。","en_us":"Samples along the view for the sun shafts; smoother but costlier."}}
+#define OMNI_VFOG_STEPS 12 // [8 12 16]
 // @option {"label":{"zh_cn":"水下体积光","en_us":"Underwater volumetric"},"description":{"zh_cn":"水下沿视线步进阴影可见性生成蓝色光柱。","en_us":"Marches shadow visibility underwater to draw blue light shafts."}}
 #define OMNI_UNDERWATER_FOG 1 // [0 1]
 // @option {"label":{"zh_cn":"末地雾","en_us":"End fog"},"description":{"zh_cn":"末地紫色漩涡雾叠加虚空暗色，替代单纯天空色。","en_us":"Adds purple end haze with void darkening instead of a plain sky colour."}}
@@ -67,14 +69,14 @@ vec3 omniVolumetricLight(vec3 view, vec3 world, float distance, float density, f
 #if defined OMNI_VOLUMETRIC_LIGHT && !defined OMNI_NETHER && !defined OMNI_END
     vec3 sampleNormal = omniNormalize(mat3(gbufferModelView)*vec3(0.0,1.0,0.0)); // 阴影接口接收视空间法线，整条视线共用向上法线。
     float scattering = 0.0; // 沿视线累计的、带上雾权重的阴影可见性。
-    for (int i=0;i<12;i++) { // 十二段等距中点积分，比水下多几次以平滑开阔空间的光柱。
-        float t = (float(i)+0.5)/12.0; // 当前采样点在视线上的归一化位置。
+    for (int i=0;i<OMNI_VFOG_STEPS;i++) { // 步数可调，越多越平滑也越耗性能。
+        float t = (float(i)+0.5)/float(OMNI_VFOG_STEPS); // 当前采样点在视线上的归一化位置。
         vec3 sampleWorld = world*t; // 转到世界空间取候选点，阴影图按世界位置比较。
         scattering += omniShadow(sampleWorld, sampleNormal) * exp(-density*distance*t); // 越远处空气越厚，可见性权重越低。
     }
     vec3 light = omniNormalize(shadowLightPosition); // 当前主光源方向。
     float phase = 0.04 + pow(max(dot(omniNormalize(view),light),0.0),8.0); // 正向面对光源时更亮，强调天体方向。
-    return vec3(0.75,0.68,0.5)*scattering/12.0*fogAmount*phase*OMNI_VOLUMETRIC_STRENGTH; // 暖白阳光光柱，强度受雾量、相位与强度选项控制。
+    return vec3(0.75,0.68,0.5)*scattering/float(OMNI_VFOG_STEPS)*fogAmount*phase*OMNI_VOLUMETRIC_STRENGTH; // 暖白阳光光柱，强度受雾量、相位与强度选项控制。
 #else
     return vec3(0.0); // 关闭选项或非主世界时不加光柱。
 #endif
