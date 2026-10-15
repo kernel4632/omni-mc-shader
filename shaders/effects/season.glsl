@@ -17,10 +17,10 @@
 // 归一化、少数值计算与时间输入来自统一模块。
 #include "/common/math.glsl"
 #include "/common/uniforms.glsl"
-// 季节上色：只给草(10001)与树叶(10002)按一年的相位混入秋色，再按选项整体偏暖或偏冷。
+// 季节上色：只给树叶(10001)与草(10002)按一年的相位混入秋色，再按选项整体偏暖或偏冷。
 vec3 omniSeason(vec3 albedo, float materialId) {
 #ifdef OMNI_SEASONS
-    if (materialId == 10001.0 || materialId == 10002.0) { // 只有草和树叶随季节变色。
+    if (materialId == 10001.0 || materialId == 10002.0) { // 只有树叶和草随季节变色。
         float phase = fract(float(worldDay) / 24.0); // 一年按二十四个游戏日循环，天数是加载器给的真实计数。
         float autumn = 0.5 - 0.5 * cos(phase * 6.283185); // 在零到一之间缓慢摆动，接近秋分时最大。
         albedo *= mix(vec3(1.0), vec3(1.15, 0.9, 0.5), autumn * 0.6); // 秋色最多混六成，保留原本的绿。
