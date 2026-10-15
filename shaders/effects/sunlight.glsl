@@ -95,7 +95,7 @@ float omniDirectionalBlock(float level, vec3 normal, vec3 world, vec2 light) {
 // 手持光遮挡：光源就在相机上，屏幕空间里比射线更靠近相机的几何，就是挡住光的东西。
 // 做法：从表面沿法线抬离一点，向相机方向走几小步；每步读屏幕深度，若那一点的几何比脚步更靠近相机，判定被挡住。
 // 为什么抬离表面：贴着表面起步会把表面自己当成遮挡物，出现整片自遮挡。
-// 为什么只在开启时计算的调用方负责：本函数不做开关判断，调用方用编译分支控制，关闭时整段不编译。
+// 为什么本函数不判断开关：开启与否由调用方的编译分支决定，关闭时整段不编译，函数本体保持单一职责。
 float omniHeldShadow(vec3 view, vec3 normal) {
     vec3 start = view + omniNormalize(normal) * 0.05; // 沿法线抬离表面，避免自遮挡。
     vec3 end = view * 0.06; // 走到相机附近就停下。
