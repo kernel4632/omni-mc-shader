@@ -22,6 +22,10 @@
 #define OMNI_HELD_BRIGHTNESS 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label": {"zh_cn": "镜面高光", "en_us": "Specular highlights"}, "description": {"zh_cn": "GGX 分布与施利克菲涅耳提供直射镜面，粗糙度和金属来自材质。", "en_us": "GGX distribution with Schlick Fresnel for direct specular, driven by material roughness and metal."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_SPECULAR 1 // [0 1]
+// @option {"label":{"zh_cn":"自发光亮度","en_us":"Emissiveness brightness"},"description":{"zh_cn":"发光方块自己有多亮；越大越容易过曝。","en_us":"How bright emissive blocks are; higher is more prone to blowing out."},"slider":true}
+#define OMNI_EMISSIVENESS_BRIGHTNESS 1.0 // [0.25 0.5 1.0 2.0 4.0 8.0]
+// @option {"label":{"zh_cn":"自发光伽马","en_us":"Emissiveness gamma"},"description":{"zh_cn":"自发光亮度的曲线；大于一压暗中间亮度。","en_us":"Curve of emissive brightness; above one darkens midtones."},"slider":true}
+#define OMNI_EMISSIVENESS_GAMMA 1.0 // [0.5 1.0 1.5 2.2]
 // 阴影与环境输入只有共同来源。
 #include "/effects/shadow.glsl"
 // 云影需要云密度，主世界直射光按云层衰减。
@@ -94,6 +98,6 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
 #if OMNI_SPECULAR == 1
     specular = omniSpecular(albedo,normal,world,materialParams,sun,shadow) * direct * sky * weather * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 直射镜面高光，颜色已经包含在反射率里。
 #endif
-    return albedo * lightColor + specular + albedo * materialParams.z * 4.0; // 漫反射乘底色，高光单独相加；自发光不被材质遮蔽乘暗。
+    return albedo * lightColor + specular + pow(max(albedo,vec3(0.0)),vec3(max(OMNI_EMISSIVENESS_GAMMA,0.1))) * materialParams.z * OMNI_EMISSIVENESS_BRIGHTNESS; // 漫反射乘底色，高光单独相加；自发光按亮度与伽马可调，默认不再四倍过曝。
 }
 #endif

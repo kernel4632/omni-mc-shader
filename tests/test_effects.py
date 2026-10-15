@@ -22,17 +22,18 @@ class EffectTests(unittest.TestCase):
                     self.assertLess(float(match[1]),float(match[2]))  # 相等或反序都不受语言保证。
 
     def test_highlight_rolloff_is_adjustable(self):
-        """高光还原只留一个强度，不再暴露色调映射算法选择。"""
+        """高光压缩方式可选，并按强度在最保守曲线与所选曲线之间插值。"""
         found,_,_ = build.configuration()  # 原生定义仍是唯一默认值来源。
         self.assertIn("OMNI_TONEMAP_STRENGTH",found)  # 高光还原强度可调。
-        self.assertNotIn("OMNI_TONE_MAP",found)  # 算法选择已去掉。
+        self.assertIn("OMNI_TONEMAP_MODE",found)  # 压缩方式可选。
+        self.assertEqual(found["OMNI_TONEMAP_MODE"].values,("0","1","2","3"))  # 四种方式。
         text = (build.SHADERS/"effects/color.glsl").read_text(encoding="utf-8")
-        self.assertIn("OMNI_TONEMAP_STRENGTH",text)  # 强度参与曲线插值。
-        self.assertNotIn("omniToneMapAces",text)  # 旧的第三种映射已删除。
+        for name in ("omniToneMapAgx","omniToneMapAces","omniToneMapFilmic","omniToneMapSimple","omniToneMapOperator"):
+            self.assertIn(name,text)  # 四种曲线与选择函数都在。
+        self.assertIn("mix(omniToneMapSimple(color), omniToneMapOperator(color), OMNI_TONEMAP_STRENGTH)",text)  # 由强度统一插值。
+        self.assertIn("pow(clamp(color,0.0,1.0),vec3(1.0/clamp(OMNI_GAMMA,1.0,4.0)))",text)  # 显示伽马可调。
         source = build.expand(build.SHADERS/"world0/final.fsh")  # 从加载器实际入口展开。
-        self.assertIn("omniToneMapAgx",source)  # 最终显示包含 AgX 曲线。
-        self.assertIn("omniToneMapSimple",source)  # 简单有理曲线保留。
-        self.assertIn("omniToneMap(color)",source)  # 计算路径由强度统一插值。
+        self.assertIn("omniToneMap",source)  # 最终显示包含高光压缩。
 
     def test_ordered_dither_applies_before_clamp(self):
         """有序抖动在显示编码之后打散色带，选项可关闭。"""
@@ -40,7 +41,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_DITHER",found); self.assertEqual(found["OMNI_DITHER"].values,("0","1"))  # 默认与关闭值来自原生定义。
         text = (build.SHADERS/"effects/color.glsl").read_text(encoding="utf-8")
         self.assertIn("float omniBayer",text)  # 有序矩阵阈值独立成函数。
-        self.assertIn("omniSrgb(clamp(color,0.0,1.0))",text)  # 抖动发生在显示编码之后。
+        self.assertIn("pow(clamp(color,0.0,1.0),vec3(1.0/clamp(OMNI_GAMMA,1.0,4.0)))",text)  # 抖动发生在显示伽马之后。
         self.assertIn("gl_FragCoord.xy",text)  # 抖动按真实像素坐标取样。
 
     def test_bloom_threshold_and_radius_are_adjustable(self):

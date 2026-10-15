@@ -17,10 +17,10 @@
   colortex0  的颜色由调用方作为参数传进来，本文件不直接采样。
 
 关键设计原因与取舍：
-  高光压缩默认用 AgX 曲线，而不是简单有理映射。简单映射把所有亮部压向纯白，
-  颜色一过亮就掉饱和、失去电影感；AgX 先把颜色转到宽色域再压，暗部和亮部都
-  留住色彩，代价是代码更长、多两次矩阵乘。想省性能可切回简单曲线，两条路径
-  都单调，都不会出现硬剪切。
+  高光压缩可选 AgX、ACES、Filmic 或简单曲线，默认 AgX。简单映射把所有亮部压向纯白，
+  颜色一过亮就掉饱和、失去电影感；AgX 先把颜色转到宽色域再压，暗部和亮部都留住色彩，
+  代价是代码更长、多两次矩阵乘。四条路径都单调，都不会出现硬剪切。
+  白点决定多大的亮度算纯白，显示伽马决定线性到屏幕的转换；两者默认是一点零与二点二。
   有序抖动用来打散八位色深下渐变色出现的色带。它按屏幕像素固定取阈值，不随帧
   变化，所以不会像随机噪声那样闪；代价是画面多一层极细的固定纹理。
   自动曝光先取九个测光点的对数亮度求平均，得到目标曝光再按时间缓慢逼近，避免
@@ -49,6 +49,12 @@
 #define OMNI_WHITE_BALANCE 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"高光还原强度","en_us":"Highlight rolloff"},"description":{"zh_cn":"强光被压平的多少；取零更接近原亮度，取一保留更多高光色彩。","en_us":"How much highlights are rolled off; zero stays closer to plain brightness, one keeps more highlight color."},"slider":true}
 #define OMNI_TONEMAP_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0]
+// @option {"label":{"zh_cn":"高光压缩方式","en_us":"Tonemap operator"},"description":{"zh_cn":"AgX 偏电影感、ACES 偏标准、Filmic 偏柔和、简单只压亮部。","en_us":"AgX is filmic, ACES is standard, Filmic is softer, Simple only rolls off highlights."},"values":{"0":{"zh_cn":"AgX","en_us":"AgX"},"1":{"zh_cn":"ACES","en_us":"ACES"},"2":{"zh_cn":"Filmic","en_us":"Filmic"},"3":{"zh_cn":"简单","en_us":"Simple"}}}
+#define OMNI_TONEMAP_MODE 0 // [0 1 2 3]
+// @option {"label":{"zh_cn":"白点","en_us":"White clip"},"description":{"zh_cn":"多大的亮度算纯白；越大高光保留越多细节。","en_us":"Brightness treated as pure white; higher keeps more highlight detail."},"slider":true}
+#define OMNI_WHITE_CLIP 1.0 // [1.0 2.0 4.0 8.0]
+// @option {"label":{"zh_cn":"显示伽马","en_us":"Display gamma"},"description":{"zh_cn":"线性到屏幕的伽马；二点二接近 sRGB。","en_us":"Linear-to-display gamma; 2.2 is close to sRGB."},"slider":true}
+#define OMNI_GAMMA 2.2 // [1.8 2.0 2.2 2.4 2.6]
 // @option {"label": {"zh_cn": "色带消除开关", "en_us": "Banding reduction"}, "description": {"zh_cn": "用四乘四阈值矩阵打散八位量化色带。", "en_us": "A 4x4 ordered matrix breaks 8-bit color banding."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_DITHER 1 // [0 1]
 // 曝光有效性与时间历史判断都由抗锯齿能力提供，引入一次即可共用。
@@ -87,10 +93,33 @@ vec3 omniToneMapAgx(vec3 color) {
     color = 15.5*fourth*squared-40.14*fourth*color+31.96*fourth-6.868*squared*color+0.4298*squared+0.1191*color-0.00232; // 单调 S 曲线压缩高光。
     return clamp(fromWorking*color,0.0,1.0); // 回到显示原色并限制范围。
 }
-// 高光压缩：在简单有理曲线与 AgX 之间按强度插值，两条曲线都在线性显示空间。
-// 为什么留一个强度：AgX 更有电影感但会改变整体影调，取零等于最保守的压缩，方便按风格取舍。
+// ACES 近似：公开的 Narkowicz 有理拟合，独立实现，不复制任何光影源码。
+vec3 omniToneMapAces(vec3 color) {
+    const float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14; // 公开拟合系数。
+    return clamp((color*(a*color+b))/(color*(c*color+d)+e),0.0,1.0); // 单调压高光。
+}
+// Filmic 近似：Uncharted 2 的曲线，独立实现。
+vec3 omniToneMapFilmic(vec3 color) {
+    const float a=0.15, b=0.50, c=0.10, d=0.20, e=0.02, f=0.30;
+    vec3 x = max(color-0.004,0.0); // 去掉极暗处的偏置。
+    return clamp(((x*(a*x+c*b)+d*e)/(x*(a*x+b)+d*f))-e/f,0.0,1.0); // 单调曲线，白色归一化。
+}
+// 按选项选一条高光压缩曲线。
+vec3 omniToneMapOperator(vec3 color) {
+#if OMNI_TONEMAP_MODE == 1
+    return omniToneMapAces(color);
+#elif OMNI_TONEMAP_MODE == 2
+    return omniToneMapFilmic(color);
+#elif OMNI_TONEMAP_MODE == 3
+    return omniToneMapSimple(color);
+#else
+    return omniToneMapAgx(color);
+#endif
+}
+// 高光压缩：在简单有理曲线与所选曲线之间按强度插值，两条都在线性显示空间。
+// 为什么留一个强度：取零等于最保守的压缩，取一时完整使用所选曲线，方便按风格取舍。
 vec3 omniToneMap(vec3 color) {
-    return mix(omniToneMapSimple(color), omniToneMapAgx(color), OMNI_TONEMAP_STRENGTH);
+    return mix(omniToneMapSimple(color), omniToneMapOperator(color), OMNI_TONEMAP_STRENGTH);
 }
 
 // --- 八位色带的抖动 ---
@@ -135,12 +164,13 @@ float omniExposure(vec2 uv) {
 vec3 omniColor(vec3 color, float exposure) {
     if (!omniFinite(color) || !omniFinite(exposure)) return vec3(0.0); // 无效输入保守回退到黑色，避免异常扩散到整屏。
     color *= exposure*OMNI_BRIGHTNESS; // 亮度与曝光独立配置。
+    color /= max(OMNI_WHITE_CLIP,1.0); // 白点决定多大的亮度算纯白，越大高光保留越多。
     color *= exp(vec3(0.12,0.0,-0.12)*OMNI_WHITE_BALANCE); // 中性零值不偏色。
     color = max(color,vec3(0)); // 强光映射之前拒绝负值。
     color = omniToneMap(color); // 按选项映射高动态范围，保持单调不剪切。
     color = mix(vec3(omniLuminance(color)),color,OMNI_SATURATION); // 以亮度轴调整色彩。
     color = (color-0.5)*OMNI_CONTRAST+0.5; // 围绕中间亮度调整对比。
-    color = omniSrgb(clamp(color,0.0,1.0)); // 最终一步才编码到屏幕颜色。
+    color = pow(clamp(color,0.0,1.0),vec3(1.0/clamp(OMNI_GAMMA,1.0,4.0))); // 显示伽马，二点二接近 sRGB。
 #if OMNI_DITHER == 1
     color += (omniBayer(gl_FragCoord.xy)-0.5)/255.0; // 有序抖动打散八位量化色带。
 #endif
