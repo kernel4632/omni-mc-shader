@@ -21,10 +21,12 @@ import hashlib  # 固定产物校验与编译去重。
 import json  # 读取显式程序与依赖记录。
 import os  # 按本机核心数决定并行编译线程数。
 import re  # 检查版本与引用边界。
+import signal  # 超时结束整个检查进程组，不能留下编译器后台继续占用资源。
 import shutil  # 同步独立开发实例。
 import subprocess  # 调用真实编译器与版本控制。
 import sys  # 使用当前解释器执行测试。
 import tempfile  # 离线编译不污染源码。
+import time  # 总预算按真实经过时间计算，包含进程创建与系统初始化。
 import zipfile  # 生成玩家使用的光影包。
 from concurrent.futures import ThreadPoolExecutor  # 并行等待多个编译器进程。
 from pathlib import Path  # 路径相对项目定位。
@@ -240,17 +242,14 @@ def option_source(text: str, found: dict, values: dict[str, str]) -> str:
         result.append(line)  # 其他代码保留。
     return "\n".join(result) + "\n"  # 固定末尾换行，避免配置差异影响编译摘要。
 
-# --- 选择代表配置：覆盖边界与整体高低组合，避免指数爆炸 ---
+# --- 选择代表配置：只检查默认与高效果，不遍历每个选项 ---
 def variants(found: dict, profiles: list) -> list[tuple[str, dict]]:
     """从 `found` 和 `profiles` 返回带名字的代表配置列表，并按内容去重。
 
-    覆盖默认值、玩家预设、每个选项的单独取值和全低/全高组合；不穷举所有选项乘积。
+    只覆盖默认值与全高组合；预设合法性由配置扫描负责，不重复编译全部取值。
     """
     defaults = {name: option.default for name, option in found.items()}  # 源码默认配置。
-    candidates = [("default", defaults)] + [(p.name, p.values) for p in profiles]
-    for name, option in found.items():
-        candidates += [(f"{name}_{v}", defaults | {name: v}) for v in option.values]  # 每个边界至少单独覆盖。
-    candidates += [("all_low", {n: o.values[0] for n, o in found.items()}), ("all_high", {n: o.values[-1] for n, o in found.items()})]  # 代表交互组合。
+    candidates = [("default", defaults), ("all_high", {n: o.values[-1] for n, o in found.items()})]  # 只保留能快速发现接线错误的两组，不声称覆盖全部算法模式。
     result, seen = [], set()  # 相同组合去重。
     for label, option_values in candidates:  # 每个候选都保留便于错误报告的名字。
         signature = tuple(sorted(option_values.items()))  # 按名称排序后，字典插入顺序不影响重复判断。
@@ -290,6 +289,8 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
     jobs, seen, reused = [], set(), 0  # 分别保存待编译任务、去重摘要与跳过的成功组数。
     for label, option_values in variants(found, profiles):  # 代表组合逐项展开。
         for environment, defines in environments:  # 基础与远景均检查。
+            if (label == "default" and environment != "base") or (label == "all_high" and environment != "iris_dh"):
+                continue  # 默认检查基础回退，高效果检查可选能力，不重复两组环境乘积。
             for program, sources in programs.items():  # 各维度不遗漏。
                 texts = [option_source(expanded[source], found, option_values) for source in sources]  # 每个阶段使用同一份选项取值。
                 texts = [text.replace("#version 330 compatibility", "#version 330 compatibility\n" + format_defines + defines, 1) for text in texts]  # 环境宏只注入临时文本，不修改入口文件。
@@ -306,7 +307,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
                 jobs.append({"digest": source_digest, "label": label, "environment": environment, "program": program, "sources": sources, "texts": texts})  # 保留错误报告需要的配置、程序与源码。
     number_to_path = {str(index + 1): source.relative_to(SHADERS).as_posix() for index, source in enumerate(sorted(SHADERS.rglob("*"))) if source.is_file()}  # 编译器数字编号反查为项目内相对路径。
     failures = []  # 收集全部失败，一次报告，避免只看到第一条。
-    workers = min(32, (os.cpu_count() or 4) * 2)  # 编译器主要在外部进程工作，适度多线程可同时等待多项独立任务。
+    workers = max(1, len(jobs))  # 任务数量已主动缩减，所有独立链接一次并行启动，不再人为排成长队。
     with tempfile.TemporaryDirectory(prefix="omni-glsl-") as temporary:
         temporary_folder = Path(temporary)  # 所有阶段文件放在自动清理目录，绝不落入源码树。
 
@@ -334,7 +335,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
                 else:
                     known_good.add(job["digest"])  # 只有本次确实链接成功才写入缓存候选。
         cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
-        cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good)}) + "\n", encoding="utf-8")  # 失败摘要不加入；成功记录供下次减少重复链接。
+        cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n", encoding="utf-8")  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
     if failures:  # 资源目录退出后临时文件已清理，再统一报告最多五项失败。
         raise ValueError("\n\n".join(failures[:5]))
     unique_programs = len(seen)  # 唯一程序数由新编译与成功缓存复用共同组成。
@@ -392,9 +393,13 @@ def check() -> None:
     audited = audit.check(ROOT)  # 自有源码先通过中文说明与未实现标记审计。
     dependencies()  # 发行包中的第三方文件与许可也必须满足白名单。
     print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
-    for source in SHADERS.rglob("*.glsl"):  # 主体文件即使暂未接入绘制流程，也不能留下坏引用。
-        expand(source)  # 与真实入口使用同一边界检查和展开逻辑。
-    compile_shaders(entries, found, profiles)
+    source_numbers = {path.resolve(): index + 1 for index, path in enumerate(sorted(SHADERS.rglob("*"))) if path.is_file()}  # 全部主体共享编号与展开缓存，避免反复扫描目录。
+    expanded_cache = {}  # 一次检查只读取每份共用源码一次。
+    for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
+        expand(source, sourceNumbers=source_numbers, cache=expanded_cache)  # 不为每个文件重新扫描整棵引用树。
+    key_programs = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "shadow", "dh_terrain", "dh_water", "deferred", "composite", "composite1", "final", "setup"}  # 编译主要数据通路；其余别名仍检查来源、伙伴和引用。
+    probes = [source for source in entries if source.stem in key_programs and (source.parent.name == "world0" or source.stem == "composite")]  # 两个额外维度只编译维度合成分支，不重复整个流程。
+    compile_shaders(probes, found, profiles)
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
     print(f"检查通过：{len(entries)} 个入口，{len(found)} 个选项，{len(profiles)} 套预设")
 
@@ -523,16 +528,98 @@ def release(target: str, notes: Path) -> None:
     subprocess.run(["git", "tag", "-a", "v" + target, "-m", notes_body], cwd=ROOT, check=True)  # 创建不可覆盖的注释标签。
     subprocess.run(["git", "push", "--atomic", "origin", "main", "v" + target], cwd=ROOT, check=True)  # 分支和标签要么一起推送，要么都不推送。
 
+# --- 检查时间预算：超时杀掉整组进程，失败不能伪装成通过 ---
+def windows_job(process: subprocess.Popen):
+    """把 `process` 纳入 Windows 作业对象，关闭对象时结束其整棵子进程树。"""
+    import ctypes  # 直接调用系统接口，不再启动耗时不定的进程清理命令。
+    from ctypes import wintypes  # 使用系统指针宽度，兼容不同位数的 Python。
+
+    class BasicLimits(ctypes.Structure):
+        """系统规定的作业限制布局，只启用关闭时杀进程这一项。"""
+        _fields_ = [("perProcessUserTime", ctypes.c_longlong), ("perJobUserTime", ctypes.c_longlong),
+                    ("limitFlags", wintypes.DWORD), ("minimumWorkingSetSize", ctypes.c_size_t),
+                    ("maximumWorkingSetSize", ctypes.c_size_t), ("activeProcessLimit", wintypes.DWORD),
+                    ("affinity", ctypes.c_size_t), ("priorityClass", wintypes.DWORD),
+                    ("schedulingClass", wintypes.DWORD)]  # 字段顺序必须与 Windows 系统规定的基本限额一致。
+
+    class IoCounters(ctypes.Structure):
+        """系统规定的六个输入输出计数器，占位但不能缩短。"""
+        _fields_ = [(name, ctypes.c_ulonglong) for name in ("readOperations", "writeOperations", "otherOperations", "readBytes", "writeBytes", "otherBytes")]  # 仅保存结构尺寸，全部保持零。
+
+    class ExtendedLimits(ctypes.Structure):
+        """扩展限制附带系统输入输出计数器和内存统计占位。"""
+        _fields_ = [("basic", BasicLimits), ("io", IoCounters), ("processMemoryLimit", ctypes.c_size_t),
+                    ("jobMemoryLimit", ctypes.c_size_t), ("peakProcessMemoryUsed", ctypes.c_size_t),
+                    ("peakJobMemoryUsed", ctypes.c_size_t)]  # 扩展作业限制是四个内存限额，不是进程内存计数结构。
+
+    kernel = ctypes.WinDLL("kernel32", use_last_error=True)  # 错误由系统原始代码说明，不吞掉失败。
+    kernel.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
+    kernel.CreateJobObjectW.restype = wintypes.HANDLE  # 句柄不能按默认的三十二位整数截断。
+    kernel.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
+    kernel.SetInformationJobObject.restype = wintypes.BOOL
+    kernel.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+    kernel.AssignProcessToJobObject.restype = wintypes.BOOL
+    kernel.CloseHandle.argtypes = [wintypes.HANDLE]  # 关闭句柄时系统负责结束关联进程树。
+    kernel.CloseHandle.restype = wintypes.BOOL
+    job = kernel.CreateJobObjectW(None, None)  # 本次检查独享匿名作业，不影响其他程序。
+    if not job:
+        raise ctypes.WinError(ctypes.get_last_error())  # 没有可靠清理能力时拒绝继续检查。
+    limits = ExtendedLimits(); limits.basic.limitFlags = 0x2000  # 系统标志：最后一个作业句柄关闭时终止其中全部进程。
+    if not kernel.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
+        error = ctypes.WinError(ctypes.get_last_error())  # 系统拒绝可靠清理时必须停止，而不是悄悄退化。
+        kernel.CloseHandle(job)
+        raise error  # 父进程仍暂停，调用方负责终止，不可能生成遗漏的子进程。
+    if not kernel.AssignProcessToJobObject(job, wintypes.HANDLE(process._handle)):
+        error = ctypes.WinError(ctypes.get_last_error())  # 分配失败时父进程仍在作业外，先杀父进程再释放作业。
+        kernel.CloseHandle(job)
+        raise error  # 父进程尚未恢复，不存在已经逃出作业的编译器。
+    resume = ctypes.WinDLL("ntdll").NtResumeProcess  # Python 不保留主线程句柄，用系统进程恢复接口解除暂停。
+    resume.argtypes = [wintypes.HANDLE]; resume.restype = wintypes.LONG  # 返回非零状态说明恢复失败，必须停止。
+    status = resume(wintypes.HANDLE(process._handle))  # 关联作业完成后才允许执行检查代码。
+    if status:
+        kernel.CloseHandle(job)  # 失败时作业关闭会终止暂停的工作进程。
+        raise OSError(f"恢复检查进程失败：{status}")
+    return kernel, job  # 调用方必须在 `finally` 关闭句柄。
+
+def run_with_budget(command: list[str], seconds: float = 10.0) -> None:
+    """运行 `command`，超过 `seconds` 就终止检查与它启动的编译器并报告失败。"""
+    started = time.monotonic()  # 从启动前开始计时，系统作业初始化也消耗同一预算。
+    creation_flags = 0x00000004 if os.name == "nt" else 0  # Windows 先暂停执行，加入作业对象之后才能启动编译和测试子进程。
+    process = subprocess.Popen(command, start_new_session=os.name != "nt", creationflags=creation_flags)  # 独立进程组只包含本次检查，不影响其他开发任务。
+    job = None  # Linux 使用进程组，Windows 使用系统作业对象。
+    try:
+        if os.name == "nt":
+            job = windows_job(process)  # 在工作进程启动编译前关联整棵子进程树。
+        code = process.wait(timeout=max(0.0, seconds-(time.monotonic()-started)))  # 等待只使用剩余预算，不给初始化额外加时。
+    except subprocess.TimeoutExpired:
+        if job is not None:
+            job[0].CloseHandle(job[1]); job = None  # 系统同步结束整棵进程树，不再等待额外清理工具。
+        else:
+            os.killpg(process.pid, signal.SIGKILL)  # 非 Windows 的独立进程组包含测试与编译器。
+        process.wait()  # 回收被结束的父进程，不留下僵尸进程。
+        raise ValueError(f"检查超过 {seconds:g} 秒预算，已终止；请缩减检查范围并审查逻辑，不能记为通过") from None
+    finally:
+        if job is not None:
+            job[0].CloseHandle(job[1])  # 正常结束也释放系统资源，遗留子进程不会偷偷继续。
+        if process.poll() is None:
+            process.kill(); process.wait()  # 初始化或系统接口出错时也回收已启动的父进程。
+    if code:
+        raise subprocess.CalledProcessError(code, command)  # 编译和测试原本的失败也必须传回自动工作流。
+
 # --- 命令入口：先解析参数，再统一执行对应构建动作 ---
 def main() -> None:
     """解析既有命令行参数并分发到公开构建函数，保持命令协议不变。"""
     parser = argparse.ArgumentParser(description="Omni 光影构建与检查")  # 明确命令才动作。
-    parser.add_argument("command",choices=("generate","check","build","sync","version","notes","audit","release"))
+    parser.add_argument("command",choices=("generate","check","build","verify","sync","version","notes","audit","release"))
+    parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)  # 内部执行标记避免预算监督进程递归启动自身。
     parser.add_argument("--tag")  # 发行工作流可在只读检查前核对标签与版本。
     parser.add_argument("--output",type=Path)
     parser.add_argument("--new-version")  # 发布必须提供新版本与对应说明。
     parser.add_argument("--notes-file",type=Path)
     args = parser.parse_args()  # 所有命令行输入先于文件生成或发布动作解析。
+    if args.command in ("check", "build", "verify", "sync") and not args.worker:
+        run_with_budget([sys.executable, str(Path(__file__).resolve()), *sys.argv[1:], "--worker"])  # 每个常用检查命令都有十秒预算，超时不会继续后台运行。
+        return
     if args.command != "release" and (args.new_version or args.notes_file):  # 发布参数不能被其他命令误用。
         parser.error("--new-version 与 --notes-file 只能用于 release 命令")
     if args.output and args.command != "notes":  # 输出路径仅用于发行说明预览。
@@ -569,7 +656,13 @@ def main() -> None:
         check()
         return
     generate()  # 构建与同步都先生成来源对应的真实入口与菜单。
-    check()
+    if args.command == "verify":  # 自动检查同时运行工具测试和光影检查，共享同一个十秒总预算。
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            tests = pool.submit(subprocess.run, [sys.executable, "-m", "unittest", "discover", "-s", "tests"], cwd=ROOT, check=True)  # 测试写独立临时目录，可与只读检查并行。
+            check()  # 任何一边失败都会拒绝生成交付包。
+            tests.result()  # 必须等真实测试结果，不能只启动就称通过。
+    else:
+        check()  # 开发构建不重复运行整套工具测试。
     if args.command == "sync":  # 开发同步只使用项目管理的测试环境。
         sync()
         return

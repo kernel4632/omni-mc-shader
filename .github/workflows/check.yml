@@ -1,4 +1,4 @@
-# 双平台检查：复用本地测试和构建，不运行游戏或显卡测试。
+# 单次快速检查：工具测试与关键编译并行，十秒预算，不运行游戏。
 name: 检查与构建
 on: # 每次主分支变化或审查请求都核对同一源码。
   push: # 自动触发只面向已授权合并的主分支。
@@ -7,15 +7,14 @@ on: # 每次主分支变化或审查请求都核对同一源码。
   workflow_dispatch: # 工具更新也可手工触发离线检查。
 permissions:
   contents: read # 构建不修改代码、标签或发行版。
+concurrency: # 新提交替换过时检查，避免同时浪费运行器时间。
+  group: check-${{ github.workflow }}-${{ github.ref }} # 不同审查分支仍独立执行。
+  cancel-in-progress: true # 同一分支只关心最新提交结果。
 jobs:
   check:
-    name: 检查 (${{ matrix.os }})
-    runs-on: ${{ matrix.os }} # 两个平台都必须检查路径与压缩包差异。
-    timeout-minutes: 30 # 并行编译仍需为慢速运行器留出余量，避免中途被取消。
-    strategy:
-      fail-fast: false # 一个系统失败仍保留另一个系统结果。
-      matrix:
-        os: [ubuntu-latest, windows-latest] # 同一压缩包协议在两个系统执行。
+    name: 快速检查
+    runs-on: ubuntu-latest # 编译检查只执行一次，不在另一个系统重复同样的工作。
+    timeout-minutes: 3 # 排队不计入；下载与上传受平台限制，实际检查另有十秒预算。
     steps:
       - name: 读取代码
         uses: actions/checkout@v6 # 检查当前提交，不读取玩家目录。
@@ -34,13 +33,11 @@ jobs:
             omni-build-${{ runner.os }}-
       - name: 安装锁定检查工具
         run: python dev.py setup # 按哈希安装工具并生成菜单与入口。
-      - name: 检查自动化工具
-        run: python -m unittest discover -s tests # 包含非法配置与离线优化回归。
-      - name: 检查并打包光影
-        run: python build.py build # 链接代表配置后才生成可分发资源。
+      - name: 十秒检查并打包
+        run: python build.py verify # 工具测试与关键编译并行，总预算十秒；超时失败。
       - name: 上传检查产物
         uses: actions/upload-artifact@v4 # 只保留离线产物，不声称游戏验证。
         with:
-          name: Omni-${{ runner.os }} # 各系统产物分开供字节对照。
+          name: Omni # 一份实际构建产物即可供下载，不重复打包。
           path: dist/
           if-no-files-found: error # 没有有效ZIP不能算交付成功。

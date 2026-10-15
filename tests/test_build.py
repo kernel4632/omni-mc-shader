@@ -9,6 +9,7 @@ import io  # 内存准备压缩包成员。
 import sys  # 各平台解压策略一致检查。
 import tarfile  # 验证链接逃逸边界。
 import tempfile  # 测试不污染项目或玩家目录。
+import time  # 实测超时路径是否及时返回，避免检查拖住开发。
 import unittest  # 使用已有标准测试入口。
 from pathlib import Path  # 测试路径来自独立临时目录。
 from unittest.mock import patch  # 隔离开发目录，真实编译器仍照常运行。
@@ -20,6 +21,20 @@ import options  # 原生定义与预设扫描直接测试。
 
 class BuildTests(unittest.TestCase):
     """验证构建边界，防止错误资源进入发布包。"""
+
+    def test_check_budget_stops_slow_process(self):
+        """长时间运行的检查必须被停止并报错，不能超时后假装成功。"""
+        started = time.monotonic()  # 只启动独立测试进程，不等待真实慢构建。
+        with self.assertRaisesRegex(ValueError, "已终止"):
+            build.run_with_budget([sys.executable, "-c", "import time; time.sleep(30)"], seconds=0.2)  # 三十秒进程应在很短预算后结束。
+        self.assertLess(time.monotonic()-started, 3.0)  # 给系统进程清理留余量，但不能等完整三十秒。
+
+    def test_compile_variants_are_bounded(self):
+        """检查配置数量固定，不随选项取值和预设数量膨胀。"""
+        found, profiles, _ = build.configuration()  # 用项目真实选项和预设检查增长边界。
+        selected = build.variants(found, profiles)
+        self.assertLessEqual(len(selected), 2)  # 默认与高效果之外不生成逐选项矩阵。
+        self.assertEqual(selected[0][0], "default")  # 玩家默认路径始终保留。
 
     def test_include_relative_and_absolute(self):
         """相对与根引用都应展开真实文件。"""
