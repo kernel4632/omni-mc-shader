@@ -119,11 +119,11 @@
 | OMNI_SUNLIGHT_STRENGTH | 阳光强度 | 阳光 | 数值 | 0.0–2.0 | 白天太阳多亮 | 已有 |
 | OMNI_SUN_TINT | 阳光色温 | 阳光 | 数值 | -1–1 | 阳光偏暖还是偏冷 | 已有 |
 | OMNI_AMBIENT_STRENGTH | 环境光强度 | 环境光 | 数值 | 0.25–2.0 | 阴影里多亮 | 已有 |
-| OMNI_AMBIENT_TINT | 环境光色温 | 环境光 | 数值 | -1–1 | 阴影里偏蓝还是偏暖 | 新 |
-| OMNI_BLOCKLIGHT_STRENGTH | 火把光强度 | 火把光 | 数值 | 0.0–2.0 | 火把照亮范围多亮 | 新 |
+| OMNI_AMBIENT_TINT | 环境光色温 | 环境光 | 数值 | -1–1 | 阴影里偏蓝还是偏暖 | 已有 |
+| OMNI_BLOCKLIGHT_STRENGTH | 火把光强度 | 火把光 | 数值 | 0.0–2.0 | 火把照亮范围多亮 | 已有 |
 | OMNI_BLOCKLIGHT_TINT | 火把光色温 | 火把光 | 数值 | -1–1 | 火把光偏橙还是偏白 | 已有 |
 | OMNI_HELD_LIGHT | 手持光开关 | 手持光 | 开关 | 开/关 | 手里拿着光源会不会照亮周围 | 已有 |
-| OMNI_HELD_BRIGHTNESS | 手持光亮度 | 手持光 | 数值 | 0.0–2.0 | 手持光多亮 | 新 |
+| OMNI_HELD_BRIGHTNESS | 手持光亮度 | 手持光 | 数值 | 0.0–2.0 | 手持光多亮 | 已有 |
 | OMNI_BOUNCE_STRENGTH | 物体反光强度 | 物体反光 | 数值 | 0.0–2.0 | 旁边物体把光反到别处多强 | 已有 |
 | OMNI_BOUNCE_RADIUS | 物体反光范围 | 物体反光 | 数值 | 0.5–3.0 | 反光能影响多远 | 新 |
 | OMNI_LPV_ENABLED | 空气补光开关 | 空气补光 | 开关 | 开/关 | 有没有光在空气里传播补亮 | 已有 |

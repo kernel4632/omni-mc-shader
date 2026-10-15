@@ -315,14 +315,19 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniSpecular",source)  # 地形光照包含镜面高光。
 
     def test_light_color_temperature_is_adjustable(self):
-        """日月与方块光色温都是可调参数，默认零等于原行为。"""
+        """阳光、环境光、火把光色温与火把光、手持光强度都是可调参数，默认等于原行为。"""
         found,_,_ = build.configuration()
-        self.assertIn("OMNI_SUN_TINT",found); self.assertIn("OMNI_BLOCKLIGHT_TINT",found)  # 两个色温参数由光照源码定义。
+        for name in ("OMNI_SUN_TINT","OMNI_AMBIENT_TINT","OMNI_BLOCKLIGHT_TINT","OMNI_BLOCKLIGHT_STRENGTH","OMNI_HELD_BRIGHTNESS"):
+            self.assertIn(name,found)  # 每个参数由光照源码定义。
         self.assertEqual(found["OMNI_SUN_TINT"].default,"0.0")  # 默认中性，不改变现有画面。
+        self.assertEqual(found["OMNI_BLOCKLIGHT_STRENGTH"].default,"1.0")  # 默认强度不改变现有画面。
         text = (build.SHADERS/"effects/sunlight.glsl").read_text(encoding="utf-8")
         self.assertIn("vec3 omniTint",text)  # 色温换算独立成函数。
         self.assertIn("omniTint(OMNI_SUN_TINT)",text)  # 直射光应用色温。
+        self.assertIn("omniTint(OMNI_AMBIENT_TINT)",text)  # 环境光应用色温。
         self.assertIn("omniTint(OMNI_BLOCKLIGHT_TINT)",text)  # 方块光应用色温。
+        self.assertIn("* OMNI_BLOCKLIGHT_STRENGTH",text)  # 方块光强度参与照明。
+        self.assertIn("* OMNI_HELD_BRIGHTNESS",text)  # 手持光亮度参与照明。
 
     def test_lightweight_preset_disables_heavy_effects(self):
         """轻量预设关闭阴影、高光、气候、云影与水面细节等较重的默认效果。"""

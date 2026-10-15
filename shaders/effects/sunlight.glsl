@@ -4,18 +4,24 @@
 #ifndef OMNI_SUNLIGHT
 #define OMNI_SUNLIGHT
 // @effect {"label":{"zh_cn":"光照","en_us":"Lighting"}}
-// @option {"label":{"zh_cn":"直接光强度","en_us":"Direct light"},"slider":true}
+// @option {"label":{"zh_cn":"阳光强度","en_us":"Sunlight strength"},"slider":true}
 #define OMNI_SUNLIGHT_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"环境光强度","en_us":"Ambient light"},"slider":true}
+// @option {"label":{"zh_cn":"阳光色温","en_us":"Sunlight tint"},"description":{"zh_cn":"正值偏暖、负值偏冷，零保持中性；只改直射光颜色不改强度。","en_us":"Positive warms the direct light, negative cools it, zero stays neutral; strength is unchanged."},"slider":true}
+#define OMNI_SUN_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
+// @option {"label":{"zh_cn":"环境光强度","en_us":"Ambient light strength"},"slider":true}
 #define OMNI_AMBIENT_STRENGTH 1.0 // [0.25 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"手持照明","en_us":"Held light"}}
+// @option {"label":{"zh_cn":"环境光色温","en_us":"Ambient light tint"},"description":{"zh_cn":"正值背光偏暖、负值偏冷，零保持中性。","en_us":"Positive warms the shadowed light, negative cools it, zero stays neutral."},"slider":true}
+#define OMNI_AMBIENT_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
+// @option {"label":{"zh_cn":"火把光强度","en_us":"Torch light strength"},"slider":true}
+#define OMNI_BLOCKLIGHT_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"火把光色温","en_us":"Torch light tint"},"description":{"zh_cn":"正值更暖、负值更冷，零保持默认暖色；只改方块光颜色。","en_us":"Positive warms the block light, negative cools it, zero keeps the default warm tone."},"slider":true}
+#define OMNI_BLOCKLIGHT_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
+// @option {"label":{"zh_cn":"手持光开关","en_us":"Held light"}}
 #define OMNI_HELD_LIGHT
+// @option {"label":{"zh_cn":"手持光亮度","en_us":"Held light strength"},"slider":true}
+#define OMNI_HELD_BRIGHTNESS 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"镜面高光","en_us":"Specular highlights"},"description":{"zh_cn":"GGX 分布与施利克菲涅耳提供直射镜面，粗糙度和金属来自材质。","en_us":"GGX distribution with Schlick Fresnel for direct specular, driven by material roughness and metal."}}
 #define OMNI_SPECULAR 1 // [0 1]
-// @option {"label":{"zh_cn":"日月色温","en_us":"Sun/moon tint"},"description":{"zh_cn":"正值偏暖、负值偏冷，零保持中性；只改直射光颜色不改强度。","en_us":"Positive warms the direct light, negative cools it, zero stays neutral; strength is unchanged."},"slider":true}
-#define OMNI_SUN_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"方块光色温","en_us":"Block light tint"},"description":{"zh_cn":"正值更暖、负值更冷，零保持默认暖色；只改方块光颜色。","en_us":"Positive warms the block light, negative cools it, zero keeps the default warm tone."},"slider":true}
-#define OMNI_BLOCKLIGHT_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // 阴影与环境输入只有共同来源。
 #include "/effects/shadow.glsl"
 // 云影需要云密度，主世界直射光按云层衰减。
@@ -57,7 +63,7 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
     float block = pow(clamp(light.x, 0.0, 1.0), 3.0); // 方块光保留局部衰减。
 #ifdef OMNI_HELD_LIGHT
     float held = float(max(heldBlockLightValue, heldBlockLightValue2)) / 15.0; // 双手取实际较亮光源。
-    block = max(block, held * max(1.0 - length(world) / 12.0, 0.0) * max(1.0 - length(world) / 12.0, 0.0)); // 无遮挡的手持近似，不声称局部阴影。
+    block = max(block, held * OMNI_HELD_BRIGHTNESS * max(1.0 - length(world) / 12.0, 0.0) * max(1.0 - length(world) / 12.0, 0.0)); // 无遮挡的手持近似；亮度可调，不声称局部阴影。
 #endif
 #if defined OMNI_NETHER
     ambient = vec3(0.16,0.065,0.04); // 下界无太阳，使用维度环境光。
@@ -66,6 +72,7 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
     ambient = vec3(0.13,0.09,0.18); // 末地冷紫环境光。
     direct *= 0.0; // 末地不使用主世界日月。
 #endif
+    ambient *= omniTint(OMNI_AMBIENT_TINT); // 环境光色温，取零保持中性。
     float shadow = 1.0; // 其他维度或关闭阴影时直接光不被遮挡。
 #if !defined OMNI_NETHER && !defined OMNI_END
     shadow = omniShadow(world, normal); // 主世界直接光和阴影共同控制亮面。
@@ -75,7 +82,7 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
 #if OMNI_CLOUD_SHADOW == 1 && !defined OMNI_NETHER && !defined OMNI_END
     cloudShade = omniCloudShadow(world); // 云影同时衰减漫反射与镜面。
 #endif
-    vec3 lightColor = (ambient * materialAo + vec3(0.012)) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * omniTint(OMNI_BLOCKLIGHT_TINT) * block; // 材质遮蔽只压低环境光，不削弱直接光；方块光色温可调。
+    vec3 lightColor = (ambient * materialAo + vec3(0.012)) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * omniTint(OMNI_BLOCKLIGHT_TINT) * block * OMNI_BLOCKLIGHT_STRENGTH; // 材质遮蔽只压低环境光，不削弱直接光；方块光颜色与强度可调。
     float weather = 1.0 - rainStrength * 0.65; // 雨天统一压低直射能量，漫反射与镜面共用。
     lightColor += direct * diffuse * sky * weather * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 漫反射。
 #if OMNI_SPECULAR == 1
