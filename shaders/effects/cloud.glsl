@@ -11,14 +11,18 @@
   `float 阳光 = omniCloudShadow(世界坐标);`
 
 关键设计原因与取舍：
-  只保留一套体积云：不再让玩家在单层/体积/平面之间选。云块由三维噪声加云层高度区间步进得到，
-  形状、颜色、云影都从同一份密度出发，所以眼见的云和地上的云影对得上。
+  两套做法可切换：体积云沿视线在云层高度区间里步进，厚实有层次；平面云只算视线与云平面的
+  交点，更省也更像一张连续的天际线。两者共用同一份夜色/日色与银边，切换时色调不会突变。
+  形状、颜色、云影都从同一层云出发，所以眼见的云和地上的云影对得上；
+  平面做法下云影也沿同一阴影方向投到同一张云平面上，保持可见云与云影一致。
   采样步数做成「云精细度」选项，玩家在更细致和更省性能之间自己取舍。
   下界和末地没有真实大气，本文件直接返回原色，交给各自的天空处理。
 */
 #ifndef OMNI_CLOUD
 #define OMNI_CLOUD
 // @effect {"label":{"zh_cn":"云","en_us":"Clouds"}}
+// @option {"label":{"zh_cn":"云的做法","en_us":"Cloud style"},"description":{"zh_cn":"体积云沿视线在云层里一步步取样，厚实有层次；平面云把云画在一层水平面上，更省也更平。","en_us":"Volumetric marches through the layer for depth; planar draws the clouds on one horizontal sheet, cheaper and flatter."},"values":{"0":{"zh_cn":"体积","en_us":"Volumetric"},"1":{"zh_cn":"平面","en_us":"Planar"}}}
+#define OMNI_CLOUD_MODE 0 // [0 1]
 // @option {"label":{"zh_cn":"云量","en_us":"Cloud amount"},"description":{"zh_cn":"天上有多少云；调高云更满更连片，取零就没有云。","en_us":"How much cloud covers the sky; higher is fuller, zero means no clouds."},"slider":true}
 #define OMNI_CLOUD_COVERAGE 0.5 // [0.0 0.25 0.5 0.75 1.0]
 // @option {"label": {"zh_cn": "云高度", "en_us": "Cloud height"}, "description": {"zh_cn": "云挂得多高。", "en_us": "How high the clouds sit."}}
@@ -63,11 +67,28 @@ float omniCloudDensity(vec3 p) {
     float n = 0.5+0.5*(shape+detail); // 噪声从负一到一映射到零到一。
     return smoothstep(0.8-coverage*0.5,0.95-coverage*0.5,n); // 云量越高阈值越低，云越满。
 }
+// --- 平面云密度：把云摊在一层水平面上，用几层噪声叠出连续云块 ---
+// 为什么可直接投到平面：平面云挂在固定高度，从地面往上看就是一层贴片，不需要沿视线步进，
+// 所以代价与云厚度无关；代价换来的是缺少立体感，因此只作为可选做法。
+float omniPlanarDensity(vec2 xz) {
+    float coverage = omniCloudCoverage(); // 与体积云共用同一个云量选项。
+    if (coverage<=0.0) return 0.0; // 云量为零时明确没有云，也省下噪声采样。
+    vec2 wind = vec2(frameTimeCounter*OMNI_CLOUD_SPEED*0.01,frameTimeCounter*OMNI_CLOUD_SPEED*0.004)*100.0; // 水平风向，缓慢平移噪声；一百倍让云速手感与体积云接近。
+    vec2 uv = xz*0.0016*OMNI_CLOUD_SCALE+wind; // 空间频率决定云块大小，与体积云同量级。
+    float n = 0.0; float amplitude = 0.5; float frequency = 1.0; // 起始层振幅与频率。
+    for (int i=0;i<4;i++) {
+        n += snoise(vec3(uv*frequency,float(i)*3.7))*amplitude; // 每层换一个高度当种子，避免层与层重复。
+        frequency *= 2.1; amplitude *= 0.5; // 频率变高、振幅减半，形成由大到细的层次。
+    }
+    float threshold = 0.75-coverage*0.45; // 云量越高阈值越低，云越满。
+    return smoothstep(threshold,threshold+0.25,0.5+0.5*n); // 把噪声收敛成零到一的密度。
+}
 // --- 云影：从地表沿光线穿过整层云，按密度扣掉直射光 ---
 // 方向取当前阴影天体（太阳或月亮）的世界方向，所以夜晚的月光同样会被云挡；
 // 而云自身的亮度与银边用太阳方向判断昼夜（见 omniCloudSilver 与 omniCloudColor）。
 // 关键：云影与可见云用同一份密度和同一套边缘渐薄、同一消光系数，只是采样方向不同，
-// 所以天上云越厚、地上影越深，薄云与高云的地影也会跟着变淡。
+// 所以天上云越厚、地上影越深，薄云与高云的地影也会跟着变淡；
+// 平面做法下改成把地表沿光线投到同一张云平面上取密度，可见云与云影仍然对得上。
 float omniCloudShadow(vec3 world) {
 #if OMNI_CLOUD_SHADOW == 0 || defined OMNI_NETHER || defined OMNI_END
     return 1.0; // 关闭云影，或该维度没有自定义云时，直射光完全不受影响。
@@ -75,6 +96,13 @@ float omniCloudShadow(vec3 world) {
     vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition); // 阴影天体在世界空间里的方向。
     if (sun.y<=0.03) return 1.0; // 天体贴近地平线时方向太斜，忽略云影避免出现超长阴影。
     float surfaceY = world.y+cameraPosition.y; // 地表的绝对高度。
+#if OMNI_CLOUD_MODE == 1
+    if (surfaceY>OMNI_CLOUD_HEIGHT) return 1.0; // 平面云：地表已在云层之上，没有云可挡。
+    vec2 hit = (world+cameraPosition).xz+sun.xz*((OMNI_CLOUD_HEIGHT-surfaceY)/sun.y); // 从地表沿光线投到云平面的落点，与可见平面云取同一张噪声。
+    float optical = omniPlanarDensity(hit)*OMNI_CLOUD_THICKNESS; // 平面云的等效光程按整层厚度折算。
+    float fade = smoothstep(0.03,0.15,sun.y); // 天体越低云影越淡。
+    return mix(1.0,exp(-optical*0.07*OMNI_CLOUD_SHADOW_STRENGTH),fade); // 0.07 与可见云同一消光系数；浓淡取零等于没有云影。
+#else
     float lower = (OMNI_CLOUD_HEIGHT-surfaceY)/sun.y; // 光线进入云层下界的距离。
     float upper = (OMNI_CLOUD_HEIGHT+OMNI_CLOUD_THICKNESS-surfaceY)/sun.y; // 光线离开云层上界的距离。
     if (upper<=0.0) return 1.0; // 地表已在云层之上或光线不向上，没有云可挡。
@@ -89,6 +117,7 @@ float omniCloudShadow(vec3 world) {
     }
     float fade = smoothstep(0.03,0.15,sun.y); // 天体越低云影越淡。
     return mix(1.0,exp(-optical*0.07*OMNI_CLOUD_SHADOW_STRENGTH),fade); // 0.07 与可见云同一消光系数；浓淡取零等于没有云影。
+#endif
 #endif
 }
 // --- 云的昼夜颜色：受昼夜、天气、亮度与冷暖共同控制 ---
@@ -106,10 +135,26 @@ float omniCloudSilver(vec3 direction) {
     float facing = max(dot(omniNormalize(direction),sun),0.0); // 视线与太阳方向夹角余弦。
     return 1.0+OMNI_CLOUD_SILVER*(pow(facing,4.0)*1.2-0.4); // 正向增亮、背向压暗；取零恒为一。
 }
-// --- 云入口：沿视线在云层高度区间内做体积透射积分 ---
+// --- 平面云入口：视线与云平面相交后只取一次密度 ---
+// 为什么不做体积步进：平面云本身就是一层贴片，取一次交点密度就够，代价与云厚度无关。
+vec3 omniPlanarCloud(vec3 color, vec3 direction) {
+    vec3 d = omniNormalize(direction); // 归一化视线方向。
+    if (d.y<0.02) return color; // 视线几乎水平或朝下，与云平面没有可见交点。
+    float travel = (OMNI_CLOUD_HEIGHT-cameraPosition.y)/d.y; // 视线到达云平面的距离。
+    if (travel<=0.0) return color; // 相机在云层之上且朝上看不到这层平面。
+    vec3 hit = cameraPosition+d*travel; // 交点世界坐标，用来取平面噪声。
+    float density = omniPlanarDensity(hit.xz); // 交点处的云密度。
+    if (density<=0.0) return color; // 交点落在云缝里，直接透出天空。
+    float horizon = smoothstep(0.02,0.15,d.y); // 越靠地平线云压得越扁，淡出避免拉花。
+    vec3 cloudColor = omniCloudColor(vec3(0.035,0.047,0.07),vec3(0.85,0.86,0.88))*omniCloudSilver(d); // 与体积云共用同一套昼夜颜色与银边。
+    return mix(color,cloudColor,clamp(density*horizon,0.0,1.0)); // 用不透明度把云混到天空上。
+}
+// --- 云入口：按做法选择体积步进或平面取点 ---
 vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
 #if defined OMNI_NETHER || defined OMNI_END
     return color; // 下界与末地没有自定义云，交给各自的天空。
+#elif OMNI_CLOUD_MODE == 1
+    return omniPlanarCloud(color,direction); // 平面云只求一次交点，不做体积步进。
 #else
     vec3 d = omniNormalize(direction); // 米制步进方向。
     if (abs(d.y)<0.005) return color; // 视线几乎水平，不与云层相交。

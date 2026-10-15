@@ -134,14 +134,19 @@ class EffectTests(unittest.TestCase):
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniCloudShadow",source)  # 地形照明包含云影。
 
-    def test_cloud_has_single_implementation(self):
-        """云只有一套体积做法，不再暴露算法选择。"""
+    def test_cloud_has_two_selectable_styles(self):
+        """云提供体积与平面两种做法，可切换，且平面云复用同一套颜色与银边。"""
         found,_,_ = build.configuration()
-        self.assertNotIn("OMNI_CLOUD_MODE",found)  # 算法选择已去掉。
+        self.assertIn("OMNI_CLOUD_MODE",found)  # 做法可切换。
+        self.assertEqual(found["OMNI_CLOUD_MODE"].values,("0","1"))  # 体积与平面两档。
         text = (build.SHADERS/"effects/cloud.glsl").read_text(encoding="utf-8")
         self.assertIn("vec3 omniCloud",text)  # 云入口保留。
         self.assertIn("OMNI_CLOUD_STEPS",text)  # 采样步数是可调参数。
-        self.assertNotIn("omniPlanarClouds",text)  # 平面云等旧算法已删除。
+        self.assertIn("omniPlanarCloud",text)  # 平面云做法存在。
+        self.assertIn("omniPlanarDensity",text)  # 平面云密度独立成函数。
+        self.assertIn("OMNI_CLOUD_MODE == 1",text)  # 入口按做法分派。
+        source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
+        self.assertIn("omniPlanarCloud",source)  # 合成阶段能取到平面云做法。
 
     def test_underwater_volumetric_shafts(self):
         """水下体积光沿视线步进阴影，接入合成雾且可关闭。"""
