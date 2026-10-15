@@ -33,6 +33,8 @@
 //#define OMNI_PLAYER_RIPPLES
 // @option {"label":{"zh_cn":"水波凹凸细节","en_us":"Water bump detail"},"description":{"zh_cn":"在解析波上叠加多层程序噪声，增加水面细碎起伏。","en_us":"Adds multi-octave procedural noise on top of the analytic waves for fine ripples."}}
 #define OMNI_WATER_BUMP 1 // [0 1]
+// @option {"label":{"zh_cn":"凹凸强度","en_us":"Bump strength"},"slider":true}
+#define OMNI_WATER_BUMP_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"物理海浪","en_us":"Ocean waves"},"description":{"zh_cn":"盖斯特纳波同时抬升顶点与法线，侧面与瀑布保持原法线。","en_us":"Gerstner waves lift vertices and normals together; side faces keep their normals."}}
 #define OMNI_OCEAN_WAVES 1 // [0 1]
 // @option {"label":{"zh_cn":"波速","en_us":"Wave speed"},"slider":true}
@@ -96,7 +98,7 @@ float omniWaterDetail(vec2 p) {
     float d = omniNoise(vec3(p*0.35,t*0.6))*0.02; // 中频涟漪，负责看得见的细浪。
     d += omniNoise(vec3(p*1.1,t*1.1))*0.008; // 高频细节，负责近看时的小颗粒。
     d += omniNoise(vec3(p*2.4,-t*1.4))*0.004; // 极细纹理并反向流动，打散规则重复感。
-    return d*OMNI_WAVE_STRENGTH; // 与波强度共同缩放，关到零时细节消失。
+    return d*OMNI_WAVE_STRENGTH*OMNI_WATER_BUMP_STRENGTH; // 与波强度和凹凸强度共同缩放，关到零时细节消失。
 }
 // --- 盖斯特纳海浪 ---
 // 盖斯特纳波给每层波一个方向、频率和振幅，再逐层叠加；这里只做垂直位移，不做水平挤压。
