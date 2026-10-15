@@ -26,19 +26,17 @@
 #define OMNI_REFLECTION
 // 菜单：反射。默认关闭，先给基础画面一条不依赖屏幕内容的路。
 // @effect {"label":{"zh_cn":"反射","en_us":"Reflections"}}
-// 屏幕空间反射总开关，默认关闭（下一行被注释掉就是关闭）。
-// @option {"label":{"zh_cn":"屏幕空间反射","en_us":"Screen-space reflections"}}
+// @option {"label":{"zh_cn":"屏幕反射开关","en_us":"Screen reflections"},"description":{"zh_cn":"地面上会不会照出屏幕里看得见的东西；关掉后只保留天空反射。","en_us":"Whether surfaces reflect what is visible on screen; off keeps only sky reflections."}}
 //#define OMNI_SSR
-// 一次反射最多走多少步，步数多才不易漏掉远处几何，开销也越大。
-// @option {"label":{"zh_cn":"反射步数","en_us":"Reflection steps"}}
-#define OMNI_SSR_STEPS 24 // [12 24 48]
-// 反射整体强度，零等于取消反射。
+// @option {"label":{"zh_cn":"天空反射开关","en_us":"Sky reflections"},"description":{"zh_cn":"平滑表面会不会照出天空与云；关掉后只反射屏幕里的东西，没命中就是黑色。","en_us":"Whether smooth surfaces reflect the sky and clouds; off reflects only on-screen content, black when nothing is hit."}}
+#define OMNI_SKY_REFLECTION 1 // [0 1]
 // @option {"label":{"zh_cn":"反射强度","en_us":"Reflection strength"},"slider":true}
 #define OMNI_REFLECTION_STRENGTH 1.0 // [0.0 0.5 1.0]
-// 开启后按命中深度加权邻点去噪，减少屏幕反射的噪点。
-// @option {"label":{"zh_cn":"反射去噪","en_us":"Reflection denoise"},"description":{"zh_cn":"按命中深度相似度加权多点，减少屏幕反射噪点。","en_us":"Weights multiple taps by hit depth similarity to reduce SSR noise."}}
+// @option {"label":{"zh_cn":"反射清晰度","en_us":"Reflection detail"},"description":{"zh_cn":"一次反射最多走多少步；越多越不容易漏掉远处几何，也越耗性能。","en_us":"Ray steps per reflection; more avoids missing distant geometry but costs more."}}
+#define OMNI_SSR_STEPS 24 // [12 24 48]
+// @option {"label":{"zh_cn":"反射降噪","en_us":"Reflection denoise"},"description":{"zh_cn":"按命中深度相似度加权多点，减少屏幕反射噪点。","en_us":"Weights multiple taps by hit depth similarity to reduce SSR noise."}}
 #define OMNI_REFLECTION_DENOISE 1 // [0 1]
-// @option {"label":{"zh_cn":"反射模糊","en_us":"Reflection blur"},"description":{"zh_cn":"不去噪路径里十字模糊的半径；越大反射越糊。","en_us":"Cross-blur radius on the non-denoise path; larger blurs the reflection more."},"slider":true}
+// @option {"label":{"zh_cn":"反射模糊","en_us":"Reflection blur"},"description":{"zh_cn":"关掉降噪时十字模糊的半径；越大反射越糊。","en_us":"Cross-blur radius when denoise is off; larger blurs the reflection more."},"slider":true}
 #define OMNI_REFLECTION_BLUR 1.0 // [0.0 0.5 1.0 2.0]
 // 天空回退色由天空文件提供。
 #include "/effects/sky.glsl"
@@ -102,7 +100,7 @@ bool omniDistantHit(vec3 point, float stride, out vec2 hitUv, out vec3 target) {
 vec3 omniReflected(vec3 view, vec3 normal, float roughness) {
     vec3 ray = reflect(omniNormalize(view),normal); // 在视空间求反射方向，省去把方向转回世界空间。
     vec3 skyDirection = mat3(gbufferModelViewInverse)*ray; // 反射方向转到世界空间，天空、云、氛围共用它。
-    vec3 reflected = omniAtmosphere(omniCloud(omniSky(skyDirection),skyDirection,32000.0),skyDirection); // 回退色与背景天空同一套合成，屏幕外反射也能看到云与氛围。
+    vec3 reflected = OMNI_SKY_REFLECTION==1 ? omniAtmosphere(omniCloud(omniSky(skyDirection),skyDirection,32000.0),skyDirection) : vec3(0.0); // 关闭天空反射时回退为零，只保留屏幕命中；开启时与背景天空同一套合成。
 #ifdef OMNI_SSR
     vec3 point = view + normal*0.15; // 起点沿法线抬起一点，避免刚出发就打到自己所在的表面。
     for (int i=0;i<OMNI_SSR_STEPS;i++) {
