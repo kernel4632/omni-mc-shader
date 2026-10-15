@@ -5,16 +5,16 @@
 #ifndef OMNI_SHADOW // 地形与雾共用同一阴影定义。
 #define OMNI_SHADOW // 多次引用不重复声明选项与函数。
 // @effect {"label":{"zh_cn":"阴影","en_us":"Shadows"}}
-// @option {"label":{"zh_cn":"开启阴影","en_us":"Enable shadows"}}
+// @option {"label": {"zh_cn": "开启阴影", "en_us": "Enable shadows"}, "description": {"zh_cn": "太阳照出的影子开不开。", "en_us": "Whether the sun casts shadows."}}
 #define OMNI_SHADOW_ENABLED
-// @option {"label":{"zh_cn":"阴影质量","en_us":"Shadow samples"},"description":{"zh_cn":"一为单次比较，三或五为柔化采样边长。","en_us":"One comparison or a three/five wide PCF kernel."}}
+// @option {"label": {"zh_cn": "阴影质量", "en_us": "Shadow samples"}, "description": {"zh_cn": "一为单次比较，三或五为柔化采样边长。", "en_us": "One comparison or a three/five wide PCF kernel."}, "values": {"1": {"zh_cn": "低", "en_us": "Low"}, "3": {"zh_cn": "中", "en_us": "Medium"}, "5": {"zh_cn": "高", "en_us": "High"}}}
 #define OMNI_SHADOW_QUALITY 3 // [1 3 5]
-// @option {"label":{"zh_cn":"阴影柔化","en_us":"Shadow softness"},"slider":true}
+// @option {"label": {"zh_cn": "阴影柔化", "en_us": "Shadow softness"}, "slider": true, "description": {"zh_cn": "影子边缘软还是硬。", "en_us": "How soft the shadow edges are."}}
 #define OMNI_SHADOW_SOFTNESS 1.5 // [0.5 1.0 1.5 2.0 3.0]
 // Iris原生阴影常量必须直接使用字面量，菜单范围仍从这两行唯一读取。
-// @option {"label":{"zh_cn":"阴影分辨率","en_us":"Shadow resolution"},"description":{"zh_cn":"Iris直接读取该原生常量并分配shadowtex。","en_us":"Iris reads this native constant for shadowtex allocation."}}
+// @option {"label": {"zh_cn": "阴影分辨率", "en_us": "Shadow resolution"}, "description": {"zh_cn": "Iris直接读取该原生常量并分配shadowtex。", "en_us": "Iris reads this native constant for shadowtex allocation."}, "values": {"1024": {"zh_cn": "低", "en_us": "Low"}, "2048": {"zh_cn": "中", "en_us": "Medium"}, "4096": {"zh_cn": "高", "en_us": "High"}}}
 const int shadowMapResolution = 2048; // [1024 2048 4096]
-// @option {"label":{"zh_cn":"阴影距离","en_us":"Shadow distance"},"description":{"zh_cn":"Iris直接读取该原生常量并设置阴影范围。","en_us":"Iris reads this native constant for shadow range."}}
+// @option {"label": {"zh_cn": "阴影距离", "en_us": "Shadow distance"}, "description": {"zh_cn": "Iris直接读取该原生常量并设置阴影范围。", "en_us": "Iris reads this native constant for shadow range."}, "values": {"64.0": {"zh_cn": "近", "en_us": "Near"}, "128.0": {"zh_cn": "中", "en_us": "Medium"}, "192.0": {"zh_cn": "远", "en_us": "Far"}, "256.0": {"zh_cn": "极远", "en_us": "Very far"}}}
 const float shadowDistance = 128.0; // [64.0 128.0 192.0 256.0]
 // @option {"label":{"zh_cn":"阴影偏置","en_us":"Shadow bias"},"description":{"zh_cn":"比较深度时留出的余量；太小会出现自身条纹，太大会让阴影脱离物体。","en_us":"Depth margin for the comparison; too small causes acne, too large detaches shadows."},"slider":true}
 #define OMNI_SHADOW_BIAS 0.0006 // [0.0002 0.0006 0.0012 0.002]

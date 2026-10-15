@@ -28,13 +28,13 @@
 // @effect {"label":{"zh_cn":"反射","en_us":"Reflections"}}
 // @option {"label":{"zh_cn":"屏幕反射开关","en_us":"Screen reflections"},"description":{"zh_cn":"地面上会不会照出屏幕里看得见的东西；关掉后只保留天空反射。","en_us":"Whether surfaces reflect what is visible on screen; off keeps only sky reflections."}}
 //#define OMNI_SSR
-// @option {"label":{"zh_cn":"天空反射开关","en_us":"Sky reflections"},"description":{"zh_cn":"平滑表面会不会照出天空与云；关掉后只反射屏幕里的东西，没命中就是黑色。","en_us":"Whether smooth surfaces reflect the sky and clouds; off reflects only on-screen content, black when nothing is hit."}}
+// @option {"label": {"zh_cn": "天空反射开关", "en_us": "Sky reflections"}, "description": {"zh_cn": "平滑表面会不会照出天空与云；关掉后只反射屏幕里的东西，没命中就是黑色。", "en_us": "Whether smooth surfaces reflect the sky and clouds; off reflects only on-screen content, black when nothing is hit."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_SKY_REFLECTION 1 // [0 1]
-// @option {"label":{"zh_cn":"反射强度","en_us":"Reflection strength"},"slider":true}
+// @option {"label": {"zh_cn": "反射强度", "en_us": "Reflection strength"}, "slider": true, "description": {"zh_cn": "反射多强。", "en_us": "How strong reflections are."}}
 #define OMNI_REFLECTION_STRENGTH 1.0 // [0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"反射清晰度","en_us":"Reflection detail"},"description":{"zh_cn":"一次反射最多走多少步；越多越不容易漏掉远处几何，也越耗性能。","en_us":"Ray steps per reflection; more avoids missing distant geometry but costs more."}}
+// @option {"label": {"zh_cn": "反射清晰度", "en_us": "Reflection detail"}, "description": {"zh_cn": "一次反射最多走多少步；越多越不容易漏掉远处几何，也越耗性能。", "en_us": "Ray steps per reflection; more avoids missing distant geometry but costs more."}, "values": {"12": {"zh_cn": "低", "en_us": "Low"}, "24": {"zh_cn": "中", "en_us": "Medium"}, "48": {"zh_cn": "高", "en_us": "High"}}}
 #define OMNI_SSR_STEPS 24 // [12 24 48]
-// @option {"label":{"zh_cn":"反射降噪","en_us":"Reflection denoise"},"description":{"zh_cn":"按命中深度相似度加权多点，减少屏幕反射噪点。","en_us":"Weights multiple taps by hit depth similarity to reduce SSR noise."}}
+// @option {"label": {"zh_cn": "反射降噪", "en_us": "Reflection denoise"}, "description": {"zh_cn": "按命中深度相似度加权多点，减少屏幕反射噪点。", "en_us": "Weights multiple taps by hit depth similarity to reduce SSR noise."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_REFLECTION_DENOISE 1 // [0 1]
 // @option {"label":{"zh_cn":"反射模糊","en_us":"Reflection blur"},"description":{"zh_cn":"关掉降噪时十字模糊的半径；越大反射越糊。","en_us":"Cross-blur radius when denoise is off; larger blurs the reflection more."},"slider":true}
 #define OMNI_REFLECTION_BLUR 1.0 // [0.0 0.5 1.0 2.0]

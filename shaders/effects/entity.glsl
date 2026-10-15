@@ -12,7 +12,7 @@
 #ifndef OMNI_ENTITY
 #define OMNI_ENTITY
 // @effect {"label":{"zh_cn":"生物与玩家","en_us":"Mobs & player"}}
-// @option {"label":{"zh_cn":"生物受光强度","en_us":"Mob light strength"},"slider":true}
+// @option {"label": {"zh_cn": "生物受光强度", "en_us": "Mob light strength"}, "slider": true, "description": {"zh_cn": "生物身上的光照多亮。", "en_us": "How bright the light on mobs is."}}
 #define OMNI_ENTITY_LIGHT 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"生物色温","en_us":"Mob light tint"},"description":{"zh_cn":"正值生物受光偏暖、负值偏冷，零保持中性。","en_us":"Positive warms the light on mobs, negative cools it, zero stays neutral."},"slider":true}
 #define OMNI_ENTITY_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]

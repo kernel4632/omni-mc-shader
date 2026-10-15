@@ -9,17 +9,17 @@
 // @effect {"label":{"zh_cn":"材质","en_us":"Materials"}}
 // @option {"label":{"zh_cn":"材质细节开关","en_us":"Material detail"},"description":{"zh_cn":"需要实验室材质标准一点三资源包；关闭时使用普通贴图。预定义金属按标准允许的底色近似。","en_us":"Requires labPBR 1.3 maps; predefined metals use the permitted albedo approximation."}}
 //#define OMNI_MATERIAL_DETAIL
-// @option {"label":{"zh_cn":"凹凸深度","en_us":"Parallax depth"},"slider":true}
+// @option {"label": {"zh_cn": "凹凸深度", "en_us": "Parallax depth"}, "slider": true, "description": {"zh_cn": "方块表面凹凸看起来多深。", "en_us": "How deep surfaces appear with parallax."}}
 #define OMNI_PARALLAX 0.0 // [0.0 0.02 0.05 0.1]
-// @option {"label":{"zh_cn":"湿润开关","en_us":"Wet surfaces"}}
+// @option {"label": {"zh_cn": "湿润开关", "en_us": "Wet surfaces"}, "description": {"zh_cn": "下雨后地面会不会变湿发亮。", "en_us": "Whether surfaces get wet and shiny after rain."}}
 #define OMNI_WET_SURFACES
-// @option {"label":{"zh_cn":"湿润程度","en_us":"Wetness strength"},"slider":true}
+// @option {"label": {"zh_cn": "湿润程度", "en_us": "Wetness strength"}, "slider": true, "description": {"zh_cn": "地面多湿。", "en_us": "How wet surfaces are."}}
 #define OMNI_WET_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"积雪程度","en_us":"Snow strength"},"slider":true}
+// @option {"label": {"zh_cn": "积雪程度", "en_us": "Snow strength"}, "slider": true, "description": {"zh_cn": "地面雪盖多厚。", "en_us": "How thick the snow cover is."}}
 #define OMNI_SNOW_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"额外积雪","en_us":"Snow coverage"},"description":{"zh_cn":"手动额外覆盖，按天空光与表面朝上程度叠加；不推断生物群系温度。","en_us":"Extra artistic coverage based on skylight and surface orientation, not biome temperature."}}
 #define OMNI_SNOW 0.0 // [0.0 0.25 0.5 1.0]
-// @option {"label":{"zh_cn":"自动积雪开关","en_us":"Climate snow/wet"},"description":{"zh_cn":"按高度与空间噪声估计温度，冷处自然积雪、温暖处更易积水；不读取真实生物群系数据。","en_us":"Estimates temperature from altitude and spatial noise for natural snow and wetness, without biome data."}}
+// @option {"label": {"zh_cn": "自动积雪开关", "en_us": "Climate snow/wet"}, "description": {"zh_cn": "按高度与空间噪声估计温度，冷处自然积雪、温暖处更易积水；不读取真实生物群系数据。", "en_us": "Estimates temperature from altitude and spatial noise for natural snow and wetness, without biome data."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_CLIMATE_SNOW 1 // [0 1]
 // 贴图解码和天气叠加共享归一化、噪声等通用计算与相机、湿度等统一输入变量。
 #include "/common/math.glsl"

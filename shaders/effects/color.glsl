@@ -31,25 +31,25 @@
 #ifndef OMNI_COLOR
 #define OMNI_COLOR
 // @effect {"label":{"zh_cn":"调色","en_us":"Color"}}
-// @option {"label":{"zh_cn":"曝光","en_us":"Exposure"},"slider":true}
+// @option {"label": {"zh_cn": "曝光", "en_us": "Exposure"}, "slider": true, "description": {"zh_cn": "整个画面亮暗。", "en_us": "Overall scene exposure."}}
 #define OMNI_EXPOSURE 1.0 // [0.5 0.75 1.0 1.5 2.0 3.0]
-// @option {"label":{"zh_cn":"自动曝光开关","en_us":"Auto exposure"}}
+// @option {"label": {"zh_cn": "自动曝光开关", "en_us": "Auto exposure"}, "description": {"zh_cn": "进出洞穴时自动调亮暗。", "en_us": "Adapts brightness in caves and bright areas."}}
 //#define OMNI_AUTO_EXPOSURE
 // @option {"label":{"zh_cn":"曝光目标","en_us":"Exposure target"},"description":{"zh_cn":"自动曝光想达到的平均亮度；越大画面越亮。","en_us":"Target average luminance the auto exposure aims for; higher makes the image brighter."},"slider":true}
 #define OMNI_EXPOSURE_TARGET 0.18 // [0.1 0.18 0.25 0.4]
 // @option {"label":{"zh_cn":"曝光适应速度","en_us":"Exposure speed"},"description":{"zh_cn":"亮度变化后曝光跟上的快慢；越大越快也越容易闪烁。","en_us":"How fast exposure follows a brightness change; higher is faster but more prone to flicker."},"slider":true}
 #define OMNI_EXPOSURE_SPEED 1.5 // [0.5 1.0 1.5 3.0]
-// @option {"label":{"zh_cn":"亮度","en_us":"Brightness"},"slider":true}
+// @option {"label": {"zh_cn": "亮度", "en_us": "Brightness"}, "slider": true, "description": {"zh_cn": "画面整体亮暗。", "en_us": "Overall brightness."}}
 #define OMNI_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
-// @option {"label":{"zh_cn":"对比度","en_us":"Contrast"},"slider":true}
+// @option {"label": {"zh_cn": "对比度", "en_us": "Contrast"}, "slider": true, "description": {"zh_cn": "明暗差距大小。", "en_us": "How far light and dark differ."}}
 #define OMNI_CONTRAST 1.0 // [0.75 1.0 1.1 1.25]
-// @option {"label":{"zh_cn":"饱和度","en_us":"Saturation"},"slider":true}
+// @option {"label": {"zh_cn": "饱和度", "en_us": "Saturation"}, "slider": true, "description": {"zh_cn": "颜色鲜艳还是发灰。", "en_us": "Colour vividness."}}
 #define OMNI_SATURATION 1.0 // [0.5 0.75 1.0 1.1 1.25]
-// @option {"label":{"zh_cn":"白平衡","en_us":"White balance"},"slider":true}
+// @option {"label": {"zh_cn": "白平衡", "en_us": "White balance"}, "slider": true, "description": {"zh_cn": "整体偏暖还是偏冷。", "en_us": "Warms or cools the whole image."}}
 #define OMNI_WHITE_BALANCE 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"高光还原强度","en_us":"Highlight rolloff"},"description":{"zh_cn":"强光被压平的多少；取零更接近原亮度，取一保留更多高光色彩。","en_us":"How much highlights are rolled off; zero stays closer to plain brightness, one keeps more highlight color."},"slider":true}
 #define OMNI_TONEMAP_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0]
-// @option {"label":{"zh_cn":"色带消除开关","en_us":"Banding reduction"},"description":{"zh_cn":"用四乘四阈值矩阵打散八位量化色带。","en_us":"A 4x4 ordered matrix breaks 8-bit color banding."}}
+// @option {"label": {"zh_cn": "色带消除开关", "en_us": "Banding reduction"}, "description": {"zh_cn": "用四乘四阈值矩阵打散八位量化色带。", "en_us": "A 4x4 ordered matrix breaks 8-bit color banding."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_DITHER 1 // [0 1]
 // 曝光有效性与时间历史判断都由抗锯齿能力提供，引入一次即可共用。
 #include "/effects/antialiasing.glsl"

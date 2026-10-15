@@ -15,7 +15,7 @@ import argparse  # 配置分享命令入口。
 import json  # 读取受控配置与机器说明。
 import re  # 检查选项名称与数值格式。
 import sys  # 唯一入口报告错误。
-from dataclasses import dataclass  # 保存已检查的选项数据。
+from dataclasses import dataclass, field  # 保存已检查的选项数据。
 from pathlib import Path  # 所有用户输出限制在开发目录。
 import paths  # 开发目录写入边界在专用模块里只检查一次。
 
@@ -77,6 +77,7 @@ class Option:
     line: int  # 原始源文件行号。
     declaration: str = "define"  # 选项来自普通宏还是加载器支持的原生常量。
     page: str = ""  # 可选的菜单页面覆盖；空表示按效果文件位置映射到页面。
+    valueLabels: dict[str, dict[str, str]] = field(default_factory=dict)  # 档位取值的玩家可读名称，从源码旁读取。
 
 
 # 主界面分类：顺序即菜单里的按钮顺序，`id` 用于 `screen.<ID>` 键名。
@@ -157,6 +158,16 @@ def metadata(text: str, location: str, allowed: set[str]) -> dict:
             raise ValueError(f"{location}：翻译必须是非空单行文字")
     if "slider" in data and not isinstance(data["slider"], bool):  # 滑块不能被文字真假值误启用。
         raise ValueError(f"{location}：slider 必须为 true 或 false")
+    if "values" in data:  # 档位名称让按钮显示的取值变成玩家能看懂的词。
+        mapping = data["values"]
+        valid = (isinstance(mapping, dict) and mapping
+                 and all(isinstance(key, str) for key in mapping)
+                 and all(isinstance(text, dict) and set(text) == set(LOCALES)
+                         and all(isinstance(value, str) and value.strip() and "\n" not in value and "\r" not in value
+                                 for value in text.values())
+                         for text in mapping.values()))
+        if not valid:
+            raise ValueError(f"{location}：values 必须是取值到双语单行名称的映射")
     return data  # 下游信任已检查的字段。
 
 
@@ -203,8 +214,8 @@ def _read_option(source: Path, lines: list[str], index: int, group: str,
     location = f"{source}:{index + 1}"  # 说明行报格式错误，定义行保存在返回对象中。
     data = metadata(
         lines[index].strip().removeprefix("// @option "), location,
-        {"label", "description", "slider", "page"},
-    )  # 菜单文字、滑块要求与可选页面覆盖只读取这一条源码说明。
+        {"label", "description", "slider", "page", "values"},
+    )  # 菜单文字、滑块要求、页面覆盖与档位名称只读取这一条源码说明。
     if "page" in data and not re.fullmatch(r"[a-z][a-z0-9_]*", data["page"]):  # 页面名用于加载器键名，必须是小写标识。
         raise ValueError(f"{location}：page 只能使用小写英文、数字和下划线")
     line = lines[index + 1] if index + 1 < len(lines) else ""  # 文件末尾没有声明时按相邻格式错误处理。
@@ -237,9 +248,12 @@ def _read_option(source: Path, lines: list[str], index: int, group: str,
         raise ValueError(f"{location}：数值选项必须启用定义并提供数字范围")
     if default not in choices or len(set(choices)) != len(choices):
         raise ValueError(f"{location}：默认值不在范围内，或范围含重复值")
+    valueLabels = data.get("values", {})  # 档位名称必须对应真实取值，避免菜单写出用不到的按钮文字。
+    if any(key not in choices for key in valueLabels):
+        raise ValueError(f"{location}：values 里的名字必须来自声明的数值范围")
     return Option(
         name, default, choices, data["label"], data.get("description", {}),
-        data.get("slider", False), group, source, index + 2, declaration, data.get("page", ""),
+        data.get("slider", False), group, source, index + 2, declaration, data.get("page", ""), valueLabels,
     )  # 返回同时包含菜单文字和原生取值的数据，不再另存一份默认值。
 
 
@@ -317,6 +331,22 @@ def page_of(option: Option) -> str:
     return PAGE_OF_GROUP[option.group]
 
 
+def _subpages(pages: dict[str, list[str]], options: dict[str, Option]) -> dict[str, dict[str, list[str]]]:
+    """把每个分类里的选项按效果折叠成子页面。
+
+    一个分类只来自一个效果文件时返回空，菜单保持平铺；来自多个效果时才建子页面，
+    这样玩家先选分类、再选效果，长列表不会一次摊开。子页面名称直接复用效果自己的标题。
+    """
+    result: dict[str, dict[str, list[str]]] = {}
+    for pid, names in pages.items():
+        by_group: dict[str, list[str]] = {}
+        for name in names:
+            by_group.setdefault(options[name].group, []).append(name)  # 同一效果的选项归到一起。
+        if len(by_group) > 1:
+            result[pid] = by_group
+    return result
+
+
 def generated(shaders: Path, options: dict[str, Option], groups: dict,
               profiles: list[Preset]) -> dict[Path, str]:
     """从效果源码和预设生成菜单、滑块、预设及翻译文件内容。
@@ -347,8 +377,18 @@ def generated(shaders: Path, options: dict[str, Option], groups: dict,
     if unknown:
         raise ValueError(f"未登记的菜单页面：{sorted(unknown)}")
     lines += ["", "screen = " + " ".join((["<profile>"] if profiles else []) + [f"[{pid.upper()}]" for pid in ordered])]  # 顶层列主界面分类，有预设时才显示预设入口。
-    for pid in ordered:  # 每页平铺其选项，并固定三栏。
-        lines.append(f"screen.{pid.upper()} = " + " ".join(pages[pid]))  # 归属唯一，顺序沿用源码。
+    subpages = _subpages(pages, options)  # 一个分类里出现多个效果时，各效果折叠成子页面，菜单仍然一眼看到分类。
+    for pid in ordered:  # 每页列出自己的子页面或直接平铺选项，并固定三栏。
+        if pid in subpages:
+            buttons = []  # 这一页只放子页面入口，顺序沿用源码扫描顺序。
+            for group in subpages[pid]:
+                sub = f"{pid.upper()}_{group.upper()}"  # 子页名带分类前缀，避免不同分类的同名效果互相覆盖。
+                buttons.append(f"[{sub}]")  # 子页面以方括号按钮出现，点击进入。
+                lines.append(f"screen.{sub} = " + " ".join(subpages[pid][group]))  # 子页面内的选项归属唯一。
+                lines.append(f"screen.{sub}.columns = 3")  # 子页面同样三栏。
+            lines.append(f"screen.{pid.upper()} = " + " ".join(buttons))  # 分类页只承担分组，不再平铺长列表。
+        else:
+            lines.append(f"screen.{pid.upper()} = " + " ".join(pages[pid]))  # 只有一个效果时不必多一层，直接平铺。
         lines.append(f"screen.{pid.upper()}.columns = 3")  # 多栏排布，利用横向空间。
     render_scale = options.get("OMNI_RENDER_SCALE")  # 渲染缩放：内部按较低分辨率渲染合成缓冲，再在时间阶段放大。
     if render_scale:
@@ -374,13 +414,21 @@ def _language(options: dict[str, Option], groups: dict, profiles: list[Preset], 
     内部数据已在说明读取处检查；这里仅按加载器要求写键名并转义文字，不再检查翻译完整性。
     """
     lines = ["# \\u7531 build.py \\u751f\\u6210\\uff1b\\u7ffb\\u8bd1\\u4f4d\\u4e8e effects/ \\u4e0e presets/ \\u65c1\\u8fb9\\u3002"]  # 保留生成提示，说明翻译应回到源码修改。
+    pages: dict[str, list[str]] = {}  # 与菜单设置用同一份归属，避免语言文件出现菜单里没有的页面。
+    for option in options.values():
+        pages.setdefault(page_of(option), []).append(option.name)
     for pid, label in MAIN_PAGES:  # 页面顺序与菜单一致，跨系统生成时不产生无意义差异。
-        if any(page_of(option) == pid for option in options.values()):  # 只输出真正有选项的页面。
+        if pid in pages:  # 只输出真正有选项的页面。
             lines.append(f"screen.{pid.upper()}={escape(label[locale])}")
+    for pid, by_group in _subpages(pages, options).items():  # 子页面标题直接复用效果自己的名称。
+        for group in by_group:
+            lines.append(f"screen.{pid.upper()}_{group.upper()}={escape(groups[group][locale])}")
     for option in options.values():  # 选项标题与帮助使用相同语言，避免混用另一套翻译。
         lines.append(f"option.{option.name}={escape(option.label[locale])}")
         if option.description:  # 没有帮助内容时不生成空白提示。
             lines.append(f"option.{option.name}.comment={escape(option.description[locale])}")
+        for value, text in option.valueLabels.items():  # 档位按钮显示玩家能看懂的取值名称。
+            lines.append(f"value.{option.name}.{value}={escape(text[locale])}")
     for preset in profiles:  # 预设名来自文件名，显示文字来自该文件的预设说明。
         lines.append(f"profile.{preset.name}={escape(preset.label[locale])}")
     return "\n".join(lines) + "\n"  # 末尾换行与菜单文件一致，保持生成内容稳定。

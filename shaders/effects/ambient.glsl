@@ -12,17 +12,17 @@
 // @effect {"label":{"zh_cn":"环境遮蔽与反弹","en_us":"Indirect light"}}
 // @option {"label":{"zh_cn":"缝隙变暗开关","en_us":"Corner darkening"},"description":{"zh_cn":"墙角和方块缝变暗；关掉后这些地方回到没有间接光的样子。","en_us":"Darkens corners and creases; off leaves them without indirect shading."},"page":"shadow"}
 #define OMNI_SSAO
-// @option {"label":{"zh_cn":"变暗强度","en_us":"Darkening strength"},"slider":true,"page":"shadow"}
+// @option {"label": {"zh_cn": "变暗强度", "en_us": "Darkening strength"}, "slider": true, "page": "shadow", "description": {"zh_cn": "缝隙和角落里压暗得多强。", "en_us": "How strongly corners and crevices darken."}}
 #define OMNI_AO_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"变暗范围","en_us":"Darkening range"},"slider":true,"page":"shadow"}
+// @option {"label": {"zh_cn": "变暗范围", "en_us": "Darkening range"}, "slider": true, "page": "shadow", "description": {"zh_cn": "变暗影响多大范围。", "en_us": "How far the darkening reaches."}}
 #define OMNI_AMBIENT_RADIUS 1.5 // [0.5 1.0 1.5 3.0]
-// @option {"label":{"zh_cn":"变暗方向数","en_us":"Darkening directions"},"description":{"zh_cn":"绕视线检查的遮挡方向数量；越多越稳也越贵。","en_us":"How many directions around the view are checked; more is steadier but costlier."},"page":"shadow"}
+// @option {"label": {"zh_cn": "变暗方向数", "en_us": "Darkening directions"}, "description": {"zh_cn": "绕视线检查的遮挡方向数量；越多越稳也越贵。", "en_us": "How many directions around the view are checked; more is steadier but costlier."}, "page": "shadow", "values": {"2": {"zh_cn": "少", "en_us": "Fewer"}, "3": {"zh_cn": "中", "en_us": "Medium"}, "4": {"zh_cn": "多", "en_us": "More"}}}
 #define OMNI_AO_SLICES 3 // [2 3 4]
-// @option {"label":{"zh_cn":"变暗精细度","en_us":"Darkening detail"},"description":{"zh_cn":"每个方向搜索遮挡的步数；越多越贴合真实遮挡。","en_us":"Search steps per direction; more matches true occlusion better."},"page":"shadow"}
+// @option {"label": {"zh_cn": "变暗精细度", "en_us": "Darkening detail"}, "description": {"zh_cn": "每个方向搜索遮挡的步数；越多越贴合真实遮挡。", "en_us": "Search steps per direction; more matches true occlusion better."}, "page": "shadow", "values": {"4": {"zh_cn": "低", "en_us": "Low"}, "6": {"zh_cn": "中", "en_us": "Medium"}, "8": {"zh_cn": "高", "en_us": "High"}, "12": {"zh_cn": "极高", "en_us": "Very high"}}}
 #define OMNI_AO_STEPS 6 // [4 6 8 12]
 // @option {"label":{"zh_cn":"物体反光开关","en_us":"Object bounce"},"description":{"zh_cn":"旁边看得见的物体会把光反到别的表面；只是屏幕里的一次近似，不是完整全局光。","en_us":"Light bouncing from visible nearby surfaces; a screen-space approximation, not full GI."}}
 //#define OMNI_SCREEN_BOUNCE
-// @option {"label":{"zh_cn":"物体反光强度","en_us":"Bounce strength"},"slider":true}
+// @option {"label": {"zh_cn": "物体反光强度", "en_us": "Bounce strength"}, "slider": true, "description": {"zh_cn": "旁边物体把光反到别处多强。", "en_us": "How strongly nearby surfaces bounce light."}}
 #define OMNI_BOUNCE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"物体反光范围","en_us":"Bounce range"},"description":{"zh_cn":"反光能影响多远，越大看到的反弹越多也越贵。","en_us":"How far the bounce reaches; larger sees more bounce and costs more."},"slider":true}
 #define OMNI_BOUNCE_RADIUS 1.5 // [0.5 1.0 1.5 3.0]

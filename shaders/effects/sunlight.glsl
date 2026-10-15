@@ -4,23 +4,23 @@
 #ifndef OMNI_SUNLIGHT
 #define OMNI_SUNLIGHT
 // @effect {"label":{"zh_cn":"光照","en_us":"Lighting"}}
-// @option {"label":{"zh_cn":"阳光强度","en_us":"Sunlight strength"},"slider":true}
+// @option {"label": {"zh_cn": "阳光强度", "en_us": "Sunlight strength"}, "slider": true, "description": {"zh_cn": "白天太阳多亮。", "en_us": "How bright the direct sunlight is."}}
 #define OMNI_SUNLIGHT_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"阳光色温","en_us":"Sunlight tint"},"description":{"zh_cn":"正值偏暖、负值偏冷，零保持中性；只改直射光颜色不改强度。","en_us":"Positive warms the direct light, negative cools it, zero stays neutral; strength is unchanged."},"slider":true}
 #define OMNI_SUN_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"环境光强度","en_us":"Ambient light strength"},"slider":true}
+// @option {"label": {"zh_cn": "环境光强度", "en_us": "Ambient light strength"}, "slider": true, "description": {"zh_cn": "阴影里多亮。", "en_us": "How bright shaded areas are."}}
 #define OMNI_AMBIENT_STRENGTH 1.0 // [0.25 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"环境光色温","en_us":"Ambient light tint"},"description":{"zh_cn":"正值背光偏暖、负值偏冷，零保持中性。","en_us":"Positive warms the shadowed light, negative cools it, zero stays neutral."},"slider":true}
 #define OMNI_AMBIENT_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"火把光强度","en_us":"Torch light strength"},"slider":true}
+// @option {"label": {"zh_cn": "火把光强度", "en_us": "Torch light strength"}, "slider": true, "description": {"zh_cn": "火把照亮范围多亮。", "en_us": "How bright block light is."}}
 #define OMNI_BLOCKLIGHT_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"火把光色温","en_us":"Torch light tint"},"description":{"zh_cn":"正值更暖、负值更冷，零保持默认暖色；只改方块光颜色。","en_us":"Positive warms the block light, negative cools it, zero keeps the default warm tone."},"slider":true}
 #define OMNI_BLOCKLIGHT_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"手持光开关","en_us":"Held light"}}
+// @option {"label": {"zh_cn": "手持光开关", "en_us": "Held light"}, "description": {"zh_cn": "手里拿着光源会不会照亮周围。", "en_us": "Whether a held light lights the surroundings."}}
 #define OMNI_HELD_LIGHT
-// @option {"label":{"zh_cn":"手持光亮度","en_us":"Held light strength"},"slider":true}
+// @option {"label": {"zh_cn": "手持光亮度", "en_us": "Held light strength"}, "slider": true, "description": {"zh_cn": "手持光多亮。", "en_us": "How bright the held light is."}}
 #define OMNI_HELD_BRIGHTNESS 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"镜面高光","en_us":"Specular highlights"},"description":{"zh_cn":"GGX 分布与施利克菲涅耳提供直射镜面，粗糙度和金属来自材质。","en_us":"GGX distribution with Schlick Fresnel for direct specular, driven by material roughness and metal."}}
+// @option {"label": {"zh_cn": "镜面高光", "en_us": "Specular highlights"}, "description": {"zh_cn": "GGX 分布与施利克菲涅耳提供直射镜面，粗糙度和金属来自材质。", "en_us": "GGX distribution with Schlick Fresnel for direct specular, driven by material roughness and metal."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_SPECULAR 1 // [0 1]
 // 阴影与环境输入只有共同来源。
 #include "/effects/shadow.glsl"

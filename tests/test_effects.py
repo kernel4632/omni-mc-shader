@@ -439,3 +439,19 @@ class EffectTests(unittest.TestCase):
         self.assertEqual(used <= known,True,used-known)  # 不允许选项落到未登记的页面。
         self.assertEqual(known <= used,True,known-used)  # 不允许出现空分类。
 
+    def test_every_option_has_tooltip(self):
+        """每个选项都要有悬停说明，玩家才能不靠猜来调。"""
+        found,_,_ = build.configuration()
+        missing = [name for name,option in found.items() if not option.description]  # 缺说明的选项直接列出来。
+        self.assertEqual(missing,[],missing)
+
+    def test_menu_subpages_and_value_labels(self):
+        """一个分类有多个效果时折叠成子页面，档位按钮显示玩家能看懂的取值名称。"""
+        _,_,files = build.configuration()
+        menu = files[build.SHADERS/"shaders.properties"]  # 读取真实生成内容。
+        self.assertIn("screen.SKY = [SKY_ATMOSPHERE]",menu)  # 天空分类下有子页面入口。
+        self.assertIn("screen.SKY_ATMOSPHERE = ",menu)  # 子页面自带选项列表。
+        lang = files[build.SHADERS/"lang"/"zh_cn.lang"]
+        self.assertIn("value.OMNI_RENDER_SCALE.50=",lang)  # 渲染缩放的档位名称已生成。
+        self.assertIn("value.OMNI_DEBUG_VIEW.0=",lang)  # 调试视图的档位名称已生成。
+

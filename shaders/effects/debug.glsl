@@ -5,7 +5,7 @@
  */
 
 // @effect {"label":{"zh_cn":"开发调试","en_us":"Development"}}
-// @option {"label":{"zh_cn":"调试显示","en_us":"Debug view"},"description":{"zh_cn":"0：正常画面；1：原始深度；2：画面坐标。深度通常接近白色。","en_us":"0: scene; 1: raw depth; 2: screen coordinates. Raw depth is often near white."}}
+// @option {"label": {"zh_cn": "调试显示", "en_us": "Debug view"}, "description": {"zh_cn": "0：正常画面；1：原始深度；2：画面坐标。深度通常接近白色。", "en_us": "0: scene; 1: raw depth; 2: screen coordinates. Raw depth is often near white."}, "values": {"0": {"zh_cn": "正常画面", "en_us": "Scene"}, "1": {"zh_cn": "原始深度", "en_us": "Raw depth"}, "2": {"zh_cn": "画面坐标", "en_us": "Coordinates"}, "3": {"zh_cn": "几何法线", "en_us": "Normals"}, "4": {"zh_cn": "材质参数", "en_us": "Material"}, "5": {"zh_cn": "原版光照", "en_us": "Light data"}}}
 #define OMNI_DEBUG_VIEW 0 // [0 1 2 3 4 5]
 // @option {"label":{"zh_cn":"性能计时","en_us":"Frame-time bar"},"description":{"zh_cn":"在屏幕左下角画一条横条显示每帧耗时，越长越慢；这是整帧时间，不是逐效果耗时。","en_us":"Draws a bar in the bottom-left showing per-frame time, longer means slower; this is total frame time, not per-effect."}}
 //#define OMNI_PROFILER

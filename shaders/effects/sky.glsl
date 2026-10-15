@@ -12,31 +12,31 @@
 #ifndef OMNI_SKY
 #define OMNI_SKY
 // @effect {"label":{"zh_cn":"天空","en_us":"Sky"}}
-// @option {"label":{"zh_cn":"太阳亮度","en_us":"Sun brightness"},"slider":true}
+// @option {"label": {"zh_cn": "太阳亮度", "en_us": "Sun brightness"}, "slider": true, "description": {"zh_cn": "太阳圆盘有多亮。", "en_us": "How bright the sun disc is."}}
 #define OMNI_SUN_DISK 1.0 // [0.0 0.5 1.0 1.5]
-// @option {"label":{"zh_cn":"太阳大小","en_us":"Sun size"},"slider":true}
+// @option {"label": {"zh_cn": "太阳大小", "en_us": "Sun size"}, "slider": true, "description": {"zh_cn": "太阳圆盘多大。", "en_us": "How large the sun disc is."}}
 #define OMNI_SUN_SIZE 1.0 // [0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"月亮亮度","en_us":"Moon brightness"},"slider":true}
+// @option {"label": {"zh_cn": "月亮亮度", "en_us": "Moon brightness"}, "slider": true, "description": {"zh_cn": "月亮圆盘有多亮。", "en_us": "How bright the moon disc is."}}
 #define OMNI_MOON_DISK 1.0 // [0.0 0.5 1.0 1.5]
-// @option {"label":{"zh_cn":"月亮大小","en_us":"Moon size"},"slider":true}
+// @option {"label": {"zh_cn": "月亮大小", "en_us": "Moon size"}, "slider": true, "description": {"zh_cn": "月亮圆盘多大。", "en_us": "How large the moon disc is."}}
 #define OMNI_MOON_SIZE 1.0 // [0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"日月色温","en_us":"Sun/moon tint"},"description":{"zh_cn":"正值日月偏暖、负值偏冷；取零保持中性。","en_us":"Positive warms the sun and moon, negative cools them; zero keeps them neutral."},"slider":true}
 #define OMNI_CELESTIAL_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"星星亮度","en_us":"Star brightness"},"slider":true}
+// @option {"label": {"zh_cn": "星星亮度", "en_us": "Star brightness"}, "slider": true, "description": {"zh_cn": "夜空星星多亮。", "en_us": "How bright the stars are."}}
 #define OMNI_STAR_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"星星数量","en_us":"Star amount"},"description":{"zh_cn":"夜里星星多还是少。","en_us":"How many stars appear at night."},"slider":true}
 #define OMNI_STAR_DENSITY 1.0 // [0.5 1.0 2.0 4.0]
-// @option {"label":{"zh_cn":"日落强度","en_us":"Sunset strength"},"slider":true}
+// @option {"label": {"zh_cn": "日落强度", "en_us": "Sunset strength"}, "slider": true, "description": {"zh_cn": "日出日落时天边红霞多强。", "en_us": "How strong the sunset glow is."}}
 #define OMNI_SUNSET_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
 // @option {"label":{"zh_cn":"日落颜色","en_us":"Sunset color"},"description":{"zh_cn":"正值晚霞偏红、负值偏紫粉。","en_us":"Positive makes the sunset redder, negative makes it more purple-pink."},"slider":true}
 #define OMNI_SUNSET_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"天空饱和度","en_us":"Sky saturation"},"slider":true}
+// @option {"label": {"zh_cn": "天空饱和度", "en_us": "Sky saturation"}, "slider": true, "description": {"zh_cn": "天空颜色鲜艳还是发灰。", "en_us": "Sky colour vividness."}}
 #define OMNI_SKY_SATURATION 1.0 // [0.5 0.75 1.0 1.25]
-// @option {"label":{"zh_cn":"天空整体亮度","en_us":"Sky brightness"},"slider":true}
+// @option {"label": {"zh_cn": "天空整体亮度", "en_us": "Sky brightness"}, "slider": true, "description": {"zh_cn": "整个天空亮暗。", "en_us": "Overall sky brightness."}}
 #define OMNI_SKY_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
-// @option {"label":{"zh_cn":"下界程序化天空","en_us":"Nether palette"},"description":{"zh_cn":"用程序化混合替代固定下界雾色，覆盖荒原、灵魂沙谷、绯红与诡异森林和玄武岩。","en_us":"Replaces a fixed nether fog colour with a procedural blend of nether biomes."}}
+// @option {"label": {"zh_cn": "下界程序化天空", "en_us": "Nether palette"}, "description": {"zh_cn": "用程序化混合替代固定下界雾色，覆盖荒原、灵魂沙谷、绯红与诡异森林和玄武岩。", "en_us": "Replaces a fixed nether fog colour with a procedural blend of nether biomes."}, "values": {"0": {"zh_cn": "固定雾色", "en_us": "Fixed fog colour"}, "1": {"zh_cn": "程序化", "en_us": "Procedural"}}}
 #define OMNI_NETHER_COLOR 1 // [0 1]
-// @option {"label":{"zh_cn":"末地天空亮度","en_us":"End sky brightness"},"slider":true}
+// @option {"label": {"zh_cn": "末地天空亮度", "en_us": "End sky brightness"}, "slider": true, "description": {"zh_cn": "末地星空亮暗。", "en_us": "End sky brightness."}}
 #define OMNI_END_SKY_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
 // @option {"label":{"zh_cn":"使用资源包天空","en_us":"Resource-pack sky"},"description":{"zh_cn":"使用资源包自带的日月贴图，而不是内置的日月圆盘。","en_us":"Uses the resource pack's own sun and moon textures instead of the built-in discs."},"page":"world"}
 //#define OMNI_RESOURCE_SKY

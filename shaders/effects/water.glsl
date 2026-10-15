@@ -17,43 +17,43 @@
 #ifndef OMNI_WATER
 #define OMNI_WATER
 // @effect {"label":{"zh_cn":"水面","en_us":"Water"}}
-// @option {"label":{"zh_cn":"波浪大小","en_us":"Wave size"},"slider":true}
+// @option {"label": {"zh_cn": "波浪大小", "en_us": "Wave size"}, "slider": true, "description": {"zh_cn": "水面起伏多明显。", "en_us": "How tall the waves are."}}
 #define OMNI_WAVE_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"波浪速度","en_us":"Wave speed"},"slider":true}
+// @option {"label": {"zh_cn": "波浪速度", "en_us": "Wave speed"}, "slider": true, "description": {"zh_cn": "水波快慢，取零静止。", "en_us": "Wave speed; zero freezes the water."}}
 #define OMNI_WAVE_SPEED 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"波浪密度","en_us":"Wave density"},"slider":true}
+// @option {"label": {"zh_cn": "波浪密度", "en_us": "Wave density"}, "slider": true, "description": {"zh_cn": "波纹更大更疏还是更小更密。", "en_us": "Wave size and spacing."}}
 #define OMNI_WAVE_SCALE 1.0 // [0.5 1.0 2.0 4.0]
-// @option {"label":{"zh_cn":"水面凹凸细节","en_us":"Water bump detail"},"description":{"zh_cn":"在波浪上叠加多层噪声，让水面近看有小起伏。","en_us":"Adds fine procedural ripples on top of the waves."}}
+// @option {"label": {"zh_cn": "水面凹凸细节", "en_us": "Water bump detail"}, "description": {"zh_cn": "在波浪上叠加多层噪声，让水面近看有小起伏。", "en_us": "Adds fine procedural ripples on top of the waves."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_WATER_BUMP 1 // [0 1]
-// @option {"label":{"zh_cn":"水面凹凸深度","en_us":"Bump depth"},"slider":true}
+// @option {"label": {"zh_cn": "水面凹凸深度", "en_us": "Bump depth"}, "slider": true, "description": {"zh_cn": "水面细碎起伏多强。", "en_us": "How strong the fine water ripples are."}}
 #define OMNI_WATER_BUMP_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"海浪开关","en_us":"Ocean waves"},"description":{"zh_cn":"起伏极大的海浪，会抬升水面顶点；瀑布与侧面不受影响。","en_us":"Large rolling waves that also lift the water surface; falls and side faces are unaffected."}}
+// @option {"label": {"zh_cn": "海浪开关", "en_us": "Ocean waves"}, "description": {"zh_cn": "起伏极大的海浪，会抬升水面顶点；瀑布与侧面不受影响。", "en_us": "Large rolling waves that also lift the water surface; falls and side faces are unaffected."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_OCEAN_WAVES 1 // [0 1]
-// @option {"label":{"zh_cn":"海浪大小","en_us":"Ocean wave size"},"slider":true}
+// @option {"label": {"zh_cn": "海浪大小", "en_us": "Ocean wave size"}, "slider": true, "description": {"zh_cn": "大浪多高。", "en_us": "How tall the ocean swell is."}}
 #define OMNI_OCEAN_HEIGHT 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"水色红","en_us":"Water red"},"description":{"zh_cn":"水里红色消失得快不快；调高水更偏青绿。","en_us":"How fast red fades in water; higher pushes the water toward green-blue."},"slider":true}
 #define OMNI_WATER_ABSORB_R 0.19 // [0.05 0.1 0.19 0.35]
-// @option {"label":{"zh_cn":"水色绿","en_us":"Water green"},"slider":true}
+// @option {"label": {"zh_cn": "水色绿", "en_us": "Water green"}, "slider": true, "description": {"zh_cn": "水里绿色消失得多快。", "en_us": "How fast green fades in water."}}
 #define OMNI_WATER_ABSORB_G 0.065 // [0.02 0.04 0.065 0.12]
-// @option {"label":{"zh_cn":"水色蓝","en_us":"Water blue"},"slider":true}
+// @option {"label": {"zh_cn": "水色蓝", "en_us": "Water blue"}, "slider": true, "description": {"zh_cn": "水里蓝色消失得多快。", "en_us": "How fast blue fades in water."}}
 #define OMNI_WATER_ABSORB_B 0.035 // [0.01 0.02 0.035 0.07]
 // @option {"label":{"zh_cn":"浑水色红","en_us":"Deep water red"},"description":{"zh_cn":"水很深时剩下的红色成分。","en_us":"Residual red tint in very deep water."},"slider":true}
 #define OMNI_WATER_SCATTER_R 0.015 // [0.0 0.015 0.04 0.08]
-// @option {"label":{"zh_cn":"浑水色绿","en_us":"Deep water green"},"slider":true}
+// @option {"label": {"zh_cn": "浑水色绿", "en_us": "Deep water green"}, "slider": true, "description": {"zh_cn": "深水的绿色成分。", "en_us": "Green in deep water."}}
 #define OMNI_WATER_SCATTER_G 0.075 // [0.02 0.05 0.075 0.12]
-// @option {"label":{"zh_cn":"浑水色蓝","en_us":"Deep water blue"},"slider":true}
+// @option {"label": {"zh_cn": "浑水色蓝", "en_us": "Deep water blue"}, "slider": true, "description": {"zh_cn": "深水的蓝色成分。", "en_us": "Blue in deep water."}}
 #define OMNI_WATER_SCATTER_B 0.095 // [0.03 0.06 0.095 0.15]
 // @option {"label":{"zh_cn":"清澈度","en_us":"Water clarity"},"description":{"zh_cn":"大于一更清澈、小于一更浑浊；只改透过多深开始看不清。","en_us":"Above one is clearer, below one is murkier; only changes how far you can see through."},"slider":true}
 #define OMNI_WATER_CLEAR 1.0 // [0.5 1.0 2.0 4.0]
-// @option {"label":{"zh_cn":"水折射开关","en_us":"Water refraction"}}
+// @option {"label": {"zh_cn": "水折射开关", "en_us": "Water refraction"}, "description": {"zh_cn": "透过水看东西会不会扭曲。", "en_us": "Whether looking through water distorts."}}
 #define OMNI_WATER_REFRACTION
-// @option {"label":{"zh_cn":"折射强度","en_us":"Refraction strength"},"slider":true}
+// @option {"label": {"zh_cn": "折射强度", "en_us": "Refraction strength"}, "slider": true, "description": {"zh_cn": "透过水看东西扭曲多强。", "en_us": "How strong the underwater distortion is."}}
 #define OMNI_REFRACTION_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"水面高光","en_us":"Water sun glint"},"description":{"zh_cn":"太阳照在水面的亮点；取零关闭。","en_us":"Bright highlight where the sun reflects off the water; zero disables it."},"slider":true}
 #define OMNI_WATER_GLINT 0.5 // [0.0 0.25 0.5 1.0]
-// @option {"label":{"zh_cn":"雨点波纹开关","en_us":"Rain ripples"}}
+// @option {"label": {"zh_cn": "雨点波纹开关", "en_us": "Rain ripples"}, "description": {"zh_cn": "下雨时水面有没有雨点圈。", "en_us": "Whether rain ripples appear on water."}}
 #define OMNI_RAIN_RIPPLES
-// @option {"label":{"zh_cn":"波纹强度","en_us":"Ripple strength"},"slider":true}
+// @option {"label": {"zh_cn": "波纹强度", "en_us": "Ripple strength"}, "slider": true, "description": {"zh_cn": "雨点圈多明显。", "en_us": "How visible the ripples are."}}
 #define OMNI_RIPPLE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"玩家水纹开关","en_us":"Player ripples"},"description":{"zh_cn":"玩家贴水走动时出现一圈圈水纹；不会跟着生物走。","en_us":"Rings appear when the player moves near the water; other mobs are not tracked."}}
 //#define OMNI_PLAYER_RIPPLES

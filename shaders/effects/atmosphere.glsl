@@ -8,23 +8,23 @@
 #ifndef OMNI_ATMOSPHERE
 #define OMNI_ATMOSPHERE
 // @effect {"label":{"zh_cn":"氛围","en_us":"Atmosphere"}}
-// @option {"label":{"zh_cn":"极光","en_us":"Aurora"}}
+// @option {"label": {"zh_cn": "极光", "en_us": "Aurora"}, "description": {"zh_cn": "夜里高空出现极光帘幕。", "en_us": "Shows aurora curtains high in the night sky."}}
 //#define OMNI_AURORA
-// @option {"label":{"zh_cn":"彩虹","en_us":"Rainbow"}}
+// @option {"label": {"zh_cn": "彩虹", "en_us": "Rainbow"}, "description": {"zh_cn": "雨后晴天出现彩虹。", "en_us": "Shows a rainbow after rain."}}
 //#define OMNI_RAINBOW
 // @option {"label":{"zh_cn":"闪电照明","en_us":"Lightning illumination"},"description":{"zh_cn":"读取加载器实际闪电强度；没有该输入时关闭，不生成虚假天气事件。","en_us":"Uses Iris lightning strength; disabled without the actual event input."},"page":"weather"}
 #define OMNI_LIGHTNING
-// @option {"label":{"zh_cn":"解析大气散射","en_us":"Analytic atmosphere"},"description":{"zh_cn":"用解析单次散射近似天空，不引入外部查找表纹理。","en_us":"Approximates the sky with analytic single scattering, no external lookup table."}}
+// @option {"label": {"zh_cn": "解析大气散射", "en_us": "Analytic atmosphere"}, "description": {"zh_cn": "用解析单次散射近似天空，不引入外部查找表纹理。", "en_us": "Approximates the sky with analytic single scattering, no external lookup table."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_ATMOSPHERE_SCATTER 1 // [0 1]
-// @option {"label":{"zh_cn":"极光强度","en_us":"Aurora strength"},"slider":true}
+// @option {"label": {"zh_cn": "极光强度", "en_us": "Aurora strength"}, "slider": true, "description": {"zh_cn": "极光多亮。", "en_us": "How bright the aurora is."}}
 #define OMNI_AURORA_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"极光颜色","en_us":"Aurora colour"},"description":{"zh_cn":"正值偏绿、负值偏蓝紫。","en_us":"Positive leans green, negative leans blue-purple."},"slider":true}
 #define OMNI_AURORA_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"彩虹强度","en_us":"Rainbow strength"},"slider":true}
+// @option {"label": {"zh_cn": "彩虹强度", "en_us": "Rainbow strength"}, "slider": true, "description": {"zh_cn": "彩虹多清楚。", "en_us": "How clear the rainbow is."}}
 #define OMNI_RAINBOW_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"散射强度","en_us":"Scatter strength"},"slider":true}
+// @option {"label": {"zh_cn": "散射强度", "en_us": "Scatter strength"}, "slider": true, "description": {"zh_cn": "天空蓝色有多浓。", "en_us": "How strong the sky's blue scattering is."}}
 #define OMNI_SCATTER_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"闪电强度","en_us":"Lightning strength"},"slider":true,"page":"weather"}
+// @option {"label": {"zh_cn": "闪电强度", "en_us": "Lightning strength"}, "slider": true, "page": "weather", "description": {"zh_cn": "打雷时闪亮多强。", "en_us": "How bright the lightning flash is."}}
 #define OMNI_LIGHTNING_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // 共用颜色与天气输入：天空色、云与太阳方向都来自这里的定义。
 #include "/effects/sky.glsl"

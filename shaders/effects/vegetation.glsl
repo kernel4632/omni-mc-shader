@@ -2,11 +2,11 @@
 #ifndef OMNI_VEGETATION
 #define OMNI_VEGETATION
 // @effect {"label":{"zh_cn":"植被","en_us":"Vegetation"}}
-// @option {"label":{"zh_cn":"植物摆动开关","en_us":"Vegetation wind"}}
+// @option {"label": {"zh_cn": "植物摆动开关", "en_us": "Vegetation wind"}, "description": {"zh_cn": "草和树叶会不会随风摆。", "en_us": "Whether grass and leaves sway."}}
 #define OMNI_VEGETATION_WIND
-// @option {"label":{"zh_cn":"摆动幅度","en_us":"Wind strength"},"slider":true}
+// @option {"label": {"zh_cn": "摆动幅度", "en_us": "Wind strength"}, "slider": true, "description": {"zh_cn": "摆得多厉害。", "en_us": "How strong the sway is."}}
 #define OMNI_WIND_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"摆动速度","en_us":"Wind speed"},"slider":true}
+// @option {"label": {"zh_cn": "摆动速度", "en_us": "Wind speed"}, "slider": true, "description": {"zh_cn": "摆得快慢。", "en_us": "How fast the sway is."}}
 #define OMNI_WIND_SPEED 1.0 // [0.5 1.0 1.5 2.0]
 // 共用噪声与时间。
 #include "/common/math.glsl"

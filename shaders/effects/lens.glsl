@@ -7,23 +7,23 @@
 #ifndef OMNI_LENS
 #define OMNI_LENS
 // @effect {"label":{"zh_cn":"镜头","en_us":"Lens"}}
-// @option {"label":{"zh_cn":"景深开关","en_us":"Depth of field"}}
+// @option {"label": {"zh_cn": "景深开关", "en_us": "Depth of field"}, "description": {"zh_cn": "远处会不会模糊。", "en_us": "Whether distant things blur."}}
 //#define OMNI_DOF
 // @option {"label":{"zh_cn":"运动模糊开关","en_us":"Motion blur"},"description":{"zh_cn":"只有相机移动才模糊，手持物不模糊，也不包含生物自身速度。","en_us":"Camera motion only; excludes hands and has no entity velocity."}}
 //#define OMNI_MOTION_BLUR
-// @option {"label":{"zh_cn":"暗角强度","en_us":"Vignette"},"slider":true}
+// @option {"label": {"zh_cn": "暗角强度", "en_us": "Vignette"}, "slider": true, "description": {"zh_cn": "画面四角变暗多少。", "en_us": "How much the corners darken."}}
 #define OMNI_VIGNETTE 0.0 // [0.0 0.1 0.25 0.5]
-// @option {"label":{"zh_cn":"色差强度","en_us":"Chromatic aberration"}}
+// @option {"label": {"zh_cn": "色差强度", "en_us": "Chromatic aberration"}, "description": {"zh_cn": "画面边缘有没有彩边。", "en_us": "Colour fringing near the edges."}}
 #define OMNI_CHROMATIC 0.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"耀斑开关","en_us":"Lens flare"},"description":{"zh_cn":"从屏幕上的太阳亮部生成鬼影与光环，被挡住时自动减弱。","en_us":"Draws ghosts and a halo from the on-screen sun highlight, fading when occluded."}}
+// @option {"label": {"zh_cn": "耀斑开关", "en_us": "Lens flare"}, "description": {"zh_cn": "从屏幕上的太阳亮部生成鬼影与光环，被挡住时自动减弱。", "en_us": "Draws ghosts and a halo from the on-screen sun highlight, fading when occluded."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_LENS_FLARE 1 // [0 1]
-// @option {"label":{"zh_cn":"散景形状","en_us":"Bokeh aperture"},"description":{"zh_cn":"零为圆形散景，一为六边形光圈，使失焦高光成多边形。","en_us":"Zero is a circular blur; one is a hexagonal aperture for polygonal highlights."}}
+// @option {"label": {"zh_cn": "散景形状", "en_us": "Bokeh aperture"}, "description": {"zh_cn": "零为圆形散景，一为六边形光圈，使失焦高光成多边形。", "en_us": "Zero is a circular blur; one is a hexagonal aperture for polygonal highlights."}, "values": {"0": {"zh_cn": "圆形", "en_us": "Round"}, "1": {"zh_cn": "六边形", "en_us": "Hexagon"}}}
 #define OMNI_BOKEH_SHAPE 1 // [0 1]
-// @option {"label":{"zh_cn":"景深强度","en_us":"Depth of field strength"},"slider":true}
+// @option {"label": {"zh_cn": "景深强度", "en_us": "Depth of field strength"}, "slider": true, "description": {"zh_cn": "模糊多强。", "en_us": "How strong the blur is."}}
 #define OMNI_DOF_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"运动模糊强度","en_us":"Motion blur strength"},"slider":true}
+// @option {"label": {"zh_cn": "运动模糊强度", "en_us": "Motion blur strength"}, "slider": true, "description": {"zh_cn": "拖影多长。", "en_us": "How long the motion trail is."}}
 #define OMNI_MOTION_BLUR_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
-// @option {"label":{"zh_cn":"耀斑强度","en_us":"Flare strength"},"slider":true}
+// @option {"label": {"zh_cn": "耀斑强度", "en_us": "Flare strength"}, "slider": true, "description": {"zh_cn": "光斑多亮。", "en_us": "How bright the lens flare is."}}
 #define OMNI_FLARE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
 // 时间重投影、深度重建和镜头颜色来自统一的屏幕协议；这一行引入坐标、亮度等共用能力。
 #include "/effects/antialiasing.glsl"

@@ -21,25 +21,25 @@
 // @effect {"label":{"zh_cn":"云","en_us":"Clouds"}}
 // @option {"label":{"zh_cn":"云量","en_us":"Cloud amount"},"description":{"zh_cn":"天上有多少云；调高云更满更连片，取零就没有云。","en_us":"How much cloud covers the sky; higher is fuller, zero means no clouds."},"slider":true}
 #define OMNI_CLOUD_COVERAGE 0.5 // [0.0 0.25 0.5 0.75 1.0]
-// @option {"label":{"zh_cn":"云高度","en_us":"Cloud height"}}
+// @option {"label": {"zh_cn": "云高度", "en_us": "Cloud height"}, "description": {"zh_cn": "云挂得多高。", "en_us": "How high the clouds sit."}}
 #define OMNI_CLOUD_HEIGHT 192.0 // [128.0 192.0 256.0 320.0]
 // @option {"label":{"zh_cn":"云厚度","en_us":"Cloud thickness"},"description":{"zh_cn":"云层有多厚；也决定云影要穿过多少云。","en_us":"How thick the cloud layer is; also the depth the cloud shadow marches."}}
 #define OMNI_CLOUD_THICKNESS 32.0 // [16.0 32.0 64.0 128.0]
 // @option {"label":{"zh_cn":"云块大小","en_us":"Cloud size"},"description":{"zh_cn":"大于一云块更小更碎，小于一云块更大更整。","en_us":"Above one makes smaller broken clouds, below one makes larger solid clouds."},"slider":true}
 #define OMNI_CLOUD_SCALE 1.0 // [0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"云速","en_us":"Cloud speed"},"slider":true}
+// @option {"label": {"zh_cn": "云速", "en_us": "Cloud speed"}, "slider": true, "description": {"zh_cn": "云飘得快慢。", "en_us": "How fast the clouds drift."}}
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"云亮度","en_us":"Cloud brightness"},"slider":true}
+// @option {"label": {"zh_cn": "云亮度", "en_us": "Cloud brightness"}, "slider": true, "description": {"zh_cn": "云整体亮暗。", "en_us": "Overall cloud brightness."}}
 #define OMNI_CLOUD_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
-// @option {"label":{"zh_cn":"云色冷暖","en_us":"Cloud warmth"},"slider":true}
+// @option {"label": {"zh_cn": "云色冷暖", "en_us": "Cloud warmth"}, "slider": true, "description": {"zh_cn": "云偏暖还是偏冷。", "en_us": "Warms or cools the clouds."}}
 #define OMNI_CLOUD_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"云边缘透光","en_us":"Cloud edge glow"},"description":{"zh_cn":"对着太阳看云时边缘发亮、背对时偏暗。","en_us":"Cloud edges brighten toward the sun and dim away from it."},"slider":true}
 #define OMNI_CLOUD_SILVER 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"云影开关","en_us":"Cloud shadow"}}
+// @option {"label": {"zh_cn": "云影开关", "en_us": "Cloud shadow"}, "description": {"zh_cn": "云要不要在地上投下阴影。", "en_us": "Whether clouds cast shadows on the ground."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_CLOUD_SHADOW 1 // [0 1]
-// @option {"label":{"zh_cn":"云影浓淡","en_us":"Cloud shadow strength"},"slider":true}
+// @option {"label": {"zh_cn": "云影浓淡", "en_us": "Cloud shadow strength"}, "slider": true, "description": {"zh_cn": "云影有多明显。", "en_us": "How dark the cloud shadows are."}}
 #define OMNI_CLOUD_SHADOW_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"云精细度","en_us":"Cloud detail"},"description":{"zh_cn":"云沿视线的采样次数；越高越厚实也越耗性能。","en_us":"Samples along the view; higher is denser but costlier."}}
+// @option {"label": {"zh_cn": "云精细度", "en_us": "Cloud detail"}, "description": {"zh_cn": "云沿视线的采样次数；越高越厚实也越耗性能。", "en_us": "Samples along the view; higher is denser but costlier."}, "values": {"8": {"zh_cn": "低", "en_us": "Low"}, "16": {"zh_cn": "中", "en_us": "Medium"}, "32": {"zh_cn": "高", "en_us": "High"}}}
 #define OMNI_CLOUD_STEPS 16 // [8 16 32]
 // 天空颜色与云照明共享天体输入；加载器输入显式引入，不依赖间接包含。
 #include "/common/uniforms.glsl"

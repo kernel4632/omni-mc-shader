@@ -8,37 +8,37 @@
 // @effect {"label":{"zh_cn":"雾与空气","en_us":"Fog"}}
 // @option {"label":{"zh_cn":"雾开关","en_us":"Fog"},"description":{"zh_cn":"远处有没有空气雾；关掉后只保留水下效果。","en_us":"Whether distance and height fog appear; off keeps only the underwater effect."}}
 #define OMNI_FOG_ENABLED
-// @option {"label":{"zh_cn":"雾浓度","en_us":"Fog density"},"slider":true}
+// @option {"label": {"zh_cn": "雾浓度", "en_us": "Fog density"}, "slider": true, "description": {"zh_cn": "雾浓还是淡，看得多远。", "en_us": "Fog thickness and view distance."}}
 #define OMNI_FOG_DENSITY 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"雾颜色","en_us":"Fog tint"},"description":{"zh_cn":"雾偏暖还是偏冷；取零与天空同色。","en_us":"Warms or cools the fog; zero matches the sky."},"slider":true}
 #define OMNI_FOG_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"高度雾开关","en_us":"Height fog"},"description":{"zh_cn":"低处更浓的一层雾；关掉只剩距离雾。","en_us":"Extra fog that thickens lower down; off leaves only distance fog."}}
 #define OMNI_HEIGHT_FOG_ENABLED
-// @option {"label":{"zh_cn":"高度雾浓度","en_us":"Height fog density"},"slider":true}
+// @option {"label": {"zh_cn": "高度雾浓度", "en_us": "Height fog density"}, "slider": true, "description": {"zh_cn": "低处雾多浓。", "en_us": "How thick the fog is near the ground."}}
 #define OMNI_HEIGHT_FOG 0.5 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"高度雾起始高度","en_us":"Height fog base"},"description":{"zh_cn":"低于此高度雾更浓，用来贴合海平面；单位世界格。","en_us":"Below this altitude fog thickens; measured in world blocks."}}
 #define OMNI_FOG_HEIGHT 64.0 // [0.0 32.0 64.0 96.0 128.0]
-// @option {"label":{"zh_cn":"高度雾衰减","en_us":"Height fog falloff"},"slider":true}
+// @option {"label": {"zh_cn": "高度雾衰减", "en_us": "Height fog falloff"}, "slider": true, "description": {"zh_cn": "高度雾随高度衰减多快。", "en_us": "How fast height fog fades with altitude."}}
 #define OMNI_FOG_SCALE 0.035 // [0.01 0.02 0.035 0.06]
-// @option {"label":{"zh_cn":"体积光开关","en_us":"Volumetric light"}}
+// @option {"label": {"zh_cn": "体积光开关", "en_us": "Volumetric light"}, "description": {"zh_cn": "阳光有没有穿过空气的光柱。", "en_us": "Whether sunlight shows as light shafts."}}
 //#define OMNI_VOLUMETRIC_LIGHT
-// @option {"label":{"zh_cn":"阳光光柱强度","en_us":"Sun shaft strength"},"slider":true}
+// @option {"label": {"zh_cn": "阳光光柱强度", "en_us": "Sun shaft strength"}, "slider": true, "description": {"zh_cn": "光柱多亮。", "en_us": "How bright the light shafts are."}}
 #define OMNI_VOLUMETRIC_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"水下光柱强度","en_us":"Underwater shaft strength"},"slider":true}
+// @option {"label": {"zh_cn": "水下光柱强度", "en_us": "Underwater shaft strength"}, "slider": true, "description": {"zh_cn": "水下光柱多亮。", "en_us": "How bright the underwater shafts are."}}
 #define OMNI_UNDERWATER_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"光柱精细度","en_us":"Shaft detail"},"description":{"zh_cn":"光柱沿视线的采样段数；越多越平滑也越耗性能。","en_us":"Samples along the view for the shafts; smoother but costlier."}}
+// @option {"label": {"zh_cn": "光柱精细度", "en_us": "Shaft detail"}, "description": {"zh_cn": "光柱沿视线的采样段数；越多越平滑也越耗性能。", "en_us": "Samples along the view for the shafts; smoother but costlier."}, "values": {"8": {"zh_cn": "低", "en_us": "Low"}, "12": {"zh_cn": "中", "en_us": "Medium"}, "16": {"zh_cn": "高", "en_us": "High"}}}
 #define OMNI_VFOG_STEPS 12 // [8 12 16]
-// @option {"label":{"zh_cn":"水下雾开关","en_us":"Underwater fog"},"description":{"zh_cn":"水下沿视线步进阴影可见性生成蓝色光柱。","en_us":"Marches shadow visibility underwater to draw blue light shafts."}}
+// @option {"label": {"zh_cn": "水下雾开关", "en_us": "Underwater fog"}, "description": {"zh_cn": "水下沿视线步进阴影可见性生成蓝色光柱。", "en_us": "Marches shadow visibility underwater to draw blue light shafts."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_UNDERWATER_FOG 1 // [0 1]
-// @option {"label":{"zh_cn":"水下雾浓度","en_us":"Underwater fog density"},"slider":true}
+// @option {"label": {"zh_cn": "水下雾浓度", "en_us": "Underwater fog density"}, "slider": true, "description": {"zh_cn": "水里能看多远。", "en_us": "How far you can see underwater."}}
 #define OMNI_UNDERWATER_DENSITY 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"水下颜色","en_us":"Underwater tint"},"description":{"zh_cn":"水下偏青绿还是偏蓝；取零保持默认。","en_us":"Underwater leans green or blue; zero keeps the default."},"slider":true}
 #define OMNI_UNDERWATER_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"末地雾开关","en_us":"End fog"},"description":{"zh_cn":"末地紫色漩涡雾叠加虚空暗色，替代单纯天空色。","en_us":"Adds purple end haze with void darkening instead of a plain sky colour."}}
+// @option {"label": {"zh_cn": "末地雾开关", "en_us": "End fog"}, "description": {"zh_cn": "末地紫色漩涡雾叠加虚空暗色，替代单纯天空色。", "en_us": "Adds purple end haze with void darkening instead of a plain sky colour."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_END_FOG 1 // [0 1]
-// @option {"label":{"zh_cn":"末地雾浓度","en_us":"End fog density"},"slider":true}
+// @option {"label": {"zh_cn": "末地雾浓度", "en_us": "End fog density"}, "slider": true, "description": {"zh_cn": "末地紫雾多浓。", "en_us": "How thick the End fog is."}}
 #define OMNI_END_FOG_DENSITY 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"下界雾浓度","en_us":"Nether fog density"},"slider":true}
+// @option {"label": {"zh_cn": "下界雾浓度", "en_us": "Nether fog density"}, "slider": true, "description": {"zh_cn": "下界空气多浑浊。", "en_us": "How murky the Nether air is."}}
 #define OMNI_NETHER_FOG_DENSITY 1.0 // [0.0 0.5 1.0 2.0]
 // 阴影图提供空气是否受光的依据。
 #include "/effects/shadow.glsl"

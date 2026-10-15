@@ -9,7 +9,7 @@
 //#define OMNI_UPSCALE
 // @option {"label":{"zh_cn":"超分强度","en_us":"Upscale strength"},"description":{"zh_cn":"边缘平滑的强度；取零等于关闭。","en_us":"Strength of the edge smoothing; zero equals off."},"slider":true}
 #define OMNI_UPSCALE_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0]
-// @option {"label":{"zh_cn":"渲染缩放","en_us":"Render scale"},"description":{"zh_cn":"内部按较低分辨率渲染后期处理再放大；取一百等于不缩放。","en_us":"Renders post-processing at a lower internal resolution then upscales; 100 means no scaling."},"slider":true}
+// @option {"label": {"zh_cn": "渲染缩放", "en_us": "Render scale"}, "description": {"zh_cn": "内部按较低分辨率渲染后期处理再放大；取一百等于不缩放。", "en_us": "Renders post-processing at a lower internal resolution then upscales; 100 means no scaling."}, "slider": true, "values": {"50": {"zh_cn": "一半", "en_us": "Half"}, "75": {"zh_cn": "四分之三", "en_us": "Three quarters"}, "100": {"zh_cn": "不缩放", "en_us": "Full"}}}
 #define OMNI_RENDER_SCALE 100 // [50 75 100]
 // 共用颜色与屏幕输入。
 #include "/common/math.glsl"

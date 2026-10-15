@@ -5,7 +5,7 @@
 // 选择本程序的绘制阶段或物体类别。
 #define OMNI_ENTITIES
 // 选择本程序的绘制阶段或物体类别。
-#define OMNI_EMISSIVE
+#define OMNI_GLOWING
 // 选择本程序的绘制阶段或物体类别。
 #define OMNI_OVERLAY
 // 显式引入完整绘制主体。

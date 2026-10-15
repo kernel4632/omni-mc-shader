@@ -13,9 +13,9 @@
 #define OMNI_AA_ENABLED
 // @option {"label":{"zh_cn":"抗锯齿强度","en_us":"Antialiasing strength"},"description":{"zh_cn":"越平滑也越容易留下轻微拖影；取零等于关闭。","en_us":"More smoothing but also slight trails; zero equals off."},"slider":true}
 #define OMNI_AA_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0]
-// @option {"label":{"zh_cn":"历史稳定度","en_us":"History stability"},"slider":true}
+// @option {"label": {"zh_cn": "历史稳定度", "en_us": "History stability"}, "slider": true, "description": {"zh_cn": "画面更稳还是更跟手；数值越高越稳。", "en_us": "Higher is more stable, lower is more responsive."}}
 #define OMNI_TAA_WEIGHT 0.85 // [0.5 0.7 0.85 0.95]
-// @option {"label":{"zh_cn":"噪点重建开关","en_us":"Noise rebuild"},"description":{"zh_cn":"每帧旋转屏幕噪声相位，配合时间重投影重建去噪。","en_us":"Rotates screen noise each frame so the reprojection rebuilds a denoised result."}}
+// @option {"label": {"zh_cn": "噪点重建开关", "en_us": "Noise rebuild"}, "description": {"zh_cn": "每帧旋转屏幕噪声相位，配合时间重投影重建去噪。", "en_us": "Rotates screen noise each frame so the reprojection rebuilds a denoised result."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
 #define OMNI_TEMPORAL_DENOISE 1 // [0 1]
 
 // --- 生成这一帧的几何抖动偏移 ---
