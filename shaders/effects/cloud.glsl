@@ -31,6 +31,8 @@
 #define OMNI_CLOUD_THICKNESS 32.0 // [16.0 32.0 64.0 128.0]
 // @option {"label":{"zh_cn":"云速度","en_us":"Cloud speed"},"slider":true}
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"云块尺度","en_us":"Cloud scale"},"description":{"zh_cn":"大于一云块更小更碎，小于一云块更大更整；同时作用于体积云与平面云。","en_us":"Above one makes smaller broken clouds, below one makes larger solid clouds; affects volume and planar clouds."},"slider":true}
+#define OMNI_CLOUD_SCALE 1.0 // [0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"云颜色冷暖","en_us":"Cloud color temperature"},"slider":true}
 #define OMNI_CLOUD_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"云影","en_us":"Cloud shadow"},"description":{"zh_cn":"地表直射光沿光线方向按云密度衰减。","en_us":"Attenuates direct sunlight by cloud density along the light direction."}}
@@ -49,8 +51,8 @@ float omniCloudCoverage() {
 float omniCloudDensity(vec3 p) {
     float coverage = omniCloudCoverage(); // 收敛到零到一的云覆盖率。
     p.x += frameTimeCounter * OMNI_CLOUD_SPEED * 2.0; // 风沿水平方向推移噪声，云看起来在飘。
-    float shape = snoise(p * vec3(0.004,0.018,0.004)) * 0.7; // 低频决定云块大轮廓，竖直方向压缩让云更扁。
-    float detail = snoise(p * 0.013) * 0.3; // 高频给云块加碎边，避免轮廓太光滑。
+    float shape = snoise(p * vec3(0.004,0.018,0.004) * OMNI_CLOUD_SCALE) * 0.7; // 低频决定云块大轮廓，竖直方向压缩让云更扁；尺度选项整体放大或缩小云块。
+    float detail = snoise(p * 0.013 * OMNI_CLOUD_SCALE) * 0.3; // 高频给云块加碎边，避免轮廓太光滑。
     float n = 0.5 + 0.5 * (shape + detail); // 噪声原本在负一到一之间，映射到零到一。
     return smoothstep(0.8 - coverage * 0.5, 0.95 - coverage * 0.5, n); // 覆盖率越高阈值越低，云越满。
 }
@@ -91,7 +93,7 @@ vec3 omniCloudColor(vec3 nightColor, vec3 dayColor) {
 float omniPlanarDensity(vec2 p) {
     float coverage = omniCloudCoverage(); // 收敛到零到一的云覆盖率。
     if (coverage <= 0.0) return 0.0; // 云量为零时不生成云块，直接跳过后面计算。
-    p *= 0.0025; // 米制坐标缩放到云块尺度。
+    p *= 0.0025*OMNI_CLOUD_SCALE; // 米制坐标缩放到云块尺度，尺度选项让云块整体变大或变小。
     p += vec2(frameTimeCounter*OMNI_CLOUD_SPEED*0.4,frameTimeCounter*OMNI_CLOUD_SPEED*0.1); // 两个方向不同速度，云缓慢平移。
     float low = omniNoise(vec3(p,0.0))*0.6; // 低频：云块主体。
     float mid = omniNoise(vec3(p*2.7,1.0))*0.3; // 中频：打破整齐。
