@@ -31,25 +31,25 @@
 #ifndef OMNI_COLOR
 #define OMNI_COLOR
 // @effect {"label":{"zh_cn":"调色","en_us":"Color"}}
-// @option {"label":{"zh_cn":"曝光倍率","en_us":"Exposure"},"slider":true}
+// @option {"label":{"zh_cn":"曝光","en_us":"Exposure"},"slider":true}
 #define OMNI_EXPOSURE 1.0 // [0.5 0.75 1.0 1.5 2.0 3.0]
-// @option {"label":{"zh_cn":"自动曝光","en_us":"Auto exposure"}}
+// @option {"label":{"zh_cn":"自动曝光开关","en_us":"Auto exposure"}}
 //#define OMNI_AUTO_EXPOSURE
-// @option {"label":{"zh_cn":"曝光目标亮度","en_us":"Exposure target"},"description":{"zh_cn":"自动曝光想达到的平均亮度；越大画面越亮。","en_us":"Target average luminance the auto exposure aims for; higher makes the image brighter."},"slider":true}
+// @option {"label":{"zh_cn":"曝光目标","en_us":"Exposure target"},"description":{"zh_cn":"自动曝光想达到的平均亮度；越大画面越亮。","en_us":"Target average luminance the auto exposure aims for; higher makes the image brighter."},"slider":true}
 #define OMNI_EXPOSURE_TARGET 0.18 // [0.1 0.18 0.25 0.4]
 // @option {"label":{"zh_cn":"曝光适应速度","en_us":"Exposure speed"},"description":{"zh_cn":"亮度变化后曝光跟上的快慢；越大越快也越容易闪烁。","en_us":"How fast exposure follows a brightness change; higher is faster but more prone to flicker."},"slider":true}
 #define OMNI_EXPOSURE_SPEED 1.5 // [0.5 1.0 1.5 3.0]
+// @option {"label":{"zh_cn":"亮度","en_us":"Brightness"},"slider":true}
+#define OMNI_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
 // @option {"label":{"zh_cn":"对比度","en_us":"Contrast"},"slider":true}
 #define OMNI_CONTRAST 1.0 // [0.75 1.0 1.1 1.25]
 // @option {"label":{"zh_cn":"饱和度","en_us":"Saturation"},"slider":true}
 #define OMNI_SATURATION 1.0 // [0.5 0.75 1.0 1.1 1.25]
 // @option {"label":{"zh_cn":"白平衡","en_us":"White balance"},"slider":true}
 #define OMNI_WHITE_BALANCE 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"亮度倍率","en_us":"Brightness"},"slider":true}
-#define OMNI_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
-// @option {"label":{"zh_cn":"色调映射","en_us":"Tone mapping"},"description":{"zh_cn":"零用简单有理曲线，一用 AgX 压缩高光并保留饱和，二用 `ACES` 近似。","en_us":"Zero keeps the simple rational curve, one uses AgX filmic highlight compression, two uses an ACES approximation."}}
-#define OMNI_TONE_MAP 1 // [0 1 2]
-// @option {"label":{"zh_cn":"有序抖动","en_us":"Ordered dither"},"description":{"zh_cn":"用四乘四阈值矩阵打散八位量化色带。","en_us":"A 4x4 ordered matrix breaks 8-bit color banding."}}
+// @option {"label":{"zh_cn":"高光还原强度","en_us":"Highlight rolloff"},"description":{"zh_cn":"强光被压平的多少；取零更接近原亮度，取一保留更多高光色彩。","en_us":"How much highlights are rolled off; zero stays closer to plain brightness, one keeps more highlight color."},"slider":true}
+#define OMNI_TONEMAP_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0]
+// @option {"label":{"zh_cn":"色带消除开关","en_us":"Banding reduction"},"description":{"zh_cn":"用四乘四阈值矩阵打散八位量化色带。","en_us":"A 4x4 ordered matrix breaks 8-bit color banding."}}
 #define OMNI_DITHER 1 // [0 1]
 // 曝光有效性与时间历史判断都由抗锯齿能力提供，引入一次即可共用。
 #include "/effects/antialiasing.glsl"
@@ -87,21 +87,10 @@ vec3 omniToneMapAgx(vec3 color) {
     color = 15.5*fourth*squared-40.14*fourth*color+31.96*fourth-6.868*squared*color+0.4298*squared+0.1191*color-0.00232; // 单调 S 曲线压缩高光。
     return clamp(fromWorking*color,0.0,1.0); // 回到显示原色并限制范围。
 }
-// `ACES` 近似：用公开的 `Narkowicz` 拟合曲线压高光，计算量比 AgX 小，色相略偏暖。
-// 系数来自公开的 `ACES` 拟合多项式，这里按公开公式独立实现，未复制任何光影源码。
-vec3 omniToneMapAces(vec3 color) {
-    const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14; // 拟合系数。
-    return clamp((color*(a*color+b))/(color*(c*color+d)+e),0.0,1.0); // 单调压高光，分母常数保证不为零。
-}
-// 按选项选择压缩曲线：三条路径都在线性显示空间输出等价的颜色。
+// 高光压缩：在简单有理曲线与 AgX 之间按强度插值，两条曲线都在线性显示空间。
+// 为什么留一个强度：AgX 更有电影感但会改变整体影调，取零等于最保守的压缩，方便按风格取舍。
 vec3 omniToneMap(vec3 color) {
-#if OMNI_TONE_MAP == 2
-    return omniToneMapAces(color); // `ACES` 近似高光。
-#elif OMNI_TONE_MAP == 1
-    return omniToneMapAgx(color); // AgX 电影感高光。
-#else
-    return omniToneMapSimple(color); // 简单有理映射。
-#endif
+    return mix(omniToneMapSimple(color), omniToneMapAgx(color), OMNI_TONEMAP_STRENGTH);
 }
 
 // --- 八位色带的抖动 ---

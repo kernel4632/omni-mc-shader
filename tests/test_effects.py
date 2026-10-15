@@ -19,15 +19,18 @@ class EffectTests(unittest.TestCase):
                 with self.subTest(path=path.name, formula=match[0]):  # 失败直接指出公式所在文件。
                     self.assertLess(float(match[1]),float(match[2]))  # 相等或反序都不受语言保证。
 
-    def test_agx_tone_mapping_is_selectable(self):
-        """色调映射可选，AgX 与简单路径都保留，并新增 `ACES` 近似。"""
+    def test_highlight_rolloff_is_adjustable(self):
+        """高光还原只留一个强度，不再暴露色调映射算法选择。"""
         found,_,_ = build.configuration()  # 原生定义仍是唯一默认值来源。
-        self.assertIn("OMNI_TONE_MAP",found); self.assertEqual(found["OMNI_TONE_MAP"].values,("0","1","2"))  # 菜单提供三种映射。
+        self.assertIn("OMNI_TONEMAP_STRENGTH",found)  # 高光还原强度可调。
+        self.assertNotIn("OMNI_TONE_MAP",found)  # 算法选择已去掉。
+        text = (build.SHADERS/"effects/color.glsl").read_text(encoding="utf-8")
+        self.assertIn("OMNI_TONEMAP_STRENGTH",text)  # 强度参与曲线插值。
+        self.assertNotIn("omniToneMapAces",text)  # 旧的第三种映射已删除。
         source = build.expand(build.SHADERS/"world0/final.fsh")  # 从加载器实际入口展开。
         self.assertIn("omniToneMapAgx",source)  # 最终显示包含 AgX 曲线。
-        self.assertIn("omniToneMapAces",source)  # 最终显示包含 `ACES` 近似。
-        self.assertIn("omniToneMapSimple",source)  # 简单有理映射没有被删除。
-        self.assertIn("omniToneMap(color)",source)  # 计算路径由选项统一分派。
+        self.assertIn("omniToneMapSimple",source)  # 简单有理曲线保留。
+        self.assertIn("omniToneMap(color)",source)  # 计算路径由强度统一插值。
 
     def test_ordered_dither_applies_before_clamp(self):
         """有序抖动在显示编码之后打散色带，选项可关闭。"""
@@ -169,9 +172,12 @@ class EffectTests(unittest.TestCase):
         self.assertIn("*OMNI_REFLECTION_BLUR",text)  # 模糊半径参与计算。
 
     def test_reflection_fallback_uses_full_sky(self):
-        """屏幕外反射回退复用天空、云与氛围的同一套合成，而不是只有纯天空色。"""
+        """屏幕外反射回退复用天空、云与氛围的同一套合成，并可单独关闭天空反射。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_SKY_REFLECTION",found)  # 天空反射开关。
         text = (build.SHADERS/"effects/reflection.glsl").read_text(encoding="utf-8")
         self.assertIn("omniAtmosphere(omniCloud(omniSky(skyDirection)",text)  # 回退色与背景天空一致。
+        self.assertIn("OMNI_SKY_REFLECTION==1 ?",text)  # 关闭天空反射时回退为零。
         self.assertIn('#include "/effects/cloud.glsl"',text)  # 反射确实引入了云。
         self.assertIn('#include "/effects/atmosphere.glsl"',text)  # 反射确实引入了氛围。
 
