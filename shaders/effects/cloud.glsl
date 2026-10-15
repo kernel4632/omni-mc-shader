@@ -37,6 +37,8 @@
 #define OMNI_CLOUD_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"云影","en_us":"Cloud shadow"},"description":{"zh_cn":"地表直射光沿光线方向按云密度衰减。","en_us":"Attenuates direct sunlight by cloud density along the light direction."}}
 #define OMNI_CLOUD_SHADOW 1 // [0 1]
+// @option {"label":{"zh_cn":"云银边受光","en_us":"Cloud silver lining"},"description":{"zh_cn":"视线接近太阳方向时云更亮、背对时更暗，模拟前向散射；取零保持均匀受光。","en_us":"Clouds brighten toward the sun and darken away from it, approximating forward scattering; zero keeps even lighting."},"slider":true}
+#define OMNI_CLOUD_SILVER 1.0 // [0.0 0.5 1.0 2.0]
 // 天空颜色与云照明共享天体输入。
 #include "/effects/sky.glsl"
 // 成熟无纹理梯度噪声直接构建体积云密度，不为库增加只转手的包装。
@@ -88,6 +90,14 @@ vec3 omniCloudColor(vec3 nightColor, vec3 dayColor) {
     vec3 color = mix(nightColor,dayColor,lit) * (1.0-rainStrength*0.6); // 雨天把云整体压暗。
     return color * exp(vec3(0.2,0.0,-0.2)*OMNI_CLOUD_TINT); // 冷暖偏移，取零时保持中性。
 }
+// --- 云的前向散射（银边） ---
+// 真实云在逆着太阳看时被穿透、发亮，顺着太阳看时偏暗；这里用视线与太阳夹角的四次方近似这个方向差。
+// 为什么只改亮度不改颜色：前向散射主要改变受光量，颜色已由昼夜与冷暖选项控制，避免两处同时改色。
+float omniCloudSilver(vec3 direction) {
+    vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*sunPosition); // 太阳在世界空间的方向。
+    float facing = max(dot(omniNormalize(direction),sun),0.0); // 视线与太阳方向夹角的余弦，背对太阳时为零。
+    return 1.0 + OMNI_CLOUD_SILVER*(pow(facing,4.0)*1.2-0.4); // 正向最多增亮一点二，背向最多压暗零点四，取零选项时恒为一。
+}
 // --- 平面云密度：在水平面上堆三层分形噪声 ---
 // 只铺满水平面，不做体积步进，所以云是薄薄一层，看不到厚度。
 float omniPlanarDensity(vec2 p) {
@@ -108,7 +118,7 @@ vec3 omniPlanarClouds(vec3 color, vec3 direction, float sceneDistance) {
     if (travel<=0.0 || travel>min(sceneDistance,18000.0)) return color; // 云层在身后或超出场景距离就不画。
     vec3 hit = cameraPosition+d*travel; // 视线与云层的交点。
     float density = omniPlanarDensity(hit.xz); // 交点处的云量。
-    vec3 cloudColor = omniCloudColor(vec3(0.03,0.04,0.06),vec3(0.9,0.9,0.92)); // 平面云偏亮偏冷。
+    vec3 cloudColor = omniCloudColor(vec3(0.03,0.04,0.06),vec3(0.9,0.9,0.92)) * omniCloudSilver(d); // 平面云偏亮偏冷，并按银边受光调整明暗。
     float horizon = smoothstep(0.02,0.18,d.y); // 视线越低越淡，避免地平线处出现硬边。
     return mix(color,cloudColor,clamp(density,0.0,1.0)*horizon); // 云量乘以地平线渐隐就是混合权重。
 }
@@ -139,7 +149,7 @@ vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
         opacity += (1.0-opacity) * (1.0-exp(-density*stride*0.07)); // 前向透射积分，后面的采样只影响剩余可见部分。
     }
 #endif
-    vec3 cloudColor = omniCloudColor(vec3(0.035,0.047,0.07),vec3(0.85,0.86,0.88)); // 体积云偏灰。
+    vec3 cloudColor = omniCloudColor(vec3(0.035,0.047,0.07),vec3(0.85,0.86,0.88)) * omniCloudSilver(d); // 体积云偏灰，并按银边受光调整明暗。
     return mix(color,cloudColor,clamp(opacity,0.0,1.0)); // 用不透明度把云混到天空上。
 #else
     return color; // 模式为零，编译时移除全部云采样。
