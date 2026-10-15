@@ -13,6 +13,10 @@
 #define OMNI_PARALLAX 0.0 // [0.0 0.02 0.05 0.1]
 // @option {"label":{"zh_cn":"湿润表面","en_us":"Wet surfaces"}}
 #define OMNI_WET_SURFACES
+// @option {"label":{"zh_cn":"湿润强度","en_us":"Wetness strength"},"slider":true}
+#define OMNI_WET_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"积雪强度","en_us":"Snow strength"},"slider":true}
+#define OMNI_SNOW_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"积雪覆盖","en_us":"Snow coverage"},"description":{"zh_cn":"手动额外覆盖，按天空光与表面朝上程度叠加；不推断生物群系温度。","en_us":"Extra artistic coverage based on skylight and surface orientation, not biome temperature."}}
 #define OMNI_SNOW 0.0 // [0.0 0.25 0.5 1.0]
 // @option {"label":{"zh_cn":"气候积雪湿润","en_us":"Climate snow/wet"},"description":{"zh_cn":"按高度与空间噪声估计温度，冷处自然积雪、温暖处更易积水；不读取真实生物群系数据。","en_us":"Estimates temperature from altitude and spatial noise for natural snow and wetness, without biome data."}}
@@ -84,7 +88,7 @@ float omniTemperature(vec3 world) {
 // 气候天气：在解码好的表面上叠加湿润和积雪，只改底色明暗与粗糙、金属参数。
 void omniSurface(inout vec3 color, inout vec3 materialParams, vec3 normal, vec3 world, float skylight) {
     float up = max((mat3(gbufferModelViewInverse)*normal).y,0.0); // 法线转到世界空间：只有朝上的面才接得住雨雪。
-    float snow = OMNI_SNOW; // 手动覆盖量作为下限，气候只会在它之上追加积雪。
+    float snow = OMNI_SNOW*OMNI_SNOW_STRENGTH; // 手动覆盖量乘强度作为下限，气候只会在它之上追加积雪。
     float wetnessAmount = wetness; // 加载器湿润度作为默认，气候会再乘一个温度权重。
 #if OMNI_CLIMATE == 1
     float temperature = omniTemperature(world); // 估计这一处的气候温度。
@@ -92,7 +96,7 @@ void omniSurface(inout vec3 color, inout vec3 materialParams, vec3 normal, vec3 
     wetnessAmount = wetness*(0.5+0.5*temperature); // 按菜单意图让暖处更湿，最冷处保留一半基础湿润。
 #endif
 #ifdef OMNI_WET_SURFACES
-    float wet = wetnessAmount * up * smoothstep(0.7,1.0,skylight); // 洞穴和垂直墙面没有天光，不凭空变湿。
+    float wet = clamp(wetnessAmount * up * smoothstep(0.7,1.0,skylight) * OMNI_WET_STRENGTH,0.0,1.0); // 洞穴和垂直墙面没有天光，不凭空变湿；强度选项整体放大或缩小。
     color *= 1.0-wet*0.25; // 湿表面反光偏暗，最多压暗四分之一。
     materialParams.x = mix(materialParams.x,0.08,wet); // 积水处更光滑，把粗糙度往零点零八靠。
 #endif

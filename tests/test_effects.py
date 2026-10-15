@@ -263,6 +263,10 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_CLIMATE == 1",text)  # 手动回退路径由选项分派保留。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniTemperature",source)  # 地形表面包含气候覆盖。
+        for name in ("OMNI_WET_STRENGTH","OMNI_SNOW_STRENGTH"):
+            self.assertIn(name,found)  # 湿润与积雪强度都是可调参数。
+        self.assertIn("* OMNI_WET_STRENGTH",text)  # 湿润强度参与湿润量。
+        self.assertIn("OMNI_SNOW*OMNI_SNOW_STRENGTH",text)  # 积雪强度参与覆盖量。
 
     def test_ggx_specular_highlight(self):
         """镜面高光用 GGX 分布接入直接光，材质粗糙度与金属来自表面参数。"""
