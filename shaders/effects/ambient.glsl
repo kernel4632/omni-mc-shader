@@ -10,15 +10,15 @@
 #ifndef OMNI_AMBIENT
 #define OMNI_AMBIENT
 // @effect {"label":{"zh_cn":"环境遮蔽与反弹","en_us":"Indirect light"}}
-// @option {"label":{"zh_cn":"缝隙变暗开关","en_us":"Corner darkening"},"description":{"zh_cn":"墙角和方块缝变暗；关掉后这些地方回到没有间接光的样子。","en_us":"Darkens corners and creases; off leaves them without indirect shading."}}
+// @option {"label":{"zh_cn":"缝隙变暗开关","en_us":"Corner darkening"},"description":{"zh_cn":"墙角和方块缝变暗；关掉后这些地方回到没有间接光的样子。","en_us":"Darkens corners and creases; off leaves them without indirect shading."},"page":"shadow"}
 #define OMNI_SSAO
-// @option {"label":{"zh_cn":"变暗强度","en_us":"Darkening strength"},"slider":true}
+// @option {"label":{"zh_cn":"变暗强度","en_us":"Darkening strength"},"slider":true,"page":"shadow"}
 #define OMNI_AO_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"变暗范围","en_us":"Darkening range"},"slider":true}
+// @option {"label":{"zh_cn":"变暗范围","en_us":"Darkening range"},"slider":true,"page":"shadow"}
 #define OMNI_AMBIENT_RADIUS 1.5 // [0.5 1.0 1.5 3.0]
-// @option {"label":{"zh_cn":"变暗方向数","en_us":"Darkening directions"},"description":{"zh_cn":"绕视线检查的遮挡方向数量；越多越稳也越贵。","en_us":"How many directions around the view are checked; more is steadier but costlier."}}
+// @option {"label":{"zh_cn":"变暗方向数","en_us":"Darkening directions"},"description":{"zh_cn":"绕视线检查的遮挡方向数量；越多越稳也越贵。","en_us":"How many directions around the view are checked; more is steadier but costlier."},"page":"shadow"}
 #define OMNI_AO_SLICES 3 // [2 3 4]
-// @option {"label":{"zh_cn":"变暗精细度","en_us":"Darkening detail"},"description":{"zh_cn":"每个方向搜索遮挡的步数；越多越贴合真实遮挡。","en_us":"Search steps per direction; more matches true occlusion better."}}
+// @option {"label":{"zh_cn":"变暗精细度","en_us":"Darkening detail"},"description":{"zh_cn":"每个方向搜索遮挡的步数；越多越贴合真实遮挡。","en_us":"Search steps per direction; more matches true occlusion better."},"page":"shadow"}
 #define OMNI_AO_STEPS 6 // [4 6 8 12]
 // @option {"label":{"zh_cn":"物体反光开关","en_us":"Object bounce"},"description":{"zh_cn":"旁边看得见的物体会把光反到别的表面；只是屏幕里的一次近似，不是完整全局光。","en_us":"Light bouncing from visible nearby surfaces; a screen-space approximation, not full GI."}}
 //#define OMNI_SCREEN_BOUNCE

@@ -76,6 +76,43 @@ class Option:
     source: Path  # 定义来源用于可读错误。
     line: int  # 原始源文件行号。
     declaration: str = "define"  # 选项来自普通宏还是加载器支持的原生常量。
+    page: str = ""  # 可选的菜单页面覆盖；空表示按效果文件位置映射到页面。
+
+
+# 主界面分类：顺序即菜单里的按钮顺序，`id` 用于 `screen.<ID>` 键名。
+MAIN_PAGES: list[tuple[str, dict[str, str]]] = [
+    ("sky", {"zh_cn": "天空", "en_us": "Sky"}),
+    ("cloud", {"zh_cn": "云", "en_us": "Clouds"}),
+    ("fog", {"zh_cn": "雾与空气", "en_us": "Fog"}),
+    ("water", {"zh_cn": "水", "en_us": "Water"}),
+    ("ground", {"zh_cn": "地面与植物", "en_us": "Ground & plants"}),
+    ("lighting", {"zh_cn": "光照", "en_us": "Lighting"}),
+    ("shadow", {"zh_cn": "影子", "en_us": "Shadows"}),
+    ("reflection", {"zh_cn": "反射", "en_us": "Reflections"}),
+    ("color", {"zh_cn": "画面颜色", "en_us": "Color"}),
+    ("lens", {"zh_cn": "镜头", "en_us": "Lens"}),
+    ("clarity", {"zh_cn": "清晰与流畅", "en_us": "Clarity & speed"}),
+    ("weather", {"zh_cn": "天气与季节", "en_us": "Weather & seasons"}),
+    ("entity", {"zh_cn": "生物与玩家", "en_us": "Mobs & player"}),
+    ("world", {"zh_cn": "世界与远景", "en_us": "World & distance"}),
+    ("dev", {"zh_cn": "开发者", "en_us": "Development"}),
+]  # 封面分类只在一处定义，菜单与翻译都从这里取。
+
+# 效果文件位置到主页面：一个页面可以合并多个效果文件；单个选项可用 `@option` 的 `page` 覆盖。
+PAGE_OF_GROUP: dict[str, str] = {
+    "sky": "sky", "atmosphere": "sky",
+    "cloud": "cloud",
+    "fog": "fog",
+    "water": "water",
+    "material": "ground", "vegetation": "ground",
+    "sunlight": "lighting", "lpv": "lighting", "ambient": "lighting",
+    "shadow": "shadow",
+    "reflection": "reflection",
+    "color": "color", "bloom": "color",
+    "lens": "lens",
+    "antialiasing": "clarity", "upscale": "clarity",
+    "debug": "dev",
+}  # 归属只在这里维护一份，效果文件新增后在此登记。
 
 
 @dataclass(frozen=True)
@@ -163,8 +200,10 @@ def _read_option(source: Path, lines: list[str], index: int, group: str,
     location = f"{source}:{index + 1}"  # 说明行报格式错误，定义行保存在返回对象中。
     data = metadata(
         lines[index].strip().removeprefix("// @option "), location,
-        {"label", "description", "slider"},
-    )  # 菜单文字和滑块要求只读取这一条源码说明。
+        {"label", "description", "slider", "page"},
+    )  # 菜单文字、滑块要求与可选页面覆盖只读取这一条源码说明。
+    if "page" in data and not re.fullmatch(r"[a-z][a-z0-9_]*", data["page"]):  # 页面名用于加载器键名，必须是小写标识。
+        raise ValueError(f"{location}：page 只能使用小写英文、数字和下划线")
     line = lines[index + 1] if index + 1 < len(lines) else ""  # 文件末尾没有声明时按相邻格式错误处理。
     definition = DEFINE.fullmatch(line)  # 原生宏允许无数值开关以及带范围的数字。
     constant = CONST.fullmatch(line)  # 常量必须带类型、默认值和明确范围。
@@ -197,7 +236,7 @@ def _read_option(source: Path, lines: list[str], index: int, group: str,
         raise ValueError(f"{location}：默认值不在范围内，或范围含重复值")
     return Option(
         name, default, choices, data["label"], data.get("description", {}),
-        data.get("slider", False), group, source, index + 2, declaration,
+        data.get("slider", False), group, source, index + 2, declaration, data.get("page", ""),
     )  # 返回同时包含菜单文字和原生取值的数据，不再另存一份默认值。
 
 
@@ -262,6 +301,19 @@ def profile_values(values: dict[str, str], options: dict[str, Option]) -> str:
     return " ".join(entries)
 
 
+def page_of(option: Option) -> str:
+    """返回选项所属的主页面名称。
+
+    优先用 `@option` 声明的 `page`，否则按效果文件位置查 `PAGE_OF_GROUP`；两者都没有时
+    直接报错，避免选项悄悄消失或落到错误分类里。
+    """
+    if option.page:
+        return option.page  # 单个选项可覆盖所在效果的默认页面。
+    if option.group not in PAGE_OF_GROUP:
+        raise ValueError(f"{option.source}：效果 {option.group} 没有登记主页面")
+    return PAGE_OF_GROUP[option.group]
+
+
 def generated(shaders: Path, options: dict[str, Option], groups: dict,
               profiles: list[Preset]) -> dict[Path, str]:
     """从效果源码和预设生成菜单、滑块、预设及翻译文件内容。
@@ -282,10 +334,19 @@ def generated(shaders: Path, options: dict[str, Option], groups: dict,
         elif line.strip():
             key = line.partition("=")[0].strip()  # 值使用已检查结果，不再从原始文字另做一次解析。
             lines.append(f"{key} = {settings[key]}")  # 已检查的键值保持唯一来源。
-    lines += ["", "screen = " + " ".join((["<profile>"] if profiles else []) + [f"[{group.upper()}]" for group in sorted(groups)])]  # 顶层只列效果分组，有预设时才显示预设入口。
-    for group in sorted(groups):  # 顺序固定便于跨系统对比。
-        lines.append(f"screen.{group.upper()} = " + " ".join(
-            option.name for option in options.values() if option.group == group))  # 分组归属来自效果文件位置，选项顺序沿用源码。
+    pages: dict[str, list[str]] = {}  # 页面名到选项名，顺序沿用源码扫描顺序。
+    for option in options.values():
+        pages.setdefault(page_of(option), []).append(option.name)  # 每个选项只落在一个页面。
+    if sum(len(names) for names in pages.values()) != len(options):  # 自检：不允许漏项或重复登记。
+        raise ValueError("菜单页面没有覆盖全部选项")
+    ordered = [pid for pid, _ in MAIN_PAGES if pid in pages]  # 页面顺序由主界面定义决定。
+    unknown = set(pages) - {pid for pid, _ in MAIN_PAGES}  # 未登记页面说明映射遗漏。
+    if unknown:
+        raise ValueError(f"未登记的菜单页面：{sorted(unknown)}")
+    lines += ["", "screen = " + " ".join((["<profile>"] if profiles else []) + [f"[{pid.upper()}]" for pid in ordered])]  # 顶层列主界面分类，有预设时才显示预设入口。
+    for pid in ordered:  # 每页平铺其选项，并固定三栏。
+        lines.append(f"screen.{pid.upper()} = " + " ".join(pages[pid]))  # 归属唯一，顺序沿用源码。
+        lines.append(f"screen.{pid.upper()}.columns = 3")  # 多栏排布，利用横向空间。
     sliders = [option.name for option in options.values() if option.slider]  # 滑块自动从效果说明读取。
     if sliders:
         lines.append("sliders = " + " ".join(sliders))  # 没有滑块时省略设置，不额外生成空菜单项。
@@ -303,8 +364,9 @@ def _language(options: dict[str, Option], groups: dict, profiles: list[Preset], 
     内部数据已在说明读取处检查；这里仅按加载器要求写键名并转义文字，不再检查翻译完整性。
     """
     lines = ["# \\u7531 build.py \\u751f\\u6210\\uff1b\\u7ffb\\u8bd1\\u4f4d\\u4e8e effects/ \\u4e0e presets/ \\u65c1\\u8fb9\\u3002"]  # 保留生成提示，说明翻译应回到源码修改。
-    for group in sorted(groups):  # 分组顺序与菜单一致，跨系统生成时不产生无意义差异。
-        lines.append(f"screen.{group.upper()}={escape(groups[group][locale])}")
+    for pid, label in MAIN_PAGES:  # 页面顺序与菜单一致，跨系统生成时不产生无意义差异。
+        if any(page_of(option) == pid for option in options.values()):  # 只输出真正有选项的页面。
+            lines.append(f"screen.{pid.upper()}={escape(label[locale])}")
     for option in options.values():  # 选项标题与帮助使用相同语言，避免混用另一套翻译。
         lines.append(f"option.{option.name}={escape(option.label[locale])}")
         if option.description:  # 没有帮助内容时不生成空白提示。
