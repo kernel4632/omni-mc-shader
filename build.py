@@ -1,8 +1,21 @@
-"""构建：生成薄入口、菜单，离线链接并打包；示例 python build.py build。
+"""构建：把维护中的光影源码变成可检查、可分享的玩家安装包。
 
-资源与版本相对本文件定位，发布命令必须交互批准才修改版本与执行版本控制。
+调用位置：终端与自动检查工作流使用命令；开发工具、游戏启动器和测试直接调用下方函数。
+可复制命令（在项目根目录执行）：
+    python build.py generate
+    python build.py check
+    python build.py build
+    python build.py notes
+
+构建主线：生成入口和菜单 → 检查来源与产物一致 → 离线编译链接 → 打包并计算校验值。
+链接是把同一程序的绘制阶段放在一起检查；它不能证明游戏画面或显卡性能正确。
+版本只读 `VERSION`，选项与预设交给 `options.py`；本文件不另存一份配置定义。
+路径以本文件为起点，换启动目录仍指向同一项目；临时编译文件自动清理，成功记录留在 `.dev/`。
+只复用同编译器、同阶段与同源码的成功链接，减少重复进程；离线宏只模拟部分加载器输入。
+普通构建不执行版本控制；只有 `release` 在交互确认后修改版本、测试、提交并推送标签。
+发布失败保留已经发生的改动供审查，不自动回滚文件，也不覆盖已有标签。
 """
-from __future__ import annotations
+from __future__ import annotations  # 类型说明不提前求值，导入时只建立构建接口。
 import argparse  # 解析明确的构建命令。
 import hashlib  # 固定产物校验与编译去重。
 import json  # 读取显式程序与依赖记录。
@@ -20,414 +33,554 @@ import audit  # 审计自有代码注释与未实现标记。
 
 ROOT = Path(__file__).resolve().parent  # 换工作目录不改变数据位置。
 SHADERS = ROOT / "shaders"  # 游戏资源根目录。
-INCLUDE = re.compile(r'^[ \t]*#include[ \t]+"([^"\n]+)"[ \t]*$', re.MULTILINE)  # 引用行不得混说明。
-STAGES = {".vsh": ".vert", ".fsh": ".frag", ".gsh": ".geom", ".csh": ".comp", ".tcs": ".tesc", ".tes": ".tese"}  # 全部支持阶段。
+INCLUDE = re.compile(r'^[ \t]*#include[ \t]+"([^"\n]+)"[ \t]*$', re.MULTILINE)  # 加载器要求引用独占一行，尾随说明会被拒绝。
+STAGES = {".vsh": ".vert", ".fsh": ".frag", ".gsh": ".geom", ".csh": ".comp", ".tcs": ".tesc", ".tes": ".tese"}  # 把游戏入口后缀映射到编译器认识的阶段名。
+_VERSION_PATTERN = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev|alpha|beta|rc)\.(?:0|[1-9]\d*))?"  # 读文件与发布新版本共用一种编号规则。
 
+# --- 读取版本：文件、压缩包和发布标签共用同一个编号 ---
 def version(root: Path = ROOT) -> str:
-    """读取并检查唯一版本来源，供命令与打包共用。"""
-    value = (root / "VERSION").read_text(encoding="utf-8").strip()  # 文件名与标签使用同一版本。
-    if not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev|alpha|beta|rc)\.(?:0|[1-9]\d*))?", value):
-        raise ValueError("VERSION 必须是 x.y.z 或 x.y.z-dev.N 等版本号")  # 拒绝路径与含糊编号。
-    return value
+    """返回 `root` 下去掉首尾空白的版本；测试可传独立目录，不读第二个版本来源。
 
+    文件内容属于外部输入，在这里检查格式，避免版本被当作路径或产生歧义标签。
+    """
+    value = (root / "VERSION").read_text(encoding="utf-8").strip()  # 文件名与标签使用同一版本。
+    if not re.fullmatch(_VERSION_PATTERN, value):  # 版本将进入文件名，不能接受任意文字或路径。
+        raise ValueError("VERSION 必须是 x.y.z 或 x.y.z-dev.N 等版本号")  # 拒绝路径与含糊编号。
+    return value  # 返回检查后的原编号，不擅自补零或改发布阶段。
+
+# --- 核对标签：阻止工作流把本版源码发到其他版本名下 ---
 def validate_tag(tag: str, root: Path = ROOT) -> None:
-    """检查标签与唯一版本一致。"""
-    if tag != "v" + version(root):
+    """核对外部 `tag` 是否等于 `root` 中版本前加 `v`；只检查，不创建标签。"""
+    if tag != "v" + version(root):  # 标签只能从唯一版本推导，不能另选编号。
         raise ValueError(f"发布标签 {tag!r} 与 VERSION 不一致")  # 错版本不能发布。
 
+# --- 提取说明：只交付当前版本的正文，不混入历史修改 ---
 def release_notes(release: str, root: Path = ROOT) -> str:
-    """提取指定版本中文说明，拒绝重复与空章节。"""
+    """从 `root` 的更新记录提取 `release` 章节，返回带固定中文标题的正文。
+
+    缺失、重复或空章节直接报错；保留正文中的小标题，供终端和发行工作流共用。
+    """
     text = (root / "CHANGELOG.md").read_text(encoding="utf-8")  # 说明只有一个来源。
     headings = list(re.finditer(r"^##[ \t]+(.+?)[ \t]*$", text, re.MULTILINE))  # 小标题保留。
-    matches = [i for i, heading in enumerate(headings) if heading[1] == release]
-    if len(matches) != 1:
+    matches = [index for index, heading in enumerate(headings) if heading[1] == release]  # 精确匹配版本标题，不能取近似编号。
+    if len(matches) != 1:  # 同一版本出现两次时不能猜哪一段才是真实说明。
         raise ValueError(f"CHANGELOG.md 必须包含且只包含一个 ## {release} 更新记录")  # 发布说明不能选错章节。
     index = matches[0]  # 章节唯一性已检查。
     end = headings[index + 1].start() if index + 1 < len(headings) else len(text)  # 不混入旧版本。
     body = text[headings[index].end():end].strip()  # 只包含本版本内容。
-    if not body:
+    if not body:  # 空标题不能成为一次发布的变更说明。
         raise ValueError(f"CHANGELOG.md 中 {release} 的更新记录不能为空")
-    return f"## 本次修改\n\n{body}\n"
+    return f"## 本次修改\n\n{body}\n"  # 固定外部输出格式，供发行工作流直接使用。
 
+# --- 寻找检查器：使用项目安装的工具，不碰巧调用系统其他版本 ---
 def tool(name: str) -> Path:
-    """寻找项目内检查器，缺失时报告安装命令。"""
-    names = {"glslang": ("glslangValidator", "glslang"), "actionlint": ("actionlint",)}
+    """按内部约定的 `name` 返回项目检查器路径；只接受下方登记的两种工具。
+
+    找不到时报告安装命令，不退回系统搜索路径，避免不同机器悄悄使用不同检查器。
+    """
+    names = {"glslang": ("glslangValidator", "glslang"), "actionlint": ("actionlint",)}  # 同一检查器兼容其正式可执行文件名。
     for base in names[name]:  # 只查项目工具目录。
         matches = sorted((ROOT / ".dev/tools" / name).rglob(base + (".exe" if sys.platform == "win32" else "")))  # 不依赖系统路径。
-        if matches:
-            return matches[0]
+        if matches:  # 工具包的解压层级可能不同，排序后固定选择结果。
+            return matches[0]  # 只返回已存在的项目内程序。
     raise ValueError(f"缺少项目内 {name}，请执行 python dev.py setup")
 
+# --- 检查引用路径：源码不能借引用读出光影目录 ---
 def source_path(reference: str, parent: Path, shaders: Path) -> Path:
-    """引用边界只允许光影目录内的存在文件。"""
-    if "\\" in reference or "\x00" in reference:
+    """把 `parent` 文件里的外部 `reference` 转成 `shaders` 内的真实文件路径。
+
+    前导斜杠表示光影根目录，其余相对引用者定位；解析链接后检查越界和缺失一次。
+    """
+    if "\\" in reference or "\x00" in reference:  # 源码路径须遵守加载器语法，不能带本机分隔符或空字符。
         raise ValueError(f"{parent}：引用必须使用正斜杠")
     source = ((shaders / reference[1:]) if reference.startswith("/") else parent.parent / reference).resolve()  # 支持加载器根引用。
-    if not source.is_relative_to(shaders.resolve()) or not source.is_file():
+    if not source.is_relative_to(shaders.resolve()) or not source.is_file():  # 解析真实路径后再检查，目录链接也不能逃逸。
         raise ValueError(f"{parent}：引用越界或文件不存在：{reference}")
-    return source
+    return source  # 后续展开信任这个已经检查过的引用目标。
 
+# --- 展开引用：编译一份完整源码，同时保留每段原文的位置 ---
 def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), sourceNumbers: dict | None = None, cache: dict | None = None) -> str:
-    """展开引用并保留数字行映射，循环路径直接报错。"""
+    """展开 `source` 中的真实引用，返回含 `#line` 原文件编号和行号的编译文本。
+
+    `shaders` 限定引用根目录；`stack` 只记录当前递归路径，用来报告循环引用。
+    `sourceNumbers` 是路径到数字编号的共享表；`cache` 保存本轮已展开文本，二者可省略。
+    共用缓存时必须共用编号表，并且期间不修改源码；缓存不跨构建保存，不用于证明编译成功。
+    """
     source = source.resolve()  # 规范化后识别循环。
-    if source in stack:
+    if source in stack:  # 先检查当前路径，不能让缓存掩盖循环引用。
         raise ValueError("循环引用：" + " → ".join(path.name for path in (*stack, source)))  # 展开前拒绝无限递归。
-    if cache is None: cache = {}  # 一次展开共享已读取内容，不反复访问磁盘。
-    if source in cache: return cache[source]  # 循环已在缓存查询之前检查。
-    if sourceNumbers is None:
-        sourceNumbers = {p.resolve(): i + 1 for i, p in enumerate(sorted(shaders.rglob("*"))) if p.is_file()}  # 同一项目的编号映射稳定。
+    if cache is None:  # 独立调用也能复用同一引用树中的重复文件。
+        cache = {}  # 一次展开共享已读取内容，不反复访问磁盘。
+    if source in cache:
+        return cache[source]  # 循环已在缓存查询之前检查。
+    if sourceNumbers is None:  # 调用方没有共享表时，为本次引用树建立固定编号。
+        sourceNumbers = {path.resolve(): index + 1 for index, path in enumerate(sorted(shaders.rglob("*"))) if path.is_file()}  # 同一项目的编号映射稳定。
     text = source.read_text(encoding="utf-8")  # 实际维护源码。
-    masked = re.sub(r"/\*.*?\*/", lambda m: "".join("\n" if c == "\n" else " " for c in m[0]), text, flags=re.DOTALL)  # 注释示例不展开。
+    masked = re.sub(r"/\*.*?\*/", lambda match: "".join("\n" if character == "\n" else " " for character in match[0]), text, flags=re.DOTALL)  # 屏蔽块注释但保留长度和换行，文档里的引用示例不参与展开。
     for line in masked.splitlines():  # 检查真实引用语法。
         if re.match(r"\s*#include\b", line) and not INCLUDE.fullmatch(line):
             raise ValueError(f"{source}：#include 行只保留引用，说明放到上一行以兼容 Iris")
     for match in reversed(list(INCLUDE.finditer(masked))):  # 倒序保持源位置。
         included = source_path(match[1], source, shaders)  # 检查外部文件引用一次。
-        content = expand(included, shaders, (*stack, source), sourceNumbers, cache)
-        if re.search(r"^\s*#version", content, re.MULTILINE):
+        content = expand(included, shaders, (*stack, source), sourceNumbers, cache)  # 子文件沿用同一编号表和读取缓存。
+        if re.search(r"^\s*#version", content, re.MULTILINE):  # 完整程序只能由入口声明语言版本。
             raise ValueError(f"{included}：被引用文件不能再次声明 #version")
         line = text[:match.start()].count("\n") + 2  # 引用后的原始下一行。
-        replacement = f"#line 1 {sourceNumbers[included]}\n{content.rstrip()}\n#line {line} {sourceNumbers[source]}"
+        replacement = f"#line 1 {sourceNumbers[included]}\n{content.rstrip()}\n#line {line} {sourceNumbers[source]}"  # 进入子文件前切编号，返回后恢复引用者的下一行。
         text = text[:match.start()] + replacement + text[match.end():]  # 编译错误可回到原文件与行号。
     cache[source] = text  # 缓存完整展开，仍保留所有条件包含与行映射。
-    return text
+    return text  # 原注释仍留在输出里，只有真正引用行被替换。
 
+# --- 检查入口：每种绘制阶段都必须具备加载器要求的伙伴 ---
 def entrypoints(shaders: Path = SHADERS) -> list[Path]:
-    """检查入口、几何与细分阶段配对，再展开真实引用。"""
-    entries = sorted(p for p in shaders.rglob("*") if p.suffix in STAGES)  # 包含各维度。
-    if not entries:
+    """返回 `shaders` 内排序后的阶段文件，并检查首行、阶段配对和引用边界。
+
+    计算阶段可独立存在；顶点、片元、几何与细分阶段按加载器规则配对，不在这里启动编译器。
+    """
+    entries = sorted(path for path in shaders.rglob("*") if path.suffix in STAGES)  # 同时检查主世界、下界和末地入口。
+    if not entries:  # 空目录不应被当作一个通过检查的光影包。
         raise ValueError("光影包至少需要一组可执行入口")
-    sourceNumbers = {p.resolve():i+1 for i,p in enumerate(sorted(shaders.rglob("*"))) if p.is_file()}  # 所有入口共用源文件编号。
+    source_numbers = {path.resolve(): index + 1 for index, path in enumerate(sorted(shaders.rglob("*"))) if path.is_file()}  # 所有入口共用源文件编号。
     cache = {}  # 同一检查共享已展开的效果文本。
     for source in entries:  # 阶段伙伴逐一检查。
         if not source.read_text(encoding="utf-8").startswith("#version "):
             raise ValueError(f"{source}：#version 必须放第一行")
-        partners = {".vsh": (".fsh",), ".fsh": (".vsh",), ".gsh": (".vsh", ".fsh"), ".tcs": (".vsh", ".tes"), ".tes": (".vsh", ".tcs")}.get(source.suffix, ())
+        partners = {".vsh": (".fsh",), ".fsh": (".vsh",), ".gsh": (".vsh", ".fsh"), ".tcs": (".vsh", ".tes"), ".tes": (".vsh", ".tcs")}.get(source.suffix, ())  # 计算阶段不需要顶点与片元伙伴。
         for partner in partners:  # 细分阶段必须成对。
             if not source.with_suffix(partner).is_file():
                 raise ValueError(f"{source}：缺少配对入口 {partner}")
-        expand(source, shaders, sourceNumbers=sourceNumbers, cache=cache)  # 入口配对检查不跳过引用。
+        expand(source, shaders, sourceNumbers=source_numbers, cache=cache)  # 入口配对检查不跳过引用。
     return entries  # 下游链接真实入口。
 
+# --- 读取菜单来源：配置定义归选项模块所有，构建只使用结果 ---
 def configuration() -> tuple[dict, list, dict]:
-    """从原生效果定义与预设读取全部菜单。"""
+    """读取固定项目路径，返回选项字典、预设列表、生成文件的路径到文本映射。
+
+    选项与预设边界由配置模块检查；这里不写文件，便于检查、打包和测试共用同一结果。
+    """
     found, groups = menu.scan(SHADERS)  # 原生定义读取菜单。
     profiles = menu.presets(ROOT / "presets", found)  # 预设合法范围检查。
-    return found, profiles, menu.generated(SHADERS, found, groups, profiles)
+    return found, profiles, menu.generated(SHADERS, found, groups, profiles)  # 返回待比较或待写入的菜单，不隐式落盘。
 
+# --- 生成薄入口文本：显式流程表决定哪些程序真正参与绘制 ---
 def program_files() -> dict[Path, str]:
-    """从显式流程表生成兼容入口，新增程序必须修改流程表。"""
+    """读取流程表并返回入口路径到文本的映射，不直接写磁盘。
+
+    流程表属于文件输入，维度、主体和宏名在此检查；固定三维度避免加载器漏读根入口。
+    顶点片元使用基础语言版本，计算阶段使用更高版本；生成文本是既有构建协议。
+    """
     data = json.loads((SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))  # 不从效果目录推测流程。
-    if set(data.get("dimensions",{}))!={"world0","world-1","world1"}:
+    if set(data.get("dimensions", {})) != {"world0", "world-1", "world1"}:  # 每个受支持维度都要明确登记。
         raise ValueError("使用旧维度约定时必须同时提供 world0、world-1、world1；不能混入根目录程序")  # 任意worldN存在时加载器忽略根目录入口。
     result = {}  # 生成入口位置与内容。
-    entry_comments = ["// 选择本程序的绘制阶段或物体类别。", "// 显式引入完整绘制主体。", "// 输出由主体按统一缓冲协议写入。"]  # 各阶段共用同一批生成说明，便于清理比对。
     for dimension, flag in data["dimensions"].items():  # 维度显式接线。
-        if dimension not in ("world0", "world-1", "world1"):
-            raise ValueError("维度入口位置无效")  # 外部流程表不能越界。
         for name, (rendering, *defines) in data["programs"].items():  # 程序显式选择主体。
-            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 流程表不能引用非法名字或不存在的绘制主体。
                 raise ValueError(f"程序名或绘制主体无效：{name}")
             for suffix, stage in ((".vsh", "OMNI_VERTEX"), (".fsh", "OMNI_FRAGMENT")):  # 顶点片元保持配对。
                 flags = [stage, *defines, *([flag] if flag else [])]  # 维度规则显式写入入口。
-                if any(not re.fullmatch(r"OMNI_[A-Z_]+", f) for f in flags):
+                if any(not re.fullmatch(r"OMNI_[A-Z_]+", flag_name) for flag_name in flags):  # 生成入口只允许项目自有宏名。
                     raise ValueError("程序宏必须使用受控名称")
-                lines = ["#version 330 compatibility", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]
+                lines = ["#version 330 compatibility", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 首行必须先声明语言版本，再说明生成来源。
                 for define in flags:  # 入口只选择类别。
                     lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define]
                 lines += ["// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
-                result[SHADERS / dimension / (name + suffix)] = "\n".join(lines) + "\n"
+                result[SHADERS / dimension / (name + suffix)] = "\n".join(lines) + "\n"  # 统一换行使本地与自动检查得到相同文本。
         for name, (rendering, *defines) in data.get("compute", {}).items():  # 计算程序单独登记，不生成顶点片元。
-            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 计算阶段同样只能选已有主体。
                 raise ValueError(f"计算程序名或主体无效：{name}")
             flags = ["OMNI_COMPUTE", *defines, *([flag] if flag else [])]  # 计算阶段使用受控宏选择主体。
-            if any(not re.fullmatch(r"OMNI_[A-Z_]+", f) for f in flags):
+            if any(not re.fullmatch(r"OMNI_[A-Z_]+", flag_name) for flag_name in flags):  # 计算入口宏也使用同一受控名称规则。
                 raise ValueError("计算程序宏必须使用受控名称")
             lines = ["#version 430", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 计算阶段需要更高版本。
             for define in flags:  # 入口只选择类别。
                 lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define]
             lines += ["// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
-            result[SHADERS / dimension / (name + ".csh")] = "\n".join(lines) + "\n"
+            result[SHADERS / dimension / (name + ".csh")] = "\n".join(lines) + "\n"  # 独立计算阶段不虚构顶点片元配对。
     return result  # 核对入口生成结果。
 
 def generate() -> None:
-    """只写变化的生成文件，避免观察模式无意义重载。"""
+    """生成菜单、翻译和薄入口，并删除确认未被用户改动的旧生成入口。
+
+    调用者负责选择何时生成；本函数只改构建协议登记的生成文件，内容相同就不重写。
+    旧入口若含额外内容会停止并保留文件，避免自动清理覆盖人工修改。
+    """
     _, _, files = configuration()  # 自动菜单与翻译。
     files.update(program_files())  # 入口和菜单都由维护的主体生成。
-    for folder in (SHADERS,SHADERS/"world0",SHADERS/"world-1",SHADERS/"world1"):
+    for folder in (SHADERS, SHADERS / "world0", SHADERS / "world-1", SHADERS / "world1"):  # 清理范围限定在已知入口位置。
         for path in folder.glob("*"):
-            if path.suffix in (".vsh",".fsh",".csh") and path not in files:
+            if path.suffix in (".vsh", ".fsh", ".csh") and path not in files:  # 只检查由流程表生成的阶段。
                 text = path.read_text(encoding="utf-8")  # 只删除旧流程生成且没有手动修改的薄入口。
-                comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 选择本程序的绘制阶段或物体类别。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 任何额外手写说明都视为用户修改。
-                untouched = all(line in comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z_]+|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 只接受旧生成器的精确薄入口语法。
-                if not text.startswith("#version ") or not text.splitlines()[1].startswith("// 生成的") or not untouched:
+                generated_comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 选择本程序的绘制阶段或物体类别。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 只有生成器自己的说明才可随旧入口删除。
+                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z_]+|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式，额外内容视为人工修改。
+                lines = text.splitlines()
+                if len(lines) < 2 or not lines[0].startswith("#version ") or not lines[1].startswith("// 生成的") or not untouched:  # 格式不完整或含人工说明时拒绝删除。
                     raise ValueError(f"旧入口含自有修改，不能自动删除：{path}")  # 保留用户文件并报告具体冲突。
                 path.unlink()  # 移除被新流程明确替代的重复维度入口。
-    for path, content in files.items():  # 仅写生成文件。
-        path.parent.mkdir(parents=True, exist_ok=True)  # 初次生成维度目录。
-        if not path.exists() or path.read_text(encoding="utf-8") != content:
-            path.write_text(content, encoding="utf-8", newline="\n")
+    for output_path, generated_text in files.items():  # 仅写生成文件。
+        output_path.parent.mkdir(parents=True, exist_ok=True)  # 初次生成维度目录。
+        if not output_path.exists() or output_path.read_text(encoding="utf-8") != generated_text:  # 只有目标内容变化才写盘，观察模式不会反复触发重载。
+            output_path.write_text(generated_text, encoding="utf-8", newline="\n")
 
+# --- 替换测试配置：保留算法原文，只改变原生选项声明 ---
 def option_source(text: str, found: dict, values: dict[str, str]) -> str:
-    """替换原生定义，供离线测试已检查的配置。"""
+    """按已验证的 `values` 替换源码 `text` 中已登记选项，返回编译用文本。
+
+    `found` 来自同一选项扫描结果；其余行原样保留，因此离线测试编译真实效果分支。
+    """
     result = []  # 保留业务源行。
     for line in text.splitlines():
         definition = menu.DEFINE.fullmatch(line)  # 只替换原生宏声明。
-        if definition and definition[2] in found:
+        if definition and definition[2] in found:  # 只动扫描器登记的原生宏，不改普通宏。
             name, value = definition[2], values[definition[2]]  # 仅替换声明，不改业务分支。
             line = (("#define " if value == "true" else "//#define ") + name) if found[name].values == ("false", "true") else f"#define {name} {value}"
         constant = menu.CONST.fullmatch(line)  # Iris原生const选项使用同一份值替换。
-        if constant and constant[2] in found:
+        if constant and constant[2] in found:  # 加载器原生常量与宏使用同一份配置值。
             line = f"const {constant[1]} {constant[2]} = {values[constant[2]]}; // [{ ' '.join(found[constant[2]].values) }]"
         result.append(line)  # 其他代码保留。
-    return "\n".join(result) + "\n"
+    return "\n".join(result) + "\n"  # 固定末尾换行，避免配置差异影响编译摘要。
 
+# --- 选择代表配置：覆盖边界与整体高低组合，避免指数爆炸 ---
 def variants(found: dict, profiles: list) -> list[tuple[str, dict]]:
-    """检查默认、预设、单项取值及全部高低组合，避免指数穷举。"""
+    """从 `found` 和 `profiles` 返回带名字的代表配置列表，并按内容去重。
+
+    覆盖默认值、玩家预设、每个选项的单独取值和全低/全高组合；不穷举所有选项乘积。
+    """
     defaults = {name: option.default for name, option in found.items()}  # 源码默认配置。
     candidates = [("default", defaults)] + [(p.name, p.values) for p in profiles]
     for name, option in found.items():
         candidates += [(f"{name}_{v}", defaults | {name: v}) for v in option.values]  # 每个边界至少单独覆盖。
     candidates += [("all_low", {n: o.values[0] for n, o in found.items()}), ("all_high", {n: o.values[-1] for n, o in found.items()})]  # 代表交互组合。
     result, seen = [], set()  # 相同组合去重。
-    for label, values in candidates:
-        signature = tuple(sorted(values.items()))  # 配置顺序无关。
+    for label, option_values in candidates:  # 每个候选都保留便于错误报告的名字。
+        signature = tuple(sorted(option_values.items()))  # 按名称排序后，字典插入顺序不影响重复判断。
         if signature not in seen:
-            seen.add(signature); result.append((label, values))  # 相同配置不重复测试。
+            seen.add(signature)  # 先登记内容，后续相同配置便可跳过。
+            result.append((label, option_values))  # 相同配置不重复测试。
     return result  # 不指数穷举。
 
+# --- 编译与链接：多阶段成组检查，缓存只信任成功的相同源码 ---
 def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
-    """链接所有唯一程序配置，并补齐加载器提供的离线宏。"""
+    """对 `entries` 的程序编译并链接代表选项配置，失败时映回光影相对路径。
+
+    `found` 与 `profiles` 来自配置扫描。离线环境只模拟基础与远景宏，不替代游戏验证。
+    缓存位于开发报告目录，并同时核对编译器文件摘要和展开后源码摘要。
+    """
     validator = tool("glslang")  # 真正执行编译器。
-    sourceNumbers = {p.resolve():i+1 for i,p in enumerate(sorted(SHADERS.rglob("*"))) if p.is_file()}  # 全部程序一次建立映射。
-    cache = {}
-    expanded = {source: expand(source,sourceNumbers=sourceNumbers,cache=cache) for source in entries}  # 展开后错误保留原始文件编号。
-    print("入口展开完成，开始检查选项接入",flush=True)
+    source_numbers = {path.resolve(): index + 1 for index, path in enumerate(sorted(SHADERS.rglob("*"))) if path.is_file()}  # 所有入口共用编号，编译器报错可指回原文件。
+    expanded_cache = {}  # 本次检查共享读取结果，不把源码缓存带到下次运行。
+    expanded = {source: expand(source, sourceNumbers=source_numbers, cache=expanded_cache) for source in entries}  # 展开后保留原始文件编号。
+    print("入口展开完成，开始检查选项接入", flush=True)  # 长时间离线检查期间及时给出阶段状态。
     for name in found:  # 验证选项接入算法。
         reachable = [text for text in expanded.values() if re.search(r"^\s*(?://\s*)?#define\s+" + name + r"\b|^\s*const\s+\w+\s+" + name + r"\b", text, re.MULTILINE)]
         used = [re.sub(r"^.*(?:#define|@option).*\n?", "", text, flags=re.MULTILINE) for text in reachable]  # 定义与说明本身不算算法接入。
         if not reachable or not any(re.search(r"\b" + name + r"\b", text) for text in used):
             raise ValueError(f"选项 {name} 没有接入任何实际入口或计算")
-    programs = {}  # 多阶段一起链接。
+    programs = {}  # 同名入口的多个绘制阶段必须作为一个链接程序。
     for source in entries:
         programs.setdefault(source.with_suffix(""), []).append(source)  # 细分与几何阶段一起链接。
-    cache_file = ROOT / ".dev/reports/glsl-cache.json"  # 成功源码缓存只服务开发，不进入发行包。
-    compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 工具升级必须重新链接。
-    cached = json.loads(cache_file.read_text(encoding="utf-8")) if cache_file.is_file() else {}  # 只复用同编译器的成功内容。
-    knownGood = set(cached.get("programs",[])) if cached.get("compiler")==compiler_digest else set()
-    formatDefines = "#define RGBA16F 34842\n#define RGBA32F 34836\n"  # 离线模拟加载器格式名称。
-    environments = [("base", ""), ("iris_dh", "#define IS_IRIS\n#define IRIS_FEATURE_ENTITY_TRANSLUCENT\n#define DISTANT_HORIZONS\n#define DH_BLOCK_WATER 13\n#define DH_BLOCK_LAVA 8\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 两种环境覆盖实体分离可用与不可用路径。
-    # 第一步：把 149 种配置乘两个环境乘全部程序展开成任务，相同编译内容只留一次。
+    cache_path = ROOT / ".dev/reports/glsl-cache.json"  # 成功源码缓存只服务开发，不进入发行包。
+    compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 编译器文件变化就让旧成功记录失效。
+    cached_report = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.is_file() else {}  # 首次运行没有缓存，按空记录处理。
+    known_good = set(cached_report.get("programs", [])) if cached_report.get("compiler") == compiler_digest else set()  # 只信任同一个编译器写下的成功摘要。
+    format_defines = "#define RGBA16F 34842\n#define RGBA32F 34836\n"  # 离线补入加载器提供的格式名称。
+    environments = [("base", ""), ("iris_dh", "#define IS_IRIS\n#define IRIS_FEATURE_ENTITY_TRANSLUCENT\n#define IRIS_FEATURE_COMPUTE_SHADERS\n#define DISTANT_HORIZONS\n#define DH_BLOCK_WATER 13\n#define DH_BLOCK_LAVA 8\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 基础回退与具备实体分离、计算能力的远景路径。
+    # 第一步：把代表配置、两种环境和全部程序展开成任务；实际组合数随选项变化。
     # 为什么先收集再编译：这样重复内容能在编译前过滤，并把独立任务交给线程池并行，避免串行等待几千个编译器进程。
-    jobs, seen, reused = [], set(), 0  # 待编译任务、已见内容标记、缓存复用计数。
-    for label, values in variants(found, profiles):  # 代表组合逐项展开。
+    jobs, seen, reused = [], set(), 0  # 分别保存待编译任务、去重摘要与跳过的成功组数。
+    for label, option_values in variants(found, profiles):  # 代表组合逐项展开。
         for environment, defines in environments:  # 基础与远景均检查。
             for program, sources in programs.items():  # 各维度不遗漏。
-                texts = [option_source(expanded[p], found, values) for p in sources]
-                texts = [t.replace("#version 330 compatibility", "#version 330 compatibility\n" + formatDefines + defines, 1) for t in texts]  # 仅离线检查环境注入。
+                texts = [option_source(expanded[source], found, option_values) for source in sources]  # 每个阶段使用同一份选项取值。
+                texts = [text.replace("#version 330 compatibility", "#version 330 compatibility\n" + format_defines + defines, 1) for text in texts]  # 环境宏只注入临时文本，不修改入口文件。
                 if program.name.startswith("dh_") and environment == "iris_dh":
-                    texts = [t.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1) if p.suffix == ".vsh" else t for p, t in zip(sources, texts)]  # 官方自动属性由离线环境模拟。
-                signature = tuple((p.suffix, re.sub(r"^#line[^\n]*|//[^\n]*|/\*.*?\*/", "", t, flags=re.MULTILINE|re.DOTALL)) for p, t in zip(sources, texts))  # 别名入口的注释不影响编译内容。
-                digest = hashlib.sha256(repr(signature).encode()).hexdigest()
-                if digest in seen:
+                    texts = [text.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1) if source.suffix == ".vsh" else text for source, text in zip(sources, texts)]  # 只在顶点阶段模拟加载器自动提供的远景材质编号。
+                source_signature = tuple((source.suffix, re.sub(r"^#line[^\n]*|//[^\n]*|/\*.*?\*/", "", text, flags=re.MULTILINE | re.DOTALL)) for source, text in zip(sources, texts))  # 阶段种类与代码都参与摘要，注释和报错行映射不改变程序。
+                source_digest = hashlib.sha256(repr(source_signature).encode()).hexdigest()  # 唯一内容编号用于去重、临时文件名和缓存。
+                if source_digest in seen:  # 别名或不同维度完全相同就不启动第二个编译器。
                     continue  # 相同维度或别名程序只链接一次。
-                seen.add(digest)  # 新内容实际需要编译。
-                if digest in knownGood:
-                    reused += 1; continue  # 完整展开源码与配置完全相同才复用先前链接。
-                jobs.append({"digest":digest,"label":label,"environment":environment,"program":program,"sources":sources,"texts":texts})  # 记录失败定位所需信息。
-    numberToPath = {str(i+1): p.relative_to(SHADERS).as_posix() for i,p in enumerate(sorted(SHADERS.rglob("*"))) if p.is_file()}  # 报错把编号换回源码路径。
-    def compile_one(job: dict):
-        """编译一个唯一程序：写临时阶段文件后调用编译器，返回原始结果。"""
-        targets = []  # 本程序阶段临时文件。
-        for suffix, text in zip((p.suffix for p in job["sources"]), job["texts"]):
-            target = folder / (job["digest"][:16] + STAGES[suffix])  # 摘要前缀保证并发文件名不冲突。
-            target.write_text(text, encoding="utf-8"); targets.append(target)  # 临时文件只属于本次检查。
-        result = subprocess.run([str(validator), "-l", *map(str, targets)], capture_output=True, text=True, encoding="utf-8", errors="replace")
-        return job, result  # 由主线程统一判断成败。
+                seen.add(source_digest)  # 新内容实际需要编译或核对缓存。
+                if source_digest in known_good:  # 缓存只跳过之前成功链接的相同内容。
+                    reused += 1  # 记录本次跳过的成功链接组。
+                    continue  # 完整展开源码与配置完全相同才复用先前链接。
+                jobs.append({"digest": source_digest, "label": label, "environment": environment, "program": program, "sources": sources, "texts": texts})  # 保留错误报告需要的配置、程序与源码。
+    number_to_path = {str(index + 1): source.relative_to(SHADERS).as_posix() for index, source in enumerate(sorted(SHADERS.rglob("*"))) if source.is_file()}  # 编译器数字编号反查为项目内相对路径。
     failures = []  # 收集全部失败，一次报告，避免只看到第一条。
-    workers = min(32, (os.cpu_count() or 4) * 2)  # 编译器是外部进程，线程数按核心数放大以隐藏等待。
+    workers = min(32, (os.cpu_count() or 4) * 2)  # 编译器主要在外部进程工作，适度多线程可同时等待多项独立任务。
     with tempfile.TemporaryDirectory(prefix="omni-glsl-") as temporary:
-        folder = Path(temporary)  # 不污染源码。
-        with ThreadPoolExecutor(max_workers=workers) as pool:  # 并行执行全部唯一程序。
-            for index, (job, result) in enumerate(pool.map(compile_one, jobs), 1):
-                if index % 500 == 0: print(f"离线程序编译进度：{index}/{len(jobs)}", flush=True)  # 长检查持续报告当前进度。
-                if result.returncode:  # 失败保留源位置。
-                    message = re.sub(r"(ERROR|WARNING): (\d+):(\d+):", lambda m: f"{m[1]}: {numberToPath.get(m[2],m[2])}:{m[3]}:", result.stdout + result.stderr)
-                    failures.append(f"GLSL 编译/链接失败：{job['program'].relative_to(SHADERS)} / {job['label']} / {job['environment']}\n{message}")
+        temporary_folder = Path(temporary)  # 所有阶段文件放在自动清理目录，绝不落入源码树。
+
+        def compile_one(job: dict):
+            """把一组阶段写入 `temporary_folder` 并调用编译器，返回任务和原始结果。
+
+            `job` 由本函数内部的任务收集步骤创建；摘要前缀保证并行任务文件名不同。
+            不在工作线程解释错误，主线程统一映射路径并汇总，避免不同线程交错输出。
+            """
+            stage_files = []  # 本程序所有临时阶段文件，必须一起交给链接器。
+            for source_path, source_text in zip(job["sources"], job["texts"]):  # 按任务阶段顺序配对原文。
+                stage_file = temporary_folder / (job["digest"][:16] + STAGES[source_path.suffix])  # 摘要前缀避免并行时互相覆盖。
+                stage_file.write_text(source_text, encoding="utf-8")  # 每个任务只写入临时目录。
+                stage_files.append(stage_file)  # 顶点、几何和片元等阶段必须同组链接。
+            process_result = subprocess.run([str(validator), "-l", *map(str, stage_files)], capture_output=True, text=True, encoding="utf-8", errors="replace")  # 保留标准输出供主线程显示完整错误。
+            return job, process_result  # 主线程负责判断成败和更新成功缓存。
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:  # 只并行独立程序组，不拆开同一程序的多个阶段。
+            for completed, (job, process_result) in enumerate(pool.map(compile_one, jobs), 1):  # map 保持任务次序，结果逐项统一处理。
+                if completed % 500 == 0:  # 大型检查定期显示进度，避免误以为程序卡住。
+                    print(f"离线程序编译进度：{completed}/{len(jobs)}", flush=True)
+                if process_result.returncode:  # 失败组不进入成功缓存。
+                    message = re.sub(r"(ERROR|WARNING): (\d+):(\d+):", lambda match: f"{match[1]}: {number_to_path.get(match[2], match[2])}:{match[3]}:", process_result.stdout + process_result.stderr)  # 把临时编号还原成可打开的源码相对路径。
+                    failures.append(f"GLSL 编译/链接失败：{job['program'].relative_to(SHADERS)} / {job['label']} / {job['environment']}\n{message}")  # 同时报告程序、配置和环境。
                 else:
-                    knownGood.add(job["digest"])  # 失败组永远不进入缓存。
-        cache_file.parent.mkdir(parents=True,exist_ok=True)
-        cache_file.write_text(json.dumps({"compiler":compiler_digest,"programs":sorted(knownGood)})+"\n",encoding="utf-8")  # 全部成功后保存已通过的链接。
-    if failures: raise ValueError("\n\n".join(failures[:5]))  # 失败时报告最多五条，附带源码位置。
-    count = len(seen)  # 唯一程序总数等于复用加本次编译。
-    print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{count} 组唯一程序，复用 {reused} 组相同源码")
+                    known_good.add(job["digest"])  # 只有本次确实链接成功才写入缓存候选。
+        cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
+        cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good)}) + "\n", encoding="utf-8")  # 失败摘要不加入；成功记录供下次减少重复链接。
+    if failures:  # 资源目录退出后临时文件已清理，再统一报告最多五项失败。
+        raise ValueError("\n\n".join(failures[:5]))
+    unique_programs = len(seen)  # 唯一程序数由新编译与成功缓存复用共同组成。
+    print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{unique_programs} 组唯一程序，复用 {reused} 组相同源码")
 
 def dependencies() -> dict[str, bytes]:
-    """依赖只接受显式版本、来源、许可和文件白名单。"""
+    """校验依赖清单，返回发布包相对路径到原始字节的白名单。
+
+    清单、来源网址、文件列表、哈希和随包许可都是外部维护边界；不改写第三方文件字节。
+    返回值只包含清单明确登记的文件，目录中多出或缺少文件都会失败。
+    """
     path = ROOT / "dependencies.json"  # 运行库唯一清单。
     data = json.loads(path.read_text(encoding="utf-8"))  # 边界输入检查。
-    if not isinstance(data,dict) or data.get("schemaVersion") != 1 or not isinstance(data.get("libraries"), list):
+    if not isinstance(data, dict) or data.get("schemaVersion") != 1 or not isinstance(data.get("libraries"), list):  # 清单结构属于外部输入，在入口一次检查。
         raise ValueError("运行依赖记录格式无效")
     result = {"dependencies.json": path.read_bytes(), "THIRD_PARTY.md": (ROOT / "THIRD_PARTY.md").read_bytes()}
-    allowed = set()  # 只有登记文件打包。
+    allowed = set()  # 记录清单登记项，最后与磁盘真实文件集合逐项比较。
     for item in data["libraries"]:  # 每库独立许可来源。
-        if not isinstance(item,dict) or set(item) != {"name", "version", "source", "license", "files"} or not all(isinstance(item[k],str) and item[k].strip() for k in ("name","version","source","license")) or not item["source"].startswith("https://"):
+        if not isinstance(item, dict) or set(item) != {"name", "version", "source", "license", "files"} or not all(isinstance(item[key], str) and item[key].strip() for key in ("name", "version", "source", "license")) or not item["source"].startswith("https://"):  # 来源必须带完整信息并使用加密网址。
             raise ValueError("依赖必须记录名称、版本、来源与明确许可")
-        if not isinstance(item.get("files"),dict) or any(not isinstance(reference,str) or not isinstance(digest,str) for reference,digest in item["files"].items()):
+        if not isinstance(item.get("files"), dict) or any(not isinstance(reference, str) or not isinstance(digest, str) for reference, digest in item["files"].items()):  # 每个文件都必须有文字路径和摘要值。
             raise ValueError(f"依赖 {item.get('name','未知')} 的 files 必须是字符串到哈希的对象")  # 错误配置在边界给出可读原因。
         for reference, digest in item["files"].items():  # 原声明也需登记。
-            source = source_path("/"+reference, path, SHADERS)
-            if not reference.startswith("libraries/") or reference in allowed or not re.fullmatch(r"[0-9a-f]{64}",digest) or hashlib.sha256(source.read_bytes()).hexdigest()!=digest:
+            source = source_path("/" + reference, path, SHADERS)  # 复用光影引用边界，拒绝依赖路径越界。
+            if not reference.startswith("libraries/") or reference in allowed or not re.fullmatch(r"[0-9a-f]{64}", digest) or hashlib.sha256(source.read_bytes()).hexdigest() != digest:  # 校验目录、重复登记与真实文件摘要。
                 raise ValueError(f"依赖白名单或校验值无效：{reference}")
-            allowed.add(reference); result["shaders/"+reference] = source.read_bytes()  # 原版权文件保持原字节。
-        if not any("license" in r.lower() or "copying" in r.lower() for r in item["files"]):
+            allowed.add(reference)  # 同一文件不能被两个依赖重复登记。
+            result["shaders/" + reference] = source.read_bytes()  # 第三方原文逐字节进入包，不重排也不改许可内容。
+        if not any("license" in reference.lower() or "copying" in reference.lower() for reference in item["files"]):  # 每个依赖都要在包内附带上游许可原文。
             raise ValueError("每个运行库必须打包原始许可")
-    actual = {p.relative_to(SHADERS).as_posix() for p in (SHADERS / "libraries").rglob("*") if p.is_file()}
-    if actual != allowed:
+    actual = {path.relative_to(SHADERS).as_posix() for path in (SHADERS / "libraries").rglob("*") if path.is_file()}  # 目录实际内容也必须完全受清单管理。
+    if actual != allowed:  # 清单与磁盘任何一边多一项都停止打包，避免遗漏许可或偷偷夹带文件。
         raise ValueError("第三方目录存在未登记或缺失的文件")
-    return result  # 原字节保留声明。
+    return result  # 清单和许可声明随第三方原文一同交付。
 
+# --- 全量检查：先核来源，再编译，最后检查工作流 ---
 def check() -> None:
-    """审计源码、生成结果、引用、配置、依赖与工作流后链接。"""
+    """检查本版说明、生成文件、所有引用、选项、依赖、着色器链接和工作流。
+
+    不生成或打包文件；失败在发现位置停止。编译缓存只减少已验证的完全相同任务。
+    此离线检查不启动 Minecraft，不能作为游戏画面、性能或兼容性证据。
+    """
     release_notes(version())  # 本版本必须有真实说明。
     entries = entrypoints()  # 先引用后编译。
-    found, profiles, files = configuration(); files.update(program_files())  # 比较维护来源与产物。
-    for path, expected in files.items():  # 不掩盖过期产物。
+    found, profiles, generated_files = configuration()  # 菜单从原生定义与预设读取。
+    generated_files.update(program_files())  # 入口从显式绘制流程读取。
+    for path, expected in generated_files.items():  # 逐一比对维护来源与仓库产物，不掩盖过期生成文件。
         if not path.exists() or path.read_text(encoding="utf-8") != expected:
             raise ValueError(f"{path.relative_to(ROOT)} 未生成或已过期，请运行 python build.py generate")
-        if path.suffix in (".properties",".lang"): audit.generated_comments(path,expected)  # 自动菜单的说明解码后同样要求中文。
-    if {p for p in entries if p.suffix in (".vsh",".fsh",".csh")}!=set(program_files()): raise ValueError("存在流程表之外的旧入口，请重新生成并审查")  # 清理生成入口，不误删配对的几何、细分或独立计算阶段。
-    audited = audit.check(ROOT); dependencies()  # 所有自有代码与进入包的第三方声明都必须合格。
+        if path.suffix in (".properties", ".lang"):  # 菜单中的机器转义说明也要按解码后的中文审计。
+            audit.generated_comments(path, expected)
+    generated_entries = {path for path in entries if path.suffix in (".vsh", ".fsh", ".csh")}  # 这些阶段由流程表生成；其他阶段仍可独立维护。
+    if generated_entries != set(program_files()):  # 旧程序可能被加载器忽略，必须明确清理并审查。
+        raise ValueError("存在流程表之外的旧入口，请重新生成并审查")
+    audited = audit.check(ROOT)  # 自有源码先通过中文说明与未实现标记审计。
+    dependencies()  # 发行包中的第三方文件与许可也必须满足白名单。
     print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
-    for source in SHADERS.rglob("*.glsl"):  # 主体全部检查引用。
-        expand(source)  # 未接入文件也不能积累坏引用。
+    for source in SHADERS.rglob("*.glsl"):  # 主体文件即使暂未接入绘制流程，也不能留下坏引用。
+        expand(source)  # 与真实入口使用同一边界检查和展开逻辑。
     compile_shaders(entries, found, profiles)
-    subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 真正执行工作流检查。
+    subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
     print(f"检查通过：{len(entries)} 个入口，{len(found)} 个选项，{len(profiles)} 套预设")
 
+# --- 创建压缩包：固定顺序、时间和平台标记，使字节可重复 ---
 def archive(path: Path, files: dict[str, bytes]) -> None:
-    """固定时间、平台和顺序，生成可重复的包。"""
+    """把相对成员名到字节的 `files` 写入 `path`，保持相同输入得到相同压缩包。
+
+    调用方负责提供已检查的清单；这里固定排序、时间和压缩包权限标记，不读取额外文件。
+    """
     path.parent.mkdir(parents=True, exist_ok=True)  # 创建产物目录。
     with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as output:
         for name, content in sorted(files.items()):  # 固定文件顺序。
-            info = zipfile.ZipInfo(name, date_time=(2020,1,1,0,0,0))
-            info.create_system = 3; info.compress_type = zipfile.ZIP_DEFLATED  # 各平台使用同一标记。
-            info.external_attr = 0o100644 << 16
+            info = zipfile.ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))  # 固定时间，避免构建日期改变包校验值。
+            info.create_system = 3  # 统一记录压缩包的平台标记，避免不同系统生成不同字节。
+            info.compress_type = zipfile.ZIP_DEFLATED  # 统一压缩方法。
+            info.external_attr = 0o100644 << 16  # 文件成员使用普通只读文件权限，不携带本机属性。
             output.writestr(info, content)  # 不带本机路径与时间。
 
+# --- 打包交付物：游戏包与可单独分享的预设分开生成 ---
 def pack() -> list[Path]:
-    """白名单打包游戏代码与必要许可，预设单独可分享。"""
-    release = version(); found, profiles, _ = configuration()  # 共用版本与预设来源。
-    files = {"shaders/" + p.relative_to(SHADERS).as_posix(): p.read_bytes() for p in SHADERS.rglob("*") if p.is_file() and "libraries" not in p.relative_to(SHADERS).parts and p.suffix in {*STAGES, ".glsl", ".properties", ".lang", ".png", ".bin"}}
-    files.pop("shaders/rendering/pipeline.properties", None)  # 源流程设置已合并到加载器菜单。
-    files.update(dependencies()); files["VERSION"] = (release+"\n").encode()
-    output = ROOT / "dist" / f"Omni-{release}.zip"; archive(output, files)  # 玩家不需要工具。
-    presets = {f"{p.name}.properties": (f"# @shaderVersion {release}\n"+"\n".join(f"{k}={v}" for k,v in p.values.items())+"\n").encode("ascii") for p in profiles}  # 完整预设有当前目标版本，不走旧版迁移。
-    presets["manifest.json"] = (json.dumps({"schemaVersion":menu.SHARE_SCHEMA,"shaderVersion":release,"presets":[p.name for p in profiles]},indent=2)+"\n").encode()  # 分享格式版本只定义在配置主体。
-    presets["README.md"] = (ROOT / "presets/README.md").read_bytes()
-    preset_output = ROOT / "dist" / f"Omni-presets-{release}.zip"; archive(preset_output,presets)  # 单独分享配置。
-    sums = ROOT / "dist/SHA256SUMS.txt"  # 当前产物真实哈希。
-    sums.write_text("".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n" for p in (output,preset_output)),encoding="ascii",newline="\n")  # 包内容真实哈希。
-    return [output,preset_output,sums]  # 报告真实路径。
+    """生成游戏光影 ZIP、预设 ZIP 和校验清单，返回三个产物路径。
 
+    游戏包只按认可的资源扩展名与第三方白名单收集；开发工具、缓存和参考目录不发布。
+    预设独立携带版本标记，校验清单记录两个压缩包的真实文件摘要。
+    """
+    release_version = version()  # 两个包和文件名共用唯一版本来源。
+    _, profiles, _ = configuration()  # 玩家可分享配置仍由预设扫描器产生。
+    shader_files = {"shaders/" + path.relative_to(SHADERS).as_posix(): path.read_bytes() for path in SHADERS.rglob("*") if path.is_file() and "libraries" not in path.relative_to(SHADERS).parts and path.suffix in {*STAGES, ".glsl", ".properties", ".lang", ".png", ".bin"}}  # 只收游戏能读取的自有资源种类。
+    shader_files.pop("shaders/rendering/pipeline.properties", None)  # 源流程设置已合并到加载器菜单。
+    shader_files.update(dependencies())  # 第三方文件必须先通过许可与哈希白名单检查。
+    shader_files["VERSION"] = (release_version + "\n").encode()  # 包内版本供玩家确认实际使用版本。
+    shader_output = ROOT / "dist" / f"Omni-{release_version}.zip"  # 产物放在项目发行目录，不碰游戏实例。
+    archive(shader_output, shader_files)  # 玩家包不包含开发工具。
+    preset_files = {f"{profile.name}.properties": (f"# @shaderVersion {release_version}\n" + "\n".join(f"{name}={value}" for name, value in profile.values.items()) + "\n").encode("ascii") for profile in profiles}  # 每套完整预设标记适用版本。
+    preset_files["manifest.json"] = (json.dumps({"schemaVersion": menu.SHARE_SCHEMA, "shaderVersion": release_version, "presets": [profile.name for profile in profiles]}, indent=2) + "\n").encode()  # 分享格式版本只由配置主体定义。
+    preset_files["README.md"] = (ROOT / "presets/README.md").read_bytes()  # 保留预设使用说明。
+    preset_output = ROOT / "dist" / f"Omni-presets-{release_version}.zip"  # 配置包可独立分享。
+    archive(preset_output, preset_files)
+    sums_path = ROOT / "dist/SHA256SUMS.txt"  # 校验清单只记录这次两个正式压缩包。
+    sums_path.write_text("".join(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.name}\n" for path in (shader_output, preset_output)), encoding="ascii", newline="\n")  # 摘要从最终包字节计算。
+    return [shader_output, preset_output, sums_path]  # 命令行只报告真实生成路径。
+
+# --- 同步开发副本：目标固定在项目控制的测试实例内 ---
 def sync() -> None:
-    """只同步工具管理的独立开发包。"""
+    """把新生成的游戏包复制到项目管理的 `.dev/minecraft` 测试实例。
+
+    不查找或修改玩家真实游戏目录；安装位置固定，避免把开发包发错位置。
+    """
     destination = ROOT / ".dev/minecraft/shaderpacks/Omni-dev.zip"  # 不改玩家包。
-    destination.parent.mkdir(parents=True,exist_ok=True); shutil.copyfile(pack()[0],destination)  # 不接触真实玩家目录。
+    destination.parent.mkdir(parents=True, exist_ok=True)  # 首次使用开发实例时建立受控目录。
+    shutil.copyfile(pack()[0], destination)  # 只复制刚生成的光影包，不复制预设包或校验清单。
     print("已同步 .dev/minecraft/shaderpacks/Omni-dev.zip")
 
+# --- 发布：检查干净且同步的主分支，确认后才改版本并推送 ---
 def release(target: str, notes: Path) -> None:
-    """交互确认后升版本、测试、提交与发布；失败不改写旧标签。"""
-    def git_output(*args: str) -> str:
-        """运行一个只读或发布版本控制命令并返回标准输出。"""
-        result = subprocess.run(["git",*args],cwd=ROOT,check=True,capture_output=True,text=True,encoding="utf-8")  # 命令参数来自固定发布流程。
-        return result.stdout.rstrip("\r\n") if args[:1]==("status",) else result.stdout.strip()  # 状态前两列包含空格，不能裁掉导致路径位置错读。
-    body = notes.read_text(encoding="utf-8").strip()  # 先读说明，任何版本文件修改都在它之后。
-    if not body or re.search(r"^## ",body,re.MULTILINE):
-        raise ValueError("发布说明应为非空正文，不能含版本章节")
-    if git_output("status","--porcelain") or git_output("branch","--show-current")!="main":  # 发布不能混入待审查代码。
-        raise ValueError("发布要求干净的 main 工作区")
-    if not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev|alpha|beta|rc)\.(?:0|[1-9]\d*))?",target) or target==version(ROOT):
-        raise ValueError("必须指定一个不同的合法新版本")
-    def order(value: str) -> tuple:
-        """按语义版本比较，防止误发布降版编号。"""
-        base,_,suffix = value.partition("-")  # 正式版本高于同目标预发布。
-        stage,_,number = suffix.partition(".")  # 同阶段按后缀序号增长。
-        return (*map(int,base.split(".")),{"dev":0,"alpha":1,"beta":2,"rc":3,"":4}[stage],int(number or 0))
-    if order(target)<=order(version(ROOT)): raise ValueError("发布版本必须向前增长")  # 不覆盖已有发布序列。
-    remote = git_output("ls-remote","--heads","origin","main").split()  # 远端分支必须存在并已同步。
-    if not remote or remote[0]!=git_output("rev-parse","HEAD"): raise ValueError("发布前 main 必须已经与远端同步")  # 不把未同步代码藏进版本发布。
-    if git_output("tag","--list","v"+target):
-        raise ValueError("目标标签已存在，禁止改写")
-    if git_output("ls-remote","--tags","origin","refs/tags/v"+target): raise ValueError("远端目标标签已存在，禁止复用")  # 发布前核对远端而不是等推送失败。
-    print(git_output("log","--oneline","-10"))  # 确认前核对近期提交风格与发布起点。
-    print(git_output("diff","--stat"))  # 用户看到具体差异后才批准发布。
-    if not sys.stdin.isatty() or input(f"将测试、提交并推送 main 与 v{target}，输入 发布 {target} 确认：") != "发布 "+target:
-        raise ValueError("未明确确认发布，未修改版本或标签")  # 自动任务无法静默发布。
-    old = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")  # 保留旧记录。
-    (ROOT / "VERSION").write_text(target+"\n",encoding="utf-8")  # 先更新唯一版本。
-    first, separator, rest = old.partition("\n")  # 只插入新章节。
-    (ROOT / "CHANGELOG.md").write_text(first+f"\n\n## {target}\n\n{body}\n"+rest,encoding="utf-8")
-    generate()  # 升版后重新生成入口和菜单。
-    status = git_output("status","--porcelain").splitlines()
-    unexpected = [line for line in status if line[3:] not in ("VERSION","CHANGELOG.md")]
-    if unexpected: raise ValueError("生成或测试改变了非版本文件，停止发布："+"；".join(unexpected))  # 不让git add掩盖生成文件差异。
-    subprocess.run([sys.executable,"-m","unittest","discover","-s","tests"],cwd=ROOT,check=True)  # 检查失败保留可审查改动。
-    check()  # 检查与打包均不执行版本控制。
-    pack()
-    unexpected = [line for line in git_output("status","--porcelain").splitlines() if line[3:] not in ("VERSION","CHANGELOG.md")]
-    if unexpected: raise ValueError("检查或打包后出现非版本文件变化，停止发布："+"；".join(unexpected))  # 测试生成变化也不能被遗漏。
-    subprocess.run(["git","add","VERSION","CHANGELOG.md"],cwd=ROOT,check=True)  # 干净起点保证只提交升版本与说明。
-    subprocess.run(["git","commit","-m",f"chore(release): 准备 {target} 版本"],cwd=ROOT,check=True)
-    subprocess.run(["git","tag","-a","v"+target,"-m",body],cwd=ROOT,check=True)  # 不使用强制参数。
-    subprocess.run(["git","push","--atomic","origin","main","v"+target],cwd=ROOT,check=True)  # 只有明确授权才推送。
+    """将 `target` 和 `notes` 发布为版本提交与标签；先核对边界，再要求交互确认。
 
+    只接受干净、位于 main 且已与远端同步的工作区；本地和远端目标标签都必须不存在。
+    确认之前不改文件。确认之后按版本、说明、生成、测试、检查、打包、提交、标签、推送顺序执行。
+    中途错误会停止并留下现场供审查，不自动撤销文件或改写既有提交、标签。
+    """
+    def git_output(*args: str) -> str:
+        """运行发布流程固定的 `git` 参数并返回输出；保留状态行前导空格供路径解析。"""
+        command_result = subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True, encoding="utf-8")  # 参数由下方固定流程传入，不拼接用户命令。
+        if args[:1] == ("status",):  # 状态前两列有意义，不能像普通文字那样去掉左侧空白。
+            return command_result.stdout.rstrip("\r\n")
+        return command_result.stdout.strip()  # 其他命令只去掉输出首尾空白。
+
+    notes_body = notes.read_text(encoding="utf-8").strip()  # 先检查说明文件，确保确认发布前不改版本文件。
+    if not notes_body or re.search(r"^## ", notes_body, re.MULTILINE):  # 发行说明只收正文，标题由构建流程统一添加。
+        raise ValueError("发布说明应为非空正文，不能含版本章节")
+
+    if git_output("status", "--porcelain") or git_output("branch", "--show-current") != "main":  # 发布不能混入待审查代码或从其他分支产生。
+        raise ValueError("发布要求干净的 main 工作区")
+
+    current_version = version(ROOT)  # 所有比较从当前唯一版本文件读取。
+    if not re.fullmatch(_VERSION_PATTERN, target) or target == current_version:  # 命令参数是外部输入，先检查格式与重复。
+        raise ValueError("必须指定一个不同的合法新版本")
+
+    def version_order(value: str) -> tuple:
+        """把已检查的版本拆成可比较数字；正式版排在同编号预发布版之后。"""
+        base, _, suffix = value.partition("-")  # 主版本三段始终按数字比较。
+        stage, _, number = suffix.partition(".")  # 预发布阶段再按名称和序号排序。
+        stage_order = {"dev": 0, "alpha": 1, "beta": 2, "rc": 3, "": 4}
+        return (*map(int, base.split(".")), stage_order[stage], int(number or 0))
+
+    if version_order(target) <= version_order(current_version):  # 版本只能向前，防止重复或倒退发布。
+        raise ValueError("发布版本必须向前增长")
+
+    remote_main = git_output("ls-remote", "--heads", "origin", "main").split()  # 远端主分支必须存在且指向当前提交。
+    if not remote_main or remote_main[0] != git_output("rev-parse", "HEAD"):  # 不把尚未推送的源码藏进版本发布。
+        raise ValueError("发布前 main 必须已经与远端同步")
+    if git_output("tag", "--list", "v" + target):  # 已用过的本地标签不能被覆盖。
+        raise ValueError("目标标签已存在，禁止改写")
+    if git_output("ls-remote", "--tags", "origin", "refs/tags/v" + target):  # 服务器也要检查，不能依赖推送时才发现冲突。
+        raise ValueError("远端目标标签已存在，禁止复用")
+
+    print(git_output("log", "--oneline", "-10"))  # 用户确认前展示最近提交，核对发布起点。
+    print(git_output("diff", "--stat"))  # 同时展示当前差异统计；干净检查后通常为空。
+    confirmation = "发布 " + target  # 要求输入完整版本，避免误触发自动发布。
+    if not sys.stdin.isatty() or input(f"将测试、提交并推送 main 与 v{target}，输入 {confirmation} 确认：") != confirmation:
+        raise ValueError("未明确确认发布，未修改版本或标签")  # 自动任务无法静默发布。
+
+    changelog_path = ROOT / "CHANGELOG.md"  # 版本说明集中在既有更新记录文件。
+    old_changelog = changelog_path.read_text(encoding="utf-8")  # 读入旧内容，后续只在首个标题后插入新章节。
+    (ROOT / "VERSION").write_text(target + "\n", encoding="utf-8")  # 确认后才更新唯一版本来源。
+    first_line, _, remaining = old_changelog.partition("\n")  # 保留主标题与所有旧章节原文。
+    changelog_path.write_text(first_line + f"\n\n## {target}\n\n{notes_body}\n" + remaining, encoding="utf-8")  # 新章节只写一次，不覆盖历史记录。
+    generate()  # 新版本可能改变生成文件，先重新生成再检查工作区。
+
+    version_changes = {"VERSION", "CHANGELOG.md"}  # 发布准备只允许这两个版本文件被改动。
+    worktree_lines = git_output("status", "--porcelain").splitlines()
+    unexpected = [line for line in worktree_lines if line[3:] not in version_changes]  # 状态行前缀长度固定，保留路径原文比较。
+    if unexpected:  # 生成器或并行工作若改了其他文件，不能让 git add 掩盖变化。
+        raise ValueError("生成或测试改变了非版本文件，停止发布：" + "；".join(unexpected))
+
+    subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests"], cwd=ROOT, check=True)  # 发布必须先通过项目回归测试。
+    check()  # 全量检查与打包本身不执行版本控制。
+    pack()
+    unexpected = [line for line in git_output("status", "--porcelain").splitlines() if line[3:] not in version_changes]  # 测试或打包不得留下其他跟踪文件改动。
+    if unexpected:  # 任何非版本变化都停止，确保提交范围可预测。
+        raise ValueError("检查或打包后出现非版本文件变化，停止发布：" + "；".join(unexpected))
+
+    subprocess.run(["git", "add", "VERSION", "CHANGELOG.md"], cwd=ROOT, check=True)  # 干净起点保证暂存内容只有版本与说明。
+    subprocess.run(["git", "commit", "-m", f"chore(release): 准备 {target} 版本"], cwd=ROOT, check=True)  # 发布说明与版本组成单独提交。
+    subprocess.run(["git", "tag", "-a", "v" + target, "-m", notes_body], cwd=ROOT, check=True)  # 创建不可覆盖的注释标签。
+    subprocess.run(["git", "push", "--atomic", "origin", "main", "v" + target], cwd=ROOT, check=True)  # 分支和标签要么一起推送，要么都不推送。
+
+# --- 命令入口：先解析参数，再统一执行对应构建动作 ---
 def main() -> None:
-    """统一命令参数与错误出口。"""
+    """解析既有命令行参数并分发到公开构建函数，保持命令协议不变。"""
     parser = argparse.ArgumentParser(description="Omni 光影构建与检查")  # 明确命令才动作。
     parser.add_argument("command",choices=("generate","check","build","sync","version","notes","audit","release"))
-    parser.add_argument("--tag")  # 保留现有发行工作流的只读标签核对。
+    parser.add_argument("--tag")  # 发行工作流可在只读检查前核对标签与版本。
     parser.add_argument("--output",type=Path)
     parser.add_argument("--new-version")  # 发布必须提供新版本与对应说明。
     parser.add_argument("--notes-file",type=Path)
-    args = parser.parse_args()  # 输入先于修改。
-    if args.command!="release" and (args.new_version or args.notes_file): parser.error("--new-version 与 --notes-file 只能用于 release 命令")
-    if args.output and args.command!="notes": parser.error("--output 只能用于 notes")  # 参数错误必须先于任何生成、版本或发布动作。
-    if args.tag and args.command not in ("version","check","build"): parser.error("--tag 只能用于 version、check、build 的只读验证")
-    if args.tag: validate_tag(args.tag)
-    if args.command=="release":
-        if not args.new_version or not args.notes_file: parser.error("release 需要 --new-version 与 --notes-file")
-        release(args.new_version,args.notes_file)
+    args = parser.parse_args()  # 所有命令行输入先于文件生成或发布动作解析。
+    if args.command != "release" and (args.new_version or args.notes_file):  # 发布参数不能被其他命令误用。
+        parser.error("--new-version 与 --notes-file 只能用于 release 命令")
+    if args.output and args.command != "notes":  # 输出路径仅用于发行说明预览。
+        parser.error("--output 只能用于 notes")
+    if args.tag and args.command not in ("version", "check", "build"):  # 标签检查仅在只读命令中开放。
+        parser.error("--tag 只能用于 version、check、build 的只读验证")
+    if args.tag:  # 先核对标签，失败时不生成或打包。
+        validate_tag(args.tag)
+    if args.command == "release":  # 发布单独走有交互确认的高风险路径。
+        if not args.new_version or not args.notes_file:  # 缺少任一发布输入都不能继续。
+            parser.error("release 需要 --new-version 与 --notes-file")
+        release(args.new_version, args.notes_file)
         return
-    if args.command=="version":
+    if args.command == "version":  # 只读输出唯一版本来源。
         print(version())
         return
-    if args.command=="notes":
+    if args.command == "notes":  # 只提取当前版本说明，不触发完整构建。
         notes = release_notes(version())
-        if args.output:
-            args.output.parent.mkdir(parents=True,exist_ok=True); args.output.write_text(notes,encoding="utf-8",newline="\n")
-        else: print(notes,end="")
+        if args.output:  # 工作流可指定临时说明文件位置。
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_text(notes, encoding="utf-8", newline="\n")
+        else:  # 未指定文件时直接输出，便于终端预览。
+            print(notes, end="")
         return
-    if args.output: parser.error("--output 只能用于 notes")
-    if args.command=="audit":
+    if args.command == "audit":  # 独立审计只检查源码说明，不生成其他文件。
         audited = audit.check(ROOT)
         print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")
         return
-    if args.command=="generate":
+    if args.command == "generate":  # 生成命令不隐式执行编译或打包。
         generate()
         print("选项、入口和翻译已生成")
         return
-    if args.command=="check":
+    if args.command == "check":  # 检查命令不创建玩家交付包。
         check()
         return
-    generate()  # 构建与同步先生成实际入口与菜单。
+    generate()  # 构建与同步都先生成来源对应的真实入口与菜单。
     check()
-    if args.command=="sync": sync()
-    else:
-        for path in pack(): print(path.relative_to(ROOT))
+    if args.command == "sync":  # 开发同步只使用项目管理的测试环境。
+        sync()
+        return
+    for output_path in pack():  # build 输出全部正式交付物的项目相对路径。
+        print(output_path.relative_to(ROOT))
 
 if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8"); sys.stderr.reconfigure(encoding="utf-8")  # 中文错误跨平台可读。
-    try: main()
-    except (ValueError,OSError,subprocess.SubprocessError) as error:
-        print(f"错误：{error}",file=sys.stderr); sys.exit(1)  # 不吞掉编译、配置或发布失败。
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows 终端也用 UTF-8 输出中文步骤与路径。
+    sys.stderr.reconfigure(encoding="utf-8")  # 错误出口使用同一编码，避免原因变成乱码。
+    try:
+        main()  # 命令入口统一接住预期的构建、文件和外部进程错误。
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        print(f"错误：{error}", file=sys.stderr)
+        sys.exit(1)  # 失败返回非零状态供自动工作流判断；不隐藏原始原因。

@@ -27,7 +27,7 @@
 #include "/effects/antialiasing.glsl"
 // 体积间接光由统一效果主体提供；这里只在明确的计算能力标志下声明纹理，避免读取未写入的三维图像。
 #include "/effects/lpv.glsl"
-#if defined OMNI_COMPUTE && defined OMNI_LPV_ENABLED
+#if defined IRIS_FEATURE_COMPUTE_SHADERS && defined OMNI_LPV_ENABLED
 uniform sampler3D omniLpvTex; // 体积格只读采样，实际写入发生在计算阶段。
 #endif
 // 采样半径边界：用户选项为零或异常时回退到一个极小正值，后续除法始终安全，所有半径计算共用此值。
@@ -162,7 +162,7 @@ vec3 omniAmbient(vec3 color, vec3 view, vec3 normal, vec2 uv) {
 #ifdef OMNI_SCREEN_BOUNCE
     color += omniBounce(view,normal,uv); // 屏幕里可见的一次反弹。
 #endif
-#if defined OMNI_COMPUTE && defined OMNI_LPV_ENABLED
+#if defined IRIS_FEATURE_COMPUTE_SHADERS && defined OMNI_LPV_ENABLED
     color += omniLpvSample(omniLpvTex,omniWorld(view)) * OMNI_LPV_STRENGTH; // 只有计算路径确认存在时才叠加体积光，避免基础路径读未写入纹理。
 #else
     // 没有可靠的计算能力标志时不猜测三维纹理状态，保留上面的屏幕反弹或无 LPV 原色路径。

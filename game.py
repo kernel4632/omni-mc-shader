@@ -1,9 +1,19 @@
-"""独立游戏调试：复用已有安装的游戏库，在 .dev/minecraft 中运行测试实例。
+"""独立游戏调试实例：复用已有游戏资源，在项目开发目录运行测试。
 
-示例：.venv/Scripts/python.exe game.py configure --minecraft-dir D:/Games/.minecraft
-      --version fabric-loader-version --java D:/Java/bin/java.exe
-随后执行 .venv/Scripts/python.exe game.py launch。使用开发测试身份，禁用多人游戏。
-正常游玩和账号登录交给启动器；本工具不读取现有账号或访问令牌。
+调用位置：这是开发工具的命令行入口，供人工执行 `configure`、`launch`、
+`regression` 和 `sample`，不参与玩家启动器和正式游戏流程。
+
+可复制示例：
+    .venv/Scripts/python.exe game.py configure --minecraft-dir D:/Games/.minecraft \
+        --version fabric-loader-version --java D:/Java/bin/java.exe
+    .venv/Scripts/python.exe game.py launch
+    .venv/Scripts/python.exe game.py regression --world TestWorld --pack-format 61
+    .venv/Scripts/python.exe game.py sample --presentmon .dev/tools/PresentMon.exe \
+        --pid 1234 --seconds 30 --context .dev/performance-context.json
+
+设计原因与安全取舍：游戏本体的 `libraries` 和 `assets` 可以复用，减少下载和
+磁盘占用；存档、设置、日志、采样和报告必须留在 `.dev`，避免碰到玩家数据。
+启动使用开发身份并关闭多人游戏，但不读取玩家账号、登录凭据或访问令牌。
 """
 
 from __future__ import annotations
@@ -25,10 +35,15 @@ import build  # 游戏启动前使用同一构建检查。
 ROOT = Path(__file__).resolve().parent  # 不依赖终端工作目录。
 SETTINGS = ROOT / ".dev/game.local.json"  # 个人路径不提交。
 
+# --- 检查开发目录路径 ---
 def development_path(path: Path) -> Path:
-    """确认自有输出留在开发目录，并拒绝路径中任何链接或目录联接。"""
+    """确认开发输出留在 `.dev`，并拒绝符号链接与目录联接逃逸。
+
+    开发工具只允许写入本项目的 `.dev`，因为这里的文件可以随时删除，不会
+    污染玩家真实实例。路径在写入前检查，外部传入的路径因此只在边界处理一次。
+    """
     root_absolute = Path(os.path.abspath(os.fspath(ROOT)))  # 词法比较统一短名和长名。
-    base = root_absolute/".dev"
+    base = root_absolute/".dev"  # 所有工具自有输出都必须在此目录内。
     absolute = Path(os.path.abspath(os.fspath(path)))
     if not absolute.is_relative_to(base):
         raise ValueError("输出必须留在本项目 .dev 内")  # 目录链接不能把输出转到玩家目录。
@@ -49,8 +64,13 @@ def development_path(path: Path) -> Path:
     return absolute
 
 
+# --- 保存本机配置 ---
 def configure(directory: Path, version: str, java: Path, isolated_java: bool = False) -> None:
-    """检查已有安装与 Java，将个人路径只保存在忽略的本机配置。"""
+    """检查已有游戏安装和 Java，并保存开发实例配置。
+
+    配置只记录用户明确指定的资源路径，不读取玩家账号或令牌。`isolated_java`
+    会把运行时复制到 `.dev/java`，便于辨认进程；代价是占用额外磁盘空间。
+    """
     directory, java = directory.resolve(), java.resolve()  # 配置边界固定资源位置。
     if not version or Path(version).name != version or "/" in version or "\\" in version:
         raise ValueError("游戏版本必须是 versions/ 中的单个目录名")
@@ -62,22 +82,29 @@ def configure(directory: Path, version: str, java: Path, isolated_java: bool = F
         runtime = java.parent.parent  # 独立进程需要完整运行时。
         if not (runtime / "release").is_file() or not (runtime / "lib").is_dir():
             raise ValueError("独立复制需要完整 Java runtime 的 bin/java.exe")
-        destination = ROOT / ".dev/java"  # 不修改系统安装。
+        destination = development_path(ROOT / ".dev/java")  # 不修改系统安装，也不允许链接改写目标。
         if not destination.exists():  # 已准备的运行时不重复覆盖。
             shutil.copytree(runtime, destination)  # 只复制首次配置的运行时。
-        java = destination / "bin/omni-java.exe"  # 独立名称用于进程与采样辨认。
+        java = development_path(destination / "bin/omni-java.exe")  # 独立名称用于进程与采样辨认。
         shutil.copyfile(destination / "bin/java.exe", java)  # 名称区分测试与玩家进程。
+    development_path(SETTINGS)  # 写配置前确认 `.dev` 没有被链接带出项目。
     SETTINGS.parent.mkdir(parents=True, exist_ok=True)  # 本机配置仅写开发目录。
     SETTINGS.write_text(json.dumps({"minecraftDirectory": str(directory), "version": version,
-                                   "java": str(java)}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+                                    "java": str(java)}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print("本机启动配置已保存到 .dev/game.local.json")
 
 
+# --- 启动开发实例 ---
 def launch(capture: bool) -> None:
-    """在独立游戏目录启动开发实例，将日志和捕获都留在项目内。"""
+    """启动独立开发实例，并把日志和捕获留在项目开发目录。
+
+    游戏目录只使用 `.dev/minecraft`，资源目录可以复用已有安装以减少复制。
+    启动使用开发测试身份，不读取玩家账号；进程记录、日志和捕获也不能写入玩家目录。
+    """
     from minecraft_launcher_lib.command import get_minecraft_command  # 成熟依赖解析启动参数。
     from minecraft_launcher_lib.utils import generate_test_options  # 不读取玩家账号。
 
+    development_path(SETTINGS)  # 配置文件本身也必须留在开发目录。
     if not SETTINGS.exists():
         raise ValueError("请先运行 game.py configure 配置已有游戏安装")
     data = json.loads(SETTINGS.read_text(encoding="utf-8"))  # 不读取任何账号或访问令牌。
@@ -86,7 +113,7 @@ def launch(capture: bool) -> None:
     tools = json.loads((ROOT / "dev-tools.lock.json").read_text(encoding="utf-8"))  # 运行版本必须匹配调试环境。
     if installed.get("inheritsFrom", installed.get("id")) != tools["minecraft"]:
         raise ValueError("现有游戏版本与锁定调试模组不一致，请配置对应的 Fabric 游戏版本")
-    game = ROOT / ".dev/minecraft"  # 存档与设置完全独立。
+    game = development_path(ROOT / ".dev/minecraft")  # 存档与设置完全独立，不能被链接带出项目。
     game.mkdir(parents=True, exist_ok=True)  # 游戏启动目录与玩家实例隔离。
     build.generate()  # 启动前生成所有真实入口。
     build.check()  # 无效代码不能同步到开发实例。
@@ -108,56 +135,71 @@ def launch(capture: bool) -> None:
         matches = sorted((ROOT / ".dev/tools/renderdoc").rglob("renderdoccmd.exe"))  # 调用项目内锁定工具。
         if not matches:
             raise ValueError("请先运行 python dev.py setup --graphics")
-        (ROOT / ".dev/captures").mkdir(parents=True, exist_ok=True)
+        capture_folder = development_path(ROOT / ".dev/captures")
+        capture_folder.mkdir(parents=True, exist_ok=True)
         command = [str(matches[0]), "capture", "-d", str(game), "-c",
-                   str(ROOT / ".dev/captures/Omni"), *command]
-    log = ROOT / ".dev/game-launch.log"  # 捕获游戏实际输出。
+                   str(development_path(capture_folder / "Omni")), *command]
+    log = development_path(ROOT / ".dev/game-launch.log")  # 捕获游戏实际输出。
+    record = development_path(ROOT/".dev/game-process.json")  # 启动前确认采样身份记录可安全写入。
     with log.open("wb") as output:  # 游戏原始日志可追溯启动失败。
         process = subprocess.Popen(command, cwd=game, stdout=output, stderr=subprocess.STDOUT)
-    record = development_path(ROOT/".dev/game-process.json")  # 采样器只能接受工具自己启动的进程。
     record.write_text(json.dumps({"pid":process.pid,"java":str(Path(data["java"]).resolve()),"gameDirectory":str(game.resolve())})+"\n",encoding="utf-8")  # 后续仍核对实际进程，防止进程号复用。
     print(f"已启动专用开发实例，进程 {process.pid}；日志：.dev/game-launch.log")
 
 
+# --- 准备版本描述 ---
 def prepare_launcher(directory: Path, version: str) -> Path:
-    """将已有版本描述规范化到项目内，兼容启动器生成的 UTF-8 BOM。"""
-    launcher = ROOT / ".dev/launcher"  # 描述规范化只在自有目录进行。
-    pending, copied = [version], set()  # 显式跟踪继承链。
-    while pending:
-        current = pending.pop()  # 逐个读取父版本。
-        if current in copied or Path(current).name != current or "/" in current or "\\" in current:
+    """把已有版本描述复制到开发目录，并展开真实继承关系。
+
+    启动器生成的 JSON 可能带 UTF-8 BOM（文件开头的兼容标记），这里统一
+    读取后重写为项目自己的描述。只复制版本描述和游戏本体，不复制存档、设置、账号或令牌。
+    """
+    launcher = development_path(ROOT / ".dev/launcher")  # 描述规范化只在自有目录进行。
+    versions_to_copy, copied_versions = [version], set()  # 显式跟踪继承链。
+    while versions_to_copy:
+        current = versions_to_copy.pop()  # 逐个读取父版本。
+        if current in copied_versions or Path(current).name != current or "/" in current or "\\" in current:
             raise ValueError("游戏版本描述包含循环或越界引用")
-        copied.add(current)  # 相同版本再次出现即拒绝循环。
+        copied_versions.add(current)  # 相同版本再次出现即拒绝循环。
         source = directory / "versions" / current  # 只读取用户选择安装的继承链。
         data = json.loads((source / (current + ".json")).read_text(encoding="utf-8-sig"))
         if "inheritsFrom" in data and "jar" not in data:
             data["jar"] = data["inheritsFrom"] # 模组版本复用基础版本的游戏本体。
-        destination = launcher / "versions" / current  # 复制描述而非原实例设置。
+        destination = development_path(launcher / "versions" / current)  # 复制描述而非原实例设置。
         destination.mkdir(parents=True, exist_ok=True)  # 描述复制留在开发目录。
-        (destination / (current + ".json")).write_text(json.dumps(data), encoding="utf-8")
+        description = development_path(destination / (current + ".json"))  # 版本描述也拒绝已有链接。
+        description.write_text(json.dumps(data), encoding="utf-8")
         jar = source / (current + ".jar")  # 仅复制实际存在的版本本体。
         if jar.exists():
-            target = destination / jar.name  # 自有描述目录中的本体路径。
+            target = development_path(destination / jar.name)  # 自有描述目录中的本体路径。
             if not target.exists() or target.stat().st_size != jar.stat().st_size:
                 shutil.copyfile(jar, target)  # 游戏本体仍来自用户已有合法安装。
         if "inheritsFrom" in data:
-            pending.append(data["inheritsFrom"])  # 继续真实继承关系。
+            versions_to_copy.append(data["inheritsFrom"])  # 继续真实继承关系。
     return launcher
 
 
+# --- 生成回归场景 ---
 def regression(world: str, pack_format: int) -> Path:
-    """在专用测试存档中生成可执行回归场景，不启动或操作游戏。"""
+    """在专用测试世界生成可执行场景，并写出未运行的回归报告。
+
+    `world` 只允许指向 `.dev/minecraft/saves` 下已有的专用世界；命令只准备
+    测试材料，不会误建目录或操作玩家存档。数据包、函数、报告和每个写入文件
+    都在写入前检查路径链接，安全优先于替用户修复错误目录。
+    """
     if not re_world(world) or type(pack_format) is not int or pack_format<1:
         raise ValueError("需要单个测试世界名与实际数据包格式编号")  # 玩家输入先检查，不建立任何目录。
     folder = development_path(ROOT / ".dev/minecraft/saves" / world)  # 世界目录不能通过链接指向玩家存档。
     if not (folder / "level.dat").is_file(): raise ValueError("请先在专用实例创建测试世界，不能指向真实玩家存档")  # 不创建伪造世界。
     pack = development_path(folder / "datapacks/Omni-regression")  # 数据包目录也必须留在自有实例。
     functions = development_path(pack / "data/omni/function")  # 函数目录链接不能逃逸。
+    pack_file = development_path(pack / "pack.mcmeta")  # 数据包描述不能写入链接目标。
+    setup_file = development_path(functions / "setup.mcfunction")  # 初始化函数必须属于本次测试包。
     for member in pack.rglob("*"):
         development_path(member)  # 任何现有成员链接在第一次写入前统一拒绝。
     destination = development_path(ROOT / ".dev/reports/regression.json")  # 报告路径也在所有写入之前检查。
     functions.mkdir(parents=True,exist_ok=True)  # 不碰其他数据包。
-    (pack / "pack.mcmeta").write_text(json.dumps({"pack":{"pack_format":pack_format,"description":"Omni 专用场景回归"}},ensure_ascii=False)+"\n",encoding="utf-8")
+    pack_file.write_text(json.dumps({"pack":{"pack_format":pack_format,"description":"Omni 专用场景回归"}},ensure_ascii=False)+"\n",encoding="utf-8")
     setup = [
         "execute in minecraft:overworld run forceload add -16 -16 16 16",  # 确保专用区域在命令执行时已加载。
         "execute in minecraft:overworld run fill -16 79 -16 16 79 16 minecraft:stone",  # 专用测试平台。
@@ -180,7 +222,7 @@ def regression(world: str, pack_format: int) -> Path:
         "gamerule minecraft:advance_weather false",  # 当前版本规则注册表的天气冻结名称。
         "gamemode creative @s",  # 防止固定测试位置导致坠落或窒息。
     ]
-    (functions / "setup.mcfunction").write_text("\n".join(setup)+"\n",encoding="utf-8")  # 只有玩家执行函数后才改变专用世界。
+    setup_file.write_text("\n".join(setup)+"\n",encoding="utf-8")  # 只有玩家执行函数后才改变专用世界。
     scenes = {
         "day":["time set noon","weather clear","execute in minecraft:overworld run tp @s 12 83 12 135 20"],  # 日间同场景对照。
         "night":["time set midnight","weather clear","execute in minecraft:overworld run tp @s 12 83 12 135 20"],  # 月光与星空。
@@ -190,12 +232,15 @@ def regression(world: str, pack_format: int) -> Path:
         "nether":["execute in minecraft:the_nether run tp @s 0 100 0 0 0"],  # 下界环境与历史重置。
         "end":["execute in minecraft:the_end run tp @s 0 90 0 0 0"],  # 末地环境与历史重置。
     }
-    for name,commands in scenes.items(): (functions / (name+".mcfunction")).write_text("\n".join(commands)+"\n",encoding="utf-8")  # 不自动传送玩家。
+    for name,commands in scenes.items():
+        scene_file = development_path(functions / (name+".mcfunction"))  # 每个场景文件都单独拒绝链接逃逸。
+        scene_file.write_text("\n".join(commands)+"\n",encoding="utf-8")  # 不自动传送玩家。
     report = {"shaderVersion":build.version(),"world":world,"scenes":{n:{"status":"未运行","command":"/function omni:"+n} for n in scenes},"manualChecks":["手持物","方块破坏","透明粒子","重载","关闭再开启","传送","切维度","窗口缩放"],"scope":"只生成场景命令，未游戏验证"}
     destination.parent.mkdir(parents=True,exist_ok=True)  # 全部边界已经检查，再创建报告目录。
     destination.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")  # 不把生成脚本当验证通过。
     return pack
 
+# --- 检查世界名 ---
 def re_world(value: str) -> bool:
     """检查世界名，拒绝路径、符号链接逃逸和特殊目录。"""
     if not isinstance(value,str) or value!=value.strip() or not value or value in (".",".."):
@@ -210,14 +255,24 @@ def re_world(value: str) -> bool:
         return False  # 链接逃逸保留为无效用户输入。
     return True
 
+# --- 检查采样上下文 ---
 def performance_context(context: dict) -> None:
-    """在捕获之前检查设备与固定场景信息，不产生外部采样副作用。"""
+    """检查性能采样的设备、场景和软件上下文。
+
+    上下文只是解释帧时间的说明，不是账号信息，也不需要读取玩家配置。先
+    要求七个字段完整且非空，再启动采样器，避免生成无法比较的报告。
+    """
     required = {"device","driver","scene","resolution","preset","minecraft","iris"}  # 这些字段是比较两个样本的最小依据。
     if not isinstance(context,dict) or set(context)!=required or any(not isinstance(v,str) or not v.strip() for v in context.values()):
         raise ValueError("性能上下文必须填写设备、驱动、场景、分辨率、预设、游戏与加载器")
 
+# --- 拆分进程命令行 ---
 def command_arguments(command_line: str) -> list[str]:
-    """按Windows启动参数规则拆分命令行，拒绝未闭合或粘连引号。"""
+    """按 Windows 启动参数规则拆分实际命令行，并拒绝歧义引号。
+
+    结果只用于确认已启动进程的身份；严格拒绝异常引号，避免把另一个进程
+    的命令行误认成 `Omni` 开发实例。
+    """
     if not isinstance(command_line,str): raise ValueError("实际进程没有可读的命令行")
     result, token = [], []  # 保存已经拆出的参数和当前参数。
     quoted = False  # 跟踪当前是否处于带引号的参数。
@@ -238,8 +293,9 @@ def command_arguments(command_line: str) -> list[str]:
     if started: result.append("".join(token))
     return result
 
+# --- 读取游戏目录参数 ---
 def game_directory_argument(command_line: str) -> str:
-    """从实际命令行取出唯一的--gameDir值，支持带引号和无空格参数。"""
+    """从实际命令行取出唯一的 `--gameDir`，支持引号和无空格参数。"""
     arguments = command_arguments(command_line)  # 先完成完整命令行边界检查。
     values = []  # 同名参数超过一个就拒绝身份判断。
     for index, argument in enumerate(arguments):
@@ -251,8 +307,9 @@ def game_directory_argument(command_line: str) -> str:
     if len(values)!=1 or not values[0]: raise ValueError("实际进程命令的游戏目录不唯一")
     return values[0]
 
+# --- 统一路径身份 ---
 def normalized_path(path: str | Path) -> Path:
-    """统一绝对路径、真实路径和Windows大小写，兼容短路径与长路径。"""
+    """统一绝对路径、真实路径和 Windows 大小写，便于比较目录身份。"""
     return Path(os.path.normcase(os.path.realpath(os.path.abspath(os.fspath(path)))))
 
 def same_existing_directory(path: str | Path, expected: Path) -> bool:
@@ -263,8 +320,13 @@ def same_existing_directory(path: str | Path, expected: Path) -> bool:
     development_real = normalized_path(ROOT/".dev")  # 身份比较仍限制在项目开发区。
     return candidate_real==expected_real and candidate_real.is_relative_to(development_real)
 
+# --- 核对开发进程 ---
 def development_process(pid: int) -> None:
-    """核对工具启动记录与当前实际进程，拒绝任意进程号与号复用。"""
+    """核对工具记录、进程身份和实际游戏目录，拒绝进程号复用。
+
+    采样只允许作用于本工具记录的 Java 进程。这里同时比对进程号、Java 可执行
+    文件和 `--gameDir`，不读取玩家账号，因为进程身份只需要运行参数。
+    """
     record = json.loads(development_path(ROOT/".dev/game-process.json").read_text(encoding="utf-8"))  # 只有工具自己启动的开发实例可采样。
     if not isinstance(record,dict) or record.get("pid")!=pid or not isinstance(record.get("java"),str) or not isinstance(record.get("gameDirectory"),str):
         raise ValueError("进程号不属于记录的 Omni 开发实例")
@@ -280,8 +342,13 @@ def development_process(pid: int) -> None:
     if not same_existing_directory(actual_directory,expected_directory):
         raise ValueError("实际进程命令没有匹配的开发游戏目录")
 
+# --- 汇总帧采样 ---
 def frame_report(source: Path, pid: int, context: dict) -> dict:
-    """汇总真实采样，拒绝混进其他进程、交换链与无效数值。"""
+    """汇总真实帧间隔采样，拒绝其他进程、多个交换链和无效数值。
+
+    这里记录的是画面呈现间隔，包含等待时间，不把它冒充成单个光影效果的
+    显卡耗时；上下文保留设备和场景，方便以后进行同条件比较。
+    """
     performance_context(context)  # 文件汇总的外部入口同样要求完整测量信息。
     frames, chains = [],set()  # 同一交换链才能比较帧间隔。
     with source.open(encoding="utf-8-sig",newline="") as stream:
@@ -298,8 +365,13 @@ def frame_report(source: Path, pid: int, context: dict) -> dict:
     result = {"shaderVersion":build.version(),"context":context,"processId":pid,"samples":len(frames),"meanFrameMs":statistics.fmean(frames),"p99FrameMs":ordered[math.ceil(len(ordered)*0.99)-1],"averageFps":1000.0/statistics.fmean(frames),"scope":"呈现帧间隔，包含处理器等待，不等同于单效果显卡耗时"}
     return result  # 原始样本由调用者保留。
 
+# --- 执行性能采样 ---
 def sample(binary: Path, pid: int, seconds: int, context: Path) -> Path:
-    """调用官方采样器捕获专用游戏进程，固定写入开发目录。"""
+    """调用 PresentMon 捕获专用游戏进程，并固定写入开发目录。
+
+    采样只读取用户提供的上下文文件和已核对的游戏进程，不读取玩家账号或
+    登录数据。原始 CSV 不覆盖旧证据，报告由真实采样生成，避免手工数字看似性能结论。
+    """
     data = json.loads(context.read_text(encoding="utf-8"))  # 性能上下文先于工具与进程边界，错误输入不产生外部动作。
     performance_context(data)  # 无效上下文必须在进程检查与采样之前失败。
     binary = binary.resolve()
@@ -318,8 +390,13 @@ def sample(binary: Path, pid: int, seconds: int, context: Path) -> Path:
     destination.write_text(json.dumps(report,ensure_ascii=False,indent=2)+"\n",encoding="utf-8")  # 只有真实样本能生成结论。
     return destination
 
+# --- 命令行入口 ---
 def main() -> None:
-    """解析配置与启动参数，统一报告环境错误。"""
+    """解析四个公开命令，并把环境错误交给统一入口报告。
+
+    参数先由 `argparse` 检查，具体命令才执行对应动作；不提供命令时不会启动
+    游戏，也不会启动采样器。
+    """
     parser = argparse.ArgumentParser(description="Omni 独立 Minecraft 调试")
     commands = parser.add_subparsers(dest="command", required=True)  # 不给命令时不会启动游戏。
     config = commands.add_parser("configure")  # 本机安装只保存受控路径。

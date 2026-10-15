@@ -59,4 +59,4 @@ class ComputeTests(unittest.TestCase):
         self.assertEqual(source.count("memoryBarrierImage();"),3)  # 注入、正向传播、反向传播各有一次。
         self.assertEqual(source.count("barrier();"),3)  # 每个图像屏障后紧跟工作组同步。
         ambient = (build.SHADERS/"effects/ambient.glsl").read_text(encoding="utf-8")  # 片元路径的能力边界。
-        self.assertIn("defined OMNI_COMPUTE && defined OMNI_LPV_ENABLED",ambient)  # 基础路径不猜测未绑定的三维纹理。
+        self.assertIn("defined IRIS_FEATURE_COMPUTE_SHADERS && defined OMNI_LPV_ENABLED",ambient)  # 片元只在加载器声明计算能力时读取三维纹理。
