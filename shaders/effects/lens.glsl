@@ -1,5 +1,6 @@
-// 镜头：统一处理色差、景深、运动模糊和暗角；调用位置是 rendering/final.glsl。
-// 调用示例：omniLens(scene, texcoord)。
+// 镜头：统一处理色差、景深、运动模糊、耀斑和暗角；无效输入时保守回退为清晰原色。
+// 调用位置：rendering/final.glsl 在线性空间里叠加镜头效果。
+// 可复制示例：`scene = omniLens(scene, texcoord) + omniBloom(texcoord);`
 #ifndef OMNI_LENS
 #define OMNI_LENS
 // @effect {"label":{"zh_cn":"镜头","en_us":"Lens"}}
@@ -18,6 +19,10 @@
 // 时间重投影、深度和镜头颜色来自统一的屏幕协议。
 #include "/effects/antialiasing.glsl"
 
+// 屏幕坐标转成合法像素编号，取样都落在画面内。
+ivec2 omniLensPixel(vec2 uv) {
+    return clamp(ivec2(uv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 边界夹紧，避免越界读取元数据。
+}
 // 读取一个镜头颜色样本：色差始终先于景深和运动模糊。
 vec3 omniLensSample(vec2 uv) {
     vec3 color = texture(colortex0,uv).rgb; // 当前样本保持线性颜色。
@@ -41,7 +46,7 @@ float omniApertureRadius(float angle) {
 }
 // 读取一个景深样本：先拒绝手和无效透明像素，再对有效样本做散焦。
 vec3 omniFocusSample(vec2 uv) {
-    ivec2 pixel = clamp(ivec2(uv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 所有类别读取最近元数据。
+    ivec2 pixel = omniLensPixel(uv); // 所有类别读取最近元数据。
     vec4 geometry = texelFetch(colortex1,pixel,0); // 精确读取手和表面类别。
     vec4 surface = texelFetch(colortex7,pixel,0); // 精确读取几何有效标记。
     vec3 color = omniLensSample(uv); // 即使景深关闭也保留统一色差顺序。
@@ -55,12 +60,13 @@ vec3 omniFocusSample(vec2 uv) {
     if (centerGeometry.a==2.0) focus = length(omniView(vec2(0.5),texture(depthtex2,vec2(0.5)).r)); // 手挡住中心时使用手之前深度。
     float distance = length(omniSceneView(uv,false)); // 当前表面真实距离。
     float radius = min(abs(distance-focus)/max(distance,0.1)*8.0,8.0); // 弥散范围保持有限。
+    if (isnan(radius)) return color; // 深度重建异常时保留清晰原色。
     vec3 sum = color; float weight = 1.0; // 当前样本先参与平均。
     for (int i=0;i<8;i++) {
         float angle = float(i)*2.399963; // 散焦样本角度。
         float shaped = radius*omniApertureRadius(angle); // 光圈形状调制样本半径。
         vec2 sampleUv = clamp(uv+vec2(cos(angle),sin(angle))*shaped/vec2(viewWidth,viewHeight),0.0,1.0); // 生成屏幕内样本。
-        ivec2 samplePixel = clamp(ivec2(sampleUv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 样本元数据使用最近像素。
+        ivec2 samplePixel = omniLensPixel(sampleUv); // 样本元数据使用最近像素。
         if (texelFetch(colortex1,samplePixel,0).a==2.0 || texelFetch(colortex7,samplePixel,0).a<0.5 || length(omniSceneView(sampleUv,false))<distance*0.75) continue; // 手、覆盖层和前景遮挡不泄漏。
         sum += omniLensSample(sampleUv); weight += 1.0; // 色差和景深顺序保持一致。
     }
@@ -73,7 +79,7 @@ vec3 omniMotionBlur(vec3 color, vec2 uv) {
 #ifndef OMNI_MOTION_BLUR
     return color; // 关闭运动模糊时没有深度、历史或矩阵读取。
 #else
-    ivec2 pixel = clamp(ivec2(uv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 当前元数据精确读取。
+    ivec2 pixel = omniLensPixel(uv); // 当前元数据精确读取。
     if (texelFetch(colortex1,pixel,0).a==2.0 || texelFetch(colortex7,pixel,0).a<0.5 || texelFetch(colortex0,pixel,0).a<0.5) return color; // 手、覆盖层和无效历史保持清晰。
     if (omniSkyPixel(uv)) return color; // 天空没有可追踪表面。
     if (length(cameraPosition-previousCameraPosition)>=8.0) return color; // 传送或重载帧拒绝历史位移。
@@ -84,7 +90,7 @@ vec3 omniMotionBlur(vec3 color, vec2 uv) {
 #ifdef DISTANT_HORIZONS
     if (omniDistantPixel(uv,false)) projected = dhPreviousProjection*vec4(previousView,1.0); // DH表面使用独立历史投影。
 #endif
-    if (projected.w<=0.0) return color; // 在除法前拒绝相机后方投影。
+    if (projected.w<=0.0 || any(isnan(projected))) return color; // 除法前拒绝相机后方与非有限投影。
     vec2 previousUnjittered = projected.xy/projected.w*0.5+0.5; // AA0与AA1始终使用未抖动的上一帧投影。
     vec2 previousUv = previousUnjittered; // 最终历史坐标默认等于未抖动位置。
     vec2 currentUnjittered = uv; // 当前坐标默认保持原位置。
@@ -97,7 +103,7 @@ vec3 omniMotionBlur(vec3 color, vec2 uv) {
     vec3 sum = color; float weight = 1.0; // 当前像素先进入快门平均。
     for (int i=1;i<6;i++) {
         vec2 sampleUv = clamp(uv-velocity*float(i)/6.0,0.0,1.0); // 沿相机轨迹取样。
-        ivec2 samplePixel = clamp(ivec2(sampleUv*vec2(viewWidth,viewHeight)),ivec2(0),ivec2(viewWidth-1.0,viewHeight-1.0)); // 采样类别精确读取。
+        ivec2 samplePixel = omniLensPixel(sampleUv); // 采样类别精确读取。
         if (texelFetch(colortex1,samplePixel,0).a==2.0 || texelFetch(colortex7,samplePixel,0).a<0.5) continue; // 手和覆盖层不进入快门。
         sum += omniFocusSample(sampleUv); weight += 1.0; // 每个样本保留景深与色差顺序。
     }
@@ -110,6 +116,7 @@ bool omniSunScreen(out vec2 sunUv) {
     vec3 sunView = omniNormalize(sunPosition); // 加载器提供的视空间太阳方向。
     if (sunView.z>=0.0) return false; // 太阳在相机后方不产生耀斑。
     vec4 clip = gbufferProjection*vec4(sunView,0.0); // 方向投影到裁剪空间。
+    if (clip.w<=0.0) return false; // 齐次投影非正时拒绝，避免除零翻转。
     sunUv = clip.xy/clip.w*0.5+0.5; // 归一化到屏幕坐标。
     return all(greaterThanEqual(sunUv,vec2(0))) && all(lessThanEqual(sunUv,vec2(1))); // 只保留屏幕内太阳。
 }
@@ -126,8 +133,8 @@ vec3 omniLensFlare(vec2 uv) {
     vec3 flare = vec3(0.0); // 累加鬼影与光环。
     for (int i=1;i<=4;i++) {
         vec2 ghostUv = 0.5-axis*float(i)*0.6; // 沿中心反向排列的鬼影位置。
-        float d = length((uv-ghostUv)*aspect); // 到鬼影中心的距离。
-        flare += exp(-d*d*80.0)*vec3(0.6,0.75,1.0)/float(i+1); // 冷色渐弱的圆形鬼影。
+        float distance = length((uv-ghostUv)*aspect); // 到鬼影中心的距离。
+        flare += exp(-distance*distance*80.0)*vec3(0.6,0.75,1.0)/float(i+1); // 冷色渐弱的圆形鬼影。
     }
     float halo = exp(-pow(length((uv-sunUv)*aspect),2.0)*6.0); // 太阳近旁的柔光环。
     flare += halo*vec3(1.0,0.86,0.62); // 暖色主耀光。

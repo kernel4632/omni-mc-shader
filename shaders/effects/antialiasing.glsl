@@ -1,4 +1,7 @@
-// 抗锯齿：几何抖动与时间合成共用；示例 omniTaa(color, uv, metadata)。
+// 抗锯齿：提供本帧几何抖动、快速边缘平滑与相机重投影的时间合成，是各绘制与效果阶段共用的独立能力。
+// 调用位置：由 effects/color.glsl 等效果与绘制文件显式 #include；rendering/temporal.glsl 调用 omniTaa 完成时间合成。
+// 可复制示例：`vec2 offset = omniJitter(frame); vec3 smoothed = omniFxaa(uv); vec3 out = omniTaa(color, uv, state);`
+// 降级约定：历史无效、首帧、重载、切维度、传送、分辨率变化、齐次除零或数值越界时，一律保守回退到当前帧颜色。
 #ifndef OMNI_ANTIALIASING
 #define OMNI_ANTIALIASING
 // @effect {"label":{"zh_cn":"抗锯齿","en_us":"Antialiasing"}}
@@ -9,7 +12,8 @@
 // @option {"label":{"zh_cn":"时序噪声重建","en_us":"Temporal denoise"},"description":{"zh_cn":"每帧旋转屏幕噪声相位，配合时间抗锯齿重建去噪。","en_us":"Rotates screen noise each frame so TAA reconstructs a denoised result."}}
 #define OMNI_TEMPORAL_DENOISE 1 // [0 1]
 vec2 omniJitter(int frame) {
-    int i = frame % 8; // 八帧固定低差异序列。
+    int i = frame % 8; // 八帧固定低差异序列；GLSL 对负数取模结果未定义，需要回绕。
+    if (i < 0) i += 8; // 帧号为负（首帧或重载）时回绕到合法下标，避免越界读取。
     const vec2 samples[8] = vec2[8](vec2(0.5,0.3333),vec2(0.25,0.6667),vec2(0.75,0.1111),vec2(0.125,0.4444),vec2(0.625,0.7778),vec2(0.375,0.2222),vec2(0.875,0.5556),vec2(0.0625,0.8889));
     return samples[i]-0.5; // 返回以像素为单位的中心偏移。
 }
@@ -28,7 +32,10 @@ float omniDimension() {
 bool omniHistoryValid() {
     vec4 size = texelFetch(colortex5,ivec2(0,0),0); // 固定位置保存尺寸和场景信息。
     vec4 camera = texelFetch(colortex5,ivec2(1,0),0); // 上一帧真实相机位置。
-    return size.x==viewWidth && size.y==viewHeight && size.z==omniDimension() && size.w==float(frameCounter-1) && camera.w==size.w && length(camera.xyz-cameraPosition)<8.0; // 拒绝缩放、切维度、重载、断帧与传送。
+    if (size.x!=viewWidth || size.y!=viewHeight) return false; // 分辨率变化后历史不再对齐。
+    if (size.z!=omniDimension()) return false; // 切维度后历史属于另一场景。
+    if (size.w!=float(frameCounter-1) || camera.w!=size.w) return false; // 重载或断帧后帧号不连续。
+    return length(camera.xyz-cameraPosition)<8.0; // 传送距离过远时拒绝上一帧世界位置。
 }
 // 时序噪声：每帧用黄金比例平移屏幕噪声，时间抗锯齿可重建去噪。
 float omniTemporalNoise(vec2 pixel) {
@@ -37,8 +44,10 @@ float omniTemporalNoise(vec2 pixel) {
 vec3 omniFxaa(vec2 uv) {
     vec2 pixel = 1.0/vec2(viewWidth,viewHeight); // 使用当前分辨率。
     vec3 c = texture(colortex6,uv).rgb; // 中心线性颜色。
-    vec3 n = texture(colortex6,clamp(uv+vec2(0,pixel.y),0.0,1.0)).rgb, s = texture(colortex6,clamp(uv-vec2(0,pixel.y),0.0,1.0)).rgb; // 上下像素。
-    vec3 e = texture(colortex6,clamp(uv+vec2(pixel.x,0),0.0,1.0)).rgb, w = texture(colortex6,clamp(uv-vec2(pixel.x,0),0.0,1.0)).rgb; // 左右像素。
+    vec3 n = texture(colortex6,clamp(uv+vec2(0,pixel.y),0.0,1.0)).rgb; // 上方像素。
+    vec3 s = texture(colortex6,clamp(uv-vec2(0,pixel.y),0.0,1.0)).rgb; // 下方像素。
+    vec3 e = texture(colortex6,clamp(uv+vec2(pixel.x,0),0.0,1.0)).rgb; // 右方像素。
+    vec3 w = texture(colortex6,clamp(uv-vec2(pixel.x,0),0.0,1.0)).rgb; // 左方像素。
     float center = omniLuminance(c); // 比较边缘亮度范围。
     float minimum = min(center,min(min(omniLuminance(n),omniLuminance(s)),min(omniLuminance(e),omniLuminance(w))));
     float maximum = max(center,max(max(omniLuminance(n),omniLuminance(s)),max(omniLuminance(e),omniLuminance(w))));
@@ -47,7 +56,8 @@ vec3 omniFxaa(vec2 uv) {
     float ne = omniLuminance(texture(colortex6,clamp(uv+pixel,0.0,1.0)).rgb); // 东北角亮度。
     float sw = omniLuminance(texture(colortex6,clamp(uv-pixel,0.0,1.0)).rgb); // 西南角亮度。
     float se = omniLuminance(texture(colortex6,clamp(uv+vec2(pixel.x,-pixel.y),0.0,1.0)).rgb); // 东南角亮度。
-    minimum = min(minimum,min(min(nw,ne),min(sw,se))); maximum = max(maximum,max(max(nw,ne),max(sw,se))); // 过滤结果须保留局部亮度范围。
+    minimum = min(minimum,min(min(nw,ne),min(sw,se))); // 过滤结果须保留局部亮度下限。
+    maximum = max(maximum,max(max(nw,ne),max(sw,se))); // 过滤结果须保留局部亮度上限。
     vec2 direction = vec2(-((nw+ne)-(sw+se)),(nw+sw)-(ne+se)); // 沿局部边缘方向搜索。
     float reduce = max((nw+ne+sw+se)*0.03125,0.0078125); // 低对比区域避免方向放大。
     direction = clamp(direction/(min(abs(direction.x),abs(direction.y))+reduce),-8.0,8.0)*pixel; // 搜索最多八像素。
@@ -79,11 +89,15 @@ vec3 omniTaa(vec3 color, vec2 uv, out vec4 metadata) {
     if (old.b!=float(frameCounter-1) || old.a!=omniDimension() || abs(old.r-expected)>max(0.15,expected*0.015)) return color; // 遮挡变化拒绝历史。
     vec3 minimum = color, maximum = color; // 历史限制在当前邻域颜色范围。
     vec2 pixel = 1.0/vec2(viewWidth,viewHeight); // 当前邻域尺寸。
-    for (int y=-1;y<=1;y++) for (int x=-1;x<=1;x++) {
-        vec3 c = texture(colortex6,clamp(uv+vec2(x,y)*pixel,0.0,1.0)).rgb; // 当前帧邻域。
-        minimum = min(minimum,c); maximum = max(maximum,c); // 防止过时亮色拖影。
-    }
-    vec3 history = clamp(texture(colortex4,previousUv).rgb,minimum,maximum); // 色彩裁剪。
+    for (int y=-1;y<=1;y++)
+        for (int x=-1;x<=1;x++) {
+            vec3 c = texture(colortex6,clamp(uv+vec2(x,y)*pixel,0.0,1.0)).rgb; // 当前帧邻域。
+            minimum = min(minimum,c); // 邻域亮度下限。
+            maximum = max(maximum,c); // 邻域亮度上限，防止过时亮色拖影。
+        }
+    vec3 history = texture(colortex4,previousUv).rgb; // 上一帧线性颜色，可能含未初始化或损坏值。
+    if (any(isnan(history)) || any(isinf(history))) history = color; // 非有限历史退回当前帧，避免NaN污染后续帧。
+    history = clamp(history,minimum,maximum); // 色彩裁剪到当前邻域范围。
     float motion = length(previousUv-uv)*max(viewWidth,viewHeight); // 大运动降低历史权重。
     float difference = abs(omniLuminance(history)-omniLuminance(color))/max(omniLuminance(color),0.05); // 动态照明与运动物体保守拒绝。
     return mix(color,history,OMNI_TAA_WEIGHT*exp(-motion*0.03)*exp(-difference*2.0)); // 不声称拥有实体速度缓冲。

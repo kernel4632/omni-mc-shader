@@ -1,4 +1,6 @@
-// 调色与曝光：时间合成保存曝光，最终显示编码；示例 omniColor(color, exposure)。
+// 调色与曝光：把线性场景映射为显示颜色，并计算时间合成保存的曝光。
+// 调用位置：最终显示与时间合成分别通过 "/effects/color.glsl" 引入，读取 colortex0、colortex5、colortex6。
+// 可复制示例：`vec3 shown = omniColor(color, exposure);` 与 `float exposure = omniExposure(texcoord);`
 #ifndef OMNI_COLOR
 #define OMNI_COLOR
 // @effect {"label":{"zh_cn":"调色","en_us":"Color"}}
@@ -20,6 +22,10 @@
 #define OMNI_DITHER 1 // [0 1]
 // 曝光有效性与时间历史共用一个接口。
 #include "/effects/antialiasing.glsl"
+// 判断数值能否继续参与计算：NaN 与无穷都视为无效。
+bool omniFinite(float value) { return !isnan(value) && !isinf(value); }
+// 判断颜色能否继续参与计算：任一分量为无效值即整体无效。
+bool omniFinite(vec3 color) { return !any(isnan(color)) && !any(isinf(color)); }
 // 简单有理映射：单调压高光，保持既有画面行为。
 vec3 omniToneMapSimple(vec3 color) {
     return color/(1.0+color); // 亮部渐近于一，不出现硬剪切。
@@ -62,17 +68,19 @@ float omniBayer(vec2 pixel) {
 }
 float omniExposure(vec2 uv) {
 #ifdef OMNI_AUTO_EXPOSURE
-    float mean = 0.0; // 使用真实场景亮度的对数均值。
-    for (int y=0;y<3;y++) for (int x=0;x<3;x++) mean += log(max(omniLuminance(texture(colortex6,(vec2(x,y)+0.5)/3.0).rgb),0.001)); // 固定测光点不受当前像素变化。
-    float target = clamp(0.18/exp(mean/9.0),0.25,8.0); // 防止曝光无限增大。
+    float sum = 0.0; // 九个测光点的对数亮度之和。
+    for (int y=0;y<3;y++) for (int x=0;x<3;x++) sum += log(max(omniLuminance(texture(colortex6,(vec2(x,y)+0.5)/3.0).rgb),0.001)); // 固定测光点不受当前像素变化。
+    if (!omniFinite(sum)) return OMNI_EXPOSURE; // 测光样本无效时回退到固定曝光，避免 NaN 扩散。
+    float target = clamp(0.18/exp(sum/9.0),0.25,8.0); // 目标曝光限制在合理范围，防止无限增大。
     float old = texture(colortex5,vec2(0.5)).g; // 上一帧曝光保存在普通历史像素。
-    if (!omniHistoryValid()) return target*OMNI_EXPOSURE; // 新场景直接初始化。
+    if (!omniHistoryValid() || !omniFinite(old)) return target*OMNI_EXPOSURE; // 新场景或历史无效时直接初始化。
     return mix(old,target*OMNI_EXPOSURE,1.0-exp(-clamp(frameTime,0.0,0.5)*1.5)); // 帧率无关的缓慢适应。
 #else
     return OMNI_EXPOSURE; // 固定曝光无需测光采样。
 #endif
 }
 vec3 omniColor(vec3 color, float exposure) {
+    if (!omniFinite(color) || !omniFinite(exposure)) return vec3(0.0); // 无效输入保守回退到黑色，避免异常扩散到整屏。
     color *= exposure*OMNI_BRIGHTNESS; // 亮度与曝光独立配置。
     color *= exp(vec3(0.12,0.0,-0.12)*OMNI_WHITE_BALANCE); // 中性零值不偏色。
     color = max(color,vec3(0)); // 强光映射之前拒绝负值。
@@ -83,6 +91,7 @@ vec3 omniColor(vec3 color, float exposure) {
 #if OMNI_DITHER == 1
     color += (omniBayer(gl_FragCoord.xy)-0.5)/255.0; // 有序抖动打散八位量化色带。
 #endif
+    if (!omniFinite(color)) return vec3(0.0); // 溢出等浮点异常保守回退到黑色。
     return clamp(color,0.0,1.0); // 抖动之后仍限制在屏幕颜色范围。
 }
 #endif

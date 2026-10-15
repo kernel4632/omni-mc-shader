@@ -145,7 +145,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("float omniWaterDetail",text)  # 细节独立成函数。
         self.assertIn("float omniWaterHeight",text)  # 合成高度独立成函数。
         self.assertIn("omniWaterHeight(p,world.y)",text)  # 法线重心样本使用合成高度。
-        self.assertIn("omniWaterHeight(p+vec2(0.08,0),world.y)",text)  # 有限差分包含细节。
+        self.assertIn("omniWaterHeight(p+vec2(0.08,0.0),world.y)",text)  # 有限差分包含细节。
 
     def test_ocean_vertex_displacement_uses_same_height(self):
         """物理海浪在顶点抬升水面，并与法线共用同一高度函数且可关闭。"""

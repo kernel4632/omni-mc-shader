@@ -60,7 +60,7 @@ class ReviewTests(unittest.TestCase):
         self.assertNotIn("current.a<0.5",lens); self.assertNotIn("vec4 current",lens)  # 景深不能依赖颜色附件历史连续性。
         self.assertIn("vec2 previousUnjittered",lens); self.assertIn("currentUnjittered-previousUnjittered",lens)  # 非TAA模式不减去不存在的上一帧抖动。
         reflection = (build.SHADERS/"effects/reflection.glsl").read_text(encoding="utf-8")
-        self.assertIn("omniProjectDistant(point)",reflection); self.assertIn("omniDistantView(distantScreen.xy,depth)",reflection)  # DH 投影与深度成对使用。
+        self.assertIn("omniProjectDistant(point)",reflection); self.assertIn("omniDistantView(screen.xy,depth)",reflection)  # DH 投影与深度成对使用。
         self.assertNotIn("omniSceneView(screen.xy,true)",reflection)  # 不能混合近景屏幕坐标与远景重建。
         self.assertIn("texelFetch(colortex5,oldPixel,0)", (build.SHADERS/"effects/antialiasing.glsl").read_text(encoding="utf-8"))  # 历史元数据不插值。
         self.assertIn("sum += omniFocusSample",lens); self.assertIn("sum += omniLensSample",lens)  # 快门和景深使用统一样本顺序。

@@ -1,4 +1,6 @@
-// 云：天空沿视线与高度层相交，轻量单层或体积步进；示例 omniCloud(color, direction, distance)。
+// 云：天空沿视线与高度层相交，按模式做单层、体积或平面云，并为直射光提供云影。
+// 调用位置：rendering/composite.glsl（几何前遮挡）、rendering/lighting.glsl（天空背景）、effects/sunlight.glsl（云影）。
+// 可复制示例：`color = omniCloud(color, omniNormalize(world), length(view));`
 #ifndef OMNI_CLOUD
 #define OMNI_CLOUD
 // @effect {"label":{"zh_cn":"云","en_us":"Clouds"}}
@@ -18,10 +20,12 @@
 #include "/effects/sky.glsl"
 // 成熟无纹理梯度噪声直接构建体积云密度，不为库增加只转手的包装。
 #include "/libraries/ashima/noise3D.glsl"
+// 云密度：三维梯度噪声，覆盖率把它映射成 0 到 1 之间的云量。
 float omniCloudDensity(vec3 p) {
+    float coverage = clamp(OMNI_CLOUD_COVERAGE, 0.0, 1.0); // 越界配置收敛到有效范围。
     p.x += frameTimeCounter * OMNI_CLOUD_SPEED * 2.0; // 风随时间移动噪声。
-    float n = 0.5+0.5*(snoise(p * vec3(0.004,0.018,0.004)) * 0.7 + snoise(p * 0.013) * 0.3); // 单纯形梯度噪声降低规则格点痕迹，不宣称未测的性能改善。
-    return smoothstep(0.8 - OMNI_CLOUD_COVERAGE * 0.5, 0.95 - OMNI_CLOUD_COVERAGE * 0.5, n); // 覆盖率实际改变密度。
+    float n = 0.5+0.5*(snoise(p * vec3(0.004,0.018,0.004)) * 0.7 + snoise(p * 0.013) * 0.3); // 单纯形梯度噪声降低规则格点痕迹。
+    return smoothstep(0.8 - coverage * 0.5, 0.95 - coverage * 0.5, n); // 覆盖率实际改变密度。
 }
 // 云影透射：从地表沿光线方向步进到云层，按密度估计遮挡。
 float omniCloudShadow(vec3 world) {
@@ -44,10 +48,12 @@ float omniCloudShadow(vec3 world) {
 }
 // 平面云密度：在水平面上用三层分形噪声生成连续云块。
 float omniPlanarDensity(vec2 p) {
+    float coverage = clamp(OMNI_CLOUD_COVERAGE, 0.0, 1.0); // 越界配置收敛到有效范围。
+    if (coverage <= 0.0) return 0.0; // 云量为零不生成云块，避免退化区间。
     p *= 0.0025; // 米制坐标缩放到云块尺度。
     p += vec2(frameTimeCounter*OMNI_CLOUD_SPEED*0.4,frameTimeCounter*OMNI_CLOUD_SPEED*0.1); // 风缓慢移动云层。
     float n = omniNoise(vec3(p,0.0))*0.6 + omniNoise(vec3(p*2.7,1.0))*0.3 + omniNoise(vec3(p*6.1,2.0))*0.1; // 三层分形。
-    return smoothstep(1.0-OMNI_CLOUD_COVERAGE,1.0-OMNI_CLOUD_COVERAGE*0.4,n); // 覆盖率控制连续度。
+    return smoothstep(1.0-coverage,1.0-coverage*0.4,n); // 覆盖率控制连续度。
 }
 // 平面云层：射线与高度平面相交后按分形密度着色。
 vec3 omniPlanarClouds(vec3 color, vec3 direction, float sceneDistance) {
@@ -71,9 +77,10 @@ vec3 omniCloud(vec3 color, vec3 direction, float sceneDistance) {
 #elif OMNI_CLOUD_MODE > 0
     vec3 d = omniNormalize(direction); // 米制步进方向。
     if (abs(d.y) < 0.005) return color; // 水平射线不与云层相交。
-    float a = (OMNI_CLOUD_HEIGHT - cameraPosition.y) / d.y; // 云层下边界。
-    float b = (OMNI_CLOUD_HEIGHT + 32.0 - cameraPosition.y) / d.y; // 云层上边界。
-    float begin = max(min(a,b),0.0), end = min(max(a,b),min(sceneDistance,18000.0)); // 地形前停止，支持云层内相机。
+    float lowerCross = (OMNI_CLOUD_HEIGHT - cameraPosition.y) / d.y; // 视线穿过云层下界的距离。
+    float upperCross = (OMNI_CLOUD_HEIGHT + 32.0 - cameraPosition.y) / d.y; // 视线穿过云层上界的距离。
+    float begin = max(min(lowerCross,upperCross),0.0); // 相机在层内时从零开始。
+    float end = min(max(lowerCross,upperCross),min(sceneDistance,18000.0)); // 地形前停止。
     if (end <= begin) return color; // 云在相机后或被地形遮挡。
     float opacity = 0.0; // 累计体积透射损失。
 #if OMNI_CLOUD_MODE == 1

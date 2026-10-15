@@ -1,4 +1,5 @@
-// 水：几何波浪法线与合成吸收折射，示例 omniWater(color, view, normal, uv)。
+// 水：几何波浪法线、顶点抬高与合成吸收折射。
+// 调用位置：rendering/terrain.glsl 与 rendering/composite.glsl；示例：omniWater(color, view, normal, uv)。
 #ifndef OMNI_WATER
 #define OMNI_WATER
 // @effect {"label":{"zh_cn":"水面","en_us":"Water"}}
@@ -71,19 +72,23 @@ vec3 omniWaterNormal(vec3 world, vec3 originalNormal) {
     if (OMNI_WAVE_STRENGTH<=0.0 || worldNormal.y<0.9) return originalNormal; // 瀑布侧面和底面保留原法线，零强度不造波。
     vec2 p = (world+cameraPosition).xz; // 世界锚定的波浪。
     float center = omniWaterHeight(p,world.y); // 高度中心样本使用相机相对水面高度。
-    vec3 n = omniNormalize(vec3((center-omniWaterHeight(p+vec2(0.08,0),world.y))/0.08,1.0,(center-omniWaterHeight(p+vec2(0,0.08),world.y))/0.08)); // 有限差分只扰动顶面。
-    return omniNormalize(mat3(gbufferModelView)*n); // 合成使用视空间法线。
+    float slopeX = (center-omniWaterHeight(p+vec2(0.08,0.0),world.y))/0.08; // 沿横轴的高度梯度。
+    float slopeZ = (center-omniWaterHeight(p+vec2(0.0,0.08),world.y))/0.08; // 沿纵轴的高度梯度。
+    vec3 tilted = omniNormalize(vec3(slopeX,1.0,slopeZ)); // 有限差分只扰动顶面，非零的垂直分量保证方向朝上。
+    if (!(tilted.y>0.0)) return originalNormal; // 高度样本非法时退回原法线，避免 NaN 污染画面。
+    return omniNormalize(mat3(gbufferModelView)*tilted); // 合成使用视空间法线。
 }
 // 调用位置：rendering/composite.glsl；示例：omniWater(color, view, waterNormal, texcoord)。
 vec3 omniWater(vec3 color, vec3 view, vec3 normal, vec2 uv) {
     vec2 refracted = uv; // 无折射时保持原位置。
-    float thickness = max(length(omniSceneView(uv,true))-length(view),0.0); // 不透明底面与水面的真实距离。
+    float waterDepth = length(omniSceneView(uv,true))-length(view); // 不透明底面到水面的真实距离。
+    float thickness = waterDepth>0.0 ? min(waterDepth,100.0) : 0.0; // 非法或负距离按零厚度回退，避免 NaN 传播。
 #ifdef OMNI_WATER_REFRACTION
-    vec2 candidate = clamp(uv+normal.xy*0.018*min(thickness,3.0),vec2(0.002),vec2(0.998)); // 浅水折射较弱。
+    vec2 candidate = clamp(uv+normal.xy*0.018*min(thickness,3.0),vec2(0.002),vec2(0.998)); // 浅水折射较弱，且始终留在屏幕内。
     if (length(omniSceneView(candidate,true))>length(view)+0.05) refracted = candidate; // 前景不能被错误折进水里。
 #endif
     vec3 transmitted = texture(colortex3,refracted).rgb; // 不透明快照包含底面辐射。
-    vec3 absorption = exp(-vec3(0.19,0.065,0.035)*min(thickness,100.0)); // 红色更快被水吸收。
+    vec3 absorption = exp(-vec3(0.19,0.065,0.035)*thickness); // 红色更快被水吸收；厚度已限制在零到一百米。
     transmitted = transmitted*absorption+vec3(0.015,0.075,0.095)*(1.0-absorption); // 深水趋近水体散射颜色。
     if (OMNI_REFLECTION_STRENGTH<=0.0) return transmitted; // 水面反射与其他材质共用同一个关闭选项。
     float fresnel = 0.02+0.98*pow(1.0-max(dot(normal,omniNormalize(-view)),0.0),5.0); // 水面反射随角度提高。

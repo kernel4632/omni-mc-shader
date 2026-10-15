@@ -44,7 +44,7 @@ class PipelineTests(unittest.TestCase):
         self.assertIn("RENDERTARGETS: 0,4,5",temporal)  # 当前与历史输出分开。
         self.assertIn("!overlay && omniHistoryValid()",temporal)  # 翻转前的历史有效性传给最终镜头。
         self.assertIn("texelFetch(colortex5,oldPixel,0)",temporal)  # 整数历史状态禁止线性过滤。
-        for condition in ("size.x==viewWidth","size.y==viewHeight","size.z==omniDimension()","frameCounter-1","camera.xyz-cameraPosition"):
+        for condition in ("size.x!=viewWidth","size.y!=viewHeight","size.z!=omniDimension()","frameCounter-1","camera.xyz-cameraPosition"):
             self.assertIn(condition,temporal)  # 历史失效条件不能遗漏。
         programs = json.loads((build.SHADERS/"rendering/programs.json").read_text(encoding="utf-8"))["programs"]
         for name in ("gbuffers_weather","gbuffers_damagedblock","gbuffers_armor_glint","gbuffers_spidereyes"):

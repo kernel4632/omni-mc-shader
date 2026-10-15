@@ -1,4 +1,8 @@
 // 材质：解码实验室材质标准一点三；地形允许图集视差，实体和手只解码材质贴图。
+// 职责：把资源包的底色、法线、表面贴图解码为线性光照使用的表面数据，并叠加湿润与积雪。
+// 调用位置：rendering/terrain.glsl 的片元步骤，由 omniReadSurface 与 omniShadeSurface 调用。
+// 可复制示例：omniMaterial(base,normal,materialParams,materialAo,uv,bounds,tangentFrame,view,true)。
+// 兼容：缺少加载器材质贴图、切线退化、通道缺失或越界时，回退到无材质的稳定结果。
 #ifndef OMNI_MATERIAL
 #define OMNI_MATERIAL
 // @effect {"label":{"zh_cn":"材质","en_us":"Materials"}}
@@ -22,8 +26,10 @@ uniform sampler2D normals, specular; // 加载器提供资源包法线与表面�
 void omniMaterial(inout vec4 base, inout vec3 normal, inout vec3 materialParams, out float materialAo, inout vec2 uv, vec4 bounds, mat3 tangentFrame, vec3 view, bool allowParallax) {
     materialAo = 1.0; // 普通贴图和缺失PBR资源使用不遮蔽的线性默认值。
 #ifdef OMNI_LABPBR
+    vec3 geometry = normal; // 保存几何法线，法线贴图缺失或损坏时回退。
     vec2 dx = dFdx(uv), dy = dFdy(uv); // 视差循环不使用不稳定的隐式导数。
-    if (allowParallax && OMNI_PARALLAX > 0.0) { // 实体与手只解码材质，避免把非图集边界当作视差边界。
+    bool atlasValid = bounds.z > bounds.x && bounds.w > bounds.y; // 图块边界有效时才允许视差。
+    if (allowParallax && OMNI_PARALLAX > 0.0 && atlasValid) { // 实体与手只解码材质，避免把非图集边界当作视差边界。
         vec3 tangentView = transpose(tangentFrame) * omniNormalize(-view); // 观察方向转贴图空间。
         vec2 stepUv = tangentView.xy / max(abs(tangentView.z),0.15) * OMNI_PARALLAX * (bounds.zw-bounds.xy) / 16.0; // 深度随图块大小缩放。
         float layer = 0.0; // 从表面向内部寻找高度交点。
@@ -34,14 +40,19 @@ void omniMaterial(inout vec4 base, inout vec3 normal, inout vec3 materialParams,
             layer += 1.0/16.0; // 固定层数控制开销。
         }
         base = textureGrad(gtexture,uv,dx,dy) * base; // 调用者传入顶点色，视差后重新采样底色。
-    } else { // 关闭视差仍读取材质法线。
+    } else { // 关闭视差或图块边界无效仍读取材质法线。
         base *= texture(gtexture,uv); // 普通法线路径保留原始图块。
     }
     vec4 n = textureGrad(normals,uv,dx,dy); // 标准法线与遮蔽、高度数据。
     vec2 xy = vec2(n.r*2.0-1.0,1.0-n.g*2.0); // 标准使用向下的绿色轴。
-    normal = omniNormalize(tangentFrame * vec3(xy,sqrt(max(1.0-dot(xy,xy),0.0)))); // 重建第三轴。
+    float plane = dot(xy,xy); // 切向分量的平方长度。
+    vec3 mapped = tangentFrame * vec3(xy,sqrt(max(1.0-plane,0.0))); // 重建单位法线的第三轴。
+    bool usable = plane <= 1.0 && dot(mapped,mapped) > 1e-6; // 通道越界或切线退化都判为不可用。
+    normal = usable ? omniNormalize(mapped) : geometry; // 不可用时回退几何法线，保持稳定结果。
     vec4 s = textureGrad(specular,uv,dx,dy); // 表面数据使用线性值。
-    materialParams = vec3(max(pow(1.0-s.r,2.0),0.025),s.g,s.a < 0.999 ? s.a*255.0/254.0 : 0.0); // 忽略缺省透明通道的自发光。
+    float smoothness = clamp(s.r,0.0,1.0); // 过滤图集边缘越界的值，避免幂运算产生非数。
+    float metalness = clamp(s.g,0.0,1.0); // 金属标志限制在合法范围。
+    materialParams = vec3(max(pow(1.0-smoothness,2.0),0.025),metalness,s.a < 0.999 ? s.a*255.0/254.0 : 0.0); // 忽略缺省透明通道的自发光。
     materialAo = n.b; // 材质遮蔽独立保存，后续只进入环境光。
 #else
     base *= texture(gtexture,uv); // 无材质资源包时不采样未提供的材质纹理。
