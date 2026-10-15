@@ -8,6 +8,7 @@ import subprocess  # 用真实预处理器验证开关分支。
 import tempfile  # 探针源码只写入临时目录。
 from pathlib import Path  # 临时阶段文件交给项目编译器。
 import build  # 读取真实展开源码与原生选项。
+import options  # 核对菜单分类覆盖。
 
 class EffectTests(unittest.TestCase):
     """逐个效果核对选项单源、算法接入和默认路径。"""
@@ -383,3 +384,58 @@ class EffectTests(unittest.TestCase):
                     result = subprocess.run([str(build.tool("glslang")),"-E",str(shader)],capture_output=True,text=True,encoding="utf-8",errors="replace")
                     self.assertEqual(result.returncode,0,result.stdout+result.stderr)  # 预处理错误同样必须失败。
                     self.assertRegex(result.stdout,rf"upscaleEnabled\s*=\s*{str(enabled).lower()}\s*;")  # 不仅检查宏名字存在，还检查真正的分支结果。
+
+    def test_season_shifts_grass_and_leaves(self):
+        """季节只给草和树叶按世界天数上色，接入地形底色且默认关闭。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_SEASONS",found); self.assertIn("OMNI_SEASON_TINT",found)  # 开关与颜色都由季节源码定义。
+        text = (build.SHADERS/"effects/season.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniSeason",text)  # 季节上色独立成函数。
+        self.assertIn("materialId == 10001.0",text)  # 只处理草。
+        self.assertIn("float(worldDay)",text)  # 相位来自世界天数。
+        source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
+        self.assertIn("omniSeason(albedo,materialId)",source)  # 地形底色接入季节。
+
+    def test_entity_light_and_hand_size_are_adjustable(self):
+        """生物受光强度、色温与手持物大小都可调，分别接入实体光照与手持物顶点。"""
+        found,_,_ = build.configuration()
+        for name in ("OMNI_ENTITY_STRENGTH","OMNI_ENTITY_TINT","OMNI_HAND_SIZE"):
+            self.assertIn(name,found)  # 每个参数由生物源码定义。
+        text = (build.SHADERS/"effects/entity.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniEntityLight",text)  # 生物受光独立成函数。
+        self.assertIn("vec4 omniHandZoom",text)  # 手持物缩放独立成函数。
+        self.assertIn("OMNI_ENTITY_TINT",text)  # 色温参与生物受光。
+        self.assertIn("OMNI_HAND_SIZE",text)  # 大小参与手持物缩放。
+        entities = build.expand(build.SHADERS/"world0/gbuffers_entities.fsh")  # 从实体入口展开。
+        self.assertIn("omniEntityLight",entities)  # 实体光照包含生物受光。
+        hand = build.expand(build.SHADERS/"world0/gbuffers_hand.vsh")  # 从手持物顶点入口展开。
+        self.assertIn("omniHandZoom",hand)  # 手持物顶点包含缩放。
+
+    def test_rain_darkening_applies_in_composite(self):
+        """雨天变暗在合成阶段整体压暗，默认取零不改变画面。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_RAIN_DARKEN",found); self.assertEqual(found["OMNI_RAIN_DARKEN"].default,"0.0")  # 默认不压暗。
+        text = (build.SHADERS/"effects/weather.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniWeather",text)  # 天气压暗独立成函数。
+        self.assertIn("rainStrength * OMNI_RAIN_DARKEN",text)  # 压暗由降雨强度驱动。
+        source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
+        self.assertIn("omniWeather(color)",source)  # 合成阶段包含雨天压暗。
+
+    def test_planet_curvature_bends_distant_vertex(self):
+        """行星曲率按水平距离压低远景顶点，默认取零不改变画面。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_PLANET_CURVATURE",found); self.assertEqual(found["OMNI_PLANET_CURVATURE"].default,"0.0")  # 默认平地。
+        text = (build.SHADERS/"effects/world.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniPlanetCurve",text)  # 曲率独立成函数。
+        self.assertIn("OMNI_PLANET_CURVATURE",text)  # 强度参与下沉。
+        source = build.expand(build.SHADERS/"world0/dh_terrain.vsh")  # 从远景顶点入口展开。
+        self.assertIn("omniPlanetCurve",source)  # 远景顶点包含曲率。
+
+    def test_menu_pages_cover_every_category(self):
+        """生成的菜单必须覆盖全部主分类，且每个分类至少有一个选项。"""
+        found,_ = options.scan(build.SHADERS)  # 读取真实扫描结果。
+        known = {name for name,_ in options.MAIN_PAGES}  # 主分类只在一处定义。
+        used = {options.page_of(option) for option in found.values()}  # 每个选项实际落在的页面。
+        self.assertEqual(used <= known,True,used-known)  # 不允许选项落到未登记的页面。
+        self.assertEqual(known <= used,True,known-used)  # 不允许出现空分类。
+

@@ -43,6 +43,8 @@ void main() {
 #include "/effects/fog.glsl"
 // 氛围：极光、彩虹、大气散射，以及按位置叠加的闪电照明。
 #include "/effects/atmosphere.glsl"
+// 天气：雨天整体压暗。
+#include "/effects/weather.glsl"
 in vec2 texcoord; // 全屏采样位置，由顶点阶段插值得到。
 /* RENDERTARGETS: 6 */
 layout(location=0) out vec4 colorOut; // 时间抗锯齿之前的线性颜色。
@@ -96,6 +98,7 @@ void main() {
     vec3 color = texture(colortex0,texcoord).rgb; // 缓冲零：前向照明与原版透明混合的结果。
     if (!sky) color = omniCompositeSurface(color,texcoord); // 背景之外的像素才做几何后处理。
     color *= 1.0-clamp(blindness,0.0,1.0); // 保留原版失明效果，让药水依然能压暗画面。
+    color = omniWeather(color); // 下雨时整体压暗，天空和地形一起。
     colorOut = vec4(color,sky || texelFetch(colortex7,ivec2(gl_FragCoord.xy),0).a>=0.5 ? 1.0 : 0.0); // 把天空与精确的几何有效标记传给时间阶段。
 }
 #endif

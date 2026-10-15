@@ -13,10 +13,11 @@
 //   所以顶点用 dhProjection 投影、重建时用 dhProjectionInverse；普通地形那边用 gl_ProjectionMatrix 与普通逆投影，两者不能混用。
 //   远景不读普通地形贴图：加载器只给一个小编号（例如水、岩浆）加顶点色，材质因此是保守的默认值，不做 labPBR 解码。
 //   内部数据互相信任：本文件只信任加载器已经给好的输入，不在层与层之间重复检查。
-// 顶点抖动来自抗锯齿文件，统一光照来自光照文件，水波来自水面文件，三者都显式引入。
+// 顶点抖动来自抗锯齿文件，统一光照来自光照文件，水波来自水面文件，行星曲率来自世界文件，四者都显式引入。
 #include "/effects/antialiasing.glsl"
 #include "/effects/sunlight.glsl"
 #include "/effects/water.glsl"
+#include "/effects/world.glsl"
 #ifdef OMNI_VERTEX
 out vec3 viewPosition, viewNormal; // 传给片元的视空间位置与法线。
 out vec4 tint; out vec2 lightUv; // 传给片元的顶点色与原版光照坐标。
@@ -35,9 +36,10 @@ void main() {
         viewPosition = (gbufferModelView*vec4(waterWorld,1.0)).xyz; // 世界位移后再变回视空间，投影前完成。
     }
 #endif
+    viewPosition = omniPlanetCurve(viewPosition); // 远景按水平距离下沉，做出地平线弧度。
     gl_Position = dhProjection*vec4(viewPosition,1.0); // 远景很远，必须用加载器的远景投影，不能用普通近远裁剪面。
 #else
-    materialId = 0; gl_Position = gl_ProjectionMatrix*vec4(viewPosition,1.0); // 未启用远景的离线基础路径仍能编译，运行时不会被调用。
+    materialId = 0; viewPosition = omniPlanetCurve(viewPosition); gl_Position = gl_ProjectionMatrix*vec4(viewPosition,1.0); // 未启用远景的离线基础路径仍能编译，运行时不会被调用。
 #endif
 #ifdef OMNI_AA_ENABLED
     gl_Position.xy += omniJitter(frameCounter)*2.0/vec2(viewWidth,viewHeight)*gl_Position.w; // 和近景用同一像素抖动，时间合成才能对齐。

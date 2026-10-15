@@ -12,6 +12,10 @@
 #include "/effects/antialiasing.glsl"
 // 植物顶点摆动。
 #include "/effects/vegetation.glsl"
+// 季节给草和树叶上色。
+#include "/effects/season.glsl"
+// 生物受光与手持物大小。
+#include "/effects/entity.glsl"
 uniform sampler2D gtexture; // 当前物体的底色贴图，材质解码时还要乘上它。
 #if defined OMNI_ENTITIES && !defined IRIS_FEATURE_ENTITY_TRANSLUCENT
 #define OMNI_OVERLAY // 加载器没有透明实体分离能力时，只能把半透明实体当叠层处理，拒绝与深度配对的后处理。
@@ -52,6 +56,9 @@ void main() {
     vec2 halfTile=abs(gl_MultiTexCoord0.xy-mc_midTexCoord.xy); // 当前贴图坐标离图块中心有多远。
     bounds=vec4(mc_midTexCoord.xy-halfTile+vec2(0.00001),mc_midTexCoord.xy+halfTile-vec2(0.00001)); // 把图块四角收进一点，视差采样就不会越到隔壁方块。
     gl_Position=gl_ProjectionMatrix*view; // 用兼容投影把相机空间位置投到裁剪空间。
+#ifdef OMNI_HAND
+    gl_Position=omniHandZoom(gl_Position); // 手持物按大小选项整体缩放，其余物体不变。
+#endif
 #if defined OMNI_AA_ENABLED && !defined OMNI_HAND
     gl_Position.xy+=omniJitter(frameCounter)*2.0/vec2(viewWidth,viewHeight)*gl_Position.w; // 开启抗锯齿时全场景共用同一像素偏移，手不抖以免糊掉。
 #endif
@@ -140,8 +147,12 @@ Surface omniReadSurface() {
 // 计算光照：把底色转线性，叠加天气材质，再算环境光、直接光和自发光。
 vec3 omniShadeSurface(inout Surface s) {
     vec3 albedo=omniLinear(s.base.rgb); // 底色只在这里转一次线性，之后的天气和光照都按线性值算。
+    albedo=omniSeason(albedo,materialId); // 草与树叶按季节上色，其余方块不动。
     omniSurface(albedo,s.materialParams,s.normal,s.world,s.lightUv.y); // 按天气叠加湿润与积雪，就地改这处颜色和材质。
     vec3 lit=omniLighting(albedo,s.normal,s.world,s.lightUv,s.materialParams,s.materialAo); // 环境光、直接光和镜面一起算，遮蔽只影响环境光。
+#ifdef OMNI_ENTITIES
+    lit=omniEntityLight(lit); // 生物整体受光强度与色温。
+#endif
 #ifdef OMNI_EMISSIVE
     lit=albedo*2.0; s.materialParams.z=1.0; // 自发光方块无视光照直接用自身颜色，并标记发光供后处理识别。
 #endif

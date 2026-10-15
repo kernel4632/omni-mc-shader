@@ -52,7 +52,7 @@ uniform float frameTimeCounter, frameTime, rainStrength, wetness; // 累计运�
 
 // --- 玩家状态：原版效果强度与照明等级，用来让画面跟随游戏玩法 ---
 uniform float nightVision, blindness; // 夜视和失明的强度，范围零到一。
-uniform int frameCounter, worldTime, isEyeInWater; // 帧序号、世界时间（单位游戏刻）、眼睛是否在水中（零无、一水、二岩浆）。
+uniform int frameCounter, worldTime, worldDay, isEyeInWater; // 帧序号、世界时间（单位游戏刻）、世界天数（用于季节）、眼睛是否在水中（零无、一水、二岩浆）。
 uniform ivec2 eyeBrightnessSmooth; // 平滑后的眼部亮度，横轴方块光等级、纵轴天空光等级，范围零到二百四十。
 uniform int heldBlockLightValue, heldBlockLightValue2; // 主手与副手方块光源等级，范围零到十五。
 uniform vec4 entityColor; // 实体受伤或受击时叠加的染色，四通道颜色。

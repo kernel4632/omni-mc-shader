@@ -111,6 +111,9 @@ PAGE_OF_GROUP: dict[str, str] = {
     "color": "color", "bloom": "color",
     "lens": "lens",
     "antialiasing": "clarity", "upscale": "clarity",
+    "season": "weather", "weather": "weather",
+    "entity": "entity",
+    "world": "world",
     "debug": "dev",
 }  # 归属只在这里维护一份，效果文件新增后在此登记。
 
