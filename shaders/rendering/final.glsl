@@ -67,6 +67,6 @@ void main() {
     vec3 lit = omniLensColor(scene,texcoord); // 镜头与泛光仍在线性空间叠加。
     float exposure = texture(colortex5,vec2(0.5)).g; // 时间合成保存的真实曝光，整屏共用一个值。
     vec3 shown = omniColor(lit,exposure); // 调色把线性颜色压成屏幕颜色，显示编码包含在内。
-    color = vec4(debugColor(shown,texture(depthtex0,texcoord).r,texcoord),1.0); // 调试视图观察真实缓冲，正常画面原样返回。
+    color = vec4(omniProfiler(debugColor(shown,texture(depthtex0,texcoord).r,texcoord),texcoord),1.0); // 调试视图观察真实缓冲，正常画面原样返回；性能计时在最后叠加。
 }
 #endif
