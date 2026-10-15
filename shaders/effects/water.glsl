@@ -25,6 +25,8 @@
 #define OMNI_REFRACTION_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"雨滴水纹","en_us":"Rain ripples"}}
 #define OMNI_RAIN_RIPPLES
+// @option {"label":{"zh_cn":"水纹强度","en_us":"Ripple strength"},"slider":true}
+#define OMNI_RIPPLE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"玩家互动水纹","en_us":"Player ripples"},"description":{"zh_cn":"相机靠近水面移动时生成解析圆环；不是物理模拟，不读取其他实体。","en_us":"Analytic rings near a moving camera, not a fluid simulation or other entity tracking."}}
 //#define OMNI_PLAYER_RIPPLES
 // @option {"label":{"zh_cn":"水波凹凸细节","en_us":"Water bump detail"},"description":{"zh_cn":"在解析波上叠加多层程序噪声，增加水面细碎起伏。","en_us":"Adds multi-octave procedural noise on top of the analytic waves for fine ripples."}}
@@ -74,13 +76,13 @@ float omniWave(vec2 p, float relativeHeight) {
     vec2 center = (cell+vec2(omniHash(cell),omniHash(cell+8.2)))/0.7; // 用格坐标算落点，同一格永远落在同一点，波纹可重复。
     float age = fract(t*0.8+omniHash(cell+1.3)); // 每格起始相位不同，雨滴不会同时出现。
     float radius = length(p-center); // 当前点到本格落点的水平距离。
-    wave += rainStrength*sin(radius*22.0-age*14.0)*exp(-radius*3.0)*(1.0-age)*0.025; // 向外扩散的环，随时间变淡，雨越大越明显。
+    wave += rainStrength*sin(radius*22.0-age*14.0)*exp(-radius*3.0)*(1.0-age)*0.025*OMNI_RIPPLE_STRENGTH; // 向外扩散的环，随时间变淡，雨越大越明显；强度可调。
 #endif
 #ifdef OMNI_PLAYER_RIPPLES
     float speed = length(cameraPosition-previousCameraPosition)/max(frameTime,0.001); // 由相邻两帧相机位置差得到移动速度。
     float r = length(p-cameraPosition.xz); // 到玩家的水平距离。
     float proximity = 1.0-smoothstep(0.5,2.5,abs(relativeHeight)); // 相机与水面垂直距离超过两米半就淡出，避免飞在天上仍冒圈。
-    wave += proximity*min(speed,2.0)*sin(r*8.0-t*4.0)*exp(-r)*0.025; // 环强度同时受水平和高度距离限制，移动越快越明显。
+    wave += proximity*min(speed,2.0)*sin(r*8.0-t*4.0)*exp(-r)*0.025*OMNI_RIPPLE_STRENGTH; // 环强度同时受水平和高度距离限制，移动越快越明显；强度可调。
 #endif
     return wave*OMNI_WAVE_STRENGTH; // 波强度为零时整体归零，法线不再变化。
 }
