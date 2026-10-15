@@ -4,7 +4,7 @@
 片元入口 `world0/deferred.fsh` 定义 OMNI_FRAGMENT，两者都用下面这两行把本文件接入：
 
     #define OMNI_FRAGMENT
-    #include "/rendering/lighting.glsl"
+    再引入本文件。
 
 为什么要有这份快照：水和玻璃等透明物体在不透明阶段之后才画，加载器不会让它们改写已经画好的不透明层。
 屏幕空间反射和水的折射都要一份"没有透明物体"的不透明画面，否则两种效果会互相叠加、越算越乱。

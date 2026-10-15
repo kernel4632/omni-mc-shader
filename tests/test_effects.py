@@ -512,7 +512,9 @@ class EffectTests(unittest.TestCase):
         for path in build.SHADERS.rglob("*"):
             if path.suffix not in (".glsl", ".vsh", ".fsh", ".csh"):
                 continue
-            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            text = path.read_text(encoding="utf-8")
+            text = re.sub(r"/\*.*?\*/", lambda match: "\n" * match.group(0).count("\n"), text, flags=re.S)  # 先挖掉块注释，块注释里的示例同样会被加载器扫到。
+            for number, line in enumerate(text.splitlines(), 1):
                 if "#include" in line and not references.fullmatch(line):
                     self.fail(f"{path.name}:{number} 含 #include 的行不是干净引用：{line.strip()}")
 

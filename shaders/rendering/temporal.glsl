@@ -5,7 +5,7 @@
 调用位置：
   三个维度的入口文件只声明阶段与片段宏，真正的绘制全部交给本文件：
     #define OMNI_FRAGMENT
-    #include "/rendering/temporal.glsl"
+    再引入本文件。
   内部按顺序复用两个效果文件：
     effects/antialiasing.glsl  提供时间合成 omniTaa；
     effects/color.glsl         提供自动曝光 omniExposure。
@@ -14,7 +14,7 @@
 可复制示例：
   入口侧（粘贴进 `composite1.fsh` 即可）：
     #define OMNI_FRAGMENT
-    #include "/rendering/temporal.glsl"
+    再引入本文件。
   本文件没有对外函数，全部逻辑只服务这一条绘制流程。
 
 本文件直接读写的中间画面（编号约定见 rendering/buffers.glsl）：
