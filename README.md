@@ -64,6 +64,7 @@ uv pip sync requirements-dev.lock
 - [菜单设计](docs/menu.md)
 - [参数总表](docs/parameters.md)
 - [可复用库与框架](docs/libraries.md)
+- [算法参考与可复用实现](docs/references.md)
 - [项目开发约定](AGENTS.md)
 
 ## 参考资料
