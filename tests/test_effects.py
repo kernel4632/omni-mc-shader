@@ -118,6 +118,8 @@ class EffectTests(unittest.TestCase):
         self.assertIn("float omniCloudShadow",text)  # 云影独立成函数。
         self.assertIn("OMNI_CLOUD_SHADOW_STRENGTH",text)  # 云影浓淡参与光学厚度。
         self.assertIn("omniCloudDensity(p)",text)  # 复用同一云密度来源。
+        self.assertIn("smoothstep(0.0,0.2,height)",text)  # 云影与可见云共用同一套上下边缘渐薄。
+        self.assertIn("stepMeters",text)  # 云影按米累积光学厚度，与可见云同一消光口径。
         sun = (build.SHADERS/"effects/sunlight.glsl").read_text(encoding="utf-8")
         self.assertIn("omniCloudShadow(world)",sun)  # 直射光按云影衰减。
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。

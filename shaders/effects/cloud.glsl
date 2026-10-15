@@ -41,7 +41,8 @@
 #define OMNI_CLOUD_SHADOW_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"云精细度","en_us":"Cloud detail"},"description":{"zh_cn":"云沿视线的采样次数；越高越厚实也越耗性能。","en_us":"Samples along the view; higher is denser but costlier."}}
 #define OMNI_CLOUD_STEPS 16 // [8 16 32]
-// 天空颜色与云照明共享天体输入。
+// 天空颜色与云照明共享天体输入；加载器输入显式引入，不依赖间接包含。
+#include "/common/uniforms.glsl"
 #include "/effects/sky.glsl"
 // 成熟无纹理梯度噪声直接构建云密度，不为库增加只转手的包装。
 #include "/libraries/ashima/noise3D.glsl"
@@ -53,6 +54,7 @@ float omniCloudCoverage() {
 // 单一频率的噪声像一块均匀的棉花，叠上低频形状和高频碎边才既有轮廓又有毛边。
 float omniCloudDensity(vec3 p) {
     float coverage = omniCloudCoverage(); // 收敛到零到一的云量。
+    if (coverage<=0.0) return 0.0; // 云量为零时明确没有云，也省下噪声采样。
     p.x += frameTimeCounter*OMNI_CLOUD_SPEED*2.0; // 风沿水平方向推移噪声，云看起来在飘。
     float shape = snoise(p*vec3(0.004,0.018,0.004)*OMNI_CLOUD_SCALE)*0.7; // 低频决定云块大轮廓，竖直方向压缩让云更扁。
     float detail = snoise(p*0.013*OMNI_CLOUD_SCALE)*0.3; // 高频给云块加碎边，避免轮廓太光滑。
@@ -60,26 +62,31 @@ float omniCloudDensity(vec3 p) {
     return smoothstep(0.8-coverage*0.5,0.95-coverage*0.5,n); // 云量越高阈值越低，云越满。
 }
 // --- 云影：从地表沿光线穿过整层云，按密度扣掉直射光 ---
-// 方向取当前天体（太阳或月亮）的世界方向，所以夜晚的月光同样会被云挡。
-// 只在云层真实高度区间内取样，避免对着云层下方的空气算厚度。
+// 方向取当前阴影天体（太阳或月亮）的世界方向，所以夜晚的月光同样会被云挡；
+// 而云自身的亮度与银边用太阳方向判断昼夜（见 omniCloudSilver 与 omniCloudColor）。
+// 关键：云影与可见云用同一份密度和同一套边缘渐薄、同一消光系数，只是采样方向不同，
+// 所以天上云越厚、地上影越深，薄云与高云的地影也会跟着变淡。
 float omniCloudShadow(vec3 world) {
 #if OMNI_CLOUD_SHADOW == 0 || defined OMNI_NETHER || defined OMNI_END
     return 1.0; // 关闭云影，或该维度没有自定义云时，直射光完全不受影响。
 #else
-    vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition); // 天体在世界空间里的方向。
+    vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition); // 阴影天体在世界空间里的方向。
     if (sun.y<=0.03) return 1.0; // 天体贴近地平线时方向太斜，忽略云影避免出现超长阴影。
     float surfaceY = world.y+cameraPosition.y; // 地表的绝对高度。
     float lower = (OMNI_CLOUD_HEIGHT-surfaceY)/sun.y; // 光线进入云层下界的距离。
     float upper = (OMNI_CLOUD_HEIGHT+OMNI_CLOUD_THICKNESS-surfaceY)/sun.y; // 光线离开云层上界的距离。
     if (upper<=0.0) return 1.0; // 地表已在云层之上或光线不向上，没有云可挡。
     float begin = max(lower,0.0); // 地表已经进入云层时从零开始。
-    float optical = 0.0; // 累计光学厚度。
-    for (int i=0;i<4;i++) {
-        vec3 p = world+cameraPosition+sun*(begin+(upper-begin)*((float(i)+0.5)/4.0)); // 只在实际云层高度区间内取四个点。
-        optical += omniCloudDensity(p); // 估计整段密度。
+    float stepMeters = (upper-begin)/float(OMNI_CLOUD_STEPS); // 与可见云同一精细度，改云精细度时云影一并变化。
+    float optical = 0.0; // 按米累计的光学厚度。
+    for (int i=0;i<OMNI_CLOUD_STEPS;i++) {
+        vec3 p = world+cameraPosition+sun*(begin+(float(i)+0.5)*stepMeters); // 只在实际云层高度区间内取样。
+        float height = (p.y-OMNI_CLOUD_HEIGHT)/OMNI_CLOUD_THICKNESS; // 相对云层中面的高度，零到一。
+        float density = omniCloudDensity(p)*smoothstep(0.0,0.2,height)*(1.0-smoothstep(0.7,1.0,height)); // 与可见云同一套上下边缘渐薄。
+        optical += density*stepMeters; // 用米累积，和可见云的消光口径一致。
     }
     float fade = smoothstep(0.03,0.15,sun.y); // 天体越低云影越淡。
-    return mix(1.0,exp(-optical*0.12*OMNI_CLOUD_SHADOW_STRENGTH),fade); // 云影浓淡取零时等于没有云影。
+    return mix(1.0,exp(-optical*0.07*OMNI_CLOUD_SHADOW_STRENGTH),fade); // 0.07 与可见云同一消光系数；浓淡取零等于没有云影。
 #endif
 }
 // --- 云的昼夜颜色：受昼夜、天气、亮度与冷暖共同控制 ---
