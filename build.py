@@ -304,7 +304,6 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 编译器文件变化就让旧成功记录失效。
     cached_report = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.is_file() else {}  # 首次运行没有缓存，按空记录处理。
     known_good = set(cached_report.get("programs", [])) if cached_report.get("compiler") == compiler_digest else set()  # 只信任同一个编译器写下的成功摘要。
-    format_defines = "#define RGBA16F 34842\n#define RGBA32F 34836\n"  # 离线补入加载器提供的格式名称。
     environments = [("base", ""), ("iris_dh", "#define IS_IRIS\n#define IRIS_FEATURE_ENTITY_TRANSLUCENT\n#define IRIS_FEATURE_COMPUTE_SHADERS\n#define IRIS_FEATURE_CUSTOM_IMAGES\n#define DISTANT_HORIZONS\n#define DH_BLOCK_WATER 13\n#define DH_BLOCK_LAVA 8\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 基础回退与具备实体分离、计算能力、自定义图像的远景路径。
     # 第一步：把代表配置、两种环境和全部程序展开成任务；实际组合数随选项变化。
     # 为什么先收集再编译：这样重复内容能在编译前过滤，并把独立任务交给线程池并行，避免串行等待几千个编译器进程。
@@ -317,7 +316,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
                 if label != "default" and program.name not in full_programs:
                     continue  # 非主要通路只在默认配置下编一次：足以挡住引入与宏撞名错误，又不让十秒预算被挤爆。
                 texts = [option_source(expanded[source], found, option_values) for source in sources]  # 每个阶段使用同一份选项取值。
-                texts = [text.replace("#version 330 compatibility", "#version 330 compatibility\n" + format_defines + defines, 1) for text in texts]  # 环境宏只注入临时文本，不修改入口文件。
+                texts = [text.replace("#version 330 compatibility", "#version 330 compatibility\n" + defines, 1) for text in texts]  # 环境宏只注入临时文本，不修改入口文件。
                 if program.name.startswith("dh_") and environment == "iris_dh":
                     texts = [text.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1) if source.suffix == ".vsh" else text for source, text in zip(sources, texts)]  # 只在顶点阶段模拟加载器自动提供的远景材质编号。
                 source_signature = tuple((source.suffix, text) for source, text in zip(sources, texts))  # 保留完整源码：删除注释会拼接词，删除行号指令也可能改变预定义行号的结果。

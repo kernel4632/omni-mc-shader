@@ -529,6 +529,15 @@ class EffectTests(unittest.TestCase):
                 with self.subTest(path=path.name, line=number):
                     self.assertEqual(len(arguments), int(match[1][3]))
 
+    def test_buffer_format_directives_are_bare_and_defined(self):
+        """格式名在 GLSL 里没有定义，必须自己给常量；格式指令行不能带别的文字，否则加载器可能读不到。"""
+        text = (build.SHADERS/"rendering/buffers.glsl").read_text(encoding="utf-8")
+        for line in text.splitlines():
+            if re.match(r"\s*const int colortex\d+Format\s*=", line):
+                self.assertRegex(line, r"^const int colortex\d+Format = [A-Z0-9_]+;$")  # 行首无缩进、行尾只有分号。
+        for name in ("RGBA16F", "RGBA32F"):
+            self.assertRegex(text, r"#define " + name + r" \d+")  # 格式名必须自己定义。
+
     def test_custom_images_feature_is_declared(self):
         """用自定义图像就必须声明能力开关，缺能力时 LPV 回退到屏幕空间间接光。"""
         settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")

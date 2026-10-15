@@ -22,8 +22,7 @@ def program(name: str, values: dict, found: dict) -> int:
         for suffix,kind in kinds.items():
             source = ROOT/"shaders/world0"/(name+suffix)  # 主世界驱动检查与加载器使用同一路径。
             if not source.is_file(): continue  # 只有流程实际存在的阶段才编译。
-            text = build.option_source(build.expand(source),found,values)  # 默认或指定合法配置。
-            text = text.replace("#version 330 compatibility","#version 330 compatibility\n#define RGBA16F 34842\n#define RGBA32F 34836",1)  # 模拟加载器格式宏。
+            text = build.option_source(build.expand(source),found,values)  # 默认或指定合法配置；缓冲格式名由 buffers.glsl 自己定义，这里不再补。
             shader = gl.glCreateShader(kind); compiled.append(shader)
             gl.glShaderSource(shader,text); gl.glCompileShader(shader)  # 使用实际显卡编译器。
             if not gl.glGetShaderiv(shader,gl.GL_COMPILE_STATUS): raise RuntimeError(gl.glGetShaderInfoLog(shader).decode("utf-8",errors="replace"))
