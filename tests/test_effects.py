@@ -53,6 +53,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("p.z - OMNI_SHADOW_BIAS",text)  # 偏置参与深度比较。
         self.assertIn("n * OMNI_SHADOW_OFFSET",text)  # 法线偏移参与采样点抬升。
 
+    def test_exposure_target_and_speed_are_adjustable(self):
+        """自动曝光的目标亮度与适应速度都是可调参数，替换原先写死的数值。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_EXPOSURE_TARGET",found); self.assertIn("OMNI_EXPOSURE_SPEED",found)  # 两个参数由调色源码定义。
+        text = (build.SHADERS/"effects/color.glsl").read_text(encoding="utf-8")
+        self.assertIn("OMNI_EXPOSURE_TARGET/exp",text)  # 目标亮度参与目标曝光。
+        self.assertIn("*OMNI_EXPOSURE_SPEED",text)  # 适应速度参与混合。
+
     def test_horizon_ao_is_selectable_and_expands(self):
         """地平线环境遮蔽通过算法选项接入合成，螺旋路径仍然保留。"""
         found,_,_ = build.configuration()

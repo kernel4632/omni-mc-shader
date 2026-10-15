@@ -35,6 +35,10 @@
 #define OMNI_EXPOSURE 1.0 // [0.5 0.75 1.0 1.5 2.0 3.0]
 // @option {"label":{"zh_cn":"自动曝光","en_us":"Auto exposure"}}
 //#define OMNI_AUTO_EXPOSURE
+// @option {"label":{"zh_cn":"曝光目标亮度","en_us":"Exposure target"},"description":{"zh_cn":"自动曝光想达到的平均亮度；越大画面越亮。","en_us":"Target average luminance the auto exposure aims for; higher makes the image brighter."},"slider":true}
+#define OMNI_EXPOSURE_TARGET 0.18 // [0.1 0.18 0.25 0.4]
+// @option {"label":{"zh_cn":"曝光适应速度","en_us":"Exposure speed"},"description":{"zh_cn":"亮度变化后曝光跟上的快慢；越大越快也越容易闪烁。","en_us":"How fast exposure follows a brightness change; higher is faster but more prone to flicker."},"slider":true}
+#define OMNI_EXPOSURE_SPEED 1.5 // [0.5 1.0 1.5 3.0]
 // @option {"label":{"zh_cn":"对比度","en_us":"Contrast"},"slider":true}
 #define OMNI_CONTRAST 1.0 // [0.75 1.0 1.1 1.25]
 // @option {"label":{"zh_cn":"饱和度","en_us":"Saturation"},"slider":true}
@@ -119,10 +123,10 @@ float omniExposure(vec2 uv) {
         }
     }
     if (!omniFinite(sum)) return OMNI_EXPOSURE; // 测光样本无效时退回固定曝光，避免无效值扩散。
-    float target = clamp(0.18/exp(sum/9.0),0.25,8.0); // 目标曝光限制在合理范围，防止无限增大。
+    float target = clamp(OMNI_EXPOSURE_TARGET/exp(sum/9.0),0.25,8.0); // 目标曝光限制在合理范围，目标亮度可调，防止无限增大。
     float old = texture(colortex5,vec2(0.5)).g; // 上一帧曝光保存在普通历史像素。
     if (!omniHistoryValid() || !omniFinite(old)) return target*OMNI_EXPOSURE; // 新场景或历史无效时直接初始化。
-    return mix(old,target*OMNI_EXPOSURE,1.0-exp(-clamp(frameTime,0.0,0.5)*1.5)); // 帧率无关的缓慢适应。
+    return mix(old,target*OMNI_EXPOSURE,1.0-exp(-clamp(frameTime,0.0,0.5)*1.5*OMNI_EXPOSURE_SPEED)); // 帧率无关的缓慢适应，速度选项整体加快或减慢。
 #else
     return OMNI_EXPOSURE; // 固定曝光无需测光采样。
 #endif
