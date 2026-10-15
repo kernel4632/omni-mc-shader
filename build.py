@@ -243,6 +243,9 @@ def option_source(text: str, found: dict, values: dict[str, str]) -> str:
     """
     result = []  # 保留业务源行。
     for line in text.splitlines():
+        if "define" not in line and "const" not in line:  # 绝大多数业务行两个词都不含，先廉价跳过，避免对每行都跑正则。
+            result.append(line)  # 明显不是选项声明的行原样保留。
+            continue
         definition = menu.DEFINE.fullmatch(line)  # 只替换原生宏声明。
         if definition and definition[2] in found:  # 只动扫描器登记的原生宏，不改普通宏。
             name, value = definition[2], values[definition[2]]  # 仅替换声明，不改业务分支。
@@ -281,10 +284,17 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list) -> None:
     expanded_cache = {}  # 本次检查共享读取结果，不把源码缓存带到下次运行。
     expanded = {source: expand(source, sourceNumbers=source_numbers, cache=expanded_cache) for source in entries}  # 展开后保留原始文件编号。
     print("入口展开完成，开始检查选项接入", flush=True)  # 长时间离线检查期间及时给出阶段状态。
-    for name in found:  # 验证选项接入算法。
-        reachable = [text for text in expanded.values() if re.search(r"^\s*(?://\s*)?#define\s+" + name + r"\b|^\s*const\s+\w+\s+" + name + r"\b", text, re.MULTILINE)]
-        used = [re.sub(r"^.*(?:#define|@option).*\n?", "", text, flags=re.MULTILINE) for text in reachable]  # 定义与说明本身不算算法接入。
-        if not reachable or not any(re.search(r"\b" + name + r"\b", text) for text in used):
+    # 预先为每个展开文本各扫一次，得到“声明过的选项名”和“去掉声明后的标识符集合”，
+    # 避免下面每个选项都对整段文本重复跑正则；文本很大时这是主要的检查开销来源。
+    declared_names, used_words = [], []  # 与 `expanded` 的顺序一一对应。
+    for text in expanded.values():
+        names = set(re.findall(r"(?m)^\s*(?://\s*)?#define\s+(\w+)", text))  # 宏声明。
+        names |= set(re.findall(r"(?m)^\s*const\s+\w+\s+(\w+)\s*=", text))  # 原生常量声明。
+        body = re.sub(r"(?m)^.*(?:#define|@option).*\n?", "", text)  # 去掉宏定义与说明行，剩下的才是算法接入。
+        declared_names.append(names)
+        used_words.append(set(re.findall(r"\b\w+\b", body)))
+    for name in found:  # 验证选项接入算法：同一选项必须在同一个入口里既声明又使用。
+        if not any(name in declared_names[index] and name in used_words[index] for index in range(len(declared_names))):
             raise ValueError(f"选项 {name} 没有接入任何实际入口或计算")
     programs = {}  # 同名入口的多个绘制阶段必须作为一个链接程序。
     for source in entries:

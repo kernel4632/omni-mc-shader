@@ -127,6 +127,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniReflectionFilter(hitUv,target.z,roughness)",text)  # 使用命中深度做相似度判断。
         self.assertIn("OMNI_REFLECTION_DENOISE == 1",text)  # 旧路径由选项分派保留。
 
+    def test_reflection_fallback_uses_full_sky(self):
+        """屏幕外反射回退复用天空、云与氛围的同一套合成，而不是只有纯天空色。"""
+        text = (build.SHADERS/"effects/reflection.glsl").read_text(encoding="utf-8")
+        self.assertIn("omniAtmosphere(omniCloud(omniSky(skyDirection)",text)  # 回退色与背景天空一致。
+        self.assertIn('#include "/effects/cloud.glsl"',text)  # 反射确实引入了云。
+        self.assertIn('#include "/effects/atmosphere.glsl"',text)  # 反射确实引入了氛围。
+
     def test_temporal_denoise_rotates_noise(self):
         """时序噪声逐帧旋转相位，地平线遮蔽在时间抗锯齿下可重建去噪。"""
         found,_,_ = build.configuration()

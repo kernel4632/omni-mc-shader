@@ -40,6 +40,9 @@
 #define OMNI_REFLECTION_DENOISE 1 // [0 1]
 // 天空回退色由天空文件提供。
 #include "/effects/sky.glsl"
+// 屏幕外反射回退要与背景天空一致，所以复用云与氛围的合成，而不是只取纯天空色。
+#include "/effects/cloud.glsl"
+#include "/effects/atmosphere.glsl"
 // 投影、逆投影和视空间还原都在这里，反射步进依赖它们。
 #include "/common/coordinates.glsl"
 // --- 反射去噪：按命中深度相似度加权邻点颜色 ---
@@ -96,7 +99,8 @@ bool omniDistantHit(vec3 point, float stride, out vec2 hitUv, out vec3 target) {
 // 这是本文件的算法主干，整段从上往下读：算方向，定回退色，逐步试探，首次命中即停止。
 vec3 omniReflected(vec3 view, vec3 normal, float roughness) {
     vec3 ray = reflect(omniNormalize(view),normal); // 在视空间求反射方向，省去把方向转回世界空间。
-    vec3 reflected = omniSky(mat3(gbufferModelViewInverse)*ray); // 先把回退色设成天空，屏幕外或被挡住时用它。
+    vec3 skyDirection = mat3(gbufferModelViewInverse)*ray; // 反射方向转到世界空间，天空、云、氛围共用它。
+    vec3 reflected = omniAtmosphere(omniCloud(omniSky(skyDirection),skyDirection,32000.0),skyDirection); // 回退色与背景天空同一套合成，屏幕外反射也能看到云与氛围。
 #ifdef OMNI_SSR
     vec3 point = view + normal*0.15; // 起点沿法线抬起一点，避免刚出发就打到自己所在的表面。
     for (int i=0;i<OMNI_SSR_STEPS;i++) {
