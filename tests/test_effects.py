@@ -62,6 +62,9 @@ class EffectTests(unittest.TestCase):
         self.assertIn("float omniSpiralOcclusion",text)  # 旧螺旋路径没有被删除。
         self.assertIn("vec2 omniHorizon",text)  # 每方向地平线搜索独立成函数，并返回有效标记。
         self.assertIn("if (!found) return 0.0;",text)  # 无有效邻点时这一片不得当成最大遮挡。
+        self.assertIn("OMNI_AO_STRENGTH",found); self.assertIn("OMNI_BOUNCE_STRENGTH",found)  # 遮蔽与反弹强度可调。
+        self.assertIn("*OMNI_AO_STRENGTH",text)  # 遮蔽强度参与遮挡系数。
+        self.assertIn("*OMNI_BOUNCE_STRENGTH",text)  # 反弹强度参与反弹叠加。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开全部引用。
         self.assertIn("omniHorizonOcclusion",source)  # 合成阶段包含地平线遮蔽。
 

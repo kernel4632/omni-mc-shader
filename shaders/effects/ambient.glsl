@@ -19,6 +19,10 @@
 //#define OMNI_SCREEN_BOUNCE
 // @option {"label":{"zh_cn":"环境采样半径","en_us":"Ambient radius"}}
 #define OMNI_AMBIENT_RADIUS 1.5 // [0.5 1.0 1.5 3.0]
+// @option {"label":{"zh_cn":"遮蔽强度","en_us":"AO strength"},"slider":true}
+#define OMNI_AO_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"反弹强度","en_us":"Bounce strength"},"slider":true}
+#define OMNI_BOUNCE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // 屏幕坐标换算、视空间重建与天空判定由统一坐标模块提供。
 #include "/common/coordinates.glsl"
 // 归一化与可重复随机数由统一数学模块提供。
@@ -161,13 +165,13 @@ vec3 omniBounce(vec3 view, vec3 normal, vec2 uv) {
 vec3 omniAmbient(vec3 color, vec3 view, vec3 normal, vec2 uv) {
 #ifdef OMNI_SSAO
 #if OMNI_AO_MODE == 1
-    color *= 1.0-omniHorizonOcclusion(view,normal,uv); // 地平线遮挡更贴合真实遮挡。
+    color *= 1.0-clamp(omniHorizonOcclusion(view,normal,uv)*OMNI_AO_STRENGTH,0.0,1.0); // 地平线遮挡更贴合真实遮挡；强度选项整体放大或缩小。
 #else
-    color *= 1.0-omniSpiralOcclusion(view,normal,uv); // 螺旋遮挡保持旧画面。
+    color *= 1.0-clamp(omniSpiralOcclusion(view,normal,uv)*OMNI_AO_STRENGTH,0.0,1.0); // 螺旋遮挡保持旧画面；强度选项整体放大或缩小。
 #endif
 #endif
 #ifdef OMNI_SCREEN_BOUNCE
-    color += omniBounce(view,normal,uv); // 屏幕里可见的一次反弹。
+    color += omniBounce(view,normal,uv)*OMNI_BOUNCE_STRENGTH; // 屏幕里可见的一次反弹，强度可调。
 #endif
 #if defined IRIS_FEATURE_COMPUTE_SHADERS && defined OMNI_LPV_ENABLED
     color += omniLpvSample(omniLpvTex,omniWorld(view)) * OMNI_LPV_STRENGTH; // 只有计算路径确认存在时才叠加体积光，避免基础路径读未写入纹理。
