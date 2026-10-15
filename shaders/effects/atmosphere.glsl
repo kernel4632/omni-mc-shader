@@ -12,7 +12,7 @@
 //#define OMNI_AURORA
 // @option {"label":{"zh_cn":"彩虹","en_us":"Rainbow"}}
 //#define OMNI_RAINBOW
-// @option {"label":{"zh_cn":"闪电照明","en_us":"Lightning illumination"},"description":{"zh_cn":"读取加载器实际闪电强度；没有该输入时关闭，不生成虚假天气事件。","en_us":"Uses Iris lightning strength; disabled without the actual event input."}}
+// @option {"label":{"zh_cn":"闪电照明","en_us":"Lightning illumination"},"description":{"zh_cn":"读取加载器实际闪电强度；没有该输入时关闭，不生成虚假天气事件。","en_us":"Uses Iris lightning strength; disabled without the actual event input."},"page":"weather"}
 #define OMNI_LIGHTNING
 // @option {"label":{"zh_cn":"解析大气散射","en_us":"Analytic atmosphere"},"description":{"zh_cn":"用解析单次散射近似天空，不引入外部查找表纹理。","en_us":"Approximates the sky with analytic single scattering, no external lookup table."}}
 #define OMNI_ATMOSPHERE_SCATTER 1 // [0 1]
@@ -22,7 +22,7 @@
 #define OMNI_RAINBOW_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"散射强度","en_us":"Scatter strength"},"slider":true}
 #define OMNI_SCATTER_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"闪电强度","en_us":"Lightning strength"},"slider":true}
+// @option {"label":{"zh_cn":"闪电强度","en_us":"Lightning strength"},"slider":true,"page":"weather"}
 #define OMNI_LIGHTNING_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // 共用颜色与天气输入：天空色、云与太阳方向都来自这里的定义。
 #include "/effects/sky.glsl"
