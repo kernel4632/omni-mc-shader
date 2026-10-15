@@ -21,6 +21,10 @@
 #define OMNI_AMBIENT_RADIUS 1.5 // [0.5 1.0 1.5 3.0]
 // @option {"label":{"zh_cn":"遮蔽强度","en_us":"AO strength"},"slider":true}
 #define OMNI_AO_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"遮蔽方向数","en_us":"AO slices"},"description":{"zh_cn":"绕视线切分的方向数量；越多越稳也越贵。","en_us":"Number of slices around the view; more is steadier but costlier."}}
+#define OMNI_AO_SLICES 3 // [2 3 4]
+// @option {"label":{"zh_cn":"遮蔽步数","en_us":"AO steps"},"description":{"zh_cn":"每个方向搜索地平线的步数；越多越贴合真实遮挡。","en_us":"Horizon search steps per direction; more matches true occlusion better."}}
+#define OMNI_AO_STEPS 6 // [4 6 8 12]
 // @option {"label":{"zh_cn":"反弹强度","en_us":"Bounce strength"},"slider":true}
 #define OMNI_BOUNCE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // 屏幕坐标换算、视空间重建与天空判定由统一坐标模块提供。
@@ -89,7 +93,7 @@ vec2 omniHorizon(vec3 view, vec3 viewDirection, vec2 sampleUv) {
 // 一个切片方向上的半球可见缺口：把法线投到切片平面，向两侧搜索最大地平线，再积分这一段遮挡。
 // 两侧都没有有效样本时返回零，表示这一片没有遮挡证据，不参与累加，绝不能当成最强遮挡。
 float omniSliceOcclusion(vec3 view, vec3 viewDirection, vec3 normal, vec2 uv, float sliceAngle) {
-    const int steps = 6; // 每个方向的地平线搜索步数，越多越贴合真实遮挡。
+    const int steps = OMNI_AO_STEPS; // 每个方向的地平线搜索步数，可调，越多越贴合真实遮挡。
     vec3 sliceDirection = vec3(cos(sliceAngle),sin(sliceAngle),0.0); // 切片在屏幕平面里的方向。
     vec3 orthogonal = sliceDirection-dot(sliceDirection,viewDirection)*viewDirection; // 切片方向正交到视线的分量。
     vec3 axis = cross(sliceDirection,viewDirection); // 切片平面的法向，用来把法线投影进来。
@@ -114,7 +118,7 @@ float omniSliceOcclusion(vec3 view, vec3 viewDirection, vec3 normal, vec2 uv, fl
 }
 // 地平线环境遮蔽：绕视线均匀切片，累加每个切片方向的可见缺口，得到整个半球被挡住的比重。
 float omniHorizonOcclusion(vec3 view, vec3 normal, vec2 uv) {
-    const int slices = 3; // 环绕视线的切片数量，越多越稳但越贵。
+    const int slices = OMNI_AO_SLICES; // 环绕视线的切片数量，可调，越多越稳但越贵。
 #if defined OMNI_ANTIALIASING && OMNI_AA_MODE == 2 && OMNI_TEMPORAL_DENOISE == 1
     float phase = omniTemporalNoise(vec2(gl_FragCoord.xy)); // 时间抗锯齿开启时逐帧旋转，历史帧重建去噪。
 #else

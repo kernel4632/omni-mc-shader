@@ -74,6 +74,9 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_AO_STRENGTH",found); self.assertIn("OMNI_BOUNCE_STRENGTH",found)  # 遮蔽与反弹强度可调。
         self.assertIn("*OMNI_AO_STRENGTH",text)  # 遮蔽强度参与遮挡系数。
         self.assertIn("*OMNI_BOUNCE_STRENGTH",text)  # 反弹强度参与反弹叠加。
+        self.assertIn("OMNI_AO_SLICES",found); self.assertIn("OMNI_AO_STEPS",found)  # 遮蔽方向数与步数可调。
+        self.assertIn("const int steps = OMNI_AO_STEPS",text)  # 步数来自选项。
+        self.assertIn("const int slices = OMNI_AO_SLICES",text)  # 方向数来自选项。
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从实际合成入口展开全部引用。
         self.assertIn("omniHorizonOcclusion",source)  # 合成阶段包含地平线遮蔽。
 
