@@ -168,6 +168,8 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
 #if OMNI_CLOUD_SHADOW == 1 && !defined OMNI_NETHER && !defined OMNI_END
     cloudShade = omniCloudShadow(world); // 云影同时衰减漫反射与镜面。
 #endif
+    // 云影也压一点天光：云挡住太阳时整片环境光同样略暗，比只压直射光更接近真实；云影关闭时 cloudShade 恒为一，这一步等于没做。
+    ambient *= mix(1.0, cloudShade, OMNI_CLOUD_SHADOW_AMBIENT); // 影响程度由选项控制，取零只压直射光。
     vec3 lightColor = ambient * materialAo + vec3(0.012) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * omniTint(OMNI_BLOCKLIGHT_TINT) * block * OMNI_BLOCKLIGHT_STRENGTH; // 环境光已含总强度，这里只补一份随强度缩放的基底；材质遮蔽只压低环境光，不削弱直接光；方块光颜色与强度可调。
     float weather = 1.0 - rainStrength * 0.65; // 雨天统一压低直射能量，漫反射与镜面共用。
     float metal = step(230.0/255.0, materialParams.y); // 金属不产生直射漫反射，直射光只以高光形式出现。

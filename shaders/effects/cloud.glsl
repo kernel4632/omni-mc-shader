@@ -39,6 +39,8 @@
 #define OMNI_CLOUD_SHADOW 1 // [0 1]
 // @option {"label": {"zh_cn": "云影浓淡", "en_us": "Cloud shadow strength"}, "slider": true, "description": {"zh_cn": "云影有多明显。", "en_us": "How dark the cloud shadows are."}}
 #define OMNI_CLOUD_SHADOW_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label": {"zh_cn": "云影影响天光", "en_us": "Cloud shadow on skylight"}, "slider": true, "description": {"zh_cn": "云挡住太阳时，除了直射光变暗，环境光也跟着暗多少；取零只压直射光。", "en_us": "How much the ambient light dims under cloud shadow in addition to the direct light; zero dims only the direct light."}}
+#define OMNI_CLOUD_SHADOW_AMBIENT 0.5 // [0.0 0.25 0.5 0.75 1.0]
 // @option {"label": {"zh_cn": "云精细度", "en_us": "Cloud detail"}, "description": {"zh_cn": "云沿视线的采样次数；越高越厚实也越耗性能。", "en_us": "Samples along the view; higher is denser but costlier."}, "values": {"8": {"zh_cn": "低", "en_us": "Low"}, "16": {"zh_cn": "中", "en_us": "Medium"}, "32": {"zh_cn": "高", "en_us": "High"}}}
 #define OMNI_CLOUD_STEPS 16 // [8 16 32]
 // 天空颜色与云照明共享天体输入；加载器输入显式引入，不依赖间接包含。
