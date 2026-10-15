@@ -148,6 +148,22 @@ class EffectTests(unittest.TestCase):
         source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
         self.assertIn("omniPlanarCloud",source)  # 合成阶段能取到平面云做法。
 
+    def test_cloud_weather_sets_and_lighting(self):
+        """云在晴天与雨天各有一套覆盖/厚度/密度/尺度/受光，按湿润度切换。"""
+        found,_,_ = build.configuration()
+        for name in ("OMNI_CLOUD_DENSITY","OMNI_CLOUD_SUNLIGHT","OMNI_CLOUD_SKYLIGHT",
+                     "OMNI_CLOUD_RAIN_COVERAGE","OMNI_CLOUD_RAIN_THICKNESS","OMNI_CLOUD_RAIN_DENSITY",
+                     "OMNI_CLOUD_RAIN_SCALE","OMNI_CLOUD_RAIN_SUNLIGHT","OMNI_CLOUD_RAIN_SKYLIGHT"):
+            self.assertIn(name,found)  # 每个晴雨参数都由云源码定义。
+        text = (build.SHADERS/"effects/cloud.glsl").read_text(encoding="utf-8")
+        self.assertIn("float omniCloudWeather",text)  # 晴雨切换独立成函数。
+        self.assertIn("mix(OMNI_CLOUD_COVERAGE,OMNI_CLOUD_RAIN_COVERAGE,omniCloudWeather())",text)  # 云量按天气插值。
+        self.assertIn("mix(OMNI_CLOUD_SUNLIGHT,OMNI_CLOUD_RAIN_SUNLIGHT,omniCloudWeather())",text)  # 受光按天气插值。
+        self.assertIn("*omniCloudDensityMul()",text)  # 密度倍率参与消光。
+        self.assertIn("*omniCloudThickness()",text)  # 厚度按天气切换并参与光程。
+        source = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
+        self.assertIn("omniCloudWeather",source)  # 合成阶段包含晴雨切换。
+
     def test_underwater_volumetric_shafts(self):
         """水下体积光沿视线步进阴影，接入合成雾且可关闭。"""
         found,_,_ = build.configuration()
