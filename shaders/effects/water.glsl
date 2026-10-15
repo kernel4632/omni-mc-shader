@@ -31,6 +31,8 @@
 #define OMNI_OCEAN_WAVES 1 // [0 1]
 // @option {"label":{"zh_cn":"波速","en_us":"Wave speed"},"slider":true}
 #define OMNI_WAVE_SPEED 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"波尺度","en_us":"Wave scale"},"slider":true}
+#define OMNI_WAVE_SCALE 1.0 // [0.5 1.0 2.0 4.0]
 // @option {"label":{"zh_cn":"红光吸收","en_us":"Red absorption"},"description":{"zh_cn":"每米红光吸收系数，越大越接近青绿色深水。","en_us":"Per-metre red absorption; higher makes deeper water trend green-blue."},"slider":true}
 #define OMNI_WATER_ABSORB_R 0.19 // [0.05 0.1 0.19 0.35]
 // @option {"label":{"zh_cn":"绿光吸收","en_us":"Green absorption"},"slider":true}
@@ -63,7 +65,8 @@ vec3 omniWaterTransmit(vec3 color, float distance) {
 // 为什么用世界坐标而不是屏幕坐标：世界锚定让波跟着水面走，不随镜头漂移。
 float omniWave(vec2 p, float relativeHeight) {
     float t = frameTimeCounter*OMNI_WAVE_SPEED; // 游戏暂停时由加载器时间行为决定；波速选项整体快慢缩放，取零即冻结。
-    float wave = sin(dot(p,vec2(0.65,0.3))+t*1.2)*0.06 + sin(dot(p,vec2(-0.2,0.8))-t*0.9)*0.04; // 两个方向与速度都不同的正弦，避免看出明显重复。
+    vec2 s = p*OMNI_WAVE_SCALE; // 只缩放解析波的空间频率；雨滴与玩家涟漪仍按真实世界坐标定位。
+    float wave = sin(dot(s,vec2(0.65,0.3))+t*1.2)*0.06 + sin(dot(s,vec2(-0.2,0.8))-t*0.9)*0.04; // 两个方向与速度都不同的正弦，避免看出明显重复。
 #ifdef OMNI_RAIN_RIPPLES
     vec2 cell = floor(p*0.7); // 把水面切成约一点四米一格，每格固定一个雨滴落点。
     vec2 center = (cell+vec2(omniHash(cell),omniHash(cell+8.2)))/0.7; // 用格坐标算落点，同一格永远落在同一点，波纹可重复。

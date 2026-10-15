@@ -187,7 +187,7 @@ class EffectTests(unittest.TestCase):
         """水体吸收、散射与波速都是可调参数，且共用同一份光学常数。"""
         found,_,_ = build.configuration()
         for name in ("OMNI_WATER_ABSORB_R","OMNI_WATER_ABSORB_G","OMNI_WATER_ABSORB_B",
-                     "OMNI_WATER_SCATTER_R","OMNI_WATER_SCATTER_G","OMNI_WATER_SCATTER_B","OMNI_WAVE_SPEED"):
+                     "OMNI_WATER_SCATTER_R","OMNI_WATER_SCATTER_G","OMNI_WATER_SCATTER_B","OMNI_WAVE_SPEED","OMNI_WAVE_SCALE"):
             self.assertIn(name,found)  # 每个参数都由效果源码定义。
         water = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")
         self.assertIn("const vec3 omniWaterAbsorbance = vec3(OMNI_WATER_ABSORB_R",water)  # 吸收只由选项组成一处向量。
