@@ -81,10 +81,12 @@ vec3 omniAtmosphere(vec3 color, vec3 direction) {
 // 闪电照明：加载器给出真实闪电事件时，按到闪电的距离照亮附近表面。
 // 天空可见度抑制洞穴闪光，避免不透光的洞里也发亮。
 vec3 omniLightning(vec3 color, vec3 world, float skylight) {
-#if defined OMNI_LIGHTNING && defined IS_IRIS
+#ifdef OMNI_LIGHTNING
+#ifdef IS_IRIS
     float intensity = lightningBoltPosition.w; // 强度来自实际闪电事件，没有事件时为零。
     float boltDistance = length(world-lightningBoltPosition.xyz); // 表面到闪电的距离，越近越亮。
     color += vec3(0.55,0.65,0.9)*intensity*skylight/(1.0+boltDistance*0.01)*OMNI_LIGHTNING_STRENGTH; // 冷白色闪光，距离越远越弱；强度可调。
+#endif
 #endif
     return color; // 没有真实闪电输入时原样返回。
 }

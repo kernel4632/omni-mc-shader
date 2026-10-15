@@ -28,8 +28,10 @@ vec3 omniLpvSample(sampler3D volume, vec3 world) {
     return texture(volume,uvw).rgb; // 硬件三线性插值。
 }
 // 采样共享的块名与阶段可见性：计算写入，其余只读；缺少自定义图像能力时整段不声明，计算阶段写入也跳过。
-#if defined OMNI_COMPUTE && defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
+#ifdef OMNI_LPV_ENABLED
+#if defined OMNI_COMPUTE && defined IRIS_FEATURE_CUSTOM_IMAGES
 layout(rgba8) uniform image3D omniLpvA; // 传播源与片元读取。
 layout(rgba8) uniform image3D omniLpvB; // 传播目标。
+#endif
 #endif
 #endif

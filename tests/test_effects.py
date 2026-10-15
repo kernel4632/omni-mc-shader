@@ -506,11 +506,38 @@ class EffectTests(unittest.TestCase):
                     self.assertNotIn(match[1],macros)  # 和程序宏同名会让整段代码被跳过。
                     self.assertNotIn(match[1],found)  # 和选项同名会让玩家开关变成引入标记。
 
+    def test_boolean_options_are_detected_by_condition(self):
+        """布尔选项必须在某处按定义与未定义各判一次，否则加载器不认它，菜单项也就无法解析。"""
+        found,_,_ = build.configuration()
+        text = "\n".join(path.read_text(encoding="utf-8") for path in build.SHADERS.rglob("*") if path.suffix in (".glsl", ".vsh", ".fsh", ".csh"))
+        for name, option in found.items():
+            if option.values == ("false", "true"):
+                with self.subTest(option=name):
+                    self.assertRegex(text, r"#\s*(?:ifdef|ifndef)\s+" + re.escape(name) + r"\b")
+
+    def test_const_vector_constructors_match_their_type(self):
+        """加载器会解析 const 声明，vecN 构造函数必须给足分量个数；vec4(0.0) 这类简写会被拒绝并让整包加载失败。"""
+        constructor = re.compile(r"const\s+(vec[234])\s+\w+\s*=\s*(vec[234])\(([^;]*)\)\s*;")
+        for path in build.SHADERS.rglob("*"):
+            if path.suffix not in (".glsl", ".vsh", ".fsh", ".csh"):
+                continue
+            for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+                match = constructor.search(line)
+                if not match or match[1] != match[2]:
+                    continue
+                arguments = [part for part in re.split(r",(?![^()]*\))", match[3]) if part.strip()]  # 只数顶层逗号分隔的参数。
+                with self.subTest(path=path.name, line=number):
+                    self.assertEqual(len(arguments), int(match[1][3]))
+
     def test_custom_images_feature_is_declared(self):
         """用自定义图像就必须声明能力开关，缺能力时 LPV 回退到屏幕空间间接光。"""
         settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")
         self.assertIn("CUSTOM_IMAGES",settings["iris.features.optional"])  # 声明为可选能力，缺少时仍能加载。
         self.assertIn("image.omniLpvA",settings)  # 自定义图像仍由绘制设置提供。
+        fields = settings["image.omniLpvA"].split()  # 字段顺序与取值必须符合加载器要求。
+        self.assertEqual(len(fields),9,fields)  # 采样器名加八个设置项。
+        self.assertTrue(fields[1].islower() and fields[2].islower(),fields)  # 像素格式与图像格式用小写。
+        self.assertIn(fields[3],("byte","short","int","float"),fields)  # 像素类型必须是加载器认识的一种。
         for name in ("effects/lpv.glsl","effects/ambient.glsl","rendering/lpv.glsl"):
             text = (build.SHADERS/name).read_text(encoding="utf-8")
             self.assertIn("IRIS_FEATURE_CUSTOM_IMAGES",text)  # 每处图像读写都按能力开关回退。

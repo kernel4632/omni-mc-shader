@@ -84,7 +84,8 @@ vec3 omniUnderwaterShafts(vec3 view, vec3 world, float distance) {
 // 体积光：算出这条视线收到的阳光光柱颜色，下界与末地不参与。
 // 为什么乘 fogAmount：雾越厚光柱越明显，用最终混合权重缩放能让光柱和雾保持一致。
 vec3 omniVolumetricLight(vec3 view, vec3 world, float distance, float density, float fogAmount) {
-#if defined OMNI_VOLUMETRIC_LIGHT && !defined OMNI_NETHER && !defined OMNI_END
+#ifdef OMNI_VOLUMETRIC_LIGHT
+#if !defined OMNI_NETHER && !defined OMNI_END
     vec3 sampleNormal = omniNormalize(mat3(gbufferModelView)*vec3(0.0,1.0,0.0)); // 阴影接口接收视空间法线，整条视线共用向上法线。
     float scattering = 0.0; // 沿视线累计的、带上雾权重的阴影可见性。
     for (int i=0;i<OMNI_VFOG_STEPS;i++) { // 步数可调，越多越平滑也越耗性能。
@@ -95,9 +96,9 @@ vec3 omniVolumetricLight(vec3 view, vec3 world, float distance, float density, f
     vec3 light = omniNormalize(shadowLightPosition); // 当前主光源方向。
     float phase = 0.04 + pow(max(dot(omniNormalize(view),light),0.0),8.0); // 正向面对光源时更亮，强调天体方向。
     return vec3(0.75,0.68,0.5)*scattering/float(OMNI_VFOG_STEPS)*fogAmount*phase*OMNI_VOLUMETRIC_STRENGTH; // 暖白阳光光柱，强度受雾量、相位与强度选项控制。
-#else
-    return vec3(0.0); // 关闭选项或非主世界时不加光柱。
 #endif
+#endif
+    return vec3(0.0); // 关闭选项或非主世界时不加光柱。
 }
 // 雾主体：先算出距离、密度和空气色，再按水下、主世界、下界、末地分别合成。
 vec3 omniFog(vec3 color, vec3 view, vec3 world) {

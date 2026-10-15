@@ -71,4 +71,4 @@ const vec4 colortex2ClearColor = vec4(1.0, 0.0, 0.0, 1.0); // 无材质使用粗
 // 七号清成无效，没有几何或覆盖层的像素不参与屏幕后处理。
 const vec4 colortex7ClearColor = vec4(0.0, 0.0, 0.0, 0.0); // 没有几何或覆盖层时标记无有效元数据。
 // 八号清成零，表示没有水面；每帧清除防止上一帧的水面残留下来。
-const vec4 colortex8ClearColor = vec4(0.0); // 没有水表面的默认值，禁止跨帧残留。
+const vec4 colortex8ClearColor = vec4(0.0, 0.0, 0.0, 0.0); // 没有水表面的默认值，禁止跨帧残留。
