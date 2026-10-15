@@ -174,6 +174,18 @@ class EffectTests(unittest.TestCase):
         source = build.expand(build.SHADERS/"world0/gbuffers_water.vsh")  # 从水面顶点入口展开。
         self.assertIn("omniOceanHeight",source)  # 顶点阶段包含海浪位移。
 
+    def test_water_optics_are_adjustable(self):
+        """水体吸收、散射与波速都是可调参数，且共用同一份光学常数。"""
+        found,_,_ = build.configuration()
+        for name in ("OMNI_WATER_ABSORB_R","OMNI_WATER_ABSORB_G","OMNI_WATER_ABSORB_B",
+                     "OMNI_WATER_SCATTER_R","OMNI_WATER_SCATTER_G","OMNI_WATER_SCATTER_B","OMNI_WAVE_SPEED"):
+            self.assertIn(name,found)  # 每个参数都由效果源码定义。
+        water = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")
+        self.assertIn("const vec3 omniWaterAbsorbance = vec3(OMNI_WATER_ABSORB_R",water)  # 吸收只由选项组成一处向量。
+        self.assertIn("omniWaterTransmit",water)  # 吸收与散射共用一个函数。
+        fog = (build.SHADERS/"effects/fog.glsl").read_text(encoding="utf-8")
+        self.assertIn("omniWaterTransmit(color,distance)",fog)  # 水下雾复用同一份水体光学常数。
+
     def test_climate_snow_and_wet(self):
         """气候温度按高度与噪声估计，驱动自然积雪与湿润且可回退手动值。"""
         found,_,_ = build.configuration()

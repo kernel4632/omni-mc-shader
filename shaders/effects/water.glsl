@@ -29,13 +29,27 @@
 #define OMNI_WATER_BUMP 1 // [0 1]
 // @option {"label":{"zh_cn":"物理海浪","en_us":"Ocean waves"},"description":{"zh_cn":"盖斯特纳波同时抬升顶点与法线，侧面与瀑布保持原法线。","en_us":"Gerstner waves lift vertices and normals together; side faces keep their normals."}}
 #define OMNI_OCEAN_WAVES 1 // [0 1]
+// @option {"label":{"zh_cn":"波速","en_us":"Wave speed"},"slider":true}
+#define OMNI_WAVE_SPEED 1.0 // [0.0 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"红光吸收","en_us":"Red absorption"},"description":{"zh_cn":"每米红光吸收系数，越大越接近青绿色深水。","en_us":"Per-metre red absorption; higher makes deeper water trend green-blue."},"slider":true}
+#define OMNI_WATER_ABSORB_R 0.19 // [0.05 0.1 0.19 0.35]
+// @option {"label":{"zh_cn":"绿光吸收","en_us":"Green absorption"},"slider":true}
+#define OMNI_WATER_ABSORB_G 0.065 // [0.02 0.04 0.065 0.12]
+// @option {"label":{"zh_cn":"蓝光吸收","en_us":"Blue absorption"},"slider":true}
+#define OMNI_WATER_ABSORB_B 0.035 // [0.01 0.02 0.035 0.07]
+// @option {"label":{"zh_cn":"水体散射红","en_us":"Scatter red"},"slider":true}
+#define OMNI_WATER_SCATTER_R 0.015 // [0.0 0.015 0.04 0.08]
+// @option {"label":{"zh_cn":"水体散射绿","en_us":"Scatter green"},"slider":true}
+#define OMNI_WATER_SCATTER_G 0.075 // [0.02 0.05 0.075 0.12]
+// @option {"label":{"zh_cn":"水体散射蓝","en_us":"Scatter blue"},"slider":true}
+#define OMNI_WATER_SCATTER_B 0.095 // [0.03 0.06 0.095 0.15]
 // 反射和坐标重建的共用实现：水面反射复用它读取已保存的不透明画面。
 #include "/effects/reflection.glsl"
 // --- 水体光学常数 ---
 // 红衰减最快、绿居中、蓝最慢，所以水越深越偏青绿，最终趋向水体散射色。
-// 只在这一个地方定义：水面合成与水下雾都从这里取，避免两处各写一份而对不上数值。
-const vec3 omniWaterAbsorbance = vec3(0.19,0.065,0.035); // 每米吸收系数，红最高。
-const vec3 omniWaterScatter = vec3(0.015,0.075,0.095); // 水体自身散射色，深度足够时趋向它。
+// 六个系数都来自上方可调选项，只在这里组成向量；水面合成与水下雾都从这里取，避免两处各写一份。
+const vec3 omniWaterAbsorbance = vec3(OMNI_WATER_ABSORB_R,OMNI_WATER_ABSORB_G,OMNI_WATER_ABSORB_B); // 每米分波段吸收系数。
+const vec3 omniWaterScatter = vec3(OMNI_WATER_SCATTER_R,OMNI_WATER_SCATTER_G,OMNI_WATER_SCATTER_B); // 水体自身散射色。
 // 按距离对颜色做分波段吸收并混入散射：`distance` 是光在水里走过的米数。
 vec3 omniWaterTransmit(vec3 color, float distance) {
     vec3 absorbed = exp(-omniWaterAbsorbance*distance); // 各波段仍然保留的比例。
@@ -48,7 +62,7 @@ vec3 omniWaterTransmit(vec3 color, float distance) {
 //   玩家涟漪，相机贴水移动时出现的圆环。
 // 为什么用世界坐标而不是屏幕坐标：世界锚定让波跟着水面走，不随镜头漂移。
 float omniWave(vec2 p, float relativeHeight) {
-    float t = frameTimeCounter; // 游戏暂停时由加载器时间行为决定，本文件不额外冻结时间。
+    float t = frameTimeCounter*OMNI_WAVE_SPEED; // 游戏暂停时由加载器时间行为决定；波速选项整体快慢缩放，取零即冻结。
     float wave = sin(dot(p,vec2(0.65,0.3))+t*1.2)*0.06 + sin(dot(p,vec2(-0.2,0.8))-t*0.9)*0.04; // 两个方向与速度都不同的正弦，避免看出明显重复。
 #ifdef OMNI_RAIN_RIPPLES
     vec2 cell = floor(p*0.7); // 把水面切成约一点四米一格，每格固定一个雨滴落点。
@@ -83,7 +97,7 @@ float omniOceanHeight(vec2 p) {
 #if OMNI_OCEAN_WAVES == 0
     return 0.0; // 关闭海浪时高度为零，顶点不动、法线也不变，等价于没有这一层。
 #else
-    float t = frameTimeCounter; // 游戏时间驱动海浪起落。
+    float t = frameTimeCounter*OMNI_WAVE_SPEED; // 游戏时间驱动海浪起落，波速选项与解析波共用同一起落快慢。
     float height = 0.0; float amplitude = 0.5; float frequency = 0.08; // 起始振幅和频率，决定最大浪高与波长。
     vec2 direction = normalize(vec2(1.0,0.3)); // 第一层浪的方向。
     for (int i=0;i<4;i++) {
