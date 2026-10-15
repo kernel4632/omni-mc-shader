@@ -289,6 +289,15 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniTint(OMNI_SUN_TINT)",text)  # 直射光应用色温。
         self.assertIn("omniTint(OMNI_BLOCKLIGHT_TINT)",text)  # 方块光应用色温。
 
+    def test_lightweight_preset_disables_heavy_effects(self):
+        """轻量预设关闭阴影、高光、气候、云影与水面细节等较重的默认效果。"""
+        _, profiles, _ = build.configuration()
+        lightweight = next(profile for profile in profiles if profile.name == "lightweight")  # 找到轻量预设。
+        for name in ("OMNI_SHADOW_ENABLED","OMNI_SSAO","OMNI_SSR","OMNI_SPECULAR","OMNI_CLIMATE",
+                     "OMNI_CLOUD_SHADOW","OMNI_WATER_BUMP","OMNI_OCEAN_WAVES","OMNI_UNDERWATER_FOG",
+                     "OMNI_END_FOG","OMNI_LENS_FLARE","OMNI_VEGETATION_WIND","OMNI_RAIN_RIPPLES"):
+            self.assertIn(lightweight.values[name],("false","0"),name)  # 每个较重的效果在轻量预设里都被关闭。
+
     def test_edge_adaptive_upscale_is_optional(self):
         """边缘自适应重采样作为最终显示前的可选滤波，默认关闭保持原行为。"""
         found,_,_ = build.configuration()
