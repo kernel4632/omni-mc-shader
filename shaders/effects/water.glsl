@@ -21,6 +21,8 @@
 #define OMNI_WAVE_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"水折射","en_us":"Water refraction"}}
 #define OMNI_WATER_REFRACTION
+// @option {"label":{"zh_cn":"折射强度","en_us":"Refraction strength"},"slider":true}
+#define OMNI_REFRACTION_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"雨滴水纹","en_us":"Rain ripples"}}
 #define OMNI_RAIN_RIPPLES
 // @option {"label":{"zh_cn":"玩家互动水纹","en_us":"Player ripples"},"description":{"zh_cn":"相机靠近水面移动时生成解析圆环；不是物理模拟，不读取其他实体。","en_us":"Analytic rings near a moving camera, not a fluid simulation or other entity tracking."}}
@@ -148,7 +150,7 @@ vec3 omniWater(vec3 color, vec3 view, vec3 normal, vec2 uv) {
     float waterDepth = length(omniSceneView(uv,true))-length(view); // 底面到水面的真实距离：不透明深度减去水面深度。
     float thickness = waterDepth>0.0 ? min(waterDepth,100.0) : 0.0; // 非法或负距离按零厚度，避免 NaN 传播，同时限制在零到一百米。
 #ifdef OMNI_WATER_REFRACTION
-    vec2 candidate = clamp(uv+normal.xy*0.018*min(thickness,3.0),vec2(0.002),vec2(0.998)); // 浅水折射弱、深水折射强，偏移始终留在屏幕内。
+    vec2 candidate = clamp(uv+normal.xy*0.018*OMNI_REFRACTION_STRENGTH*min(thickness,3.0),vec2(0.002),vec2(0.998)); // 浅水折射弱、深水折射强，偏移始终留在屏幕内；强度选项整体放大或缩小。
     if (length(omniSceneView(candidate,true))>length(view)+0.05) refracted = candidate; // 只有偏移后仍在水面之后才采用，防止前景颜色漏进水里。
 #endif
     vec3 transmitted = omniWaterTransmit(texture(colortex3,refracted).rgb,thickness); // 不透明快照含底面辐射，坐标可能已被折射偏移过；再按水体分波段吸收并趋向散射色。
