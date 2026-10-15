@@ -20,11 +20,12 @@ class EffectTests(unittest.TestCase):
                     self.assertLess(float(match[1]),float(match[2]))  # 相等或反序都不受语言保证。
 
     def test_agx_tone_mapping_is_selectable(self):
-        """AgX 通过色调映射选项接入最终显示，简单路径仍然保留。"""
+        """色调映射可选，AgX 与简单路径都保留，并新增 `ACES` 近似。"""
         found,_,_ = build.configuration()  # 原生定义仍是唯一默认值来源。
-        self.assertIn("OMNI_TONE_MAP",found); self.assertEqual(found["OMNI_TONE_MAP"].values,("0","1"))  # 菜单提供两种映射。
+        self.assertIn("OMNI_TONE_MAP",found); self.assertEqual(found["OMNI_TONE_MAP"].values,("0","1","2"))  # 菜单提供三种映射。
         source = build.expand(build.SHADERS/"world0/final.fsh")  # 从加载器实际入口展开。
         self.assertIn("omniToneMapAgx",source)  # 最终显示包含 AgX 曲线。
+        self.assertIn("omniToneMapAces",source)  # 最终显示包含 `ACES` 近似。
         self.assertIn("omniToneMapSimple",source)  # 简单有理映射没有被删除。
         self.assertIn("omniToneMap(color)",source)  # 计算路径由选项统一分派。
 

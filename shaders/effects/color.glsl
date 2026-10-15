@@ -47,8 +47,8 @@
 #define OMNI_WHITE_BALANCE 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // @option {"label":{"zh_cn":"亮度倍率","en_us":"Brightness"},"slider":true}
 #define OMNI_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
-// @option {"label":{"zh_cn":"色调映射","en_us":"Tone mapping"},"description":{"zh_cn":"零用简单有理曲线保持原亮度，一用 AgX 压缩高光并保留饱和。","en_us":"Zero keeps the simple rational curve; one uses AgX filmic highlight compression."}}
-#define OMNI_TONE_MAP 1 // [0 1]
+// @option {"label":{"zh_cn":"色调映射","en_us":"Tone mapping"},"description":{"zh_cn":"零用简单有理曲线，一用 AgX 压缩高光并保留饱和，二用 `ACES` 近似。","en_us":"Zero keeps the simple rational curve, one uses AgX filmic highlight compression, two uses an ACES approximation."}}
+#define OMNI_TONE_MAP 1 // [0 1 2]
 // @option {"label":{"zh_cn":"有序抖动","en_us":"Ordered dither"},"description":{"zh_cn":"用四乘四阈值矩阵打散八位量化色带。","en_us":"A 4x4 ordered matrix breaks 8-bit color banding."}}
 #define OMNI_DITHER 1 // [0 1]
 // 曝光有效性与时间历史判断都由抗锯齿能力提供，引入一次即可共用。
@@ -87,9 +87,17 @@ vec3 omniToneMapAgx(vec3 color) {
     color = 15.5*fourth*squared-40.14*fourth*color+31.96*fourth-6.868*squared*color+0.4298*squared+0.1191*color-0.00232; // 单调 S 曲线压缩高光。
     return clamp(fromWorking*color,0.0,1.0); // 回到显示原色并限制范围。
 }
-// 按选项选择压缩曲线：两条路径都在线性显示空间输出等价的颜色。
+// `ACES` 近似：用公开的 `Narkowicz` 拟合曲线压高光，计算量比 AgX 小，色相略偏暖。
+// 系数来自公开的 `ACES` 拟合多项式，这里按公开公式独立实现，未复制任何光影源码。
+vec3 omniToneMapAces(vec3 color) {
+    const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14; // 拟合系数。
+    return clamp((color*(a*color+b))/(color*(c*color+d)+e),0.0,1.0); // 单调压高光，分母常数保证不为零。
+}
+// 按选项选择压缩曲线：三条路径都在线性显示空间输出等价的颜色。
 vec3 omniToneMap(vec3 color) {
-#if OMNI_TONE_MAP == 1
+#if OMNI_TONE_MAP == 2
+    return omniToneMapAces(color); // `ACES` 近似高光。
+#elif OMNI_TONE_MAP == 1
     return omniToneMapAgx(color); // AgX 电影感高光。
 #else
     return omniToneMapSimple(color); // 简单有理映射。
