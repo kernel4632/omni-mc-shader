@@ -209,6 +209,16 @@ class EffectTests(unittest.TestCase):
         source = build.expand(build.SHADERS/"world0/gbuffers_terrain.fsh")  # 从地形入口展开。
         self.assertIn("omniSpecular",source)  # 地形光照包含镜面高光。
 
+    def test_light_color_temperature_is_adjustable(self):
+        """日月与方块光色温都是可调参数，默认零等于原行为。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_SUN_TINT",found); self.assertIn("OMNI_BLOCKLIGHT_TINT",found)  # 两个色温参数由光照源码定义。
+        self.assertEqual(found["OMNI_SUN_TINT"].default,"0.0")  # 默认中性，不改变现有画面。
+        text = (build.SHADERS/"effects/sunlight.glsl").read_text(encoding="utf-8")
+        self.assertIn("vec3 omniTint",text)  # 色温换算独立成函数。
+        self.assertIn("omniTint(OMNI_SUN_TINT)",text)  # 直射光应用色温。
+        self.assertIn("omniTint(OMNI_BLOCKLIGHT_TINT)",text)  # 方块光应用色温。
+
     def test_edge_adaptive_upscale_is_optional(self):
         """边缘自适应重采样作为最终显示前的可选滤波，默认关闭保持原行为。"""
         found,_,_ = build.configuration()

@@ -12,6 +12,10 @@
 #define OMNI_HELD_LIGHT
 // @option {"label":{"zh_cn":"镜面高光","en_us":"Specular highlights"},"description":{"zh_cn":"GGX 分布与施利克菲涅耳提供直射镜面，粗糙度和金属来自材质。","en_us":"GGX distribution with Schlick Fresnel for direct specular, driven by material roughness and metal."}}
 #define OMNI_SPECULAR 1 // [0 1]
+// @option {"label":{"zh_cn":"日月色温","en_us":"Sun/moon tint"},"description":{"zh_cn":"正值偏暖、负值偏冷，零保持中性；只改直射光颜色不改强度。","en_us":"Positive warms the direct light, negative cools it, zero stays neutral; strength is unchanged."},"slider":true}
+#define OMNI_SUN_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
+// @option {"label":{"zh_cn":"方块光色温","en_us":"Block light tint"},"description":{"zh_cn":"正值更暖、负值更冷，零保持默认暖色；只改方块光颜色。","en_us":"Positive warms the block light, negative cools it, zero keeps the default warm tone."},"slider":true}
+#define OMNI_BLOCKLIGHT_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // 阴影与环境输入只有共同来源。
 #include "/effects/shadow.glsl"
 // 云影需要云密度，主世界直射光按云层衰减。
@@ -37,12 +41,17 @@ vec3 omniSpecular(vec3 normal, vec3 world, vec3 materialParams, vec3 sun, float 
     float visibility = (nv/(nv*(1.0-k)+k))*(nl/(nl*(1.0-k)+k)); // 几何可见性，分母由 k 保证不为零。
     return distribution*fresnel*visibility*nl*shadow; // 返回反射率与阴影。
 }
+// 用一份色温偏移乘到光色上：正值偏暖（加红减蓝），负值偏冷（减红加蓝），零保持中性。
+// 只让红蓝反向移动，绿色不动，避免调整色温时整体亮度变化；振幅固定，选项只控制方向与幅度。
+vec3 omniTint(float amount) {
+    return vec3(1.0+0.25*amount,1.0,1.0-0.25*amount); // 零偏移返回全一，等于不改颜色。
+}
 // 调用位置：rendering/terrain.glsl和rendering/distant.glsl；示例：omniLighting(albedo, normal, world, lightUv, materialParams, materialAo)。
 vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materialParams, float materialAo) {
     vec3 sun = omniNormalize(shadowLightPosition); // 当前阴影天体可为太阳或月亮；退化时为零向量，直接光收敛为零。
     float sunUpDot = dot(omniNormalize(sunPosition), omniNormalize(upPosition)); // 天体与天顶方向的夹角关系。
     float day = smoothstep(-0.15, 0.1, sunUpDot); // 黎明平滑过渡。
-    vec3 direct = mix(vec3(0.16,0.22,0.34), vec3(1.4,1.23,1.0), day); // 日月能量分开。
+    vec3 direct = mix(vec3(0.16,0.22,0.34), vec3(1.4,1.23,1.0), day) * omniTint(OMNI_SUN_TINT); // 日月能量分开；色温选项整体偏暖或偏冷。
     float sky = pow(clamp(light.y, 0.0, 1.0), 2.0); // 原版天空光限制洞穴中的天体照明。
     vec3 ambient = mix(vec3(0.035,0.047,0.075), vec3(0.24,0.32,0.43), day) * sky; // 原版光照提供遮挡依据。
     float block = pow(clamp(light.x, 0.0, 1.0), 3.0); // 方块光保留局部衰减。
@@ -66,7 +75,7 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
 #if OMNI_CLOUD_SHADOW == 1 && !defined OMNI_NETHER && !defined OMNI_END
     cloudShade = omniCloudShadow(world); // 云影同时衰减漫反射与镜面。
 #endif
-    vec3 lightColor = (ambient * materialAo + vec3(0.012)) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * block; // 材质遮蔽只压低环境光，不削弱直接光。
+    vec3 lightColor = (ambient * materialAo + vec3(0.012)) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * omniTint(OMNI_BLOCKLIGHT_TINT) * block; // 材质遮蔽只压低环境光，不削弱直接光；方块光色温可调。
     float weather = 1.0 - rainStrength * 0.65; // 雨天统一压低直射能量，漫反射与镜面共用。
     lightColor += direct * diffuse * sky * weather * OMNI_SUNLIGHT_STRENGTH * cloudShade; // 漫反射。
 #if OMNI_SPECULAR == 1
