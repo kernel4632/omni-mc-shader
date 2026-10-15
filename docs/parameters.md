@@ -125,6 +125,9 @@
 | OMNI_SUN_TINT | 阳光色温 | 阳光 | 数值 | -1–1 | 阳光偏暖还是偏冷 | 已有 |
 | OMNI_AMBIENT_STRENGTH | 环境光强度 | 环境光 | 数值 | 0.25–2.0 | 阴影里多亮 | 已有 |
 | OMNI_AMBIENT_TINT | 环境光色温 | 环境光 | 数值 | -1–1 | 阴影里偏蓝还是偏暖 | 已有 |
+| OMNI_SKYLIGHT_STRENGTH | 天光强度 | 环境光 | 数值 | 0.0–2.0 | 环境光里来自天空那一份的占比 | 已有 |
+| OMNI_NIGHT_BRIGHTNESS | 夜间亮度 | 环境光 | 数值 | 0.0–2.0 | 夜里月光与夜空多亮 | 已有 |
+| OMNI_NOLIGHT_BRIGHTNESS | 无光亮度 | 环境光 | 数值 | 0.0–2.0 | 洞穴深处的最低亮度 | 已有 |
 | OMNI_BLOCKLIGHT_STRENGTH | 火把光强度 | 火把光 | 数值 | 0.0–2.0 | 火把照亮范围多亮 | 已有 |
 | OMNI_BLOCKLIGHT_TINT | 火把光色温 | 火把光 | 数值 | -1–1 | 火把光偏橙还是偏白 | 已有 |
 | OMNI_HELD_LIGHT | 手持光开关 | 手持光 | 开关 | 开/关 | 手里拿着光源会不会照亮周围 | 已有 |

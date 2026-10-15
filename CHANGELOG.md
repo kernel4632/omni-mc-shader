@@ -1,5 +1,18 @@
 # 更新记录
 
+## 0.0.0-dev.113
+
+对齐 iterationT 3.2.0 的光照与阴影第一步：把阳光与天光拆分，并补上夜间与无光亮度。
+
+- `shaders/effects/sunlight.glsl` 把太阳与月亮的直射能量、白天与夜间的天空环境光分别列出来，不再混在一条 `mix` 里，昼夜切换和色温调整的来源更清楚。
+- 新增 `OMNI_SKYLIGHT_STRENGTH`（天光强度，默认 1.0）：环境光里来自天空那一份的占比，与阳光强度相互独立。
+- 新增 `OMNI_NIGHT_BRIGHTNESS`（夜间亮度，默认 0.5）：只压月光与夜空的亮度，白天不受影响；默认让夜晚比原来更暗、更接近写实。
+- 新增 `OMNI_NOLIGHT_BRIGHTNESS`（无光亮度，默认 0.5）：洞穴深处既无天光也无火把时的最低亮度，取零表示允许完全变黑。
+- 对齐取自 iterationT 3.2.0 的选项口径（`SUNLIGHT_INTENSITY`、`SKYLIGHT_INTENSITY`、`NIGHT_BRIGHTNESS`、`NOLIGHT_BRIGHTNESS`），按本项目命名重写，未复制参考源码。
+- 选项总数 169 → 172（不删除任何现有选项）。
+
+只做过离线编译与逻辑审查；世界内画面与性能未验证。
+
 ## 0.0.0-dev.112
 
 按审查修三处大气散射的实现问题：

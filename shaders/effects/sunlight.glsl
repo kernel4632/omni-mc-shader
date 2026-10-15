@@ -12,6 +12,12 @@
 #define OMNI_AMBIENT_STRENGTH 1.0 // [0.25 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"环境光色温","en_us":"Ambient light tint"},"description":{"zh_cn":"正值背光偏暖、负值偏冷，零保持中性。","en_us":"Positive warms the shadowed light, negative cools it, zero stays neutral."},"slider":true}
 #define OMNI_AMBIENT_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
+// @option {"label":{"zh_cn":"天光强度","en_us":"Skylight strength"},"description":{"zh_cn":"环境光里来自天空那一份的占比；调高阴影偏蓝亮，调低更接近灰暗。与阳光强度相互独立。","en_us":"Share of ambient that comes from the sky; higher is a bluer shaded look, lower is flatter grey. Independent from sunlight strength."},"slider":true}
+#define OMNI_SKYLIGHT_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"夜间亮度","en_us":"Night brightness"},"description":{"zh_cn":"夜里月光与夜空的亮度倍率；调低夜晚更暗更真实，调高看得更清。白天不受影响。","en_us":"Brightness multiplier for moonlight and the night sky; lower is darker and more realistic, higher is easier to see. Daytime is unaffected."},"slider":true}
+#define OMNI_NIGHT_BRIGHTNESS 0.5 // [0.0 0.25 0.5 1.0 2.0]
+// @option {"label":{"zh_cn":"无光亮度","en_us":"No-light brightness"},"description":{"zh_cn":"洞穴深处这类既没阳光也没火把的地方的最低亮度；取零会完全变黑。","en_us":"Floor brightness where there is neither sunlight nor torch light, such as deep caves; zero goes fully black."},"slider":true}
+#define OMNI_NOLIGHT_BRIGHTNESS 0.5 // [0.0 0.25 0.5 1.0 2.0]
 // @option {"label": {"zh_cn": "火把光强度", "en_us": "Torch light strength"}, "slider": true, "description": {"zh_cn": "火把照亮范围多亮。", "en_us": "How bright block light is."}}
 #define OMNI_BLOCKLIGHT_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"火把光色温","en_us":"Torch light tint"},"description":{"zh_cn":"正值更暖、负值更冷，零保持默认暖色；只改方块光颜色。","en_us":"Positive warms the block light, negative cools it, zero keeps the default warm tone."},"slider":true}
@@ -64,14 +70,23 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
     vec3 sun = omniNormalize(shadowLightPosition); // 当前阴影天体可为太阳或月亮；退化时为零向量，直接光收敛为零。
     float sunUpDot = dot(omniNormalize(sunPosition), omniNormalize(upPosition)); // 天体与天顶方向的夹角关系。
     float day = smoothstep(-0.15, 0.1, sunUpDot); // 黎明平滑过渡。
-    vec3 direct = mix(vec3(0.16,0.22,0.34), vec3(1.4,1.23,1.0), day) * omniTint(OMNI_SUN_TINT); // 日月能量分开；色温选项整体偏暖或偏冷。
+    // 直接把太阳和月亮的能量分开列出来：夜间亮度只压夜间这一端，白天完全不受它影响。
+    vec3 sunDirect = vec3(1.4,1.23,1.0); // 太阳的直射能量与偏暖色。
+    vec3 moonDirect = vec3(0.16,0.22,0.34) * OMNI_NIGHT_BRIGHTNESS; // 月光的直射能量与偏冷色，随夜间亮度整体缩放。
+    vec3 direct = mix(moonDirect, sunDirect, day) * omniTint(OMNI_SUN_TINT); // 日月能量合并；色温选项整体偏暖或偏冷。
     float sky = pow(clamp(light.y, 0.0, 1.0), 2.0); // 原版天空光限制洞穴中的天体照明。
-    vec3 ambient = mix(vec3(0.035,0.047,0.075), vec3(0.24,0.32,0.43), day) * sky; // 原版光照提供遮挡依据。
+    // 天光：天空可见时受到的蓝色环境光，同样随昼夜变化，并随夜间亮度变暗。
+    vec3 skyLight = mix(vec3(0.035,0.047,0.075) * OMNI_NIGHT_BRIGHTNESS, vec3(0.24,0.32,0.43), day) * sky;
+    // 无光地板：既没有天光也没有方块光时的最低亮度，靠它让洞穴不是纯黑；取零表示允许完全黑。
+    vec3 noLight = vec3(0.02,0.022,0.03) * OMNI_NOLIGHT_BRIGHTNESS;
     float block = pow(clamp(light.x, 0.0, 1.0), 3.0); // 方块光保留局部衰减。
 #ifdef OMNI_HELD_LIGHT
     float held = float(max(heldBlockLightValue, heldBlockLightValue2)) / 15.0; // 双手取实际较亮光源。
     block = max(block, held * OMNI_HELD_BRIGHTNESS * max(1.0 - length(world) / 12.0, 0.0) * max(1.0 - length(world) / 12.0, 0.0)); // 无遮挡的手持近似；亮度可调，不声称局部阴影。
 #endif
+    // 环境光底色：主世界是「天光按天光强度取一份，再加无光地板」，天光与环境光强度分离控制；
+    // 下界与末地没有真实天空，直接给一组维度底色，再统一乘环境光强度与色温。
+    vec3 ambient = skyLight * OMNI_SKYLIGHT_STRENGTH + noLight;
 #if defined OMNI_NETHER
     ambient = vec3(0.16,0.065,0.04); // 下界无太阳，使用维度环境光。
     direct *= 0.0; // 下界不保留主世界天体照明。
@@ -79,7 +94,7 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
     ambient = vec3(0.13,0.09,0.18); // 末地冷紫环境光。
     direct *= 0.0; // 末地不使用主世界日月。
 #endif
-    ambient *= omniTint(OMNI_AMBIENT_TINT); // 环境光色温，取零保持中性。
+    ambient *= OMNI_AMBIENT_STRENGTH * omniTint(OMNI_AMBIENT_TINT); // 环境光总强度与色温，取零保持中性。
     float shadow = 1.0; // 其他维度或关闭阴影时直接光不被遮挡。
 #if !defined OMNI_NETHER && !defined OMNI_END
     shadow = omniShadow(world, normal); // 主世界直接光和阴影共同控制亮面。
@@ -89,7 +104,7 @@ vec3 omniLighting(vec3 albedo, vec3 normal, vec3 world, vec2 light, vec3 materia
 #if OMNI_CLOUD_SHADOW == 1 && !defined OMNI_NETHER && !defined OMNI_END
     cloudShade = omniCloudShadow(world); // 云影同时衰减漫反射与镜面。
 #endif
-    vec3 lightColor = (ambient * materialAo + vec3(0.012)) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * omniTint(OMNI_BLOCKLIGHT_TINT) * block * OMNI_BLOCKLIGHT_STRENGTH; // 材质遮蔽只压低环境光，不削弱直接光；方块光颜色与强度可调。
+    vec3 lightColor = ambient * materialAo + vec3(0.012) * OMNI_AMBIENT_STRENGTH + vec3(1.15,0.55,0.20) * omniTint(OMNI_BLOCKLIGHT_TINT) * block * OMNI_BLOCKLIGHT_STRENGTH; // 环境光已含总强度，这里只补一份随强度缩放的基底；材质遮蔽只压低环境光，不削弱直接光；方块光颜色与强度可调。
     float weather = 1.0 - rainStrength * 0.65; // 雨天统一压低直射能量，漫反射与镜面共用。
     float metal = step(230.0/255.0, materialParams.y); // 金属不产生直射漫反射，直射光只以高光形式出现。
     lightColor += direct * diffuse * sky * weather * OMNI_SUNLIGHT_STRENGTH * cloudShade * (1.0 - metal); // 直射漫反射；环境光与方块光仍保留，近似金属对周围环境的反光。
