@@ -102,7 +102,7 @@ float omniSliceOcclusion(vec3 view, vec3 viewDirection, vec3 normal, vec2 uv, fl
 // 缝隙变暗：绕视线均匀切片，累加每个切片方向的可见缺口，得到整个半球被挡住的比重。
 float omniHorizonOcclusion(vec3 view, vec3 normal, vec2 uv) {
     const int slices = OMNI_AO_SLICES; // 环绕视线的切片数量，可调，越多越稳但越贵。
-#if defined OMNI_ANTIALIASING && OMNI_AA_MODE == 2 && OMNI_TEMPORAL_DENOISE == 1
+#if defined OMNI_ANTIALIASING && defined OMNI_AA_ENABLED && OMNI_TEMPORAL_DENOISE == 1
     float phase = omniTemporalNoise(vec2(gl_FragCoord.xy)); // 时间抗锯齿开启时逐帧旋转，历史帧重建去噪。
 #else
     float phase = omniHash(vec2(gl_FragCoord.xy)); // 没有时间重建时保持空间稳定。

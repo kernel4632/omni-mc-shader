@@ -39,7 +39,7 @@ void main() {
 #else
     materialId = 0; gl_Position = gl_ProjectionMatrix*vec4(viewPosition,1.0); // 未启用远景的离线基础路径仍能编译，运行时不会被调用。
 #endif
-#if OMNI_AA_MODE == 2
+#ifdef OMNI_AA_ENABLED
     gl_Position.xy += omniJitter(frameCounter)*2.0/vec2(viewWidth,viewHeight)*gl_Position.w; // 和近景用同一像素抖动，时间合成才能对齐。
 #endif
 }

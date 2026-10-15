@@ -52,7 +52,7 @@ void main() {
     vec2 halfTile=abs(gl_MultiTexCoord0.xy-mc_midTexCoord.xy); // 当前贴图坐标离图块中心有多远。
     bounds=vec4(mc_midTexCoord.xy-halfTile+vec2(0.00001),mc_midTexCoord.xy+halfTile-vec2(0.00001)); // 把图块四角收进一点，视差采样就不会越到隔壁方块。
     gl_Position=gl_ProjectionMatrix*view; // 用兼容投影把相机空间位置投到裁剪空间。
-#if OMNI_AA_MODE == 2 && !defined OMNI_HAND
+#if defined OMNI_AA_ENABLED && !defined OMNI_HAND
     gl_Position.xy+=omniJitter(frameCounter)*2.0/vec2(viewWidth,viewHeight)*gl_Position.w; // 抗锯齿模式二下全场景共用同一像素偏移，手不抖以免糊掉。
 #endif
 }

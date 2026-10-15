@@ -14,7 +14,7 @@
 // 顶点投影时加上、坐标重建时减去，读历史和写历史才能落在同一套像素上精确对齐。
 // 把这段换算收在一处，调用方不必再写条件判断，也不会出现某一处忘记开关的漏洞。
 vec2 omniJitterOffset() {
-#if defined OMNI_ANTIALIASING && OMNI_AA_MODE == 2
+#if defined OMNI_ANTIALIASING && defined OMNI_AA_ENABLED
     return omniJitter(frameCounter)/vec2(viewWidth,viewHeight); // 抖动量以像素为单位，除以分辨率换算成零至一的屏幕偏移。
 #else
     return vec2(0.0); // 没有时间抗锯齿就没有抖动，返回零让减法与加法都退化成恒等操作。

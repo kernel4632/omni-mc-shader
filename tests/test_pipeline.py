@@ -77,7 +77,7 @@ class PipelineTests(unittest.TestCase):
             options.save(root/".dev/user.json",migrated["values"],build.version(),root)
             self.assertEqual(options.shared(root/".dev/user.json",found,build.version()),migrated)  # 导出可再次导入。
             with self.assertRaises(ValueError): options.save(root/"player.json",{},build.version(),root)  # 用户目录不能成为输出。
-            for values in ({"UNKNOWN":"1"},{"OMNI_AA_MODE":"9"},{"OMNI_AA_MODE":2}):
+            for values in ({"UNKNOWN":"1"},{"OMNI_EXPOSURE":"9"},{"OMNI_EXPOSURE":2}):
                 data["values"] = values; source.write_text(json.dumps(data),encoding="utf-8")
                 with self.assertRaises(ValueError): options.shared(source,found,build.version())  # 未知键值都失败。
             data["values"]={}; data["shaderVersion"]="9.0.0"; source.write_text(json.dumps(data),encoding="utf-8")
@@ -187,5 +187,5 @@ class PipelineTests(unittest.TestCase):
         found,_ = options.scan(build.SHADERS)  # 合法范围仍从源码读取。
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary)/"duplicate.json"
-            source.write_text('{"schemaVersion":2,"shaderVersion":"0.0.0-dev.4","values":{"OMNI_AA_MODE":"1","OMNI_AA_MODE":"2"}}',encoding="utf-8")
+            source.write_text('{"schemaVersion":2,"shaderVersion":"0.0.0-dev.4","values":{"OMNI_EXPOSURE":"1","OMNI_EXPOSURE":"2"}}',encoding="utf-8")
             with self.assertRaisesRegex(ValueError,"重复配置字段"): options.shared(source,found,build.version())  # 不同解析器不能得到不同风格。

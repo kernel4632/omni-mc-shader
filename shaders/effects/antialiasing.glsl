@@ -1,18 +1,21 @@
-// 抗锯齿：本文件集中管理屏幕边缘的三件事——本帧几何抖动偏移、快速边缘平滑，以及按相机重投影的时间抗锯齿。
-// 调用位置：几何抖动在 rendering/terrain.glsl 与 rendering/distant.glsl 的顶点阶段调用 omniJitter；rendering/temporal.glsl 调用 omniFxaa 与 omniTaa 完成平滑和时间合成；ambient.glsl 等效果复用 omniTemporalNoise。
-// 可复制示例：`vec2 offset = omniJitter(frameCounter); vec3 smoothed = omniFxaa(uv); vec3 out = omniTaa(color, texcoord, state);`
+// 抗锯齿：本文件集中管理屏幕边缘的两件事——本帧几何抖动偏移，以及按相机重投影的时间抗锯齿。
+// 调用位置：几何抖动在 rendering/terrain.glsl 与 rendering/distant.glsl 的顶点阶段调用 omniJitter；rendering/temporal.glsl 调用 omniTaa 完成时间合成；ambient.glsl 等效果复用 omniTemporalNoise。
+// 可复制示例：`vec2 offset = omniJitter(frameCounter); vec3 out = omniTaa(color, texcoord, state);`
 // 关键设计原因与取舍：抖动值必须来自同一个确定的序列，写历史和读历史才能精确对齐，所以抖动只在本文件定义一次；时间合成不依赖实体速度缓冲，只用相机重投影加邻域裁剪来保守接纳历史。
+// 只保留一套时间重投影算法；强度由「抗锯齿强度」控制，关掉后直接输出当前帧。
 // 降级约定：历史无效、首帧、重载、切维度、传送、分辨率变化、齐次除零或数值越界时，一律保守回退到当前帧颜色，宁可画面短暂不干净，也不制造拖影或污点。
 #ifndef OMNI_ANTIALIASING
 #define OMNI_ANTIALIASING
 
 // --- 选项：抗锯齿算法、历史权重与噪声重建 ---
 // @effect {"label":{"zh_cn":"抗锯齿","en_us":"Antialiasing"}}
-// @option {"label":{"zh_cn":"抗锯齿算法","en_us":"Antialiasing mode"},"description":{"zh_cn":"零关闭，一快速边缘平滑，二带相机重投影的时间抗锯齿；动态物体保守降低历史。","en_us":"Off, FXAA, or camera-reprojected TAA with conservative dynamic rejection."}}
-#define OMNI_AA_MODE 1 // [0 1 2]
-// @option {"label":{"zh_cn":"时间历史权重","en_us":"History weight"}}
+// @option {"label":{"zh_cn":"抗锯齿开关","en_us":"Antialiasing"},"description":{"zh_cn":"用逐帧重投影把边缘和噪点叠平滑；关掉只输出当前帧。","en_us":"Reprojects frame history to smooth edges and noise; off returns the current frame."}}
+#define OMNI_AA_ENABLED
+// @option {"label":{"zh_cn":"抗锯齿强度","en_us":"Antialiasing strength"},"description":{"zh_cn":"越平滑也越容易留下轻微拖影；取零等于关闭。","en_us":"More smoothing but also slight trails; zero equals off."},"slider":true}
+#define OMNI_AA_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0]
+// @option {"label":{"zh_cn":"历史稳定度","en_us":"History stability"},"slider":true}
 #define OMNI_TAA_WEIGHT 0.85 // [0.5 0.7 0.85 0.95]
-// @option {"label":{"zh_cn":"时序噪声重建","en_us":"Temporal denoise"},"description":{"zh_cn":"每帧旋转屏幕噪声相位，配合时间抗锯齿重建去噪。","en_us":"Rotates screen noise each frame so TAA reconstructs a denoised result."}}
+// @option {"label":{"zh_cn":"噪点重建开关","en_us":"Noise rebuild"},"description":{"zh_cn":"每帧旋转屏幕噪声相位，配合时间重投影重建去噪。","en_us":"Rotates screen noise each frame so the reprojection rebuilds a denoised result."}}
 #define OMNI_TEMPORAL_DENOISE 1 // [0 1]
 
 // --- 生成这一帧的几何抖动偏移 ---
@@ -60,35 +63,6 @@ float omniTemporalNoise(vec2 pixel) {
     return fract(omniHash(pixel)+0.6180339887*float(frameCounter%64)); // 空间稳定且逐帧旋转，重建时不会留下固定图案。
 }
 
-// --- 快速边缘平滑：按局部亮度线索做一次边缘方向的混合 ---
-// 先比较中心与上下左右五点，平坦区域直接返回，省下后面的采样；再取四角估计边缘方向，
-// 沿方向做两次对称采样得到内圈与外圈颜色，最后只在局部亮度范围内取外圈，避免糊掉高对比细节。
-vec3 omniFxaa(vec2 uv) {
-    vec2 pixel = 1.0/vec2(viewWidth,viewHeight); // 使用当前分辨率得到单个像素的屏幕步长。
-    vec3 c = texture(colortex6,uv).rgb; // 中心像素的线性颜色。
-    vec3 n = texture(colortex6,clamp(uv+vec2(0,pixel.y),0.0,1.0)).rgb; // 上方像素。
-    vec3 s = texture(colortex6,clamp(uv-vec2(0,pixel.y),0.0,1.0)).rgb; // 下方像素。
-    vec3 e = texture(colortex6,clamp(uv+vec2(pixel.x,0),0.0,1.0)).rgb; // 右方像素。
-    vec3 w = texture(colortex6,clamp(uv-vec2(pixel.x,0),0.0,1.0)).rgb; // 左方像素。
-    float center = omniLuminance(c); // 中心亮度，用作对比范围的参照。
-    float minimum = min(center,min(min(omniLuminance(n),omniLuminance(s)),min(omniLuminance(e),omniLuminance(w)))); // 十字五点亮度下限。
-    float maximum = max(center,max(max(omniLuminance(n),omniLuminance(s)),max(omniLuminance(e),omniLuminance(w)))); // 十字五点亮度上限。
-    if (maximum-minimum<max(0.0312,maximum*0.125)) return c; // 平坦区域保留原色，不引入无意义的模糊。
-    float nw = omniLuminance(texture(colortex6,clamp(uv+vec2(-pixel.x,pixel.y),0.0,1.0)).rgb); // 西北角亮度。
-    float ne = omniLuminance(texture(colortex6,clamp(uv+pixel,0.0,1.0)).rgb); // 东北角亮度。
-    float sw = omniLuminance(texture(colortex6,clamp(uv-pixel,0.0,1.0)).rgb); // 西南角亮度。
-    float se = omniLuminance(texture(colortex6,clamp(uv+vec2(pixel.x,-pixel.y),0.0,1.0)).rgb); // 东南角亮度。
-    minimum = min(minimum,min(min(nw,ne),min(sw,se))); // 加入四角后重新收紧亮度下限。
-    maximum = max(maximum,max(max(nw,ne),max(sw,se))); // 加入四角后重新放宽亮度上限。
-    vec2 direction = vec2(-((nw+ne)-(sw+se)),(nw+sw)-(ne+se)); // 用四角亮度差估计边缘方向。
-    float reduce = max((nw+ne+sw+se)*0.03125,0.0078125); // 低对比区域加大分母，避免方向被噪声放大。
-    direction = clamp(direction/(min(abs(direction.x),abs(direction.y))+reduce),-8.0,8.0)*pixel; // 归一化并限制搜索长度最多八像素。
-    vec3 inner = (texture(colortex6,clamp(uv-direction/6.0,0.0,1.0)).rgb+texture(colortex6,clamp(uv+direction/6.0,0.0,1.0)).rgb)*0.5; // 沿方向近处两点求平均，得到内圈颜色。
-    vec3 outer = inner*0.5+(texture(colortex6,clamp(uv-direction*0.5,0.0,1.0)).rgb+texture(colortex6,clamp(uv+direction*0.5,0.0,1.0)).rgb)*0.25; // 再往边缘外侧取两点，得到更接近边缘的外圈颜色。
-    float resultLuma = omniLuminance(outer); // 外圈亮度，用来判断是否越过了局部范围。
-    return resultLuma<minimum || resultLuma>maximum ? inner : outer; // 外圈越界时退回内圈，保留亮度边界、避免过度模糊。
-}
-
 // --- 当前帧三乘三邻域的颜色包围盒 ---
 // 用当前像素周围九个样本求颜色最小值和最大值，作为历史颜色的接纳范围；
 // 超出范围的历史说明对应点已经过时或错误，需要被夹回，否则会拖出旧画面的亮色或暗色。
@@ -111,7 +85,7 @@ vec3 omniTaa(vec3 color, vec2 uv, out vec4 metadata) {
     vec3 view = omniSceneView(uv,false); // 当前像素的真实视空间位置，用来做重投影。
     metadata = vec4(length(view),1.0,float(frameCounter),omniDimension()); // 每像素记录深度、帧号和维度，供下一帧判断历史。
     if (texture(colortex6,uv).a<0.5 || texture(colortex8,uv).a<0.0) return color; // 叠层像素与退出历史的水面不参与底层几何的历史。
-#if OMNI_AA_MODE == 2
+#ifdef OMNI_AA_ENABLED
     if (!omniHistoryValid() || texture(colortex1,uv).a==2.0 || omniSkyPixel(uv)) return color; // 历史无效、手部标记或天空都没有可靠世界位置，保守不积累。
     vec3 world = omniWorld(view)+cameraPosition-previousCameraPosition; // 把当前表面挪回上一帧相机所在的世界坐标。
     vec4 previous = gbufferPreviousProjection*gbufferPreviousModelView*vec4(world,1.0); // 用上一帧矩阵投影，得到该表面在上一帧的屏幕位置。
@@ -134,7 +108,7 @@ vec3 omniTaa(vec3 color, vec2 uv, out vec4 metadata) {
     history = clamp(history,minimum,maximum); // 把历史夹进当前邻域范围，抑制过时亮色的拖影。
     float motion = length(previousUv-uv)*max(viewWidth,viewHeight); // 用像素为单位的运动量衡量重投影偏移。
     float difference = abs(omniLuminance(history)-omniLuminance(color))/max(omniLuminance(color),0.05); // 历史与当前的亮度差，越大越像动态照明或运动物体。
-    return mix(color,history,OMNI_TAA_WEIGHT*exp(-motion*0.03)*exp(-difference*2.0)); // 运动或亮度差越大历史权重越低；本文件不依赖实体速度缓冲。
+    return mix(color,history,OMNI_TAA_WEIGHT*OMNI_AA_STRENGTH*exp(-motion*0.03)*exp(-difference*2.0)); // 运动、亮度差越大历史权重越低；强度取零等于不接纳历史。
 #else
     return color; // 关闭时间算法时只输出当前帧，不读取历史画面。
 #endif
