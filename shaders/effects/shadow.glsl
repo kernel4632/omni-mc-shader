@@ -16,6 +16,10 @@
 const int shadowMapResolution = 2048; // [1024 2048 4096]
 // @option {"label":{"zh_cn":"阴影距离","en_us":"Shadow distance"},"description":{"zh_cn":"Iris直接读取该原生常量并设置阴影范围。","en_us":"Iris reads this native constant for shadow range."}}
 const float shadowDistance = 128.0; // [64.0 128.0 192.0 256.0]
+// @option {"label":{"zh_cn":"阴影偏置","en_us":"Shadow bias"},"description":{"zh_cn":"比较深度时留出的余量；太小会出现自身条纹，太大会让阴影脱离物体。","en_us":"Depth margin for the comparison; too small causes acne, too large detaches shadows."},"slider":true}
+#define OMNI_SHADOW_BIAS 0.0006 // [0.0002 0.0006 0.0012 0.002]
+// @option {"label":{"zh_cn":"法线偏移","en_us":"Normal offset"},"description":{"zh_cn":"比较点沿法线抬起的距离，用来减少贴地阴影的自身条纹。","en_us":"Lifts the sample along the normal to reduce self-shadowing on flat surfaces."},"slider":true}
+#define OMNI_SHADOW_OFFSET 0.035 // [0.0 0.02 0.035 0.06]
 // 共用坐标与归一化。
 #include "/common/coordinates.glsl"
 #include "/common/math.glsl"
@@ -31,7 +35,7 @@ float omniShadow(vec3 world, vec3 normal) {
     float worldDistance = length(world); // 相机相对世界距离，用于覆盖判断与边缘淡出。
     if (worldDistance > shadowDistance * 0.95) return 1.0; // 超出阴影覆盖使用环境照明。
     vec3 n = mat3(gbufferModelViewInverse) * normal; // 视空间法线转世界空间。
-    vec3 p = omniShadowCoord(world + n * 0.035); // 法线偏移减少自身条纹。
+    vec3 p = omniShadowCoord(world + n * OMNI_SHADOW_OFFSET); // 法线偏移减少自身条纹，偏移量可调。
     if (any(lessThanEqual(p, vec3(0.0))) || any(greaterThanEqual(p, vec3(1.0)))) return 1.0; // 阴影图外不采样边缘。
     float resolution = max(float(shadowMapResolution), 1.0); // 分辨率退化时采样偏移不会变成无穷。
     float result = 0.0; // 累计真实深度比较。
@@ -39,7 +43,7 @@ float omniShadow(vec3 world, vec3 normal) {
     for (int y = 0; y < kernel; y++) { // 柔化核纵向覆盖邻近深度。
         for (int x = 0; x < kernel; x++) { // 柔化核横向覆盖邻近深度。
             vec2 offset = (vec2(x, y) - float(kernel - 1) * 0.5) * OMNI_SHADOW_SOFTNESS / resolution; // 柔化核内采样偏移。
-            result += step(p.z - 0.0006, texture(shadowtex0, p.xy + offset).r); // 百分比近邻柔化。
+            result += step(p.z - OMNI_SHADOW_BIAS, texture(shadowtex0, p.xy + offset).r); // 百分比近邻柔化，比较余量可调。
         }
     }
     float lit = result / float(kernel * kernel); // 未遮蔽采样占比。

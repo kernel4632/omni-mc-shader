@@ -45,6 +45,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("lum - OMNI_BLOOM_THRESHOLD",text)  # 阈值参与光晕筛选。
         self.assertIn("* OMNI_BLOOM_RADIUS",text)  # 半径参与采样偏移。
 
+    def test_shadow_bias_and_offset_are_adjustable(self):
+        """阴影比较偏置与法线偏移都是可调参数，替换原先写死的余量与抬升距离。"""
+        found,_,_ = build.configuration()
+        self.assertIn("OMNI_SHADOW_BIAS",found); self.assertIn("OMNI_SHADOW_OFFSET",found)  # 两个参数由阴影源码定义。
+        text = (build.SHADERS/"effects/shadow.glsl").read_text(encoding="utf-8")
+        self.assertIn("p.z - OMNI_SHADOW_BIAS",text)  # 偏置参与深度比较。
+        self.assertIn("n * OMNI_SHADOW_OFFSET",text)  # 法线偏移参与采样点抬升。
+
     def test_horizon_ao_is_selectable_and_expands(self):
         """地平线环境遮蔽通过算法选项接入合成，螺旋路径仍然保留。"""
         found,_,_ = build.configuration()
