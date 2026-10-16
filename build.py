@@ -224,7 +224,13 @@ def compile_all(seconds: float = 300.0) -> None:
     """
     found, profiles, _ = configuration()  # 选项与预设先检查。
     entries = entrypoints()  # 引用边界与阶段配对。
-    compile_shaders(entries, found, profiles, set())  # 全部程序、全部代表配置与两组环境。
+    global PORTING  # 完整编译不受移植期缩减影响：两种代表配置与基础、开远景两组环境都要编。
+    saved = PORTING
+    PORTING = False
+    try:
+        compile_shaders(entries, found, profiles, set())  # 全部程序、全部代表配置与两组环境。
+    finally:
+        PORTING = saved
 
 # --- 读取菜单来源：配置定义归选项模块所有，构建只使用结果 ---
 def configuration() -> tuple[dict, list, dict]:

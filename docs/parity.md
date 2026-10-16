@@ -242,6 +242,21 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 | 己 下界与末地 | 维度程序、`effects/world/nether`、`effects/world/end`、下界时间抗锯齿 | 完成（离线编译通过；待实机核对） |
 | 庚 集成 | 选项改名登记、预设、测试、文档、离线检查、游戏内对照截图 | 待前面完成 |
 
+
+### 覆盖核对（2026-10-16，本地离线）
+
+核对方法：
+- 选项：把 `references/iterationT/shaders/Lib/Settings.glsl` 与 `lang/*.lang` 里的宏与菜单项，和项目 `options.scan` 的结果逐名对照（iterationT 名加 `OMNI_` 前缀，拼写修正见第九节，下界末地原生常量保留原名）。
+- 函数：用 `references/iterationT/shaders` 全部 `.glsl/.fsh/.vsh/.gsh` 抽取函数定义，与 `shaders/` 对照函数名。
+- 函数体：按函数名配对后做词序列比对；GLSL 的 `#if` 分支会出现“一支开括号、另一支闭括号”，自动比对会把函数体读超，所以相似度低的函数逐个手工比对。
+
+核对结果：
+- 选项：iterationT 有效选项 262 个全部保留；项目当前 283 个选项（含项目自己的额外功能）。没有“定义了却没有接入任何入口”的选项。
+- 函数：iterationT 侧 248 个具名函数，项目侧 288 个；缺失只有 `MotionBlur.glsl` 的 `title`（纯菜单标题计数，HOP 不做无计算的装饰开关）；`BlueNoiseTemproal`、`BayerTemproal` 按合同改名。
+- 函数体：手工核对的可疑项均一致——`ScreenSpaceTracer` 与 iterationT 逐词相同（665 词）；4 个 `ShadowScreenPos_*`/`DistortShadowScreenPos` 与 `BloomDownSample`/`AxialGaussianBlur`/`FidelityFX_FSR1` 只差已登记的重名改名与选项前缀；`BlueNoise` 只差 `OMNI_PIXEL` 宏（见第十二节第 14 条）。
+- 结构：`shaders/effects/` 按菜单页面分文件夹（`sky/`、`cloud/`、`fog/`、`water/`、`ground/`、`lighting/`、`shadow/`、`reflection/`、`color/`、`lens/`、`clarity/`、`weather/`、`entity/`、`world/`、`dev/`）；`rendering/` 只安排绘制顺序；`effects/`、`rendering/`、`common/` 每个文件都有中文文件头；`python build.py audit` 通过。
+- 编译：`python build.py compile` 用两种代表配置与基础、开远景两组环境编全部 253 个入口、126 组唯一程序，0 错误。
+
 ## 十一、验证方式
 
 1. `python build.py verify` 通过（十秒预算不变）。

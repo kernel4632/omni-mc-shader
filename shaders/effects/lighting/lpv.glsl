@@ -1,4 +1,16 @@
-// LPV 光传播体积：计算阶段注入与传播，间接光阶段三线性采样；示例 omniLpvSample(volume, world)。
+/*
+LPV 光传播体积：三维体积格里的间接光传播与采样映射；这是 Omni 自己的额外功能，iterationT 没有对应实现。
+调用位置：`rendering/lpv.glsl` 的计算阶段用 `omniLpvUvw`/`omniLpvOrigin` 定位单元并写入两张图像；
+    `rendering/composite.glsl` 的合成零号用 `omniLpvSample` 三线性读出体积光加到场景上。
+可复制示例：
+    `finalComposite += omniLpvSample(omniLpvTex, worldPos) * OMNI_LPV_STRENGTH;`  在表面位置取体积间接光
+    `vec3 uvw = omniLpvUvw(world);`                                            计算阶段把世界位置映射到体积坐标
+设计原因与取舍：
+    体积格以相机所在单元为中心，随玩家移动，因此只覆盖身边一圈，远处不参与；
+    计算写入、片元只读；缺少自定义图像能力时整段不声明，计算与采样一起跳过，画面退回屏幕空间间接光；
+    传播用双缓冲加图像屏障与工作组屏障，保证下一轮一定读到完整的上一步结果。
+*/
+// 选项与映射放在同一文件：加删这项功能只需要动这一个文件。
 #ifndef OMNI_LPV
 #define OMNI_LPV
 // @effect {"label":{"zh_cn":"光传播体积","en_us":"Light propagation"}}

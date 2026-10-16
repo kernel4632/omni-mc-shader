@@ -368,6 +368,24 @@ vec4 TemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin, out flo
 // --- 相机速度：算出当前像素相对上一帧的屏幕位移 ---
 // 远景与近景、手与世界分别用各自的矩阵重投影，任一步失败就返回零位移，让历史权重自然降低。
 #ifdef DISTANT_HORIZONS // 有远景模组时区分远景。
+// 远景深度取单点：远景模组自己有深度贴图，近景的邻域取最近做法在远景里不适用。
+float SampleDepthDHFetch(ivec2 coord){
+	return texelFetch(dhDepthTex0, coord, 0).x; // 直接读该像素的远景深度。
+}
+// 远景三乘三邻域取最近深度，理由与近景版本相同：边缘不让远处深度带进来。
+float SampleCurrDepthDHFetchClosest3x3(ivec2 coord){
+	float depth0 = SampleDepthDHFetch(coord + ivec2(-1, -1)); // 左上。
+	float depth1 = SampleDepthDHFetch(coord + ivec2( 0, -1)); // 上方。
+	float depth2 = SampleDepthDHFetch(coord + ivec2( 1, -1)); // 右上。
+	float depth3 = SampleDepthDHFetch(coord + ivec2(-1,  0)); // 左侧。
+	float depth4 = SampleDepthDHFetch(coord + ivec2( 0,  0)); // 中心。
+	float depth5 = SampleDepthDHFetch(coord + ivec2( 1,  0)); // 右侧。
+	float depth6 = SampleDepthDHFetch(coord + ivec2(-1,  1)); // 左下。
+	float depth7 = SampleDepthDHFetch(coord + ivec2( 0,  1)); // 下方。
+	float depth8 = SampleDepthDHFetch(coord + ivec2( 1,  1)); // 右下。
+
+	return min9(depth0, depth1, depth2, depth3, depth4, depth5, depth6, depth7, depth8); // 取九个里的最近。
+}
 vec3 CalculateCameraVelocity(out float depth, float materialIDs){
 	if (materialIDs == MATID_STAINEDGLASS || materialIDs == MATID_ICE){ // 玻璃和冰用不含半透明的深度。
 		depth = texelFetch(depthtex1, taaTexelCoord, 0).x; // 读一号深度。
