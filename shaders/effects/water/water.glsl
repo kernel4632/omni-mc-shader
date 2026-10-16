@@ -481,7 +481,9 @@ void WaterFog(inout vec3 color, vec3 viewDir, float opaqueDist, float waterDist,
 // 调用位置：`rendering/composite.glsl`；先把采样点按水面法线偏移，再读一号画面的颜色。
 // 防泄漏：偏移后的采样点若比当前水面更近，说明采到了前景物体，直接退回原位。
 // 为什么分成水面与水外两条路：水面用波法线偏移更贴合，水外的玻璃等用整段折射方向偏移更准确。
-void WaterRefractionLite(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist, float fogTimeFactor, float cloudShadow, vec2 screenCoordInput){
+// 为什么像素坐标由调用方传 `texelCoord`：渲染缩放或放大链下 `screenCoordInput` 与 `screenSize` 的口径可能不同，
+//   用传入的整数像素坐标直接读深度，才与原程序一致，不会差出一个像素。
+void WaterRefractionLite(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist, float fogTimeFactor, float cloudShadow, vec2 screenCoordInput, ivec2 texelCoord){
 	vec2 refractCoord = screenCoordInput; // 默认不折射，用原屏幕坐标。
 
 	float waterDeep = opaqueDist - waterDist; // 水面到水底的厚度，越厚折射越强。
@@ -509,7 +511,7 @@ void WaterRefractionLite(inout vec3 color, MaterialMask mask, vec3 normal, vec3 
 		refractCoord = refractPos.xy / refractPos.w * 0.5 + 0.5; // 转成屏幕坐标。
 	}
 
-	float currentDepth = texelFetch(depthtex0, ivec2(screenCoordInput * screenSize), 0).x; // 当前像素的深度，用传入的屏幕坐标换算像素位置，不依赖程序声明的全局。
+	float currentDepth = texelFetch(depthtex0, texelCoord, 0).x; // 当前像素的深度，直接用调用方传入的整数像素坐标，不靠屏幕坐标反推。
 	float refractDepth = textureLod(depthtex1, refractCoord, 0.0).x; // 折射采样点的深度。
 	if(refractDepth < currentDepth) refractCoord = screenCoordInput; // 采样点更近就是前景，退回原位防泄漏。
 

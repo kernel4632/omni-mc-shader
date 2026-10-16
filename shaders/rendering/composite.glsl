@@ -301,7 +301,7 @@ void main(){
 						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow < 1.0 && gbuffer.parallaxShadow > 0.0)
 					#endif
 				#endif
-					shadow *= mix(ScreenSpaceShadow(viewPos, viewDir, gbuffer.normalL, materialMaskSoild, worldShadowVector), 1.0, saturate(materialMaskSoild.leaves * 1.67 - 0.67)); // 屏幕空间阴影，叶片按比例削弱。
+					shadow *= mix(ScreenSpaceShadow(viewPos, viewDir, gbuffer.normalL, materialMaskSoild, shadowVector), 1.0, saturate(materialMaskSoild.leaves * 1.67 - 0.67)); // 屏幕空间阴影，叶片按比例削弱；方向传视空间的 shadowVector，与原程序一致。
 			#endif
 
 			#ifdef OMNI_CAUSTICS
@@ -1164,7 +1164,7 @@ void main(){
 	vec3 color = CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb); // 读一号画面当前颜色。
 
 	if (materialMask.water + materialMask.ice + materialMask.stainedGlass > 0.5)
-		WaterRefractionLite(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist, fogTimeFactor, globalCloudShadow, texCoord); // 水玻璃冰做折射。
+		WaterRefractionLite(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist, fogTimeFactor, globalCloudShadow, texCoord, texelCoord); // 水玻璃冰做折射。
 
 	float waterAbsorption = 1.0; // 水的吸收系数。
 	if (isEyeInWater == 1) waterAbsorption = saturate(exp2(-waterDist * 0.06 * OMNI_WATERFOG_DENSITY)); // 水下按距离算吸收。

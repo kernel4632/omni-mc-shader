@@ -3,28 +3,30 @@
 来源：七段数码管照 iterationT `Lib/IndividualFounctions/PrintFloat.glsl` 一比一移植；
   调试视图与帧耗时条是 Omni 原有功能，保留并以中性默认接入，默认不改变玩家画面。
 调用位置：
-  final 片元阶段需要读数时调用 `PrintFloat`、`PrintUintBinary`，返回的零或一表示该像素是否点亮；
-  `debugColor` 覆盖场景颜色，用来查看深度、坐标与中间画面；
-  `omniProfiler` 在左下角画一条随帧时间伸缩的横条。
+  `rendering/final.glsl` 的片元 `main()` 最后调用 `debugColor` 与 `omniProfiler`，把最终屏幕颜色替换成调试画面或叠上耗时条；
+  需要读数时也可调用 `PrintFloat`、`PrintUintBinary`，返回的零或一表示该像素是否点亮。
 可复制示例：
-  `vec3 shown = debugColor(sceneColor, texture(depthtex0, texcoord).r, texcoord);`
+  `color = debugColor(color, textureLod(depthtex0, texCoord, 0.0).x, texCoord);`  按选项换成法线、深度或光照图；
   `shown = mix(shown, vec3(0.0), PrintFloat(frameTime * 1000.0, vec2(8.0), 4.0));`
-  `shown = omniProfiler(shown, texcoord);`
+  `color = omniProfiler(color, texCoord);`
 调用前提（iterationT 原样保留）：`PrintFloat`、`PrintUintBinary` 直接读 `gl_FragCoord`，
-  所以只能在片元阶段调用；`debugColor` 读取若干中间画面，调用方要保证它们在当前程序里可见。
+  所以只能在片元阶段调用；`debugColor` 读取 `colortex4` 与传入深度，调用方要保证它们在当前程序里可见。
 设计原因与取舍：
   数码管用一块十五项的查找表描述每段是否点亮，按像素坐标查表，同一个函数既能画整数也能画小数；
-  默认关闭全部调试输出，调试代码本身不进入正常画面，避免为了调试改变玩家看到的颜色。
+  默认关闭全部调试输出（`OMNI_DEBUG_VIEW` 为零、`OMNI_PROFILER` 未定义），调试代码本身不进入正常画面，
+  关闭时画面与 iterationT 完全一致。
 */
 #ifndef OMNI_DEBUG_INCLUDED // 只引入一次，避免函数与常量重复定义。
 #define OMNI_DEBUG_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"开发调试","en_us":"Development"}}
-// @option {"label": {"zh_cn": "调试显示", "en_us": "Debug view"}, "description": {"zh_cn": "0：正常画面；1：原始深度；2：画面坐标；3：几何法线；4：材质参数；5：原版光照。", "en_us": "0: scene; 1: raw depth; 2: screen coordinates; 3: normals; 4: material; 5: vanilla light."}, "values": {"0": {"zh_cn": "正常画面", "en_us": "Scene"}, "1": {"zh_cn": "原始深度", "en_us": "Raw depth"}, "2": {"zh_cn": "画面坐标", "en_us": "Coordinates"}, "3": {"zh_cn": "几何法线", "en_us": "Normals"}, "4": {"zh_cn": "材质参数", "en_us": "Material"}, "5": {"zh_cn": "原版光照", "en_us": "Light data"}}}
-#define OMNI_DEBUG_VIEW 0 // [0 1 2 3 4 5]
+// @option {"label": {"zh_cn": "调试显示", "en_us": "Debug view"}, "description": {"zh_cn": "0：正常画面；1：几何法线；2：深度；3：光照图。用现有中间画面直接观察，关闭时画面不变。", "en_us": "0: scene; 1: geometry normals; 2: depth; 3: lightmap. Reads existing buffers directly; off keeps the scene."}, "values": {"0": {"zh_cn": "正常画面", "en_us": "Scene"}, "1": {"zh_cn": "几何法线", "en_us": "Normals"}, "2": {"zh_cn": "深度", "en_us": "Depth"}, "3": {"zh_cn": "光照图", "en_us": "Lightmap"}}}
+#define OMNI_DEBUG_VIEW 0 // [0 1 2 3]
 // @option {"label":{"zh_cn":"性能计时","en_us":"Frame-time bar"},"description":{"zh_cn":"在屏幕左下角画一条横条显示每帧耗时，越长越慢；这是整帧时间，不是逐效果耗时。","en_us":"Draws a bar in the bottom-left showing per-frame time; this is total frame time, not per-effect."}}
 //#define OMNI_PROFILER
 // 加载器输入提供中间画面与画面尺寸，调试视图按编号读取它们。
 #include "/common/uniforms.glsl"
+// 法线解码 `DecodeNormal` 来自共用数学，调试视图用它把打包法线还原成可见颜色。
+#include "/common/math.glsl"
 
 // --- 七段数码管的字模表 ---
 // 每一项是一个字节，最低七位分别对应一段笔画是否点亮，位到笔画的对应关系在下面 `SevenSegment` 里说明。
@@ -200,19 +202,17 @@ vec3 omniProfiler(vec3 color, vec2 coordinates){
 }
 
 // --- Omni 额外功能：选择要观察的中间数据 ---
-// 按选项把场景颜色换成深度、坐标或某张中间画面，帮助定位绘制问题。
-// 默认零表示不改变玩家画面，所以这个功能是中性接入。
+// 按选项把最终场景颜色换成法线、深度或光照图，帮助定位绘制问题。
+// 为什么用四号画面：延迟六号把不透明法线光照图复制进四号，半透明层也会写入它，到最终阶段仍可读；
+// 深度用不含半透明的 `depthtex0`，法线用 `DecodeNormal` 还原成方向后映射到零到一以便肉眼分辨。
+// 默认零表示不改变玩家画面，所以这个功能是中性接入，关闭时与 iterationT 完全一致。
 vec3 debugColor(vec3 scene, float depth, vec2 coordinates){
-#if OMNI_DEBUG_VIEW == 1 // 深度直接观察实际场景输入。
-	return vec3(depth); // 用灰度展示加载器提供的原始深度。
-#elif OMNI_DEBUG_VIEW == 2 // 坐标用于定位屏幕取样偏移。
-	return vec3(coordinates, 0.0); // 红绿通道分别显示横纵坐标。
-#elif OMNI_DEBUG_VIEW == 3 // 法线用于核对几何元数据。
-	return texture(colortex1,coordinates).rgb; // 观察实际几何法线编码。
-#elif OMNI_DEBUG_VIEW == 4
-	return texture(colortex2,coordinates).rgb; // 观察全局光与遮蔽中间结果。
-#elif OMNI_DEBUG_VIEW == 5
-	return texture(colortex7,coordinates).rgb; // 观察时间抗锯齿历史。
+#if OMNI_DEBUG_VIEW == 1 // 几何法线：四号画面的 `rg` 通道是打包法线。
+	return DecodeNormal(texture(colortex4, coordinates).xy) * 0.5 + 0.5; // 解出方向后映射到零到一显示。
+#elif OMNI_DEBUG_VIEW == 2 // 深度：直接看加载器提供的深度。
+	return vec3(depth); // 用灰度展示。
+#elif OMNI_DEBUG_VIEW == 3 // 光照图：四号画面的 `ba` 通道是方块光与天光。
+	return vec3(texture(colortex4, coordinates).ba, 0.0); // 红绿通道分别显示方块光与天光。
 #else
 	return scene; // 默认不改变玩家画面。
 #endif

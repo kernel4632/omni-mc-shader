@@ -5,7 +5,9 @@
 调用位置：各维度 `shadow`、`dh_shadow` 入口定义阶段宏与对应程序宏后引入本文件；入口按 `rendering/programs.json` 生成。
 可复制示例：入口写 `#define OMNI_VERTEX 1`、`#define OMNI_SHADOW_PASS 1`、`#define OMNI_OVERWORLD 1`，
   再写 `#include "/rendering/shadow.glsl"`。
-输出约定：片元写 `gl_FragData[0]` 阴影颜色与 `gl_FragData[1]` 阴影法线天空光，对应 `DRAWBUFFERS:01`。
+输出约定：片元写 `gl_FragData[0]` 阴影颜色与 `gl_FragData[1]` 阴影法线天空光，共两张阴影缓冲（编号 0 与 1）。
+  原程序 `Shadow_FS.glsl` 用 `gl_FragData[0]/[1]` 但不写附件指令（`DRAWBUFFERS`），本文件与其保持一致，同样不写附件指令；
+  加载器对阴影程序按固定的两张阴影缓冲绑定，默认写零号与一号。
 设计原因与取舍：
   阴影图是深度写入，顶点负责植物摆动、法线判定与投影压缩，片元写入贴图色与法线天光。
   阴影相关选项、常量与末地阴影相机矩阵都在 `effects/shadow.glsl`，主体引入它；它内部还要 `MaterialMask`

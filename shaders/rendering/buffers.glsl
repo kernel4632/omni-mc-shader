@@ -18,6 +18,7 @@
 二号顶行特殊像素：横坐标零为自动曝光，二十为标题计数，四十为全局云影，六十为景深对焦深度，都在 `a` 通道。
 设计原因与取舍：
     格式名只有加载器认识，GLSL 不认识，所以格式写在块注释里，这是加载器的读法；每行只写指令，说明放上一行。
+    七号、八号画面格式与部分阴影、遮蔽常量按维度覆盖，值照 iterationT 三份 composite 文件头；实现见下方维度分支与存疑说明。
     `sunPathRotation`、`wetnessHalflife`、`drynessHalflife` 是玩家选项，按合同由 `effects/sky.glsl`、`effects/weather.glsl` 定义，这里不重复。
     `shadowMapResolution`、`shadowDistance` 同样是选项，由 `effects/shadow.glsl` 定义。
 */
@@ -39,11 +40,33 @@ const int colortex4Format = RGBA16;
 const int colortex5Format = RGBA16;
 六号画面格式。
 const int colortex6Format = RGBA16;
-七号画面格式。
+*/
+
+// 七号、八号画面格式按维度覆盖，值照 iterationT `composite.fsh`、`world-1/composite.fsh`、`world1/composite.fsh` 三份文件头。
+// 注意（存疑项）：Iris 的指令解析器逐行读取已展开引用的文本，不评估 `#if`，同名常量只保留文本里最后出现的一条；
+// 因此下面的维度分支在 Iris 下不会按维度生效，运行时实际取 `#else` 的值。要逐维度生效需把声明移进各维度各自的入口，属结构性改动。
+#if defined OMNI_NETHER
+/*
+下界七号画面格式：下界时间抗锯齿把参考深度与当前深度打包进七号透明度通道，必须三十二位浮点，否则打包值丢精度。
+const int colortex7Format = RGBA32F;
+下界八号画面格式：放大输出用十六位。
+const int colortex8Format = RGB16;
+*/
+#elif defined OMNI_END
+/*
+末地七号画面格式。
 const int colortex7Format = RGBA16;
-八号画面格式：放大输出直接显示，八位就够。
+末地八号画面格式：放大输出用十六位。
+const int colortex8Format = RGB16;
+*/
+#else
+/*
+主世界七号画面格式。
+const int colortex7Format = RGBA16;
+主世界八号画面格式：放大输出直接显示，八位就够。
 const int colortex8Format = RGBA8;
 */
+#endif
 
 // 零号清成黑色、透明度一：天气程序把雨雪遮罩乘进 `a`，起点必须是一。
 const vec4 colortex0ClearColor = vec4(0.0, 0.0, 0.0, 1.0); // 黑色、不透明。
@@ -60,10 +83,21 @@ const bool colortex7Clear = false; // 时间抗锯齿历史跨帧保留。
 
 // --- 阴影图设置 ---
 const float shadowIntervalSize = 4.0; // 阴影相机按四格对齐移动，减少走动时阴影边缘闪烁。
+// 阴影绘制距离按维度覆盖：下界几乎不向阴影图绘制几何，其余维度按完整阴影距离。
+#if defined OMNI_NETHER
+const float shadowDistanceRenderMul = 0.007; // 下界照原程序把阴影绘制距离缩到近乎零。
+#else
 const float shadowDistanceRenderMul = 1.0; // 阴影绘制距离等于阴影距离。
+#endif
 
+// 一号阴影深度硬件比较与零号阴影多级纹理按维度覆盖：下界关掉，其余维度开启。
+#if defined OMNI_NETHER
+const bool shadowHardwareFiltering1 = false; // 下界一号阴影深度不做硬件比较采样。
+const bool shadowtex0Mipmap = false; // 下界零号阴影深度不生成多级纹理。
+#else
 const bool shadowHardwareFiltering1 = true; // 一号阴影深度用硬件比较采样，得到柔和边缘。
 const bool shadowtex0Mipmap = true; // 零号阴影深度生成多级纹理，可变半影搜索用。
+#endif
 const bool shadowtex0Nearest = false; // 零号阴影深度线性过滤。
 const bool shadowtex1Mipmap = false; // 一号阴影深度不需要多级纹理。
 const bool shadowtex1Nearest = false; // 一号阴影深度线性过滤。
@@ -75,6 +109,11 @@ const bool shadowcolor1Nearest = false; // 阴影法线线性过滤。
 // --- 其他加载器常量 ---
 const int noiseTextureResolution = 64; // 噪声贴图边长，与 `texture/noise.png` 一致。
 const float eyeBrightnessHalflife = 10.0; // 眼部亮度平滑半衰期，单位游戏刻。
-const float ambientOcclusionLevel = 1.0; // 原版环境光遮蔽强度保持满值，`GTAO` 另算。
+// 原版环境光遮蔽强度按维度覆盖：下界与末地照原程序关掉，主世界保持满值。
+#if defined OMNI_NETHER || defined OMNI_END
+const float ambientOcclusionLevel = 0.0; // 下界与末地关闭原版遮蔽。
+#else
+const float ambientOcclusionLevel = 1.0; // 主世界保持满值，`GTAO` 另算。
+#endif
 const int superSamplingLevel = 0; // 不开超采样。
 #endif // 文件守卫结束。

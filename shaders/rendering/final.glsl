@@ -9,7 +9,8 @@
     渲染比例等于一时，先按已开启的排除选项决定哪些像素用手或玩家的边缘抗锯齿 `Fxaa`，其余像素做 `CAS` 锐化；
     渲染比例小于一时改用八号画面里的放大结果再锐化（`FidelityFX_FSR1`），所以本程序读过放大输出。
     强光压缩的序号只在十四号分派，这里不做色调整，只做锐化、抖动与黑边，与原程序一致。
-    原 `final.fsh` 还引入 `PrintFloat.glsl` 但 `main` 从未调用它；这里照合同一并引入 `effects/debug.glsl`，保持调试能力可用。
+    原 `final.fsh` 还引入 `PrintFloat.glsl` 但 `main` 从未调用它；这里照合同引入 `effects/debug.glsl` 并真正调用
+    `debugColor` 与 `omniProfiler`，默认关闭，关闭时画面与原程序一致。
 */
 #ifndef OMNI_FINAL_BODY_INCLUDED // 只引入一次，避免 `main()` 与输出变量重复定义。
 #define OMNI_FINAL_BODY_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -47,7 +48,7 @@
 	#include "/effects/color/color.glsl"
 	// 对比度自适应锐化与放大。
 	#include "/effects/clarity/upscale.glsl"
-	// 调试数码管；原程序一并引入，本 `main` 未调用。
+	// 调试画面与耗时条；原程序一并引入，这里把 `debugColor`、`omniProfiler` 真正接到最终屏幕颜色上。
 	#include "/effects/dev/debug.glsl"
 
 	void main(){
@@ -92,6 +93,11 @@
 		color += InterleavedGradientNoise(gl_FragCoord.xy) * (1.0 / 255.0); // 叠加一点抖动，减小色带。
 
 		color *= BlackBar(OMNI_SCREEN_RATIO); // 按电影比例裁黑边，零表示不加。
+
+		// 调试视图：按选项把最终颜色换成法线、深度或光照图；默认零不改变画面。
+		color = debugColor(color, textureLod(depthtex0, texCoord, 0.0).x, texCoord);
+		// 帧耗时条：把整帧耗时画在左下角；默认关闭时原样返回。
+		color = omniProfiler(color, texCoord);
 
 		gl_FragData[0] = vec4(color, 0.0); // 直接写屏幕。
 	}

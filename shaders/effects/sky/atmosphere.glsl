@@ -1,5 +1,5 @@
 /*
-氛围：在天空颜色上叠加极光和彩虹，并提供全场闪电照明；这三项是 Omni 额外功能，iterationT 没有对应实现。
+氛围：在天空颜色上叠加极光和彩虹，并提供全场闪电照明；这三项是 Omni 额外功能，iterationT 没有对应实现，默认全部关闭。
 调用位置：延迟三号主体算完 `GetSkyRadiance` 与云之后，对天空像素调用 `omniAtmosphere(skyColor, worldDir)`；
     合成主体对有真实深度与天光的表面调用 `omniLightning(color, worldPos, skylight)`。
 可复制示例：
@@ -8,7 +8,7 @@
 设计原因与取舍：
     极光与彩虹各自独立成一个函数、各自带开关，默认关闭，关掉后连采样都不生成，默认画面与 iterationT 一致；
     大气散射已由 `effects/sky.glsl` 的预计算模型统一出图，这里不再重复叠一份；
-    闪电只在加载器给出真实事件时叠加，缺少输入就原样返回，不凭空制造天气事件；
+    闪电只在加载器给出真实事件、并且玩家主动打开时才叠加；iterationT 不使用 `lightningBoltPosition`，所以默认关闭以免雷暴时多出一层闪光；
     雨天判据用新管线的 `wetness`（平滑后的降雨），与 iterationT 保持一致。
 */
 #ifndef OMNI_ATMOSPHERE_INCLUDED
@@ -18,8 +18,8 @@
 //#define OMNI_AURORA
 // @option {"label":{"zh_cn":"彩虹","en_us":"Rainbow"},"description":{"zh_cn":"雨后晴天出现彩虹；默认关闭，打开后才计算。","en_us":"Shows a rainbow after rain; off by default."}}
 //#define OMNI_RAINBOW
-// @option {"label":{"zh_cn":"闪电照明","en_us":"Lightning Illumination"},"description":{"zh_cn":"读取加载器实际闪电强度；没有该输入时不产生影响。","en_us":"Uses the loader lightning strength; without the event input it has no effect."}}
-#define OMNI_LIGHTNING
+// @option {"label":{"zh_cn":"闪电照明","en_us":"Lightning Illumination"},"description":{"zh_cn":"读取加载器实际闪电强度，在雷暴闪电瞬间给附近表面叠一层冷色闪光；这是额外功能，默认关闭，关闭时默认画面与 iterationT 一致。","en_us":"Uses the loader lightning strength to flash nearby surfaces during a strike; an extra feature, off by default so the default scene matches iterationT."}}
+//#define OMNI_LIGHTNING
 // @option {"label":{"zh_cn":"极光强度","en_us":"Aurora Strength"},"description":{"zh_cn":"极光多亮。","en_us":"How bright the aurora is."},"slider":true}
 #define OMNI_AURORA_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"极光颜色","en_us":"Aurora Colour"},"description":{"zh_cn":"正值偏绿、负值偏蓝紫。","en_us":"Positive leans green, negative leans blue-purple."},"slider":true}
