@@ -3,11 +3,9 @@
 // 选择本程序的绘制阶段或物体类别。
 #define OMNI_VERTEX 1
 // 选择本程序的绘制阶段或物体类别。
-#define OMNI_BASIC 1
-// 选择本程序的绘制阶段或物体类别。
-#define OMNI_OVERLAY 1
+#define OMNI_BASIC_PASS 1
 // 选择本程序的绘制阶段或物体类别。
 #define OMNI_NETHER 1
 // 显式引入完整绘制主体。
-#include "/rendering/terrain.glsl"
+#include "/rendering/overlay.glsl"
 // 输出由主体按统一缓冲协议写入。

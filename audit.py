@@ -21,8 +21,9 @@ CHINESE = re.compile(r"[\u3400-\u9fff]")  # 只有汉字能证明说明不是纯
 DIRECTIVE = re.compile(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b")  # 属性文件里的条件指令是机器语句，加载器按选项宏挑选分支。
 MACHINE = re.compile(r"\s*(?:#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include)\b|const\s+\w+\s+\w+\s*=)")  # 注释里成行的机器语句（预处理指令、常量声明）不是给接手者的自然语言说明；普通注释仍按中文检查。
 EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__"}  # 环境、参考和第三方内容不是本项目的维护边界。
+MACHINE_FILES = {"shaders/shaders.properties", "shaders/block.properties", "shaders/entity.properties", "shaders/item.properties"}  # 生成菜单和从 iterationT 原样移植的方块、实体、物品编号表是逐行可对照的机器数据，加中文说明会破坏对照；它们是数据不是业务代码。
 SUFFIXES = {".py", ".glsl", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除。
-TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup SSBO AgX ACES Filmic Uncharted Narkowicz PCSS".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
+TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup SSBO AgX ACES Filmic Uncharted Narkowicz PCSS Omni iterationT Eclipse".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
 
 
 def chinese_explanation(line: str) -> bool:
@@ -41,7 +42,7 @@ def chinese_explanation(line: str) -> bool:
         for field in ("label", "description"):
             if isinstance(data.get(field), dict) and isinstance(data[field].get("zh_cn"), str): chinese_explanation(data[field]["zh_cn"])  # 中文字段仍拒绝夹带英语自然语言。
         return True  # 菜单其他字段交给选项扫描器，避免重复定义机器规则。
-    if re.fullmatch(r"(?:#?define\s+)?[A-Z][A-Z0-9_]*(?:\s+[-\d.]+)?", text) or re.fullmatch(r"RENDERTARGETS:\s*[\d, ]+", text): return False  # 原生宏和附件指令是机器配置，不是业务说明。
+    if re.fullmatch(r"(?:#?define\s+)?[A-Z][A-Z0-9_]*(?:\s+[-\d.]+)?", text) or re.fullmatch(r"(?:RENDERTARGETS|DRAWBUFFERS):\s*[\d, ]+", text): return False  # 原生宏和附件指令是机器配置，不是业务说明。
     text = re.sub(r"`[^`]*`|https://\S+|[\w./\\:-]+\.(?:py|glsl|vsh|fsh|csh|json|md|zip|txt|exe|properties|lang|ya?ml)\b|\b(?:effects|presets|rendering|common)/", "", text)  # 文件名和链接是代码引用，普通英语句子仍需拒绝。
     text = re.sub(r"(?:python\s+-m\s+unittest\s+discover\s+-s\s+tests|python\s+(?:build|audit|generate|check|setup|doctor|watch)|--[\w-]+(?:\s+[\w./:-]+)?)", "", text)  # 明确的命令示例可以原样复制，不应当成英语说明。
     text = re.sub(r"\b[A-Za-z_]\w*\([^\n]*?\)", "", text)  # 函数调用示例是代码，不是自然语言句子。
@@ -97,7 +98,7 @@ def check(root: Path) -> list[dict]:
     reports, errors = [], []  # 汇总所有文件的结果，让维护者一次看到全部需要修正的位置。
     for file_path in sorted(root.rglob("*")):
         relative_path = file_path.relative_to(root).as_posix()  # 报告使用项目相对路径，避免泄露本机目录。
-        if not file_path.is_file() or file_path.suffix not in SUFFIXES or EXCLUDED.intersection(file_path.relative_to(root).parts) or relative_path == "shaders/shaders.properties": continue  # 第三方和生成菜单有自己的来源，不在这里重复审计。
+        if not file_path.is_file() or file_path.suffix not in SUFFIXES or EXCLUDED.intersection(file_path.relative_to(root).parts) or relative_path in MACHINE_FILES: continue  # 第三方、机器数据和生成菜单有自己的来源，不在这里重复审计。
         nonempty_lines = {number for number, line in enumerate(file_path.read_text(encoding="utf-8").splitlines(), 1) if line.strip()}  # 空行没有业务内容，不应稀释说明比例。
         commented_lines, fragments = comments(file_path)
         ratio = len(commented_lines & nonempty_lines) / max(len(nonempty_lines), 1)  # 行尾说明既是代码行也是说明行，分子分母都保留。

@@ -3,6 +3,8 @@
 // 选择本程序的绘制阶段或物体类别。
 #define OMNI_VERTEX 1
 // 选择本程序的绘制阶段或物体类别。
+#define OMNI_COMPOSITE0_PASS 1
+// 选择本程序的绘制阶段或物体类别。
 #define OMNI_END 1
 // 显式引入完整绘制主体。
 #include "/rendering/composite.glsl"

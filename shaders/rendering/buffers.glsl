@@ -1,53 +1,80 @@
 /*
-中间画面唯一约定：每个编号画面的格式、通道含义、写入者和读取者只在这里定义一次。
-调用位置：由 composite.glsl、lighting.glsl、terrain.glsl、temporal.glsl、final.glsl 等绘制流程引入。
+中间画面唯一约定：照 iterationT `composite.fsh` 文件头移植全部画面格式、每帧清除、清除色和阴影、噪声等加载器常量。
+调用位置：只由 `rendering/composite.glsl` 引入一次。加载器扫描任意程序的源码读取这些常量，
+放进同一个程序就够；别的主体不要再引入，避免同一个常量在一个程序里出现两次。
 可复制示例：
-    `texture(colortex1, uv)`                 按屏幕坐标采样法线画面
-    `texelFetch(colortex7, pixel, 0).a`      精确读取像素的几何有效标记
-    `texture(colortex5, vec2(0.5)).g`        读取时间合成算出的曝光
-为什么集中在这里：画面编号是跨文件接口，写入者和读取者各存一份就会改一处忘一处，
-接手者无法判断哪份才准。这里一次写清，其他文件只按编号引用。
-取舍：编号按绘制先后排列，方便从上往下读；历史画面要跨帧保留，所以单独关闭每帧清除。
+    `CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb) * MAIN_OUTPUT_FACTOR`   读回一号画面的线性颜色
+    `texelFetch(colortex2, ivec2(0, screenSize.y - 1), 0).a`                       读自动曝光统计像素
+各画面用途（详见 `docs/parity.md` 第四节）：
+    零号 八位：贴图色（伽马空间）、天体颜色、雨遮罩；每帧清成黑色、透明度一。
+    一号 十六位：全局光与遮蔽 → 场景曲线编码颜色 → 色调映射后的颜色；不清除。
+    二号 十六位：全局光历史、上半屏天空盒、右上角云影、顶行统计像素；不清除。
+    三号 十六位：不透明法线光照图 → 反射数据 → 镜头光斑。
+    四号 十六位：半透明法线光照图；延迟阶段被一百二十八立方云噪声替换。
+    五号 十六位：不透明高光材质 → 泛光。
+    六号 十六位：半透明颜色材质与水遮罩；延迟阶段被三十二立方云噪声替换。
+    七号 十六位：焦散法线方块 → 时间抗锯齿历史；不清除。
+    八号 八位、两倍尺寸：放大输出；延迟和合成阶段被预计算大气三维贴图替换。
+二号顶行特殊像素：横坐标零为自动曝光，二十为标题计数，四十为全局云影，六十为景深对焦深度，都在 `a` 通道。
+设计原因与取舍：
+    格式名只有加载器认识，GLSL 不认识，所以格式写在块注释里，这是加载器的读法；每行只写指令，说明放上一行。
+    `sunPathRotation`、`wetnessHalflife`、`drynessHalflife` 是玩家选项，按合同由 `effects/sky.glsl`、`effects/weather.glsl` 定义，这里不重复。
+    `shadowMapResolution`、`shadowDistance` 同样是选项，由 `effects/shadow.glsl` 定义。
 */
+#ifndef OMNI_BUFFERS_INCLUDED // 只引入一次，重复声明常量会让编译失败。
+#define OMNI_BUFFERS_INCLUDED // 置上标记。
 
-// 格式指令行只写指令、行尾不带说明：加载器按名字读取格式，格式名会由加载器在编译时补上，自己定义反而会把名字换成数字。
-// 缓冲格式：加载器按名字读取格式，而 GLSL 不认识这些名字，所以格式指令放进块注释，每行只写指令本身。
-// 名称含义：RGBA16F 保留高光与法线等连续数据，RGBA32F 保留米制深度；改格式只改这里的名字。
 /*
-零号画面：场景线性颜色。几何与前向照明写颜色，时间合成回写稳定结果，最终显示读取；允许高于屏幕白色的线性照明。
-const int colortex0Format = RGBA16F;
-一号画面：视空间法线与物体类别。几何写，屏幕后处理与时间阶段读；透明阶段不改此画面；保留法线和类别的精度。
-const int colortex1Format = RGBA16F;
-二号画面：材质参数与原版天空光。几何写，反射与氛围读；粗糙度要连续变化，八位定长会出现台阶。
-const int colortex2Format = RGBA16F;
-三号画面：不透明颜色快照。延迟阶段写，透明折射、屏幕反射与间接光读；透明绘制会改动零号画面，这里留一份改动前的副本。
-const int colortex3Format = RGBA16F;
-四号画面：上一帧线性颜色。时间合成写，时间合成下一帧与抗锯齿读；历史跨帧保留，所以不每帧清除。
-const int colortex4Format = RGBA16F;
-五号画面：时间元数据。时间合成写，重投影、自动曝光与最终镜头读；帧号、绝对相机位置和米制深度需要较高精度。
-const int colortex5Format = RGBA32F;
-六号画面：抗锯齿之前的合成颜色。合成阶段写，时间合成与自动曝光读；「渲染缩放」会把它缩到一半或四分之三。
-const int colortex6Format = RGBA16F;
-七号画面：原版光照数据。几何写，屏幕后处理、时间阶段与调试读；光照等级要连续插值，有效标记是精确开关。
-const int colortex7Format = RGBA16F;
-八号画面：水表面法线与真实视空间深度。水面几何写，合成与时间阶段读；米制深度要覆盖远景，半精度会在远处丢失分辨。
-const int colortex8Format = RGBA32F;
+零号画面格式：八位就够存贴图色。
+const int colortex0Format = RGBA8;
+一号画面格式：十六位定点，配合四次方根编码保住暗部精度。
+const int colortex1Format = RGBA16;
+二号画面格式。
+const int colortex2Format = RGBA16;
+三号画面格式。
+const int colortex3Format = RGBA16;
+四号画面格式。
+const int colortex4Format = RGBA16;
+五号画面格式。
+const int colortex5Format = RGBA16;
+六号画面格式。
+const int colortex6Format = RGBA16;
+七号画面格式。
+const int colortex7Format = RGBA16;
+八号画面格式：放大输出直接显示，八位就够。
+const int colortex8Format = RGBA8;
 */
-// 六号画面被缩放后，写入方必须用 `omniPixel(uv)` 取全分辨率像素，不能用 `gl_FragCoord`；
-// 读取方只能用 `texture(colortex6, uv)` 按比例坐标采样，不能用 `texelFetch`。
 
-// 四号与五号是历史画面，要带着上一帧的内容进入下一帧，所以关闭每帧清除。
-const bool colortex4Clear = false; // 历史跨帧保留。
-const bool colortex5Clear = false; // 历史状态跨帧保留。
+// 零号清成黑色、透明度一：天气程序把雨雪遮罩乘进 `a`，起点必须是一。
+const vec4 colortex0ClearColor = vec4(0.0, 0.0, 0.0, 1.0); // 黑色、不透明。
 
-// 零号清成黑色：原版天空几何已关闭，天空像素在延迟阶段之前只剩日月等贴图的颜色，
-// 开启「使用资源包天空」时延迟阶段把这部分叠加到自定义天空上；清成雾色会把雾色也一起叠进去。
-const vec4 colortex0ClearColor = vec4(0.0, 0.0, 0.0, 0.0); // 天空像素只保留贴图贡献。
-// 一号清成朝前的浮点法线，天空这类没有几何的像素也有一个无害的默认方向。
-const vec4 colortex1ClearColor = vec4(0.5, 0.5, 1.0, 0.0); // 天空法线采用朝前的无害默认值。
-// 二号清成粗糙非金属，没有材质信息的像素不会反光。
-const vec4 colortex2ClearColor = vec4(1.0, 0.0, 0.0, 1.0); // 无材质使用粗糙非金属。
-// 七号清成无效，没有几何或覆盖层的像素不参与屏幕后处理。
-const vec4 colortex7ClearColor = vec4(0.0, 0.0, 0.0, 0.0); // 没有几何或覆盖层时标记无有效元数据。
-// 八号清成零，表示没有水面；每帧清除防止上一帧的水面残留下来。
-const vec4 colortex8ClearColor = vec4(0.0, 0.0, 0.0, 0.0); // 没有水表面的默认值，禁止跨帧残留。
+// 每帧清除：一号、二号、七号带跨帧数据，不能清。
+const bool colortex0Clear = true; // 贴图色每帧重写。
+const bool colortex1Clear = false; // 场景颜色在各阶段之间接力，并作为下一帧部分输入。
+const bool colortex2Clear = false; // 全局光历史、云影和统计像素要跨帧保留。
+const bool colortex3Clear = true; // 法线光照图每帧重写。
+const bool colortex4Clear = true; // 半透明法线光照图每帧重写。
+const bool colortex5Clear = true; // 高光材质每帧重写。
+const bool colortex6Clear = true; // 半透明颜色材质每帧重写。
+const bool colortex7Clear = false; // 时间抗锯齿历史跨帧保留。
+
+// --- 阴影图设置 ---
+const float shadowIntervalSize = 4.0; // 阴影相机按四格对齐移动，减少走动时阴影边缘闪烁。
+const float shadowDistanceRenderMul = 1.0; // 阴影绘制距离等于阴影距离。
+
+const bool shadowHardwareFiltering1 = true; // 一号阴影深度用硬件比较采样，得到柔和边缘。
+const bool shadowtex0Mipmap = true; // 零号阴影深度生成多级纹理，可变半影搜索用。
+const bool shadowtex0Nearest = false; // 零号阴影深度线性过滤。
+const bool shadowtex1Mipmap = false; // 一号阴影深度不需要多级纹理。
+const bool shadowtex1Nearest = false; // 一号阴影深度线性过滤。
+const bool shadowcolor0Mipmap = false; // 阴影颜色不需要多级纹理。
+const bool shadowcolor0Nearest = false; // 阴影颜色线性过滤。
+const bool shadowcolor1Mipmap = false; // 阴影法线不需要多级纹理。
+const bool shadowcolor1Nearest = false; // 阴影法线线性过滤。
+
+// --- 其他加载器常量 ---
+const int noiseTextureResolution = 64; // 噪声贴图边长，与 `texture/noise.png` 一致。
+const float eyeBrightnessHalflife = 10.0; // 眼部亮度平滑半衰期，单位游戏刻。
+const float ambientOcclusionLevel = 1.0; // 原版环境光遮蔽强度保持满值，`GTAO` 另算。
+const int superSamplingLevel = 0; // 不开超采样。
+#endif // 文件守卫结束。

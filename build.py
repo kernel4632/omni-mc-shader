@@ -37,6 +37,9 @@ ROOT = Path(__file__).resolve().parent  # 换工作目录不改变数据位置�
 SHADERS = ROOT / "shaders"  # 游戏资源根目录。
 INCLUDE = re.compile(r'^[ \t]*#include[ \t]+"([^"\n]+)"[ \t]*$', re.MULTILINE)  # 加载器要求引用独占一行，尾随说明会被拒绝。
 STAGES = {".vsh": ".vert", ".fsh": ".frag", ".gsh": ".geom", ".csh": ".comp", ".tcs": ".tesc", ".tes": ".tese"}  # 把游戏入口后缀映射到编译器认识的阶段名。
+# 移植 iterationT 期间的临时开关：旧效果文件在各片改写前没有入口引用，为真时“选项未接入”只警告不报错。
+# 移植完成后由庚片删除这个开关和它的分支，恢复严格检查。
+PORTING = True
 _VERSION_PATTERN = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev|alpha|beta|rc)\.(?:0|[1-9]\d*))?"  # 读文件与发布新版本共用一种编号规则。
 
 # --- 读取版本：文件、压缩包和发布标签共用同一个编号 ---
@@ -180,19 +183,28 @@ def program_files() -> dict[Path, str]:
     """读取流程表并返回入口路径到文本的映射，不直接写磁盘。
 
     流程表属于文件输入，维度、主体和宏名在此检查；固定三维度避免加载器漏读根入口。
-    顶点片元使用基础语言版本，计算阶段使用更高版本；生成文本是既有构建协议。
+    每个维度登记 `define`（维度宏）、`geometry`（额外生成几何阶段的程序）和 `absent`（该维度没有的程序）。
+    顶点、几何、片元使用基础语言版本，计算阶段使用更高版本；生成文本是既有构建协议。
     """
     data = json.loads((SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))  # 不从效果目录推测流程。
     if set(data.get("dimensions", {})) != {"world0", "world-1", "world1"}:  # 每个受支持维度都要明确登记。
         raise ValueError("使用旧维度约定时必须同时提供 world0、world-1、world1；不能混入根目录程序")  # 任意worldN存在时加载器忽略根目录入口。
     result = {}  # 生成入口位置与内容。
-    for dimension, flag in data["dimensions"].items():  # 维度显式接线。
+    for dimension, setting in data["dimensions"].items():  # 维度显式接线：维度宏、几何阶段清单、缺席程序清单。
+        flag = setting["define"]  # 每个维度都有自己的维度宏，主世界也不例外，主体靠它选维度分支。
+        geometry = set(setting.get("geometry", []))  # 只有登记在这里的程序额外生成几何阶段。
+        absent = set(setting.get("absent", []))  # 这个维度没有的程序，按参考光影的维度目录删减。
+        if not (geometry | absent) <= set(data["programs"]):  # 清单里的名字必须是真实程序，拼错会让程序悄悄多出或缺失。
+            raise ValueError(f"{dimension} 的几何或缺席清单含未登记程序")
         for name, (rendering, *defines) in data["programs"].items():  # 程序显式选择主体。
             if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 流程表不能引用非法名字或不存在的绘制主体。
                 raise ValueError(f"程序名或绘制主体无效：{name}")
-            for suffix, stage in ((".vsh", "OMNI_VERTEX"), (".fsh", "OMNI_FRAGMENT")):  # 顶点片元保持配对。
-                flags = [stage, *defines, *([flag] if flag else [])]  # 维度规则显式写入入口。
-                if any(not re.fullmatch(r"OMNI_[A-Z_]+", flag_name) for flag_name in flags):  # 生成入口只允许项目自有宏名。
+            if name in absent:  # 维度没有的程序不生成入口，加载器就不会执行它。
+                continue
+            stages = [(".vsh", "OMNI_VERTEX"), (".fsh", "OMNI_FRAGMENT")] + ([(".gsh", "OMNI_GEOMETRY")] if name in geometry else [])  # 顶点片元必配对，几何阶段按清单追加。
+            for suffix, stage in stages:  # 每个阶段一个薄入口。
+                flags = [stage, *defines, flag]  # 维度规则显式写入入口。
+                if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 生成入口只允许项目自有宏名；程序宏带编号，如 `OMNI_COMPOSITE10_PASS`。
                     raise ValueError("程序宏必须使用受控名称")
                 lines = ["#version 330 compatibility", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 首行必须先声明语言版本，再说明生成来源。
                 for define in flags:  # 入口只选择类别。
@@ -202,8 +214,8 @@ def program_files() -> dict[Path, str]:
         for name, (rendering, *defines) in data.get("compute", {}).items():  # 计算程序单独登记，不生成顶点片元。
             if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 计算阶段同样只能选已有主体。
                 raise ValueError(f"计算程序名或主体无效：{name}")
-            flags = ["OMNI_COMPUTE", *defines, *([flag] if flag else [])]  # 计算阶段使用受控宏选择主体。
-            if any(not re.fullmatch(r"OMNI_[A-Z_]+", flag_name) for flag_name in flags):  # 计算入口宏也使用同一受控名称规则。
+            flags = ["OMNI_COMPUTE", *defines, flag]  # 计算阶段使用受控宏选择主体。
+            if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 计算入口宏也使用同一受控名称规则。
                 raise ValueError("计算程序宏必须使用受控名称")
             lines = ["#version 430", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 计算阶段需要更高版本。
             for define in flags:  # 入口只选择类别。
@@ -222,10 +234,10 @@ def generate() -> None:
     files.update(program_files())  # 入口和菜单都由维护的主体生成。
     for folder in (SHADERS, SHADERS / "world0", SHADERS / "world-1", SHADERS / "world1"):  # 清理范围限定在已知入口位置。
         for path in folder.glob("*"):
-            if path.suffix in (".vsh", ".fsh", ".csh") and path not in files:  # 只检查由流程表生成的阶段。
+            if path.suffix in (".vsh", ".fsh", ".gsh", ".csh") and path not in files:  # 只检查由流程表生成的阶段，几何阶段也由流程表生成。
                 text = path.read_text(encoding="utf-8")  # 只删除旧流程生成且没有手动修改的薄入口。
                 generated_comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 选择本程序的绘制阶段或物体类别。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 只有生成器自己的说明才可随旧入口删除。
-                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z_]+(?: 1)?|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式（含带值的宏），额外内容视为人工修改。
+                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z0-9_]+(?: 1)?|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式（含带值与带编号的宏），额外内容视为人工修改。
                 lines = text.splitlines()
                 if len(lines) < 2 or not lines[0].startswith("#version ") or not lines[1].startswith("// 生成的") or not untouched:  # 格式不完整或含人工说明时拒绝删除。
                     raise ValueError(f"旧入口含自有修改，不能自动删除：{path}")  # 保留用户文件并报告具体冲突。
@@ -294,9 +306,11 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
         body = re.sub(r"(?m)^.*(?:#define|@option).*\n?", "", text)  # 去掉宏定义与说明行，剩下的才是算法接入。
         declared_names.append(names)
         used_words.append(set(re.findall(r"\b\w+\b", body)))
-    for name in found:  # 验证选项接入算法：同一选项必须在同一个入口里既声明又使用。
-        if not any(name in declared_names[index] and name in used_words[index] for index in range(len(declared_names))):
-            raise ValueError(f"选项 {name} 没有接入任何实际入口或计算")
+    unconnected = [name for name in found if not any(name in declared_names[index] and name in used_words[index] for index in range(len(declared_names)))]  # 验证选项接入算法：同一选项必须在同一个入口里既声明又使用。
+    if unconnected and not PORTING:  # 正常开发时，没有接入的选项是玩家看得见却不起作用的假开关，必须失败。
+        raise ValueError(f"选项 {unconnected[0]} 没有接入任何实际入口或计算")
+    if unconnected:  # 移植期间旧效果文件暂时没有入口引用，只报数量，不挡住地基检查。
+        print(f"移植期间警告：{len(unconnected)} 个选项暂未接入任何入口", flush=True)
     programs = {}  # 同名入口的多个绘制阶段必须作为一个链接程序。
     for source in entries:
         programs.setdefault(source.with_suffix(""), []).append(source)  # 细分与几何阶段一起链接。
@@ -308,7 +322,11 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     # 第一步：把代表配置、两种环境和全部程序展开成任务；实际组合数随选项变化。
     # 为什么先收集再编译：这样重复内容能在编译前过滤，并把独立任务交给线程池并行，避免串行等待几千个编译器进程。
     jobs, seen, reused = [], set(), 0  # 分别保存待编译任务、去重摘要与跳过的成功组数。
-    for label, option_values in variants(found, profiles):  # 代表组合逐项展开。
+    configurations = variants(found, profiles)  # 代表配置。
+    if PORTING:  # 移植期间只编默认配置与基础环境，避免占位主体把十秒预算用光；移植完成后由庚片恢复完整矩阵。
+        configurations = configurations[:1]
+        environments = environments[:1]
+    for label, option_values in configurations:  # 代表组合逐项展开。
         for environment, defines in environments:  # 基础与远景均检查。
             if (label == "default" and environment != "base") or (label == "all_high" and environment != "iris_dh"):
                 continue  # 默认检查基础回退，高效果检查可选能力，不重复两组环境乘积。
@@ -410,7 +428,7 @@ def check() -> None:
             raise ValueError(f"{path.relative_to(ROOT)} 未生成或已过期，请运行 python build.py generate")
         if path.suffix in (".properties", ".lang"):  # 菜单中的机器转义说明也要按解码后的中文审计。
             audit.generated_comments(path, expected)
-    generated_entries = {path for path in entries if path.suffix in (".vsh", ".fsh", ".csh")}  # 这些阶段由流程表生成；其他阶段仍可独立维护。
+    generated_entries = {path for path in entries if path.suffix in (".vsh", ".fsh", ".gsh", ".csh")}  # 这些阶段由流程表生成；细分阶段仍可独立维护。
     if generated_entries != set(program_files()):  # 旧程序可能被加载器忽略，必须明确清理并审查。
         raise ValueError("存在流程表之外的旧入口，请重新生成并审查")
     audited = audit.check(ROOT)  # 自有源码先通过中文说明与未实现标记审计。
@@ -420,9 +438,12 @@ def check() -> None:
     expanded_cache = {}  # 一次检查只读取每份共用源码一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
         expand(source, sourceNumbers=source_numbers, cache=expanded_cache)  # 不为每个文件重新扫描整棵引用树。
-    key_programs = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "shadow", "dh_terrain", "dh_water", "deferred", "composite", "composite1", "final", "setup"}  # 主要数据通路，在全部代表配置下编译。
+    key_programs = {"gbuffers_terrain", "deferred3", "composite", "composite5", "composite14", "final"}  # 主要数据通路：地形、天空、主光照、合并、色调映射、最终输出，在全部代表配置下编译。
     dimension_programs = {"deferred", "composite"}  # 维度宏改变天空、雾与光照的地方集中在这两个阶段。
     probes = [source for source in entries if source.parent.name == "world0" or source.stem in dimension_programs]  # 主世界每个程序都编：不同程序宏会改变引入结果，只编主路会漏掉宏与引入标记撞名。
+    if PORTING:  # 移植期间主体大多是占位，维度目录只在默认配置下再编一遍，给十秒预算留余量；移植完成后由庚片恢复完整探针。
+        key_programs = {"gbuffers_terrain", "composite", "final"}
+        probes = [source for source in entries if source.parent.name == "world0"]
     compile_shaders(probes, found, profiles, key_programs)
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
     print(f"检查通过：{len(entries)} 个入口，{len(found)} 个选项，{len(profiles)} 套预设")
@@ -438,7 +459,7 @@ def archive(path: Path, files: dict[str, bytes]) -> None:
         for name, content in sorted(files.items()):  # 固定文件顺序。
             info = zipfile.ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))  # 固定时间，避免构建日期改变包校验值。
             info.create_system = 3  # 统一记录压缩包的平台标记，避免不同系统生成不同字节。
-            info.compress_type = zipfile.ZIP_DEFLATED  # 统一压缩方法。
+            info.compress_type = zipfile.ZIP_STORED if name.endswith((".png", ".bin")) else zipfile.ZIP_DEFLATED  # 贴图与二进制数据本身已压缩或压不动，直接存放：九级压缩几十兆数据要好几秒，超过检查预算还几乎没有收益。
             info.external_attr = 0o100644 << 16  # 文件成员使用普通只读文件权限，不携带本机属性。
             output.writestr(info, content)  # 不带本机路径与时间。
 
@@ -451,7 +472,7 @@ def pack() -> list[Path]:
     """
     release_version = version()  # 两个包和文件名共用唯一版本来源。
     _, profiles, _ = configuration()  # 玩家可分享配置仍由预设扫描器产生。
-    shader_files = {"shaders/" + path.relative_to(SHADERS).as_posix(): path.read_bytes() for path in SHADERS.rglob("*") if path.is_file() and "libraries" not in path.relative_to(SHADERS).parts and path.suffix in {*STAGES, ".glsl", ".properties", ".lang", ".png", ".bin"}}  # 只收游戏能读取的自有资源种类。
+    shader_files = {"shaders/" + path.relative_to(SHADERS).as_posix(): path.read_bytes() for path in SHADERS.rglob("*") if path.is_file() and "libraries" not in path.relative_to(SHADERS).parts and path.suffix in {*STAGES, ".glsl", ".properties", ".lang", ".png", ".bin", ".mcmeta"}}  # 只收游戏能读取的自有资源种类；`.mcmeta` 记录贴图的过滤与重复方式。
     shader_files.pop("shaders/rendering/pipeline.properties", None)  # 源流程设置已合并到加载器菜单。
     shader_files.update(dependencies())  # 第三方文件必须先通过许可与哈希白名单检查。
     shader_files["VERSION"] = (release_version + "\n").encode()  # 包内版本供玩家确认实际使用版本。

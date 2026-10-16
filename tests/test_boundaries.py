@@ -20,16 +20,27 @@ import options  # 分享格式唯一来源。
 class BoundaryTests(unittest.TestCase):
     """外部输入必须在文件写入与外部进程之前拒绝。"""
     def test_loader_world_folders_are_complete(self):
-        """官方旧维度规则要求主世界world0，存在worldN后根程序不会加载。"""
+        """官方旧维度规则要求主世界world0，存在worldN后根程序不会加载；每个维度的程序集由流程表裁减。"""
         generated = build.program_files()  # 只接受显式的三组实际加载位置。
-        names = {p.name for p in generated if p.parent.name=="world0"}  # 三个维度必须覆盖完全相同的程序集。
-        self.assertIn("final.fsh",names)  # 主世界拥有真实最终显示入口。
-        for dimension in ("world0","world-1","world1"):
-            self.assertEqual({p.name for p in generated if p.parent.name==dimension},names)  # 每个世界都提供完整程序。
-        self.assertFalse(any(p.parent==build.SHADERS for p in generated))  # 根入口是被忽略的重复代码。
-        settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 阴影开关必须对应实际目录。
-        for dimension in ("world0","world-1","world1"):
-            self.assertEqual(settings[f"program.{dimension}/shadow.enabled"],"OMNI_SHADOW_ENABLED")  # 世界开关与入口路径成对。
+        data = json.loads((build.SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))  # 维度、缺席与几何清单是唯一来源。
+        names = {p.name for p in generated if p.parent.name == "world0"}  # 主世界拥有完整程序集。
+        self.assertIn("final.fsh", names)  # 主世界拥有真实最终显示入口。
+        for dimension, setting in data["dimensions"].items():
+            absent = set(setting.get("absent", []))  # 这个维度没有的程序。
+            geometry = set(setting.get("geometry", []))  # 额外生成几何阶段的程序。
+            expected = set()
+            for name in data["programs"]:
+                if name in absent:
+                    continue
+                expected |= {name + ".vsh", name + ".fsh"}  # 顶点片元始终配对。
+                if name in geometry:
+                    expected.add(name + ".gsh")  # 只有登记过的程序生成几何阶段。
+            expected |= {name + ".csh" for name in data.get("compute", {})}  # 计算入口每个维度都有。
+            self.assertEqual({p.name for p in generated if p.parent.name == dimension}, expected, dimension)
+        self.assertFalse(any(p.parent == build.SHADERS for p in generated))  # 根入口是被忽略的重复代码。
+        settings = options.read_pipeline(build.SHADERS / "rendering/pipeline.properties")  # 程序开关必须对应实际维度目录。
+        self.assertTrue(any(key.startswith("program.world-1/") for key in settings))  # 下界开关带维度前缀。
+        self.assertTrue(any(key.startswith("program.world1/") for key in settings))  # 末地开关带维度前缀。
 
     def test_generated_comments_are_ascii_chinese(self):
         """转义中文说明保持加载器编码，英语生成说明仍被拒绝。"""

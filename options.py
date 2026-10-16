@@ -37,6 +37,9 @@ CONST = re.compile(  # 只读取声明中的类型和字面量，不求值任意
 CONST_OPTIONS = {  # 只允许加载器真正认识的原生常量，避免生成无效菜单。
     "shadowMapResolution": "int",
     "shadowDistance": "float",
+    "sunPathRotation": "float",
+    "wetnessHalflife": "float",
+    "drynessHalflife": "float",
 }
 OPTION_RENAMES = {  # 保留历史名称对照；当前导入不使用此表，不会自动接受或改写旧名称。
     "OMNI_SHADOW_RESOLUTION": "shadowMapResolution",
@@ -105,8 +108,8 @@ PAGE_OF_GROUP: dict[str, str] = {
     "cloud": "cloud",
     "fog": "fog",
     "water": "water",
-    "material": "ground", "vegetation": "ground",
-    "sunlight": "lighting", "lpv": "lighting", "ambient": "lighting",
+    "material": "ground", "vegetation": "ground", "selection": "ground",
+    "sunlight": "lighting", "lpv": "lighting", "ambient": "lighting", "blocklight": "lighting",
     "shadow": "shadow",
     "reflection": "reflection",
     "color": "color", "bloom": "color",
@@ -114,7 +117,7 @@ PAGE_OF_GROUP: dict[str, str] = {
     "antialiasing": "clarity", "upscale": "clarity",
     "season": "weather", "weather": "weather",
     "entity": "entity",
-    "world": "world",
+    "world": "world", "nether": "world", "end": "world",
     "debug": "dev",
 }  # 归属只在这里维护一份，效果文件新增后在此登记。
 

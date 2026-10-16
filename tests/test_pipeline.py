@@ -28,27 +28,24 @@ class PipelineTests(unittest.TestCase):
                 self.assertTrue(text.startswith("#version 330 compatibility"))  # 兼容版本必须第一行。
             self.assertIn('#include "/rendering/',text)  # 不依赖加载器猜回退。
             self.assertEqual(text,path.read_text(encoding="utf-8"))  # 实际入口没有遗漏维度宏。
-        for folder in ("world0","world-1","world1"):
-            self.assertIn(build.SHADERS/folder/"composite1.fsh",files)  # 时间签名覆盖各维度。
-            self.assertIn(build.SHADERS/folder/"setup.csh",files)  # 每个维度都登记计算入口。
+        for folder in ("world0", "world-1", "world1"):
+            self.assertIn(build.SHADERS / folder / "setup.csh", files)  # 每个维度都登记计算入口。
+        self.assertIn(build.SHADERS / "world0/composite1.fsh", files)  # 主世界有水后雾阶段。
+        self.assertNotIn(build.SHADERS / "world-1/composite1.fsh", files)  # 参考光影的下界没有这个阶段。
 
     def test_buffer_history_and_snapshot_contract(self):
-        """历史不清除，折射从透明阶段无法覆盖的快照读取。"""
-        buffers = (build.SHADERS/"rendering/buffers.glsl").read_text(encoding="utf-8")
-        self.assertIn("colortex4Clear = false",buffers); self.assertIn("colortex5Clear = false",buffers)  # 历史跨帧保留。
-        deferred = build.expand(build.SHADERS/"world0/deferred.fsh")  # 从加载器实际主世界路径检查快照。
-        self.assertIn("RENDERTARGETS: 0,3",deferred)
-        water = build.expand(build.SHADERS/"world0/gbuffers_water.fsh")  # 水几何禁止写快照。
-        self.assertIn("RENDERTARGETS: 0,7,8",water)  # 水独立保存法线与实际深度，不覆盖底层类别。
-        temporal = build.expand(build.SHADERS/"world0/composite1.fsh")
-        self.assertIn("RENDERTARGETS: 0,4,5",temporal)  # 当前与历史输出分开。
-        self.assertIn("!overlay && omniHistoryValid()",temporal)  # 翻转前的历史有效性传给最终镜头。
-        self.assertIn("texelFetch(colortex5,oldPixel,0)",temporal)  # 整数历史状态禁止线性过滤。
-        for condition in ("size.x!=viewWidth","size.y!=viewHeight","size.z!=omniDimension()","frameCounter-1","camera.xyz-cameraPosition"):
-            self.assertIn(condition,temporal)  # 历史失效条件不能遗漏。
-        programs = json.loads((build.SHADERS/"rendering/programs.json").read_text(encoding="utf-8"))["programs"]
-        for name in ("gbuffers_weather","gbuffers_damagedblock","gbuffers_armor_glint","gbuffers_spidereyes"):
-            self.assertIn("OMNI_OVERLAY",programs[name])  # 不写深度的覆盖程序必须只写颜色。
+        """跨帧历史不清除；每个程序写出的画面编号与移植合同一致。"""
+        buffers = (build.SHADERS / "rendering/buffers.glsl").read_text(encoding="utf-8")
+        self.assertIn("colortex1Clear = false", buffers); self.assertIn("colortex2Clear = false", buffers); self.assertIn("colortex7Clear = false", buffers)  # 场景颜色、全局光历史与时间抗锯齿历史跨帧保留。
+        self.assertIn("colortex0Clear = true", buffers); self.assertIn("colortex5Clear = true", buffers)  # 贴图色与高光材质每帧重写。
+        self.assertIn("DRAWBUFFERS:7", build.expand(build.SHADERS / "world0/deferred.fsh"))  # 焦散法线写在七号。
+        self.assertIn("DRAWBUFFERS:460", build.expand(build.SHADERS / "world0/gbuffers_water.fsh"))  # 半透明层写四号、六号与贴图色。
+        self.assertIn("DRAWBUFFERS:1", build.expand(build.SHADERS / "world0/composite.fsh"))  # 不透明光照写一号。
+        self.assertIn("DRAWBUFFERS:7", build.expand(build.SHADERS / "world0/composite7.fsh"))  # 时间抗锯齿历史写七号。
+        programs = json.loads((build.SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))["programs"]
+        for name in ("gbuffers_weather", "gbuffers_damagedblock", "gbuffers_armor_glint"):
+            self.assertEqual(programs[name][0], "overlay", name)  # 不写深度的覆盖程序共用叠加绘制主体。
+        self.assertEqual(programs["gbuffers_spidereyes"][0], "entities")  # 蜘蛛眼与实体共用实体绘制主体。
 
     def test_tessellation_pair_and_source_map(self):
         """细分不完整时拒绝，引用映射保留原始行号。"""
@@ -170,7 +167,7 @@ class PipelineTests(unittest.TestCase):
                 with zipfile.ZipFile(first[0]) as package:
                     names = set(package.namelist())
                     self.assertIn("shaders/world0/gbuffers_terrain.fsh",names)  # 官方旧维度规则从world0加载主世界。
-                    self.assertIn("shaders/world-1/composite1.fsh",names)
+                    self.assertIn("shaders/world-1/composite.fsh",names)
                     self.assertNotIn("shaders/gbuffers_terrain.fsh",names)  # 根目录可执行程序会被worldN忽略，不随包放重复入口。
                     self.assertIn("THIRD_PARTY.md",names); self.assertIn("VERSION",names)  # 来源与版本可追溯。
                     self.assertNotIn("shaders/rendering/programs.json",names); self.assertNotIn("shaders/rendering/pipeline.properties",names)  # 开发源表已经生成实际入口和加载器设置。
