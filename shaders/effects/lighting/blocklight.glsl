@@ -76,7 +76,7 @@
 #include "/common/math.glsl"
 #include "/common/coordinates.glsl"
 #include "/common/noise.glsl"
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 
 // --- 原版方块光：按方块光等级与遮蔽算出火把照亮周围的光 ---
 // 输入是方块光等级、遮蔽项与不透明材质掩码；输出该像素收到的方块光颜色。

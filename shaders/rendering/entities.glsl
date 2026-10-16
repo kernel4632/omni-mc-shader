@@ -40,29 +40,29 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 vec3 colorShadowlight; // 阳光颜色。
 vec3 colorSkylight; // 天光颜色。
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与实体材质选项。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 生物与玩家：提供 `EntityStatusColor` 与 `HandFovProjection`。
-#include "/effects/entity.glsl"
+#include "/effects/entity/entity.glsl"
 // 自发光模式选项归属方块光文件，只在有高光贴图时按需引入。
 #if defined OMNI_FRAGMENT && defined MC_SPECULAR_MAP
 	// 方块光文件读取火把光色，按它的调用前提给一个空全局。
 	vec3 colorTorchlight;
 	// 方块光与手持光：这里只借它的 `OMNI_TEXTURE_EMISSIVENESS_MODE` 选项。
-	#include "/effects/blocklight.glsl"
+	#include "/effects/lighting/blocklight.glsl"
 #endif
 // 水面与水雾：片元算湿润与雨点要用 `GetModulatedRainSpecular`、`GetRainNormal`，只在片元引入。
 #ifdef OMNI_FRAGMENT
 	// 波浪、涟漪、湿润调制与水体光学。
-	#include "/effects/water.glsl"
+	#include "/effects/water/water.glsl"
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 // 末地需要末地版阴影相机矩阵，只有片元用到，也只有末地用它。
 #if defined OMNI_END && defined OMNI_FRAGMENT
 	// 阴影：提供末地的 `shadowModelViewInverseEnd`。
-	#include "/effects/shadow.glsl"
+	#include "/effects/shadow/shadow.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：四类实体程序的共用顶点着色器。
@@ -380,7 +380,7 @@ void main(){
 		albedo.rgb = EntityStatusColor(albedo.rgb, entityColor); // 叠上实体状态色。
 	#endif
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		albedo.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 

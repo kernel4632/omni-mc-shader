@@ -40,15 +40,15 @@
 	// 共用数学：亮度、颜色曲线与交错梯度噪声。
 	#include "/common/math.glsl"
 	// 提供材质编号 `MATID_*`，手与玩家的排除判断用它。
-	#include "/effects/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 边缘抗锯齿 `Fxaa`；内部再引入坐标换算。
-	#include "/effects/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 	// 黑边 `BlackBar`。
-	#include "/effects/color.glsl"
+	#include "/effects/color/color.glsl"
 	// 对比度自适应锐化与放大。
-	#include "/effects/upscale.glsl"
+	#include "/effects/clarity/upscale.glsl"
 	// 调试数码管；原程序一并引入，本 `main` 未调用。
-	#include "/effects/debug.glsl"
+	#include "/effects/dev/debug.glsl"
 
 	void main(){
 		vec3 color = vec3(0.0); // 最终要写的屏幕颜色。

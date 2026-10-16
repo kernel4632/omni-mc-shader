@@ -94,10 +94,12 @@
 // 数学提供相位函数与曲线，蓝噪声提供步进抖动，阴影提供阴影图坐标、焦散与波法线，天空云提供大气数据与云影，光照提供强度选项。
 #include "/common/math.glsl"
 #include "/common/noise.glsl"
-#include "/effects/shadow.glsl"
-#include "/effects/sky.glsl"
-#include "/effects/cloud.glsl"
-#include "/effects/sunlight.glsl"
+#include "/effects/shadow/shadow.glsl"
+#include "/effects/sky/sky.glsl"
+#include "/effects/cloud/cloud.glsl"
+#include "/effects/lighting/sunlight.glsl"
+// 原版雾用失明与黑暗的调试开关 `OMNI_DISABLE_BLINDNESS_DARKNESS`，它的归属文件是颜色效果，这里引入才拿到定义。
+#include "/effects/color/color.glsl"
 
 // --- 体积雾：相位、噪声与密度 ---
 // 粉末效应：光穿过一层薄雾时，正对光源方向更亮，背光方向的雾壁反而更暗，模拟粒子间的多次散射。
@@ -225,7 +227,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 	#endif
 
 	#if OMNI_VFOG_NOISE_TYPE > 0 // 团雾模式要按风移动。
-		float windTimer = (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * FTC_OFFSET) * 0.0025; // 风速时间，与云速一致。
+		float windTimer = (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_FTC_OFFSET) * 0.0025; // 风速时间，与云速一致。
 		vec3 wind = vec3(-1.0, -0.05, 0.6) * windTimer; // 固定的风方向。
 	#endif
 
@@ -475,7 +477,7 @@ void LandAtmosphericScattering(inout vec3 color, in float dist, vec3 startPos, v
 // 输入是待修改颜色与距离；就地把画面往对应颜色混合。
 // 为什么这些单独处理：它们来自原版药水与介质状态，不属于自定义雾，改动可能影响玩法判断，所以按原版逻辑照搬。
 void VanillaFog(inout vec3 color, float dist){
-	#ifndef DISABLE_BLINDNESS_DARKNESS // 调试开关，关闭后不看失明与黑暗。
+	#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 调试开关，关闭后不看失明与黑暗。
 		if (darknessFactor > 0.0) color = mix(color, vec3(0.0), smoothstep(5.0, mix(far, 15.0, darknessFactor), dist) * darknessFactor); // 黑暗效果：越远越黑。
 		if (blindness > 0.0) color = mix(color, vec3(0.0), smoothstep(1.5, mix(far, 4.5, blindness), dist) * blindness); // 失明效果：更近就开始变黑。
 	#endif
@@ -487,7 +489,7 @@ void VanillaFog(inout vec3 color, float dist){
 
 // 水面折射与原版雾共用本文件的水下体积雾函数，所以在这里引入水面效果；它同时提供水下雾开关与浓度选项。
 // 放在函数定义之后：水面折射会调用上面的 `VolumetricFog` 与 `LandAtmosphericScattering`，此时两者已经定义。
-#include "/effects/water.glsl"
+#include "/effects/water/water.glsl"
 
 // --- 水下焦散：水下体积雾需要一份范围很窄的焦散值来收窄光柱 ---
 // 说明：原 `UnderwaterVolumetricFog.glsl` 里的 `CalculateWaterCaustics` 与 `effects/shadow.glsl` 里的同名函数内容不同，

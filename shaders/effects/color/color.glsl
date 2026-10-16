@@ -67,6 +67,10 @@
 #define OMNI_PURKINJE_EFFECT_THRESHOLD 0.00003 // [0.00001 0.000015 0.00002 0.00003 0.00005 0.00007 0.0001 0.00015 0.0002 0.0003 0.0005 0.0007 0.001]
 // @option {"label": {"zh_cn": "浦肯野强度", "en_us": "Strength"}, "slider": true, "description": {"zh_cn": "色偏的强度。", "en_us": "Strength of the colour shift."}}
 #define OMNI_PURKINJE_EFFECT_STRENGTH 0.7 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
+// @option {"label": {"zh_cn": "关闭夜视校正", "en_us": "Disable Night Vision"}, "page": "dev", "description": {"zh_cn": "调试开关：忽略夜视对曝光曲线的抬升，用来比较真实亮度。","en_us": "Debug switch: ignores the night-vision lift of the exposure curve to compare real brightness."}}
+//#define OMNI_DISABLE_NIGHTVISION
+// @option {"label": {"zh_cn": "关闭失明与黑暗校正", "en_us": "Disable Blindness & Darkness"}, "page": "dev", "description": {"zh_cn": "调试开关：忽略失明与黑暗对曝光、泛光和原版雾的影响。","en_us": "Debug switch: ignores blindness and darkness on exposure, bloom and vanilla fog."}}
+//#define OMNI_DISABLE_BLINDNESS_DARKNESS
 
 // --- 内部常数：原 `Settings.glsl` 里不进菜单的曝光常数 ---
 #define AE_CLAMP // 给分块亮度设一个极小下限，避免全黑画面把曝光推到无穷。
@@ -207,7 +211,7 @@ float GetExposureValue(){
 	#else // 自动曝光。
 		float ae = CurveToLinear(texelFetch(colortex2, ivec2(0, screenSize.y - 1.0), 0).a) * (5120.0 / EXPOSURE_OUTPUT_FACTOR); // 读顶行自动曝光统计。
 		float aeCurve = OMNI_AE_CURVE; // 曲线指数初值。
-		#ifndef DISABLE_NIGHTVISION // 夜视时把曲线指数抬到接近一。
+		#ifndef OMNI_DISABLE_NIGHTVISION // 夜视时把曲线指数抬到接近一。
 			aeCurve = mix(aeCurve, 0.95, nightVision); // 按夜视强度混合。
 		#endif
 		#ifdef AE_CLAMP // 开启曝光钳位时按亮度压曲线。
@@ -218,7 +222,7 @@ float GetExposureValue(){
 		#endif
 		ae = pow(ae, -aeCurve); // 按曲线把亮度换成曝光。
 		ae *= exp2(OMNI_AE_OFFSET); // 叠加曝光偏移。
-		#ifndef DISABLE_BLINDNESS_DARKNESS // 黑暗效果时压低曝光。
+		#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 黑暗效果时压低曝光。
 			ae *= 1.0 - min(darknessLightFactor * 2.0, 0.9); // 按黑暗脉动亮度压低。
 		#endif
 		return 8.5 * MAIN_OUTPUT_FACTOR * ae; // 乘回管线单位并给出最终曝光。

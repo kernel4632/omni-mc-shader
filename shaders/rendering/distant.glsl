@@ -45,13 +45,13 @@
 	#define DH_BLOCK_ILLUMINATED 15
 #endif
 // 时间抗锯齿选项：远景顶点抖动要用。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*` 与物理光照选项。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 远景噪声与剔除、水面波法线都只在片元引入。
 #ifdef OMNI_FRAGMENT
 	// 天气选项与雨函数：远景地形的湿润要读 `OMNI_SURFACE_WETNESS`。
-	#include "/effects/weather.glsl"
+	#include "/effects/weather/weather.glsl"
 	// 天气的 `Rain` 读取阳光与天光颜色，按它的调用前提给两个空全局。
 	vec3 colorShadowlight; // 阳光颜色，本程序不调用 `Rain`。
 	vec3 colorSkylight; // 天光颜色，本程序不调用 `Rain`。
@@ -62,9 +62,9 @@
 	uniform sampler2D gaux3; // 雨点第三张动画贴图。
 	uniform float rainStrength; // 降雨强度。
 	// 波浪、涟漪与水波法线。
-	#include "/effects/water.glsl"
+	#include "/effects/water/water.glsl"
 	// 远景噪声与剔除。
-	#include "/effects/world.glsl"
+	#include "/effects/world/world.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：远景地形与远景水分开写。
@@ -201,7 +201,7 @@ void main(){
 		if (fract(materialIDs) != 0.1) DH_noise(albedo, worldPos + cameraPosition + mat3(gbufferModelView) * viewNormal * 0.001, materialIDs); // 雪不叠噪声，其余按世界位置叠逐块噪声。界位置叠噪声。
 	#endif
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		albedo = vec3(1.0); // 调试白光时全白。
 	#endif
 
@@ -265,7 +265,7 @@ void main(){
 	#endif
 
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		tex.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 

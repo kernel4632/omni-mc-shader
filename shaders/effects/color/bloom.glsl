@@ -30,10 +30,12 @@
 // 颜色曲线、亮度与共享数学，以及做深度换算的坐标函数都要先引入。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 #include "/common/coordinates.glsl"
 // 合并泛光要读水雾密度 `OMNI_WATERFOG_DENSITY`（定义在 `effects/water.glsl`），这里引入它的归属文件。
-#include "/effects/water.glsl"
+#include "/effects/water/water.glsl"
+// 合并泛光用失明与黑暗的调试开关 `OMNI_DISABLE_BLINDNESS_DARKNESS`，它的归属文件是颜色效果，这里引入才拿到定义。
+#include "/effects/color/color.glsl"
 
 // --- 内部常数：各级降采样与升采样的半径和步长 ---
 // 半径是每一级高斯核的相对大小，步长是每一级沿轴取多少个样本；数值照 iterationT 原样，改动会直接改变光晕形状。
@@ -176,7 +178,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 		#endif
 	#endif
 #endif
-	#ifndef DISABLE_BLINDNESS_DARKNESS // 失明或黑暗效果时不加光晕。
+	#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 失明或黑暗效果时不加光晕。
 		bloomAmount *= 1.0 - blindness - darknessFactor; // 按遮挡强度压低。
 	#endif
 	return mix(color, bloom, saturate(bloomAmount)); // 按占比把光晕混进场景。

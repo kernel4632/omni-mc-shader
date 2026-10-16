@@ -30,11 +30,11 @@
 // 共用纯计算：曲线、法线编解码与打包。
 #include "/common/math.glsl"
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*` 与实体法线限制选项。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 选择框：提供 `SelectionBoxColor` 与线条图像输出函数。
-#include "/effects/selection.glsl"
+#include "/effects/ground/selection.glsl"
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 
@@ -149,7 +149,7 @@ void main(){
 out vec2 texCoord; // 纹理坐标。
 
 // 雨雪风偏移在天气效果文件里，引入它才能读到风向与扰动选项。
-#include "/effects/weather.glsl"
+#include "/effects/weather/weather.glsl"
 
 // 顶点主函数：按风把雨雪几何推斜后投影。
 void main(){
@@ -276,7 +276,7 @@ void main(){
 
 	if(albedo.a < 0.1) discard; // 透明像素丢弃。
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		albedo.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 
@@ -312,7 +312,7 @@ void main(){
 
 	if (albedo.a < 0.1) discard; // 透明像素丢弃。
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		albedo.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 
@@ -335,7 +335,7 @@ void main(){
 	vec4 albedo = texture(tex, texCoord); // 采附魔光贴图。
 	albedo *= color; // 乘顶点色。
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		albedo.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 
@@ -365,7 +365,7 @@ void main(){
 	vec4 albedo = textureLod(tex, texCoord, 0.0); // 采光束贴图。
 	albedo *= color; // 乘顶点色。
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		albedo.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 
@@ -434,7 +434,7 @@ layout(location = 0) out vec4 gbufferOutput0; // 零号，只写透明通道作�
 in vec2 texCoord; // 纹理坐标。
 
 // 雨遮罩计算在天气效果文件里，引入它才能读到选项。
-#include "/effects/weather.glsl"
+#include "/effects/weather/weather.glsl"
 
 // 片元主函数：把雨雪遮罩写进零号透明度，颜色为零，混合方式会把它乘到底层。
 void main(){

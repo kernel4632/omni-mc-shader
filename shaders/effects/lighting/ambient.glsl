@@ -15,6 +15,7 @@
     `OMNI_DEFERRED2_PASS` 的程序要先声明 `gbufferProjection`、`depthtex1`、`texCoord`；
     坐标换算按合同要先引入定义 `OMNI_TAA` 的效果文件。为什么这里不直接引入 `effects/material.glsl`：
     那份文件带只在几何阶段存在的贴图取样器，延迟程序引不动，材质编号由绘制主体保证可见。
+    末地把延迟程序重新排序（时间滤波在二号、空间滤波在四号），所以本文件的编译条件同时认末地对应的程序宏。
 */
 #ifndef OMNI_AMBIENT_INCLUDED
 #define OMNI_AMBIENT_INCLUDED
@@ -64,14 +65,14 @@
 // 相对坐标、数学、噪声与共享效果按下述顺序引入；本文件末尾的算法只在这里定义一次。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 #include "/common/coordinates.glsl"
 #include "/common/noise.glsl"
-#include "/effects/shadow.glsl"
+#include "/effects/shadow/shadow.glsl"
 #ifdef OMNI_GI_RSM // 只有打开全局光才需要下面的函数。
 ////////////////////PROGRAM_GI_0////////////////////////////////////////////////////////////////////
 ////////////////////PROGRAM_GI_0////////////////////////////////////////////////////////////////////
-#ifdef OMNI_DEFERRED1_PASS // 延迟一号：算反射阴影图并做时间滤波。
+#if (defined OMNI_DEFERRED1_PASS && !defined OMNI_END) || (defined OMNI_END && defined OMNI_DEFERRED2_PASS) // 主世界在延迟一号、末地在延迟二号做反射阴影图与时间滤波。
 // 反射阴影图反弹：从阴影图里可见的表面取光照与底色，按法线朝向和距离估计给当前点补一份光。
 vec3 RSM(vec3 viewPos, vec3 normal){
 	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz; // 视空间位置换到世界空间。
@@ -315,7 +316,7 @@ vec4 GI_TemporalFilter(){
 ////////////////////END_IF//////////////////////////////////////////////////////////////////////////
 ////////////////////PROGRAM_GI_1////////////////////////////////////////////////////////////////////
 ////////////////////PROGRAM_GI_1////////////////////////////////////////////////////////////////////
-#ifdef OMNI_DEFERRED2_PASS // 延迟二号：全局光空间滤波。
+#if (defined OMNI_DEFERRED2_PASS && !defined OMNI_END) || (defined OMNI_END && defined OMNI_DEFERRED4_PASS) // 主世界在延迟二号、末地在延迟四号做全局光空间滤波。
 // 全局光空间滤波：在七乘七邻域里按法线与深度加权平均，抑制半分辨率带来的噪点。
 vec3 GI_SpatialFilter(float dist, vec3 normal, vec3 viewDir){
 	const vec2 offset[49] = vec2[49]( // 七乘七邻域偏移表。

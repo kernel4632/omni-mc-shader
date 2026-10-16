@@ -32,17 +32,19 @@ uniform ivec2 atlasSize; // 方块图集尺寸。
 uniform int renderStage; // 当前原版绘制阶段，用来区分实体方块与透明方块。
 uniform float rainStrength; // 降雨强度，雨点函数读取它。
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与材质相关选项。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 植物摆动：提供 `WavingPlants`，顶点阶段的地形与阴影共用同一份摆法。
-#include "/effects/vegetation.glsl"
+#include "/effects/ground/vegetation.glsl"
+// Omni 额外功能：植被季节色，默认关闭。
+#include "/effects/weather/season.glsl"
 // 自发光模式选项归属方块光文件，只在有高光贴图时按需引入。
 #if defined OMNI_FRAGMENT && defined MC_SPECULAR_MAP
 	// 方块光文件读取火把光色，按它的调用前提给一个空全局。
 	vec3 colorTorchlight;
 	// 方块光与手持光：这里只借它的 `OMNI_TEXTURE_EMISSIVENESS_MODE` 选项。
-	#include "/effects/blocklight.glsl"
+	#include "/effects/lighting/blocklight.glsl"
 #endif
 // 水面与水雾：片元算湿润与雨点要用 `GetModulatedRainSpecular`、`GetRainNormal`，只在片元引入。
 #ifdef OMNI_FRAGMENT
@@ -50,14 +52,14 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 	vec3 colorShadowlight; // 阳光颜色。
 	vec3 colorSkylight; // 天光颜色。
 	// 波浪、涟漪、湿润调制与水体光学。
-	#include "/effects/water.glsl"
+	#include "/effects/water/water.glsl"
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 // 末地需要末地版阴影相机矩阵，只有片元用到，也只有末地用它。
 #if defined OMNI_END && defined OMNI_FRAGMENT
 	// 阴影：提供末地的 `shadowModelViewInverseEnd`。
-	#include "/effects/shadow.glsl"
+	#include "/effects/shadow/shadow.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：地形顶点着色器。
@@ -81,7 +83,7 @@ flat out float v_materialIDs; // 材质编号，平面插值避免边界混值�
 
 // 顶点主函数：把原程序的判定与摆动按顺序执行一遍。
 void main(){
-	#ifdef WHITE_DEBUG_WORLD // 调试白光模式：按是否开启遮蔽调试改底色。
+	#ifdef OMNI_WHITE_DEBUG_WORLD // 调试白光模式：按是否开启遮蔽调试改底色。
 		#ifdef OMNI_GTAO // 开启地平线遮蔽时用纯白。
 			v_color = vec3(1.0); // 直接给白。
 		#else // 未开遮蔽时只保留红色与透明度作为区分。
@@ -468,7 +470,9 @@ void main(){
 // 底色：贴图色乘顶点色。
 	vec3 albedo = albedoTex.rgb * color; // 合成底色。
 
-	#ifdef WHITE_DEBUG_WORLD
+	albedo = omniSeason(albedo, color); // Omni 额外功能：按游戏天数给植被上季节色，默认关闭。
+
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		albedo = color.bbb; // 调试白光时只留顶点色的蓝通道。
 	#endif
 

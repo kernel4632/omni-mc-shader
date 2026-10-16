@@ -15,7 +15,8 @@
 设计原因与取舍：
   只有相机重投影，没有实体速度缓冲，动态物体会靠邻域裁剪与深度比较把过时历史挡掉；
   历史可信度由混合权重、运动量和深度差共同决定，任一项对不上就少用或不用历史，避免拖影。
-  下界的时间抗锯齿与主世界不同（参考深度打包进七号画面透明度通道），由己片在本文件内按 `OMNI_NETHER` 分支补齐。
+  下界的时间抗锯齿与主世界不同（参考深度打包进七号画面透明度通道），按 `OMNI_NETHER` 分支在本文件内提供另一套取样、邻域统计与重投影；
+  调用方（`rendering/post.glsl` 的合成七号）在下界用四参数版 `TemporalReprojection` 并自行打包写回七号画面。
 */
 #ifndef OMNI_ANTIALIASING_INCLUDED // 只引入一次，避免宏与函数重复定义。
 #define OMNI_ANTIALIASING_INCLUDED // 置上标记。
@@ -30,13 +31,14 @@
 //#define OMNI_DISABLE_HAND_TAA
 // @option {"label": {"zh_cn": "关闭玩家抗锯齿与动态模糊", "en_us": "Disable Player TAA & Motion Blur"}, "description": {"zh_cn": "玩家角色不参与时间抗锯齿和动态模糊，减少第三人称下的拖影。", "en_us": "Excludes the player from TAA and motion blur."}}
 //#define OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR
+// @option {"label": {"zh_cn": "深度比较阈值", "en_us": "Depth Compare Threshold"}, "slider": true, "description": {"zh_cn": "判断历史点是否被遮挡的深度差上限；越小越容易判定为被遮挡、越少拖影。", "en_us": "Depth difference above which history is treated as occluded; smaller rejects more history and reduces smearing."}}
+#define OMNI_TAA_DEPTH_COMPARE_THRESHOLD 0.0007 // [0.00002 0.00003 0.00005 0.00007 0.0001 0.00015 0.0002 0.0003 0.0005 0.0007 0.001 0.0015 0.002 0.003 0.005 0.007 0.01 0.015 0.02 0.03 0.05 0.07 0.1]
 
-// --- 内部常数：原 `Settings.glsl` 里不进菜单的时间抗锯齿开关与阈值 ---
+// --- 内部常数：原 `Settings.glsl` 里不进菜单的时间抗锯齿开关 ---
 #define TAA_CLOSEST_DEPTH // 向前重投影时取三乘三邻域里最近的深度，减少物体边缘把背景深度带偏。
 #define TAA_BICUBIC_PREVIOUS // 读取历史画面时用三次采样，比双线性更锐利。
 #define TAA_DEPTH_COMPARE // 用上一帧深度和当前深度比较，判断对应点是否被遮挡。
 #define TAA_MICRO_BLUR // 历史权重很低时对当前帧做一次极轻的邻域平均，压掉抖动。
-#define TAA_DEPTH_COMPARE_THRESHOLD 0.0007 // 深度比较阈值；越远阈值越小，因为远处深度变化本来就大。
 //#define TAA_BICUBIC_CURRENT // 原程序默认关闭：当前帧用双线性采样即可。
 //#define TAA_CLIP_TO_CENTER // 原程序默认关闭：邻域裁剪默认用另一种做法。
 
@@ -45,7 +47,7 @@
 #include "/common/math.glsl"
 #include "/common/coordinates.glsl"
 // 材质编号 `MATID_*` 由材质效果文件定义，本文件的速度函数要用，自己引入避免调用方漏引。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 本文件自己的像素坐标：不依赖调用程序声明的全局量，任何程序在任意阶段引入都能编译。
 // 为什么自己取：邻域取样需要一个全局像素坐标，各程序各自声明的同名全局量不一定排在本文件之前。
 // 为什么放在片元守卫里面：`gl_FragCoord` 只有片元阶段存在，顶点阶段不编译下面这些函数。
@@ -68,6 +70,9 @@ vec3 YCoCg_To_RGB(vec3 color) {
 }
 
 // --- 当前帧取样 ---
+// 主世界与末地把颜色与深度分开取；下界把颜色和线性深度打包进同一个四分量的结果。
+// 为什么分两套：下界的时间抗锯齿要把本帧参考深度和历史参考深度一起重投影，取样就得连同深度一起带回来。
+#ifndef OMNI_NETHER
 // 双线性读当前帧颜色并转到亮度色度空间。
 vec3 SampleCurrColor(vec2 coord){
 	return RGB_To_YCoCg(textureLod(colortex1, coord, 0.0).rgb); // 连续坐标用双线性。
@@ -88,6 +93,81 @@ vec3 SamplePrevColor(vec2 coord){
 		return RGB_To_YCoCg(textureLod(colortex7, coord, 0.0).rgb); // 双线性历史。
 	#endif
 }
+#else // 下界版：取样结果连线性深度一起返回。
+// 用四次采样读一个四分量纹理，与上面的 `BicubicTexture` 同理，只是保留透明度通道。
+vec4 BicubicTextureVec4(sampler2D texSampler, vec2 coord, vec2 texSize){
+	vec2 texPixelSize = 1.0 / texSize; // 一个纹素的大小。
+	coord = coord * texSize; // 换到像素坐标。
+
+	vec2 p = floor(coord - 0.5) + 0.5; // 采样核中心。
+	vec2 f = coord - p; // 中心偏移。
+	vec2 f2 = f * f; // 平方。
+	vec2 f3 = f * f2; // 立方。
+
+	const float c = 0.5; // 三次核系数，与原程序一致。
+	vec2 w0 =        -c  * f3 +  2.0 * c         * f2 - c * f; // 最左权重。
+	vec2 w1 =  (2.0 - c) * f3 - (3.0 - c)        * f2         + 1.0; // 左权重。
+	vec2 w2 = -(2.0 - c) * f3 + (3.0 -  2.0 * c) * f2 + c * f; // 右权重。
+	vec2 w3 =         c  * f3 -                c * f2; // 最右权重。
+
+	vec2 w12 = w1 + w2; // 左右权重和。
+	vec2 tc12 = texPixelSize * (p + w2 / w12); // 左右两个采样点的混合坐标。
+	vec2 tc0 = texPixelSize * (p - 1.0); // 最左采样点。
+	vec2 tc3 = texPixelSize * (p + 2.0); // 最右采样点。
+
+	vec4 color = textureLod(texSampler, vec2(tc12.x, tc0.y ), 0.0) * (w12.x * w0.y ) + // 五个采样点加权。
+				 textureLod(texSampler, vec2(tc0.x,  tc12.y), 0.0) * (w0.x  * w12.y) +
+				 textureLod(texSampler, vec2(tc12.x, tc12.y), 0.0) * (w12.x * w12.y) +
+				 textureLod(texSampler, vec2(tc3.x,  tc12.y), 0.0) * (w3.x  * w12.y) +
+				 textureLod(texSampler, vec2(tc12.x, tc3.y ), 0.0) * (w12.x * w3.y );
+	return color / (w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y); // 除以权重和归一化。
+}
+// 双线性读当前帧，颜色转亮度色度空间，透明度换成线性深度。
+vec4 SampleCurr(vec2 coord){
+	vec4 curr = textureLod(colortex1, coord, 0.0); // 读当前帧颜色与深度。
+	curr.rgb = RGB_To_YCoCg(curr.rgb); // 颜色转亮度色度空间。
+	curr.a = LinearDepth_From_ScreenDepth(curr.a); // 深度换米制。
+	return curr; // 返回四分量。
+}
+// 精确读某个纹素的当前帧，邻域统计用。
+vec4 SampleCurrFetch(ivec2 coord){
+	vec4 curr = texelFetch(colortex1, coord, 0); // 精确读当前帧。
+	curr.rgb = RGB_To_YCoCg(curr.rgb); // 颜色转亮度色度空间。
+	curr.a = LinearDepth_From_ScreenDepth(curr.a); // 深度换米制。
+	return curr; // 返回四分量。
+}
+// 用四次采样读当前帧，边缘更锐；原程序默认关闭，本函数只在打开时被调用。
+vec4 SampleCurrBicubic(vec2 coord){
+	vec4 curr = BicubicTextureVec4(colortex1, coord, screenSize); // 四次采样当前帧。
+	curr.rgb = RGB_To_YCoCg(curr.rgb); // 颜色转亮度色度空间。
+	curr.a = LinearDepth_From_ScreenDepth(curr.a); // 深度换米制。
+	return curr; // 返回四分量。
+}
+// 双线性读上一帧历史里打包的参考深度，位置存成两分量，横向纵向各插值一次。
+vec2 SamplePreviousDepthBilinear(vec2 coord){
+	coord = coord * screenSize - 0.5; // 换到纹素坐标并移到纹素中心。
+
+	vec2 f = fract(coord); // 纹素内的小数偏移。
+	ivec2 texel = ivec2(coord); // 左上角纹素。
+
+	vec2 s0 = Unpack2x16(texelFetch(colortex7, texel, 0).a); // 左上角两个参考深度。
+	vec2 s1 = Unpack2x16(texelFetch(colortex7, texel + ivec2(1, 0), 0).a); // 右上角。
+	vec2 s2 = Unpack2x16(texelFetch(colortex7, texel + ivec2(0, 1), 0).a); // 左下角。
+	vec2 s3 = Unpack2x16(texelFetch(colortex7, texel + ivec2(1, 1), 0).a); // 右下角。
+
+	return mix(mix(s0, s1, f.x), mix(s2, s3, f.x), f.y); // 双向插值。
+}
+// 读上一帧历史：颜色转亮度色度空间，参考深度解包后换米制，第一个分量是上一帧参考深度。
+vec4 SamplePrevious(vec2 coord){
+	#ifdef TAA_BICUBIC_PREVIOUS // 原程序默认用三次采样。
+		vec3 prevColor = RGB_To_YCoCg(BicubicTexture(colortex7, coord, screenSize)); // 三次采样历史颜色。
+	#else // 关闭时用双线性。
+		vec3 prevColor = RGB_To_YCoCg(textureLod(colortex7, coord, 0.0).rgb); // 双线性历史颜色。
+	#endif
+	float prevReferenceDepth = LinearDepth_From_ScreenDepth(SamplePreviousDepthBilinear(coord).x); // 解包并换米制的上一帧参考深度。
+	return vec4(prevColor, prevReferenceDepth); // 返回颜色与参考深度。
+}
+#endif // 当前帧取样分支结束。
 
 // --- 深度取样 ---
 // 精确读当前帧某个像素的深度。
@@ -107,10 +187,16 @@ float SampleCurrDepthFetchClosest3x3(ivec2 coord){
 	float depth8 = SampleDepthFetch(coord + ivec2( 1,  1)); // 右下。
 	return min9(depth0, depth1, depth2, depth3, depth4, depth5, depth6, depth7, depth8); // 取最近。
 }
-// 读上一帧历史深度；历史深度存在七号画面的透明度通道。
+// 读上一帧历史深度。主世界与末地把线性深度直接存在七号画面透明通道；下界把两个参考深度打包进透明通道。
+#ifndef OMNI_NETHER
 float SamplePrevDepthFetch(ivec2 coord){
 	return texelFetch(colortex7, coord, 0).w; // 透明度通道保存历史深度。
 }
+#else
+float SamplePrevDepthFetch(ivec2 coord){
+	return Unpack2x16(texelFetch(colortex7, coord, 0).a).y; // 解包后第二个分量是上一帧深度。
+}
+#endif // 历史深度分支结束。
 // 取上一帧三乘三邻域的历史深度最小与最大值，用于深度比较的时间一致性判断。
 vec2 SamplePrevDepthMinMax3x3(vec2 prevCoord){
 	ivec2 nearestTexel = ivec2(prevCoord * screenSize); // 上一帧坐标换成最近纹素。
@@ -131,6 +217,8 @@ vec2 SamplePrevDepthMinMax3x3(vec2 prevCoord){
 // --- 当前帧邻域颜色范围 ---
 // 用当前帧三乘三邻域求颜色均值、十字均值与方差，再由方差得到历史颜色的接纳范围。
 // `avgColor` 与 `crossAvgColor` 由输出参数带回，前者给裁剪用，后者给微模糊用。
+// 下界版额外带回邻域参考深度的最小与最大值，深度比较用它判断对应点是否被遮挡。
+#ifndef OMNI_NETHER
 vec3 GetVariance3x3(ivec2 coord, vec3 currColor, out vec3 avgColor, out vec3 crossAvgColor){
 	vec3 color0 = SampleCurrColorFetch(coord + ivec2(-1, -1)); // 左上当前帧颜色。
 	vec3 color1 = SampleCurrColorFetch(coord + ivec2( 0, -1)); // 上方当前帧颜色。
@@ -151,6 +239,30 @@ vec3 GetVariance3x3(ivec2 coord, vec3 currColor, out vec3 avgColor, out vec3 cro
 	avgColor = minColor + maxColor; // 输出范围中心。
 	return maxColor - minColor; // 输出范围半径。
 }
+#else
+vec3 GetVariance3x3(ivec2 coord, vec3 currColor, out vec3 avgColor, out vec3 crossAvgColor, out vec2 referenceDepthMinMax){
+	vec4 data0 = SampleCurrFetch(coord + ivec2(-1, -1)); // 左上当前帧颜色与深度。
+	vec4 data1 = SampleCurrFetch(coord + ivec2( 0, -1)); // 上方。
+	vec4 data2 = SampleCurrFetch(coord + ivec2( 1, -1)); // 右上。
+	vec4 data3 = SampleCurrFetch(coord + ivec2(-1,  0)); // 左侧。
+	vec4 data4 = SampleCurrFetch(coord + ivec2( 0,  0)); // 中心。
+	vec4 data5 = SampleCurrFetch(coord + ivec2( 1,  0)); // 右侧。
+	vec4 data6 = SampleCurrFetch(coord + ivec2(-1,  1)); // 左下。
+	vec4 data7 = SampleCurrFetch(coord + ivec2( 0,  1)); // 下方。
+	vec4 data8 = SampleCurrFetch(coord + ivec2( 1,  1)); // 右下。
+	crossAvgColor = data1.rgb + data3.rgb + data4.rgb + data5.rgb + data7.rgb; // 十字五点的和。
+	avgColor = (crossAvgColor + data0.rgb + data2.rgb + data6.rgb + data8.rgb) / 9.0; // 九点均值。
+	crossAvgColor *= 0.2; // 十字均值。
+	vec3 m2 = (data0.rgb * data0.rgb + data1.rgb * data1.rgb + data2.rgb * data2.rgb + data3.rgb * data3.rgb + data4.rgb * data4.rgb + data5.rgb * data5.rgb + data6.rgb * data6.rgb + data7.rgb * data7.rgb + data8.rgb * data8.rgb) / 9.0; // 二阶矩。
+	vec3 variance = sqrt(m2 - avgColor * avgColor) * OMNI_TAA_AGGRESSION; // 标准差乘裁剪强度得到范围半径。
+	vec3 minColor = min(avgColor - variance, currColor) * 0.5; // 范围下界。
+	vec3 maxColor = max(avgColor + variance, currColor) * 0.5; // 范围上界。
+	referenceDepthMinMax = vec2(min9(data0.a, data1.a, data2.a, data3.a, data4.a, data5.a, data6.a, data7.a, data8.a), // 邻域最小参考深度。
+								max9(data0.a, data1.a, data2.a, data3.a, data4.a, data5.a, data6.a, data7.a, data8.a)); // 邻域最大参考深度。
+	avgColor = minColor + maxColor; // 输出范围中心。
+	return maxColor - minColor; // 输出范围半径。
+}
+#endif // 邻域范围分支结束。
 
 // --- 把历史颜色夹进当前帧范围 ---
 // 落在范围外的历史说明对应点已经变化，按两种做法之一把它拉回范围，避免旧颜色拖影。
@@ -179,6 +291,8 @@ vec3 clipAABB(vec3 avgColor, vec3 variance, vec3 prevColor){
 // --- 时间重投影 ---
 // 把当前帧按相机重投影到上一帧，再用邻域范围、运动量、深度一致性共同决定历史权重，返回合成后的颜色与深度。
 // `velocity` 是当前像素相对上一帧的屏幕位移；`currDepthMin` 是当前帧代表深度。
+// 下界版额外返回重投影后的参考深度，写回历史时和当前深度一起打包，供下一帧的深度比较使用。
+#ifndef OMNI_NETHER
 vec4 TemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin){
 	vec2 unjitterCoord = coord + taaJitter * 0.5; // 撤销本帧抖动，取样才落在真实位置。
 	#ifdef TAA_BICUBIC_CURRENT // 原程序默认关闭。
@@ -199,7 +313,7 @@ vec4 TemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin){
 	#ifdef TAA_DEPTH_COMPARE // 深度比较通过才保留历史权重。
 		vec2 prevDepth = SamplePrevDepthMinMax3x3(coord); // 上一帧深度范围。
 		float currDist = LinearDepth_From_ScreenDepth(currDepthMin); // 当前帧换成米制距离。
-		float threshold = max(TAA_DEPTH_COMPARE_THRESHOLD - currDist / far * 0.2 * TAA_DEPTH_COMPARE_THRESHOLD, 1e-5); // 距离越远阈值越小，避免远处误判。
+		float threshold = max(OMNI_TAA_DEPTH_COMPARE_THRESHOLD - currDist / far * 0.2 * OMNI_TAA_DEPTH_COMPARE_THRESHOLD, 1e-5); // 距离越远阈值越小，避免远处误判。
 		blendWeight *= step(prevDepth.x - currDepthMin + velocity.z, threshold); // 历史更深一侧的一致性判断。
 		blendWeight *= step(currDepthMin - velocity.z - prevDepth.y, threshold); // 历史更浅一侧的一致性判断。
 	#endif
@@ -210,6 +324,46 @@ vec4 TemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin){
 	currColor = YCoCg_To_RGB(currColor); // 换回红绿蓝。
 	return vec4(currColor, currDepthMin); // 返回颜色与代表深度。
 }
+#else
+vec4 TemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin, out float referenceDepth){
+	vec2 unjitterCoord = coord + taaJitter * 0.5; // 撤销本帧抖动。
+	#ifdef TAA_BICUBIC_CURRENT // 原程序默认关闭。
+		vec4 currData = SampleCurrBicubic(unjitterCoord); // 当前帧四次采样，连深度一起取。
+	#else // 默认用双线性。
+		vec4 currData = SampleCurr(unjitterCoord); // 当前帧双线性采样。
+	#endif
+	vec3 currColor = currData.rgb; // 当前帧颜色。
+	vec3 avgColor = currColor; // 邻域均值初值。
+	vec3 crossAvgColor = currColor; // 十字均值初值。
+	vec2 referenceDepthMinMax = vec2(0.0); // 邻域参考深度范围。
+	vec3 variance = GetVariance3x3(taaTexelCoord, currData.rgb, avgColor, crossAvgColor, referenceDepthMinMax); // 求邻域范围与参考深度范围。
+	coord -= velocity.xy; // 退回上一帧坐标。
+	vec4 prevData = SamplePrevious(coord); // 读上一帧颜色与参考深度。
+	vec3 prevColor = prevData.rgb; // 上一帧颜色。
+	prevColor = clipAABB(avgColor, variance, prevColor); // 把历史夹进当前范围。
+	const float depthThreshold = 2e-5; // 参考深度的容差，极小，避免抖出条纹。
+	prevData.a = clamp(prevData.a + velocity.z, referenceDepthMinMax.x - depthThreshold, referenceDepthMinMax.y + depthThreshold); // 上一帧参考深度夹到邻域范围内。
+	float blendWeight = OMNI_TAA_BLENDWEIGHT; // 历史基础权重。
+	vec2 pixelVelocity = abs(fract(velocity.xy * screenSize) - 0.5) * 2.0; // 像素为单位的运动量。
+	blendWeight *= sqrt(pixelVelocity.x * pixelVelocity.y) * 0.25 + 0.75; // 运动越大历史权重越低。
+	blendWeight *= float(saturate(coord) == coord); // 上一帧坐标出屏时不用历史。
+	#ifdef TAA_DEPTH_COMPARE // 深度比较通过才保留历史权重。
+		vec2 prevDepth = SamplePrevDepthMinMax3x3(coord); // 上一帧深度范围。
+		float currDist = LinearDepth_From_ScreenDepth(currDepthMin); // 当前帧换成米制。
+		float threshold = max(OMNI_TAA_DEPTH_COMPARE_THRESHOLD - currDist / far * 0.2 * OMNI_TAA_DEPTH_COMPARE_THRESHOLD, 1e-5); // 越远阈值越小。
+		blendWeight *= step(prevDepth.x - currDepthMin + velocity.z, threshold); // 历史更深一侧的一致性判断。
+		blendWeight *= step(currDepthMin - velocity.z - prevDepth.y, threshold); // 历史更浅一侧的一致性判断。
+	#endif
+	#ifdef TAA_MICRO_BLUR // 历史权重很低时对当前帧做一次极轻的邻域平均。
+		currColor = mix(crossAvgColor, currColor, saturate(blendWeight * 5.0 - 0.5)); // 权重低时更倾向十字均值。
+	#endif
+	currColor = mix(currColor, prevColor, blendWeight); // 按权重把历史混进当前帧。
+	referenceDepth = mix(currData.a, prevData.a, blendWeight); // 参考深度也按权重混合。
+	currColor = YCoCg_To_RGB(currColor); // 换回红绿蓝。
+	referenceDepth = ScreenDepth_From_LinearDepth(referenceDepth); // 参考深度换回屏幕深度再打包。
+	return vec4(currColor, currDepthMin); // 返回颜色与代表深度。
+}
+#endif // 时间重投影分支结束。
 
 // --- 相机速度：算出当前像素相对上一帧的屏幕位移 ---
 // 远景与近景、手与世界分别用各自的矩阵重投影，任一步失败就返回零位移，让历史权重自然降低。

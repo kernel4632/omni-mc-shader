@@ -82,7 +82,7 @@
 // 加载器输入、共享数学、时间噪声先引入；坐标换算依赖本文件先定义的 `OMNI_TAA`，所以放在选项之后。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 #include "/common/noise.glsl"
 
 // --- 景深：弥散圆半径与深度 ---

@@ -38,6 +38,8 @@
 #define OMNI_PARALLAX_MODE 0 // [0 1 2]
 // @option {"label":{"zh_cn":"视差采样质量","en_us":"Parallax Quality"},"description":{"zh_cn":"锐利模式决定视差范围，平滑模式决定伪影多少，越大越细也越慢。","en_us":"Sharp sets the parallax range, Smooth sets artifact level; higher is finer and slower."},"slider":true}
 #define OMNI_PARALLAX_QUALITY 40 // [10 15 20 30 40 60 80 100 150 200 300 500]
+// @option {"label":{"zh_cn":"视差细化步数","en_us":"Parallax Refinements"},"description":{"zh_cn":"平滑视差找到交点后再二分细化的次数，越大边缘越准也越慢。","en_us":"Bisection steps after the parallax hit in Smooth mode; higher is more accurate and slower."},"slider":true}
+#define OMNI_PARALLAX_MAX_REFINEMENTS 12 // [0 2 4 6 8 12 16]
 // @option {"label":{"zh_cn":"视差阴影","en_us":"Parallax Self Shadow"},"description":{"zh_cn":"让视差像素自己也投出阳光阴影，代价很低。","en_us":"Lets parallax pixels cast their own sunlight shadow; cheap."}}
 #define OMNI_PARALLAX_SHADOW
 // @option {"label":{"zh_cn":"视差阴影质量","en_us":"Self Shadow Quality"},"description":{"zh_cn":"视差阴影的采样数，越大越细也越慢。","en_us":"Sample count for the parallax shadow; higher is finer and slower."},"slider":true}
@@ -82,6 +84,8 @@
 //#define OMNI_TERRAIN_VS_TBN
 // @option {"label":{"zh_cn":"未指定方块按植物处理","en_us":"General Grass Fix"},"description":{"zh_cn":"把倾斜的面都当成植物渲染，可能误伤其他方块。","en_us":"Treats tilted faces as plants; may misfire on other blocks."}}
 //#define OMNI_GENERAL_GRASS_FIX
+// @option {"label":{"zh_cn":"白色调试世界","en_us":"White Debug World"},"page":"dev","description":{"zh_cn":"把所有几何的底色改写成纯白，用来检查光照与几何；仅供调试。","en_us":"Rewrites every geometry albedo to plain white for checking lighting and geometry; debug only."}}
+//#define OMNI_WHITE_DEBUG_WORLD
 // 内部常数：方块与实体材质编号，按 iterationT `Settings.glsl` 原值，几何与合成阶段共用一份。
 #define MATID_SKY 0.0 // 天空里没有几何的像素。
 #define MATID_LAND 1.0 // 普通不透明方块，默认材质编号。
@@ -113,8 +117,6 @@
 #define MATID_SELECTION 200.0 // 选择框与线条。
 // 内部常数：粒子法线修正开关。iterationT 原文声明了它但源码里没有引用，按合同原样保留在这里。
 #define CORRECT_PARTICLE_NORMAL
-// 内部常数：平滑视差的最多细化步数，控制视差收尾的精度上限。
-#define PARALLAX_MAX_REFINEMENTS 12
 // 解码、掩码与视差都用到共用数学，先引入加载器输入与共用计算。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
@@ -480,7 +482,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 			);
 			if (sampleHeight > parallaxTexelCoord.z) break; // 表面高度超过步进深度就找到了交点。
 		}
-		for (int i = 0; i < PARALLAX_MAX_REFINEMENTS; i++){ // 二分细化交点。
+		for (int i = 0; i < OMNI_PARALLAX_MAX_REFINEMENTS; i++){ // 二分细化交点。
 			if (sampleHeight > parallaxTexelCoord.z){ // 越过交点就回退半步。
 				parallaxTexelCoord -= stepDir * stepLength; // 回退。
 				stepLength *= 0.5; // 步长减半。

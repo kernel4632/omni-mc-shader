@@ -22,9 +22,9 @@
 // 共用纯计算：曲线、法线编解码、打包与波浪辅助。
 #include "/common/math.glsl"
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*` 与材质选项。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 水面与水雾：片元算波浪、视差与雨点，只在片元引入。
 #ifdef OMNI_FRAGMENT
 	// --- 水文件会读的加载器输入：必须先于水文件声明 ---
@@ -40,14 +40,14 @@
 		#define PHYSICS_FS 1 // 请求水文件声明物理海浪的片元输入。
 	#endif
 	// 波浪、涟漪、物理海浪、湿润调制与水体光学。
-	#include "/effects/water.glsl"
+	#include "/effects/water/water.glsl"
 #endif
 // 海洋物理扩展存在时顶点需要同一个文件里的波高函数。
 #ifdef OMNI_VERTEX
 	#ifdef PHYSICS_OCEAN
 		#define PHYSICS_VS 1 // 请求水文件声明物理海浪的顶点输出。
 		// 波浪与物理海浪。
-		#include "/effects/water.glsl"
+		#include "/effects/water/water.glsl"
 	#endif
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
@@ -192,7 +192,7 @@ void main(){
 	vec4 tex = textureGrad(tex, texCoord, duv1, duv2); // 按屏幕导数采贴图。
 	tex.rgb *= color; // 乘顶点色。
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		tex.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 
@@ -347,7 +347,7 @@ void main(){
 	vec4 albedo = textureGrad(tex, texCoord, duv1, duv2); // 按屏幕导数采贴图。
 	albedo.rgb *= color; // 乘顶点色。
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		albedo.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 

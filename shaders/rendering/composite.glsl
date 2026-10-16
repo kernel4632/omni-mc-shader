@@ -45,6 +45,312 @@
 #if defined OMNI_FRAGMENT && defined OMNI_COMPOSITE0_PASS
 /* DRAWBUFFERS:1 */
 layout(location = 0) out vec4 compositeOutput1; // 一号画面：场景曲线编码颜色。
+#if defined OMNI_NETHER
+// 下界：没有太阳，光照来自 `NetherLighting` 与雾色，不接收全局光与阴影（来自 `world-1/composite.fsh`）。
+#include "/common/uniforms.glsl"
+#include "/common/math.glsl"
+ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
+vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
+// 下界不需要顶点光色来照明，但被引入的雾与光照文件整段编译，先声明它们引用的量。
+in vec3 worldShadowVector; // 阴影相机对应的世界光方向。
+in vec3 shadowVector; // 上面那个方向在视空间的值。
+in vec3 worldSunVector; // 太阳的世界方向。
+in vec3 worldMoonVector; // 月亮的世界方向。
+in vec3 colorShadowlight; // 日月直射光色之和。
+in vec3 colorSunlight; // 太阳直射光色。
+in vec3 colorMoonlight; // 月亮直射光色。
+in vec3 colorSkylight; // 日月环境光色之和。
+in vec3 colorSunSkylight; // 太阳一侧的环境光色。
+in vec3 colorMoonSkylight; // 月亮一侧的环境光色。
+in vec3 colorTorchlight; // 火把光色，方块光与手持光引用它。
+in float timeNoon; // 太阳高度因子。
+in float timeMidnight; // 月亮高度因子。
+// 被引入的水面与雾文件整段编译，下列采样器由它们引用。
+uniform sampler2D shadowtex0; // 阴影遮挡图。
+uniform sampler2D shadowtex1; // 阴影实心图，下界当普通深度贴图。
+uniform sampler2D gaux1; // 第一张涟漪动画贴图。
+uniform sampler2D gaux2; // 第二张涟漪动画贴图。
+uniform sampler2D gaux3; // 第三张涟漪动画贴图。
+uniform float rainStrength; // 降雨强度，雨点涟漪用。
+// 读回表面数据与材质掩码。
+#include "/effects/ground/material.glsl"
+// 先定义 `OMNI_TAA`，坐标换算与遮蔽抖动要用。
+#include "/effects/clarity/antialiasing.glsl"
+// 屏幕与视空间互转。
+#include "/common/coordinates.glsl"
+// 蓝噪声，遮蔽抖动用。
+#include "/common/noise.glsl"
+// 雾文件带入水面、阴影、天空、云与光照，并提供 `OMNI_NETHERFOG_DENSITY`。
+#include "/effects/fog/fog.glsl"
+// 下界配色与光照 `NetherLighting`、`NetherFogColor`。
+#include "/effects/world/nether.glsl"
+// Omni 额外功能：真实闪电事件照亮表面，默认开启但缺少事件输入时无影响。
+#include "/effects/sky/atmosphere.glsl"
+void main(){
+	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
+	MaterialMask materialMask = CalculateMasks(gbuffer.materialIDW); // 半透明层材质掩码。
+	MaterialMask materialMaskSoild = CalculateMasks(gbuffer.materialIDL); // 不透明层材质掩码。
+
+	FixParticleMask(materialMaskSoild, materialMask, gbuffer.depthL, gbuffer.depthW); // 薄粒子借不透明深度。
+
+	vec3 viewPos = ViewPos_From_ScreenPos(texCoord, gbuffer.depthL); // 还原不透明表面视空间位置。
+
+	#ifdef DISTANT_HORIZONS
+		if (gbuffer.depthL == 1.0){ // 天空像素改读远景深度。
+			gbuffer.depthL = texelFetch(dhDepthTex1, texelCoord, 0).x; // 远景不含半透明深度。
+			viewPos = ViewPos_From_ScreenPos_DH(texCoord, gbuffer.depthL); // 远景逆投影。
+		}
+	#endif
+
+	vec3 viewDir = normalize(viewPos); // 视线方向。
+	vec3 worldNormal = mat3(gbufferModelViewInverse) * gbuffer.normalL; // 法线转到世界空间。
+
+	vec3 finalComposite = vec3(0.0); // 累积的下界表面颜色。
+
+	if (materialMaskSoild.sky < 0.5){ // 只处理有几何的像素，天空留给下界雾色。
+		finalComposite += NetherLighting() * (worldNormal.y * 0.25 + 1.0); // 按法线朝向叠下界自发光。
+
+		float gi = 1.0; // 环境遮蔽，默认为一。
+		#ifdef OMNI_GTAO
+			if (materialMaskSoild.hand + materialMask.particle < 0.5) // 手与粒子不参与遮蔽。
+				gi = GroundTruthBasedAmbientOcclusion(viewPos, -viewDir, gbuffer.normalL); // 算地平线遮蔽。
+		#endif
+
+		#ifdef OMNI_GTAO
+			#ifdef OMNI_GTAO_MULTIBOUNCE
+				vec3 ao = GTAOMultiBounce(gi, gbuffer.albedo); // 遮蔽做多弹射补偿。
+			#else
+				vec3 ao = vec3(gi); // 直接用遮蔽值。
+			#endif
+		#else
+			vec3 ao = vec3(1.0); // 不开遮蔽时全亮。
+		#endif
+
+		finalComposite *= ao; // 遮蔽乘到颜色上。
+
+		if(heldBlockLightValue + heldBlockLightValue2 > 0.0)
+			finalComposite += HeldLighting(viewPos, viewDir, gbuffer.normalL, gbuffer.material.roughness, ao, materialMask.hand > 0.5); // 叠手持光源。
+		finalComposite += BlockLighting(gbuffer.lightmapL.r, ao, materialMaskSoild); // 叠方块光。
+
+		finalComposite *= mix(vec3(1.0), NetherFogColor().rgb, gbuffer.material.metalness * 0.7); // 金属面用雾色染色。
+		finalComposite *= (1.0 - gbuffer.material.metalness * 0.75); // 非金属整体压一点。
+
+		finalComposite += TextureLighting(gbuffer.albedo, gbuffer.lightmapL.r, gbuffer.material.emissiveness, materialMaskSoild); // 叠资源包自发光。
+
+		finalComposite *= gbuffer.albedo; // 乘底色。
+
+	}else{ // 天空像素交给合成五号的雾与泛光。
+		finalComposite = vec3(0.0); // 清成黑色。
+	}
+
+	finalComposite /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
+	finalComposite = LinearToCurve(finalComposite); // 四次方根编码。
+
+	compositeOutput1 = vec4(finalComposite, 0.0); // 写回一号画面。
+}
+#elif defined OMNI_END
+// 末地：没有太阳贴图，光色用固定黑体色，天空像素画吸积盘与行星（来自 `world1/composite.fsh`）。
+#include "/common/uniforms.glsl"
+#include "/common/math.glsl"
+#define OMNI_SHADOW_COMPARE 1 // 末地同样用可变半影阴影，打开阴影效果里的对应段。
+ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
+vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
+in vec3 worldShadowVector; // 阴影相机对应的世界光方向。
+in vec3 shadowVector; // 上面那个方向在视空间的值。
+in vec3 worldSunVector; // 太阳的世界方向。
+in vec3 worldMoonVector; // 月亮的世界方向。
+in vec3 colorShadowlight; // 日月直射光色之和。
+in vec3 colorSunlight; // 太阳直射光色。
+in vec3 colorMoonlight; // 月亮直射光色。
+in vec3 colorSkylight; // 日月环境光色之和。
+in vec3 colorSunSkylight; // 太阳一侧的环境光色。
+in vec3 colorMoonSkylight; // 月亮一侧的环境光色。
+in vec3 colorTorchlight; // 火把光色。
+in float timeNoon; // 太阳高度因子。
+in float timeMidnight; // 月亮高度因子。
+uniform sampler2D shadowtex0; // 阴影遮挡图。
+uniform sampler2DShadow shadowtex1; // 阴影实心图，可变半影阴影按深度比较读取。
+uniform sampler2D shadowcolor0; // 彩色半影阴影颜色图。
+uniform sampler2D gaux1; // 第一张涟漪动画贴图。
+uniform sampler2D gaux2; // 第二张涟漪动画贴图。
+uniform sampler2D gaux3; // 第三张涟漪动画贴图。
+uniform float rainStrength; // 降雨强度，雨点涟漪用。
+// 读回表面数据与材质掩码。
+#include "/effects/ground/material.glsl"
+// 先定义 `OMNI_TAA`，坐标换算与遮蔽抖动要用。
+#include "/effects/clarity/antialiasing.glsl"
+// 屏幕与视空间互转。
+#include "/common/coordinates.glsl"
+// 蓝噪声，遮蔽与阴影抖动用。
+#include "/common/noise.glsl"
+// 光照文件提供 `OMNI_SUNLIGHT_INTENSITY`、方块光、遮蔽与星空类型选项。
+#include "/effects/lighting/sunlight.glsl"
+// 水面文件提供波法线 `GetWavesNormal`，末地折射函数引用它。
+#include "/effects/water/water.glsl"
+// 末地天空 `BlackHole_AccretionDisc_Stars`、`PlanetEnd2` 与 `timeFactor`、`planetShadow`。
+#include "/effects/world/end.glsl"
+void main(){
+	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
+	MaterialMask materialMask = CalculateMasks(gbuffer.materialIDW); // 半透明层材质掩码。
+	MaterialMask materialMaskSoild = CalculateMasks(gbuffer.materialIDL); // 不透明层材质掩码。
+
+	FixParticleMask(materialMaskSoild, materialMask, gbuffer.depthL, gbuffer.depthW); // 薄粒子借不透明深度。
+
+	if (materialMask.water > 0.5){ // 末地水面按光滑非金属处理。
+		gbuffer.material.roughness = 1.0; // 粗糙度拉满。
+		gbuffer.material.metalness = 0.0; // 去掉金属度。
+	}
+
+	vec3 viewPos = ViewPos_From_ScreenPos(texCoord, gbuffer.depthL); // 还原不透明表面视空间位置。
+
+	#ifdef DISTANT_HORIZONS
+		bool isDH = gbuffer.depthL == 1.0; // 标记远景像素。
+		if (isDH){ // 天空像素改读远景深度。
+			gbuffer.depthL = texelFetch(dhDepthTex1, texelCoord, 0).x; // 远景不含半透明深度。
+			viewPos = ViewPos_From_ScreenPos_DH(texCoord, gbuffer.depthL); // 远景逆投影。
+		}
+	#endif
+
+	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos; // 视空间转相机相对世界空间。
+	vec3 viewDir = normalize(viewPos); // 视线方向。
+	vec3 worldDir = normalize(worldPos); // 世界方向。
+
+	#ifdef DISTANT_HORIZONS
+		float farDist = max(dhFarPlane, 1024.0); // 有远景时用远景远裁剪面。
+	#else
+		float farDist = max(far * 1.2, 1024.0); // 否则用近景远裁剪面留一点余量。
+	#endif
+	float opaqueDist = gbuffer.depthL < 1.0 ? length(viewPos) : farDist; // 表面到相机的距离，天空按远裁剪面。
+
+	vec3 colorSunLight = Blackbody(6000.0); // 末地用固定色温的太阳光色。
+	vec3 finalComposite = vec3(0.0); // 累积的末地表面颜色。
+
+	if (materialMaskSoild.sky < 0.5){ // 只处理有几何的像素。
+		vec3 worldNormal = mat3(gbufferModelViewInverse) * gbuffer.normalL; // 法线转到世界空间。
+
+		#ifdef DISTANT_HORIZONS
+			#ifdef OMNI_DH_SHADOW
+				materialMaskSoild.leaves *= saturate(3.2 - opaqueDist / min(shadowDistance, far) * 4.0) * 0.65 + 0.35; // 有远景阴影时叶片透光按距离收敛。
+			#else
+				materialMaskSoild.leaves *= saturate(3.2 - opaqueDist / min(shadowDistance, far) * 4.0 - float(isDH) * 1e10) * 0.65 + 0.35; // 没有远景阴影时远景叶子不透光。
+			#endif
+		#else
+			materialMaskSoild.leaves *= saturate(3.2 - opaqueDist / min(shadowDistance, far) * 4.0) * 0.6 + 0.4; // 叶片透光随距离收敛。
+		#endif
+
+		worldNormal = normalize(mix(worldNormal, vec3(0.0, 1.0, 0.0), materialMaskSoild.grass * 0.49)); // 草的法线朝上拉。
+		gbuffer.material.scattering *= saturate(1.0 - materialMaskSoild.leaves - materialMaskSoild.grass); // 叶片与草之外的表面不做透光。
+
+		finalComposite += vec3(colorSunLight * 0.005) * ((worldNormal.y * 0.35 + 0.75) * (dot(worldSunVector, worldNormal) * 0.3 + 0.7) * (planetShadow * planetShadow * 0.93 + 0.07)); // 行星相位控制的太阳环境光。
+
+		vec3 sunlightMult = colorSunLight * (0.3 * OMNI_SUNLIGHT_INTENSITY * planetShadow * planetShadow); // 太阳直射按行星相位缩放。
+
+		vec4 gi = texelFetch(colortex1, texelCoord, 0); // 一号画面里存着延迟阶段算好的全局光与遮蔽。
+		gi = mix(gi, vec4(0.0, 0.0, 0.0, 1.0), materialMask.particle); // 粒子不接收全局光。
+
+		vec3 rsm = CurveToLinear(gi.rgb); // 全局光解码回线性。
+		rsm *= sunlightMult * (7.0 * OMNI_GI_BRIGHTNESS); // 乘直射与全局光亮度。
+		finalComposite += rsm; // 叠全局光。
+
+		#ifdef OMNI_GTAO
+			#ifdef OMNI_GTAO_MULTIBOUNCE
+				vec3 ao = GTAOMultiBounce(gi.a, gbuffer.albedo); // 遮蔽做多弹射补偿。
+			#else
+				vec3 ao = vec3(gi.a); // 直接用遮蔽值。
+			#endif
+		#else
+			vec3 ao = vec3(1.0); // 不开遮蔽时全亮。
+		#endif
+		finalComposite *= ao; // 遮蔽乘到颜色上。
+
+		if(heldBlockLightValue + heldBlockLightValue2 > 0.0)
+			finalComposite += HeldLighting(viewPos, viewDir, gbuffer.normalL, gbuffer.material.roughness, ao, materialMask.hand > 0.5); // 叠手持光源。
+
+		finalComposite += BlockLighting(gbuffer.lightmapL.r, ao, materialMaskSoild); // 叠方块光。
+		finalComposite += TextureLighting(gbuffer.albedo, gbuffer.lightmapL.r, gbuffer.material.emissiveness, materialMaskSoild); // 叠资源包自发光。
+
+		float sunlight = Fd_Burley(worldNormal, -worldDir, worldShadowVector, gbuffer.material.roughness); // 阳光漫反射项。
+
+		float sunlightTrans = saturate(materialMaskSoild.leaves * 3.0) * 0.25 + materialMask.particle * 0.4 + materialMaskSoild.grass * 0.15; // 薄片透光占比。
+		sunlight = mix(sunlight, 0.6, sunlightTrans); // 薄片把阳光漫反射往固定值拉。
+		gbuffer.parallaxShadow = saturate(gbuffer.parallaxShadow + sunlightTrans * 1e10); // 薄片视差自阴影放宽。
+
+		vec3 shadow = vec3(1.0); // 阳光阴影可见度，初值全亮。
+		vec3 specularHighlight = vec3(0.0); // 太阳高光，初值零。
+		vec3 sss = vec3(0.0); // 次表面散射，初值零。
+
+		if (sunlight + gbuffer.material.scattering > 0.0) // 有阳光或透光才算阴影。
+			shadow *= VariablePenumbraShadow(worldPos, worldNormal, sunlight, gbuffer.albedo, gbuffer.material.scattering, materialMaskSoild, sss); // 可变半影阴影并带回透光。
+
+		#if OMNI_PARALLAX_MODE > 0
+			shadow *= gbuffer.parallaxShadow; // 视差自阴影也压阳光。
+		#endif
+
+		if (any(greaterThan(sunlight * shadow, vec3(0.0)))){ // 还有阳光的像素才继续。
+			#ifdef OMNI_SCREEN_SPACE_SHADOWS
+				#ifdef OMNI_DISABLE_PLAYER_SCREEN_SPACE_SHADOWS
+					#if OMNI_PARALLAX_MODE > 0
+						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow + materialMaskSoild.entityPlayer < 1.0)
+					#else
+						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow + materialMaskSoild.entityPlayer < 1.0 && gbuffer.parallaxShadow > 0.0)
+					#endif
+				#else
+					#if OMNI_PARALLAX_MODE > 0
+						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow < 1.0)
+					#else
+						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow < 1.0 && gbuffer.parallaxShadow > 0.0)
+					#endif
+				#endif
+					shadow *= mix(ScreenSpaceShadow(viewPos, viewDir, gbuffer.normalL, materialMaskSoild, worldShadowVector), 1.0, saturate(materialMaskSoild.leaves * 1.67 - 0.67)); // 屏幕空间阴影，叶片按比例削弱。
+			#endif
+
+			#ifdef OMNI_CAUSTICS
+				if (materialMask.water > 0.5 || isEyeInWater == 1)
+					shadow *= CalculateWaterCaustics(worldPos, worldShadowVector); // 水面焦散。
+			#endif
+
+			shadow *= sunlightMult; // 阴影乘直射光。
+
+			finalComposite += sunlight * shadow; // 叠漫反射阳光。
+
+			if (materialMask.water + materialMask.ice < 0.5){ // 水与冰不做这层高光。
+				float highlightGGX = SpecularGGX(gbuffer.normalL, -viewDir, shadowVector, clamp(gbuffer.material.roughness, 0.0015, 0.9), gbuffer.material.f0); // GGX 高光。
+				highlightGGX *= saturate(4.0 - gbuffer.material.roughness * 3.5); // 光滑面高光更强。
+				highlightGGX *= 0.07 - materialMaskSoild.grass * 0.035; // 整体很弱，草更弱。
+				specularHighlight = mix(vec3(1.0), gbuffer.albedo, vec3(gbuffer.material.metalness)) * shadow * highlightGGX; // 金属面高光带底色。
+			}
+		}
+		finalComposite += sss * sunlightMult; // 叠次表面散射。
+
+		finalComposite *= gbuffer.albedo; // 乘底色。
+
+		finalComposite *= 1.0 - gbuffer.material.metalness * 0.75; // 非金属整体压一点。
+
+		finalComposite += specularHighlight; // 叠高光。
+	}
+
+	worldDir = (isEyeInWater == 1 && materialMask.water > 0.5) ? refract(worldDir, normalize((gbufferModelViewInverse * vec4(gbuffer.normalW, 0.0)).xyz), WATER_REFRACT_IOR) : worldDir; // 水下看水面时折射世界方向。
+
+	if (materialMaskSoild.sky > 0.5){ // 天空像素画末地天空。
+		finalComposite = vec3(0.0); // 清空。
+
+		BlackHole_AccretionDisc_Stars(finalComposite, worldDir, worldShadowVector); // 吸积盘与星空。
+
+		PlanetEnd2(finalComposite, vec3(0.0), worldDir, worldSunVector); // 行星与光环。
+	}
+
+	float totalInternalReflection = 0.0; // 全反射标记，写进一号画面透明通道。
+	if (length(worldDir) < 0.5){ // 折射方向退化说明发生全反射。
+		finalComposite = vec3(0.0); // 全反射看不到外面。
+		totalInternalReflection = 1.0; // 记录发生全反射。
+	}
+
+	finalComposite /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
+	finalComposite = LinearToCurve(finalComposite); // 四次方根编码。
+
+	compositeOutput1 = vec4(finalComposite, totalInternalReflection); // 写回一号画面。
+}
+#else // 主世界
 // 本程序是唯一使用可变半影阴影的合成阶段，声明比较采样器 `shadowtex1` 并按需要打开阴影效果里的对应段。
 #define OMNI_SHADOW_COMPARE 1 // 让 `effects/shadow.glsl` 编译可变半影阴影函数。
 // 加载器输入先声明。
@@ -76,17 +382,26 @@ uniform sampler2D gaux2; // 第二张涟漪动画贴图。
 uniform sampler2D gaux3; // 第三张涟漪动画贴图。
 uniform float rainStrength; // 降雨强度，雨点涟漪用。
 // 读回表面数据与材质掩码。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 先定义 `OMNI_TAA`，坐标换算要用。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 屏幕与视空间互转。
 #include "/common/coordinates.glsl"
 // 蓝噪声，阴影与环境遮蔽抖动用。
 #include "/common/noise.glsl"
 // 天光照明 `SkyLighting`，并带入天空、云、环境光、方块光与阴影。
-#include "/effects/sunlight.glsl"
+#include "/effects/lighting/sunlight.glsl"
 // 水下雾与焦散选项，本程序据它们决定水色。
-#include "/effects/water.glsl"
+#include "/effects/water/water.glsl"
+// Omni 额外功能：真实闪电事件照亮表面。
+#include "/effects/sky/atmosphere.glsl"
+// Omni 额外功能：光传播体积的采样映射与选项。
+#include "/effects/lighting/lpv.glsl"
+#ifdef OMNI_LPV_ENABLED
+	#ifdef IRIS_FEATURE_CUSTOM_IMAGES
+	uniform sampler3D omniLpvTex; // 计算阶段写入的体积间接光，片元这里三线性采样。
+	#endif
+#endif
 void main(){
 	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
 	MaterialMask materialMask = CalculateMasks(gbuffer.materialIDW); // 半透明层材质掩码。
@@ -283,11 +598,20 @@ void main(){
 
 		finalComposite += vec3(1.0) * materialMaskSolid.lightning; // 闪电自发光。
 
+		finalComposite = omniLightning(finalComposite, worldPos, gbuffer.lightmapL.g); // Omni 额外功能：真实闪电事件照亮附近表面。
+
+		#ifdef OMNI_LPV_ENABLED // Omni 额外功能：光传播体积给空气补间接光；缺少自定义图像能力时整段不编译。
+			#ifdef IRIS_FEATURE_CUSTOM_IMAGES
+			finalComposite += omniLpvSample(omniLpvTex, worldPos) * OMNI_LPV_STRENGTH; // 三线性采样体积间接光。
+			#endif
+		#endif
+
 		finalComposite /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
 		finalComposite = LinearToCurve(finalComposite); // 四次方根编码。
 		compositeOutput1 = vec4(finalComposite, 0.0); // 写回一号画面。
 	}
 }
+#endif // 维度分支结束。
 #endif // 合成零号结束。
 
 // ------------------------------- 合成一号：水下与水后雾 -------------------------------
@@ -319,17 +643,17 @@ uniform sampler2D gaux2; // 第二张涟漪动画贴图。
 uniform sampler2D gaux3; // 第三张涟漪动画贴图。
 uniform float rainStrength; // 降雨强度，雨点涟漪用。
 // 读回表面数据与材质掩码。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 先定义 `OMNI_TAA`，坐标换算要用。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 屏幕与视空间互转。
 #include "/common/coordinates.glsl"
 // 蓝噪声，被引入的效果文件引用。
 #include "/common/noise.glsl"
 // 先提供 `OMNI_RAIN_SHADOW` 与天空盒投影，供天气与水面引用。
-#include "/effects/cloud.glsl"
+#include "/effects/cloud/cloud.glsl"
 // `WaterFog` 水下与水后雾。
-#include "/effects/water.glsl"
+#include "/effects/water/water.glsl"
 void main(){
 	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
 	MaterialMask materialMask = CalculateMasks(gbuffer.materialIDW); // 半透明层材质掩码。
@@ -431,17 +755,30 @@ uniform sampler2D gaux2; // 第二张涟漪动画贴图。
 uniform sampler2D gaux3; // 第三张涟漪动画贴图。
 uniform float rainStrength; // 降雨强度，雨点涟漪用。
 // 读回表面数据与材质掩码。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 先定义 `OMNI_TAA`，坐标换算与噪声要用。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 屏幕与视空间互转。
 #include "/common/coordinates.glsl"
 // 蓝噪声，反射抖动用。
 #include "/common/noise.glsl"
-// 带入天空、云、环境光、方块光与雾依赖。
-#include "/effects/sunlight.glsl"
-// 屏幕空间反射与天空盒回退 `CalculateSpecularReflections`。
-#include "/effects/reflection.glsl"
+// 维度决定反射里的天空回退与雾由谁提供，效果文件按分支引入后再引入反射文件。
+#if defined OMNI_NETHER
+	// 下界：雾文件提供 `OMNI_NETHERFOG_DENSITY`，下界文件提供 `NetherFog` 与 `NetherFogColor`。
+	#include "/effects/fog/fog.glsl"
+	#include "/effects/world/nether.glsl"
+#elif defined OMNI_END
+	// 末地：光照文件提供选项与星空类型，末地文件提供 `EndFog` 与 `ComputeFakeSkyReflectionEnd`。
+	#include "/effects/lighting/sunlight.glsl"
+	// 水面文件提供波法线 `GetWavesNormal`，末地折射函数引用它。
+	#include "/effects/water/water.glsl"
+	#include "/effects/world/end.glsl"
+#else
+	// 主世界：带入天空、云、环境光、方块光与雾依赖。
+	#include "/effects/lighting/sunlight.glsl"
+#endif
+// 屏幕空间反射与天空盒回退 `CalculateSpecularReflections`，按维度选择不同的一份。
+#include "/effects/reflection/reflection.glsl"
 void main(){
 	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
 	MaterialMask materialMaskSolid = CalculateMasks(gbuffer.materialIDL); // 不透明层材质掩码。
@@ -483,15 +820,15 @@ layout(location = 0) out vec4 compositeOutput3; // 三号画面：滤波后的�
 ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
 vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
 // 读回表面数据与材质掩码。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 先定义 `OMNI_TAA`，坐标换算要用。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 屏幕与视空间互转。
 #include "/common/coordinates.glsl"
 // 蓝噪声，被反射滤波引用。
 #include "/common/noise.glsl"
 // 反射小波滤波 `AtrousWaveletFilter`。
-#include "/effects/reflection.glsl"
+#include "/effects/reflection/reflection.glsl"
 void main(){
 	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
 
@@ -519,15 +856,15 @@ layout(location = 0) out vec4 compositeOutput3; // 三号画面：滤波后的�
 ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
 vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
 // 读回表面数据与材质掩码。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 先定义 `OMNI_TAA`，坐标换算与噪声要用。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 屏幕与视空间互转。
 #include "/common/coordinates.glsl"
 // 蓝噪声，滤波抖动用。
 #include "/common/noise.glsl"
 // 反射小波滤波 `AtrousWaveletFilter`。
-#include "/effects/reflection.glsl"
+#include "/effects/reflection/reflection.glsl"
 void main(){
 	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
 
@@ -584,28 +921,200 @@ uniform sampler2D gaux2; // 第二张涟漪动画贴图。
 uniform sampler2D gaux3; // 第三张涟漪动画贴图。
 uniform float rainStrength; // 降雨强度，雨点涟漪用。
 // 读回表面数据与材质掩码。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 先定义 `OMNI_TAA`，坐标换算与噪声要用。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 屏幕与视空间互转。
 #include "/common/coordinates.glsl"
 // 蓝噪声，被引入的效果文件引用。
 #include "/common/noise.glsl"
-// 带入天空、云、环境光与方块光依赖。
-#include "/effects/sunlight.glsl"
-// 体积雾、水下体积雾、地面大气散射、原版雾，并带入水面与阴影。
-#include "/effects/fog.glsl"
+// 维度决定雾与折射由谁提供：主世界用体积雾与地表散射，下界用 `NetherFog`，末地用 `EndFog`。
+#if defined OMNI_NETHER
+	// 雾文件带入水面、天空、云、光照，并提供 `VanillaFog` 与雾选项。
+	#include "/effects/fog/fog.glsl"
+	// 下界配色、雾与折射 `NetherFogColor`、`NetherFog`、`WaterRefractionLiteNether`。
+	#include "/effects/world/nether.glsl"
+#elif defined OMNI_END
+	// 雾文件带入水面与 `VanillaFog`，并提供星空类型与阳光强度选项。
+	#include "/effects/fog/fog.glsl"
+	// 末地天空、雾与折射 `EndFog`、`WaterRefractionLiteEnd`。
+	#include "/effects/world/end.glsl"
+#else
+	// 带入天空、云、环境光与方块光依赖。
+	#include "/effects/lighting/sunlight.glsl"
+	// 体积雾、水下体积雾、地面大气散射、原版雾，并带入水面与阴影。
+	#include "/effects/fog/fog.glsl"
+#endif
 // 反射合并 `CalculateSpecularReflections`。
-#include "/effects/reflection.glsl"
+#include "/effects/reflection/reflection.glsl"
 // 浦肯野效应 `PurkinjeEffect`。
-#include "/effects/color.glsl"
+#include "/effects/color/color.glsl"
 // 景深弥散 `CoCSpread` 与镜头光斑 `LensFlare`，并提供镜头选项。
-#include "/effects/lens.glsl"
+#include "/effects/lens/lens.glsl"
 // 选择框 `SelectionBox`。
-#include "/effects/selection.glsl"
+#include "/effects/ground/selection.glsl"
+#if defined OMNI_NETHER || defined OMNI_END
+// 下界与末地的合成五号原程序只写一号画面，不画镜头光斑，所以这里不声明三号输出。
+#else
 #if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE || (defined OMNI_VFOG && defined OMNI_VFOG_BLOOM && !defined OMNI_DOF)
 	layout(location = 1) out vec4 compositeOutput3; // 三号画面：镜头光斑，仅在开启相关效果时写出。
 #endif
+#endif
+#if defined OMNI_NETHER
+// 下界合成五号：折射与彩色玻璃用下界版，雾用 `NetherFog`（来自 `world-1/composite5.fsh`）。
+void main(){
+	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
+	MaterialMask materialMaskSoild = CalculateMasks(gbuffer.materialIDL); // 不透明层材质掩码。
+	MaterialMask materialMask = CalculateMasks(gbuffer.materialIDW); // 半透明层材质掩码。
+
+	FixParticleMask(materialMaskSoild, materialMask); // 薄粒子修正。
+	bool isSmooth = false; // 光滑面标记，由材质覆盖函数回填。
+	ApplyMaterial(gbuffer.material, materialMask, isSmooth); // 水玻璃冰用写死材质。
+
+	vec3 viewPos = ViewPos_From_ScreenPos(texCoord, gbuffer.depthW); // 半透明表面视空间位置。
+	vec3 viewPosSoild = ViewPos_From_ScreenPos(texCoord, gbuffer.depthL); // 不透明表面视空间位置。
+
+	#ifdef DISTANT_HORIZONS
+		bool isDH = gbuffer.depthW == 1.0; // 标记远景像素。
+		if (isDH){ // 半透明表面是天空像素时改读远景深度。
+			gbuffer.depthW = texelFetch(dhDepthTex0, texelCoord, 0).x; // 远景完整深度。
+			viewPos = ViewPos_From_ScreenPos_DH(texCoord, gbuffer.depthW); // 远景逆投影。
+		}
+
+		if (gbuffer.depthL == 1.0){ // 不透明表面是天空像素时改读远景深度。
+			gbuffer.depthL = texelFetch(dhDepthTex1, texelCoord, 0).x; // 远景不含半透明深度。
+			viewPosSoild = ViewPos_From_ScreenPos_DH(texCoord, gbuffer.depthL); // 远景逆投影。
+		}
+	#endif
+
+	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos; // 视空间转相机相对世界空间。
+	vec3 viewDir = normalize(viewPos.xyz); // 视线方向。
+	vec3 worldDir = normalize(worldPos.xyz); // 世界方向。
+
+	#ifdef DISTANT_HORIZONS
+		float farDist = clamp(dhFarPlane, 1024.0, 2048.0); // 有远景时把远裁剪面夹在合理范围。
+	#else
+		float farDist = max(far * 1.2, 1024.0); // 否则用近景远裁剪面。
+	#endif
+	float opaqueDist = min(length(viewPosSoild) + materialMaskSoild.sky * 1e10, farDist); // 不透明表面距离，天空给很远。
+	float waterDist = min(length(viewPos) + materialMask.sky * 1e10, farDist); // 半透明表面距离，天空给很远。
+
+	vec3 color = CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb); // 读一号画面当前颜色。
+
+	if (materialMask.ice + materialMask.stainedGlass > 0.5) // 冰面与彩色玻璃做折射。
+		WaterRefractionLiteNether(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist); // 下界折射。
+
+	if (materialMask.stainedGlass > 0.5) // 彩色玻璃吸收。
+		TransparentAbsorptionNether(color, gbuffer.albedoW); // 下界彩色玻璃吸收。
+
+	if (materialMask.water + materialMask.ice > 0.5 || isEyeInWater == 1) // 水与冰整体染一点冷色。
+		color *= vec3(0.5, 0.55, 0.7); // 下界水色。
+
+	if (gbuffer.material.reflectionStrength > 0.0) // 只有允许反射的表面才合并反射。
+		CalculateSpecularReflections(color, viewDir, gbuffer.normalW, gbuffer.albedo, 1.0, gbuffer.material); // 合并三号画面的反射，下界不用水吸收。
+
+	color *= MAIN_OUTPUT_FACTOR; // 换成管线线性单位，雾按此单位工作。
+
+	#ifdef OMNI_SPECULAR_HELDLIGHT
+		if(heldBlockLightValue + heldBlockLightValue2 > 0.0 && materialMask.sky < 0.5)
+			TorchSpecularHighlight(color, viewPos, viewDir, waterDist, gbuffer.albedo, gbuffer.normalW, gbuffer.material); // 手持光高光。
+	#endif
+
+	color += NetherFog(waterDist); // 下界整条视线的雾。
+
+	VanillaFog(color, waterDist); // 原版雾、失明、黑暗、岩浆雪盲。
+
+	SelectionBox(color, gbuffer.albedo, materialMaskSoild.selection > 0.5 && isEyeInWater < 3); // 选择框上色。
+
+	color /= MAIN_OUTPUT_FACTOR; // 换回管线存储单位。
+	color = LinearToCurve(color); // 四次方根编码。
+
+	#ifdef OMNI_DOF
+		compositeOutput1 = vec4(color.rgb, CoCSpread()); // 景深开启时透明通道存弥散范围。
+	#else
+		#ifdef DISTANT_HORIZONS
+			if (isDH) gbuffer.depthW = ScreenDepth_From_DHScreenDepth(gbuffer.depthW); // 深度换回近景尺度。
+		#endif
+		compositeOutput1 = vec4(color.rgb, gbuffer.depthW); // 否则透明通道存深度。
+	#endif
+}
+#elif defined OMNI_END
+// 末地合成五号：折射与彩色玻璃用末地版，雾用 `EndFog`（来自 `world1/composite5.fsh`）。
+void main(){
+	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
+	MaterialMask materialMaskSoild = CalculateMasks(gbuffer.materialIDL); // 不透明层材质掩码。
+	MaterialMask materialMask = CalculateMasks(gbuffer.materialIDW); // 半透明层材质掩码。
+
+	float globalCloudShadow = 1.0; // 原程序保留的占位，末地不走体积雾，本值不被使用。
+
+	FixParticleMask(materialMaskSoild, materialMask); // 薄粒子修正。
+	bool isSmooth = false; // 光滑面标记，由材质覆盖函数回填。
+	ApplyMaterial(gbuffer.material, materialMask, isSmooth); // 水玻璃冰用写死材质。
+
+	vec3 viewPos = ViewPos_From_ScreenPos(texCoord, gbuffer.depthW); // 半透明表面视空间位置。
+	vec3 viewPosSoild = ViewPos_From_ScreenPos(texCoord, gbuffer.depthL); // 不透明表面视空间位置。
+
+	#ifdef DISTANT_HORIZONS
+		if (gbuffer.depthW == 1.0){ // 半透明表面是天空像素时改读远景深度。
+			gbuffer.depthW = texelFetch(dhDepthTex0, texelCoord, 0).x; // 远景完整深度。
+			viewPos = ViewPos_From_ScreenPos_DH(texCoord, gbuffer.depthW); // 远景逆投影。
+		}
+
+		if (gbuffer.depthL == 1.0){ // 不透明表面是天空像素时改读远景深度。
+			gbuffer.depthL = texelFetch(dhDepthTex1, texelCoord, 0).x; // 远景不含半透明深度。
+			viewPosSoild = ViewPos_From_ScreenPos_DH(texCoord, gbuffer.depthL); // 远景逆投影。
+		}
+	#endif
+
+	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos; // 视空间转相机相对世界空间。
+	vec3 viewDir = normalize(viewPos.xyz); // 视线方向。
+	vec3 worldDir = normalize(worldPos.xyz); // 世界方向。
+
+	#ifdef DISTANT_HORIZONS
+		float farDist = clamp(dhFarPlane, 1024.0, 2048.0); // 有远景时把远裁剪面夹在合理范围。
+	#else
+		float farDist = max(far * 1.2, 1024.0); // 否则用近景远裁剪面。
+	#endif
+	float opaqueDist = min(length(viewPosSoild) + materialMaskSoild.sky * 1e10, farDist); // 不透明表面距离，天空给很远。
+	float waterDist = min(length(viewPos) + materialMask.sky * 1e10, farDist); // 半透明表面距离，天空给很远。
+
+	vec3 color = CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb); // 读一号画面当前颜色。
+
+	if (materialMask.water + materialMask.ice + materialMask.stainedGlass > 0.5) // 水、冰与彩色玻璃做折射。
+		WaterRefractionLiteEnd(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist); // 末地折射。
+
+	if (materialMask.stainedGlass > 0.5) // 彩色玻璃吸收。
+		TransparentAbsorptionEnd(color, gbuffer.albedoW); // 末地彩色玻璃吸收。
+
+	if (materialMask.water + materialMask.ice > 0.5 || isEyeInWater == 1) // 水与冰整体染一点冷色。
+		color *= vec3(0.5, 0.55, 0.7); // 末地水色。
+
+	if (gbuffer.material.reflectionStrength > 0.0) // 只有允许反射的表面才合并反射。
+		CalculateSpecularReflections(color, viewDir, gbuffer.normalW, gbuffer.albedo, 1.0, gbuffer.material); // 合并三号画面的反射，末地不用水吸收。
+
+	color *= MAIN_OUTPUT_FACTOR; // 换成管线线性单位，雾按此单位工作。
+
+	#ifdef OMNI_SPECULAR_HELDLIGHT
+		if(heldBlockLightValue + heldBlockLightValue2 > 0.0 && materialMask.sky < 0.5)
+			TorchSpecularHighlight(color, viewPos, viewDir, waterDist, gbuffer.albedo, gbuffer.normalW, gbuffer.material); // 手持光高光。
+	#endif
+
+	color += EndFog(waterDist, worldDir); // 末地整条视线的雾。
+
+	VanillaFog(color, waterDist); // 原版雾、失明、黑暗、岩浆雪盲。
+
+	SelectionBox(color, gbuffer.albedo, materialMaskSoild.selection > 0.5 && isEyeInWater < 3); // 选择框上色。
+
+	color /= MAIN_OUTPUT_FACTOR; // 换回管线存储单位。
+	color = LinearToCurve(color); // 四次方根编码。
+
+	#ifdef OMNI_DOF
+		compositeOutput1 = vec4(color.rgb, CoCSpread()); // 景深开启时透明通道存弥散范围。
+	#else
+		compositeOutput1 = vec4(color.rgb, 0.0); // 否则透明通道留零。
+	#endif
+}
+#else // 主世界
 void main(){
 	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
 	MaterialMask materialMaskSolid = CalculateMasks(gbuffer.materialIDL); // 不透明层材质掩码。
@@ -727,6 +1236,7 @@ void main(){
 		#endif
 	#endif
 }
+#endif // 维度分支结束。
 #endif // 合成五号结束。
 
 #endif // 文件守卫结束。

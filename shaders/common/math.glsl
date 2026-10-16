@@ -23,7 +23,6 @@
 // --- 内部常数：原 `Settings.glsl` 里不进菜单的共用常数 ---
 #define MAIN_OUTPUT_FACTOR 2048.0 // 场景亮度单位：中间画面颜色先除以它再做四次方根编码。
 #define EXPOSURE_OUTPUT_FACTOR 128.0 // 曝光统计用的亮度单位。
-#define FTC_OFFSET 0 // 动画时间偏移，单位秒；原程序在调试页可调，这里按合同作内部常数。
 #define ANIMATION_SPEED 1.0 // 植物摆动等动画速度倍率。
 #define WATER_REFRACT_IOR 1.2 // 水面折射率，比真实水的一点三三小，避免折射拉伸过大。
 #define CAUSTICS_TEX_RESOLUTION 500.0 // 焦散法线方块边长，单位像素，七号画面左下角。

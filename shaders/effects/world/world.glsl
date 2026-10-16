@@ -28,7 +28,7 @@
 // 噪声用到共用数学与亮度，树叶判定取材质文件的编号，距离剔除读加载器的远景距离。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 远景地形剔除：太近的远景区块与正常区块重叠，直接丢弃，避免两层地形互相闪烁。
 // 调用前提：`far` 已由加载器输入声明。
 void DHTerrainCulling(vec3 viewPos){

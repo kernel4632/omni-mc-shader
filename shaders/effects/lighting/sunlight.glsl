@@ -30,10 +30,10 @@
 // 四种光色依赖大气查表、云选项、全局光开关与火把色温，按下述顺序引入。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/sky.glsl"
-#include "/effects/cloud.glsl"
-#include "/effects/ambient.glsl"
-#include "/effects/blocklight.glsl"
+#include "/effects/sky/sky.glsl"
+#include "/effects/cloud/cloud.glsl"
+#include "/effects/lighting/ambient.glsl"
+#include "/effects/lighting/blocklight.glsl"
 // 算日月高度因子：太阳越高 `timeNoon` 越大，月亮越高 `timeMidnight` 越大，供太阳圆盘与镜头效果缩放用。
 void CalculateTimeFactors(float SdotU, float MdotU, out float timeNoon, out float timeMidnight){
 	timeNoon = 1.0 - pow(1.0 - (clamp(SdotU, 0.2, 0.99) - 0.2) / 0.8, 6.0); // 太阳从低到高平滑升到一。

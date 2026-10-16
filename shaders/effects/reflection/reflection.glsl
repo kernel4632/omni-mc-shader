@@ -39,11 +39,12 @@
 #ifdef OMNI_COMPOSITE2_PASS
 // 蓝噪声给追踪与体积反射抖动，材质提供解码材质，天空云提供假天空反射与云影开关，雾提供反射里的体积雾与地表散射。
 #include "/common/noise.glsl"
-#include "/effects/material.glsl"
-#include "/effects/sky.glsl"
-#include "/effects/cloud.glsl"
-#include "/effects/fog.glsl"
+#include "/effects/ground/material.glsl"
+#include "/effects/sky/sky.glsl"
+#include "/effects/cloud/cloud.glsl"
+#include "/effects/fog/fog.glsl"
 
+#if !defined OMNI_NETHER && !defined OMNI_END // 主世界才用天空盒回退；下界用 `NetherFog`，末地用末地天空。
 // 如果屏幕追踪没命中，就用上半屏的天空盒图当反射：把反射方向投到天空盒坐标再取色。
 // 为什么单列一个函数：屏幕内没有内容时天空是唯一的反射源，缺了它反射处会变成黑洞。
 // 调用前提：`colortex2`、`worldMoonVector`、`colorMoonlight`、`isEyeInWater` 已由合成主程序声明。
@@ -64,6 +65,7 @@ vec3 ComputeFakeSkyReflection(vec3 reflectWorldDir){
 
 	return skyImage.rgb; // 返回天空反射颜色。
 }
+#endif // 天空盒回退分支结束。
 
 // 可见法线抽样：按粗糙度把反射方向散射开，粗糙面因此得到模糊反射。
 // 来源：原程序改自一篇公开论文的可见法线抽样，作者名字与链接见参考包，本函数保持原程序写法。
@@ -195,6 +197,144 @@ bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float nois
 	return hit; // 返回是否命中。
 }
 
+#if defined OMNI_NETHER
+// 下界反射：没有天空盒回退，命中取屏幕颜色、没命中留黑，再叠一段 `NetherFog`（来自 `world-1/composite2.fsh`）。
+// 调用前提：`NetherFog` 由 `effects/world/nether.glsl` 提供，绘制主体需在本文件之前引入它。
+vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec3 normal, float gbufferdepth, vec3 albedo, Material material, float skylight, bool isHand, bool isSmooth, float highlightStrength){
+	bool totalInternalReflection = texelFetch(colortex1, texelCoord, 0).a > 0.5; // 全反射标记，下界不使用。
+
+	float NdotV = saturate(dot(-viewDir, normal)); // 视线与法线的夹角余弦。
+	#ifdef OMNI_TAA // 打开时间抗锯齿时用逐帧抖动。
+		vec2 noise = BlueNoiseTemporal(); // 每帧变化的二维噪声。
+	#else
+		vec2 noise = BlueNoise(); // 固定二维噪声。
+	#endif
+	#ifdef DISTANT_HORIZONS
+		vec3 screenPos = ScreenPos_From_ViewPos(viewPos); // 有远景时按投影还原屏幕坐标。
+	#else
+		vec3 screenPos = vec3(texCoord, gbufferdepth); // 没有远景时直接用当前像素坐标与深度。
+	#endif
+
+	vec3 reflection; // 反射颜色。
+	float hitDist = 1.0; // 命中距离，写进返回的 a 通道供后续滤波使用。
+	vec3 rayDir; // 反射射线方向。
+
+	bool hit; // 是否命中几何。
+
+	if(isSmooth){ // 光滑面：镜面反射。
+		rayDir = reflect(viewDir, normal); // 镜面反射方向。
+		float minLength = (3e-4 - viewPos.z * 7e-6 * saturate(NdotV * 500.0 - 1.0)) * gbufferProjection[1][1]; // 最小步长。
+
+		hit = ScreenSpaceTracer(viewPos, rayDir, NdotV, noise.x, minLength, isHand, screenPos); // 屏幕空间追踪。
+
+		hitDist = 0.0; // 光滑面视作镜面，命中距离记零。
+	}else{ // 粗糙面：按可见法线抽样。
+		vec3 normalUp = normalize(vec3(0.0, normal.z, -normal.y)); // 用竖直参考轴构造一个切向。
+		mat3 toTangent = mat3(cross(normalUp, normal), normalUp, normal); // 切线基。
+		vec3 tangentView = viewDir * toTangent; // 视线转到切线空间。
+
+		vec3 visibleNormal = toTangent * sampleGGXVNDF(-tangentView, material.roughness, noise); // 抽样一个可见法线。
+		rayDir = reflect(viewDir, visibleNormal); // 沿可见法线反射。
+
+		hit = ScreenSpaceTracer(viewPos, rayDir, NdotV, noise.x, 0.015, isHand, screenPos); // 屏幕空间追踪。
+	}
+
+	reflection = CurveToLinear(textureLod(colortex1, screenPos.xy, 0.0).rgb); // 命中点或默认点取屏幕颜色。
+
+	reflection = mix(vec3(0.0), reflection, float(hit)); // 没命中就留黑。
+
+	float dist = length(viewPos); // 表面到相机的距离。
+	float rDist = 80.0; // 反射射线的默认长度。
+
+	if(hit){ // 命中几何时按命中点算这段空气长度。
+		float hitDepth = textureLod(depthtex0, screenPos.xy, 0.0).x; // 命中点深度。
+		vec3 hitPos = ViewPos_From_ScreenPos(screenPos.xy, hitDepth); // 还原命中点视空间位置。
+		rDist = dist + distance(hitPos, viewPos); // 表面到相机的距离加命中点距离。
+
+		if(!isSmooth) hitDist = saturate(max(rDist * 2.0, 3.0 * material.roughness)); // 粗糙面把命中距离写进 a 通道。
+	}
+
+	reflection += NetherFog(vec2(rDist, dist)) / MAIN_OUTPUT_FACTOR; // 补一段下界雾。
+
+	return vec4(LinearToCurve(reflection.rgb), hitDist); // 曲线编码后与命中距离一起返回。
+}
+#elif defined OMNI_END
+// 末地反射：天空盒回退换成末地天空，命中距离那段补 `EndFog`（来自 `world1/composite2.fsh`）。
+// 调用前提：`ComputeFakeSkyReflectionEnd` 与 `EndFog` 由 `effects/world/end.glsl` 提供，绘制主体需在本文件之前引入它。
+vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec3 normal, float gbufferdepth, vec3 albedo, Material material, float skylight, bool isHand, bool isSmooth, float highlightStrength){
+	bool totalInternalReflection = texelFetch(colortex1, texelCoord, 0).a > 0.5; // 全反射标记。
+
+	float NdotV = saturate(dot(-viewDir, normal)); // 视线与法线的夹角余弦。
+	#ifdef OMNI_TAA // 打开时间抗锯齿时用逐帧抖动。
+		vec2 noise = BlueNoiseTemporal(); // 每帧变化的二维噪声。
+	#else
+		vec2 noise = BlueNoise(); // 固定二维噪声。
+	#endif
+
+	#ifdef DISTANT_HORIZONS
+		vec3 screenPos = ScreenPos_From_ViewPos(viewPos); // 有远景时按投影还原屏幕坐标。
+	#else
+		vec3 screenPos = vec3(texCoord, gbufferdepth); // 没有远景时直接用当前像素坐标与深度。
+	#endif
+
+	vec3 reflection; // 反射颜色。
+	float hitDist = 1.0; // 命中距离。
+	vec3 rayDir; // 反射射线方向。
+
+	bool hit; // 是否命中几何。
+
+	if(isSmooth){ // 光滑面：镜面反射。
+		rayDir = reflect(viewDir, normal); // 镜面反射方向。
+		float minLength = (3e-4 - viewPos.z * 7e-6 * saturate(NdotV * 500.0 - 1.0)) * gbufferProjection[1][1]; // 最小步长。
+
+		hit = ScreenSpaceTracer(viewPos, rayDir, NdotV, noise.x, minLength, isHand, screenPos); // 屏幕空间追踪。
+
+		hitDist = 0.0; // 光滑面视作镜面。
+	}else{ // 粗糙面：按可见法线抽样。
+		vec3 normalUp = normalize(vec3(0.0, normal.z, -normal.y)); // 切向参考轴。
+		mat3 toTangent = mat3(cross(normalUp, normal), normalUp, normal); // 切线基。
+		vec3 tangentView = viewDir * toTangent; // 视线转到切线空间。
+
+		vec3 visibleNormal = toTangent * sampleGGXVNDF(-tangentView, material.roughness, noise); // 抽样可见法线。
+		rayDir = reflect(viewDir, visibleNormal); // 沿可见法线反射。
+
+		hit = ScreenSpaceTracer(viewPos, rayDir, NdotV, noise.x, 0.015, isHand, screenPos); // 屏幕空间追踪。
+	}
+
+	reflection = CurveToLinear(textureLod(colortex1, screenPos.xy, 0.0).rgb); // 命中点或默认点取屏幕颜色。
+
+	vec3 rayDirectionWorld = mat3(gbufferModelViewInverse) * rayDir; // 反射方向转到世界空间。
+	vec3 skyReflection = vec3(0.0); // 天空回退颜色。
+	if(!totalInternalReflection && isEyeInWater == 0){ // 空中且非全反射才用末地天空。
+		skyReflection = ComputeFakeSkyReflectionEnd(rayDirectionWorld, isSmooth); // 末地天空回退。
+		skyReflection *= saturate((dot(normal, gbufferModelView[1].xyz) + 0.7) * 2.0) * 0.75 + 0.25; // 朝上的面接更多天空。
+	}
+	if(totalInternalReflection) skyReflection = CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb); // 全反射直接取当前场景色。
+
+	reflection = mix(skyReflection, reflection, float(hit)); // 命中则用屏幕颜色，否则用天空。
+
+	float dist = length(viewPos); // 表面到相机的距离。
+	float rDist = 1e10; // 反射射线在空气里的长度。
+
+	if(hit){ // 命中几何时按命中点算这段空气长度。
+		vec3 hitPos = ViewPos_From_ScreenPos(screenPos.xy, textureLod(depthtex0, screenPos.xy, 0.0).x); // 还原命中点。
+		rDist = distance(hitPos, viewPos); // 命中点到表面的距离。
+
+		if(!isSmooth) hitDist = saturate(max(rDist * 2.0, 3.0 * material.roughness)); // 粗糙面写命中距离。
+	}
+
+	#ifdef DISTANT_HORIZONS
+		float farDist = clamp(dhFarPlane, 1024.0, 2048.0); // 有远景时把远裁剪面夹在合理范围。
+	#else
+		float farDist = max(far * 1.2, 1024.0); // 否则用近景远裁剪面。
+	#endif
+	rDist = max(min(min(rDist + dist, farDist), 512.0) - dist, 0.0); // 空气段长度裁到可视范围内。
+
+	if (rDist > 0.0) reflection += EndFog(rDist, rayDirectionWorld) / MAIN_OUTPUT_FACTOR; // 有空气段才补末地雾。
+
+	return vec4(LinearToCurve(reflection.rgb), hitDist); // 曲线编码后与命中距离一起返回。
+}
+#else // 主世界
 // 反射主函数（写三号画面）：追踪反射方向，命中取屏幕颜色，没命中取天空回退，再叠反射里的体积雾与地表散射。
 // 输入是表面位置、世界位置、视线方向、法线、深度、底色、材质、天光等级、是否手部、是否光滑面与高光强度；输出三号画面的反射数据。
 // 为什么全反射像素直接取当前场景色：发生全反射时表面看不到外面的东西，取自身颜色才不会出现黑洞。
@@ -355,12 +495,13 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 
 	return vec4(LinearToCurve(reflection.rgb), hitDist); // 曲线编码后与命中距离一起返回。
 }
+#endif // 反射主函数分支结束。
 #endif // composite2 段结束。
 
 // --- composite5：把三号画面的反射合并进场景色 ---
 #ifdef OMNI_COMPOSITE5_PASS
 // 材质提供 `Material` 结构，反射合并要读它的金属度与反射强度。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 
 // 反射合并：把三号画面的反射按菲涅耳与金属度混合进底色。
 // 输入是场景色、视线方向、法线、底色、水的吸收与材质；就地把反射混进场景色。

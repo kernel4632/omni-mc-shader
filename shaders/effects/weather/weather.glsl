@@ -51,7 +51,7 @@ const float drynessHalflife = 50.0; // [10.0 20.0 30.0 50.0 75.0 100.0 150.0 200
 // 通用小工具提供零到一夹紧等计算。
 #include "/common/math.glsl"
 // 云影选项 `OMNI_RAIN_SHADOW` 在云效果文件里定义，这里按需要引入它，避免调用方漏引。
-#include "/effects/cloud.glsl"
+#include "/effects/cloud/cloud.glsl"
 
 // --- 雨中画面：按雨遮罩把画面往雨天色混合 ---
 // 输入是已经合成好的颜色与雨遮罩；输出混合后的颜色。

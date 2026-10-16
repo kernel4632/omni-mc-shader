@@ -75,6 +75,8 @@
 #define OMNI_CLOUD_FADE
 // @option {"label":{"zh_cn":"云速","en_us":"Cloud Speed"},"description":{"zh_cn":"云飘动的快慢。","en_us":"How fast the clouds drift."},"slider":true}
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0 3.0 4.0 5.0 7.5 10.0 15.0 20.0 30.0 40.0 50.0 75.0 100.0]
+// @option {"label":{"zh_cn":"云时间偏移","en_us":"Cloud Time Offset"},"description":{"zh_cn":"给云和平面云的飘动时间加一个固定偏移，用来错开云的位置；不改变飘动速度。","en_us":"Offsets the cloud drift time by a fixed amount to shift their position; does not change speed."},"slider":true}
+#define OMNI_FTC_OFFSET 0 // [0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 105 110 115 120 125 130 135 140 145 150 155 160 165 170 175 180 185 190 195 200 205 210 215 220 225 230 235 240 245 250 255 260 265 270 275 280 285 290 295 300 305 310 315 320 325 330 335 340 345 350 355]
 // @option {"label":{"zh_cn":"云影","en_us":"Cloud Shadow"},"description":{"zh_cn":"云在地上投下阴影。","en_us":"Clouds cast shadows on the ground."}}
 #define OMNI_CLOUD_SHADOW
 // @option {"label":{"zh_cn":"云影淡出","en_us":"Cloud Shadow Fade"},"description":{"zh_cn":"太阳贴近地平线时让云影变淡，避免阴影拉得过长。","en_us":"Fades cloud shadows as the sun nears the horizon."}}
@@ -88,7 +90,7 @@
 // 云的算法依赖大气透视与共用数学，显式引入而不依赖调用顺序。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/sky.glsl"
+#include "/effects/sky/sky.glsl"
 // 体积云与平面云只延迟三号用，且要读三维云噪声；别的程序（合成、云影模糊）不该把它们编译进来，
 // 否则会把三维噪声贴图当成二维采样。原程序靠“只有延迟三号引入这两个文件”区分，这里用一个显式守卫。
 #if defined COLORTEX_CLOUDNOISE && defined OMNI_DEFERRED3_PASS
@@ -344,7 +346,7 @@ void PlanarClouds(inout vec3 color, vec3 worldDir, vec3 camera, float dither, fl
 	vec3 rayStartPos = vec3(0.0, planetRadius + cameraPosition.y, 0.0); // 相机在行星球上的位置。
 	float intersection = RaySphereIntersection(rayStartPos, worldDir, planetRadius + OMNI_PC_ALTITUDE).y; // 视线与云平面的远交点。
 	if (intersection > 0.0){ // 只有真的相交才画。
-		float wind = 2.5 * (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * FTC_OFFSET); // 随风移动的时间量。
+		float wind = 2.5 * (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_FTC_OFFSET); // 随风移动的时间量。
 		vec2 windDirection = vec2(-wind, wind * 0.2); // 主风向与一点横向分量。
 		float VdotL = dot(worldDir, worldShadowVector) * 0.5 + 0.5; // 视线与光方向夹角余弦映射到零到一。
 		vec3 centerPosition = worldDir * intersection; // 交点相对相机的方向。

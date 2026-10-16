@@ -94,9 +94,9 @@
 	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标，重投影的输入。
 
 	// 提供材质编号 `MATID_*`，抗锯齿的速度重投影引用它。
-	#include "/effects/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 时间重投影与相机速度；内部再引入坐标换算。
-	#include "/effects/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 
 	/* DRAWBUFFERS:7 */
 	layout(location = 0) out vec4 compositeOutput7; // 七号时间抗锯齿历史画面。
@@ -107,6 +107,9 @@
 			float depth = 1.0; // 供相机速度函数回填的代表深度。
 			vec3 velocity = CalculateCameraVelocity(depth, materialIDs); // 算当前像素相对上一帧的屏幕位移，并回填深度。
 			vec4 taa = vec4(0.0); // 重投影结果。
+			#ifdef OMNI_NETHER // 下界重投影额外回填参考深度，写回历史时要一起打包。
+				float referenceDepth = 0.0; // 重投影后的参考深度。
+			#endif
 
 			#if defined OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都排除。
 				if (materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER){ // 这两类像素不用历史。
@@ -122,13 +125,24 @@
 				}else // 其余像素走重投影。
 			#endif
 				{
-					taa = TemporalReprojection(texCoord, velocity, depth); // 邻域裁剪后把历史混进当前帧。
+					#ifdef OMNI_NETHER // 下界用带参考深度的重投影。
+						taa = TemporalReprojection(texCoord, velocity, depth, referenceDepth); // 邻域裁剪后把历史混进当前帧，并回填参考深度。
+					#else // 其余维度用主世界版重投影。
+						taa = TemporalReprojection(texCoord, velocity, depth); // 邻域裁剪后把历史混进当前帧。
+					#endif
 				}
 		#else // 关闭时间抗锯齿时原样复制当前帧。
 			vec4 taa = texelFetch(colortex1, texelCoord, 0); // 当前帧颜色与深度。
+			#ifdef OMNI_NETHER // 下界直接沿用当前帧的深度当作参考深度。
+				float referenceDepth = taa.a; // 当前帧深度就是参考深度。
+			#endif
 		#endif
 
-		compositeOutput7 = taa; // 写回七号，作为下一帧的历史。
+		#ifdef OMNI_NETHER // 下界把参考深度与当前深度打包进七号画面透明度通道。
+			compositeOutput7 = vec4(saturate(taa.rgb), Pack2x16(saturate(vec2(referenceDepth, taa.a)))); // 颜色加两个深度的打包值。
+		#else // 其余维度直接写回。
+			compositeOutput7 = taa; // 写回七号，作为下一帧的历史。
+		#endif
 	}
 
 #endif // 合成七号结束。
@@ -180,26 +194,26 @@
 
 	// 材质编号（并提供视差与材质选项）、时间抗锯齿选项（先定义 `OMNI_TAA` 供坐标换算使用）。
 	// 提供 `MATID_*` 与材质选项。
-	#include "/effects/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 提供 `OMNI_TAA` 与时间抗锯齿选项，并带入坐标换算。
-	#include "/effects/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 	// 选项归属文件：雨在天气文件，水下雾在水面文件，体积雾与云影在雾文件；雾文件又带入阴影、天空、云与光照。
 	// 提供雨可见度等选项，泛光的合并读它。
-	#include "/effects/weather.glsl"
+	#include "/effects/weather/weather.glsl"
 	// 提供水下雾开关与浓度选项，泛光的合并读它。
-	#include "/effects/water.glsl"
+	#include "/effects/water/water.glsl"
 	// 提供体积雾选项，并带入水面、阴影、天空、云与光照依赖。
-	#include "/effects/fog.glsl"
+	#include "/effects/fog/fog.glsl"
 	// 坐标与深度换算。
 	#include "/common/coordinates.glsl"
 	// 时间噪声，景深与动态模糊的抖动读它。
 	#include "/common/noise.glsl"
 	// 曝光统计、曝光值与强光压缩曲线。
-	#include "/effects/color.glsl"
+	#include "/effects/color/color.glsl"
 	// 景深、动态模糊、暗角与镜头光斑。
-	#include "/effects/lens.glsl"
+	#include "/effects/lens/lens.glsl"
 	// 泛光降采样、轴向模糊与合并泛光。
-	#include "/effects/bloom.glsl"
+	#include "/effects/color/bloom.glsl"
 
 	// --- 合成六号：景深 ---
 	#if defined OMNI_COMPOSITE6_PASS
@@ -520,11 +534,11 @@
 	// 共用数学：亮度与邻域最值。
 	#include "/common/math.glsl"
 	// 提供材质编号，被抗锯齿文件引用。
-	#include "/effects/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 提供 `OMNI_TAA`，锐化的开启条件读它。
-	#include "/effects/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 	// 对比度自适应锐化与放大。
-	#include "/effects/upscale.glsl"
+	#include "/effects/clarity/upscale.glsl"
 
 	ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标，邻域取样用。
 	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标，本程序未使用但效果文件引用它。
@@ -553,7 +567,7 @@
 	// 共用数学：亮度与邻域最值。
 	#include "/common/math.glsl"
 	// 边缘方向重采样放大。
-	#include "/effects/upscale.glsl"
+	#include "/effects/clarity/upscale.glsl"
 
 	/* DRAWBUFFERS:8 */
 	layout(location = 0) out vec4 compositeOutput8; // 八号放大输出。

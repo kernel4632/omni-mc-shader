@@ -23,11 +23,11 @@
 // 共用纯计算：三次模糊、曲线与法线编解码。
 #include "/common/math.glsl"
 // 时间抗锯齿选项：`effects/shadow.glsl` 的屏幕空间阴影要用。
-#include "/effects/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MaterialMask`，阴影采样函数要用。
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 植物摆动：提供 `WavingPlants` 与阴影摆动开关。
-#include "/effects/vegetation.glsl"
+#include "/effects/ground/vegetation.glsl"
 // `effects/shadow.glsl` 的采样函数读取这两个方向，本节不调用采样函数，按调用前提给空全局。
 vec3 worldShadowVector; // 世界空间阳光方向。
 vec3 shadowVector; // 视空间阳光方向。
@@ -40,7 +40,7 @@ vec3 shadowVector; // 视空间阳光方向。
 	#define DH_BLOCK_WATER 13 // 远景水编号。
 #endif
 // 阴影：提供全部阴影选项、`shadowDistance`、`shadowMapResolution` 与末地阴影相机矩阵。
-#include "/effects/shadow.glsl"
+#include "/effects/shadow/shadow.glsl"
 
 #ifdef OMNI_VERTEX // 顶点阶段：阴影顶点着色器。
 // 传给片元的插值量。
@@ -201,7 +201,7 @@ void main(){
 	vec4 texel = textureLod(tex, texCoord, 0.0); // 采贴图。
 	texel.rgb *= color; // 乘顶点色。
 
-	#ifdef WHITE_DEBUG_WORLD
+	#ifdef OMNI_WHITE_DEBUG_WORLD
 		texel.rgb = vec3(1.0); // 调试白光时全白。
 	#endif
 

@@ -43,9 +43,9 @@
 // 波法线解码与颜色曲线来自共用计算，屏幕还原与投影来自坐标换算，`MaterialMask` 由材质文件提供。
 #include "/common/math.glsl"
 #include "/common/coordinates.glsl"
-#include "/effects/material.glsl"
+#include "/effects/ground/material.glsl"
 // 局部降水开关决定雨点涟漪是否跟随降雨，归属天气文件。
-#include "/effects/weather.glsl"
+#include "/effects/weather/weather.glsl"
 
 // --- 波浪：多层噪声正弦叠成起伏 ---
 // 先用三次曲线把噪声采样平滑化，再逐层缩小频率、加快速度，得到自然且可重复的波浪。

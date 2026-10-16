@@ -5,7 +5,7 @@
 #ifndef OMNI_LPV_LIB // 防止重复引用造成重复声明。
 #define OMNI_LPV_LIB // 标记本文件已经引入。
 // 效果选项与采样映射来自效果主体。
-#include "/effects/lpv.glsl"
+#include "/effects/lighting/lpv.glsl"
 #ifdef OMNI_COMPUTE // 只有计算阶段编译下面的入口。
 layout(local_size_x=8, local_size_y=8, local_size_z=8) in; // 单一工作组覆盖整格，可用工作组屏障。
 // 读取源图像的一个单元并夹紧到网格内，避免越界。
