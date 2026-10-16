@@ -275,6 +275,18 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 10. 强光压缩选项表示（戊片）：iterationT `TONEMAP_OPERATOR` 是函数名取值的宏（`AgX`/`ACES`/`None`），而 `options.py` 只接受数字取值，所以 Omni 把它定义为序号 `0`/`1`/`2`，档位名称映射回 `AgX`/`ACES`/无，绘制主体用 `#if OMNI_TONEMAP_OPERATOR == 1` 分派。行为和默认值（`AgX`）与原程序一致，只改表示形式。
 11. `CalculateWaterCaustics` 同名不同实现（丁片）：iterationT 有两份同名函数，`Lib/BasicFounctions/Sunlight_Shadow.glsl` 的一份按九次采样算焦散遮罩，`Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 的一份只返回 `dist * 2.8 + 0.2`，两者内容不同。前者已在 `effects/shadow.glsl`，按第九点五节的处理方式把后者改名 `CalculateUnderwaterCaustics` 留在 `effects/fog.glsl`，函数体不变；水下体积雾同时复用 `effects/shadow.glsl` 里内容相同的 `GetWavesNormalFromTex`，不重复定义。
 12. `LANDSCATTERING_DISTANCE` 选项补记（丁片）：第九节 `effects/fog.glsl` 的选项清单漏了这个名字，但 iterationT `Settings.glsl` 它有菜单范围且被 `LandAtmosphericScattering` 使用，所以按 `OMNI_LANDSCATTERING_DISTANCE` 正式登记，默认值与可选范围照 iterationT。
+13. 效果文件被多个程序共同引入，靠“只有某个程序引入它”区分阶段的做法不再成立。凡是依赖程序全局量（光色、光方向、像素坐标）的函数，改成参数传入或就地计算：`CalculateStars(+sunVector)`、`CloudShadowFromTex(+shadowLightVector)`、`WaterFog(+shadowVector, +colorShadowlight, +colorSkylight)`、`Rain(+colorShadowlight, +colorSkylight)`、`WaterRefractionLite(+screenCoordInput)`、`GetWavesNormalFromTex`/`CalculateWaterCaustics(+shadowLightVector)`、`ScreenSpaceShadow(+shadowVector)`、`DH_noise(+materialID)`。这样任何程序在任意阶段引入都能编译，行为不变。
+14. `common/noise.glsl` 用 `OMNI_PIXEL` 宏取像素坐标：片元阶段是 `gl_FragCoord.xy`，顶点、几何与计算阶段取零。三个噪声函数因此在各阶段都能编译；顶点阶段本来不调用它们，输出不变。
+15. `effects/antialiasing.glsl` 自带 `taaTexelCoord`/`taaTexCoord`，并把整份实现放进 `#ifdef OMNI_FRAGMENT`，不再依赖调用程序声明的同名全局量。
+16. `BicubicBlurTexture` 在三处实现不同，必须改名：`common/math.glsl` 保留原名（噪声贴图十六像素三次模糊），泛光版改名 `BloomBicubicBlurTexture`，云影版改名 `CloudBicubicBlurTexture`，平面云内部另有 `BicubicBlurNoise`。GLSL 不允许同名函数只靠返回类型区分。
+17. `effects/shadow.glsl` 的可变半影阴影段用 `OMNI_SHADOW_COMPARE` 隔开：只有合成零号把 `shadowtex1` 声明为 `sampler2DShadow` 并定义该宏，其它程序把 `shadowtex1` 当普通深度贴图用。
+18. `rendering/lights.glsl` 只声明 `shadowtex0`，不声明 `shadowtex1` 与 `shadowcolor0`：顶点与片元对同名采样器要求类型一致，合成零号片元用的是比较采样器。
+19. 加载器标准环境宏在 `build.py` 里按 Iris `StandardMacros` 注入（`MC_VERSION`、`MC_HAND_DEPTH = 0.125`、`MC_RENDER_QUALITY`、厂商与系统宏、远景方块编号照 Iris 取值）。离线编译没有这些宏会把只在游戏里存在的名字当成未声明标识符。
+20. `verify` 的十秒预算装不下整包编译（展开引用树与编译数百程序需要一两分钟）。移植期 `verify` 只跑生成、审计与引用检查，并新增 `python build.py compile`（放宽到 300 秒）做完整离线编译；庚片在实机核对后决定如何把编译探针放回预算内。旧管线测试共 56 个用 `@unittest.skip(PORT_REPLACED)` 标记，理由写在测试文件里。
+21. 修正 iterationT 的范围笔误：`CAMERA_FOCAL_POINT` 重复的 `15.0`、`CLOUD_BASE_NOISE_SCALE` 重复值；加载器要求 `const` 向量构造给足分量，个别 `vec3(0.0)` 之类已补齐。
+22. `sunPathRotation`、`wetnessHalflife`、`drynessHalflife` 三个加载器原生常量加入 `options.py` 的 `CONST_OPTIONS` 白名单。
+23. 预设按新选项集重写四套（默认、氛围、轻量、真实），保持各自定位。
+24. 下界与末地的绘制主体目前仍引用主世界内容（己片负责按 iterationT 的 `world-1`、`world1` 目录改写）。
 
 ### 待裁决的旧选项（分片登记）
 - 天空（丙片登记）：`OMNI_SUN_DISK`、`OMNI_SUN_SIZE`、`OMNI_MOON_DISK`、`OMNI_MOON_SIZE`、`OMNI_CELESTIAL_TINT`、`OMNI_STAR_STRENGTH`、`OMNI_STAR_DENSITY`、`OMNI_SUNSET_STRENGTH`、`OMNI_SUNSET_TINT`、`OMNI_SKY_SATURATION`、`OMNI_SKY_BRIGHTNESS`、`OMNI_RESOURCE_SKY`、`OMNI_ATMOSPHERE_STEPS`、`OMNI_ATMOSPHERE_SCATTER`、`OMNI_SCATTER_STRENGTH`、`OMNI_ATMOSPHERE_MIE_G`、`OMNI_ATMOSPHERE_MULTIPLE`、`OMNI_ATMOSPHERE_OZONE`、`OMNI_NETHER_COLOR`、`OMNI_END_SKY_BRIGHTNESS`。
