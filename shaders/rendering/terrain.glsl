@@ -31,6 +31,12 @@ uniform sampler2D gaux3; // 雨点第三张动画贴图。
 uniform ivec2 atlasSize; // 方块图集尺寸。
 uniform int renderStage; // 当前原版绘制阶段，用来区分实体方块与透明方块。
 uniform float rainStrength; // 降雨强度，雨点函数读取它。
+// 视差函数照 iterationT 原样读取调用方声明的 `viewPos` 与地形 `textureResolution`，而且会被
+// `antialiasing` 间接引入（它要用 `MATID_*`），所以片元必须在引入任何效果文件之前先声明这两个插值量。
+#ifdef OMNI_FRAGMENT
+	in vec3 viewPos; // 不透明表面的视空间位置，视差与切线基都要用它。
+	flat in float textureResolution; // 方块纹理分辨率，由几何阶段平面插值传下，视差要用。
+#endif
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与材质相关选项。
@@ -39,6 +45,8 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 #include "/effects/ground/vegetation.glsl"
 // Omni 额外功能：植被季节色，默认关闭。
 #include "/effects/weather/season.glsl"
+// Omni 额外功能：积雪覆盖（来源 Eclipse），默认关闭；与季节同属天气相关的地表效果。
+#include "/effects/weather/snow.glsl"
 // 自发光模式选项归属方块光文件，只在有高光贴图时按需引入。
 #if defined OMNI_FRAGMENT && defined MC_SPECULAR_MAP
 	// 方块光文件读取火把光色，按它的调用前提给一个空全局。
@@ -248,13 +256,13 @@ layout(location = 2) out vec4 gbufferOutput5; // 五号高光材质。
 // 从几何阶段接收的插值量。
 in vec3 color; // 顶点色。
 in vec2 texCoord; // 纹理坐标。
-in vec3 viewPos; // 视空间位置。
+// `in vec3 viewPos;` 已在文件顶部、引入视差函数之前声明。
 #ifdef OMNI_TERRAIN_VS_TBN
 	in mat3 tbn; // 切线基。
 #endif
 in vec2 blockLight; // 方块光。
 flat in float materialIDs; // 材质编号。
-flat in float textureResolution; // 方块纹理分辨率。
+// `flat in float textureResolution;` 已在文件顶部、引入视差函数之前声明。
 
 // 各向异性过滤：沿屏幕上的纹理压缩方向多采几步，换回更清晰的远处方块。
 vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, inout vec4 specularTex){
@@ -544,6 +552,18 @@ void main(){
 	#endif
 
 	vec2 normalEnc = EncodeNormal(viewNormal); // 八面体编码法线。
+
+
+// 积雪覆盖：把雪按露天程度与朝向叠到底色，默认关闭时不执行。
+	#ifdef OMNI_SNOW_OVERLAY
+		// 世界位置：视空间位置回到相机相对世界坐标，再加上相机绝对位置。
+		vec3 snowWorldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz + cameraPosition;
+		// 带贴图扰动的世界法线：视空间法线转到世界。
+		vec3 snowWorldNormal = mat3(gbufferModelViewInverse) * viewNormal;
+		// 几何面世界法线：切线基第三列转到世界，用来判断面的朝向。
+		vec3 snowWorldFlatNormal = mat3(gbufferModelViewInverse) * tbn[2];
+		albedo = omniSnowOverlay(albedo, snowWorldPos, snowWorldNormal, snowWorldFlatNormal, blockLight.y);
+	#endif
 
 
 // 高光：按资源包编码取出，并给红石线一个最小发光。

@@ -15,6 +15,8 @@
     调用前提（iterationT 原样保留）：调用方必须先声明 `texelCoord`、`worldSunVector`、`worldMoonVector` 等全局量；
     这些量由绘制主体在引入本文件前给出，本文件不重复声明。
     本文件还承载原程序写在 `deferred3`、`CompositeVS`、`SSR` 里的天空相关小函数，见移植合同第九点五节的去重约定。
+    月亮轨道、月食与月相来自 Eclipse：自定义轨道在顶点阶段由世界时间闭式算出，日月解耦后才可能月食；
+    真实月亮模式需要的月亮贴图与法线贴图是 Eclipse 自带文件，本项目没有，缺少时退回程序圆盘，见 `RenderMoonDisc`。
 */
 #ifndef OMNI_SKY_INCLUDED
 #define OMNI_SKY_INCLUDED
@@ -39,8 +41,38 @@
 #define OMNI_SKY_TEXTURE_BRIGHTNESS 1.0 // [0.0 0.05 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
 // @option {"label":{"zh_cn":"星星类型","en_us":"Star Type"},"description":{"zh_cn":"关为没有星星，点状为按方向生成的星点，原版为资源包星空贴图。","en_us":"Off has no stars, Dots draws procedural points, Vanilla uses the pack sky texture."},"values":{"0":{"zh_cn":"关","en_us":"Off"},"1":{"zh_cn":"点状","en_us":"Dots"},"2":{"zh_cn":"原版","en_us":"Vanilla"}}}
 #define OMNI_STAR_TYPE 1 // [0 1 2]
+// @option {"label":{"zh_cn":"星星数量","en_us":"Stars Amount"},"description":{"zh_cn":"点状星空的星点疏密倍率，默认一倍与现在一致；只在星星类型为点状时生效。","en_us":"Density multiplier for the Dots star field; default 1 matches the current look; only used with the Dots star type."},"slider":true}
+#define OMNI_STARS_AMOUNT 1.0 // [0.5 0.75 1.0 1.25 1.5 1.75 2.0]
+// @option {"label":{"zh_cn":"星星亮度","en_us":"Stars Brightness"},"description":{"zh_cn":"点状星空的星点整体亮度倍率，默认一倍与现在一致；只在星星类型为点状时生效。","en_us":"Overall brightness multiplier for the Dots star field; default 1 matches the current look; only used with the Dots star type."},"slider":true}
+#define OMNI_STARS_BRIGHTNESS 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 3.0 4.0 5.0]
 // @option {"label":{"zh_cn":"日月倾角","en_us":"Sun Path Rotation"},"description":{"zh_cn":"日月运动轨迹相对原版轨迹的倾角，Iris 直接读取该原生常量。","en_us":"Tilt of the sun and moon path versus vanilla; Iris reads this native constant."}}
 const float sunPathRotation = -30.0; // [-90.0 -89.0 -88.0 -87.0 -86.0 -85.0 -84.0 -83.0 -82.0 -81.0 -80.0 -79.0 -78.0 -77.0 -76.0 -75.0 -74.0 -73.0 -72.0 -71.0 -70.0 -69.0 -68.0 -67.0 -66.0 -65.0 -64.0 -63.0 -62.0 -61.0 -60.0 -59.0 -58.0 -57.0 -56.0 -55.0 -54.0 -53.0 -52.0 -51.0 -50.0 -49.0 -48.0 -47.0 -46.0 -45.0 -44.0 -43.0 -42.0 -41.0 -40.0 -39.0 -38.0 -37.0 -36.0 -35.0 -34.0 -33.0 -32.0 -31.0 -30.0 -29.0 -28.0 -27.0 -26.0 -25.0 -24.0 -23.0 -22.0 -21.0 -20.0 -19.0 -18.0 -17.0 -16.0 -15.0 -14.0 -13.0 -12.0 -11.0 -10.0 -9.0 -8.0 -7.0 -6.0 -5.0 -4.0 -3.0 -2.0 -1.0 0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 21.0 22.0 23.0 24.0 25.0 26.0 27.0 28.0 29.0 30.0 31.0 32.0 33.0 34.0 35.0 36.0 37.0 38.0 39.0 40.0 41.0 42.0 43.0 44.0 45.0 46.0 47.0 48.0 49.0 50.0 51.0 52.0 53.0 54.0 55.0 56.0 57.0 58.0 59.0 60.0 61.0 62.0 63.0 64.0 65.0 66.0 67.0 68.0 69.0 70.0 71.0 72.0 73.0 74.0 75.0 76.0 77.0 78.0 79.0 80.0 81.0 82.0 83.0 84.0 85.0 86.0 87.0 88.0 89.0 90.0]
+// --- 月亮轨道与月食：来源 Eclipse `lib/settings.glsl:400-456`、`dimensions/begin.csh:73-95`、`lib/ROBOBO_sky.glsl:130-133` ---
+// 这一组选项默认不改变画面：自定义轨道、真实月亮、月相亮度都默认关闭，月食默认开启但默认轨道下日月永不接近。
+// @option {"label":{"zh_cn":"自定义月亮轨道","en_us":"Custom Moon Rotation"},"description":{"zh_cn":"让月亮按自己的轨道运行，不再永远待在太阳对面，才可能出现月相与月食；关闭时与现在完全一样。","en_us":"Gives the moon its own orbit instead of always opposing the sun, allowing phases and eclipses; off keeps the current look."}}
+//#define OMNI_CUSTOM_MOON_ROTATION
+// @option {"label":{"zh_cn":"月亮轨道纬度","en_us":"Moon Orbit Latitude"},"description":{"zh_cn":"观测点纬度，决定月亮升起的高度；只在自定义月亮轨道开启时生效。","en_us":"Observer latitude, setting how high the moon rises; only used with custom moon rotation."},"slider":true}
+#define OMNI_MOON_LATITUDE 40.0 // [-89.0 -88.0 -87.0 -86.0 -85.0 -84.0 -83.0 -82.0 -81.0 -80.0 -79.0 -78.0 -77.0 -76.0 -75.0 -74.0 -73.0 -72.0 -71.0 -70.0 -69.0 -68.0 -67.0 -66.0 -65.0 -64.0 -63.0 -62.0 -61.0 -60.0 -59.0 -58.0 -57.0 -56.0 -55.0 -54.0 -53.0 -52.0 -51.0 -50.0 -49.0 -48.0 -47.0 -46.0 -45.0 -44.0 -43.0 -42.0 -41.0 -40.0 -39.0 -38.0 -37.0 -36.0 -35.0 -34.0 -33.0 -32.0 -31.0 -30.0 -29.0 -28.0 -27.0 -26.0 -25.0 -24.0 -23.0 -22.0 -21.0 -20.0 -19.0 -18.0 -17.0 -16.0 -15.0 -14.0 -13.0 -12.0 -11.0 -10.0 -9.0 -8.0 -7.0 -6.0 -5.0 -4.0 -3.0 -2.0 -1.0 0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 21.0 22.0 23.0 24.0 25.0 26.0 27.0 28.0 29.0 30.0 31.0 32.0 33.0 34.0 35.0 36.0 37.0 38.0 39.0 40.0 41.0 42.0 43.0 44.0 45.0 46.0 47.0 48.0 49.0 50.0 51.0 52.0 53.0 54.0 55.0 56.0 57.0 58.0 59.0 60.0 61.0 62.0 63.0 64.0 65.0 66.0 67.0 68.0 69.0 70.0 71.0 72.0 73.0 74.0 75.0 76.0 77.0 78.0 79.0 80.0 81.0 82.0 83.0 84.0 85.0 86.0 87.0 88.0 89.0]
+// @option {"label":{"zh_cn":"月亮时间偏移","en_us":"Moon Time Offset"},"description":{"zh_cn":"月亮轨道相对世界时间的偏移，用来挑一个起始相位；只在自定义月亮轨道开启时生效。","en_us":"Offset of the moon orbit in world time to pick a starting phase; only used with custom moon rotation."},"slider":true}
+#define OMNI_MOON_TIME_OFFSET 1000.0 // [0.0 500.0 1000.0 1500.0 2000.0 2500.0 3000.0 3500.0 4000.0 4500.0 5000.0 5500.0 6000.0 6500.0 7000.0 7500.0 8000.0 8500.0 9000.0 9500.0 10000.0 10500.0 11000.0 11500.0 12000.0 12500.0 13000.0 13500.0 14000.0 14500.0 15000.0 15500.0 16000.0 16500.0 17000.0 17500.0 18000.0 18500.0 19000.0 19500.0 20000.0 20500.0 21000.0 21500.0 22000.0 22500.0 23000.0 23500.0]
+// @option {"label":{"zh_cn":"月亮轨道平滑","en_us":"Smooth Moon Rotation"},"description":{"zh_cn":"用平滑后的世界时间驱动月亮，移动不跳格；只在自定义月亮轨道开启时生效。","en_us":"Drives the moon with smoothed world time so it moves without stepping; only used with custom moon rotation."}}
+#define OMNI_SMOOTH_MOON_ROTATION
+// @option {"label":{"zh_cn":"月相亮度","en_us":"Moonphase Moonlight"},"description":{"zh_cn":"按月亮与太阳的夹角算月相，把月光与月盘按被照亮比例压暗；默认关闭。","en_us":"Scales moonlight and the moon disc by the illuminated fraction from the sun-moon angle; off by default."}}
+//#define OMNI_MOONPHASE_BASED_MOONLIGHT
+// @option {"label":{"zh_cn":"月亮亮度基准","en_us":"Moon Illuminance"},"description":{"zh_cn":"真实月亮模式下月盘的亮度基准；只在真实月亮开启时生效。","en_us":"Brightness reference of the moon disc in realistic moon mode; only used with Realistic Moon."},"slider":true}
+#define OMNI_MOON_ILLUMINANCE 600.0 // [0.0 10.0 20.0 30.0 40.0 50.0 60.0 70.0 80.0 90.0 100.0 150.0 200.0 300.0 400.0 500.0 600.0 700.0 800.0 900.0 1000.0 2000.0 3000.0 4000.0 5000.0 6000.0 7000.0 8000.0 9000.0 10000.0 11000.0 12000.0 13000.0 14000.0 15000.0 20000.0 30000.0 40000.0 50000.0 60000.0 70000.0 80000.0 90000.0 100000.0 150000.0 200000.0 250000.0 300000.0 400000.0 500000.0]
+// @option {"label":{"zh_cn":"月亮色温","en_us":"Moon Temperature"},"description":{"zh_cn":"真实月亮模式下月盘的色温，越低越暖；只在真实月亮开启时生效。","en_us":"Color temperature of the moon disc in realistic moon mode; lower is warmer."},"slider":true}
+#define OMNI_MOON_TEMP 8000.0 // [1000.0 1100.0 1200.0 1300.0 1400.0 1500.0 1600.0 1700.0 1800.0 1900.0 2000.0 2100.0 2200.0 2300.0 2400.0 2500.0 2600.0 2700.0 2800.0 2900.0 3000.0 3100.0 3200.0 3300.0 3400.0 3500.0 3600.0 3700.0 3800.0 3900.0 4000.0 4100.0 4200.0 4300.0 4400.0 4500.0 4600.0 4700.0 4800.0 4900.0 5000.0 5100.0 5200.0 5300.0 5400.0 5600.0 5700.0 5800.0 5900.0 6000.0 6100.0 6200.0 6300.0 6400.0 6500.0 6600.0 6700.0 6800.0 6900.0 7000.0 7100.0 7200.0 7300.0 7400.0 7500.0 7600.0 7700.0 7800.0 7900.0 8000.0 8100.0 8200.0 8300.0 8400.0 8500.0 8600.0 8700.0 8800.0 8900.0 9000.0 9100.0 9200.0 9300.0 9400.0 9500.0 9600.0 9700.0 9800.0 9900.0 10000.0 15000.0 20000.0 25000.0 50000.0]
+// @option {"label":{"zh_cn":"真实月亮","en_us":"Realistic Moon"},"description":{"zh_cn":"用真实月亮的色温与尺寸画月盘；Eclipse 自带的月亮贴图不在本项目内，没有贴图时退回现有的程序圆盘。","en_us":"Draws the moon with realistic temperature and size; the Eclipse moon texture is not bundled, so it falls back to the built-in disc."}}
+//#define OMNI_REALMOON
+// @option {"label":{"zh_cn":"月面法线","en_us":"Moon Normals"},"description":{"zh_cn":"用月面法线贴图做起伏明暗；本项目没有该贴图，缺少时退回现有的程序圆盘。","en_us":"Adds relief shading from a moon normal map; the texture is not bundled, so it falls back."}}
+//#define OMNI_MOON_NORMALS
+// @option {"label":{"zh_cn":"月亮尺寸","en_us":"Moon Size"},"description":{"zh_cn":"真实月亮模式下月盘的角直径档位，越大月亮越大；只在真实月亮开启时生效。","en_us":"Angular size of the moon disc in realistic moon mode; larger means a bigger moon."},"slider":true}
+#define OMNI_MOON_SIZE_SETTING 4.5 // [1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 5.5 6.0 6.5 7.0 7.5 8.0 8.5 9.0]
+// @option {"label":{"zh_cn":"月食变暗","en_us":"Eclipse Darkening"},"description":{"zh_cn":"日月方向对齐时把天空压暗；默认开启，但默认轨道下日月永不接近，所以不影响默认画面。","en_us":"Darkens the sky when the sun and moon align; on by default but never triggers with the default orbit."}}
+#define OMNI_ECLIPSE
+// @option {"label":{"zh_cn":"月食变暗强度","en_us":"Eclipse Strength"},"description":{"zh_cn":"日月对齐时压暗的程度，零为不压暗；只在月食变暗开启时生效。","en_us":"How much the sky darkens on alignment; zero disables it; only used when Eclipse Darkening is on."},"slider":true}
+#define OMNI_ECLIPSE_DARKENING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 // --- 内部常数：原 `Settings.glsl` 里不进菜单的取值，名字保持原名 ---
 #define ATMO_MIN_ALTITUDE 500.0 // 相机大气高度下限，低于它按这个高度算，避免贴地时大气几何退化。
 #define ATMO_SKYBOX_MIN_ALTITUDE 500.0 - wetness * 300.0 // 反射天空盒的相机高度下限，雨天云更厚所以再压低一点。
@@ -93,12 +125,23 @@ vec3 RenderSunDisc(vec3 worldDir, vec3 sunDir){
 	return vec3(1.1114, 0.9756, 0.9133) * disc; // 太阳偏暖的白色。
 }
 // 月亮圆盘：形状同太阳，但边缘更硬、亮度单独交给选项。
+// 真实月亮模式改用 Eclipse 的尺寸档位：角半径由 `OMNI_MOON_SIZE_SETTING` 换算，来源 `composite1.fsh:1785-1786`。
 float RenderMoonDisc(vec3 worldDir, vec3 moonDir){
 	float d = dot(worldDir, moonDir); // 视线与月亮方向的夹角余弦。
-	float size = 5e-5; // 圆盘角半径。
-	float hardness = 1e5; // 边缘硬度，比太阳更硬。
-	float disc = curve(saturate((d - (1.0 - size)) * hardness)); // 月亮遮罩。
-	return disc * disc; // 平方收口后返回零到一的亮度。
+	#ifdef OMNI_REALMOON
+		float moonSize = 0.999 + (10.0 - OMNI_MOON_SIZE_SETTING) * 0.0001; // 档位越大圆盘越大。
+		float disc = curve(saturate((d - moonSize) / (1.0 - moonSize))); // 从圆盘中心到边缘的遮罩。
+		#ifdef OMNI_MOON_NORMALS
+			// 起伏明暗需要 Eclipse 自带的月面法线贴图，本项目没有该贴图，退回程序圆盘不额外调制。
+			disc *= 1.0; // 保留现有遮罩。
+		#endif
+		return disc * disc; // 平方收口后返回零到一的亮度。
+	#else
+		float size = 5e-5; // 圆盘角半径。
+		float hardness = 1e5; // 边缘硬度，比太阳更硬。
+		float disc = curve(saturate((d - (1.0 - size)) * hardness)); // 月亮遮罩。
+		return disc * disc; // 平方收口后返回零到一的亮度。
+	#endif
 }
 // 反射里的月亮圆盘：反射天空盒分辨率低，用更大的角半径换取可见。
 float RenderMoonDiscReflection(vec3 worldDir, vec3 moonDir){
@@ -107,6 +150,74 @@ float RenderMoonDiscReflection(vec3 worldDir, vec3 moonDir){
 	float hardness = 300.0; // 边缘更软。
 	float disc = curve(saturate((d - (1.0 - size)) * hardness)); // 反射月亮遮罩。
 	return disc * disc; // 返回零到一亮度。
+}
+// --- 月亮轨道、月食与月相 ---
+// 月亮轨道的内部常数照 Eclipse `lib/settings.glsl:411-413`，本项目不把它们开放成玩家选项。
+#define MONTH_LENGTH 8 // 一个月多少游戏日，月亮绕一圈比一天略长，所以每天相对太阳移动一点。
+#define EARTH_ROTATION_TILT 14.0 // 月亮轨道随季节摆动的最大赤纬偏移，单位度。
+uniform float omniMoonTimeSmooth; // 平滑后的累计世界时间，由加载器按 `pipeline.properties` 每帧算好。世界天数 `worldDay` 由 `common/uniforms.glsl` 统一声明。
+// 把时间换算成月亮的世界方向：纬度决定升起高度，倾角决定赤纬，时间决定时角。
+// 来源 Eclipse `dimensions/begin.csh:73-95` 的 `moonDirection`，数学与步骤逐行相同。
+vec3 MoonDirection(float time, float latitude, float pathRotation){
+	float phi = radians(-latitude); // 观测点纬度，换算成弧度。
+	float del = radians(pathRotation); // 月亮轨道相对天赤道的倾角。
+	float t = time / 24000.0; // 时间换算成天。
+	t *= 1.0 + 1.0 / float(MONTH_LENGTH); // 月亮每天比太阳多走一点，长期累积才产生月相与对齐。
+	float H = t * 2.0 * PI - PI; // 时角，一整天转一圈。
+	float sin_h = sin(phi) * sin(del) + cos(phi) * cos(del) * cos(H); // 高度角正弦。
+	float h = asin(clamp(sin_h, -1.0, 1.0)); // 高度角；钳一下避免浮点误差让反正弦出非数。
+	float cos_h = cos(h); // 高度角余弦。
+	float cosA = (sin(del) - sin(phi) * sin_h) / max(cos(phi) * cos_h, 1e-4); // 方位角余弦；分母加下限，避免两极附近除零。
+	cosA = clamp(cosA, -1.0, 1.0); // 同样钳一下，防止浮点误差越界。
+	float A = acos(cosA); // 方位角。
+	if (sin(H) > 0.0) A = 2.0 * PI - A; // 时角过午时镜像到另一半球。
+	return vec3(cos_h * sin(A), sin_h, cos_h * cos(A)); // 单位方向，y 轴朝天。
+}
+// 由世界时间闭式算出月亮方向：开启自定义轨道时月亮独立运行，关闭时月亮仍与太阳相对。
+// 这是顶点阶段的一项纯计算，不读取任何中间画面，因此各程序算出的方向完全一致。
+vec3 CalculateWorldMoonVector(vec3 worldSunVector){
+	#ifdef OMNI_CUSTOM_MOON_ROTATION
+		#ifdef OMNI_SMOOTH_MOON_ROTATION
+			float totalTime = omniMoonTimeSmooth; // 平滑后的累计世界时间，月亮移动不跳格。
+		#else
+			float totalTime = float(worldDay) * 24000.0 + float(worldTime); // 未平滑时按整数刻累计。
+		#endif
+		float absWorldTime = totalTime - 48000.0; // 偏移两天，与 Eclipse 的相位对齐。
+		float yearLengthTicks = float(MONTH_LENGTH) * 12.0 * 24000.0; // 一年对应的刻数。
+		float timeInYear = mod(absWorldTime, yearLengthTicks) / yearLengthTicks; // 落在一年内的相位。
+		float moonOffset = 2.0 * EARTH_ROTATION_TILT * smoothstep(0.0, 0.5, timeInYear) * (1.0 - smoothstep(0.5, 1.0, timeInYear)) - EARTH_ROTATION_TILT; // 随季节摆动的赤纬；Eclipse 用反向 `smoothstep`，这里改成等价的单向写法，避免未定义行为。
+		return normalize(MoonDirection(absWorldTime - OMNI_MOON_TIME_OFFSET, OMNI_MOON_LATITUDE, moonOffset)); // 换算成单位方向。
+	#else
+		return -worldSunVector; // 关闭时月亮与太阳相对，与移植前完全一致。
+	#endif
+}
+// 月相亮度：由太阳与月亮方向的夹角算被照亮比例，满月为一、新月为零；关闭时返回一，不改变画面。
+// 为什么用夹角而不是游戏自带的月相编号：自定义轨道下月亮位置与世界时间解耦，只有几何夹角才是真实的相位。
+float CalculateMoonPhaseBrightness(vec3 worldSunVector, vec3 worldMoonVector){
+	#ifdef OMNI_MOONPHASE_BASED_MOONLIGHT
+		return saturate((1.0 - dot(worldSunVector, worldMoonVector)) * 0.5); // 方向相反是满月，方向相同是新月。
+	#else
+		return 1.0; // 不改变月光与月盘亮度。
+	#endif
+}
+// 月食变暗：日月方向接近时把天空压暗，来源 Eclipse `lib/ROBOBO_sky.glsl:130-133`。
+// 为什么按视线高度过渡：地平线以下看不到天体，不必压暗，只压地平线以上的那一侧。
+float CalculateEclipseDarkening(vec3 worldDir, vec3 worldSunVector, vec3 worldMoonVector){
+	#ifdef OMNI_ECLIPSE
+		float eclipseDarkness = smoothstep(0.005, 0.08, length(worldSunVector - worldMoonVector)); // 日月越近越小，对齐时接近零。
+		eclipseDarkness = mix(1.0, eclipseDarkness, smoothstep(-1.0, 0.175, worldDir.y)); // 只压地平线以上的天空。
+		return mix(1.0, eclipseDarkness, OMNI_ECLIPSE_DARKENING); // 按选项强度在不变暗与全暗之间插值。
+	#else
+		return 1.0; // 关闭月食变暗时不改变天空。
+	#endif
+}
+// 月亮圆盘颜色：真实月亮模式按色温与亮度基准，否则用现有的偏暖白。
+vec3 CalculateMoonDiscColor(){
+	#ifdef OMNI_REALMOON
+		return Blackbody(OMNI_MOON_TEMP) * (OMNI_MOON_ILLUMINANCE / 600.0); // 黑体颜色亮度已归一，再按亮度基准相对默认值缩放。
+	#else
+		return vec3(0.8886, 1.0019, 1.3095); // 现有的偏暖白月亮圆盘。
+	#endif
 }
 // 视线到大气层顶的距离，解视线与顶球面的方程取远根。
 float DistanceToTopAtmosphereBoundary(
@@ -435,10 +546,14 @@ vec3 GetSkyRadianceToPoint(
 }
 // 校次把球面方向绕太阳轴旋转，让星点跟着天体倾斜，再按方向切格撒星。
 // 太阳方向作为参数传入：天空效果会被多个程序引入，直接在函数里读全局量会让不需要光色的程序编译失败。
+// 来源与差异：算法是现有的 iterationT 版本，没有改成 Eclipse `lib/stars.glsl`。Eclipse 默认那条星场走
+// `StableStarField`，出的星是白色、没有星温（`lib/stars.glsl:94-97`）；带星温的 `starbox` 默认关闭，
+// 而且它自己在注释里就承认有走样（`lib/stars.glsl:24-26`）。现有算法本身已经用 `Blackbody` 上星温，
+// 默认画面也以它为准，所以只把 Eclipse 的数量与亮度两个选项接进来，不重写算法。
 vec3 CalculateStars(vec3 worldDir, vec3 sunVector){
 	const float scale = 384.0; // 方向切格的密度，越大星星越密越小。
-	const float coverage = 0.007; // 亮格占所有格子的比例。
-	const float maxLuminance = 0.05; // 最亮的一颗星的亮度。
+	const float coverage = 0.007 * OMNI_STARS_AMOUNT; // 亮格占所有格子的比例；数量选项按比例缩放它，格子大小不变，星星只变多或变少。
+	const float maxLuminance = 0.05 * OMNI_STARS_BRIGHTNESS; // 最亮的一颗星的亮度；亮度选项按比例缩放它。
 	const float minTemperature = 4000.0; // 星色温下限，偏橙。
 	const float maxTemperature = 8000.0; // 星色温上限，偏蓝。
 	float cosine = dot(sunVector,  vec3(0, 0, 1)); // 太阳轴与参考轴夹角余弦。

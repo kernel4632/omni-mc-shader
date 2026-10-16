@@ -228,7 +228,7 @@ def compile_all(seconds: float = 300.0) -> None:
     saved = PORTING
     PORTING = False
     try:
-        compile_shaders(entries, found, profiles, set())  # 全部程序、全部代表配置与两组环境。
+        compile_shaders(entries, found, profiles, {entry.stem for entry in entries})  # 全部程序在任何代表配置下都要编，不能只编默认配置。
     finally:
         PORTING = saved
 

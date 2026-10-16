@@ -12,7 +12,7 @@
   `vec3 shadowPos = ShadowScreenPos_From_WorldPos(worldPos);`  求一个世界位置的阴影图坐标；
   `vec3 shadow = VariablePenumbraShadow(worldPos, worldNormal, sunlight, albedo, scattering, mask, sss);`  不透明表面阴影可见度。
 调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明这些全局量）：
-  `shadowtex0`、`shadowtex1`、`shadowcolor0` 三个阴影采样器，以及主程序的 `in vec3 shadowLightVector`、`in vec3 shadowVector`；
+  `shadowtex0`、`shadowtex1`、`shadowcolor0` 三个阴影采样器，以及主程序的 `in vec3 worldShadowVector`、`in vec3 shadowVector`；
   `ivec2 texelCoord`、`vec2 texCoord` 由延迟与合成主程序声明；`MaterialMask` 结构由 `effects/material.glsl` 提供；
   `OMNI_TAA`、`OMNI_DISABLE_HAND_TAA`、`OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR` 由 `effects/antialiasing.glsl` 提供。
 关键设计原因与取舍：
@@ -232,7 +232,7 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 		float distFalloff = saturate(((min(shadowDistance, far) - length(worldPos)) * 0.05 - 1.0)); // 超出阴影范围就淡出透光。
 
 		#ifdef OMNI_SSS_NORMAL // 开启朝向透光时按观察角计算。
-			sss = scattering * (OMNI_SSS_BRIGHTNESS * distFalloff * (MiePhaseFunction(0.5, dot(worldNormal, -shadowLightVector)) * 0.5 + 0.15)); // 逆光方向更亮的米氏相位。
+			sss = scattering * (OMNI_SSS_BRIGHTNESS * distFalloff * (MiePhaseFunction(0.5, dot(worldNormal, -worldShadowVector)) * 0.5 + 0.15)); // 逆光方向更亮的米氏相位。
 		#else // 关闭朝向透光时用固定亮度。
 			sss = scattering * (OMNI_SSS_BRIGHTNESS * distFalloff * 0.2); // 固定占比，不随角度变化。
 		#endif

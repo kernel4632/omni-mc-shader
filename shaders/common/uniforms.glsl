@@ -22,10 +22,12 @@ uniform int heldBlockLightValue; // 主手方块光源等级，零到十五。
 uniform int heldItemId2; // 副手物品编号。
 uniform int heldBlockLightValue2; // 副手方块光源等级。
 uniform int worldTime; // 世界时间，单位游戏刻，零到两万四千。
+uniform int worldDay; // 当前游戏天数，季节与自定义月亮轨道的累积时间用它。
 uniform int frameCounter; // 帧序号，驱动时间噪声与抖动序列。
 uniform float frameTime; // 上一帧用时，单位秒。
 uniform float frameTimeCounter; // 累计运行秒数，驱动动画。
 uniform float sunAngle; // 太阳角度，零到一表示一整天。
+uniform vec3 sunPosition; // 太阳或月亮在视空间里的方向，由加载器提供；氛围效果用它判断昼夜。
 uniform float aspectRatio; // 画面宽高比。
 uniform float viewWidth; // 画面宽度，单位像素。
 uniform float viewHeight; // 画面高度，单位像素。

@@ -212,8 +212,7 @@ void main(){
 /* DRAWBUFFERS:0 */
 layout(location = 0) out vec4 gbufferOutput0; // 零号，本模式实际不用，只为满足声明。
 
-layout(rgba8) uniform image2D colorimg0; // 零号画面，贴图色。
-layout(rgba16) uniform image2D colorimg5; // 五号画面，材质编号。
+// 两张图像由 `effects/ground/selection.glsl` 的 `SelectionLineImage` 自己声明并写入。
 
 flat in vec4 color; // 顶点色。
 
@@ -224,7 +223,7 @@ void main(){
 	if(albedo.a > 0.1 && gl_FragCoord.z < texelFetch(depthtex0, ivec2(gl_FragCoord.xy), 0).x){ // 线条在已有几何前面才写。
 		if (albedo.a == 0.4) albedo.rgb = SelectionBoxColor(); // 选择框换成配置颜色。
 
-		SelectionLineImage(albedo, colorimg0, colorimg5); // 把颜色与材质编号写进两张画面。
+		SelectionLineImage(albedo); // 把颜色与材质编号写进零号与五号画面。
 	}
 
 	discard; // 本模式不通过光栅化输出，全部丢弃。

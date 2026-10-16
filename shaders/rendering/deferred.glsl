@@ -410,6 +410,8 @@
 			#endif
 			bool ray_r_mu_intersects_ground; // 视线是否打到地面，由大气函数回填。
 			vec3 atmosphere = GetSkyRadiance(camera, worldDir, worldSunVector, worldMoonVector, horizon, transmittance, ray_r_mu_intersects_ground); // 查预计算大气的天空辐射。
+			float eclipseDarkening = CalculateEclipseDarkening(worldDir, worldSunVector, worldMoonVector); // 月食：日月对齐时把天空压暗，默认轨道下日月相对所以不触发。
+			atmosphere *= eclipseDarkening; // 把压暗因子乘到天空辐射上。
 
 			finalComposite += atmosphere; // 先叠大气。
 
@@ -432,8 +434,8 @@
 
 			celestial *= OMNI_NIGHT_BRIGHTNESS; // 天体整体按夜间亮度缩放。
 
-			vec3 sunDisc = RenderSunDisc(worldDir, worldSunVector) * (0.2 + timeNoon * 3.0); // 太阳圆盘，白天更亮。
-			vec3 moonDisc = vec3(0.8886, 1.0019, 1.3095) * (RenderMoonDisc(worldDir, worldMoonVector) * OMNI_NIGHT_BRIGHTNESS); // 月亮圆盘，偏暖白。
+			vec3 sunDisc = RenderSunDisc(worldDir, worldSunVector) * (0.2 + timeNoon * 3.0) * eclipseDarkening; // 太阳圆盘，白天更亮，月食时一起压暗。
+			vec3 moonDisc = CalculateMoonDiscColor() * (RenderMoonDisc(worldDir, worldMoonVector) * OMNI_NIGHT_BRIGHTNESS * CalculateMoonPhaseBrightness(worldSunVector, worldMoonVector)); // 月亮圆盘：颜色由真实月亮选项决定，亮度再乘月相比例。
 
 			#ifdef OMNI_MOON_TEXTURE
 				celestial = mix(celestial * cloudTransmittance + sunDisc + moonDisc, // 用贴图月亮时水下不画月亮。
@@ -478,6 +480,7 @@
 			vec3 transmittance = vec3(1.0); // 大气透过率。
 			bool ray_r_mu_intersects_ground; // 是否打到地面。
 			vec3 atmosphere = GetSkyRadiance(cameraSkyBox, viewVector, worldSunVector, worldMoonVector, horizon, transmittance, ray_r_mu_intersects_ground); // 查该方向的天空辐射。
+			atmosphere *= CalculateEclipseDarkening(viewVector, worldSunVector, worldMoonVector); // 反射天空盒同样按月食压暗。
 
 			skyImage += atmosphere; // 叠大气。
 

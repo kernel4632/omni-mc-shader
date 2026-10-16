@@ -28,7 +28,7 @@
 out vec3 worldShadowVector; // 阴影相机对应的世界光方向，当作太阳方向基准。
 out vec3 shadowVector; // 上面那个方向转到视空间，屏幕空间阴影与镜头效果用。
 out vec3 worldSunVector; // 太阳的世界方向，已按太阳角度翻转正负。
-out vec3 worldMoonVector; // 月亮的世界方向，与月亮方向相反。
+out vec3 worldMoonVector; // 月亮的世界方向；默认与太阳相对，开启自定义轨道后由世界时间独立算出。
 out vec3 colorShadowlight; // 日月直射光色之和，阴影与云影用。
 out vec3 colorSunlight; // 太阳直射光色。
 out vec3 colorMoonlight; // 月亮直射光色。
@@ -70,7 +70,7 @@ void main(){
 	worldShadowVector = shadowModelViewInverse[2].xyz; // 阴影相机的朝向就是光方向，从逆视图矩阵第三列取。
 	shadowVector = mat3(gbufferModelView) * worldShadowVector; // 同一个方向转到视空间。
 	worldSunVector = worldShadowVector * (step(sunAngle, 0.5) * 2.0 - 1.0); // 一天的后半段把方向翻到月亮侧。
-	worldMoonVector = -worldSunVector; // 月亮方向与太阳方向相反。
+	worldMoonVector = CalculateWorldMoonVector(worldSunVector); // 月亮方向：默认取太阳的反方向，自定义轨道时由世界时间闭式算出。
 
 	float SdotU = dot(vec3(0.0, 1.0, 0.0), worldSunVector); // 太阳方向相对天顶的余弦。
 	float MdotU = dot(vec3(0.0, 1.0, 0.0), worldMoonVector); // 月亮方向相对天顶的余弦。
@@ -137,10 +137,11 @@ void main(){
 		#endif
 	#endif
 
-	colorSunlight = GetSunAndSkyIrradiance(camera, worldSunVector, -worldSunVector, colorMoonlight, colorSunSkylight, colorMoonSkylight); // 查表得到太阳直射与环境、月亮直射与环境。
+	colorSunlight = GetSunAndSkyIrradiance(camera, worldSunVector, worldMoonVector, colorMoonlight, colorSunSkylight, colorMoonSkylight); // 查表得到太阳直射与环境、月亮直射与环境。
 
 	colorSunlight *= 1.0 - curve(saturate((1.0 - saturate(SdotU)) * 30.0 - 29.0)); // 太阳很贴地时收掉直射，避免出现长条亮带。
 	colorMoonlight *= 1.0 - curve(saturate((1.0 - saturate(MdotU)) * 5.0 - 4.0)); // 月亮很贴地时同样收掉。
+	colorMoonlight *= CalculateMoonPhaseBrightness(worldSunVector, worldMoonVector); // 月相亮度：按日月夹角把月光按被照亮比例压暗，关闭时不改变亮度。
 	#ifdef OMNI_COLD_MOONLIGHT
 		DoNightEye(colorMoonlight); // 打开冷色月光时把月光混向偏蓝的亮度。
 	#endif

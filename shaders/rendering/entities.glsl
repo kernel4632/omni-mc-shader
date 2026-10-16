@@ -39,12 +39,19 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 // 天气文件里的雨色与风偏移读取阳光、天光与露天标记，按调用前提给空全局；本程序不调用它们。
 vec3 colorShadowlight; // 阳光颜色。
 vec3 colorSkylight; // 天光颜色。
+// 视差函数照 iterationT 原样读取调用方声明的 `viewPos`，而且会被 `antialiasing` 间接引入（它要用 `MATID_*`），
+// 所以片元必须在引入任何效果文件之前先声明这个插值量。
+#ifdef OMNI_FRAGMENT
+	in vec3 viewPos; // 实体表面的视空间位置，视差与切线基都要用它。
+#endif
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与实体材质选项。
 #include "/effects/ground/material.glsl"
 // 生物与玩家：提供 `EntityStatusColor` 与 `HandFovProjection`。
 #include "/effects/entity/entity.glsl"
+// Omni 额外功能：积雪覆盖（来源 Eclipse），默认关闭；与地形共用同一份雪覆盖算法。
+#include "/effects/weather/snow.glsl"
 // 自发光模式选项归属方块光文件，只在有高光贴图时按需引入。
 #if defined OMNI_FRAGMENT && defined MC_SPECULAR_MAP
 	// 方块光文件读取火把光色，按它的调用前提给一个空全局。
@@ -173,7 +180,7 @@ layout(location = 2) out vec4 gbufferOutput5; // 五号高光材质。
 // 从顶点阶段接收的插值量。
 in vec4 color; // 顶点色。
 in vec2 texCoord; // 纹理坐标。
-in vec3 viewPos; // 视空间位置。
+// `in vec3 viewPos;` 已在文件顶部、引入视差函数之前声明。
 in vec2 blockLight; // 方块光。
 
 #if (defined OMNI_ENTITIES_VS_TBN && (defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS) && (MC_VERSION < 11500 || MC_VERSION > 11604)) || (defined OMNI_HAND_PASS && MC_VERSION < 11300)
@@ -492,6 +499,18 @@ void main(){
 			vec3 viewDir = -normalize(viewPos); // 视线方向。
 			viewNormal = normalize(viewNormal + tbnMat[2] * inversesqrt(saturate(dot(viewNormal, viewDir)) + 0.001)); // 压住极端法线。
 		#endif
+	#endif
+
+
+// 积雪覆盖：只给普通实体与方块实体叠雪，手持物与蜘蛛眼不叠；默认关闭时不执行。
+	#if (defined OMNI_ENTITIES_PASS || defined OMNI_BLOCK_PASS) && defined OMNI_SNOW_OVERLAY
+		// 世界位置：视空间位置回到相机相对世界坐标，再加上相机绝对位置。
+		vec3 snowWorldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz + cameraPosition;
+		// 带贴图扰动的世界法线：视空间法线转到世界。
+		vec3 snowWorldNormal = mat3(gbufferModelViewInverse) * viewNormal;
+		// 几何面世界法线：切线基第三列转到世界，用来判断面的朝向。
+		vec3 snowWorldFlatNormal = mat3(gbufferModelViewInverse) * tbnMat[2];
+		albedo.rgb = omniSnowOverlay(albedo.rgb, snowWorldPos, snowWorldNormal, snowWorldFlatNormal, blockLight.y);
 	#endif
 
 
