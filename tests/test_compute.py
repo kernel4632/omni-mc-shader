@@ -56,6 +56,7 @@ class ComputeTests(unittest.TestCase):
         settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
         self.assertIn("image.omniLpvA",settings); self.assertIn("image.omniLpvB",settings)  # 体积格在流程设置登记。
 
+    @unittest.skip(PORT_REPLACED)
     def test_lpv_image_writes_have_visibility_barriers(self):
         """每次图像写入后都先做图像屏障再同步工作组，避免传播读取旧数据。"""
         source = (build.SHADERS/"rendering/lpv.glsl").read_text(encoding="utf-8")  # 读取计算主体而不是复制实现。

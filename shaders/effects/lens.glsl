@@ -1,182 +1,413 @@
-// 镜头：把色差、景深、运动模糊、耀斑和暗角合成成一套相机成像效果，输入无效时保守回退为清晰原色。
-// 调用位置：rendering/final.glsl 在线性颜色空间里调用 omniLens，把镜头效果叠到场景颜色上。
-// 可复制示例：`scene = omniLens(scene, texcoord) + omniBloom(texcoord);`
-// 设计取舍：这些效果共用一个文件，因为它们读同一套屏幕元数据、共享同一段屏幕坐标约定，拆成多个文件会让同一段取样逻辑散落多处；
-//   但每个效果仍各自成一个函数，关闭某个效果时用预处理器在编译期直接去掉对应循环，不在运行时逐像素判断，避免为关闭的功能付出开销。
-// 顺序原因：GLSL 不支持先调用后定义，所以入口 omniLens 放在文件末尾，上面的函数按被调用的先后排列。
-#ifndef OMNI_LENS
-#define OMNI_LENS
+/*
+镜头成像：景深、弥散范围统计、镜头眩光与光斑、相机动态模糊、暗角，合成成一套相机成像效果。
+来源：景深照 iterationT `Lib/IndividualFounctions/DOF.glsl` 一比一移植；
+  眩光与光斑照 iterationT `Lib/IndividualFounctions/LensGlareFlare.glsl` 一比一移植；
+  相机速度与动态模糊照 iterationT `Lib/IndividualFounctions/MotionBlur.glsl` 的模糊部分一比一移植；
+  暗角照 iterationT `Lib/Programs/Final.glsl` 的 `Vignette` 一比一移植。
+  曝光统计（平均亮度与 `AE_*`）不属于本文件，按合同放在 `effects/color.glsl`。
+调用位置：
+  合成五号片元在景深开启时调用 `CoCSpread` 取弥散范围，并调用 `LensFlare` 写镜头光斑到三号画面；
+  合成六号片元调用 `DepthOfField` 做景深；
+  合成八号片元调用 `MotionBlur` 做相机动态模糊；
+  合成十四号片元调用 `Vignette` 画暗角。
+可复制示例：
+  `compositeOutput1 = DepthOfField();`
+  `float spread = CoCSpread();`
+  `color += CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb) * eyeBrightnessSmoothCurved;`
+  `color *= Vignette(texCoord, OMNI_VIGNETTE_FALLOFF, OMNI_VIGNETTE_ROUNDNESS);`
+调用前提（iterationT 原样保留）：
+  调用方必须先声明 `texCoord`、`texelCoord` 全局量，并让材质编号 `MATID_*` 可见；
+  `LensFlare` 还要用到从合成顶点程序插值进来的 `sunCoord`、`colorSunlight`、`sunVisibility`；
+  `CoCSpread`、`DepthOfField`、`MotionBlur` 里的随机数按 `OMNI_TAA` 决定是否随时间变化，
+  所以本文件先引入定义该选项的 `effects/antialiasing.glsl`；`LensFlare` 用到 `OMNI_VFOG_DENSITY`，
+  由 `effects/fog.glsl` 提供。
+设计原因与取舍：
+  这些效果共用同一套屏幕元数据与坐标约定，放在一个文件里，读取同一份深度和颜色；
+  每个效果各自成函数，关闭时用预处理器在编译期直接去掉对应循环，不为关闭的功能付出逐像素开销。
+*/
+#ifndef OMNI_LENS_INCLUDED // 只引入一次，避免选项、内部常数与函数重复定义。
+#define OMNI_LENS_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"镜头","en_us":"Lens"}}
-// @option {"label": {"zh_cn": "景深开关", "en_us": "Depth of field"}, "description": {"zh_cn": "远处会不会模糊。", "en_us": "Whether distant things blur."}}
+// @option {"label": {"zh_cn": "景深", "en_us": "Depth of field"}, "description": {"zh_cn": "让不在对焦平面上的物体模糊，模拟真实镜头。", "en_us": "Blurs objects away from the focal plane, like a real lens."}}
 //#define OMNI_DOF
-// @option {"label":{"zh_cn":"运动模糊开关","en_us":"Motion blur"},"description":{"zh_cn":"只有相机移动才模糊，手持物不模糊，也不包含生物自身速度。","en_us":"Camera motion only; excludes hands and has no entity velocity."}}
-//#define OMNI_MOTION_BLUR
-// @option {"label": {"zh_cn": "暗角强度", "en_us": "Vignette"}, "slider": true, "description": {"zh_cn": "画面四角变暗多少。", "en_us": "How much the corners darken."}}
-#define OMNI_VIGNETTE 0.0 // [0.0 0.1 0.25 0.5]
-// @option {"label": {"zh_cn": "色差强度", "en_us": "Chromatic aberration"}, "description": {"zh_cn": "画面边缘有没有彩边。", "en_us": "Colour fringing near the edges."}}
-#define OMNI_CHROMATIC 0.0 // [0.0 0.5 1.0 2.0]
-// @option {"label": {"zh_cn": "耀斑开关", "en_us": "Lens flare"}, "description": {"zh_cn": "从屏幕上的太阳亮部生成鬼影与光环，被挡住时自动减弱。", "en_us": "Draws ghosts and a halo from the on-screen sun highlight, fading when occluded."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
-#define OMNI_LENS_FLARE 1 // [0 1]
-// @option {"label": {"zh_cn": "散景形状", "en_us": "Bokeh aperture"}, "description": {"zh_cn": "零为圆形散景，一为六边形光圈，使失焦高光成多边形。", "en_us": "Zero is a circular blur; one is a hexagonal aperture for polygonal highlights."}, "values": {"0": {"zh_cn": "圆形", "en_us": "Round"}, "1": {"zh_cn": "六边形", "en_us": "Hexagon"}}}
-#define OMNI_BOKEH_SHAPE 1 // [0 1]
-// @option {"label": {"zh_cn": "景深强度", "en_us": "Depth of field strength"}, "slider": true, "description": {"zh_cn": "模糊多强。", "en_us": "How strong the blur is."}}
-#define OMNI_DOF_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label": {"zh_cn": "运动模糊强度", "en_us": "Motion blur strength"}, "slider": true, "description": {"zh_cn": "拖影多长。", "en_us": "How long the motion trail is."}}
-#define OMNI_MOTION_BLUR_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
-// @option {"label": {"zh_cn": "耀斑强度", "en_us": "Flare strength"}, "slider": true, "description": {"zh_cn": "光斑多亮。", "en_us": "How bright the lens flare is."}}
-#define OMNI_FLARE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
-// 时间重投影、深度重建和镜头颜色来自统一的屏幕协议；这一行引入坐标、亮度等共用能力。
+// @option {"label": {"zh_cn": "景深模糊量", "en_us": "Blur Amount"}, "slider": true, "description": {"zh_cn": "失焦处模糊的强度。", "en_us": "Strength of the out-of-focus blur."}}
+#define OMNI_DOF_BLUR 0.01 // [0.001 0.0015 0.002 0.003 0.005 0.007 0.01 0.015 0.02 0.03 0.05 0.07 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0]
+// @option {"label": {"zh_cn": "景深采样数", "en_us": "Quality"}, "slider": true, "description": {"zh_cn": "散焦取样次数，越高越平滑也越慢。", "en_us": "Blur samples per pixel; higher is smoother and slower."}}
+#define OMNI_DOF_QUALITY 10 // [5 7 10 15 20 30 50 70 100]
+// @option {"label": {"zh_cn": "前景弥散范围采样数", "en_us": "CoC Spread Quality"}, "slider": true, "description": {"zh_cn": "统计前景弥散范围的搜索次数。", "en_us": "Search steps used to estimate foreground blur spread."}}
+#define OMNI_DOF_COCSPREAD_QUALITY 10 // [5 7 10 15 20 30 50 70 100]
+// @option {"label": {"zh_cn": "最大弥散半径", "en_us": "Max CoC Radius"}, "slider": true, "description": {"zh_cn": "单个像素最多模糊多少，限制景深开销。", "en_us": "Largest blur radius per pixel, capping the cost."}}
+#define OMNI_DOF_MAX_COC 0.02 // [0.001 0.0015 0.002 0.003 0.005 0.007 0.01 0.015 0.02 0.03 0.05 0.07 0.1 0.15 0.2 0.3 0.5]
+// @option {"label": {"zh_cn": "猫眼效应", "en_us": "Cat Eye"}, "description": {"zh_cn": "模拟镜头口径造成的画面边缘椭圆散景。", "en_us": "Edge-of-frame oval bokeh caused by the lens aperture."}}
+//#define OMNI_DOF_CATSEYE
+// @option {"label": {"zh_cn": "猫眼强度", "en_us": "Strength"}, "slider": true, "description": {"zh_cn": "猫眼裁剪的强度。", "en_us": "Strength of the cat-eye clipping."}}
+#define OMNI_DOF_CATSEYE_STRENGTH 0.5 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label": {"zh_cn": "猫眼中点", "en_us": "Midpoint"}, "slider": true, "description": {"zh_cn": "从画面中心多远开始出现猫眼裁剪。", "en_us": "Distance from screen centre where the cat-eye starts."}}
+#define OMNI_DOF_CATSEYE_MIDPOINT 0.3 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label": {"zh_cn": "对焦模式", "en_us": "Focus Mode"}, "description": {"zh_cn": "自动跟着屏幕中心变焦，或手动指定距离。", "en_us": "Auto focuses on the screen centre, or takes a fixed distance."}, "values": {"0": {"zh_cn": "自动", "en_us": "Auto"}, "1": {"zh_cn": "手动", "en_us": "Manual"}}}
+#define OMNI_CAMERA_FOCUS_MODE 0 // [0 1]
+// @option {"label": {"zh_cn": "手动对焦距离", "en_us": "Manual Focus Distance"}, "slider": true, "description": {"zh_cn": "手动模式的对焦距离，单位米。", "en_us": "Focus distance in manual mode, in metres."}}
+#define OMNI_CAMERA_FOCAL_POINT 10.0 // [0.2 0.3 0.4 0.6 0.8 1.0 1.25 1.5 1.75 2.0 2.5 3.0 3.5 4.0 5.0 6.0 8.0 10.0 12.5 15.0 17.5 20.0 30.0 40.0 50.0 60.0 80.0 100.0 150.0 200.0 250.0 300.0 400.0 500.0 600.0 800.0 1000.0]
+// @option {"label": {"zh_cn": "对焦深度平滑速度", "en_us": "Focus Smooth Speed"}, "slider": true, "description": {"zh_cn": "自动对焦切换焦点时过渡的快慢。", "en_us": "How fast auto focus moves to a new focal distance."}}
+#define OMNI_DOF_DEPTH_SMOOTH_HALFLIFE 1.0 // [0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0]
+// @option {"label": {"zh_cn": "对焦忽略手与粒子", "en_us": "Ignore Hand & Particles"}, "description": {"zh_cn": "屏幕中央是手或粒子时不改变对焦点，避免手持物品闪烁。", "en_us": "Keeps the focus when the centre is the hand or a particle."}}
+#define OMNI_DOF_FOCUS_IGNORE_HAND_PARTICLE
+// @option {"label": {"zh_cn": "眩光", "en_us": "Lens Glare"}, "description": {"zh_cn": "太阳在画面中时沿光线方向产生细长眩光。", "en_us": "Draws a stretched glare from the sun highlight."}}
+#define OMNI_LENS_GLARE
+// @option {"label": {"zh_cn": "镜头光斑", "en_us": "Lens Flare"}, "description": {"zh_cn": "从太阳亮部生成一串鬼影与光环。", "en_us": "Draws ghosts and a halo from the sun highlight."}}
+//#define OMNI_LENS_FLARE
+// @option {"label": {"zh_cn": "眩光亮度", "en_us": "Glare Brightness"}, "slider": true, "description": {"zh_cn": "眩光的强度。", "en_us": "Brightness of the glow glare."}}
+#define OMNI_GLARE_BRIGHTNESS 1.0 // [0.1 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0]
+// @option {"label": {"zh_cn": "光斑亮度", "en_us": "Flare Brightness"}, "slider": true, "description": {"zh_cn": "鬼影与光环的强度。", "en_us": "Brightness of the ghosts and halo."}}
+#define OMNI_FLARE_BRIGHTNESS 1.0 // [0.1 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0]
+// @option {"label": {"zh_cn": "按阴影遮挡减弱眩光", "en_us": "Shadow Based Glare"}, "description": {"zh_cn": "太阳被阴影挡住时让眩光一并减弱。", "en_us": "Fades the glare when the sun is shadowed."}}
+//#define OMNI_GLARE_FLARE_SHADOWBASED
+// @option {"label": {"zh_cn": "相机动态模糊", "en_us": "Motion Blur"}, "description": {"zh_cn": "相机移动时画面沿运动方向拖出残影。", "en_us": "Smears the image along camera motion."}}
+#define OMNI_MOTION_BLUR
+// @option {"label": {"zh_cn": "动态模糊抖动", "en_us": "Motion Blur Dither"}, "description": {"zh_cn": "给动态模糊采样加抖动，减少采样不足产生的条纹。", "en_us": "Dithers the motion blur samples to reduce banding."}}
+#define OMNI_MOTION_BLUR_DITHER
+// @option {"label": {"zh_cn": "动态模糊采样数", "en_us": "Motion Blur Quality"}, "slider": true, "description": {"zh_cn": "沿运动方向取多少个样本，越高越顺滑。", "en_us": "Samples along the motion direction; higher is smoother."}}
+#define OMNI_MOTION_BLUR_QUALITY 3 // [2 3 5 10 20 30 50 100]
+// @option {"label": {"zh_cn": "快门角度", "en_us": "Shutter Angle"}, "slider": true, "description": {"zh_cn": "快门张开的角度，越大拖影越长。", "en_us": "Shutter opening angle; larger means longer trails."}}
+#define OMNI_MOTION_BLUR_SHUTTER_ANGLE 135.0 // [45.0 90.0 135.0 180.0 270.0 360.0]
+// @option {"label": {"zh_cn": "暗角", "en_us": "Vignette"}, "description": {"zh_cn": "画面四角变暗，模拟镜头边缘失光。", "en_us": "Darkens the corners, like lens falloff."}}
+#define OMNI_VIGNETTE
+// @option {"label": {"zh_cn": "暗角衰减", "en_us": "Falloff"}, "slider": true, "description": {"zh_cn": "暗角的强度，越大越暗。", "en_us": "Strength of the vignette."}}
+#define OMNI_VIGNETTE_FALLOFF 0.4 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label": {"zh_cn": "暗角圆度", "en_us": "Roundness"}, "slider": true, "description": {"zh_cn": "零为椭圆暗角，一为圆形暗角。", "en_us": "Zero is an oval vignette, one is circular."}}
+#define OMNI_VIGNETTE_ROUNDNESS 0.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
+// @option {"label": {"zh_cn": "潜行暗角", "en_us": "Sneaking Vignette"}, "description": {"zh_cn": "潜行时画面下边缘出现额外暗角。", "en_us": "Adds a bottom-edge vignette while sneaking."}}
+//#define OMNI_SNEAKING_VIGNETTE
+
+// 加载器输入、共享数学、时间噪声先引入；坐标换算依赖本文件先定义的 `OMNI_TAA`，所以放在选项之后。
+#include "/common/uniforms.glsl"
+#include "/common/math.glsl"
 #include "/effects/antialiasing.glsl"
+#include "/common/noise.glsl"
 
-// --- 像素与颜色取样 ---
-
-// 取一个镜头颜色样本：先取线性颜色，再让红蓝通道朝相反方向偏移，返回已经完成色差处理的颜色。
-// 为什么色差先做：色差改变的是每个通道各自取样位置，后面的景深和运动模糊都基于这份错开的颜色做平均，顺序反了三种效果会互相打架。
-vec3 omniLensSample(vec2 uv) {
-    vec3 color = texture(colortex0,uv).rgb; // 取当前样本的线性颜色，后续效果在线性空间里平均不会偏色。
-    if (OMNI_CHROMATIC<=0.0) return color; // 关闭色差时直接返回，省下两次额外纹理读取。
-    vec2 offset = (uv-0.5)*OMNI_CHROMATIC/vec2(viewWidth,viewHeight); // 偏移随到画面中心的距离变大，画面边缘色差更明显，符合真实镜头。
-    color.r = texture(colortex0,clamp(uv+offset,0.0,1.0)).r; // 红色通道向外偏移；取样点可能超出画面，先夹紧到合法范围。
-    color.b = texture(colortex0,clamp(uv-offset,0.0,1.0)).b; // 蓝色通道向内偏移，与红色方向相反以形成完整色散。
-    return color; // 返回已经完成色差的线性颜色。
+// --- 景深：弥散圆半径与深度 ---
+// 按薄透镜公式估算一个点的弥散圆半径：离对焦平面越远，弥散越大。
+// `f` 是对焦距离，`d` 是该点距离，`a` 是口径系数；三者单位一致时结果就是像素半径。
+float CalculateCoCRadius(float f, float d, float a){
+	return abs(a * (d - f) / (d * f)); // 薄透镜近似。
 }
 
-// --- 光圈与景深 ---
-
-// 光圈形状：给定采样方向的角度，返回该方向上多边形光圈的边界半径相对内切圆的比例。
-// 为什么需要它：真实镜头由若干片叶片组成光圈，失焦的高光会变成多边形而不是圆；这里用叶片数描述边界，让散景呈现六边形。
-// 考虑点：返回值是相对比例，一表示不考虑形状；取样时乘以弥散半径就得到多边形散景，不必改动景深本身的算法。
-float omniApertureRadius(float angle) {
-#if OMNI_BOKEH_SHAPE == 0
-    return 1.0; // 圆形光圈：每个方向边界半径相同，直接返回一。
-#else
-    const float blades = 6.0; // 六片光圈叶片，决定多边形有几条边。
-    float sector = 6.2831853/blades; // 每片叶片覆盖的角度，一整圈除以叶片数。
-    float local = abs(mod(angle,sector)-sector*0.5); // 当前方向离最近边中点的角度差，用来求这条边的边界。
-    return cos(sector*0.5)/cos(local); // 内切圆半径除以方向上的余弦，得到多边形边界半径的比例。
-#endif
-}
-// 读取一个景深样本：先取颜色并拒绝无法判定深度的像素，再对有效方向做散焦平均。
-// 为什么先拒绝手和叠层：手和覆盖层没有单一的表面深度，若参与散焦会把清晰的手或界面糊掉，所以只对普通表面做景深。
-vec3 omniFocusSample(vec2 uv) {
-    ivec2 pixel = omniPixel(uv); // 先算出整数像素编号，后面几处类别读取都复用它。
-    vec4 geometry = texelFetch(colortex1,pixel,0); // 精确读取手的类别，类别是离散标记，线性插值会混出不存在的值。
-    vec4 surface = texelFetch(colortex7,pixel,0); // 精确读取几何有效标记，同理不能插值。
-    vec3 color = omniLensSample(uv); // 先完成色差，保证景深在色差之后处理。
-    if (surface.a<0.5 || geometry.a==2.0) return color; // 覆盖层或手没有单一表面深度，直接返回清晰颜色，不做景深。
-#ifndef OMNI_DOF
-    return color; // 关闭景深时不读取深度、也不进入采样循环，省掉全部散焦开销。
-#else
-    ivec2 centerPixel = ivec2(viewWidth*0.5,viewHeight*0.5); // 自动对焦固定在屏幕中心，符合第一人称取景把注意力放在中间的直觉。
-    vec4 centerGeometry = texelFetch(colortex1,centerPixel,0); // 精确读取中心像素的类别，用来判断中心是不是手。
-    float focus = length(omniSceneView(vec2(0.5),false)); // 默认用中心普通表面的视空间距离作为焦平面。
-    if (centerGeometry.a==2.0) focus = length(omniView(vec2(0.5),texture(depthtex2,vec2(0.5)).r)); // 中心被手挡住时改用不透明深度，避免把手当成对焦点。
-    float distance = length(omniSceneView(uv,false)); // 当前像素表面的真实视空间距离，作为弥散量的依据。
-    float radius = min(abs(distance-focus)/max(distance,0.1)*8.0*OMNI_DOF_STRENGTH,8.0); // 越远离焦平面弥散越大；强度选项整体放大或缩小，上限八像素防止性能失控。
-    if (isnan(radius)) return color; // 深度重建异常时保留清晰原色，不让坏值糊成黑块。
-    vec3 sum = color; float weight = 1.0; // 当前像素先计入平均，保证至少有一个有效样本。
-    for (int i=0;i<8;i++) {
-        float angle = float(i)*2.399963; // 黄金角螺旋分布，八个样本在圆盘上铺得均匀，比规则网格更少出现条纹。
-        float shaped = radius*omniApertureRadius(angle); // 用光圈形状调制这个方向的取样半径，得到多边形散景。
-        vec2 sampleUv = clamp(uv+vec2(cos(angle),sin(angle))*shaped/vec2(viewWidth,viewHeight),0.0,1.0); // 把像素半径换算成屏幕坐标并夹紧在画面内。
-        ivec2 samplePixel = omniPixel(sampleUv); // 样本的类别同样用整数像素精确读取。
-        if (texelFetch(colortex1,samplePixel,0).a==2.0 || texelFetch(colortex7,samplePixel,0).a<0.5 || length(omniSceneView(sampleUv,false))<distance*0.75) continue; // 手、覆盖层和明显更近的前景都跳过，避免远处背景糊到近处物体上形成光晕。
-        sum += omniLensSample(sampleUv); weight += 1.0; // 有效样本按色差后的颜色累加并计数。
-    }
-    return sum/weight; // 只对有效样本求平均，样本少时亮度也不会被拉低。
-#endif
+// 读某个坐标的米制深度；远景像素改用远景深度，并给一个近处下限避免紧贴相机时数值失控。
+float GetLinearDepth(vec2 coord){
+	float depth = textureLod(depthtex0, coord, 0.0).x; // 读含半透明的深度。
+	#ifdef DISTANT_HORIZONS // 有远景模组时判断是否远景像素。
+		if (depth == 1.0){ // 深度为一说明近处没有几何。
+			depth = textureLod(dhDepthTex0, coord, 0.0).x; // 改用远景深度。
+			depth = saturate(ScreenDepth_From_DHScreenDepth(depth)); // 换到近景深度尺度。
+		}
+	#endif
+	depth = max(depth, 0.875); // 近处下限，避免对焦距离趋近零时弥散爆炸。
+	return LinearDepth_From_ScreenDepth(depth); // 换成米制距离。
 }
 
-// --- 运动模糊 ---
-
-// 相机运动模糊：用上一帧相机把当前表面重投影回屏幕，沿两帧之间的屏幕位移方向取几个历史位置做平均，模拟快门时间内相机的移动。
-// 为什么只做相机运动：实体自身速度没有输入缓冲，硬用会把静止物体也拖出鬼影，所以这里只处理相机移动造成的整屏位移。
-// 考虑点：所有无效情况都提前返回，循环里只处理确实可追踪的有效快门样本。
-vec3 omniMotionBlur(vec3 color, vec2 uv) {
-#ifndef OMNI_MOTION_BLUR
-    return color; // 关闭运动模糊时没有深度、历史或矩阵读取，直接返回原色。
-#else
-    ivec2 pixel = omniPixel(uv); // 当前像素的整数编号，用于精确读取元数据。
-    if (texelFetch(colortex1,pixel,0).a==2.0 || texelFetch(colortex7,pixel,0).a<0.5 || texelFetch(colortex0,pixel,0).a<0.5) return color; // 手、覆盖层和颜色无效的像素保持清晰，它们没有可追踪的历史。
-    if (omniSkyPixel(uv)) return color; // 天空没有可追踪的表面，重投影没有意义。
-    if (length(cameraPosition-previousCameraPosition)>=8.0) return color; // 一帧跨过八米说明发生了传送或重载，上一帧历史已不属于同一场景。
-    vec3 currentView = omniSceneView(uv,false); // 用当前深度还原表面的视空间位置。
-    vec3 absoluteWorld = omniWorld(currentView)+cameraPosition; // 加上相机位置得到绝对世界坐标，跨帧才不会随相机一起漂移。
-    vec3 previousView = (gbufferPreviousModelView*vec4(absoluteWorld-previousCameraPosition,1.0)).xyz; // 用上一帧相机把它转回上一帧的视空间。
-    vec4 projected = gbufferPreviousProjection*vec4(previousView,1.0); // 普通表面投影到上一帧的屏幕位置。
-#ifdef DISTANT_HORIZONS
-    if (omniDistantPixel(uv,false)) projected = dhPreviousProjection*vec4(previousView,1.0); // 远景表面必须用远景自己的历史投影，否则位置会错。
-#endif
-    if (projected.w<=0.0 || any(isnan(projected))) return color; // 先检查齐次分量再相除，避免相机后方或非有限值算出错误坐标。
-    vec2 previousUnjittered = projected.xy/projected.w*0.5+0.5; // 得到未抖动的上一帧屏幕坐标，作为去抖动后的基准。
-    vec2 previousUv = previousUnjittered; // 默认直接用这个基准，未开启抗锯齿时没有抖动要恢复。
-    vec2 currentUnjittered = uv; // 当前坐标默认保持原位置。
-#if defined OMNI_ANTIALIASING && defined OMNI_AA_ENABLED
-    previousUv = previousUnjittered+omniJitter(frameCounter-1)/vec2(viewWidth,viewHeight); // 只有时间抗锯齿开着时，历史坐标才要补回上一帧的抖动。
-    currentUnjittered -= omniJitter(frameCounter)/vec2(viewWidth,viewHeight); // 当前坐标先撤掉本帧抖动，两帧才对齐在同一基准上。
-#endif
-    if (any(lessThan(previousUv,vec2(0))) || any(greaterThan(previousUv,vec2(1)))) return color; // 上一帧坐标跑到屏幕外说明表面刚进入视野，没有历史可平均。
-    vec2 velocity = clamp((currentUnjittered-previousUnjittered)*OMNI_MOTION_BLUR_STRENGTH,vec2(-0.05),vec2(0.05)); // 用去抖动后的两帧坐标算屏幕位移，抖动不会混进速度；强度选项整体放大或缩小。
-    vec3 sum = color; float weight = 1.0; // 当前像素先进入快门平均。
-    for (int i=1;i<6;i++) {
-        vec2 sampleUv = clamp(uv-velocity*float(i)/6.0,0.0,1.0); // 沿相机轨迹往回取样，越早的快门时刻偏移越大。
-        ivec2 samplePixel = omniPixel(sampleUv); // 采样点的类别同样精确读取。
-        if (texelFetch(colortex1,samplePixel,0).a==2.0 || texelFetch(colortex7,samplePixel,0).a<0.5) continue; // 手和覆盖层不进入快门，否则静止的手也会被拖模糊。
-        sum += omniFocusSample(sampleUv); weight += 1.0; // 每个样本走完整的色差加景深流程，保证整体效果顺序一致。
-    }
-    return sum/weight; // 按实际有效样本归一化，样本少时画面不会变暗。
-#endif
+// 取对焦距离：自动模式读屏幕中心的历史深度并平滑，手动模式直接用选项。
+float GetFocus(){
+	#if OMNI_CAMERA_FOCUS_MODE == 0 // 自动对焦。
+		float focus = LinearDepth_From_ScreenDepth(texelFetch(colortex2, ivec2(60, screenSize.y - 1.0), 0).a * 0.125 + 0.875); // 读顶行统计像素里保存的对焦深度并解码。
+	#else // 手动对焦。
+		float focus = OMNI_CAMERA_FOCAL_POINT; // 直接用选项给的距离。
+	#endif
+	return focus; // 返回对焦距离。
 }
 
-// --- 耀斑 ---
-
-// 求屏幕上的太阳位置：把加载器给的视空间太阳方向投影到屏幕，太阳在相机后方或超出画面时返回假。
-// 用输出参数带回屏幕坐标，返回假就表示不该画耀斑。
-bool omniSunScreen(out vec2 sunUv) {
-    vec3 sunView = omniNormalize(sunPosition); // 归一化视空间太阳方向，长度不影响投影结果。
-    if (sunView.z>=0.0) return false; // 视空间里朝向相机后方的太阳不会出现在画面里，直接放弃。
-    vec4 clip = gbufferProjection*vec4(sunView,0.0); // 方向向量用投影矩阵的线性部分投影到裁剪空间。
-    if (clip.w<=0.0) return false; // 齐次分量非正时相除会翻转符号，先拒绝。
-    sunUv = clip.xy/clip.w*0.5+0.5; // 归一化到零到一的屏幕坐标。
-    return all(greaterThanEqual(sunUv,vec2(0))) && all(lessThanEqual(sunUv,vec2(1))); // 只有太阳落在画面内才返回真。
+// --- 景深：前景弥散范围统计 ---
+// 在螺旋上撒一圈样本，找出附近比当前点更近、弥散更大的点，把它们的弥散并进来。
+// 为什么需要它：一个像素要被足够大的前景散焦覆盖，否则近处物体边缘会显得又硬又细。
+float CoCSpread(){
+	float cocRadiusfactor = OMNI_DOF_BLUR * gbufferProjection[1][1]; // 口径系数，投影矩阵的纵向缩放乘以模糊量。
+	const float maxCoc = OMNI_DOF_MAX_COC; // 最大弥散半径。
+	const float rMaxCoc = 1.0 / maxCoc; // 半径倒数，用于归一化。
+	float rAspectRatio = 1.0 / aspectRatio; // 宽高比倒数，让椭圆散景在像素上是圆的。
+	#ifdef OMNI_TAA // 开时间抗锯齿时用随时间变化的噪声，避免固定图案。
+		vec2 noise = BlueNoiseTemporal(); // 每帧变化的蓝噪声。
+	#else // 关闭时用固定蓝噪声。
+		vec2 noise = BlueNoise(); // 固定蓝噪声。
+	#endif
+	float currDepth = GetLinearDepth(texCoord); // 当前点的米制深度。
+	float focus = GetFocus(); // 对焦距离。
+	float currCoc = CalculateCoCRadius(focus, currDepth, cocRadiusfactor); // 当前点的弥散半径。
+	float startRadius = currCoc * rMaxCoc; // 当前弥散占最大值的比例。
+	startRadius *= startRadius; // 平方，让搜索从中心附近开始。
+	float spreadCoc = currCoc; // 弥散范围初值为当前点的弥散。
+	const float steps = OMNI_DOF_COCSPREAD_QUALITY; // 搜索步数。
+	const float rSteps = 1.0 / steps; // 步数倒数。
+	const mat2 rotMat = mat2(cos(goldenAngle), sin(goldenAngle), -sin(goldenAngle), cos(goldenAngle)); // 黄金角旋转矩阵。
+	float angle = noise.x * TAU; // 起始角。
+	vec2 rot = vec2(cos(angle), sin(angle)); // 起始方向。
+	for (float i = 0.0; i < steps; i++){ // 螺旋逐点搜索。
+		rot *= rotMat; // 每步旋转一点。
+		float sampleRadius = sqrt(startRadius + (i + noise.y) * (1.0 - startRadius) * rSteps) * maxCoc; // 这个样本的半径。
+		vec2 sampleCoordOffset = rot * sampleRadius; // 屏幕偏移。
+		sampleCoordOffset.x *= rAspectRatio; // 按宽高比修正成圆。
+		vec2 sampleCoord = texCoord + sampleCoordOffset; // 样本坐标。
+		float sampleDepth = GetLinearDepth(sampleCoord); // 样本深度。
+		float sampleCoC = CalculateCoCRadius(focus, sampleDepth, cocRadiusfactor); // 样本弥散。
+		if (sampleCoC >= sampleRadius && sampleDepth <= currDepth){ // 只有样本弥散足够大且比当前点更近才并进来。
+			spreadCoc = max(spreadCoc, sampleCoC); // 扩大弥散范围。
+		}
+	}
+	spreadCoc = min(spreadCoc, maxCoc) * rMaxCoc; // 夹到最大值并归一化。
+	return spreadCoc; // 返回归一化的弥散范围。
 }
-// 镜头耀斑：从屏幕上太阳的亮部生成一串鬼影和一个光环，被云或地形遮挡以及夜里时自动减弱。
-// 为什么取现有画面的亮部当光源：不新增附件；遮挡太阳的物体会让亮部变暗，耀斑就自然跟着减弱，无需额外的可见性判断。
-vec3 omniLensFlare(vec2 uv) {
-#if OMNI_LENS_FLARE == 0
-    return vec3(0.0); // 关闭耀斑时不读太阳位置，也不做任何额外采样。
-#else
-    vec2 sunUv; // 屏幕上的太阳坐标。
-    if (!omniSunScreen(sunUv)) return vec3(0.0); // 太阳不在画面内就没有耀斑。
-    float source = max(omniLuminance(texture(colortex0,sunUv).rgb)-1.0,0.0); // 只有超过一的高光亮部才算光源，普通亮度不产生耀斑。
-    vec2 aspect = vec2(viewWidth/viewHeight,1.0); // 用屏幕宽高比修正距离，让鬼影和光环是圆而不是被拉长的椭圆。
-    vec2 axis = sunUv-0.5; // 屏幕中心到太阳的方向，鬼影沿它反向排布。
-    vec3 flare = vec3(0.0); // 累加所有鬼影与光环。
-    for (int i=1;i<=4;i++) {
-        vec2 ghostUv = 0.5-axis*float(i)*0.6; // 鬼影穿过屏幕中心排列在太阳的对称侧，越远的一枚离太阳越远。
-        float distance = length((uv-ghostUv)*aspect); // 到鬼影中心、按宽高比修正后的距离。
-        flare += exp(-distance*distance*80.0)*vec3(0.6,0.75,1.0)/float(i+1); // 高斯亮点，偏冷色，序号越大越暗。
-    }
-    float halo = exp(-pow(length((uv-sunUv)*aspect),2.0)*6.0); // 太阳近旁的柔和光环。
-    flare += halo*vec3(1.0,0.86,0.62); // 光环用暖色，模拟主角耀光。
-    float daylight = smoothstep(-0.15,0.1,dot(omniNormalize(sunPosition),omniNormalize(upPosition))); // 用太阳相对地平线的高度控制白天强度，夜里不出现耀斑。
-    return flare*source*daylight*OMNI_FLARE_STRENGTH; // 亮部强度、遮挡程度、白昼程度与强度选项相乘，决定最终耀斑。
-#endif
+
+// --- 景深：散焦合成 ---
+// 按弥散半径在螺旋上取样，只让"更近且弥散足够"的样本散到当前像素上，得到背景向近处的柔和过渡。
+// 这样做能避免远处背景糊到近处清晰物体上，也能让近处前景盖住后面的背景。
+vec4 DepthOfField(){
+	float cocRadiusfactor = OMNI_DOF_BLUR * gbufferProjection[1][1]; // 口径系数。
+	float minCoc = 0.5641895835 * pixelSize.y; // 一个像素大小的最小弥散，避免零半径时除零。
+	const float maxCoc = OMNI_DOF_MAX_COC; // 最大弥散半径。
+	float rAspectRatio = 1.0 / aspectRatio; // 宽高比倒数。
+	#ifdef OMNI_TAA // 时间噪声选择同上面。
+		vec2 noise = BlueNoiseTemporal(); // 每帧变化的蓝噪声。
+	#else
+		vec2 noise = BlueNoise(); // 固定蓝噪声。
+	#endif
+	float currDepth = GetLinearDepth(texCoord); // 当前点深度。
+	float focus = GetFocus(); // 对焦距离。
+	float currCoc = CalculateCoCRadius(focus, currDepth, cocRadiusfactor); // 当前点弥散。
+	currCoc = clamp(currCoc, minCoc, maxCoc); // 夹在最小与最大之间。
+	vec4 currData = textureLod(colortex1, texCoord, 0.0); // 读当前点的曲线编码颜色与弥散范围。
+	float spreadCoc = currData.a * maxCoc; // 把存下来的弥散范围还原成半径。
+	float centerWeight = spreadCoc * spreadCoc - spreadCoc + 1.0; // 中心权重多项式。
+	centerWeight = mix(centerWeight, 1e-20, pow(currCoc / spreadCoc, 4.0)); // 当前点自己很清晰时把它自己压到极小。
+	#ifdef OMNI_DOF_CATSEYE // 猫眼效应：把散焦区域在画面边缘裁成椭圆。
+		vec2 catsEyeOffset = (texCoord) * 2.0 - 1.0; // 从中心指向当前点。
+		catsEyeOffset.x *= aspectRatio; // 按宽高比修正成圆。
+		float catsEyeDist = length(catsEyeOffset); // 到中心的距离。
+		catsEyeDist = max(catsEyeDist - OMNI_DOF_CATSEYE_MIDPOINT, 0.0); // 超过中点才开始裁剪。
+		catsEyeDist *= spreadCoc * OMNI_DOF_CATSEYE_STRENGTH; // 按弥散与强度缩放。
+		catsEyeOffset = normalize(catsEyeOffset) * catsEyeDist; // 得到裁剪半径。
+	#endif
+	vec3 dof = vec3(0.0); // 散焦进来的颜色累加。
+	float weights = 0.0; // 样本权重累加。
+	vec3 selfColor = CurveToLinear(currData.rgb) * 1e-20; // 当前点自贡献初值极小。
+	float selfSamples = 1e-20; // 当前点自计入的样本数初值极小。
+	float selfWeights = 0.0; // 被拒绝样本在中心上的权重累加。
+	#ifdef OMNI_NETHER // 下界还要带出散焦后的深度。
+		float blendedDepth = 0.0; // 散焦后的深度累加。
+		float selfDepth = currDepth * 1e-20; // 当前点自计入深度初值极小。
+	#endif
+	const float steps = OMNI_DOF_QUALITY; // 采样步数。
+	const float rSteps = 1.0 / steps; // 步数倒数。
+	const float firstStepRadius = sqrt(rSteps); // 首个样本半径，原程序保留。
+	const mat2 rotMat = mat2(cos(goldenAngle), sin(goldenAngle), -sin(goldenAngle), cos(goldenAngle)); // 黄金角旋转矩阵。
+	float angle = noise.x * TAU; // 起始角。
+	vec2 rot = vec2(cos(angle), sin(angle)); // 起始方向。
+	for (float i = 0.0; i < steps; i++){ // 螺旋采样。
+		rot *= rotMat; // 每步旋转一点。
+		float sampleRadius = sqrt((i + noise.y) * rSteps) * spreadCoc; // 样本半径。
+		vec2 sampleCoordOffset = rot * sampleRadius; // 屏幕偏移。
+		#ifdef OMNI_DOF_CATSEYE // 猫眼裁剪：偏移超出裁剪半径就跳过。
+			if (distance(catsEyeOffset, sampleCoordOffset) > spreadCoc) continue; // 超出就不采。
+		#endif
+		sampleCoordOffset.x *= rAspectRatio; // 按宽高比修正。
+		vec2 sampleCoord = texCoord + sampleCoordOffset; // 样本坐标。
+		float sampleDepth =  GetLinearDepth(sampleCoord); // 样本深度。
+		float sampleCoC = CalculateCoCRadius(focus, sampleDepth, cocRadiusfactor); // 样本弥散。
+		sampleCoC = clamp(sampleCoC, minCoc, maxCoc); // 夹到范围。
+		vec3 sampleColor = CurveToLinear(textureLod(colortex1, sampleCoord, 0.0).rgb); // 样本线性颜色。
+		#ifdef OMNI_NETHER // 下界分支额外累积深度。
+			if (currCoc >= sampleRadius && sampleDepth >= currDepth){ // 当前点比样本更近，样本属于当前点自己。
+				selfColor += sampleColor; // 记为自贡献。
+				selfDepth += sampleDepth; // 自贡献深度。
+				selfSamples += 1.0; // 自贡献样本数。
+			}else if (sampleCoC >= sampleRadius && sampleDepth < currDepth){ // 样本更近且弥散够大，散焦进来。
+				float sampleWeight = max(1.0, currCoc / sampleCoC); // 近处前方样本权重更高。
+				sampleWeight *= sampleWeight; // 平方加强。
+				dof += sampleColor * sampleWeight; // 累加散焦颜色。
+				blendedDepth += sampleDepth * sampleWeight; // 累加散焦深度。
+				weights += sampleWeight; // 累加权重。
+			}else{ // 样本不满足条件，记进中心权重。
+				selfWeights += centerWeight; // 累加中心权重。
+			}
+		}
+		dof += selfColor * (1.0 + selfWeights / selfSamples); // 把自贡献按被拒绝样本的补偿加回来。
+		dof /= weights + selfSamples + selfWeights; // 归一化。
+		blendedDepth += selfDepth * (1.0 + selfWeights / selfSamples); // 深度同样补偿。
+		blendedDepth /= weights + selfSamples + selfWeights; // 归一化深度。
+		return vec4(LinearToCurve(dof), ScreenDepth_From_LinearDepth(blendedDepth)); // 返回曲线编码颜色与换回的屏幕深度。
+		#else // 主世界与末地不带深度。
+			if (currCoc >= sampleRadius && sampleDepth >= currDepth){ // 当前点更近。
+				selfColor += sampleColor; // 自贡献。
+				selfSamples += 1.0; // 自贡献样本数。
+			}else if (sampleCoC >= sampleRadius && sampleDepth < currDepth){ // 样本更近且弥散够大。
+				float sampleWeight = max(1.0, currCoc / sampleCoC); // 近处样本权重更高。
+				sampleWeight *= sampleWeight; // 平方加强。
+				dof += sampleColor * sampleWeight; // 累加散焦颜色。
+				weights += sampleWeight; // 累加权重。
+			}else{ // 不满足条件记进中心权重。
+				selfWeights += centerWeight; // 累加中心权重。
+			}
+		}
+		dof += selfColor * (1.0 + selfWeights / selfSamples); // 自贡献补偿。
+		dof /= weights + selfSamples + selfWeights; // 归一化。
+		return vec4(LinearToCurve(dof), 0.0); // 返回曲线编码颜色，透明度留零。
+		#endif
 }
 
-// --- 最终镜头顺序 ---
+// --- 镜头眩光与光斑 ---
+// 只在开启眩光或光斑时编译这一段。
+#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE
+	#define ORB_FLARE_COUNT	6.0 // 一组鬼影包含几个圆形光斑。
+	#define DISTORTION_BARREL 1.0 // 桶形畸变强度，让鬼影沿弧线排布。
 
-// 最终镜头顺序：色差与景深、运动模糊、耀斑、暗角依次叠加，返回这一帧的镜头颜色。
-// 顺序原因：色差和景深先作用在原始颜色上，运动模糊取样时再走同一条流程；耀斑是加光，必须放在暗角之前，否则会被暗角连带压暗。
-// 调用位置：rendering/final.glsl。
-vec3 omniLens(vec3 color, vec2 uv) {
-#if defined OMNI_DOF || defined OMNI_MOTION_BLUR
-    color = omniFocusSample(uv); // 只要开了景深或运动模糊，就用统一入口拿到带色差、可散焦的颜色。
-#else
-    if (OMNI_CHROMATIC>0.0) color = omniLensSample(uv); // 两者都关时只按需做色差，跳过整套散焦循环。
-#endif
-    color = omniMotionBlur(color,uv); // 运动模糊内部自行处理关闭状态和各种提前返回。
-    color += omniLensFlare(uv); // 镜头耀斑在暗角之前叠加。
-    return color*(1.0-OMNI_VIGNETTE*smoothstep(0.1,0.7,length(uv-0.5))); // 暗角最后应用，离画面中心越远压得越暗。
+	// 求一个偏移向量在桶形畸变后的方向，用于把鬼影沿弧线排列。
+	vec2 GetDistOffset(vec2 uv, vec2 pxoffset){
+		vec2 tocenter = uv.xy; // 当前点到中心的方向。
+		vec3 prep = normalize(vec3(tocenter.y, -tocenter.x, 0.0)); // 与中心方向垂直的轴。
+		float angle = length(tocenter.xy) * 2.221 * DISTORTION_BARREL; // 旋转角随距离增大。
+		vec3 oldoffset = vec3(pxoffset, 0.0); // 把偏移抬到三维。
+		vec3 rotated = oldoffset * cos(angle) + cross(prep, oldoffset) * sin(angle) + prep * dot(prep, oldoffset) * (1.0 - cos(angle)); // 绕轴旋转。
+		return rotated.xy; // 取回二维偏移。
+	}
+
+	// 画一个带色散的软光点：红绿蓝三个通道沿鬼影方向错开一点，得到彩色边缘。
+	vec3 flare(vec2 uv, vec2 pos, float dist, float chromaOffset, float size){
+		pos = GetDistOffset(uv, pos); // 先对鬼影位置做桶形畸变。
+		float r = max(0.01 - pow(length(uv + (dist - chromaOffset) * pos), 2.4) *( 1.0 / (size * 2.0)), 0.0) * 0.85; // 红色通道。
+		float g = max(0.01 - pow(length(uv +  dist                 * pos), 2.4) * (1.0 / (size * 2.0)), 0.0) * 1.0; // 绿色通道。
+		float b = max(0.01 - pow(length(uv + (dist + chromaOffset) * pos), 2.4) * (1.0 / (size * 2.0)), 0.0) * 1.5; // 蓝色通道。
+		return vec3(r, g, b); // 返回带色散的光点颜色。
+	}
+
+	// 画一串沿鬼影方向排列的圆形光斑，颜色从暖到冷渐变。
+	vec3 orb(vec2 uv, vec2 pos, float dist, float size){
+		vec3 c = vec3(0.0); // 累加结果。
+		for (float i = 0.0; i < ORB_FLARE_COUNT; i++){ // 逐个光斑。
+			float j = i + 1; // 从一起数的序号。
+			float offset = j / (j + 0.1); // 这个光斑在鬼影方向上的位置。
+			float colOffset = j / ORB_FLARE_COUNT * 0.5; // 颜色偏移。
+			float ss = size / (j + 1.0); // 越靠后的光斑越小。
+			c += flare(uv, pos, dist + offset, ss * 2.0, ss) * vec3(1.0 - colOffset, 1.0, 0.5 + colOffset) * j; // 累加并染色放大。
+		}
+		c += flare(uv, pos, dist + 0.8, 0.05, 3.0 * size) * 0.5; // 末尾再补一个大的柔和光斑。
+		return c; // 返回光斑颜色。
+	}
+
+	// 画一个环状光环，三个通道同样做色散。
+	vec3 ring(vec2 uv, vec2 pos, float dist, float chromaOffset, float blur){
+		vec2 uvd = uv * length(uv); // 把坐标按到中心距离放大，得到环而不是点。
+		float r = max(1.0 / (1.0 + 250.0 * pow(length(uvd + (dist - chromaOffset) * pos), blur)), 0.0) * 0.8; // 红色通道。
+		float g = max(1.0 / (1.0 + 250.0 * pow(length(uvd +  dist                 * pos), blur)), 0.0) * 1.0; // 绿色通道。
+		float b = max(1.0 / (1.0 + 250.0 * pow(length(uvd + (dist + chromaOffset) * pos), blur)), 0.0) * 1.5; // 蓝色通道。
+		return vec3(r, g, b); // 返回光环颜色。
+	}
+
+	// 镜头光斑主入口：按太阳在屏幕上的位置铺开眩光与鬼影，并按太阳可见度与雾浓淡衰减。
+	// 输出按管线编码，写进三号画面，稍后由八号与十四号阶段叠加。
+	vec3 LensFlare(){
+		vec3 lf = vec3(0.0); // 累加结果。
+		vec2 coord = texCoord - 0.5; // 当前点相对中心。
+		vec2 sunPos = sunCoord - 0.5; // 太阳相对中心。
+		coord.x *= aspectRatio; // 按宽高比修正成圆。
+		sunPos.x *= aspectRatio; // 太阳位置同样修正。
+		float fovFactor = max(gbufferProjection[1][1], 2.0); // 由投影矩阵估计视场，给一个下限。
+		#ifdef OMNI_LENS_GLARE // 眩光：沿光线方向拉出细长亮纹。
+			vec2 v = coord - sunPos; // 当前点到太阳的方向。
+			float dist = length(v); // 距离。
+			float gDist = dist * 13.0 / fovFactor; // 按视场归一化。
+			float phase = atan2(v) + 0.131; // 方向角加一个固定偏移。
+			float gl = 2.0 - saturate(gDist) + sin(phase * 12.0) * saturate(gDist * 2.5 - 0.2); // 细长亮纹。
+			gl = gl * gl; // 平方加强。
+			gDist = gDist * gDist; // 距离平方。
+			gl *= 8e-5 / (gDist * gDist); // 按距离衰减。
+			gl = min(gl, 200.0); // 设上限避免过亮。
+			lf += vec3(gl * OMNI_GLARE_BRIGHTNESS); // 按眩光亮度累加。
+		#endif
+		#ifdef OMNI_LENS_FLARE // 光斑：一组鬼影、两个光环和若干散点。
+			float size = 0.5 * fovFactor; // 光斑整体大小。
+			vec3 fl = vec3(0.0); // 光斑累加。
+			fl += orb(coord, sunPos, 0.0, size * 0.01) * 0.1; // 圆形鬼影。
+			fl += ring(coord, sunPos,  1.0, 0.02, 1.4) * 0.01; // 远端光环。
+			fl += ring(coord, sunPos, -1.0, 0.02, 1.4) * 0.01; // 近端光环。
+			fl += flare(coord, sunPos, -2.00, 0.05, size * 0.05) * 0.5; // 一抹大鬼影。
+			fl += flare(coord, sunPos, -0.90, 0.02, size * 0.03) * 0.3; // 散点。
+			fl += flare(coord, sunPos, -0.70, 0.01, size * 0.06) * 0.5; // 散点。
+			fl += flare(coord, sunPos, -0.55, 0.02, size * 0.02) * 0.2; // 散点。
+			fl += flare(coord, sunPos, -0.35, 0.02, size * 0.04) * 0.7; // 散点。
+			fl += flare(coord, sunPos, -0.25, 0.01, size * 0.15) * vec3(0.3, 0.4, 0.38); // 偏青的大鬼影。
+			fl += flare(coord, sunPos, -0.25, 0.02, size * 0.08) * 0.2; // 散点。
+			fl += flare(coord, sunPos,  0.05, 0.01, size * 0.03) * 0.1; // 散点。
+			fl += flare(coord, sunPos,  0.30, 0.02, size * 0.20) * vec3(0.2, 0.18, 0.14); // 偏暖的鬼影。
+			fl += flare(coord, sunPos,  1.20, 0.03, size * 0.10) * 0.2; // 散点。
+			lf += fl * (OMNI_FLARE_BRIGHTNESS * 0.3); // 按光斑亮度累加。
+		#endif
+		lf *= colorSunlight * (sunVisibility * saturate(exp2(1.0 - OMNI_VFOG_DENSITY * 20.0)) / MAIN_OUTPUT_FACTOR); // 按阳光颜色、可见度与雾浓淡衰减。
+		return LinearToCurve(lf); // 按管线编码返回。
+	}
+#endif // 眩光与光斑结束。
+
+// --- 相机动态模糊 ---
+// 用上一帧相机把当前表面重投影回屏幕，沿两帧之间的屏幕位移取几个历史位置做平均，模拟快门时间内相机的移动。
+// 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理相机移动造成的整屏位移。
+// 无效情况（手、覆盖层、传送、越界）都提前返回，让这些像素保持清晰。
+vec2 CalculateCameraVelocity(vec2 coord, float depth){
+	vec3 projection = vec3(coord, depth) * 2.0 - 1.0; // 转负一到一。
+	projection = (vec3(vec2(gbufferProjectionInverse[0].x, gbufferProjectionInverse[1].y) * projection.xy, 0.0) + gbufferProjectionInverse[3].xyz) / (gbufferProjectionInverse[2].w * projection.z + gbufferProjectionInverse[3].w); // 逆投影到视空间。
+	if (depth < 0.7){ // 手按固定深度偏移补偿相机位移。
+		projection += (gbufferPreviousModelView[3].xyz - gbufferModelView[3].xyz) * MC_HAND_DEPTH; // 手的固定偏移。
+	}else{ // 普通世界表面。
+		projection = mat3(gbufferModelViewInverse) * projection + gbufferModelViewInverse[3].xyz; // 视空间转世界。
+		if (depth < 1.0) projection += cameraPosition - previousCameraPosition; // 有限深度才补相机位移。
+		projection = mat3(gbufferPreviousModelView) * projection + gbufferPreviousModelView[3].xyz; // 转到上一帧视空间。
+	}
+	projection = (vec3(gbufferPreviousProjection[0].x, gbufferPreviousProjection[1].y, gbufferPreviousProjection[2].z) * projection + gbufferPreviousProjection[3].xyz) / -projection.z * 0.5 + 0.5; // 投到上一帧屏幕。
+	return coord - projection.xy; // 位移等于当前坐标减上一帧坐标。
 }
-#endif
+
+// 相机动态模糊主入口：沿快门方向的中心位置取历史颜色，按质量选项决定样本数。
+// 快门角决定拖影长度；抖动选项给采样位置加一点随机，减少采样不足产生的条纹。
+vec3 MotionBlur(){
+	float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读当前像素的材质编号。
+	float depth = 0.0; // 该像素用于重投影的深度。
+	if (materialIDs == MATID_WATER || materialIDs == MATID_ICE){ // 水和冰用含半透明的深度。
+		depth = texelFetch(depthtex0, texelCoord, 0).x; // 读零号深度。
+	}else{ // 其他表面用不含半透明的深度。
+		depth = texelFetch(depthtex1, texelCoord, 0).x; // 读一号深度。
+	}
+	vec2 velocity = vec2(0.0); // 屏幕位移，默认零。
+	#ifdef OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 关闭玩家动态模糊时玩家不参与。
+		if (depth > 0.7 && materialIDs != MATID_END_PORTAL && materialIDs != MATID_ENTITIES_PLAYER) // 手与玩家都排除。
+	#else // 默认只排除手和末地传送门。
+		if (depth > 0.7 && materialIDs != MATID_END_PORTAL) // 近处左手以外的世界表面参与。
+	#endif
+		velocity = CalculateCameraVelocity(texCoord, depth); // 算屏幕位移。
+	vec3 color = vec3(0.0); // 输出颜色。
+	if (length(velocity) < 5e-7){ // 位移极小说明相机没动，直接用历史颜色。
+		color = CurveToLinear(texelFetch(colortex7, texelCoord, 0).rgb); // 读七号画面当前颜色。
+	}else{ // 相机动了，沿位移方向平均。
+		velocity *= OMNI_MOTION_BLUR_SHUTTER_ANGLE / 720.0; // 快门角换算成拖影长度。
+		velocity = clamp(velocity, -0.1, 0.1); // 限制单帧拖影上限。
+		float steps = OMNI_MOTION_BLUR_QUALITY; // 一侧的采样步数。
+		float samples = 0.0; // 有效样本计数。
+		float dither = 0.0; // 采样抖动。
+		#ifdef OMNI_MOTION_BLUR_DITHER // 开启抖动时给采样位置加噪声。
+			dither = InterleavedGradientNoise(gl_FragCoord.xy); // 交错梯度噪声。
+		#endif
+		for (float i = -steps; i <= steps; i++){ // 沿快门方向对称取样。
+			vec2 coord = texCoord.st + velocity / (steps + 1.0) * (i + dither); // 这个样本的坐标。
+			if (saturate(coord) == coord){ // 坐标在画面内才采。
+				color += CurveToLinear(textureLod(colortex7, coord, 0.0).rgb); // 累加历史颜色。
+				samples++; // 计数。
+			}
+		}
+		color.rgb /= samples; // 按有效样本数平均。
+	}
+	return color; // 返回模糊后的线性颜色。
+}
+
+// --- 暗角 ---
+// 按到画面中心的距离把四角压暗；`falloff` 是强度，`roundness` 在椭圆与圆形之间插值。
+float Vignette(vec2 coord, const float falloff, const float roundness){
+	vec2 aCoord = coord * 2.0 - 1.0; // 转负一到一。
+	aCoord.x *= mix(1.0, aspectRatio, roundness); // 按圆度修正横坐标。
+	float rf = dot(aCoord, aCoord) * falloff * falloff + 1.0; // 距离平方乘强度。
+	return 1.0 / (rf * rf); // 取二次衰减。
+}
+#endif // 文件守卫结束。

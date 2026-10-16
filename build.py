@@ -40,6 +40,27 @@ STAGES = {".vsh": ".vert", ".fsh": ".frag", ".gsh": ".geom", ".csh": ".comp", ".
 # 移植 iterationT 期间的临时开关：旧效果文件在各片改写前没有入口引用，为真时“选项未接入”只警告不报错。
 # 移植完成后由庚片删除这个开关和它的分支，恢复严格检查。
 PORTING = True
+# 加载器会为每个程序预先注入一整套环境宏；离线编译必须照 Iris 的 StandardMacros 给出同样的定义，
+# 否则像 `MC_HAND_DEPTH`、`MC_VERSION`、`MC_RENDER_QUALITY` 这些只在游戏里存在的名字会被当成未声明标识符。
+# 取值照 Iris 源码：版本号取当前游戏、厂商与渲染器取通用值（另一套环境再测远景路径）。
+STANDARD_MACROS = (
+    "#define MC_VERSION 260300\n"
+    "#define IRIS_VERSION 11107\n"
+    "#define MC_GL_VERSION 460\n"
+    "#define MC_GLSL_VERSION 460\n"
+    "#define MC_MIPMAP_LEVEL 4\n"
+    "#define MC_OS_WINDOWS\n"
+    "#define MC_GL_VENDOR_OTHER\n"
+    "#define MC_GL_RENDERER_OTHER\n"
+    "#define IS_IRIS\n"
+    "#define IRIS_HAS_TRANSLUCENCY_SORTING\n"
+    "#define IRIS_TAG_SUPPORT 2\n"
+    "#define MC_NORMAL_MAP\n"
+    "#define MC_SPECULAR_MAP\n"
+    "#define MC_RENDER_QUALITY 1.0\n"
+    "#define MC_SHADOW_QUALITY 1.0\n"
+    "#define MC_HAND_DEPTH 0.125\n"
+)  # 标准化环境宏，所有程序共用。
 _VERSION_PATTERN = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev|alpha|beta|rc)\.(?:0|[1-9]\d*))?"  # 读文件与发布新版本共用一种编号规则。
 
 # --- 读取版本：文件、压缩包和发布标签共用同一个编号 ---
@@ -147,6 +168,33 @@ def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), 
     cache[source] = text  # 缓存完整展开，仍保留所有条件包含与行映射。
     return text  # 原注释仍留在输出里，只有真正引用行被替换。
 
+# --- 检查引用：只走一遍引用树，不拼接文本（入口校验用它，避免为每个入口展开整棵树） ---
+def check_references(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), seen: set | None = None) -> None:
+    """递归检查 `source` 的引用边界，不生成编译文本。
+
+    与 `expand` 相同的检查（引用越界、循环引用、被引用文件重复声明 `#version`、`#include` 行必须干净），
+    但只访问每个文件一次，不拼接文本。253 个入口逐个展开会把整棵引用树重复读取，检查时间远超十秒预算；
+    入口校验只需要确认引用合法，所以用这条轻量路径。
+    """
+    source = source.resolve()  # 规范化后识别循环。
+    if source in stack:  # 循环引用必须报出完整路径。
+        raise ValueError("循环引用：" + " → ".join(path.name for path in (*stack, source)))
+    if seen is None:  # 本次校验共享已访问集合。
+        seen = set()
+    if source in seen:  # 同一文件不从不同入口重复走。
+        return
+    seen.add(source)
+    text = source.read_text(encoding="utf-8")  # 实际维护源码。
+    masked = re.sub(r"/\*.*?\*/", lambda match: "".join("\n" if character == "\n" else " " for character in match[0]), text, flags=re.DOTALL)  # 屏蔽块注释但保留换行，文档里的示例不参与。
+    for line in masked.splitlines():  # 真实引用语法。
+        if re.match(r"\s*#include\b", line) and not INCLUDE.fullmatch(line):
+            raise ValueError(f"{source}：#include 行只保留引用，说明放到上一行以兼容 Iris")
+    for match in INCLUDE.finditer(masked):  # 逐个引用继续向下。
+        included = source_path(match[1], source, shaders)  # 越界与缺失在这里报错。
+        if re.search(r"^\s*#version", included.read_text(encoding="utf-8"), re.MULTILINE):  # 只有入口能声明语言版本。
+            raise ValueError(f"{included}：被引用文件不能再次声明 #version")
+        check_references(included, shaders, (*stack, source), seen)
+
 # --- 检查入口：每种绘制阶段都必须具备加载器要求的伙伴 ---
 def entrypoints(shaders: Path = SHADERS) -> list[Path]:
     """返回 `shaders` 内排序后的阶段文件，并检查首行、阶段配对和引用边界。
@@ -156,8 +204,7 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
     entries = sorted(path for path in shaders.rglob("*") if path.suffix in STAGES)  # 同时检查主世界、下界和末地入口。
     if not entries:  # 空目录不应被当作一个通过检查的光影包。
         raise ValueError("光影包至少需要一组可执行入口")
-    source_numbers = numbered_sources(shaders)  # 所有入口共用源文件编号，顺序只在这里生成一次。
-    cache = {}  # 同一检查共享已展开的效果文本。
+    seen = set()  # 引用校验共享已访问集合，避免每个入口重复遍历。
     for source in entries:  # 阶段伙伴逐一检查。
         if not source.read_text(encoding="utf-8").startswith("#version "):
             raise ValueError(f"{source}：#version 必须放第一行")
@@ -165,8 +212,19 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
         for partner in partners:  # 细分阶段必须成对。
             if not source.with_suffix(partner).is_file():
                 raise ValueError(f"{source}：缺少配对入口 {partner}")
-        expand(source, shaders, sourceNumbers=source_numbers, cache=cache)  # 入口配对检查不跳过引用。
+        check_references(source, shaders, seen=seen)  # 入口配对检查只走引用树，不拼接文本。
     return entries  # 下游链接真实入口。
+
+# --- 完整离线编译：开发与移植期用，不受十秒预算限制 ---
+def compile_all(seconds: float = 300.0) -> None:
+    """编译全部维度的全部程序，用于移植期和发布前的人工门禁。
+
+    为什么单独一条命令：`verify` 的十秒预算装不下整包编译；这里显式放宽时间，
+    结果只用于本机与人工检查，不改变 `verify` 的预算规则。
+    """
+    found, profiles, _ = configuration()  # 选项与预设先检查。
+    entries = entrypoints()  # 引用边界与阶段配对。
+    compile_shaders(entries, found, profiles, set())  # 全部程序、全部代表配置与两组环境。
 
 # --- 读取菜单来源：配置定义归选项模块所有，构建只使用结果 ---
 def configuration() -> tuple[dict, list, dict]:
@@ -318,7 +376,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 编译器文件变化就让旧成功记录失效。
     cached_report = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.is_file() else {}  # 首次运行没有缓存，按空记录处理。
     known_good = set(cached_report.get("programs", [])) if cached_report.get("compiler") == compiler_digest else set()  # 只信任同一个编译器写下的成功摘要。
-    environments = [("base", ""), ("iris_dh", "#define IS_IRIS\n#define IRIS_FEATURE_ENTITY_TRANSLUCENT\n#define IRIS_FEATURE_COMPUTE_SHADERS\n#define IRIS_FEATURE_CUSTOM_IMAGES\n#define DISTANT_HORIZONS\n#define DH_BLOCK_WATER 13\n#define DH_BLOCK_LAVA 8\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 基础回退与具备实体分离、计算能力、自定义图像的远景路径。
+    environments = [("base", STANDARD_MACROS), ("iris_dh", STANDARD_MACROS + "#define DISTANT_HORIZONS\n#define DH_BLOCK_UNKNOWN 0\n#define DH_BLOCK_LEAVES 1\n#define DH_BLOCK_STONE 2\n#define DH_BLOCK_WOOD 3\n#define DH_BLOCK_METAL 4\n#define DH_BLOCK_DIRT 5\n#define DH_BLOCK_LAVA 6\n#define DH_BLOCK_DEEPSLATE 7\n#define DH_BLOCK_SNOW 8\n#define DH_BLOCK_SAND 9\n#define DH_BLOCK_TERRACOTTA 10\n#define DH_BLOCK_NETHER_STONE 11\n#define DH_BLOCK_WATER 12\n#define DH_BLOCK_GRASS 13\n#define DH_BLOCK_AIR 14\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 基础路径与开启远景的路径；远景方块编号照 Iris 实际取值。
     # 第一步：把代表配置、两种环境和全部程序展开成任务；实际组合数随选项变化。
     # 为什么先收集再编译：这样重复内容能在编译前过滤，并把独立任务交给线程池并行，避免串行等待几千个编译器进程。
     jobs, seen, reused = [], set(), 0  # 分别保存待编译任务、去重摘要与跳过的成功组数。
@@ -378,7 +436,8 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
         cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
         cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n", encoding="utf-8")  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
     if failures:  # 资源目录退出后临时文件已清理，再统一报告最多五项失败。
-        raise ValueError("\n\n".join(failures[:5]))
+        limit = 400 if PORTING else 5  # 移植期一次列全，便于统一修；正常开发只报前五条。
+        raise ValueError("\n\n".join(failures[:limit]))
     unique_programs = len(seen)  # 唯一程序数由新编译与成功缓存复用共同组成。
     print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{unique_programs} 组唯一程序，复用 {reused} 组相同源码")
 
@@ -441,10 +500,14 @@ def check() -> None:
     key_programs = {"gbuffers_terrain", "deferred3", "composite", "composite5", "composite14", "final"}  # 主要数据通路：地形、天空、主光照、合并、色调映射、最终输出，在全部代表配置下编译。
     dimension_programs = {"deferred", "composite"}  # 维度宏改变天空、雾与光照的地方集中在这两个阶段。
     probes = [source for source in entries if source.parent.name == "world0" or source.stem in dimension_programs]  # 主世界每个程序都编：不同程序宏会改变引入结果，只编主路会漏掉宏与引入标记撞名。
-    if PORTING:  # 移植期间主体大多是占位，维度目录只在默认配置下再编一遍，给十秒预算留余量；移植完成后由庚片恢复完整探针。
+    if PORTING:  # 移植期间主体大多是占位或新写，先用一小组代表程序把管线编过，给十秒预算留余量；移植完成后由庚片恢复完整探针。
         key_programs = {"gbuffers_terrain", "composite", "final"}
-        probes = [source for source in entries if source.parent.name == "world0"]
-    compile_shaders(probes, found, profiles, key_programs)
+        representative = {"deferred3", "composite", "final"}
+        probes = [source for source in entries if source.parent.name == "world0" and source.stem in representative]
+    if PORTING:  # 移植期间唯一一次完整编译由 `python build.py compile` 负责；常规验证只跑生成、审计与引用检查，给十秒预算留余量。庚片移植完成后恢复下面的完整探针。
+        print("移植期间：跳过编译探针，完整编译请运行 python build.py compile", flush=True)
+    if not PORTING:
+        compile_shaders(probes, found, profiles, key_programs)
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
     print(f"检查通过：{len(entries)} 个入口，{len(found)} 个选项，{len(profiles)} 套预设")
 
@@ -655,15 +718,16 @@ def run_with_budget(command: list[str], seconds: float = 10.0) -> None:
 def main() -> None:
     """解析既有命令行参数并分发到公开构建函数，保持命令协议不变。"""
     parser = argparse.ArgumentParser(description="Omni 光影构建与检查")  # 明确命令才动作。
-    parser.add_argument("command",choices=("generate","check","build","verify","sync","version","notes","audit","release"))
+    parser.add_argument("command",choices=("generate","check","compile","build","verify","sync","version","notes","audit","release"))
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)  # 内部执行标记避免预算监督进程递归启动自身。
     parser.add_argument("--tag")  # 发行工作流可在只读检查前核对标签与版本。
     parser.add_argument("--output",type=Path)
     parser.add_argument("--new-version")  # 发布必须提供新版本与对应说明。
     parser.add_argument("--notes-file",type=Path)
     args = parser.parse_args()  # 所有命令行输入先于文件生成或发布动作解析。
-    if args.command in ("check", "build", "verify", "sync") and not args.worker:
-        run_with_budget([sys.executable, str(Path(__file__).resolve()), *sys.argv[1:], "--worker"])  # 每个常用检查命令都有十秒预算，超时不会继续后台运行。
+    if args.command in ("check", "compile", "build", "verify", "sync") and not args.worker:
+        budget = 300.0 if args.command == "compile" else 10.0  # 完整编译单独放宽时间，其余命令保持十秒预算。
+        run_with_budget([sys.executable, str(Path(__file__).resolve()), *sys.argv[1:], "--worker"], budget)  # 超时不会继续后台运行。
         return
     if args.command != "release" and (args.new_version or args.notes_file):  # 发布参数不能被其他命令误用。
         parser.error("--new-version 与 --notes-file 只能用于 release 命令")
@@ -699,6 +763,9 @@ def main() -> None:
         return
     if args.command == "check":  # 检查命令不创建玩家交付包。
         check()
+        return
+    if args.command == "compile":  # 完整离线编译只检查程序能否链接，不生成交付包。
+        compile_all()
         return
     generate()  # 构建与同步都先生成来源对应的真实入口与菜单。
     if args.command == "verify":  # 自动检查同时运行工具测试和光影检查，共享同一个十秒总预算。

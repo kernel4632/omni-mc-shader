@@ -1,183 +1,578 @@
-// 水：解析波浪、多层正弦海浪、凹凸细节与水面折射反射的合成。
-// 管什么：本文件只管水面这一件事——顶点高度、表面法线和屏幕合成颜色；
-//   它不安排绘制顺序，也不复制其他效果的算法，绘制顺序见 rendering/terrain.glsl 与 rendering/composite.glsl。
-// 调用位置：
-//   rendering/terrain.glsl 顶点阶段用 omniOceanHeight 抬升水面顶点，片元阶段用 omniWaterNormal 造波；
-//   rendering/composite.glsl 屏幕合成阶段用 omniWater 做折射、吸收与反射。
-// 可复制示例：
-//   取某点高度：`float h = omniWaterHeight(p, world.y);`
-//   由高度得到法线：`vec3 n = omniWaterNormal(world, normal);`
-//   合成颜色：`vec3 lit = omniWater(view, n, texcoord);`
-// 设计原因与取舍：
-//   高度只有一个来源：顶点位移和片元法线都读 omniWaterHeight，避免两边各写一套公式而对不上。
-//   波浪只作用在顶面：瀑布与水流的侧面法线接近垂直，若也按水平位置造波，水面会和真实几何脱节。
-//   折射必须防泄漏：偏移后的采样点若落到漂在水面前方的物体上，会把前景颜色漏进水里，所以偏移后要回头验证。
-//   吸收按可见光分波段：红光衰减最快，水越深越偏青绿，最终趋近水体散射色。
-//   内部数据互相信任：只在真正的边界（屏幕外、无效深度、非法高度）检查一次，层与层之间直接传值。
-#ifndef OMNI_WATER
-#define OMNI_WATER
+/*
+水面：把 iterationT 的波浪、海洋物理波、雨点涟漪、水下雾、折射与彩色玻璃吸收集中到一个文件。
+职责分成四块：
+  一、选项：`OMNI_WAVE_SCALE`、`OMNI_WAVE_HEIGHT`、`OMNI_WATER_PARALLAX`、`OMNI_UNDERWATER_FOG`、`OMNI_WATERFOG_DENSITY`、`OMNI_CAUSTICS`，全项目只在这里定义一次；
+  二、波浪：`GetWaves`、`GetWavesNormal`、`GetWaterParallaxCoord` 用噪声贴图叠多层正弦，算出波高、波法线与视差坐标；
+  三、物理海浪：`physics_*` 一组函数按迭代正弦合成海面，供海洋物理扩展使用；
+  四、屏幕合成：`WaterFog` 水下与水面雾、`WaterRefractionLite` 折射、`TransparentAbsorption` 彩色玻璃吸收，以及雨点涟漪 `GetRainNormal`。
+调用位置：
+  `rendering/translucent.glsl` 顶点阶段用 `GetWaterParallaxCoord`、`GetWavesNormal` 抬升水面并造波；
+  `rendering/composite.glsl` 屏幕合成阶段用 `WaterFog`、`WaterRefractionLite`、`TransparentAbsorption`；
+  `effects/shadow.glsl` 的焦散读取七号画面里的波法线，与本文件共用 `GetWavesNormal` 写出的数据。
+可复制示例：
+  `vec3 normal = GetWavesNormal(worldPos, OMNI_WAVE_HEIGHT);`  由世界位置得到波法线；
+  `WaterFog(color, viewDir, opaqueDist, waterDist, normal, mask, occludedWater, waterSkylight, totalInternalReflection);`  水下与水后雾。
+调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明这些全局量）：
+  `MaterialMask` 结构由 `effects/material.glsl` 提供（本文件已显式引入）；
+  `ivec2 texelCoord`、`vec2 screenCoordInput` 由延迟与合成主程序声明；
+  `in vec3 colorShadowlight`、`in vec3 colorSkylight` 等光色输入由合成主程序声明；
+  物理海浪的 `physics_*` 输入由外部海洋物理扩展提供，缺失时对应函数不被调用，不影响基础水面；
+  雨点涟漪的 `rainStrength` 与 `gaux1`、`gaux2`、`gaux3` 三张动画贴图由几何阶段主程序声明。
+关键设计原因与取舍：
+  波浪高度与法线都从 `GetWaves` 一处取，顶点抬升和片元法线不会各写一套而对不上；
+  折射采样附带防泄漏：偏移后的位置若落在水面前方就退回原位，避免前景颜色漏进水里；
+  水下雾与彩色玻璃吸收只用分波段衰减，红衰减最快、蓝最慢，水越深越偏青绿。
+*/
+#ifndef OMNI_WATER_INCLUDED // 只引入一次，避免选项与函数重复定义。
+#define OMNI_WATER_INCLUDED // 置上标记，后续再次引用直接跳过。
+
 // @effect {"label":{"zh_cn":"水面","en_us":"Water"}}
-// @option {"label": {"zh_cn": "波浪大小", "en_us": "Wave size"}, "slider": true, "description": {"zh_cn": "水面起伏多明显。", "en_us": "How tall the waves are."}}
-#define OMNI_WAVE_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label": {"zh_cn": "波浪速度", "en_us": "Wave speed"}, "slider": true, "description": {"zh_cn": "水波快慢，取零静止。", "en_us": "Wave speed; zero freezes the water."}}
-#define OMNI_WAVE_SPEED 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label": {"zh_cn": "波浪密度", "en_us": "Wave density"}, "slider": true, "description": {"zh_cn": "波纹更大更疏还是更小更密。", "en_us": "Wave size and spacing."}}
-#define OMNI_WAVE_SCALE 1.0 // [0.5 1.0 2.0 4.0]
-// @option {"label": {"zh_cn": "水面凹凸细节", "en_us": "Water bump detail"}, "description": {"zh_cn": "在波浪上叠加多层噪声，让水面近看有小起伏。", "en_us": "Adds fine procedural ripples on top of the waves."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
-#define OMNI_WATER_BUMP 1 // [0 1]
-// @option {"label": {"zh_cn": "水面凹凸深度", "en_us": "Bump depth"}, "slider": true, "description": {"zh_cn": "水面细碎起伏多强。", "en_us": "How strong the fine water ripples are."}}
-#define OMNI_WATER_BUMP_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label": {"zh_cn": "海浪开关", "en_us": "Ocean waves"}, "description": {"zh_cn": "起伏极大的海浪，会抬升水面顶点；瀑布与侧面不受影响。", "en_us": "Large rolling waves that also lift the water surface; falls and side faces are unaffected."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
-#define OMNI_OCEAN_WAVES 1 // [0 1]
-// @option {"label": {"zh_cn": "海浪大小", "en_us": "Ocean wave size"}, "slider": true, "description": {"zh_cn": "大浪多高。", "en_us": "How tall the ocean swell is."}}
-#define OMNI_OCEAN_HEIGHT 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"水色红","en_us":"Water red"},"description":{"zh_cn":"水里红色消失得快不快；调高水更偏青绿。","en_us":"How fast red fades in water; higher pushes the water toward green-blue."},"slider":true}
-#define OMNI_WATER_ABSORB_R 0.19 // [0.05 0.1 0.19 0.35]
-// @option {"label": {"zh_cn": "水色绿", "en_us": "Water green"}, "slider": true, "description": {"zh_cn": "水里绿色消失得多快。", "en_us": "How fast green fades in water."}}
-#define OMNI_WATER_ABSORB_G 0.065 // [0.02 0.04 0.065 0.12]
-// @option {"label": {"zh_cn": "水色蓝", "en_us": "Water blue"}, "slider": true, "description": {"zh_cn": "水里蓝色消失得多快。", "en_us": "How fast blue fades in water."}}
-#define OMNI_WATER_ABSORB_B 0.035 // [0.01 0.02 0.035 0.07]
-// @option {"label":{"zh_cn":"浑水色红","en_us":"Deep water red"},"description":{"zh_cn":"水很深时剩下的红色成分。","en_us":"Residual red tint in very deep water."},"slider":true}
-#define OMNI_WATER_SCATTER_R 0.015 // [0.0 0.015 0.04 0.08]
-// @option {"label": {"zh_cn": "浑水色绿", "en_us": "Deep water green"}, "slider": true, "description": {"zh_cn": "深水的绿色成分。", "en_us": "Green in deep water."}}
-#define OMNI_WATER_SCATTER_G 0.075 // [0.02 0.05 0.075 0.12]
-// @option {"label": {"zh_cn": "浑水色蓝", "en_us": "Deep water blue"}, "slider": true, "description": {"zh_cn": "深水的蓝色成分。", "en_us": "Blue in deep water."}}
-#define OMNI_WATER_SCATTER_B 0.095 // [0.03 0.06 0.095 0.15]
-// @option {"label":{"zh_cn":"清澈度","en_us":"Water clarity"},"description":{"zh_cn":"大于一更清澈、小于一更浑浊；只改透过多深开始看不清。","en_us":"Above one is clearer, below one is murkier; only changes how far you can see through."},"slider":true}
-#define OMNI_WATER_CLEAR 1.0 // [0.5 1.0 2.0 4.0]
-// @option {"label": {"zh_cn": "水折射开关", "en_us": "Water refraction"}, "description": {"zh_cn": "透过水看东西会不会扭曲。", "en_us": "Whether looking through water distorts."}}
-#define OMNI_WATER_REFRACTION
-// @option {"label": {"zh_cn": "折射强度", "en_us": "Refraction strength"}, "slider": true, "description": {"zh_cn": "透过水看东西扭曲多强。", "en_us": "How strong the underwater distortion is."}}
-#define OMNI_REFRACTION_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"水面高光","en_us":"Water sun glint"},"description":{"zh_cn":"太阳照在水面的亮点；取零关闭。","en_us":"Bright highlight where the sun reflects off the water; zero disables it."},"slider":true}
-#define OMNI_WATER_GLINT 0.5 // [0.0 0.25 0.5 1.0]
-// @option {"label": {"zh_cn": "雨点波纹开关", "en_us": "Rain ripples"}, "description": {"zh_cn": "下雨时水面有没有雨点圈。", "en_us": "Whether rain ripples appear on water."}}
-#define OMNI_RAIN_RIPPLES
-// @option {"label": {"zh_cn": "波纹强度", "en_us": "Ripple strength"}, "slider": true, "description": {"zh_cn": "雨点圈多明显。", "en_us": "How visible the ripples are."}}
-#define OMNI_RIPPLE_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"玩家水纹开关","en_us":"Player ripples"},"description":{"zh_cn":"玩家贴水走动时出现一圈圈水纹；不会跟着生物走。","en_us":"Rings appear when the player moves near the water; other mobs are not tracked."}}
-//#define OMNI_PLAYER_RIPPLES
-// 反射和坐标重建的共用实现：水面反射复用它读取已保存的不透明画面。
-#include "/effects/reflection.glsl"
-// 雨点落点密度来自天气效果。
+// @option {"label":{"zh_cn":"波浪密度","en_us":"Wave scale"},"description":{"zh_cn":"水面波纹的空间频率；调大波纹更密更细。","en_us":"Spatial frequency of the water ripples; larger makes them finer."},"slider":true}
+#define OMNI_WAVE_SCALE 0.05 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.15 0.2 0.3 0.5 0.7 1.0]
+// @option {"label":{"zh_cn":"波浪高度","en_us":"Wave height"},"description":{"zh_cn":"水面起伏的强度；调大波浪更明显。","en_us":"Strength of the water surface undulation; larger makes waves more visible."},"slider":true}
+#define OMNI_WAVE_HEIGHT 1.2 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 3.0 5.0 7.0 10.0]
+// @option {"label":{"zh_cn":"水面视差","en_us":"Water parallax"},"description":{"zh_cn":"按波浪高度偏移水面采样，让波峰看起来真的凸起；关闭后只用法线造形。","en_us":"Offsets water sampling by wave height so crests look raised; off keeps shape from normals only."}}
+#define OMNI_WATER_PARALLAX
+// @option {"label":{"zh_cn":"水下雾","en_us":"Underwater fog"},"description":{"zh_cn":"在水下或隔着水看远处时叠加雾；关闭后水更通透。","en_us":"Adds fog when underwater or looking through water; off makes the water clearer."}}
+#define OMNI_UNDERWATER_FOG
+// @option {"label":{"zh_cn":"水雾密度","en_us":"Water fog density"},"description":{"zh_cn":"水下与水后雾的浓度；调大看得更近。","en_us":"Density of underwater and through-water fog; larger reduces visibility."},"slider":true}
+#define OMNI_WATERFOG_DENSITY 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"水面焦散","en_us":"Water caustics"},"description":{"zh_cn":"阳光透过波动水面在水底汇聚出的亮纹。","en_us":"Bright patterns where sunlight focuses through the rippling water onto the bottom."}}
+#define OMNI_CAUSTICS
+
+// 波法线解码与颜色曲线来自共用计算，屏幕还原与投影来自坐标换算，`MaterialMask` 由材质文件提供。
+#include "/common/math.glsl"
+#include "/common/coordinates.glsl"
+#include "/effects/material.glsl"
+// 局部降水开关决定雨点涟漪是否跟随降雨，归属天气文件。
 #include "/effects/weather.glsl"
-// --- 水体光学常数 ---
-// 红衰减最快、绿居中、蓝最慢，所以水越深越偏青绿，最终趋向水体散射色。
-// 六个系数都来自上方可调选项，只在这里组成向量；水面合成与水下雾都从这里取，避免两处各写一份。
-const vec3 omniWaterAbsorbance = vec3(OMNI_WATER_ABSORB_R,OMNI_WATER_ABSORB_G,OMNI_WATER_ABSORB_B)/clamp(OMNI_WATER_CLEAR,0.1,8.0); // 清澈度越高吸收越弱，水越清澈。
-const vec3 omniWaterScatter = vec3(OMNI_WATER_SCATTER_R,OMNI_WATER_SCATTER_G,OMNI_WATER_SCATTER_B); // 水体自身散射色。
-// 按距离对颜色做分波段吸收并混入散射：`distance` 是光在水里走过的米数。
-vec3 omniWaterTransmit(vec3 color, float distance) {
-    vec3 absorbed = exp(-omniWaterAbsorbance*distance); // 各波段仍然保留的比例。
-    return color*absorbed+omniWaterScatter*(1.0-absorbed); // 被吸收掉的部分趋向散射色。
+
+// --- 波浪：多层噪声正弦叠成起伏 ---
+// 先用三次曲线把噪声采样平滑化，再逐层缩小频率、加快速度，得到自然且可重复的波浪。
+// 为什么用噪声贴图而不是解析正弦：贴图里已经烘好一层细节，叠几层就有足够丰富感，省下大量三角计算。
+vec4 textureSmooth(sampler2D texSampler, vec2 coord){
+	coord *= 64.0; // 噪声贴图边长六十四，先换成像素坐标。
+	coord += 0.5; // 移到像素中心。
+
+	vec2 whole = floor(coord); // 整数像素。
+	vec2 part  = coord - whole; // 小数部分。
+
+	coord = whole + curve(part); // 用三次曲线改写小数部分，采样更平滑。
+
+	coord -= 0.5; // 移回像素角。
+	coord *= 0.015625; // 除以六十四，换回零到一坐标。
+
+	return textureLod(texSampler, coord, 0.0); // 读取平滑后的噪声四通道。
 }
-// --- 解析波 ---
-// 解析波是直接套公式算出的波，不用模拟，便宜且稳定；这里由三部分组成：
-//   两个方向不同的正弦交叉，形成不会整齐滚动的较大起伏；
-//   雨的涟漪，按空间格确定落点；
-//   玩家涟漪，相机贴水移动时出现的圆环。
-// 为什么用世界坐标而不是屏幕坐标：世界锚定让波跟着水面走，不随镜头漂移。
-float omniWave(vec2 p, float relativeHeight) {
-    float t = frameTimeCounter*OMNI_WAVE_SPEED; // 游戏暂停时由加载器时间行为决定；波速选项整体快慢缩放，取零即冻结。
-    vec2 s = p*OMNI_WAVE_SCALE; // 只缩放解析波的空间频率；雨滴与玩家涟漪仍按真实世界坐标定位。
-    float wave = sin(dot(s,vec2(0.65,0.3))+t*1.2)*0.06 + sin(dot(s,vec2(-0.2,0.8))-t*0.9)*0.04; // 两个方向与速度都不同的正弦，避免看出明显重复。
-#ifdef OMNI_RAIN_RIPPLES
-    float grid = omniRippleGrid(); // 落点密度决定格子精细度：密度越高，同一片水面上的落点越多。
-    if (grid > 0.0) { // 密度取零表示没有雨点圈；先判断，避免下面除以零得到无效值。
-        vec2 cell = floor(p*grid); // 把水面切成格子，每格固定一个雨滴落点。
-        vec2 center = (cell+vec2(omniHash(cell),omniHash(cell+8.2)))/grid; // 用格坐标算落点，同一格永远落在同一点，波纹可重复。
-        float age = fract(t*0.8+omniHash(cell+1.3)); // 每格起始相位不同，雨滴不会同时出现。
-        float radius = length(p-center); // 当前点到本格落点的水平距离。
-        wave += rainStrength*sin(radius*22.0-age*14.0)*exp(-radius*3.0)*(1.0-age)*0.025*OMNI_RIPPLE_STRENGTH*omniRainSplash(); // 向外扩散的环，随时间变淡，雨越大越明显；总强度与溅射强度都可调。
-    }
+
+// 把零到一的值压成两端平、中间过渡的形状，用来让波浪峰值更饱满。
+float AlmostIdentity(float x, float m, float n){
+	x = abs(x * 2.0 - 1.0); // 折回零到一并取绝对值，得到对称形状。
+
+	if (x <= m){ // 只在靠近中间的一段改写。
+		float a = 2.0 * n - m; // 三次项系数。
+		float b = 2.0 * m - 3.0 * n; // 二次项系数。
+		float t = x / m; // 归一化到零到一。
+
+		x = (a * t + b) * t * t + n; // 三次多项式重排形状。
+	}
+
+	return 1.0 - x; // 翻转方向。
+}
+
+// 主波函数：把世界位置缩放后逐层累加噪声采样，每层频率与速度都不同。
+float GetWaves(vec3 position) {
+	float wavesTime = frameTimeCounter * 0.0035; // 波浪时间，比真实秒慢很多，水面更平静。
+
+	position *= OMNI_WAVE_SCALE; // 按波浪密度缩放空间坐标。
+	vec2 p = position.xz - position.y; // 用水平坐标，减去高度让波浪随高度起伏。
+	p += -3.875 * wavesTime; // 整片波沿一个方向平移。
+	p.x = -p.x; // 翻转一个轴，打散规则方向。
+
+	vec2 waves = vec2(0.0); // 前两个分量分别存累加高度和累加权重。
+
+	waves += vec2(textureSmooth(noisetex, p * vec2(2.0, 1.2) + vec2(0.0, p.x * 2.1)).w,
+				  1.0); // 第一层：低频大波，权重一。
+
+		p = p * 0.475; // 收缩坐标，频率升高。
+		p += vec2(-5.16, -7.75) * wavesTime; // 每层自己的行进方向与速度。
+
+	waves += vec2(textureSmooth(noisetex, p * vec2(2.0, 1.4) + vec2(0.0, -p.x * 2.1)).w
+				  * 4.0, 4.0); // 第二层：加四倍权重。
+
+		p *= 0.67; // 继续抬高频率。
+		p.x += 7.75 * wavesTime; // 换一个方向。
+
+	waves += vec2(textureSmooth(noisetex, p + vec2(0.0, p.x * 1.1)).z
+				  * 8.0, 8.0); // 第三层：换一个通道，权重八。
+
+		p *= 0.7; // 再抬高频率。
+		p.x += -2.82 * wavesTime; // 换方向。
+
+	waves += vec2(textureSmooth(noisetex, p * vec2(1.0, 0.75) + vec2(0.0, -p.x * 1.7)).w
+				  * 16.0, 16.0); // 第四层：权重十六。
+
+		p *= 0.45; // 高频细节。
+		p.x += wavesTime; // 换方向。
+
+	waves += vec2(AlmostIdentity(textureSmooth(noisetex, p * vec2(1.0, 0.8) + vec2(0.0, -p.x * 1.7)).z, 0.2, 0.1)
+				  * 30.0, 30.0); // 第五层：用形状函数让峰值饱满，权重三十。
+
+		p *= 0.5; // 最高频一层。
+		p.x += wavesTime; // 换方向。
+
+	waves += vec2(AlmostIdentity(textureSmooth(noisetex, p * vec2(1.0, 0.8) + vec2(0.0,  p.x * 1.7)).w, 0.2, 0.1)
+				  * 20.0, 20.0); // 第六层：最高频，权重二十。
+
+	return waves.x / waves.y; // 高度除以权重和，归一化到合理范围。
+}
+
+#define sampleDistance 12.0 // 法线差分采样距离，原程序取值，写死让每个程序代价一致。
+
+// 波法线：用高度差近似倾斜，中央差分取横纵两个方向。
+// 为什么乘 `WAVE_HEIGHT / sampleDistance`：高度差除以采样距离才是坡度，再乘波浪高度选项统一缩放。
+vec3 GetWavesNormal(vec3 position, const float waveHeight){
+	position.xz -= 0.005 * sampleDistance; // 采样点整体后移一点，让差分落在波面中心。
+
+	float wavesCenter = GetWaves(position); // 中心高度。
+	float wavesLeft = GetWaves(position + vec3(0.01 * sampleDistance, 0.0, 0.0)); // 横向偏移一点的高度。
+	float wavesUp   = GetWaves(position + vec3(0.0, 0.0, 0.01 * sampleDistance)); // 纵向偏移一点的高度。
+
+	vec3 wavesNormal = vec3(wavesCenter - wavesLeft, wavesCenter - wavesUp, 1.0); // 用两个方向的高度差构成法线，竖直分量为一。
+
+	wavesNormal.xy *= waveHeight * (OMNI_WAVE_HEIGHT / sampleDistance); // 按波高选项与采样距离缩放坡度。
+
+	return normalize(wavesNormal); // 归一化成单位法线。
+}
+
+// 水面视差：沿视线在波高场里一步步前进，找到真正可见的波面位置。
+// 为什么限制十二步：步数直接决定开销，写死让每个程序代价一致，也让画面表现稳定。
+vec3 GetWaterParallaxCoord(vec3 position, vec3 viewVector){
+	const vec3 stepSize = vec3(OMNI_WAVE_HEIGHT * 0.8, OMNI_WAVE_HEIGHT * 0.8, 0.6); // 每步的大小，横向按波高缩放，纵向固定。
+	float waveHeight = GetWaves(position); // 起点波高。
+	vec3 pCoord = vec3(0.0, 0.0, 1.0); // 以表面为参考，向前推进的深度。
+	vec3 steps = viewVector * stepSize; // 每步的位移。
+
+	float sampleHeight = waveHeight; // 当前位置的波高。
+
+	for (int i = 0; sampleHeight < pCoord.z && i < 12; ++i) // 波高还没追上视线深度就继续走，最多十二步。
+	{
+		pCoord.xy += steps.xy * saturate((pCoord.z - sampleHeight) * (-viewVector.z + 0.05) / (stepSize.z * 0.2)); // 按深度差决定这一步走多远。
+		pCoord.z += steps.z; // 视线深度前进。
+		sampleHeight = GetWaves(position + vec3(pCoord.x, 0.0, pCoord.y)); // 读取新位置的波高。
+	}
+
+	return position.xyz + vec3(pCoord.x, 0.0, pCoord.y); // 返回偏移后的采样坐标。
+}
+
+// --- 海洋物理波：按迭代正弦合成海面，供外部海洋物理扩展使用 ---
+// 形状必须与原程序一致，因为实体偏移在中央处理器一侧也按同一套公式计算，两边不一致会让实体浮空或陷进水里。
+// 下面这些输入由外部海洋物理扩展提供；扩展缺失时不会调用这些函数，基础水面不受影响。
+const int PHYSICS_ITERATIONS_OFFSET = 13; // 迭代次数的基础偏移，原程序取值。
+const float PHYSICS_DRAG_MULT = 0.048; // 每层波形对采样点的拖拽量。
+const float PHYSICS_XZ_SCALE = 0.035; // 水平坐标缩放。
+const float PHYSICS_TIME_MULTIPLICATOR = 0.45; // 时间缩放。
+const float PHYSICS_W_DETAIL = 0.75; // 细节权重指数。
+const float PHYSICS_FREQUENCY = 6.0; // 起始频率。
+const float PHYSICS_SPEED = 2.0; // 起始速度。
+const float PHYSICS_WEIGHT = 0.8; // 每层权重衰减。
+const float PHYSICS_FREQUENCY_MULT = 1.18; // 每层频率放大。
+const float PHYSICS_SPEED_MULT = 1.07; // 每层速度放大。
+const float PHYSICS_ITER_INC = 12.0; // 每层方向角增量。
+const float PHYSICS_NORMAL_STRENGTH = 0.6; // 法线竖直分量的强度。
+
+uniform int physics_iterationsNormal; // 表面细节迭代次数，来自扩展。
+uniform vec2 physics_waveOffset; // 波形原点偏移，保持网格改变时波形不变。
+uniform ivec2 physics_textureOffset; // 波纹理采样偏移。
+uniform float physics_gameTime; // 可随天气加速的游戏时间，单位秒。
+uniform float physics_globalTime; // 全局时间，单位秒。
+uniform float physics_oceanHeight; // 海面高度基准，基础值十三再乘波高。
+uniform sampler2D physics_waviness; // 浅水深浅图。
+uniform float physics_oceanWaveHorizontalScale; // 波浪水平尺寸。
+uniform vec3 physics_modelOffset; // 模型偏移，用来定位涟漪。
+uniform float physics_rippleRange; // 涟漪贴图覆盖范围。
+uniform float physics_foamAmount; // 泡沫生成量。
+uniform float physics_foamOpacity; // 泡沫不透明度。
+uniform sampler2D physics_ripples; // 涟漪凹凸贴图。
+uniform sampler3D physics_foam; // 泡沫噪声三维贴图。
+uniform sampler2D physics_lightmap; // 原版光照图。
+
+#ifdef PHYSICS_VS // 顶点阶段把局部位置与波高传给片元。
+	out vec3 physics_localPosition; // 顶点局部位置。
+	out float physics_localWaviness; // 顶点处的水深。
 #endif
-#ifdef OMNI_PLAYER_RIPPLES
-    float speed = length(cameraPosition-previousCameraPosition)/max(frameTime,0.001); // 由相邻两帧相机位置差得到移动速度。
-    float r = length(p-cameraPosition.xz); // 到玩家的水平距离。
-    float proximity = 1.0-smoothstep(0.5,2.5,abs(relativeHeight)); // 相机与水面垂直距离超过两米半就淡出，避免飞在天上仍冒圈。
-    wave += proximity*min(speed,2.0)*sin(r*8.0-t*4.0)*exp(-r)*0.025*OMNI_RIPPLE_STRENGTH; // 环强度同时受水平和高度距离限制，移动越快越明显；强度可调。
+#ifdef PHYSICS_FS // 片元阶段接收顶点传来的数据。
+	in vec3 physics_localPosition; // 顶点局部位置。
+	in float physics_localWaviness; // 顶点处的水深。
 #endif
-    return wave*OMNI_WAVE_STRENGTH; // 波强度为零时整体归零，法线不再变化。
+
+// 按迭代正弦求某点波高：每层频率与速度都放大，权重衰减，最后归一化并居中。
+float physics_waveHeight(vec2 position, int iterations, float factor, float time) {
+	position = (position - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale; // 换到波形空间。
+	float iter = 0.0; // 每层方向角。
+	float frequency = PHYSICS_FREQUENCY; // 当前层频率。
+	float speed = PHYSICS_SPEED; // 当前层速度。
+	float weight = 1.0; // 当前层权重。
+	float height = 0.0; // 累加高度。
+	float waveSum = 0.0; // 累加权重。
+	float modifiedTime = time * PHYSICS_TIME_MULTIPLICATOR; // 缩放后的时间。
+
+	for (int i = 0; i < iterations; i++) { // 逐层叠加。
+		vec2 direction = vec2(sin(iter), cos(iter)); // 当前层方向。
+		float x = dot(direction, position) * frequency + modifiedTime * speed; // 当前层的相位。
+		float wave = exp(sin(x) - 1.0); // 波峰更尖的包络。
+		float result = wave * cos(x); // 波形值。
+		vec2 force = result * weight * direction; // 对采样点的拖拽力。
+
+		position -= force * PHYSICS_DRAG_MULT; // 采样点被拖拽，形成剪切。
+		height += wave * weight; // 累加高度。
+		iter += PHYSICS_ITER_INC; // 方向角前进。
+		waveSum += weight; // 累加权重。
+		weight *= PHYSICS_WEIGHT; // 权重衰减。
+		frequency *= PHYSICS_FREQUENCY_MULT; // 频率放大。
+		speed *= PHYSICS_SPEED_MULT; // 速度放大。
+	}
+
+	return height / waveSum * physics_oceanHeight * factor - physics_oceanHeight * factor * 0.5; // 归一化并按海面高度缩放、居中。
 }
-// --- 凹凸细节 ---
-// 解析波和多层正弦海浪负责大起伏，这里用多层程序噪声补高频小涟漪，
-// 频率越高振幅越小，避免近看发花；三层共用同一时间，保证细节和波形一起动。
-float omniWaterDetail(vec2 p) {
-    float t = frameTimeCounter; // 与解析波、海浪共享同一时间。
-    float d = omniNoise(vec3(p*0.35,t*0.6))*0.02; // 中频涟漪，负责看得见的细浪。
-    d += omniNoise(vec3(p*1.1,t*1.1))*0.008; // 高频细节，负责近看时的小颗粒。
-    d += omniNoise(vec3(p*2.4,-t*1.4))*0.004; // 极细纹理并反向流动，打散规则重复感。
-    return d*OMNI_WAVE_STRENGTH*OMNI_WATER_BUMP_STRENGTH; // 与波强度和凹凸强度共同缩放，关到零时细节消失。
+
+// 按迭代正弦求波形方向，与波高同源，只是累加拖拽力。
+vec2 physics_waveDirection(vec2 position, int iterations, float time) {
+	position = (position - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale; // 换到波形空间。
+	float iter = 0.0; // 每层方向角。
+	float frequency = PHYSICS_FREQUENCY; // 当前层频率。
+	float speed = PHYSICS_SPEED; // 当前层速度。
+	float weight = 1.0; // 当前层权重。
+	float waveSum = 0.0; // 累加权重。
+	float modifiedTime = time * PHYSICS_TIME_MULTIPLICATOR; // 缩放后的时间。
+	vec2 dx = vec2(0.0); // 累加方向。
+
+	for (int i = 0; i < iterations; i++) { // 逐层叠加。
+		vec2 direction = vec2(sin(iter), cos(iter)); // 当前层方向。
+		float x = dot(direction, position) * frequency + modifiedTime * speed; // 当前层的相位。
+		float wave = exp(sin(x) - 1.0); // 波峰更尖的包络。
+		float result = wave * cos(x); // 波形值。
+		vec2 force = result * weight * direction; // 对采样点的拖拽力。
+
+		dx += force / pow(weight, PHYSICS_W_DETAIL); // 按细节指数累加方向。
+		position -= force * PHYSICS_DRAG_MULT; // 采样点被拖拽。
+		iter += PHYSICS_ITER_INC; // 方向角前进。
+		waveSum += weight; // 累加权重。
+		weight *= PHYSICS_WEIGHT; // 权重衰减。
+		frequency *= PHYSICS_FREQUENCY_MULT; // 频率放大。
+		speed *= PHYSICS_SPEED_MULT; // 速度放大。
+	}
+
+	return vec2(dx / pow(waveSum, 1.0 - PHYSICS_W_DETAIL)); // 归一化方向。
 }
-// --- 海浪 ---
-// 四层方向、频率、振幅都不同的正弦叠加成起伏；只做垂直位移，不做浪尖前倾（真正的盖斯特纳波还会水平挤压顶点）。
-// 为什么单独成函数：海浪是大尺度、慢速、随波强度整体缩放的位移，顶点和法线都要用，
-// 由 omniWaterHeight 调用，保证顶点抬升和片元法线来自同一份高度，不会错位。
-float omniOceanHeight(vec2 p) {
-#if OMNI_OCEAN_WAVES == 0
-    return 0.0; // 关闭海浪时高度为零，顶点不动、法线也不变，等价于没有这一层。
-#else
-    float t = frameTimeCounter*OMNI_WAVE_SPEED; // 游戏时间驱动海浪起落，波速选项与解析波共用同一起落快慢。
-    float height = 0.0; float amplitude = 0.5; float frequency = 0.08; // 起始振幅和频率，决定最大浪高与波长。
-    vec2 direction = normalize(vec2(1.0,0.3)); // 第一层浪的方向。
-    for (int i=0;i<4;i++) {
-        height += amplitude*sin(dot(direction,p)*frequency+t*(1.0+frequency)); // 按当前方向和频率叠加一层波。
-        direction = vec2(direction.x*0.6-direction.y*0.8,direction.x*0.8+direction.y*0.6); // 旋转方向，避免四层同向叠成一条。
-        amplitude *= 0.5; frequency *= 1.7; // 每层振幅减半、频率变高，形成由大到细的自然层次。
-    }
-    return height*OMNI_WAVE_STRENGTH*OMNI_OCEAN_HEIGHT; // 随波浪大小与海浪大小共同缩放。
-#endif
+
+// 合成海面法线：波形法线再混入涟漪贴图的凹凸，涟漪越强权重越大。
+vec3 physics_waveNormal(const in vec2 position, const in vec2 direction, const in float factor, const in float time) {
+	float oceanHeightFactor = physics_oceanHeight / 13.0; // 海面高度相对基础值十三的倍率。
+	float totalFactor = oceanHeightFactor * factor; // 总倍率。
+	vec3 waveNormal = normalize(vec3(direction.x * totalFactor, PHYSICS_NORMAL_STRENGTH, direction.y * totalFactor)); // 由波形方向构造法线。
+
+	vec2 eyePosition = position + physics_modelOffset.xz; // 加上模型偏移，定位涟漪位置。
+	vec2 rippleFetch = (eyePosition + vec2(physics_rippleRange)) / (physics_rippleRange * 2.0); // 涟漪贴图采样坐标。
+	vec2 rippleTexelSize = vec2(2.0 / textureSize(physics_ripples, 0).x, 0.0); // 一个纹素的横向大小。
+	float left = texture(physics_ripples, rippleFetch - rippleTexelSize.xy).r; // 左侧涟漪高度。
+	float right = texture(physics_ripples, rippleFetch + rippleTexelSize.xy).r; // 右侧涟漪高度。
+	float top = texture(physics_ripples, rippleFetch - rippleTexelSize.yx).r; // 上侧涟漪高度。
+	float bottom = texture(physics_ripples, rippleFetch + rippleTexelSize.yx).r; // 下侧涟漪高度。
+	float totalEffect = left + right + top + bottom; // 四邻合计，表示涟漪强度。
+
+	float normalx = left - right; // 横向坡度。
+	float normalz = top - bottom; // 纵向坡度。
+	vec3 rippleNormal = normalize(vec3(normalx, 1.0, normalz)); // 涟漪法线。
+	return normalize(mix(waveNormal, rippleNormal, pow(totalEffect, 0.5))); // 按涟漪强度混合波形法线与涟漪法线。
 }
-// --- 合成高度 ---
-// 把三种波加在一起，作为唯一的波高来源：大尺度海浪 + 解析波 + 凹凸细节。
-// 法线有限差分和顶点位移都读这个函数，任何一层调整都会同时反映到顶点和法线。
-float omniWaterHeight(vec2 p, float relativeHeight) {
-    float height = omniOceanHeight(p)+omniWave(p,relativeHeight); // 先叠大尺度海浪和解析波。
-#if OMNI_WATER_BUMP == 1
-    height += omniWaterDetail(p); // 再补细碎凹凸。
-#endif
-    return height; // 波强度已在各层内部缩放，这里不再重复乘。
+
+// 海面像素的完整数据，一次算好方向、位置、法线、泡沫与高度，供片元阶段一次取用。
+struct WavePixelData {
+	vec2 direction; // 波形方向。
+	vec2 worldPos; // 还原后的世界位置。
+	vec3 normal; // 合成法线。
+	float foam; // 泡沫强度。
+	float height; // 波高。
+};
+
+// 一次算出海面像素的全部数据，内部把波高、方向与泡沫合成，避免片元阶段重复迭代。
+WavePixelData physics_wavePixel(const in vec2 position, const in float factor, const in float iterations, const in float time) {
+	vec2 wavePos = (position.xy - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale; // 换到波形空间。
+	float iter = 0.0; // 每层方向角。
+	float frequency = PHYSICS_FREQUENCY; // 当前层频率。
+	float speed = PHYSICS_SPEED; // 当前层速度。
+	float weight = 1.0; // 当前层权重。
+	float height = 0.0; // 累加高度。
+	float waveSum = 0.0; // 累加权重。
+	float modifiedTime = time * PHYSICS_TIME_MULTIPLICATOR; // 缩放后的时间。
+	vec2 dx = vec2(0.0); // 累加方向。
+
+	for (int i = 0; i < iterations; i++) { // 逐层叠加。
+		vec2 direction = vec2(sin(iter), cos(iter)); // 当前层方向。
+		float x = dot(direction, wavePos) * frequency + modifiedTime * speed; // 当前层的相位。
+		float wave = exp(sin(x) - 1.0); // 波峰更尖的包络。
+		float result = wave * cos(x); // 波形值。
+		vec2 force = result * weight * direction; // 对采样点的拖拽力。
+
+		dx += force / pow(weight, PHYSICS_W_DETAIL); // 按细节指数累加方向。
+		wavePos -= force * PHYSICS_DRAG_MULT; // 采样点被拖拽。
+		height += wave * weight; // 累加高度。
+		iter += PHYSICS_ITER_INC; // 方向角前进。
+		waveSum += weight; // 累加权重。
+		weight *= PHYSICS_WEIGHT; // 权重衰减。
+		frequency *= PHYSICS_FREQUENCY_MULT; // 频率放大。
+		speed *= PHYSICS_SPEED_MULT; // 速度放大。
+	}
+
+	WavePixelData data; // 待填充的数据。
+	data.direction = -vec2(dx / pow(waveSum, 1.0 - PHYSICS_W_DETAIL)); // 方向取负，朝向波前进方向。
+	data.worldPos = wavePos / physics_oceanWaveHorizontalScale / PHYSICS_XZ_SCALE; // 还原世界位置。
+	data.height = height / waveSum * physics_oceanHeight * factor - physics_oceanHeight * factor * 0.5; // 归一化并按海面高度缩放、居中。
+
+	data.normal = physics_waveNormal(position, data.direction, factor, time); // 复用上面的法线合成。
+
+	float waveAmplitude = data.height * pow(max(data.normal.y, 0.0), 4.0); // 波峰处的振幅，用来抑制泡沫。
+	vec2 waterUV = mix(position - physics_waveOffset, data.worldPos, clamp(factor * 2.0, 0.2, 1.0)); // 泡沫采样坐标在原始位置与波后位置间混合，避免泡沫拉花。
+
+	vec2 s1 = textureLod(physics_foam, vec3(waterUV * 0.26, physics_globalTime / 360.0), 0).rg; // 泡沫噪声第一层。
+	vec2 s2 = textureLod(physics_foam, vec3(waterUV * 0.02, physics_globalTime / 360.0 + 0.5), 0).rg; // 泡沫噪声第二层。
+	vec2 s3 = textureLod(physics_foam, vec3(waterUV * 0.1, physics_globalTime / 360.0 + 1.0), 0).rg; // 泡沫噪声第三层。
+
+	float waterSurfaceNoise = s1.r * s2.r * s3.r * 2.8 * physics_foamAmount; // 三层噪声相乘得到泡沫形状。
+	waveAmplitude = clamp(waveAmplitude * 1.2, 0.0, 1.0); // 振幅夹到零到一。
+	waterSurfaceNoise = (1.0 - waveAmplitude) * waterSurfaceNoise + waveAmplitude * physics_foamAmount; // 波峰处泡沫更强。
+
+	float worleyNoise = 0.2 + 0.8 * s1.g * (1.0 - s2.g); // 用噪声的另一个通道做细胞状调制。
+	float waterFoamMinSmooth = 0.45; // 泡沫起始阈值。
+	float waterFoamMaxSmooth = 2.0; // 泡沫最大增益。
+	waterSurfaceNoise = smoothstep(waterFoamMinSmooth, 1.0, waterSurfaceNoise) * worleyNoise; // 平滑阈值并乘细胞调制。
+
+	data.foam = clamp(waterFoamMaxSmooth * waterSurfaceNoise * physics_foamOpacity, 0.0, 1.0); // 得到最终泡沫强度。
+
+	return data; // 返回完整数据。
 }
-// --- 水面法线 ---
-// 用高度差近似波浪倾斜：取横纵各一小步的高度差（中央差分），足够表现波浪倾斜，比解析求导便宜。
-// 只对顶面造波：瀑布和水流的侧面法线接近垂直，这些面若也造波会和真实几何脱节；
-// 波强度为零时同样直接返回原法线，让选项能彻底关掉波浪。
-vec3 omniWaterNormal(vec3 world, vec3 originalNormal) {
-    vec3 worldNormal = omniNormalize(mat3(gbufferModelViewInverse)*originalNormal); // 原表面朝向由真实几何提供，转到世界空间判断。
-    if (OMNI_WAVE_STRENGTH<=0.0 || worldNormal.y<0.9) return originalNormal; // 顶面之外和零强度都保留原法线。
-    vec2 p = (world+cameraPosition).xz; // 波浪锚定在世界坐标，随水面移动而不是随镜头漂移。
-    float center = omniWaterHeight(p,world.y); // 中心点高度，用相机相对水面高度作为近水互动的基准。
-    float slopeX = (center-omniWaterHeight(p+vec2(0.08,0.0),world.y))/0.08; // 横轴高度梯度，八厘米步长对应细波尺度。
-    float slopeZ = (center-omniWaterHeight(p+vec2(0.0,0.08),world.y))/0.08; // 纵轴高度梯度，与横轴对称。
-    vec3 tilted = omniNormalize(vec3(slopeX,1.0,slopeZ)); // 有限差分只扰动顶面，非零的垂直分量保证法线仍朝上。
-    if (!(tilted.y>0.0)) return originalNormal; // 高度样本非法时退回原法线，避免 NaN 污染整幅画面。
-    return omniNormalize(mat3(gbufferModelView)*tilted); // 合成阶段要用视空间法线，这里转回去。
+
+// --- 雨点涟漪：用三张动画贴图叠出雨滴落点，供水面与地表使用 ---
+// 三层动画贴图越大越散开，用降雨强度与降雪、无降水标记调制，雪天与干燥群系不出现雨点。
+// 为什么用三重噪声：单层噪声太规则，三层不同缩放叠加后落点更自然。
+float Get3DNoise(vec3 pos){
+	vec3 p = floor(pos); // 整数格。
+	vec3 f = pos - p; // 格内小数。
+	f = curve(f); // 平滑小数，插值更自然。
+
+	vec2 uv = 17.0 * p.z + p.xy + f.xy; // 任意分配一个三维到二维的坐标。
+	vec2 rg = textureLod(noisetex, (uv + 0.5) / 64.0, 0.0).zw; // 读噪声贴图后两个通道。
+
+	return mix(rg.x, rg.y, f.z); // 按高度插值。
 }
-// --- 水面合成 ---
-// 折射：按法线把取样位置略作偏移，模拟光线在水面处弯折；浅水偏移小，避免整片画面扭曲。
-// 防泄漏：若偏移后的位置属于漂在水面前方的物体，用它会显影前景颜色，所以这种情况拒绝偏移。
-// 吸收：水体对红绿蓝的吸收速度不同，红最快、蓝最慢，越深越偏青绿，深水趋近水体散射色。
-// 反射：按菲涅耳强度把水面反射混进来；反射强度开关关掉时整段反射都不参与。
-// 调用位置：rendering/composite.glsl；示例：omniWater(view, waterNormal, texcoord)。
-vec3 omniWater(vec3 view, vec3 normal, vec2 uv) {
-    vec2 refracted = uv; // 默认不折射，直接用原屏幕位置。
-    float waterDepth = length(omniSceneView(uv,true))-length(view); // 底面到水面的真实距离：不透明深度减去水面深度。
-    float thickness = waterDepth>0.0 ? min(waterDepth,100.0) : 0.0; // 非法或负距离按零厚度，避免 NaN 传播，同时限制在零到一百米。
-#ifdef OMNI_WATER_REFRACTION
-    vec2 candidate = clamp(uv+normal.xy*0.018*OMNI_REFRACTION_STRENGTH*min(thickness,3.0),vec2(0.002),vec2(0.998)); // 浅水折射弱、深水折射强，偏移始终留在屏幕内；强度选项整体放大或缩小。
-    if (length(omniSceneView(candidate,true))>length(view)+0.05) refracted = candidate; // 只有偏移后仍在水面之后才采用，防止前景颜色漏进水里。
-#endif
-    vec3 transmitted = omniWaterTransmit(texture(colortex3,refracted).rgb,thickness); // 不透明快照含底面辐射，坐标可能已被折射偏移过；再按水体分波段吸收并趋向散射色。
-    vec3 surface = transmitted; // 默认只有水色，反射关闭时也走这里。
-    if (OMNI_REFLECTION_STRENGTH>0.0) { // 反射开启时才采样反射，省下关闭时的天空与屏幕调用。
-        float fresnel = 0.02+0.98*pow(1.0-max(dot(normal,omniNormalize(-view)),0.0),5.0); // 正对水面反射弱，掠射角反射强。
-        surface = mix(transmitted,omniReflected(view,normal,0.06),fresnel*OMNI_REFLECTION_STRENGTH); // 按菲涅耳强度在透射和反射之间混合。
-    }
-    // 水面阳光高光：水面法线朝向太阳与视线半程方向时出现一条窄亮带，即俗称的水面鳞光。
-    // 为什么只在白天出现：太阳落到地平线以下就没有直射高光，用太阳高度做过渡，夜里自然消失。
-    vec3 sunDir = omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition); // 太阳在世界空间的方向。
-    vec3 halfway = omniNormalize(omniNormalize(shadowLightPosition)+omniNormalize(-view)); // 光线与视线的半程方向，仍在视空间。
-    float glint = pow(max(dot(normal,halfway),0.0),256.0) * OMNI_WATER_GLINT * smoothstep(-0.1,0.1,sunDir.y); // 高指数让亮带很窄，只在接近镜面方向出现。
-    return surface + vec3(1.0,0.95,0.85)*glint; // 暖白高光叠在最终水面上，取零强度时无变化。
+
+// 雨雾高光调制：三层噪声叠加后归一，让雨中的高光随时间轻微变化。
+float GetModulatedRainSpecular(vec3 pos){
+	pos.y *= 0.2; // 压缩竖直方向，雨高光在竖直上变化更慢。
+
+	float n = Get3DNoise(pos); // 第一层。
+		  n += Get3DNoise(pos * 0.5) * 2.0; // 第二层，缩小坐标并放大权重。
+		  n += Get3DNoise(pos * 0.25) * 4.0; // 第三层，更细更高权重。
+
+	n /= 7.0; // 归一化到大致零到一。
+
+	return saturate(n) * 0.7 + 0.3; // 夹紧后留一个下限，避免完全无高光。
 }
-#endif
+
+// 读一张雨点动画贴图并转成带符号的法线，指数控制边缘锐度。
+vec2 GetRainAnimationTex(sampler2D texSampler, vec2 coord, float rp){
+	vec2 n = textureLod(texSampler, coord, 0.0).rg; // 读红绿两通道。
+	n =  n * vec2(2.0, -2.0) + vec2(-1.0, 1.0); // 零到一转成负一到一，并翻转纵轴。
+	n = pow(abs(n), vec2(rp)) * sign(n); // 按指数压形状，符号保留。
+	return n; // 返回法线横纵分量。
+}
+
+// 雨点法线：按动画相位在贴图上采样，三层按降雨强弱叠加。
+// 为什么用整数帧取模：让动画按固定帧率推进，避免不同刷新设备上速度不一致。
+vec2 GetRainNormal(vec3 pos, float strength, inout float wet){
+	pos.xyz *= 0.5; // 缩放坐标，让落点更大。
+	#ifdef OMNI_DISABLE_LOCAL_PRECIPITATION // 强制局部无降水时只看整体降雨。
+		strength *= rainStrength; // 只乘降雨强度。
+	#else // 默认按所在群系的下雪与无降水标记调制。
+		strength *= rainStrength * (1.0 - eyeSnowySmooth) * (1.0 - eyeNoPrecipitationSmooth); // 雪天或干燥群系雨点减弱。
+	#endif
+
+	float frame = fract(floor(frameTimeCounter * 60.0) / 60.0); // 当前动画帧，按每秒六十帧取整。
+	vec2 coord = vec2(pos.x, fract(pos.z / 60.0) - frame); // 动画沿一个轴滑动。
+
+	float wet2 = wet * wet; // 湿润度平方。
+	float rp = 2.0 - (wet2 * wet2) * 1.2; // 越湿边缘越锐。
+
+	vec2 n1 = GetRainAnimationTex(gaux1, coord, rp); // 第一张动画贴图。
+	vec2 n2 = GetRainAnimationTex(gaux2, coord, rp); // 第二张动画贴图。
+	vec2 n3 = GetRainAnimationTex(gaux3, coord, rp); // 第三张动画贴图。
+
+	pos.x -= frameTimeCounter * 0.5; // 沿一个轴漂移，落点缓慢移动。
+	float downfall = textureLod(noisetex, pos.xz * 0.0025, 0.0).w; // 读噪声得到落点密度。
+	downfall = saturate(downfall - 0.25); // 留一个阈值，稀疏区域没有雨点。
+
+	vec2 n = n1; // 第一层总是有。
+	n += n2 * saturate(downfall * 2.0); // 密度中等时叠第二层。
+	n += n3 * saturate(downfall * 2.0 - 1.0); // 密度高时才叠第三层。
+
+	float lod = dot(fwidth(pos.xz), vec2(1.0)); // 屏幕上的坐标变化量，用来按距离衰减。
+
+	n /= lod * 5.0 + 1.0; // 越远越平，避免远处闪烁。
+	n *= strength; // 乘降雨强度。
+
+	wet = saturate(mix(downfall, wet, 1.0 - 0.4 * saturate(strength))); // 湿润度向落点密度靠拢，降雨越强越明显。
+
+	return n; // 返回雨点法线。
+}
+
+// --- 水下与水后雾：按距离做分波段衰减并向雾色靠拢 ---
+// 调用位置：`rendering/composite.glsl`；示例见文件头。
+// 参数里的 `occludedWater` 表示视线被半透明玻璃挡住的水，`totalInternalReflection` 表示发生全反射。
+// 为什么区分是否在水下：水面之上看水下与整只眼睛浸在水里，雾色与散射方向都不同。
+void WaterFog(inout vec3 color, vec3 viewDir, float opaqueDist, float waterDist, vec3 normal, MaterialMask mask, float occludedWater, float waterSkylight, float totalInternalReflection, vec3 shadowLightVector, vec3 shadowlightColorInput, vec3 skylightColorInput){
+	float distDiff = opaqueDist - waterDist; // 水面到水底的真实厚度。
+	waterDist = isEyeInWater == 0 ? // 不在水下时，实际雾距离是水体厚度。
+				mix(distDiff, min(distDiff * 0.3, 6.0), occludedWater) : // 隔着玻璃时厚度打折并封顶，避免过浓。
+				mix(waterDist, opaqueDist, mask.stainedGlass); // 在水下且隔着玻璃时改用不透明距离。
+
+	float eyeWaterDepth = saturate(float(eyeBrightnessSmooth.y) / 120.0 - 0.8); // 眼睛离水面的深度感，由天空光反推。
+	waterDist = max(waterDist, totalInternalReflection * eyeWaterDepth * 50.0); // 全反射时把雾距离拉长，形成亮环。
+
+	vec3 shadowVectorRefracted = refract(-shadowLightVector, gbufferModelView[1].xyz, 1.0 / WATER_REFRACT_IOR); // 阳光在水面折射后的方向。
+
+	vec3 waterFogColor = mix(vec3(0.05, 0.6, 1.0), vec3(0.3, 0.9, 1.5), mask.ice); // 冰面偏亮青，普通水偏青。
+	waterFogColor = mix(waterFogColor, vec3(0.5), wetness * 0.6); // 越湿雾色越中性。
+
+	waterFogColor *= dot(vec3(0.33333), skylightColorInput); // 乘天光色，雾色随环境变化。
+
+	if (isEyeInWater == 0){ // 水面之上看水下。
+		waterFogColor *= 0.04 - wetness * 0.032; // 水面之上的雾很淡，雨天更淡。
+		waterFogColor *= waterSkylight; // 再乘该处水面接收的天光。
+
+		vec3 l = normalize(reflect(viewDir, normal)); // 视线在水面的反射方向。
+		vec3 h = normalize(l - viewDir); // 反射方向与视线的半程。
+		float F = saturate(dot(normal, l)) * saturate(dot(l, h) * 1.5 - 0.5); // 一个简化的菲涅耳权重。
+		float scatter = 3.0 * F * pow(dot(shadowVectorRefracted, viewDir) * 5.0 + 5.2, -1.4); // 逆光时的散射更强。
+
+		waterFogColor = mix(waterFogColor, shadowlightColorInput * waterFogColor * 3.0, scatter * saturate(1.0 - wetness - occludedWater)); // 逆光散射叠上去，湿地或隔玻璃时减弱。
+	}else{ // 整只眼睛在水里。
+		waterFogColor *= 0.02 - wetness * 0.012; // 水下雾更淡。
+		float scatter = 1.0 / (dot(shadowVectorRefracted, viewDir) * 5.0 + 5.1); // 朝向阳光的散射。
+		vec3 waterSunlightScatter = shadowlightColorInput * scatter * waterFogColor * 2.0; // 阳光在水里的散射色。
+
+		waterFogColor *= dot(viewDir, gbufferModelView[1].xyz) * 0.4 + 0.6; // 朝上看更亮。
+		waterFogColor += waterSunlightScatter * (eyeWaterDepth * (1.0 - wetness * 0.6)); // 叠加阳光散射。
+	}
+
+	float fogDensity = isEyeInWater == 0 ? 0.29 : mask.ice * 0.96 + 0.04; // 基础雾密度，冰下更浓。
+	float visibility = exp2(-waterDist * fogDensity * OMNI_WATERFOG_DENSITY); // 按密度指数衰减得到可见度。
+
+	visibility = clamp(visibility, 0.35 * mask.ice, 1.0); // 冰下留一个最低可见度。
+	visibility = mix(visibility, 0.7, mask.hand); // 手持物只受七成雾影响，避免手被糊掉。
+
+	vec3 attenuationColor = isEyeInWater == 0 ? vec3(0.2, 0.5, 0.7) : vec3(0.1, 0.6, 1.0); // 分波段衰减色，水下偏蓝。
+	color *= pow(attenuationColor * 0.99, vec3(waterDist * (0.21 * float(isEyeInWater == 0) + 0.04) * OMNI_WATERFOG_DENSITY)); // 红衰减最快，蓝最慢。
+
+	color = mix(waterFogColor, color, visibility); // 用可见度在雾色与场景色之间混合。
+}
+
+// --- 水面折射Lite：只移动一次采样坐标的轻量折射 ---
+// 调用位置：`rendering/composite.glsl`；先把采样点按水面法线偏移，再读一号画面的颜色。
+// 防泄漏：偏移后的采样点若比当前水面更近，说明采到了前景物体，直接退回原位。
+// 为什么分成水面与水外两条路：水面用波法线偏移更贴合，水外的玻璃等用整段折射方向偏移更准确。
+void WaterRefractionLite(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist, float fogTimeFactor, float cloudShadow, vec2 screenCoordInput){
+	vec2 refractCoord = screenCoordInput; // 默认不折射，用原屏幕坐标。
+
+	float waterDeep = opaqueDist - waterDist; // 水面到水底的厚度，越厚折射越强。
+
+	if (mask.water > 0.5){ // 水面本身：用波法线偏移。
+		float NdotU = dot(normal, gbufferModelView[1].xyz) + float(isEyeInWater == 1) * 2.0; // 法线朝向与水下判断。
+		vec3 wavesNormal = GetWavesNormal(worldPos + cameraPosition, step(0.05, NdotU) * 18.0).xzy; // 求波法线并换到竖直轴朝上的坐标。
+		vec4 wnv = gbufferModelView * vec4(wavesNormal.xyz, 0.0); // 波法线转到视空间。
+		vec3 wavesNormalView = normalize(wnv.xyz); // 归一化。
+
+		vec4 nv = gbufferModelView * vec4(0.0, 1.0, 0.0, 0.0); // 平水面法线转到视空间。
+		nv.xyz = normalize(nv.xyz); // 归一化。
+
+		refractCoord = nv.xy - wavesNormalView.xy; // 两种法线的差就是折射偏移方向。
+		refractCoord *= saturate(waterDeep) * 0.5 / (waterDist + 0.0001); // 越深折射越强，除以距离避免远处偏移过大。
+		refractCoord += screenCoordInput; // 加到原坐标上。
+	}else{ // 玻璃等透明面：用整段折射方向。
+		vec3 refractDir = refract(normalize(viewPos), normal, 0.66); // 视空间折射方向。
+		refractDir = refractDir / saturate(dot(refractDir, -normal)); // 归一化到视线方向。
+		refractDir *= saturate(waterDeep * 2.0) * 0.125; // 按厚度缩放。
+
+		vec4 refractPos = vec4(viewPos + refractDir, 0.0); // 折射后的视空间位置。
+		refractPos = gbufferProjection * refractPos; // 投影到裁剪空间。
+
+		refractCoord = refractPos.xy / refractPos.w * 0.5 + 0.5; // 转成屏幕坐标。
+	}
+
+	float currentDepth = texelFetch(depthtex0, ivec2(screenCoordInput * screenSize), 0).x; // 当前像素的深度，用传入的屏幕坐标换算像素位置，不依赖程序声明的全局。
+	float refractDepth = textureLod(depthtex1, refractCoord, 0.0).x; // 折射采样点的深度。
+	if(refractDepth < currentDepth) refractCoord = screenCoordInput; // 采样点更近就是前景，退回原位防泄漏。
+
+	refractCoord = mix(screenCoordInput, refractCoord, float(saturate(refractCoord) == refractCoord)); // 屏幕外的采样点也退回原位。
+
+	color = CurveToLinear(textureLod(colortex1, refractCoord, 0.0).rgb); // 读回折射后的场景颜色。
+
+	#if (defined OMNI_LANDSCATTERING && defined OMNI_LANDSCATTERING_REFRACTION) || (defined OMNI_VFOG && defined OMNI_VFOG_REFRACTION) // 只在同时开启地表散射或体积雾的折射时，给玻璃后面补雾。
+		if (mask.stainedGlass > 0.5){ // 只处理彩色玻璃。
+			float rDepth = textureLod(depthtex1, refractCoord, 0.0).x; // 折射点的深度。
+			vec3 rViewPos = ViewPos_From_ScreenPos(refractCoord, rDepth); // 还原视空间位置。
+			#ifdef DISTANT_HORIZONS // 有远景时，近景是天空就改用远景深度。
+				if (rDepth == 1.0){ // 近景是天空。
+					rDepth = textureLod(dhDepthTex1, refractCoord, 0.0).x; // 读远景深度。
+					rViewPos = ViewPos_From_ScreenPos_DH(refractCoord, rDepth); // 远景还原位置。
+				}
+				float farDist = max(float(dhRenderDistance), far) * 1.4; // 远景可视距离。
+				#ifdef OMNI_DH_LIMIT_VFOG_DIST
+					farDist = min(2048.0, farDist); // 限制雾距离上限。
+				#endif
+			#else
+				float farDist = far * 1.4; // 没有远景时用近景远裁剪面估计。
+			#endif
+
+			float rDist = min(length(rViewPos) + float(rDepth == 1.0) * 1e10, farDist); // 折射点距离，天空给很远。
+			rDist = max(rDist - waterDist, 0.0); // 减去水面距离，只剩水体厚度。
+
+			vec3 rWorldPos = mat3(gbufferModelViewInverse) * rViewPos; // 折射点转回相机相对世界。
+			vec3 rWorldDir = normalize(rWorldPos); // 世界方向。
+
+			vec3 endPos = rWorldDir * rDist; // 雾的终点。
+
+			color *= MAIN_OUTPUT_FACTOR; // 换成管线线性单位，雾函数按此单位工作。
+
+			#ifdef OMNI_LANDSCATTERING
+				#ifdef OMNI_LANDSCATTERING_REFRACTION
+					LandAtmosphericScattering(color, rDist, worldPos, endPos, rWorldDir, rDepth == 1.0); // 给折射后的场景补地表散射。
+				#endif
+			#endif
+
+			#ifdef OMNI_VFOG
+				#ifdef OMNI_VFOG_REFRACTION
+					float fogTransmittance = 1.0; // 透射率占位，本处不返回。
+					if (fogTimeFactor > 0.01 && isEyeInWater == 0) VolumetricFog(color, worldPos, endPos, rWorldDir, cloudShadow, fogTimeFactor, fogTransmittance); // 给折射后的场景补体积雾。
+				#endif
+			#endif
+
+			color /= MAIN_OUTPUT_FACTOR; // 换回管线存储单位。
+		}
+	#endif
+}
+
+// --- 彩色玻璃吸收：按玻璃自身的颜色与不透明度吸收透过的光 ---
+// 调用位置：`rendering/composite.glsl`；只影响彩色玻璃像素。
+// 为什么把颜色归一化再乘回长度：贴图颜色可能很亮，先取方向与大致亮度，避免吸收过强或失效。
+void TransparentAbsorption(inout vec3 color, vec4 stainedGlassAlbedo, float waterAbsorption){
+	vec3 stainedGlassColor = normalize(stainedGlassAlbedo.rgb + 0.0001) * fsqrt(length(stainedGlassAlbedo.rgb)); // 归一化方向乘近似亮度。
+	stainedGlassAlbedo.a = pow(stainedGlassAlbedo.a, 0.2); // 抬升不透明度曲线，让吸收更明显。
+
+	#ifdef OMNI_UNDERWATER_FOG // 水下时玻璃吸收按水的吸收程度缩放。
+		if (isEyeInWater == 1) stainedGlassAlbedo.a = mix(0.0, stainedGlassAlbedo.a, waterAbsorption); // 水越浅吸收越弱。
+	#endif
+
+	color *= GammaToLinear(mix(vec3(1.0), stainedGlassColor, stainedGlassAlbedo.a)); // 按不透明度在无吸收与玻璃色之间混合后吸收。
+}
+#endif // 文件守卫结束。

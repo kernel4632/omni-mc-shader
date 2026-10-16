@@ -57,6 +57,7 @@ uniform vec2 screenSize; // 画面尺寸，单位像素。
 uniform vec2 pixelSize; // 一个像素在零到一坐标里的大小。
 uniform float eyeBrightnessSmoothCurved; // 天空光亮度的曲线平滑值，自动曝光与洞穴判断用。
 uniform float eyeBrightnessZeroSmooth; // 完全没有天空光的平滑标记。
+uniform float eyeBrightnessOneSmooth; // 天空光满值的平滑标记，雨雪倾斜与云影淡出用。
 uniform float eyeSnowySmooth; // 所在群系下雪的平滑标记。
 uniform float eyeNoPrecipitationSmooth; // 所在群系不降水的平滑标记。
 uniform float eyeRxSmooth; // 视角俯仰角速度的平滑值，镜头效果用。

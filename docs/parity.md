@@ -176,7 +176,7 @@ common/uniforms.glsl → common/math.glsl →（定义本程序所需选项的�
   - 与 iterationT 选项同名（如 `OMNI_DOF`、`OMNI_GAMMA`）：直接改成 iterationT 含义、默认值与取值。
   - 含义相同但名字不同：删除旧定义，在交付报告里写“旧名 → 新名”，主助手统一登记进 `options.py` 的 `OPTION_RENAMES`。
   - iterationT 没有的额外功能：保留并接到新管线的真实计算，默认值必须让画面与 iterationT 一致（默认关闭或取不改变画面的值）。
-  - 只属于被替换旧算法、找不到对应含义的参数：不要直接删除，写进报告由主助手决定。
+  - 只属于被替换旧算法、在新算法里再也找不到含义的参数：不要直接删除，写进报告由主助手决定。
 
 选项归属（括号内为数量，名字为 iterationT 原名）：
 
@@ -235,10 +235,10 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 | 分片 | 负责文件 | 状态 |
 | --- | --- | --- |
 | 甲 地基 | `build.py`、`options.py`、`rendering/programs.json`、`rendering/pipeline.properties`、`rendering/buffers.glsl`、`common/*`、`shaders/texture/`、`*.properties`、工具测试 | 完成（占位主体可编译，`python build.py verify` 通过） |
-| 乙 几何阶段 | `rendering/terrain`、`entities`、`translucent`、`overlay`、`celestial`、`shadow`、`distant`；`effects/material`、`shadow`、`water`、`vegetation`、`weather`、`entity`、`world`、`selection`、`season` | 进行中 |
-| 丙 延迟阶段 | `rendering/deferred`；`effects/sky`、`atmosphere`、`cloud`、`ambient`、`sunlight` | 进行中 |
-| 丁 合成阶段 | `rendering/composite`；`effects/blocklight`、`reflection`、`fog`、`lpv` 与 `rendering/lpv` | 进行中 |
-| 戊 后期 | `rendering/post`、`final`；`effects/lens`、`antialiasing`、`bloom`、`color`、`upscale`、`debug` | 进行中 |
+| 乙 几何阶段 | `rendering/terrain`、`entities`、`translucent`、`overlay`、`celestial`、`shadow`、`distant`；`effects/material`、`shadow`、`water`、`vegetation`、`weather`、`entity`、`world`、`selection`、`season` | 完成（离线编译通过；待实机核对） |
+| 丙 延迟阶段 | `rendering/deferred`、`lights`；`effects/sky`、`atmosphere`、`cloud`、`ambient`、`sunlight` | 完成（离线编译通过；待实机核对） |
+| 丁 合成阶段 | `rendering/composite`；`effects/blocklight`、`reflection`、`fog`、`lpv` 与 `rendering/lpv` | 完成（离线编译通过；待实机核对） |
+| 戊 后期 | `rendering/post`、`final`；`effects/lens`、`antialiasing`、`bloom`、`color`、`upscale`、`debug` | 完成（离线编译通过；待实机核对） |
 | 己 下界与末地 | 维度程序、`effects/nether`、`effects/end`、下界时间抗锯齿 | 待甲到戊完成 |
 | 庚 集成 | 选项改名登记、预设、测试、文档、离线检查、游戏内对照截图 | 待前面完成 |
 
@@ -247,6 +247,19 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 1. `python build.py verify` 通过（十秒预算不变）。
 2. 游戏内对照：同一位置、同一时间、同一天气，分别加载 iterationT 与 Omni 截图，逐项比较天空、阴影、水、雾、云、曝光与色调。
 3. 偏离 iterationT 的地方必须写进下面的偏离记录，不能当成已复刻。
+
+## 十三、给子任务的工作方式
+
+每个子任务开工前先读：HOP 技能（`C:\Users\17137\.config\opencode\skills\hop\SKILL.md`）、`AGENTS.md`、本文件全文。
+
+- 只改分片表里分给你的文件，别的文件一个字不动。
+- 数学、常数、分支、采样、顺序照 iterationT 原程序逐行对照写；函数名、结构体名、全局量、输入输出变量名保持原名（只修 `Temproal` → `Temporal`、`Soild` → `Solid` 这类拼写）。
+- 每个文件按第八节规则写：文件头讲清职责、调用位置、可复制示例、关键取舍；用 `#ifndef OMNI_<文件名>_INCLUDED` 守卫；选项用 `// @option` 加 `#define OMNI_X`（或合同允许的原生常量）；至少一半非空行有中文说明，英文术语放反引号。
+- 绘制主体按第九节“地基接口”的引入顺序写；效果文件用 `#include "/common/..."` 与 `#include "/effects/..."` 引依赖，不写 `#version`。
+- 每个效果文件的函数调用前要确认依赖它的全局量已由调用方声明（例如 `texelCoord`、`colorShadowlight`），在文件头写清调用前提。
+- 验证只用 `python build.py audit`（检查中文说明比例与格式）。**不要**运行 `python build.py verify`、`check`、`generate`、`build`：其它分片还没写完，编译必然失败，那不是你的错误。
+- 不要 `git commit`、`git add`、`git push`、切分支。
+- 回报只写：改了哪些文件、每个文件对照的 iterationT 来源、用到的选项与内部常数、没做或存疑的地方。不要贴大段代码。
 
 ## 十二、偏离记录
 
@@ -258,3 +271,23 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 6. `block.properties`、`entity.properties`、`item.properties` 与生成的 `shaders.properties` 加入审计的机器文件豁免：它们是逐行可对照的编号数据，不写中文说明。
 7. 移植期开关：`build.py` 里的 `PORTING = True` 让“选项未接入入口”只警告、并把编译探针缩到主世界默认配置和环境；移植完成后由庚片删除该开关并恢复完整探针与全部代表配置。
 8. 旧管线测试跳过：`tests/` 里断言旧管线算法与缓冲的 32 个测试用 `@unittest.skip(PORT_REPLACED)` 标记，理由写入测试文件；庚片按新管线重写后恢复。
+9. 旧算法专用选项的处置（由主助手统一裁决，分片只登记不擅自删除）：iterationT 用预计算大气贴图，旧 Omni 那种“实时积分步数/散射倍率”参数在新算法里没有对应含义。这类选项一律登记到本节清单，由主助手在庚片决定“并入同名迭代T选项 / 保留为中性额外功能 / 作为接口变更移除并写迁移说明”，不在分片里悄悄删除。
+10. 强光压缩选项表示（戊片）：iterationT `TONEMAP_OPERATOR` 是函数名取值的宏（`AgX`/`ACES`/`None`），而 `options.py` 只接受数字取值，所以 Omni 把它定义为序号 `0`/`1`/`2`，档位名称映射回 `AgX`/`ACES`/无，绘制主体用 `#if OMNI_TONEMAP_OPERATOR == 1` 分派。行为和默认值（`AgX`）与原程序一致，只改表示形式。
+11. `CalculateWaterCaustics` 同名不同实现（丁片）：iterationT 有两份同名函数，`Lib/BasicFounctions/Sunlight_Shadow.glsl` 的一份按九次采样算焦散遮罩，`Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 的一份只返回 `dist * 2.8 + 0.2`，两者内容不同。前者已在 `effects/shadow.glsl`，按第九点五节的处理方式把后者改名 `CalculateUnderwaterCaustics` 留在 `effects/fog.glsl`，函数体不变；水下体积雾同时复用 `effects/shadow.glsl` 里内容相同的 `GetWavesNormalFromTex`，不重复定义。
+12. `LANDSCATTERING_DISTANCE` 选项补记（丁片）：第九节 `effects/fog.glsl` 的选项清单漏了这个名字，但 iterationT `Settings.glsl` 它有菜单范围且被 `LandAtmosphericScattering` 使用，所以按 `OMNI_LANDSCATTERING_DISTANCE` 正式登记，默认值与可选范围照 iterationT。
+
+### 待裁决的旧选项（分片登记）
+- 天空（丙片登记）：`OMNI_SUN_DISK`、`OMNI_SUN_SIZE`、`OMNI_MOON_DISK`、`OMNI_MOON_SIZE`、`OMNI_CELESTIAL_TINT`、`OMNI_STAR_STRENGTH`、`OMNI_STAR_DENSITY`、`OMNI_SUNSET_STRENGTH`、`OMNI_SUNSET_TINT`、`OMNI_SKY_SATURATION`、`OMNI_SKY_BRIGHTNESS`、`OMNI_RESOURCE_SKY`、`OMNI_ATMOSPHERE_STEPS`、`OMNI_ATMOSPHERE_SCATTER`、`OMNI_SCATTER_STRENGTH`、`OMNI_ATMOSPHERE_MIE_G`、`OMNI_ATMOSPHERE_MULTIPLE`、`OMNI_ATMOSPHERE_OZONE`、`OMNI_NETHER_COLOR`、`OMNI_END_SKY_BRIGHTNESS`。
+- 云（丙片登记）：`OMNI_CLOUD_MODE`、`OMNI_CLOUD_BRIGHTNESS`、`OMNI_CLOUD_TINT`、`OMNI_CLOUD_SILVER`、`OMNI_CLOUD_STEPS`、`OMNI_CLOUD_SHADOW_STRENGTH`、`OMNI_CLOUD_SHADOW_AMBIENT`。
+- 环境光（丙片登记）：`OMNI_SSAO`、`OMNI_AO_STEPS`、`OMNI_AO_SLICES`、`OMNI_AO_STRENGTH`、`OMNI_AMBIENT_RADIUS`、`OMNI_SCREEN_BOUNCE`、`OMNI_BOUNCE_RADIUS`、`OMNI_BOUNCE_STRENGTH`。
+- 阴影（乙片登记）：`OMNI_SHADOW_ENABLED`、`OMNI_SHADOW_QUALITY`、`OMNI_SHADOW_BIAS`、`OMNI_SHADOW_OFFSET`。iterationT 的阴影恒开、比较偏移写死，这四个旧参数的新算法里没有对应含义。另有四个旧参数含义相近，已并入迭代T选项（`OMNI_SHADOW_PENUMBRA`→`OMNI_VARIABLE_PENUMBRA_SHADOWS`、`OMNI_SHADOW_PENUMBRA_QUALITY`→`OMNI_VPS_QUALITY`、`OMNI_SHADOW_BLUR`→`OMNI_SHADOW_BASIC_BLUR`、`OMNI_SHADOW_SOFTNESS`→`OMNI_VPS_SPREAD`），见交付报告。
+- 水面（乙片登记）：`OMNI_WAVE_STRENGTH`、`OMNI_WAVE_SPEED`、`OMNI_WATER_BUMP`、`OMNI_WATER_BUMP_STRENGTH`、`OMNI_OCEAN_WAVES`、`OMNI_OCEAN_HEIGHT`、`OMNI_WATER_ABSORB_R`、`OMNI_WATER_ABSORB_G`、`OMNI_WATER_ABSORB_B`、`OMNI_WATER_SCATTER_R`、`OMNI_WATER_SCATTER_G`、`OMNI_WATER_SCATTER_B`、`OMNI_WATER_CLEAR`、`OMNI_WATER_REFRACTION`、`OMNI_REFRACTION_STRENGTH`、`OMNI_WATER_GLINT`、`OMNI_RAIN_RIPPLES`、`OMNI_RIPPLE_STRENGTH`、`OMNI_PLAYER_RIPPLES`。iterationT 的水色、波速与折射写死在算法里，这些旧参数没有一一对应的迭代T选项；`OMNI_WAVE_SCALE` 与迭代T同名，已直接改成迭代T含义。
+- 天气（乙片登记）：`OMNI_SNOW_VISIBILITY`、`OMNI_RAIN_DENSITY`、`OMNI_RAIN_SPLASH`、`OMNI_RAIN_WET_RESPONSE`、`OMNI_RAIN_DARKEN`。这些旧参数在新天气计算里没有对应含义；`OMNI_RAIN_VISIBILITY` 与迭代T同名已直接改成迭代T含义，旧的单值 `OMNI_RAIN_WIND` 已拆成迭代T的 `OMNI_RAIN_WIND_X` 与 `OMNI_RAIN_WIND_Z`。
+- 材质与视差（乙片登记）：`OMNI_PARALLAX`、`OMNI_WET_SURFACES`、`OMNI_WET_STRENGTH`、`OMNI_SNOW_STRENGTH`、`OMNI_SNOW`、`OMNI_CLIMATE_SNOW`。旧材质模型整体换成 iterationT `GbufferData` 解码，这些旧参数在新算法里没有对应含义。另有旧参数含义相近已按同名含义合并：`OMNI_MATERIAL_DETAIL` → `OMNI_ENABLE_PBR`，见交付报告。
+- 植物（乙片登记）：`OMNI_WIND_STRENGTH`、`OMNI_WIND_SPEED`。迭代T的植物摆动幅度与速度写死，这两个旧参数没有对应含义；速度有内部常数 `ANIMATION_SPEED` 对应但不在菜单里。另有旧参数含义相近已合并：`OMNI_VEGETATION_WIND` → `OMNI_WAVING_PLANTS`，见交付报告。
+- 生物与玩家（乙片登记）：`OMNI_ENTITY_LIGHT`、`OMNI_ENTITY_TINT`、`OMNI_PLAYER_GLOW`。迭代T没有整块实体的亮度、色温与发光遮盖参数，这三个旧参数没有对应含义；`OMNI_HAND_FOV` 与迭代T同名已直接改成迭代T含义。
+- 世界与远景（乙片登记）：`OMNI_DH_ENABLED`、`OMNI_DH_FOG_BLEND`、`OMNI_PLANET_CURVATURE`。iterationT 的远景始终参与、没有行星曲率与近远景雾衔接参数，这三个旧参数没有对应含义。
+- 屏幕反射（丁片登记）：`OMNI_SSR`、`OMNI_SKY_REFLECTION`、`OMNI_REFLECTION_STRENGTH`、`OMNI_SSR_STEPS`、`OMNI_REFLECTION_DENOISE`、`OMNI_REFLECTION_BLUR`。iterationT 的反射质量是内部常数 `RAYTRACE_QUALITY`（不进菜单）、去噪恒定走 `composite3`/`composite4` 的小波滤波、反射强度由材质粗糙度决定，这些旧参数在新算法里没有对应菜单含义。
+- 雾与空气（丁片登记）：`OMNI_FOG_ENABLED`、`OMNI_FOG_DENSITY`、`OMNI_FOG_TINT`、`OMNI_HEIGHT_FOG_ENABLED`、`OMNI_HEIGHT_FOG`、`OMNI_FOG_HEIGHT`、`OMNI_FOG_SCALE`、`OMNI_VOLUMETRIC_LIGHT`、`OMNI_VOLUMETRIC_STRENGTH`、`OMNI_UNDERWATER_STRENGTH`、`OMNI_UNDERWATER_TINT`、`OMNI_END_FOG`、`OMNI_END_FOG_DENSITY`。iterationT 的距离雾与高度雾写死在算法里、没有雾色调与末地雾密度选项，这些旧参数在新算法里没有对应含义。另有三个旧参数含义相同、已按新名合并（`OMNI_NETHER_FOG_DENSITY`→`OMNI_NETHERFOG_DENSITY`、`OMNI_UNDERWATER_DENSITY`→`OMNI_WATERFOG_DENSITY`、`OMNI_VFOG_STEPS`→`OMNI_VFOG_QUALITY`），见交付报告。
+- 水面与雾的选项重名冲突（乙片登记，需丁片处理）：旧 `effects/fog.glsl` 目前也定义 `OMNI_UNDERWATER_FOG`（旧含义是水下体积光柱开关），而合同第九节把 `UNDERWATER_FOG` 归属 `effects/water.glsl`；丁片重写 `fog.glsl` 时须移除该旧定义，避免同一选项两处定义。
+- 后期（戊片登记）：`OMNI_AA_STRENGTH`、`OMNI_TEMPORAL_DENOISE`、`OMNI_CHROMATIC`、`OMNI_BOKEH_SHAPE`、`OMNI_DOF_STRENGTH`、`OMNI_MOTION_BLUR_STRENGTH`、`OMNI_FLARE_STRENGTH`、`OMNI_BLOOM_THRESHOLD`、`OMNI_BLOOM_RADIUS`、`OMNI_EXPOSURE`、`OMNI_EXPOSURE_TARGET`、`OMNI_EXPOSURE_SPEED`、`OMNI_BRIGHTNESS`、`OMNI_CONTRAST`、`OMNI_WHITE_BALANCE`、`OMNI_TONEMAP_STRENGTH`、`OMNI_DITHER`、`OMNI_RENDER_SCALE`。这些旧参数在 iterationT 的镜头、泛光、曝光与放大算法里没有一一对应含义（例如 iterationT 泛光靠固定降采样链，没有阈值与半径参数；曝光目标与亮度也是写死的）。另有若干旧名可合并：`OMNI_AA_ENABLED`→`OMNI_TAA`、`OMNI_TAA_WEIGHT`→`OMNI_TAA_BLENDWEIGHT`、`OMNI_VIGNETTE`(浮点强度)→`OMNI_VIGNETTE` 开关加 `OMNI_VIGNETTE_FALLOFF`、`OMNI_LENS_FLARE`(开关)→`OMNI_LENS_FLARE`、`OMNI_BLOOM_ENABLED`→`OMNI_BLOOM`、`OMNI_BLOOM_STRENGTH`→`OMNI_BLOOM_AMOUNT`、`OMNI_TONEMAP_MODE`(序号)→`OMNI_TONEMAP_OPERATOR`、`OMNI_AUTO_EXPOSURE`(反向)→`OMNI_MANUAL_EXPOSURE`、`OMNI_UPSCALE`→`OMNI_FSR`、`OMNI_UPSCALE_STRENGTH`→`OMNI_FSR_SHARPNESS`，见交付报告。

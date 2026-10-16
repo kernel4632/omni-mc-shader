@@ -1,251 +1,500 @@
 /*
-天空：算出主世界的昼夜天空、星空，以及下界和末地的环境底色，供背景画面和屏幕外反射共用。
-
-调用位置：effects/fog.glsl 与 effects/reflection.glsl 调用，经 atmosphere.glsl、cloud.glsl 汇入 rendering/lighting.glsl 的背景绘制。
-可复制示例（`worldDirection` 与 `ray` 都是世界空间方向）：
-    `vec3 sky = omniSky(worldDirection);`                              背景天空颜色。
-    `vec3 reflected = omniSky(mat3(gbufferModelViewInverse) * ray);`   屏幕外反射采样同一片天空。
-
-设计原因：天空是"方向到颜色"的纯函数，只吃一个世界方向，所以背景、反射和雾能用同一个方向调它，各自不用重复判断昼夜。
-算法来源：主世界天空按公开的 `Bruneton` 大气散射模型独立实现，公式与常数取自论文 `Precomputed Atmospheric Scattering`；
-    不复制任何参考光影的源码，也不引入预计算查找表，而是沿视线数值积分出透过率、单次散射、太阳方向透过率与多次散射近似。
-取舍：怎么把颜色画到屏幕由调用方决定，这里不出图也不读深度；代价是每个调用点都得给出正确的世界方向。
+天空：预计算大气散射、日月圆盘、星空与天空盒投影，供背景天空、屏幕外反射与光照共用。
+调用位置：延迟三号主体画天空像素时调用 `GetSkyRadiance`、`CalculateStars`、`RenderSunDisc`、`RenderMoonDisc`；
+    三号主体把上半屏天空盒写成三维贴图时调用 `UnprojectSky` 与 `GetSkyRadiance`；
+    合成阶段把世界方向投回天空盒坐标时调用 `ProjectSky`；
+    合成顶点阶段算日月与环境光色时调用 `GetSunAndSkyIrradiance`；
+    体积云与平面云算远处的空气透视时调用 `GetSkyRadianceToPoint`。
+可复制示例（`camera` 是米制世界位置，`worldDir` 是单位世界方向）：
+    `vec3 atmosphere = GetSkyRadiance(camera, worldDir, worldSunVector, worldMoonVector, horizon, transmittance, ray_r_mu_intersects_ground);`
+    `vec3 sunIrradiance = GetSunAndSkyIrradiance(camera, worldSunVector, -worldSunVector, moonIrradiance, sunSkyIrradiance, moonSkyIrradiance);`
+    `vec2 skyUv = ProjectSky(worldDir, tileSize);`
+设计原因与取舍：
+    天空不是实时积分，而是读预计算大气三维贴图；加载器在延迟与合成阶段把八号画面换成那张数据，
+    所以这里只做查表与相位函数组合，代价与分辨率无关。
+    调用前提（iterationT 原样保留）：调用方必须先声明 `texelCoord`、`worldSunVector`、`worldMoonVector` 等全局量；
+    这些量由绘制主体在引入本文件前给出，本文件不重复声明。
+    本文件还承载原程序写在 `deferred3`、`CompositeVS`、`SSR` 里的天空相关小函数，见移植合同第九点五节的去重约定。
 */
-#ifndef OMNI_SKY
-#define OMNI_SKY
+#ifndef OMNI_SKY_INCLUDED
+#define OMNI_SKY_INCLUDED
 // @effect {"label":{"zh_cn":"天空","en_us":"Sky"}}
-// @option {"label": {"zh_cn": "太阳亮度", "en_us": "Sun brightness"}, "slider": true, "description": {"zh_cn": "太阳圆盘有多亮。", "en_us": "How bright the sun disc is."}}
-#define OMNI_SUN_DISK 1.0 // [0.0 0.5 1.0 1.5]
-// @option {"label": {"zh_cn": "太阳大小", "en_us": "Sun size"}, "slider": true, "description": {"zh_cn": "太阳圆盘多大。", "en_us": "How large the sun disc is."}}
-#define OMNI_SUN_SIZE 1.0 // [0.5 1.0 1.5 2.0]
-// @option {"label": {"zh_cn": "月亮亮度", "en_us": "Moon brightness"}, "slider": true, "description": {"zh_cn": "月亮圆盘有多亮。", "en_us": "How bright the moon disc is."}}
-#define OMNI_MOON_DISK 1.0 // [0.0 0.5 1.0 1.5]
-// @option {"label": {"zh_cn": "月亮大小", "en_us": "Moon size"}, "slider": true, "description": {"zh_cn": "月亮圆盘多大。", "en_us": "How large the moon disc is."}}
-#define OMNI_MOON_SIZE 1.0 // [0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"日月色温","en_us":"Sun/moon tint"},"description":{"zh_cn":"正值日月偏暖、负值偏冷；取零保持中性。","en_us":"Positive warms the sun and moon, negative cools them; zero keeps them neutral."},"slider":true}
-#define OMNI_CELESTIAL_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label": {"zh_cn": "星星亮度", "en_us": "Star brightness"}, "slider": true, "description": {"zh_cn": "夜空星星多亮。", "en_us": "How bright the stars are."}}
-#define OMNI_STAR_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label":{"zh_cn":"星星数量","en_us":"Star amount"},"description":{"zh_cn":"夜里星星多还是少。","en_us":"How many stars appear at night."},"slider":true}
-#define OMNI_STAR_DENSITY 1.0 // [0.5 1.0 2.0 4.0]
-// @option {"label": {"zh_cn": "日落强度", "en_us": "Sunset strength"}, "slider": true, "description": {"zh_cn": "日出日落时天边红霞多强。", "en_us": "How strong the sunset glow is."}}
-#define OMNI_SUNSET_STRENGTH 1.0 // [0.0 0.5 1.0 1.5]
-// @option {"label":{"zh_cn":"日落颜色","en_us":"Sunset color"},"description":{"zh_cn":"正值晚霞偏红、负值偏紫粉。","en_us":"Positive makes the sunset redder, negative makes it more purple-pink."},"slider":true}
-#define OMNI_SUNSET_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label": {"zh_cn": "天空饱和度", "en_us": "Sky saturation"}, "slider": true, "description": {"zh_cn": "天空颜色鲜艳还是发灰。", "en_us": "Sky colour vividness."}}
-#define OMNI_SKY_SATURATION 1.0 // [0.5 0.75 1.0 1.25]
-// @option {"label": {"zh_cn": "天空整体亮度", "en_us": "Sky brightness"}, "slider": true, "description": {"zh_cn": "整个天空亮暗。", "en_us": "Overall sky brightness."}}
-#define OMNI_SKY_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
-// @option {"label": {"zh_cn": "下界程序化天空", "en_us": "Nether palette"}, "description": {"zh_cn": "用程序化混合替代固定下界雾色，覆盖荒原、灵魂沙谷、绯红与诡异森林和玄武岩。", "en_us": "Replaces a fixed nether fog colour with a procedural blend of nether biomes."}, "values": {"0": {"zh_cn": "固定雾色", "en_us": "Fixed fog colour"}, "1": {"zh_cn": "程序化", "en_us": "Procedural"}}}
-#define OMNI_NETHER_COLOR 1 // [0 1]
-// @option {"label": {"zh_cn": "末地天空亮度", "en_us": "End sky brightness"}, "slider": true, "description": {"zh_cn": "末地星空亮暗。", "en_us": "End sky brightness."}}
-#define OMNI_END_SKY_BRIGHTNESS 1.0 // [0.5 0.75 1.0 1.25 1.5]
-// @option {"label":{"zh_cn":"使用资源包天空","en_us":"Resource-pack sky"},"description":{"zh_cn":"使用资源包自带的日月贴图，而不是内置的日月圆盘。","en_us":"Uses the resource pack's own sun and moon textures instead of the built-in discs."},"page":"world"}
-//#define OMNI_RESOURCE_SKY
-// @option {"label": {"zh_cn": "大气散射", "en_us": "Atmosphere scattering"}, "description": {"zh_cn": "是否用物理模型算天空；关掉退回简单渐变，作为基础路径。", "en_us": "Whether the sky uses the physical model; off falls back to a simple gradient."}, "values": {"0": {"zh_cn": "关", "en_us": "Off"}, "1": {"zh_cn": "开", "en_us": "On"}}}
-#define OMNI_ATMOSPHERE_SCATTER 1 // [0 1]
-// @option {"label": {"zh_cn": "散射强度", "en_us": "Scatter strength"}, "slider": true, "description": {"zh_cn": "大气散射整体亮暗，也能给天空加浓蓝色。", "en_us": "Overall strength of the atmosphere scattering and how deep the blue is."}}
-#define OMNI_SCATTER_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
-// @option {"label": {"zh_cn": "散射精细度", "en_us": "Scatter detail"}, "description": {"zh_cn": "沿视线的采样段数；越高越平滑也越耗性能。", "en_us": "Samples along the view; smoother but costlier."}, "values": {"8": {"zh_cn": "低", "en_us": "Low"}, "16": {"zh_cn": "中", "en_us": "Medium"}, "32": {"zh_cn": "高", "en_us": "High"}}}
-#define OMNI_ATMOSPHERE_STEPS 16 // [8 16 32]
-// @option {"label": {"zh_cn": "米氏方向性", "en_us": "Mie anisotropy"}, "slider": true, "description": {"zh_cn": "太阳附近光晕的集中程度，越大越亮越窄。", "en_us": "How tightly the sun halo concentrates; higher is brighter and narrower."}}
-#define OMNI_ATMOSPHERE_MIE_G 0.8 // [0.0 0.5 0.8 0.95]
-// @option {"label": {"zh_cn": "臭氧强度", "en_us": "Ozone strength"}, "slider": true, "description": {"zh_cn": "高空臭氧吸收多强，主要影响天顶的蓝。", "en_us": "How strong high-altitude ozone absorption is; mostly deepens the zenith blue."}}
-#define OMNI_ATMOSPHERE_OZONE 1.0 // [0.0 1.0 2.0]
-// @option {"label": {"zh_cn": "多次散射强度", "en_us": "Multiple scatter"}, "slider": true, "description": {"zh_cn": "多次散射近似有多强，补足只算一次散射时偏暗的天空。", "en_us": "Strength of the multiple scattering approximation that lifts a single-scatter sky."}}
-#define OMNI_ATMOSPHERE_MULTIPLE 1.0 // [0.0 0.5 1.0 2.0]
-// 天体、雾色和噪声都来自这些共用声明，显式引入而不依赖间接包含。
-#include "/common/math.glsl"
+// @option {"label":{"zh_cn":"天空地平线","en_us":"Sky Horizon"},"description":{"zh_cn":"打开后地平线方向也算被行星表面挡住的大气，日出时地平线一带更真实。","en_us":"Also shades the horizon band below the eye as ground-lit atmosphere."}}
+//#define OMNI_ATMO_HORIZON
+// @option {"label":{"zh_cn":"反射天空盒地平线","en_us":"Skybox Horizon"},"description":{"zh_cn":"反射用的天空盒是否同样处理地平线方向。","en_us":"Whether the reflection skybox shades the horizon the same way."}}
+#define OMNI_ATMO_REFLECTION_HORIZON
+// @option {"label":{"zh_cn":"月亮纹理平滑","en_us":"Moon Texture Smoothing"},"description":{"zh_cn":"用双线性过滤读月亮贴图，低分辨率资源包会显得更糊。","en_us":"Reads the moon texture with bilinear filtering; low-resolution packs look softer."}}
+//#define OMNI_BILINEAR_MOON_TEXTURE
+// @option {"label":{"zh_cn":"天空盒纹理平滑","en_us":"Skybox Texture Smoothing"},"description":{"zh_cn":"用双线性过滤读天空盒贴图，低分辨率资源包会显得更糊。","en_us":"Reads the skybox texture with bilinear filtering; low-resolution packs look softer."}}
+//#define OMNI_BILINEAR_SKYBOX_TEXTURE
+// @option {"label":{"zh_cn":"月亮纹理","en_us":"Moon Texture"},"description":{"zh_cn":"用资源包的月亮贴图代替内置圆盘。","en_us":"Uses the resource pack moon texture instead of the built-in disc."}}
+#define OMNI_MOON_TEXTURE
+// @option {"label":{"zh_cn":"夜间亮度比值","en_us":"Night Brightness"},"description":{"zh_cn":"夜间环境光相对白天环境光的比值，越大夜里越亮。","en_us":"Night ambient light relative to day; larger makes nights brighter."},"slider":true}
+#define OMNI_NIGHT_BRIGHTNESS 0.0003 // [0.0 0.0001 0.00015 0.0002 0.0003 0.0005 0.0007 0.001 0.0015 0.002 0.003 0.005 0.007 0.01 1.0]
+// @option {"label":{"zh_cn":"天空盒纹理","en_us":"Skybox Texture"},"description":{"zh_cn":"用资源包的天空盒贴图叠在天空上。","en_us":"Overlays the resource pack skybox texture on the sky."}}
+//#define OMNI_SKYBOX_TEXTURE
+// @option {"label":{"zh_cn":"反射天空盒分辨率","en_us":"Skybox Resolution"},"description":{"zh_cn":"反射里天空贴图的边长，越高越清晰也越费性能。","en_us":"Side length of the reflected sky image; higher is sharper and costlier."},"values":{"32.0":{"zh_cn":"极低","en_us":"Lowest"},"64.0":{"zh_cn":"低","en_us":"Low"},"128.0":{"zh_cn":"中","en_us":"Medium"},"256.0":{"zh_cn":"高","en_us":"High"},"512.0":{"zh_cn":"极高","en_us":"Very high"}}}
+#define OMNI_SKY_IMAGE_RESOLUTION 64.0 // [32.0 48.0 64.0 96.0 128.0 192.0 256.0 384.0 512.0]
+// @option {"label":{"zh_cn":"纹理亮度","en_us":"Texture Brightness"},"description":{"zh_cn":"原版星星、月亮贴图和天空盒的亮度倍率。","en_us":"Brightness multiplier for vanilla stars, the moon texture and the skybox."},"slider":true}
+#define OMNI_SKY_TEXTURE_BRIGHTNESS 1.0 // [0.0 0.05 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
+// @option {"label":{"zh_cn":"星星类型","en_us":"Star Type"},"description":{"zh_cn":"关为没有星星，点状为按方向生成的星点，原版为资源包星空贴图。","en_us":"Off has no stars, Dots draws procedural points, Vanilla uses the pack sky texture."},"values":{"0":{"zh_cn":"关","en_us":"Off"},"1":{"zh_cn":"点状","en_us":"Dots"},"2":{"zh_cn":"原版","en_us":"Vanilla"}}}
+#define OMNI_STAR_TYPE 1 // [0 1 2]
+// @option {"label":{"zh_cn":"日月倾角","en_us":"Sun Path Rotation"},"description":{"zh_cn":"日月运动轨迹相对原版轨迹的倾角，Iris 直接读取该原生常量。","en_us":"Tilt of the sun and moon path versus vanilla; Iris reads this native constant."}}
+const float sunPathRotation = -30.0; // [-90.0 -89.0 -88.0 -87.0 -86.0 -85.0 -84.0 -83.0 -82.0 -81.0 -80.0 -79.0 -78.0 -77.0 -76.0 -75.0 -74.0 -73.0 -72.0 -71.0 -70.0 -69.0 -68.0 -67.0 -66.0 -65.0 -64.0 -63.0 -62.0 -61.0 -60.0 -59.0 -58.0 -57.0 -56.0 -55.0 -54.0 -53.0 -52.0 -51.0 -50.0 -49.0 -48.0 -47.0 -46.0 -45.0 -44.0 -43.0 -42.0 -41.0 -40.0 -39.0 -38.0 -37.0 -36.0 -35.0 -34.0 -33.0 -32.0 -31.0 -30.0 -29.0 -28.0 -27.0 -26.0 -25.0 -24.0 -23.0 -22.0 -21.0 -20.0 -19.0 -18.0 -17.0 -16.0 -15.0 -14.0 -13.0 -12.0 -11.0 -10.0 -9.0 -8.0 -7.0 -6.0 -5.0 -4.0 -3.0 -2.0 -1.0 0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 21.0 22.0 23.0 24.0 25.0 26.0 27.0 28.0 29.0 30.0 31.0 32.0 33.0 34.0 35.0 36.0 37.0 38.0 39.0 40.0 41.0 42.0 43.0 44.0 45.0 46.0 47.0 48.0 49.0 50.0 51.0 52.0 53.0 54.0 55.0 56.0 57.0 58.0 59.0 60.0 61.0 62.0 63.0 64.0 65.0 66.0 67.0 68.0 69.0 70.0 71.0 72.0 73.0 74.0 75.0 76.0 77.0 78.0 79.0 80.0 81.0 82.0 83.0 84.0 85.0 86.0 87.0 88.0 89.0 90.0]
+// --- 内部常数：原 `Settings.glsl` 里不进菜单的取值，名字保持原名 ---
+#define ATMO_MIN_ALTITUDE 500.0 // 相机大气高度下限，低于它按这个高度算，避免贴地时大气几何退化。
+#define ATMO_SKYBOX_MIN_ALTITUDE 500.0 - wetness * 300.0 // 反射天空盒的相机高度下限，雨天云更厚所以再压低一点。
+// 预计算大气三维贴图的排布尺寸，读表时要按这些尺寸算坐标。
+#define TRANSMITTANCE_TEXTURE_WIDTH 256.0 // 透过率子图宽度，单位像素。
+#define TRANSMITTANCE_TEXTURE_HEIGHT 64.0 // 透过率子图高度。
+#define SCATTERING_TEXTURE_R_SIZE 32.0 // 散射子图的半径方向尺寸，拼进深度方向。
+#define SCATTERING_TEXTURE_MU_SIZE 128.0 // 散射子图的高度角方向尺寸。
+#define SCATTERING_TEXTURE_MU_S_SIZE 32.0 // 散射子图的太阳高度角方向尺寸。
+#define SCATTERING_TEXTURE_NU_SIZE 16.0 // 散射子图的视线与太阳夹角方向尺寸。
+#define COMBINED_TEXTURE_WIDTH 512.0 // 拼合后大图宽度。
+#define COMBINED_TEXTURE_HEIGHT 128.0 // 拼合后大图高度。
+#define COMBINED_TEXTURE_DEPTH 33.0 // 拼合后大图深度。
+#define IRRADIANCE_TEXTURE_WIDTH 64.0 // 辐照度子图宽度。
+#define IRRADIANCE_TEXTURE_HEIGHT 16.0 // 辐照度子图高度。
+// 大气物理常数，长度单位公里，亮度单位辐射亮度；与 iterationT 完全一致。
+#define atmosphereModel_solar_irradiance 		vec3(1.68194, 1.85149, 1.91198) // 太阳辐照度，决定大气散射的基准亮度。
+#define atmosphereModel_sun_angular_radius 		0.005 // 太阳视半径，日落时用它对太阳方向做渐隐。
+#define atmosphereModel_bottom_radius 			6360.0 // 行星底半径，越过它就算被地面挡住。
+#define atmosphereModel_top_radius 				6420.0 // 大气层顶半径，视线到这里离开大气。
+#define atmosphereModel_rayleigh_scattering 	vec3(0.008396, 0.014590, 0.033100) // 瑞利散射系数，蓝光最强，天空因此偏蓝。
+#define atmosphereModel_mie_scattering 			vec3(0.003996) // 米氏散射系数，气溶胶造成太阳附近的白晕。
+#define atmosphereModel_mie_extinction 			vec3(0.004440) // 米氏消光系数，比散射略大，差额被吸收。
+#define atmosphereModel_mie_phase_function_g 	0.8 // 米氏相位的前向集中程度。
+#define atmosphereModel_absorption_extinction 	vec3(0.0020031, 0.0016555, 0.0000847) // 臭氧吸收系数。
+#define atmosphereModel_ground_albedo 			vec3(0.1) // 地面反照率，地平线方向算一次地面反弹。
+#define atmosphereModel_mu_s_min 				-0.5 // 太阳高度角的查表下限。
+#define atmosphereModel_densityProfile_rayleigh 			-0.1803369 // 瑞利密度剖面的指数系数。
+#define atmosphereModel_densityProfile_mie 					-1.2022459 // 米氏密度剖面的指数系数。
+#define atmosphereModel_densityProfile_absorption_width 	25.0 // 臭氧三角剖面的转折高度。
+#define atmosphereModel_densityProfile_absorption 			vec4(0.09617967, -0.9617967, -0.09617967, 3.847187) // 臭氧剖面分段线性系数。
+// 共用数学与加载器输入，显式引入而不依赖调用顺序。
 #include "/common/uniforms.glsl"
-
-// --- 大气常数：公开 `Bruneton` 预计算散射模型的取值，长度单位公里，亮度单位辐射亮度 ---
-const float omniPi = 3.14159265358979; // 相位函数要用圆周率，单独列出避免到处写长小数。
-const vec3 omniSolarIrradiance = vec3(1.68194,1.85149,1.91198); // 太阳辐照度，决定大气散射的基准亮度。
-const float omniSunAngularRadius = 0.005; // 太阳视半径，日落时用它对太阳方向透过率做渐隐。
-const float omniGroundRadius = 6360.0; // 行星底半径，越过它就算被地面挡住。
-const float omniTopRadius = 6420.0; // 大气层顶半径，视线到这里就离开大气。
-const vec3 omniRayleighScattering = vec3(0.008396,0.014590,0.033100); // 瑞利散射系数，蓝光最强，天空因此偏蓝。
-const float omniMieScattering = 0.003996; // 米氏散射系数，气溶胶造成太阳附近的白晕。
-const float omniMieExtinction = 0.004440; // 米氏消光系数，比散射略大，差额是被吸收的部分。
-const vec3 omniOzoneAbsorption = vec3(0.0020031,0.0016555,0.0000847); // 臭氧吸收系数，主要吃掉蓝绿之外的长波。
-const float omniGroundAlbedo = 0.1; // 地面反照率，多次散射近似里算一次地面反弹。
-const float omniRayleighScaleHeight = 8.0; // 瑞利密度标高，越往上越稀，约八公里掉到三成七。
-const float omniMieScaleHeight = 1.2; // 米氏密度标高，气溶胶集中在近地约一点二公里。
-const float omniOzoneCenter = 25.0; // 臭氧层中心高度，约二十五公里。
-const float omniOzoneHalfWidth = 15.0; // 臭氧层半宽，两侧到十与四十公里降到零。
-const float omniIsotropicPhase = 0.0795774715; // 各向同性相函数 1/(4π)，多次散射的方向平均值。
-const float omniSkyScale = 20.0; // 量级匹配：把物理辐射亮度缩到本项目天空的亮度口径，属未实机确认的取值。
-const int omniSunSteps = 8; // 太阳方向透过率的固定段数；它对画面影响小，不再单独开选项。
-
-// --- 大气几何：视线在大气层里走到哪里为止 ---
-// 到大气层顶的交点：解视线与顶球面的方程，取正根；相机在大气内部，这个根一定存在。
-float omniDistanceToTop(float r, float mu) {
-    float discriminant = r*r*(mu*mu-1.0) + omniTopRadius*omniTopRadius; // 交点判别式，小于零表示这条视线到不了层顶。
-    return -r*mu + sqrt(max(discriminant,0.0)); // 取朝向层顶一侧的远交点。
+#include "/common/math.glsl"
+// 把半径夹进大气层范围内，越界时按最近的边界算。
+float ClampRadius(float r){
+	return clamp(r, atmosphereModel_bottom_radius, atmosphereModel_top_radius); // 下不低于地面、上不超过层顶。
 }
-// --- 密度剖面：三种成分各自随高度变化 ---
-// 指数密度：给定标高，高度越高密度越低，涨到标高处剩约三成七。
-float omniExpDensity(float altitude, float scaleHeight) {
-    return exp(-altitude/scaleHeight); // 单位公里的指数衰减。
+// 安全开方：负零以下一律当零，避免判别式因浮点误差变负时出非数。
+float SafeSqrt(float a){
+	return sqrt(max(a, 0.0)); // 负数开到零。
 }
-// 臭氧密度：在约二十五公里最高的三角层，向上向下都变稀薄。
-float omniOzoneDensity(float altitude) {
-    return max(1.0 - abs(altitude-omniOzoneCenter)/omniOzoneHalfWidth, 0.0); // 三角剖面，层外归零。
+// 太阳圆盘：视线越接近太阳方向越亮，边缘由平滑曲线收口。
+vec3 RenderSunDisc(vec3 worldDir, vec3 sunDir){
+	float d = dot(worldDir, sunDir); // 视线与太阳方向的夹角余弦。
+	float size = 5e-5; // 圆盘角半径，越小圆盘越细。
+	float hardness = 4e4; // 边缘硬度，越大边缘越陡。
+	float disc = curve(saturate((d - (1.0 - size)) * hardness)); // 从中心到边缘的平滑遮罩。
+	disc *= disc; // 平方让边缘更收。
+	return vec3(1.1114, 0.9756, 0.9133) * disc; // 太阳偏暖的白色。
 }
-// --- 相位函数：散射把光往哪个方向偏 ---
-// 瑞利相位：前后基本对称，只在前后稍强，是蓝天的主要来源。
-float omniRayleighPhase(float mu) {
-    return 3.0/(16.0*omniPi)*(1.0 + mu*mu); // 公开模型的瑞利相位公式。
+// 月亮圆盘：形状同太阳，但边缘更硬、亮度单独交给选项。
+float RenderMoonDisc(vec3 worldDir, vec3 moonDir){
+	float d = dot(worldDir, moonDir); // 视线与月亮方向的夹角余弦。
+	float size = 5e-5; // 圆盘角半径。
+	float hardness = 1e5; // 边缘硬度，比太阳更硬。
+	float disc = curve(saturate((d - (1.0 - size)) * hardness)); // 月亮遮罩。
+	return disc * disc; // 平方收口后返回零到一的亮度。
 }
-// 米氏相位：强烈偏向前方，太阳附近因此出现暖白光晕。
-// 用公开模型的 `Cornette-Shanks` 形式，比只用 `Henyey-Greenstein` 更贴近真实米氏散射。
-float omniMiePhase(float g, float mu) {
-    float g2 = g*g; // 各向异性因子的平方，下面反复用到。
-    float k = 3.0/(8.0*omniPi)*(1.0-g2)/(2.0+g2); // 归一化系数，保证整个球面的积分为一。
-    return k*(1.0+mu*mu)/pow(1.0+g2-2.0*g*mu, 1.5); // 前向峰随 g 增大而更尖更亮。
+// 反射里的月亮圆盘：反射天空盒分辨率低，用更大的角半径换取可见。
+float RenderMoonDiscReflection(vec3 worldDir, vec3 moonDir){
+	float d = dot(worldDir, moonDir); // 夹角余弦。
+	float size = 0.0025; // 反射用更大的角半径。
+	float hardness = 300.0; // 边缘更软。
+	float disc = curve(saturate((d - (1.0 - size)) * hardness)); // 反射月亮遮罩。
+	return disc * disc; // 返回零到一亮度。
 }
-// --- 太阳方向透过率：从采样点朝太阳走到层顶，累计被吸收和散射掉的能量 ---
-// 为什么逐点计算：越靠近地平线，阳光穿过的空气越长、损失越多，黄昏的红色和天顶的蓝色都由它决定。
-vec3 omniSunTransmittance(vec3 point, vec3 sunDirection) {
-    float r = length(point); // 采样点到地心的距离。
-    float mu = dot(point, sunDirection)/r; // 太阳方向与当地"向上"的夹角余弦。
-    float distance = omniDistanceToTop(r, mu); // 这段视线在大气中的长度；太阳偏到地平线以下时也照算，由下面的渐隐收尾。
-    float stepLength = distance/float(omniSunSteps); // 每段长度，段数固定。
-    vec3 depthRayleigh = vec3(0.0); // 累积的瑞利密度积分。
-    float depthMie = 0.0; // 累积的米氏密度积分。
-    float depthOzone = 0.0; // 累积的臭氧密度积分。
-    for (int i=0;i<omniSunSteps;i++) { // 沿太阳方向分段取中点积分。
-        vec3 samplePoint = point + sunDirection*(float(i)+0.5)*stepLength; // 当前采样点位置。
-        float altitude = max(length(samplePoint)-omniGroundRadius, 0.0); // 采样点离地面的高度。
-        depthRayleigh += omniExpDensity(altitude, omniRayleighScaleHeight)*stepLength; // 瑞利密度乘段长。
-        depthMie += omniExpDensity(altitude, omniMieScaleHeight)*stepLength; // 米氏密度乘段长。
-        depthOzone += omniOzoneDensity(altitude)*stepLength; // 臭氧密度乘段长。
-    }
-    vec3 opticalDepth = omniRayleighScattering*depthRayleigh // 瑞利消光。
-                      + vec3(omniMieExtinction)*depthMie // 米氏消光。
-                      + omniOzoneAbsorption*depthOzone*OMNI_ATMOSPHERE_OZONE; // 臭氧吸收；强度可调。
-    // 太阳贴到地平线时不直接判零，而是沿当地地平线方向留一段角度过渡：
-    // 采样点越高，地平线方向的余弦越负，过渡带越宽，黄昏时高空仍能收到暖光，不会一瞬变黑。
-    float sinHorizon = omniGroundRadius/r; // 地平线方向相对当地的俯角正弦。
-    float cosHorizon = -sqrt(max(1.0 - sinHorizon*sinHorizon, 0.0)); // 地平线方向的余弦，越高处负得越多。
-    float horizonFade = smoothstep(-sinHorizon*omniSunAngularRadius, sinHorizon*omniSunAngularRadius, mu - cosHorizon); // 过渡带半宽由太阳视半径决定。
-    return exp(-opticalDepth)*horizonFade; // 透过率等于消光光学的负指数，再乘地平线渐隐。
+// 视线到大气层顶的距离，解视线与顶球面的方程取远根。
+float DistanceToTopAtmosphereBoundary(
+	float r,
+	float mu
+	){
+		float discriminant = r * r * (mu * mu - 1.0) + atmosphereModel_top_radius * atmosphereModel_top_radius; // 交点判别式。
+		return max(-r * mu + SafeSqrt(discriminant), 0.0); // 取朝向层顶一侧的根，负数归零。
 }
-// --- 大气散射天空：沿视线把空气切成小段，逐段累加收到的阳光，得到这个方向的天空颜色 ---
-// 为什么相机半径要加玩家高度：大气厚六十公里，玩家海拔上千米在比例上仍很小，但加上它高空看天空才与低处一致。
-// 为什么用近密远疏的非均匀步长：地平线方向整条视线接近九百公里，而瑞利标高只有八公里、米氏约一点二公里，
-//   等分会把近地这段高密度空气整块跳过，地平线附近偏暗甚至出现断带；按比例平方分布取样，近地段长成倍变短。
-// 为什么朝下的视线要压平：看向地面的方向穿不过整层大气，用水平方向代替，避免雾在地面下方发黑。
-vec3 omniAtmosphereSky(vec3 direction, vec3 sunDirection) {
-    vec3 ray = direction; // 先复制一份，下面可能把朝下的方向压平。
-    if (ray.y < 0.0) { // 只有朝下的方向需要处理。
-        vec2 level = ray.xz; // 取水平投影。
-        ray = length(level) > 1e-6 ? omniNormalize(vec3(level.x,0.0,level.y)) : vec3(1.0,0.0,0.0); // 退化为正下方时用一个水平方向兜底。
-    }
-    float r = omniGroundRadius + max(eyeAltitude,0.0)*0.001; // 相机半径＝底半径加玩家高度（米换算成公里）；地下负高度按零处理。
-    float mu = dot(ray, vec3(0.0,1.0,0.0)); // 视线与向上的夹角余弦。
-    float sunMu = dot(ray, sunDirection); // 视线与太阳的夹角余弦，决定相位函数。
-    float distance = omniDistanceToTop(r, mu); // 视线在大气中的长度。
-    float phaseRayleigh = omniRayleighPhase(sunMu); // 瑞利相位。
-    float phaseMie = omniMiePhase(OMNI_ATMOSPHERE_MIE_G, sunMu); // 米氏相位；方向性可调。
-    vec3 depthRayleigh = vec3(0.0); // 相机到当前采样点的瑞利密度积分。
-    float depthMie = 0.0; // 相机到当前采样点的米氏密度积分。
-    float depthOzone = 0.0; // 相机到当前采样点的臭氧密度积分。
-    vec3 single = vec3(0.0); // 单次散射的累加结果。
-    vec3 multiple = vec3(0.0); // 多次散射近似里与方向无关的那一项。
-    for (int i=0;i<OMNI_ATMOSPHERE_STEPS;i++) { // 沿视线分段积分；段数由选项决定，含义仍是段数。
-        float lower = float(i)/float(OMNI_ATMOSPHERE_STEPS); // 当前段的起始比例。
-        float upper = float(i+1)/float(OMNI_ATMOSPHERE_STEPS); // 当前段的结束比例。
-        float t = (lower*lower + upper*upper)*0.5*distance; // 段中点在比例平方分布上，近地密、远处疏。
-        float segmentLength = (upper*upper - lower*lower)*distance; // 这一段的实际长度，越靠相机越短。
-        vec3 point = vec3(0.0,r,0.0) + ray*t; // 采样点位置，相机放在中轴上方。
-        float altitude = max(length(point)-omniGroundRadius, 0.0); // 采样点离地面的高度。
-        float densityRayleigh = omniExpDensity(altitude, omniRayleighScaleHeight); // 当地瑞利密度。
-        float densityMie = omniExpDensity(altitude, omniMieScaleHeight); // 当地米氏密度。
-        float densityOzone = omniOzoneDensity(altitude); // 当地臭氧密度。
-        depthRayleigh += densityRayleigh*segmentLength; // 累加瑞利密度。
-        depthMie += densityMie*segmentLength; // 累加米氏密度。
-        depthOzone += densityOzone*segmentLength; // 累加臭氧密度。
-        vec3 viewOptical = omniRayleighScattering*depthRayleigh // 视线消光：瑞利。
-                         + vec3(omniMieExtinction)*depthMie // 视线消光：米氏。
-                         + omniOzoneAbsorption*depthOzone*OMNI_ATMOSPHERE_OZONE; // 视线消光：臭氧；强度可调。
-        vec3 viewTransmittance = exp(-viewOptical); // 相机到采样点的透过率。
-        vec3 sunTransmittance = omniSunTransmittance(point, sunDirection); // 采样点到太阳的透过率。
-        vec3 rayleighLight = omniRayleighScattering*densityRayleigh*phaseRayleigh; // 瑞利单次散射。
-        vec3 mieLight = vec3(omniMieScattering)*densityMie*phaseMie; // 米氏单次散射。
-        single += (rayleighLight+mieLight)*sunTransmittance*viewTransmittance*segmentLength; // 这段贡献给单次散射。
-        multiple += (omniRayleighScattering*densityRayleigh + vec3(omniMieScattering)*densityMie)*sunTransmittance*viewTransmittance*segmentLength; // 多次散射用与方向无关的相位。
-    }
-    float multipleFactor = omniIsotropicPhase*(1.0+omniGroundAlbedo)*OMNI_ATMOSPHERE_MULTIPLE; // 各向同性平均相位，再算一次地面反弹；强度可调。
-    vec3 radiance = (single + multiple*multipleFactor)*omniSolarIrradiance; // 乘太阳辐照度得到辐射亮度。
-    return radiance*omniSkyScale*OMNI_SCATTER_STRENGTH; // 缩放到本项目天空口径；散射强度可调。
+// 视线到大气层底的距离，解视线与底球面的方程取近根。
+float DistanceToBottomAtmosphereBoundary(
+	float r,
+	float mu
+	){
+		float discriminant = r * r * (mu * mu - 1.0) + atmosphereModel_bottom_radius * atmosphereModel_bottom_radius; // 球面交点判别式。
+		return max(-r * mu - SafeSqrt(discriminant), 0.0); // 取靠近相机一侧的根。
 }
-
-// --- 下界氛围色：按方向噪声在几种下界生物群系颜色之间过渡 ---
-// 为什么用方向而不是坐标：下界天空没有地面参照，按玩家看的方向混合，抬头低头就能看到不同群系的色调。
-vec3 omniNetherColor(vec3 direction, float horizon) {
-    vec3 d = omniNormalize(direction); // 方向先归一化，后面的噪声取样才对所有机器一致。
-    float region = omniNoise(d * 3.0); // 3 倍频率让几个群系片区在视野里铺开，频率太低会糊成一片。
-    vec3 tone = mix(vec3(0.99,0.34,0.10), vec3(0.60,0.77,1.00), smoothstep(0.20,0.40,region)); // 荒原暖橙过渡到灵魂沙谷冷蓝。
-    tone = mix(tone, vec3(1.00,0.55,0.35), smoothstep(0.40,0.55,region)); // 接着混入绯红森林的红橙。
-    tone = mix(tone, vec3(0.50,0.85,0.90), smoothstep(0.55,0.70,region)); // 再混入诡异森林的青蓝。
-    tone = mix(tone, vec3(0.70,0.66,0.62), smoothstep(0.70,0.85,region)); // 最后混入玄武岩三角洲的灰。
-    tone *= mix(1.0,0.6,horizon); // 地平线以下（`horizon` 变大）先压一档，避免向下看比抬头还亮。
-    return tone * (1.0-0.5*horizon) * 0.5; // 地平线以下再压一档，整体缩到与加载器雾色同量级，替换后不突兀。
+// 判断一条朝下的视线是否真的打到地面球。
+bool RayIntersectsGround(
+	float r,
+	float mu
+	){
+		return mu < 0.0 && r * r * (mu * mu - 1.0) + atmosphereModel_bottom_radius * atmosphereModel_bottom_radius >= 0.0; // 朝下且判别式非负才相交。
 }
-
-// --- 星点：把球面方向切成细格，只点亮少数格子，得到稳定的星空 ---
-// 为什么按方位角和仰角切格：每颗星钉死在方向上，相机转头时星空跟着转，不像贴屏纹理那样滑动。
-// 为什么极点要保护：正上方和正下方没有方位角，`atan` 会算出 NaN 污染整幅画面。
-float omniStars(vec3 direction) {
-    float azimuth = (direction.x == 0.0 && direction.z == 0.0) ? 0.0 : atan(direction.z, direction.x); // 极点退化时取零，避免 NaN 传播。
-    vec2 cell = floor(vec2(azimuth, asin(clamp(direction.y,-1.0,1.0))) * 700.0); // 700 让格子足够细，星星才像点而不是块。
-    float cut = 0.999 - 0.001 * OMNI_STAR_DENSITY; // 数量选项越高阈值越低，亮格越多；默认一约等于千分之二。
-    float density = step(cut, omniHash(cell)); // 只有超过阈值的少量格子亮。
-    return density * pow(omniHash(cell + 3.1), 3.0); // 立方压低亮度，让多数星暗、少数星亮。
+// 瑞利与米氏密度剖面：以二为底的指数衰减，系数已经积分好。
+float GetProfileDensityRayleighMie(
+	float exp_scale,
+	float altitude
+	){
+		return exp2(exp_scale * altitude); // 高度越高密度越低。
 }
-
-// --- 天空：把方向映射成颜色，昼夜、日落、日月圆盘、星空、雨天和维度底色都在这合成 ---
-// 调用位置：effects/fog.glsl、effects/reflection.glsl；示例：`vec3 sky = omniSky(worldDirection);`
-vec3 omniSky(vec3 direction) {
-    vec3 d = omniNormalize(direction); // 归一化后方向才能直接和天体方向做点积。
-    vec3 sun = omniNormalize(mat3(gbufferModelViewInverse) * sunPosition); // 转回世界空间，相机转头太阳不跟着动。
-    vec3 moon = omniNormalize(mat3(gbufferModelViewInverse) * moonPosition); // 月亮用加载器给的真实方向。
-    vec3 celestialTint = exp(vec3(0.25,0.0,-0.25)*OMNI_CELESTIAL_TINT); // 日月色温：正值加红减蓝、负值相反，取零为全一。
-    float day = smoothstep(-0.15, 0.1, sun.y); // 太阳高度在零点附近平滑过渡，昼夜不会硬切。
-    float horizon = pow(1.0 - max(d.y, 0.0), 4.0); // 越靠近地平线值越大，用来提亮天际。
-    vec3 nightSky = vec3(0.008,0.014,0.033); // 夜空底色，偏蓝的深色。
-    vec3 color; // 天空底色，下面按散射开关在物理模型和简单渐变之间取一个。
-#if OMNI_ATMOSPHERE_SCATTER == 1
-    color = omniAtmosphereSky(d,sun); // 主世界的天空用物理大气散射模型算出来。
-    color += nightSky*(1.0-day); // 夜晚补一层深蓝底，避免天空全黑，也给星星一个背景。
-#else
-    vec3 daySky = mix(vec3(0.10,0.28,0.62), vec3(0.62,0.72,0.82), horizon); // 关闭散射时退回简单渐变：天顶偏蓝、地平线泛白。
-    color = mix(nightSky, daySky, day); // 按昼夜权重插值，天空整天连续变化。
-#endif
-    float sunset = (1.0 - smoothstep(0.0,0.3,abs(sun.y))) * pow(max(dot(d,sun),0.0),8.0); // 只在太阳低且靠近太阳方向时出现，避免全天泛红。
-    vec3 sunsetColor = vec3(0.8,0.22,0.06)*exp(vec3(0.3,0.0,-0.3)*OMNI_SUNSET_TINT); // 日落颜色：正值偏红、负值偏紫粉。
-    color += sunsetColor * sunset * horizon * OMNI_SUNSET_STRENGTH; // 暖色染在地平线一带，强度可调。
-#ifndef OMNI_RESOURCE_SKY
-    float sunRadius = 0.0002*OMNI_SUN_SIZE; // 太阳圆盘的角半径；大小一约等于原阈值。
-    color += vec3(12.0,9.0,5.0)*celestialTint * smoothstep(1.0-sunRadius*2.0,1.0-sunRadius,dot(d,sun)) * day * OMNI_SUN_DISK; // 太阳圆盘：越接近太阳方向越亮；大小与亮度可调。
-    float moonRadius = 0.0003*OMNI_MOON_SIZE; // 月亮圆盘的角半径；大小一约等于原阈值。
-    color += vec3(0.6,0.7,1.0)*celestialTint * smoothstep(1.0-moonRadius*2.0,1.0-moonRadius,dot(d,moon)) * (1.0-day) * OMNI_MOON_DISK; // 月亮圆盘同理，只在夜里出现。
-#endif
-    float stars = omniStars(d); // 稳定的星点亮度，还没乘强度和时间。
-    color += stars * OMNI_STAR_STRENGTH * (1.0-day) * smoothstep(0.0,0.2,d.y); // 白天和地平线附近隐藏，避免星星压过日光。
-    color = mix(color, mix(vec3(0.025),vec3(0.22,0.25,0.29),day), rainStrength * 0.85); // 雨天按权重换成灰色阴天。
-    color *= OMNI_SKY_BRIGHTNESS; // 天空整体亮度，只作用主世界天空；下界与末地底色不读它。
-#ifdef OMNI_NETHER
-#if OMNI_NETHER_COLOR == 1
-    color = omniNetherColor(d,horizon); // 开启选项时用程序化下界氛围色。
-#else
-    color = omniLinear(fogColor) * (0.5 + 0.5 * horizon); // 关闭选项时退回加载器雾色，作为基础路径。
-#endif
-#elif defined OMNI_END
-    color = (vec3(0.018,0.008,0.034) + vec3(0.06,0.025,0.1) * omniNoise(d * 12.0)) * OMNI_END_SKY_BRIGHTNESS; // 末地紫黑星云：底色加低频噪声，亮度可调。
-    color += stars * 0.3 * OMNI_STAR_STRENGTH; // 末地保留稀疏星空，但不加昼夜因子。
-#endif
-    return mix(vec3(omniLuminance(color)), color, OMNI_SKY_SATURATION); // 按选项在灰度和原色之间插值，改天空饱和度。
+// 臭氧密度剖面：在转折高度以下是一段斜线，以上是另一段斜线。
+float GetProfileDensityAbsorption(
+	float width,
+	vec4 profile,
+	float altitude
+	){
+		return altitude < width ? // 转折高度以下用前两个系数。
+			profile.x * altitude + profile.y :
+			profile.z * altitude + profile.w; // 以上用后两个系数。
 }
-#endif
+// 把零到一的比例映射到贴图坐标的像素中心，避免采到子图交界。
+float GetTextureCoordFromUnitRange(float x, float texture_size) {
+	return 0.5 / texture_size + x * (1.0 - 1.0 / texture_size); // 内缩半像素。
+}
+// 把子图内部的比例映射到拼合大图上的坐标，子图在大图里也内缩半像素。
+float GetCombinedTextureCoordFromUnitRange(float x, float original_texture_size, float combined_texture_size) {
+	return 0.5 / combined_texture_size + x * (original_texture_size / combined_texture_size - 1.0 / combined_texture_size); // 按子图尺寸缩放。
+}
+// 把半径与几个角度换成散射三维贴图的四维坐标：前三维是坐标，第四维留给上层插值。
+vec4 GetScatteringTextureUvwzFromRMuMuSNu(
+	float r,
+	float mu,
+	float mu_s,
+	float nu,
+	bool ray_r_mu_intersects_ground
+	){
+		float H = sqrt(atmosphereModel_top_radius * atmosphereModel_top_radius - atmosphereModel_bottom_radius* atmosphereModel_bottom_radius); // 大气层顶相对地面的水平距离。
+		float rho = SafeSqrt(r * r - atmosphereModel_bottom_radius* atmosphereModel_bottom_radius); // 相机到地心的水平投影。
+		float u_r = GetCombinedTextureCoordFromUnitRange(rho / H, SCATTERING_TEXTURE_R_SIZE, COMBINED_TEXTURE_DEPTH); // 半径方向落到深度坐标。
+		float r_mu = r * mu; // 半径乘高度角余弦，判别式里反复用到。
+		float discriminant = r_mu * r_mu - r * r + atmosphereModel_bottom_radius* atmosphereModel_bottom_radius; // 是否打到地面的判别式。
+		float u_mu; // 高度角方向的坐标，下面分两种情形算。
+		if (ray_r_mu_intersects_ground){ // 打到地面：用近根，坐标落在下半段。
+			float d = -r_mu - SafeSqrt(discriminant); // 到地面的距离。
+			float d_min = r - atmosphereModel_bottom_radius; // 距离下限。
+			float d_max = rho; // 距离上限。
+			u_mu = 0.5 - 0.5 * GetTextureCoordFromUnitRange(float(d_max != d_min) * (d - d_min) / (d_max - d_min), SCATTERING_TEXTURE_MU_SIZE / 2.0); // 映射到下半张子图。
+		}else{ // 没打到地面：用远根，坐标落在上半段。
+			float d = -r_mu + SafeSqrt(discriminant + H * H); // 到层顶的距离。
+			float d_min = atmosphereModel_top_radius - r; // 距离下限。
+			float d_max = rho + H; // 距离上限。
+			u_mu = 0.5 + 0.5 * GetTextureCoordFromUnitRange((d - d_min) / (d_max - d_min), SCATTERING_TEXTURE_MU_SIZE / 2.0); // 映射到上半张子图。
+		}
+		float d = DistanceToTopAtmosphereBoundary(atmosphereModel_bottom_radius, mu_s); // 太阳高度角对应的层顶距离。
+		float d_min = atmosphereModel_top_radius - atmosphereModel_bottom_radius; // 距离下限。
+		float d_max = H; // 距离上限。
+		float a = (d - d_min) / (d_max - d_min); // 太阳高度角的归一化距离。
+		float D = DistanceToTopAtmosphereBoundary(atmosphereModel_bottom_radius, atmosphereModel_mu_s_min); // 查表下限对应的距离。
+		float A = (D - d_min) / (d_max - d_min); // 下限的归一化距离。
+		float u_mu_s = GetTextureCoordFromUnitRange(max(1.0 - a / A, 0.0) / (1.0 + a), SCATTERING_TEXTURE_MU_S_SIZE); // 非线性映射到太阳高度角坐标。
+		float u_nu = (nu + 1.0) / 2.0; // 视线与太阳夹角从负一到一转成零到一。
+		return vec4(u_nu, u_mu_s, u_mu, u_r); // 返回四维坐标，供上层做夹角方向插值。
+}
+// 把半径与高度角换成透过率子图坐标。
+vec2 GetTransmittanceTextureUvFromRMu(
+	float r,
+	float mu
+	){
+		float H = sqrt(atmosphereModel_top_radius * atmosphereModel_top_radius - atmosphereModel_bottom_radius* atmosphereModel_bottom_radius); // 大气层顶相对地面的水平距离。
+		float rho = SafeSqrt(r * r - atmosphereModel_bottom_radius* atmosphereModel_bottom_radius); // 相机到地心的水平投影。
+		float d = DistanceToTopAtmosphereBoundary(r, mu); // 到层顶的距离。
+		float d_min = atmosphereModel_top_radius - r; // 距离下限。
+		float d_max = rho + H; // 距离上限。
+		float x_mu = (d - d_min) / (d_max - d_min); // 高度角方向的归一化位置。
+		float x_r = rho / H; // 半径方向的归一化位置。
+		return vec2(GetCombinedTextureCoordFromUnitRange(x_mu, TRANSMITTANCE_TEXTURE_WIDTH, COMBINED_TEXTURE_WIDTH), // 横坐标是高度角方向。
+					GetCombinedTextureCoordFromUnitRange(x_r, TRANSMITTANCE_TEXTURE_HEIGHT, COMBINED_TEXTURE_HEIGHT)); // 纵坐标是半径方向。
+}
+// 查到层顶的透过率：透过率存在拼合大图的同一深度层上。
+vec3 GetTransmittanceToTopAtmosphereBoundary(
+	float r,
+	float mu
+	){
+		vec2 uv = GetTransmittanceTextureUvFromRMu(r, mu); // 先算子图坐标。
+		#if MC_VERSION >= 11605 // 一点一六点五以后大气数据挂在八号画面。
+			return vec3(textureLod(colortex8, vec3(uv, 32.5 / 33.0), 0.0)); // 读固定深度层，取三通道颜色。
+		#else // 更早版本挂在二号深度画面上。
+			return vec3(textureLod(depthtex2, vec3(uv, 32.5 / 33.0), 0.0)); // 旧版本读二号深度画面。
+		#endif
+}
+// 两点之间的透过率：由两端到层顶的透过率相除得到，地面相交时用镜像方向。
+vec3 GetTransmittance(
+	float r,
+	float mu,
+	float d,
+	bool ray_r_mu_intersects_ground
+	){
+		float r_d = ClampRadius(sqrt(d * d + 2.0 * r * mu * d + r * r)); // 终点相对地心的半径。
+		float mu_d = clamp((r * mu + d) / r_d, -1.0, 1.0); // 终点处的高度角余弦。
+		if (ray_r_mu_intersects_ground) { // 打到地面时用负高度角镜像。
+			return min(
+				GetTransmittanceToTopAtmosphereBoundary(r_d, -mu_d) /
+				GetTransmittanceToTopAtmosphereBoundary(r, -mu),
+			vec3(1.0)); // 两端相除并封顶到一。
+		} else { // 没打到地面直接用正高度角。
+			return min(
+				GetTransmittanceToTopAtmosphereBoundary(r, mu) /
+				GetTransmittanceToTopAtmosphereBoundary(r_d, mu_d),
+			vec3(1.0)); // 两端相除并封顶到一。
+		}
+}
+// 从某点朝太阳方向到层顶的透过率，太阳贴地时按太阳视半径留一段过渡。
+vec3 GetTransmittanceToSun(
+	float r,
+	float mu_s
+	){
+		float sin_theta_h = atmosphereModel_bottom_radius/ r; // 地平线方向的俯角正弦。
+		float cos_theta_h = -sqrt(max(1.0 - sin_theta_h * sin_theta_h, 0.0)); // 地平线方向的余弦。
+		return GetTransmittanceToTopAtmosphereBoundary(r, mu_s) * // 基础透过率。
+			smoothstep(-sin_theta_h * atmosphereModel_sun_angular_radius, // 过渡带下沿。
+					   sin_theta_h * atmosphereModel_sun_angular_radius, // 过渡带上沿。
+					   mu_s - cos_theta_h); // 过渡带半宽由太阳视半径决定。
+}
+// 从拼合散射数据反推单次米氏散射：按通道比例还原。
+vec3 GetExtrapolatedSingleMieScattering(
+	vec4 scattering
+	){
+		if (scattering.r <= 0.0){ // 红通道为零说明没有数据。
+			return vec3(0.0); // 直接返回零。
+		}
+		return scattering.rgb * scattering.a / scattering.r * // 按红通道比例缩放。
+			(atmosphereModel_rayleigh_scattering.r / atmosphereModel_mie_scattering.r) * // 瑞利与米氏红通道比例。
+			(atmosphereModel_mie_scattering / atmosphereModel_rayleigh_scattering); // 逐通道还原米氏散射。
+}
+// 查组合散射：先在夹角方向插值两片，再拆出单次米氏散射。
+vec3 GetCombinedScattering(
+	float r,
+	float mu,
+	float mu_s,
+	float nu,
+	bool ray_r_mu_intersects_ground,
+	out vec3 single_mie_scattering
+	){
+		vec4 uvwz = GetScatteringTextureUvwzFromRMuMuSNu(r, mu, mu_s, nu, ray_r_mu_intersects_ground); // 四维查表坐标。
+		float tex_coord_x = uvwz.x * (SCATTERING_TEXTURE_NU_SIZE - 1.0); // 夹角方向落在第几片。
+		float tex_x = floor(tex_coord_x); // 前一片的编号。
+		float lerp = tex_coord_x - tex_x; // 两片之间的插值比例。
+		vec3 uvw0 = vec3((tex_x + uvwz.y) / SCATTERING_TEXTURE_NU_SIZE, uvwz.z, uvwz.w); // 前一片的三维坐标。
+		vec3 uvw1 = vec3((tex_x + 1.0 + uvwz.y) / SCATTERING_TEXTURE_NU_SIZE, uvwz.z, uvwz.w); // 后一片的三维坐标。
+		#if MC_VERSION >= 11605 // 一点一六点五以后大气数据挂在八号画面。
+			vec4 combined_scattering = textureLod(colortex8, uvw0, 0.0) * (1.0 - lerp) + textureLod(colortex8, uvw1, 0.0) * lerp; // 两片之间线性插值。
+		#else // 更早版本挂在二号深度画面上。
+			vec4 combined_scattering = textureLod(depthtex2, uvw0, 0.0) * (1.0 - lerp) + textureLod(depthtex2, uvw1, 0.0) * lerp; // 旧版本两片插值。
+		#endif
+		vec3 scattering = vec3(combined_scattering); // 前三通道是组合散射。
+		single_mie_scattering = GetExtrapolatedSingleMieScattering(combined_scattering); // 第四通道还原单次米氏散射。
+		return scattering; // 返回组合散射。
+}
+// 查辐照度：给出某个高度朝上接到的太阳与环境辐照度。
+vec3 GetIrradiance(
+	float r,
+	float mu_s
+	){
+		float x_r = (r - atmosphereModel_bottom_radius) / (atmosphereModel_top_radius - atmosphereModel_bottom_radius); // 半径方向归一化。
+		float x_mu_s = mu_s * 0.5 + 0.5; // 太阳高度角从负一到一转成零到一。
+		vec2 uv = vec2(GetCombinedTextureCoordFromUnitRange(x_mu_s, IRRADIANCE_TEXTURE_WIDTH, COMBINED_TEXTURE_WIDTH), // 横坐标是高度角方向。
+					   GetCombinedTextureCoordFromUnitRange(x_r, IRRADIANCE_TEXTURE_HEIGHT, COMBINED_TEXTURE_HEIGHT) + TRANSMITTANCE_TEXTURE_HEIGHT / COMBINED_TEXTURE_HEIGHT); // 纵坐标要跳过透过率子图。
+		#if MC_VERSION >= 11605 // 一点一六点五以后大气数据挂在八号画面。
+			return vec3(textureLod(colortex8, vec3(uv, 32.5 / 33.0), 0.0)); // 读固定深度层的辐照度。
+		#else // 更早版本挂在二号深度画面上。
+			return vec3(textureLod(depthtex2, vec3(uv, 32.5 / 33.0), 0.0)); // 旧版本读二号深度画面。
+		#endif
+}
+// 色适应矩阵：把物理辐照度的三刺激值转到本项目使用的原色空间。
+const mat3 LMS = mat3(1.6858, -0.4624, -0.0069, -0.0374, 1.0598, -0.0742, -0.0283, -0.1119, 1.0491);
+// 算某点的太阳、月亮与天空辐照度：太阳和月亮各出一份直射与一份环境。
+vec3 GetSunAndSkyIrradiance(
+	vec3 point,
+	vec3 sun_direction,
+	vec3 moon_direction,
+	out vec3 moon_irradiance,
+	out vec3 sun_sky_irradiance,
+	out vec3 moon_sky_irradiance
+	){
+		float r = length(point); // 点到地心的距离。
+		float sun_mu_s = dot(point, sun_direction) / r; // 太阳方向相对当地向上的余弦。
+		float moon_mu_s = dot(point, moon_direction) / r; // 月亮方向相对当地向上的余弦。
+		sun_sky_irradiance = GetIrradiance(r, sun_mu_s) * LMS; // 太阳侧的环境辐照度，乘色适应矩阵。
+		moon_sky_irradiance = GetIrradiance(r, moon_mu_s) * OMNI_NIGHT_BRIGHTNESS * LMS; // 月亮侧环境辐照度，按夜间亮度缩放。
+		vec3 sun_irradiance = atmosphereModel_solar_irradiance; // 太阳直射从标准辐照度出发。
+		moon_irradiance = sun_irradiance * GetTransmittanceToSun(r, moon_mu_s) * OMNI_NIGHT_BRIGHTNESS * LMS; // 月亮直射等于太阳辐照度乘月光透过率，再按夜间亮度缩放。
+		sun_irradiance *= GetTransmittanceToSun(r, sun_mu_s); // 太阳直射乘它自己的透过率。
+		return sun_irradiance * LMS; // 太阳直射乘色适应矩阵后返回。
+}
+// 算某个视线方向的天空辐射亮度：日月散射、可选的地面反弹，再乘天气修正。
+vec3 GetSkyRadiance(
+	vec3 camera,
+	vec3 view_ray,
+	vec3 sun_direction,
+	vec3 moon_direction,
+	bool horizon,
+	out vec3 transmittance,
+	out bool ray_r_mu_intersects_ground
+	){
+		float r = length(camera); // 相机到地心的距离。
+		float rmu = dot(camera, view_ray); // 相机位置与视线的点积。
+		float distance_to_top_atmosphere_boundary = -rmu - sqrt(rmu * rmu - r * r + atmosphereModel_top_radius * atmosphereModel_top_radius); // 相机到层顶的负距离，正数表示相机在上方。
+		if (distance_to_top_atmosphere_boundary > 0.0){ // 相机在大气内部时把起点推到层顶。
+			camera = camera + view_ray * distance_to_top_atmosphere_boundary; // 沿视线外推到层顶。
+			r = atmosphereModel_top_radius; // 起点半径等于层顶。
+			rmu += distance_to_top_atmosphere_boundary; // 同步更新点积。
+		} else if (r > atmosphereModel_top_radius) { // 相机在层顶之外时没有大气。
+			transmittance = vec3(1.0); // 透过率为一。
+			return vec3(0.0); // 没有散射。
+		}
+		float mu = rmu / r; // 起点的高度角余弦。
+		float sun_mu_s = dot(camera, sun_direction) / r; // 太阳方向相对当地向上的余弦。
+		float sun_nu = dot(view_ray, sun_direction); // 视线与太阳夹角余弦。
+		float moon_mu_s = dot(camera, moon_direction) / r; // 月亮方向相对当地向上的余弦。
+		float moon_nu = dot(view_ray, moon_direction); // 视线与月亮夹角余弦。
+		ray_r_mu_intersects_ground = RayIntersectsGround(r, mu); // 视线是否打到地面。
+		transmittance = ray_r_mu_intersects_ground ? vec3(0.0) : GetTransmittanceToTopAtmosphereBoundary(r, mu); // 打到地面时透过率为零。
+		vec3 sun_single_mie_scattering; // 太阳侧的单次米氏散射。
+		vec3 sun_scattering; // 太阳侧的组合散射。
+		vec3 moon_single_mie_scattering; // 月亮侧的单次米氏散射。
+		vec3 moon_scattering; // 月亮侧的组合散射。
+		horizon = horizon && ray_r_mu_intersects_ground; // 只有打到地面才考虑地平线处理。
+		sun_scattering = GetCombinedScattering(r, mu, sun_mu_s, sun_nu, horizon, sun_single_mie_scattering); // 查太阳侧组合散射。
+		moon_scattering = GetCombinedScattering(r, mu, moon_mu_s, moon_nu, horizon, moon_single_mie_scattering); // 查月亮侧组合散射。
+		vec3 groundDiffuse = vec3(0.0); // 地面反弹的散射。
+		#ifdef OMNI_ATMO_HORIZON // 打开地平线时才算地面反弹。
+		if (horizon){ // 只有打到地面的方向需要。
+			vec3 planet_surface = camera + view_ray * DistanceToBottomAtmosphereBoundary(r, mu); // 视线与地面的交点。
+			float r = length(planet_surface); // 交点到地心的距离。
+			float sun_mu_s = dot(planet_surface, sun_direction) / r; // 交点处的太阳高度角余弦。
+			float moon_mu_s = dot(planet_surface, moon_direction) / r; // 交点处的月亮高度角余弦。
+			vec3 sky_irradiance = GetIrradiance(r, sun_mu_s); // 交点处的太阳侧环境辐照度。
+			sky_irradiance += GetIrradiance(r, moon_mu_s) * OMNI_NIGHT_BRIGHTNESS; // 加上月亮侧环境辐照度。
+			vec3 sun_irradiance = atmosphereModel_solar_irradiance * GetTransmittanceToSun(r, sun_mu_s); // 交点处的太阳直射辐照度。
+			float d = distance(camera, planet_surface); // 相机到交点的距离。
+			vec3 surface_transmittance = GetTransmittance(r, mu, d, ray_r_mu_intersects_ground); // 这段距离的透过率。
+			groundDiffuse = mix(sky_irradiance * 0.1, sun_irradiance * 0.008, wetness * 0.6) * surface_transmittance; // 地面反弹按干湿在环境与直射之间插值。
+		}
+		#endif
+		vec3 rayleigh = sun_scattering * RayleighPhaseFunction(sun_nu) // 太阳侧瑞利散射乘瑞利相位。
+					 + moon_scattering * RayleighPhaseFunction(moon_nu) * OMNI_NIGHT_BRIGHTNESS; // 月亮侧同理并按夜间亮度缩放。
+		vec3 mie = sun_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, sun_nu) // 太阳侧米氏散射乘米氏相位。
+				+ moon_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, moon_nu) * OMNI_NIGHT_BRIGHTNESS; // 月亮侧同理。
+		rayleigh = mix(rayleigh, vec3(Luminance(rayleigh)) * atmosphereModel_solar_irradiance, wetness * 0.5); // 雨天把瑞利散射去色并按太阳谱重新染色。
+		return (rayleigh + mie + groundDiffuse) * (1.0 - wetness * 0.4) * LMS; // 合成后按雨天压暗并转色适应空间。
+}
+// 算相机到某个世界点之间的天空辐射亮度，体积云与平面云算空气透视时用。
+vec3 GetSkyRadianceToPoint(
+	vec3 camera,
+	vec3 point,
+	vec3 sun_direction,
+	vec3 moon_direction,
+	out vec3 transmittance
+	){
+		vec3 view_ray = normalize(point - camera); // 从相机指向目标点的方向。
+		float r = length(camera); // 相机到地心的距离。
+		float rmu = dot(camera, view_ray); // 相机位置与视线的点积。
+		float distance_to_top_atmosphere_boundary = -rmu - sqrt(rmu * rmu - r * r + atmosphereModel_top_radius * atmosphereModel_top_radius); // 相机到层顶的负距离。
+		if (distance_to_top_atmosphere_boundary > 0.0){ // 相机在大气内部时把起点推到层顶。
+			camera = camera + view_ray * distance_to_top_atmosphere_boundary; // 沿视线外推到层顶。
+			r = atmosphereModel_top_radius; // 起点半径等于层顶。
+			rmu += distance_to_top_atmosphere_boundary; // 同步更新点积。
+		}
+		float mu = rmu / r; // 起点的高度角余弦。
+		float sun_mu_s = dot(camera, sun_direction) / r; // 太阳方向相对当地向上的余弦。
+		float sun_nu = dot(view_ray, sun_direction); // 视线与太阳夹角余弦。
+		float moon_mu_s = dot(camera, moon_direction) / r; // 月亮方向相对当地向上的余弦。
+		float moon_nu = dot(view_ray, moon_direction); // 视线与月亮夹角余弦。
+		float d = length(point - camera); // 起点到目标点的距离。
+		#ifdef CLOUD_LOCAL_LIGHTING // 云局部光照开启时也考虑地面相交。
+			bool ray_r_mu_intersects_ground = RayIntersectsGround(r, mu); // 按视线是否打到地面判断。
+		#else // 关闭时一律当作没打到地面。
+			bool ray_r_mu_intersects_ground = false; // 常量假。
+		#endif
+		transmittance = GetTransmittance(r, mu, d, ray_r_mu_intersects_ground); // 起点到目标点的透过率。
+		vec3 sun_single_mie_scattering; // 太阳侧单次米氏散射。
+		vec3 sun_scattering = GetCombinedScattering(r, mu, sun_mu_s, sun_nu, ray_r_mu_intersects_ground, sun_single_mie_scattering); // 起点处太阳侧组合散射。
+		vec3 moon_single_mie_scattering; // 月亮侧单次米氏散射。
+		vec3 moon_scattering = GetCombinedScattering(r, mu, moon_mu_s, moon_nu, ray_r_mu_intersects_ground, moon_single_mie_scattering); // 起点处月亮侧组合散射。
+		float r_p = ClampRadius(sqrt(d * d + 2.0 * r * mu * d + r * r)); // 目标点相对地心的半径。
+		float mu_p = (r * mu + d) / r_p; // 目标点处的高度角余弦。
+		float sun_mu_s_p = (r * sun_mu_s + d * sun_nu) / r_p; // 目标点处的太阳高度角余弦。
+		float moon_mu_s_p = (r * moon_mu_s + d * moon_nu) / r_p; // 目标点处的月亮高度角余弦。
+		vec3 sun_single_mie_scattering_p; // 目标点处太阳侧单次米氏散射。
+		vec3 sun_scattering_p = GetCombinedScattering(r_p, mu_p, sun_mu_s_p, sun_nu, ray_r_mu_intersects_ground, sun_single_mie_scattering_p); // 目标点处太阳侧组合散射。
+		vec3 moon_single_mie_scattering_p; // 目标点处月亮侧单次米氏散射。
+		vec3 moon_scattering_p = GetCombinedScattering(r_p, mu_p, moon_mu_s_p, moon_nu, ray_r_mu_intersects_ground, moon_single_mie_scattering_p); // 目标点处月亮侧组合散射。
+		sun_scattering = sun_scattering - transmittance * sun_scattering_p; // 两点之差的散射是这段空气的贡献。
+		sun_single_mie_scattering = sun_single_mie_scattering - transmittance * sun_single_mie_scattering_p; // 米氏散射同样相减。
+		moon_scattering = moon_scattering - transmittance * moon_scattering_p; // 月亮侧同理。
+		moon_single_mie_scattering = moon_single_mie_scattering - transmittance * moon_single_mie_scattering_p; // 月亮侧米氏同样相减。
+		sun_single_mie_scattering = sun_single_mie_scattering * smoothstep(0.0, 0.01, sun_mu_s); // 太阳很贴地时淡出米氏散射，避免出现断带。
+		moon_single_mie_scattering = moon_single_mie_scattering * smoothstep(0.0, 0.01, moon_mu_s); // 月亮同样处理。
+		vec3 rayleigh = sun_scattering * RayleighPhaseFunction(sun_nu) // 太阳侧瑞利散射。
+					 + moon_scattering * RayleighPhaseFunction(moon_nu) * OMNI_NIGHT_BRIGHTNESS; // 月亮侧瑞利散射。
+		vec3 mie = sun_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, sun_nu) // 太阳侧米氏散射。
+				+ moon_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, moon_nu) * OMNI_NIGHT_BRIGHTNESS; // 月亮侧米氏散射。
+		rayleigh = mix(rayleigh, vec3(Luminance(rayleigh)) * atmosphereModel_solar_irradiance, wetness * 0.5); // 雨天把瑞利散射去色重染。
+		return (rayleigh + mie) * (1.0 - wetness * 0.4) * LMS; // 合成后按雨天压暗并转色适应空间。
+}
+// 校次把球面方向绕太阳轴旋转，让星点跟着天体倾斜，再按方向切格撒星。
+// 太阳方向作为参数传入：天空效果会被多个程序引入，直接在函数里读全局量会让不需要光色的程序编译失败。
+vec3 CalculateStars(vec3 worldDir, vec3 sunVector){
+	const float scale = 384.0; // 方向切格的密度，越大星星越密越小。
+	const float coverage = 0.007; // 亮格占所有格子的比例。
+	const float maxLuminance = 0.05; // 最亮的一颗星的亮度。
+	const float minTemperature = 4000.0; // 星色温下限，偏橙。
+	const float maxTemperature = 8000.0; // 星色温上限，偏蓝。
+	float cosine = dot(sunVector,  vec3(0, 0, 1)); // 太阳轴与参考轴夹角余弦。
+	vec3 axis = cross(sunVector,  vec3(0, 0, 1)); // 旋转轴。
+	float cosecantSquared = 1.0 / dot(axis, axis); // 旋转公式里的比例因子。
+	worldDir = cosine * worldDir + cross(axis, worldDir) + (cosecantSquared - cosecantSquared * cosine) * dot(axis, worldDir) * axis; // 按罗德里格公式旋转方向。
+	vec3  p = worldDir * scale; // 缩放后切格。
+	ivec3 i = ivec3(floor(p)); // 格子整数坐标。
+	vec3  f = p - i; // 格内小数偏移。
+	float r = dot(f - 0.5, f - 0.5); // 到格子中心的距离平方，用来收窄星点。
+	vec3 i3 = fract(i * vec3(443.897, 441.423, 437.195)); // 逐格散列。
+	i3 += dot(i3, i3.yzx + 19.19); // 再做一次混合。
+	vec2 hash = fract((i3.xx + i3.yz) * i3.zy); // 得到两个零到一的散列值。
+	hash.y = 2.0 * hash.y - 4.0 * hash.y * hash.y + 3.0 * hash.y * hash.y * hash.y; // 把色温分布压向中间。
+	float c = remapSaturate(hash.x, 1.0 - coverage, 1.0); // 只有少量格子亮。
+	return (maxLuminance * remapSaturate(r, 0.25, 0.0) * c * c) * Blackbody(mix(minTemperature, maxTemperature, hash.y)); // 亮度乘色温得到星点颜色。
+}
+// 把天空盒三维贴图上的一个纹素坐标反解成世界方向，与 `ProjectSky` 互为逆。
+vec3 UnprojectSky(vec2 texel, float tileSize){
+	float tileSizeDivide = 1.0 / (0.5 * tileSize - 1.5); // 纹素到方向的缩放系数。
+	vec3 direction = vec3(0.0); // 待求的世界方向。
+	if (texel.x < tileSize) { // 第一张面，朝 x 正负。
+		direction.x = step(tileSize, texel.y) * 2.0 - 1.0; // 纵半决定正负。
+		direction.y = (texel.x - tileSize * 0.5) * tileSizeDivide; // 横坐标映射到一个轴。
+		direction.z = (texel.y - tileSize * (step(tileSize, texel.y) + 0.5)) * tileSizeDivide; // 纵坐标映射到另一个轴。
+	} else if (texel.x < 2.0 * tileSize) { // 第二张面，朝 y 正负。
+		direction.x = (texel.x - tileSize * 1.5) * tileSizeDivide; // 横坐标映射到一个轴。
+		direction.y = step(tileSize, texel.y) * 2.0 - 1.0; // 纵半决定正负。
+		direction.z = (texel.y - tileSize * (step(tileSize, texel.y) + 0.5)) * tileSizeDivide; // 纵坐标映射到另一个轴。
+	} else { // 第三张面，朝 z 正负。
+		direction.x = (texel.x - tileSize * 2.5) * tileSizeDivide; // 横坐标映射到一个轴。
+		direction.y = (texel.y - tileSize * (step(tileSize, texel.y) + 0.5)) * tileSizeDivide; // 纵坐标映射到另一个轴。
+		direction.z = step(tileSize, texel.y) * 2.0 - 1.0; // 纵半决定正负。
+	}
+	return normalize(direction); // 单位世界方向。
+}
+// 把一个世界方向投到天空盒三维贴图上，与 `UnprojectSky` 互为逆；原程序两处各写一份，按合同只保留这里一份。
+// 调用前提：`screenSize` 与 `pixelSize` 已由绘制主体声明。
+vec2 ProjectSky(vec3 dir, float tileSize){
+	float tileSizeDivide = 0.5 * tileSize - 1.5; // 方向到纹素的缩放系数。
+	vec3 adir = abs(dir); // 三个分量的绝对值，用来选主轴。
+	vec2 texel; // 待求的纹素坐标。
+	if (adir.x > adir.y && adir.x > adir.z){ // x 份量最大时用第一张面。
+		dir /= adir.x; // 归一化主轴分量。
+		texel.x = dir.y * tileSizeDivide + tileSize * 0.5; // 一个轴映射到横坐标。
+		texel.y = dir.z * tileSizeDivide + tileSize * (step(0.0, dir.x) + 0.5); // 另一个轴映射到纵坐标，符号决定上下半。
+	}else if (adir.y > adir.x && adir.y > adir.z){ // y 分量最大时用第二张面。
+		dir /= adir.y; // 归一化主轴分量。
+		texel.x = dir.x * tileSizeDivide + tileSize * 1.5; // 偏移到第二张面。
+		texel.y = dir.z * tileSizeDivide + tileSize * (step(0.0, dir.y) + 0.5); // 符号决定上下半。
+	}else{ // 否则用第三张面。
+		dir /= adir.z; // 归一化主轴分量。
+		texel.x = dir.x * tileSizeDivide + tileSize * 2.5; // 偏移到第三张面。
+		texel.y = dir.y * tileSizeDivide + tileSize * (step(0.0, dir.z) + 0.5); // 符号决定上下半。
+	}
+	texel.y += ceil(screenSize.y * 0.5 + 1.0); // 天空盒贴图放在上半屏，纵坐标抬到上半屏起点。
+	return texel * pixelSize; // 纹素坐标换成零到一的贴图坐标。
+}
+#endif // 文件守卫结束。

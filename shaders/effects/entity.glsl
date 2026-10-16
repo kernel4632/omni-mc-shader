@@ -1,41 +1,50 @@
 /*
-生物与玩家：给实体受光统一调亮度与色温，调整手持物视野，并控制玩家发光效果在光影下的显示。
-
+生物与玩家：实体受伤状态色、发光眼开关与手持物视场角。
+来源：实体状态色与手部视场角照 iterationT `Lib/Programs/Gbuffers/Entities_FS.glsl`、`Entities_VS.glsl` 一比一移植；
+  发光眼在 iterationT 里没有算法，只作为一个程序开关存在，见下方说明。
 调用位置：
-  rendering/terrain.glsl 的 omniShadeSurface：对实体颜色调用 omniEntityLight，发光实体再调用 omniGlow；
-  rendering/terrain.glsl 的顶点阶段：对手持物裁剪坐标调用 omniHandZoom。
-可复制示例：`lit = omniEntityLight(lit);`、`lit = omniGlow(lit, albedo);` 与 `gl_Position = omniHandZoom(gl_Position);`
-
-设计原因与取舍：只改整块生物与手持物的亮度、色温、视野和发光强弱，不做逐生物局部光；
-这样接入简单、任何资源包和模组都不受影响，代价是做不到单个生物单独调。
+  实体片元：解出底色后调用 `albedo.rgb = EntityStatusColor(albedo.rgb, entityColor);`；
+  手持物顶点：算裁剪坐标时调用 `gl_Position = HandFovProjection(gbufferProjection, aspectRatio) * viewPos;`。
+可复制示例：
+  `albedo.rgb = EntityStatusColor(albedo.rgb, entityColor);`
+  `gl_Position = HandFovProjection(gbufferProjection, aspectRatio) * viewPos;`
+调用前提（iterationT 原样保留）：实体状态色依赖调用方声明的 `entityColor`；手持物视场角依赖加载器提供的
+  `MC_HAND_DEPTH` 宏与 `aspectRatio` 输入，只在手持物程序里调用。
+设计原因与取舍：发光眼在 iterationT 里靠 `shaders.properties` 里开关整个 `gbuffers_spidereyes` 程序实现，
+  光源码中只有一句空的判断，没有任何算法，所以这里只保留选项本身，真正的启用写在 `rendering/pipeline.properties`
+  的 `program.world0/gbuffers_spidereyes.enabled=OMNI_EYES_LIGHTING`，语义与 iterationT 一致。
 */
-#ifndef OMNI_ENTITY_INCLUDED
-#define OMNI_ENTITY_INCLUDED
+#ifndef OMNI_ENTITY_INCLUDED // 只引入一次。
+#define OMNI_ENTITY_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"生物与玩家","en_us":"Mobs & player"}}
-// @option {"label": {"zh_cn": "生物受光强度", "en_us": "Mob light strength"}, "slider": true, "description": {"zh_cn": "生物身上的光照多亮。", "en_us": "How bright the light on mobs is."}}
-#define OMNI_ENTITY_LIGHT 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// @option {"label":{"zh_cn":"生物色温","en_us":"Mob light tint"},"description":{"zh_cn":"正值生物受光偏暖、负值偏冷，零保持中性。","en_us":"Positive warms the light on mobs, negative cools it, zero stays neutral."},"slider":true}
-#define OMNI_ENTITY_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
-// @option {"label":{"zh_cn":"手持物视野","en_us":"Held item FOV"},"description":{"zh_cn":"手里物品看起来多大；七十是原版大小，数值越小物品越大。","en_us":"How large held items appear; 70 is the vanilla size, smaller values look bigger."},"slider":true}
-#define OMNI_HAND_FOV 70.0 // [30.0 50.0 70.0 90.0 120.0]
-// @option {"label":{"zh_cn":"玩家发光遮盖","en_us":"Glow effect"},"description":{"zh_cn":"发光效果在光影下有多明显；取零时发光实体按普通受光显示。","en_us":"How strongly the glowing effect shows; zero makes glowing entities render as normal lit."},"slider":true}
-#define OMNI_PLAYER_GLOW 0.5 // [0.0 0.25 0.5 0.75 1.0]
-// 归一化等共用计算来自数学模块。
+// @option {"label":{"zh_cn":"实体状态颜色","en_us":"Entity Status Color"},"description":{"zh_cn":"实体受伤时贴图会染上的红色。","en_us":"The red tint a mob shows when hurt."}}
+#define OMNI_ENTITIES_STATUS_COLOR
+// @option {"label":{"zh_cn":"实体眼部发光","en_us":"Entity Eyes Lighting"},"description":{"zh_cn":"让末影人、蜘蛛、坚守者等实体的部分纹理发光。","en_us":"Makes parts of endermen, spiders and wardens glow."}}
+#define OMNI_EYES_LIGHTING
+// @option {"label":{"zh_cn":"手部视场角模式","en_us":"Hand FOV Mode"},"description":{"zh_cn":"默认、跟随游戏设置或跟随光影设置；跟随游戏设置会使用选项里的视场角。","en_us":"Default, follow the game FOV, or follow the shader FOV; game mode uses the option value."},"values":{"0":{"zh_cn":"默认","en_us":"Default"},"1":{"zh_cn":"跟随游戏设置","en_us":"Follow Game Setting"},"2":{"zh_cn":"跟随光影设置","en_us":"Follow Shader Setting"}}}
+#define OMNI_HAND_FOV_MODE 0 // [0 1 2]
+// @option {"label":{"zh_cn":"手部视场角","en_us":"Hand FOV"},"description":{"zh_cn":"跟随光影设置时手持物的视场角，七十是原版大小。","en_us":"Held item FOV when following the shader; 70 is the vanilla size."},"slider":true}
+#define OMNI_HAND_FOV 70.0 // [30.0 31.0 32.0 33.0 34.0 35.0 36.0 37.0 38.0 39.0 40.0 41.0 42.0 43.0 44.0 45.0 46.0 47.0 48.0 49.0 50.0 51.0 52.0 53.0 54.0 55.0 56.0 57.0 58.0 59.0 60.0 61.0 62.0 63.0 64.0 65.0 66.0 67.0 68.0 69.0 70.0 71.0 72.0 73.0 74.0 75.0 76.0 77.0 78.0 79.0 80.0 81.0 82.0 83.0 84.0 85.0 86.0 87.0 88.0 89.0 90.0 91.0 92.0 93.0 94.0 95.0 96.0 97.0 98.0 99.0 100.0 101.0 102.0 103.0 104.0 105.0 106.0 107.0 108.0 109.0 110.0 111.0 112.0 113.0 114.0 115.0 116.0 117.0 118.0 119.0 120.0]
+// 手持物视场角与状态色都用到共用数学与角度常数。
+#include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-// 生物受光：整体乘一个强度，再按色温偏移红蓝通道，绿色不动。
-vec3 omniEntityLight(vec3 lit) {
-    lit *= OMNI_ENTITY_LIGHT; // 生物整体更亮或更暗。
-    return lit * vec3(1.0 + 0.2 * OMNI_ENTITY_TINT, 1.0, 1.0 - 0.2 * OMNI_ENTITY_TINT); // 色温偏移，取零保持中性。
+// 实体状态色：受伤时把底色朝受伤颜色混，混合量取自受伤颜色的透明度。
+vec3 EntityStatusColor(vec3 albedo, vec4 entityColor){
+	#ifdef OMNI_ENTITIES_STATUS_COLOR // 关闭时直接返回原底色。
+		albedo = mix(albedo, entityColor.rgb, vec3(entityColor.a)); // 按受伤颜色本身的透明度混合。
+	#endif
+	return albedo; // 交回处理后的底色。
 }
-// 玩家发光遮盖：把普通受光颜色朝发光色靠拢，取零等于发光效果不生效。
-vec3 omniGlow(vec3 lit, vec3 albedo) {
-    return mix(lit, albedo * 2.5, OMNI_PLAYER_GLOW); // 取零时保持普通受光，取一时按自身颜色明显发光。
+// 手持物视场角：按模式改写投影矩阵的焦点与深度项，得到与原版不同大小或深度的手持物。
+// 调用前提：只在手持物程序里调用，`MC_HAND_DEPTH` 由加载器提供。
+mat4 HandFovProjection(mat4 projection, float aspectRatio){
+	#if OMNI_HAND_FOV_MODE == 1 // 跟随游戏设置时只改深度项，沿用游戏给的焦距。
+		projection[2][2] *= MC_HAND_DEPTH; // 按游戏的手部深度缩放。
+	#elif OMNI_HAND_FOV_MODE == 2 // 跟随光影设置时改写焦距。
+		projection[1][1] = 1.0 / tan(OMNI_HAND_FOV * (PI / 360.0)); // 由视场角反推纵向焦距。
+		projection[0][0] = projection[1][1] / aspectRatio; // 横向按屏幕宽高比缩放，形状不变形。
+		projection[2][2] *= MC_HAND_DEPTH; // 同样按游戏的手部深度缩放。
+	#endif
+	return projection; // 交回改写后的投影矩阵。
 }
-// 手持物视野：投影的焦距和半视野角的正切成反比，所以把裁剪坐标的横纵乘上两者正切之比，
-// 就等于换了一个视野角去看手，和真实相机改视野完全一样；物品离屏幕中心越远，移动也越明显，这是视野变化本来的样子。
-// 参照值七十度是原版画手时使用的固定视野，取七十时比例正好是一。
-vec4 omniHandZoom(vec4 clip) {
-    clip.xy *= tan(radians(35.0)) / tan(radians(clamp(OMNI_HAND_FOV, 1.0, 179.0) * 0.5)); // 三十度约放大二点六倍，一百二十度约缩到四成。
-    return clip;
-}
-#endif
+#endif // 文件守卫结束。
