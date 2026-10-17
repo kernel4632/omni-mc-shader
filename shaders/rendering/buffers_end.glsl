@@ -30,4 +30,5 @@ const bool shadowHardwareFiltering1 = true;
 const bool shadowtex0Mipmap = true;
 // 末地关闭原版遮蔽。
 const float ambientOcclusionLevel = 0.0;
+// 末地没有程序化草：九号方块编号缓冲照共用文件声明存在，但末地的入口不会引用它，画面与原样一致。
 #endif // 文件守卫结束。

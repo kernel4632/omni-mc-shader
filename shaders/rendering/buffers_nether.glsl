@@ -30,4 +30,5 @@ const bool shadowHardwareFiltering1 = false;
 const bool shadowtex0Mipmap = false;
 // 下界关闭原版遮蔽。
 const float ambientOcclusionLevel = 0.0;
+// 下界没有程序化草：九号方块编号缓冲照共用文件声明存在，但下界的入口不会引用它，画面与原样一致。
 #endif // 文件守卫结束。

@@ -31,4 +31,6 @@ const bool shadowHardwareFiltering1 = true;
 const bool shadowtex0Mipmap = true;
 // 主世界保持满值原版遮蔽，`GTAO` 另算。
 const float ambientOcclusionLevel = 1.0;
+// 九号画面是程序化草用的方块编号与生物群系缓冲，格式与清除在共用文件里声明；只有主世界会写和读它，
+// 下界与末地不引用它，因此这两处保持原样，不引入不存在的缓冲。
 #endif // 文件守卫结束。

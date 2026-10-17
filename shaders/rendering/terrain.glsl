@@ -47,6 +47,8 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 #include "/common/noise.glsl"
 // 植物摆动：提供 `WavingPlants`，顶点阶段的地形与阴影共用同一份摆法。
 #include "/effects/ground/vegetation.glsl"
+// 程序化草：提供草丛的摆动、方块编号查询与草叶外形；默认关闭，只在主世界编译。
+#include "/effects/ground/grass.glsl"
 // Omni 额外功能：植被季节色，默认关闭。
 #include "/effects/weather/season.glsl"
 // Omni 额外功能：积雪覆盖（来源 Eclipse），默认关闭；与季节同属天气相关的地表效果。
@@ -80,11 +82,20 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 attribute vec4 mc_Entity;
 // 方块纹理坐标的中点：用来判断哪一半顶点属于植物上端。
 attribute vec4 mc_midTexCoord;
+#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+// 方块中心相对顶点的偏移：除以六十四得到方块中心，草丛以它为中心摆放。
+attribute vec3 at_midBlock;
+#endif
 
 // 传给几何阶段的插值量；开关顶点切线时多传一组切线基。
 out vec3 v_color; // 顶点色，雨天与调试会改它。
 out vec2 v_texCoord; // 方块纹理坐标。
 out vec3 v_viewPos; // 视空间位置，片元做切线基与视差要用。
+#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+flat out float v_blockID; // 方块编号，几何阶段挑出草方块顶面用。
+flat out float v_grassUp; // 该面是否朝上，只有朝上的面才长草。
+flat out vec3 v_blockCenter; // 方块中心的相机相对世界坐标，草丛与隔壁查询都以它为基准。
+#endif
 #ifdef OMNI_TERRAIN_VS_TBN
 	// 顶点切线属性，由模组或资源包提供。
 	attribute vec4 at_tangent;
@@ -124,6 +135,12 @@ void main(){
 	v_chunkFade = omniChunkFadeValue(chunkFadeRaw); // 取正并夹到零到一，选项关闭时返回一。
 	vec4 worldPos = gbufferModelViewInverse * viewPos; // 视空间回到相机相对世界坐标。
 	worldPos.xyz += cameraPosition.xyz; // 加上相机绝对位置，得到世界坐标。
+
+	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+		v_blockID = mc_Entity.x; // 记录方块编号，几何阶段按它挑出草方块。
+		v_grassUp = step(0.9, gl_Normal.y); // 只有朝上的面才可能是草方块顶面。
+		v_blockCenter = worldPos.xyz - cameraPosition.xyz + at_midBlock / 64.0; // 方块中心，去掉相机绝对位置避免插值精度不足。
+	#endif
 
 	// 植物摆动：把世界坐标就地改一下，风固定在世界里。
 	WavingPlants(worldPos.xyz, mc_Entity.x, v_blockLight.y, gl_MultiTexCoord0.y, mc_midTexCoord.y);
@@ -202,7 +219,17 @@ void main(){
 #ifdef OMNI_GEOMETRY // 几何阶段：原程序在这里估方块纹理分辨率，再原样转发三角形。
 // 几何阶段输入一个三角形，输出一个三角带。
 layout(triangles) in; // 输入三角形。
-layout(triangle_strip, max_vertices = 3) out; // 输出三个顶点。
+#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+#if OMNI_GRASS_QUALITY == 2
+layout(triangle_strip, max_vertices = 24) out; // 高密度：基准三角形加七段草叶。
+#elif OMNI_GRASS_QUALITY == 1
+layout(triangle_strip, max_vertices = 18) out; // 中密度：基准三角形加五段草叶。
+#else
+layout(triangle_strip, max_vertices = 12) out; // 低密度：基准三角形加三段草叶。
+#endif
+#else
+layout(triangle_strip, max_vertices = 3) out; // 关闭草丛时只转发原来的三个顶点。
+#endif
 
 // 方块图集尺寸，由加载器提供。
 
@@ -210,6 +237,13 @@ layout(triangle_strip, max_vertices = 3) out; // 输出三个顶点。
 in vec3 v_color[]; // 顶点色数组。
 in vec2 v_texCoord[]; // 纹理坐标数组。
 in vec3 v_viewPos[]; // 视空间位置数组。
+#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+flat in float v_blockID[]; // 方块编号数组。
+flat in float v_grassUp[]; // 朝上标记数组。
+flat in vec3 v_blockCenter[]; // 方块中心数组。
+// 九号画面：上一帧记下的方块编号与生物群系，草丛按它判断隔壁方块。
+uniform sampler2D colortex9;
+#endif
 #ifdef OMNI_TERRAIN_VS_TBN
 	in mat3 v_tbn[]; // 切线基数组。
 #endif
@@ -228,6 +262,9 @@ out vec2 blockLight; // 方块光。
 flat out float materialIDs; // 材质编号。
 flat out float textureResolution; // 该三角形所属方块的纹理分辨率，平面插值。
 out float chunkFade; // 区块淡入进度，片元按它抖动丢弃。
+#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+flat out float blockID; // 方块编号，片元写九号画面用。
+#endif
 
 // 几何主函数：先估分辨率，再逐顶点转发。
 void main(){
@@ -253,19 +290,98 @@ void main(){
 		#endif
 		blockLight = v_blockLight[i]; // 转发方块光。
 		materialIDs = v_materialIDs[i]; // 转发材质编号。
+		#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+			blockID = v_blockID[i]; // 转发方块编号，片元写九号画面。
+		#endif
 		chunkFade = v_chunkFade[i]; // 转发区块淡入进度。
 
 		EmitVertex(); // 发出顶点。
 	}
 	EndPrimitive(); // 结束三角形。
+
+	// --- 草丛：只对草方块朝上的面、且在范围内生成；关闭选项或不在主世界时整段不编译 ---
+	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+		vec3 grassCenter = (v_viewPos[0] + v_viewPos[1] + v_viewPos[2]) / 3.0; // 面中心，视空间。
+		float grassDist = length(grassCenter); // 到相机的距离，用来分级密度与高度。
+		if (v_blockID[0] == OMNI_GRASS_BLOCK_ID && v_grassUp[0] > 0.5 && grassDist < OMNI_GRASS_RANGE){ // 草方块顶面且在范围内才长草。
+			vec3 viewUp = mat3(gbufferModelView) * vec3(0.0, 1.0, 0.0); // 视空间里的世界竖直方向。
+			vec3 viewEast = mat3(gbufferModelView) * vec3(1.0, 0.0, 0.0); // 视空间里的世界东方向，给隔壁查询用。
+			vec3 viewSouth = mat3(gbufferModelView) * vec3(0.0, 0.0, 1.0); // 视空间里的世界南方向。
+
+			// 按距离选段数：近处多几段，远处只留一片大叶，顶点数不超标。
+			#if OMNI_GRASS_QUALITY == 2
+				int triangle_count = 7; float heightMult = 1.1; // 高密度起始值。
+				if (grassDist > 2.5) { triangle_count = 5; heightMult = 1.5; } // 稍远处减一段并加高。
+				if (grassDist > 5.5) { triangle_count = 3; heightMult = 2.25; } // 更远再减并加高。
+				if (grassDist > 0.75 * OMNI_GRASS_RANGE) { triangle_count = 1; heightMult = 5.0; } // 最远处只留一片大叶。
+			#elif OMNI_GRASS_QUALITY == 1
+				int triangle_count = 5; float heightMult = 1.5; // 中密度起始值。
+				if (grassDist > 7.5) { triangle_count = 3; heightMult = 2.25; } // 稍远处减段加高。
+				if (grassDist > 0.75 * OMNI_GRASS_RANGE) { triangle_count = 1; heightMult = 5.0; } // 最远处只留一片大叶。
+			#else
+				int triangle_count = 3; float heightMult = 2.25; // 低密度起始值。
+				if (grassDist > 0.75 * OMNI_GRASS_RANGE) { triangle_count = 1; heightMult = 5.0; } // 最远处只留一片大叶。
+			#endif
+
+			// 隔壁方块：读九号画面上一帧记下的编号，判断四个水平邻居是不是草方块。
+			// 为什么按邻居的屏幕像素读：世界坐标只有投影到屏幕才有对应的记录。
+			float neighborE = omniGrassBlockAt(colortex9, grassCenter + viewEast, gbufferProjection, screenSize); // 东邻居。
+			float neighborW = omniGrassBlockAt(colortex9, grassCenter - viewEast, gbufferProjection, screenSize); // 西邻居。
+			float neighborS = omniGrassBlockAt(colortex9, grassCenter + viewSouth, gbufferProjection, screenSize); // 南邻居。
+			float neighborN = omniGrassBlockAt(colortex9, grassCenter - viewSouth, gbufferProjection, screenSize); // 北邻居。
+			// 编号为零表示这一像素没有记录（新加载、被遮挡或第一帧），当作草处理，避免整片草被压低。
+			float openE = (neighborE < 0.5 || abs(neighborE - OMNI_GRASS_BLOCK_ID) < 0.5) ? 1.0 : 0.0; // 东边是否开口。
+			float openW = (neighborW < 0.5 || abs(neighborW - OMNI_GRASS_BLOCK_ID) < 0.5) ? 1.0 : 0.0; // 西边是否开口。
+			float openS = (neighborS < 0.5 || abs(neighborS - OMNI_GRASS_BLOCK_ID) < 0.5) ? 1.0 : 0.0; // 南边是否开口。
+			float openN = (neighborN < 0.5 || abs(neighborN - OMNI_GRASS_BLOCK_ID) < 0.5) ? 1.0 : 0.0; // 北边是否开口。
+			float openAvg = (openE + openW + openS + openN) * 0.25; // 四周平均开口程度。
+			heightMult *= mix(0.65, 1.0, openAvg) * OMNI_GRASS_HEIGHT; // 旁边不是草就让草矮一点，避免越过台阶。
+
+			// 草叶横向宽度方向：取竖直方向与视线方向的叉乘；正对竖直方向时退回东方向，避免除零。
+			vec3 sideRaw = cross(viewUp, normalize(grassCenter)); // 横向宽度方向的原始方向。
+			if (length(sideRaw) < 1e-4) sideRaw = viewEast; // 视线与竖直方向平行时换一个方向。
+			vec3 bladeSide = normalize(sideRaw) * OMNI_GRASS_BASE_THICKNESS; // 收放到草叶宽度。
+
+			vec2 seed = v_blockCenter[0].xz; // 方块中心的相机相对水平坐标当随机种子，同一方块每次结果一致。
+			vec2 randomDir = 2.0 * (texture(noisetex, 0.75 * seed).xy + texture(noisetex, 0.35 * seed.yx).xy) - 1.0; // 两组噪声拼出稳定随机方向。
+			vec2 windWorld = omniGrassWindOffset(v_blockCenter[0] + cameraPosition); // 风在方块中心处的世界位移。
+			vec3 windView = mat3(gbufferModelView) * vec3(windWorld.x, 0.0, windWorld.y); // 风换成视空间。
+
+			for (int j = 0; j < triangle_count; j++){ // 逐段拼出一片草叶。
+				for (int i = 0; i < 3; i++){ // 每段三个顶点。
+					vec3 offset = omniGrassBladeVertex(viewUp, bladeSide, heightMult, j, triangle_count, i); // 该角相对底部的偏移。
+					float height = clamp(dot(offset, viewUp) / max(heightMult, 1e-4) * 0.5, 0.0, 1.0); // 沿竖直的高度比例。
+					vec3 bladePos = grassCenter + offset; // 草叶顶点位置。
+					bladePos += windView * height * height; // 越高越被风吹弯。
+					bladePos += normalize(bladeSide) * OMNI_GRASS_RANDOMNESS * randomDir.x * height; // 每片草随机方向的小弯。
+
+					gl_Position = gbufferProjection * vec4(bladePos, 1.0); // 投影到裁剪空间。
+					#ifdef OMNI_TAA
+						gl_Position.xy += taaJitter * gl_Position.w; // 与顶点阶段一致地加本帧抖动，避免草叶和时间抗锯齿错位。
+					#endif
+
+					color = v_color[i]; // 草叶底色沿用源顶点色。
+					texCoord = v_texCoord[i]; // 贴图坐标沿用源顶点，草叶显示草方块的贴图。
+					viewPos = bladePos; // 视空间位置，片元做切线基与视差要用。
+					blockLight = v_blockLight[i]; // 方块光沿用源顶点。
+					materialIDs = MATID_GRASS; // 草叶按草处理，湿润与光照走草的路径。
+					chunkFade = v_chunkFade[i]; // 新加载区块的草叶同样淡入。
+					blockID = v_blockID[i]; // 编号沿用源顶点，片元写九号画面时仍是草方块。
+					EmitVertex(); // 发出草叶顶点。
+				}
+				EndPrimitive(); // 一段草叶结束。
+			}
+		}
+	#endif
 }
 #endif // 几何阶段结束。
 
 #if defined OMNI_FRAGMENT && defined OMNI_TERRAIN_PASS // 片元阶段：地形片元着色器。
-/* DRAWBUFFERS:035 */
+/* DRAWBUFFERS:0359 */
 layout(location = 0) out vec4 gbufferOutput0; // 零号贴图色。
 layout(location = 1) out vec4 gbufferOutput3; // 三号法线光照图。
 layout(location = 2) out vec4 gbufferOutput5; // 五号高光材质。
+layout(location = 3) out vec4 gbufferOutput9; // 九号方块编号与生物群系，草阶段下一帧查询用。
 
 // 从几何阶段接收的插值量。
 in vec3 color; // 顶点色。
@@ -278,6 +394,10 @@ in vec2 blockLight; // 方块光。
 flat in float materialIDs; // 材质编号。
 in float chunkFade; // 区块淡入进度，按它抖动丢弃新加载区块的像素。
 // `flat in float textureResolution;` 已在文件顶部、引入视差函数之前声明。
+#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+flat in float blockID; // 方块编号，写九号画面用。
+uniform int biome; // 当前像素所在的生物群系编号，写九号画面用。
+#endif
 
 // 各向异性过滤：沿屏幕上的纹理压缩方向多采几步，换回更清晰的远处方块。
 vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, inout vec4 specularTex, out float materialAO){
@@ -626,6 +746,12 @@ void main(){
 
 
 	WriteTerrainGbuffer(albedo, normalEnc, blockLightDirectional, blockLight, specularTex, materialIDs, wet, parallaxShadow); // 统一写出零、三、五号画面。
+
+	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+		// 九号画面：红通道记方块编号，绿通道记生物群系，供下一帧几何阶段的草丛查询。
+		// 为什么记成字节：编号和生物群系都是小整数，八位够用，跨帧查询不需要更高精度。
+		gbufferOutput9 = vec4(blockID / 255.0, float(biome & 255) / 255.0, 0.0, 1.0); // 归一化到零到一存进八位画面。
+	#endif
 }
 #endif // 片元阶段结束。
 #endif // 文件守卫结束。

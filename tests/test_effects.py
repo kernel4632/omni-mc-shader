@@ -233,7 +233,7 @@ class EffectTests(unittest.TestCase):
     def test_extra_features_default_neutral(self):
         """项目自己的额外功能默认关闭或取中性值，默认画面与 iterationT 一致。"""
         found, _, _ = support.configuration()  # 真实选项与默认值。
-        off = ("OMNI_AURORA", "OMNI_RAINBOW", "OMNI_LIGHTNING", "OMNI_SEASONS", "OMNI_SNOW_OVERLAY", "OMNI_LPV_ENABLED", "OMNI_PROFILER", "OMNI_FSR", "OMNI_DOF", "OMNI_LENS_FLARE", "OMNI_LINE_IMAGE_OUTPUT", "OMNI_CLOUD_CIRRUS", "OMNI_CLOUD_ALTOSTRATUS", "OMNI_CLOUD_CUMULONIMBUS")
+        off = ("OMNI_AURORA", "OMNI_RAINBOW", "OMNI_LIGHTNING", "OMNI_SEASONS", "OMNI_SNOW_OVERLAY", "OMNI_LPV_ENABLED", "OMNI_PROFILER", "OMNI_FSR", "OMNI_DOF", "OMNI_LENS_FLARE", "OMNI_LINE_IMAGE_OUTPUT", "OMNI_CLOUD_CIRRUS", "OMNI_CLOUD_ALTOSTRATUS", "OMNI_CLOUD_CUMULONIMBUS", "OMNI_SHADER_GRASS")
         for name in off:
             with self.subTest(option=name):
                 self.assertEqual(found[name].default, "false")  # 额外功能默认关闭。
@@ -545,6 +545,21 @@ class EffectTests(unittest.TestCase):
         self.assertIn("MotionBlur", lens)  # 运动模糊独立成函数。
         self.assertIn("Vignette", lens)  # 暗角独立成函数。
         self.assertIn("OMNI_MOTION_BLUR_SHUTTER_ANGLE", lens)  # 快门角参与位移。
+
+    def test_shader_grass_and_block_buffer(self):
+        """程序化草默认关闭且只在主世界编译；地形写九号方块编号缓冲，草阶段按世界坐标查询。"""
+        found, _, _ = support.configuration()  # 真实选项。
+        self.assertEqual(found["OMNI_SHADER_GRASS"].default, "false")  # 默认关闭，默认画面不变。
+        grass = support.text("effects/ground/grass.glsl")  # 草效果主体。
+        self.assertIn("omniGrassWindOffset", grass)  # 摆动独立成函数。
+        self.assertIn("omniGrassBlockAt", grass)  # 方块编号查询独立成函数。
+        self.assertIn("//#define OMNI_SHADER_GRASS", grass)  # 关闭是唯一默认。
+        terrain = support.text("rendering/terrain.glsl")  # 地形主体。
+        self.assertIn('/effects/ground/grass.glsl"', terrain)  # 地形引入草效果。
+        self.assertIn("#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD", terrain)  # 只在主世界且开启时编译。
+        self.assertIn("DRAWBUFFERS:0359", terrain)  # 地形多写九号方块编号画面。
+        self.assertIn("colortex9Clear = false", support.text("rendering/buffers.glsl"))  # 方块编号跨帧保留。
+        self.assertIn("block.85 = grass_block", support.text("block.properties"))  # 草方块编号是八十五。
 
     def test_vegetation_winding(self):
         """植物摆动可开关，阴影阶段另有独立开关，摆动在世界空间推移顶点。"""
