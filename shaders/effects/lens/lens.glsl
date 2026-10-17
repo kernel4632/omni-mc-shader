@@ -396,11 +396,13 @@ vec3 MotionBlur(){
 	}
 	vec2 velocity = vec2(0.0); // 屏幕位移，默认零。
 	#ifdef OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 关闭玩家动态模糊时玩家不参与。
-		if (depth > 0.7 && materialIDs != MATID_END_PORTAL && materialIDs != MATID_ENTITIES_PLAYER) // 手与玩家都排除。
+		bool blurPixel = depth > 0.7 && materialIDs != MATID_END_PORTAL && materialIDs != MATID_ENTITIES_PLAYER; // 手与玩家都排除。
 	#else // 默认只排除手和末地传送门。
-		if (depth > 0.7 && materialIDs != MATID_END_PORTAL) // 近处左手以外的世界表面参与。
+		bool blurPixel = depth > 0.7 && materialIDs != MATID_END_PORTAL; // 近处左手以外的世界表面参与。
 	#endif
+	if (blurPixel){ // 先用宏决定是否参与，再走一条完整的 `if`，避免判断括号被预处理指令切开。
 		velocity = MotionBlurCameraVelocity(texCoord, depth); // 算屏幕位移。
+	}
 	vec3 color = vec3(0.0); // 输出颜色。
 	if (length(velocity) < 5e-7){ // 位移极小说明相机没动，直接用历史颜色。
 		color = CurveToLinear(texelFetch(colortex7, texelCoord, 0).rgb); // 读七号画面当前颜色。

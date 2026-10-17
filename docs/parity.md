@@ -255,7 +255,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 - 函数：iterationT 侧 248 个具名函数，项目侧 288 个；缺失只有 `MotionBlur.glsl` 的 `title`（纯菜单标题计数，HOP 不做无计算的装饰开关）；`BlueNoiseTemproal`、`BayerTemproal` 按合同改名。
 - 函数体：手工核对的可疑项均一致——`ScreenSpaceTracer` 与 iterationT 逐词相同（665 词）；4 个 `ShadowScreenPos_*`/`DistortShadowScreenPos` 与 `BloomDownSample`/`AxialGaussianBlur`/`FidelityFX_FSR1` 只差已登记的重名改名与选项前缀；`BlueNoise` 只差 `OMNI_PIXEL` 宏（见第十二节第 14 条）。
 - 结构：`shaders/effects/` 按菜单页面分文件夹（`sky/`、`cloud/`、`fog/`、`water/`、`ground/`、`lighting/`、`shadow/`、`reflection/`、`color/`、`lens/`、`clarity/`、`weather/`、`entity/`、`world/`、`dev/`）；`rendering/` 只安排绘制顺序；`effects/`、`rendering/`、`common/` 每个文件都有中文文件头；`python build.py audit` 通过。
-- 编译：`python build.py compile` 用两种代表配置与基础、开远景两组环境编全部 253 个入口、126 组唯一程序，0 错误。
+- 编译：`python build.py compile` 用两种代表配置与基础、开远景两组环境编全部 253 个入口，打印 252 组唯一程序（默认配置与全高配置各计一遍，单遍 126 组），0 错误。
 
 ## 十一、验证方式
 
@@ -284,7 +284,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 4. `shaders.properties` 笔误：iterationT 原文 `program.world-1/program.composite9.enabled` 重复写了 `program.`，本移植修正为 `program.world-1/composite9.enabled`。
 5. 大贴图压缩：`build.py` 打包时对 `.png`、`.bin` 用 `ZIP_STORED` 直接存放，九级压缩几十兆贴图要好几秒且几乎没有收益，会突破十秒检查预算。
 6. `block.properties`、`entity.properties`、`item.properties` 与生成的 `shaders.properties` 加入审计的机器文件豁免：它们是逐行可对照的编号数据，不写中文说明。
-7. 移植期开关（已删除）：移植期 `build.py` 有 `PORTING` 开关，让编译失败一次显示最多 400 条错误；现已删除，固定只报前五条（`build.py:462`）。选项接线始终是全树硬检查 `check_option_wiring`（`build.py:229-248`），发现未接线直接报错。
+7. 移植期开关（已删除）：移植期 `build.py` 有 `PORTING` 开关，让编译失败一次显示最多 400 条错误；现已删除，固定只报前五条（`build.py:467`）。选项接线始终是全树硬检查 `check_option_wiring`（`build.py:229-248`），发现未接线直接报错。
 8. 旧管线测试跳过（已解决）：早期 `tests/` 里断言旧管线算法与缓冲的测试曾用 `@unittest.skip(PORT_REPLACED)` 标记；现已按新管线全部重写，`verify` 实跑 113 个测试、0 跳过。
 9. 旧算法专用选项的处置（由主助手统一裁决，分片只登记不擅自删除）：iterationT 用预计算大气贴图，旧 Omni 那种“实时积分步数/散射倍率”参数在新算法里没有对应含义。这类选项一律登记到本节清单，由主助手在庚片决定“并入同名迭代T选项 / 保留为中性额外功能 / 作为接口变更移除并写迁移说明”，不在分片里悄悄删除。
 10. 强光压缩选项表示（戊片）：iterationT `TONEMAP_OPERATOR` 是函数名取值的宏（`AgX`/`ACES`/`None`），而 `options.py` 只接受数字取值，所以 Omni 把它定义为序号 `0`/`1`/`2`，档位名称映射回 `AgX`/`ACES`/无，绘制主体用 `#if OMNI_TONEMAP_OPERATOR == 1` 分派。行为和默认值（`AgX`）与原程序一致，只改表示形式。
@@ -297,7 +297,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 17. `effects/shadow/shadow.glsl` 的可变半影阴影段用 `OMNI_SHADOW_COMPARE` 隔开：只有合成零号把 `shadowtex1` 声明为 `sampler2DShadow` 并定义该宏，其它程序把 `shadowtex1` 当普通深度贴图用。
 18. `rendering/lights.glsl` 只声明 `shadowtex0`，不声明 `shadowtex1` 与 `shadowcolor0`：顶点与片元对同名采样器要求类型一致，合成零号片元用的是比较采样器。
 19. 加载器标准环境宏在 `build.py` 里按 Iris `StandardMacros` 注入（`MC_VERSION`、`MC_HAND_DEPTH = 0.125`、`MC_RENDER_QUALITY`、厂商与系统宏、远景方块编号照 Iris 取值）。离线编译没有这些宏会把只在游戏里存在的名字当成未声明标识符。
-20. `verify` 的十秒预算装不下整包编译（展开引用树与编译数百程序需要一两分钟），所以 `verify` 与 `check` 只编一小组探针（主世界 10 个轻量程序编默认配置；`gbuffers_terrain`、`gbuffers_water`、`shadow` 另编全高配置与开远景环境，约 13 组唯一程序）。完整离线编译改用 `python build.py compile`（放宽到 300 秒，全部程序 × 两种代表配置 × 基础与开远景两组环境，约两分钟）。测试已全部按新管线重写，`verify` 实跑 113 个、0 跳过。
+20. `verify` 的十秒预算装不下整包编译（展开引用树与编译数百程序需要一两分钟），所以 `verify` 与 `check` 只编一小组探针（主世界 4 个轻量程序 `gbuffers_terrain`、`gbuffers_water`、`shadow`、`final` 编默认配置与基础环境，`gbuffers_terrain` 另编全高配置与开远景环境，共 5 组唯一程序，约 8.4 秒）。完整离线编译改用 `python build.py compile`（放宽到 300 秒，全部程序 × 两种代表配置 × 基础与开远景两组环境，约两分钟）。测试已全部按新管线重写，`verify` 实跑 113 个、0 跳过。
 21. 修正 iterationT 的范围笔误：`CAMERA_FOCAL_POINT` 重复的 `15.0`、`CLOUD_BASE_NOISE_SCALE` 重复值；加载器要求 `const` 向量构造给足分量，个别 `vec3(0.0)` 之类已补齐。
 22. `sunPathRotation`、`wetnessHalflife`、`drynessHalflife` 三个加载器原生常量加入 `options.py` 的 `CONST_OPTIONS` 白名单。
 23. 预设按新选项集重写四套（默认、氛围、轻量、真实），保持各自定位。

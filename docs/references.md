@@ -25,7 +25,7 @@
 | 快速近似抗锯齿 | NVIDIA FXAA、three.js FXAAShader | GLSL | 宽松 | 按原理重写 |
 | 超分 | FidelityFX FSR（EASU/RCAS）、SGSR | HLSL/GLSL | MIT（核对） | 直接采用或按原理重写 |
 | 环境光遮蔽 | Intel XeGTAO、FidelityFX CACAO、three.js GTAOPass、Filament SSAO | GLSL/HLSL | MIT / Apache-2.0 | 直接采用 XeGTAO |
-| 大气 / 天空 | Bruneton 预计算、wwwtyro glsl-atmosphere、Hosek-Wilkie、Preetham、Nishita | 多语言 | BSD-3 / 公有领域 / 公开论文 | 已用解析近似；后续换 Bruneton 或 Hosek-Wilkie |
+| 大气 / 天空 | Bruneton 预计算、wwwtyro glsl-atmosphere、Hosek-Wilkie、Preetham、Nishita | 多语言 | BSD-3 / 公有领域 / 公开论文 | 已用 Bruneton 预计算大气贴图（随包 `AtmoData_620_540_440_n4.bin`，三维 `RGBA32F`），不再走解析近似 |
 | 云（体积） | Sebastian Lague Clouds、shadertoy 体积云、Horizon Zero Dawn 方案、Frostbite | C#/GLSL/论文 | MIT（SebLague 已核实）/ 公开论文 | 按原理重写 |
 | 云（平面） | 各 shadertoy | GLSL | 公开 | 按原理重写 |
 | 雾（体积） | Filament froxel fog、Godot volumetric fog、Frostbite volumetrics | GLSL/论文 | Apache-2.0 / MIT / 公开 | 按原理重写 |

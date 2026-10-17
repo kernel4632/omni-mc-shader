@@ -481,13 +481,9 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 
 // 反射合并：把三号画面的反射按菲涅耳与金属度混合进底色。
 // 输入是场景色、视线方向、法线、底色、水的吸收与材质；就地把反射混进场景色。
-// 为什么分主世界与下界末地两版参数：主世界要给水吸收留权重，下界末地没有水吸收这一项。
+// 为什么主世界与下界末地共用一份签名：主世界给水吸收留权重，下界末地没有水吸收这一项，数值差异留在函数体内用 `OMNI_OVERWORLD` 分支处理，调用点保持同一个。
 // 为什么用 `length(color)` 与 `length(reflection)` 再补一项：亮度差大时补一点反射，金属与高亮边缘不会突黑。
-#ifdef OMNI_OVERWORLD
-	void CalculateSpecularReflections(inout vec3 color, vec3 viewDir, vec3 normal, vec3 albedo, float waterAbsorption, Material material){
-#else
-	void CalculateSpecularReflections(inout vec3 color, vec3 viewDir, vec3 normal, vec3 albedo, float waterAbsorption, Material material){ // 下界末地没有水吸收，参数保留以复用同一个调用点。
-#endif
+void CalculateSpecularReflections(inout vec3 color, vec3 viewDir, vec3 normal, vec3 albedo, float waterAbsorption, Material material){
 
 	vec3 reflection = CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb); // 读三号画面的反射颜色并换回线性。
 

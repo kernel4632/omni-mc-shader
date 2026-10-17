@@ -589,9 +589,13 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 			totalStep += vec2(stepNext) * ardir; // 累加边界距离。
 			prevStepHeight = stepHeight; // 记下这一步高度。
 			#ifndef OMNI_TERRAIN_PASS
-				if (isBlock) // 实体用到方块图集时回绕到本图块。
+				bool wrapTile = isBlock; // 实体只在用到方块图集时回绕到本图块。
+			#else
+				bool wrapTile = true; // 地形阶段总是回绕到本图块。
 			#endif
-			parallaxTexel = tilesPixelBase + (parallaxTexel & iTextureResolution); // 把像素折回本图块。
+			if (wrapTile){ // 先用宏决定是否回绕，再走一条完整的 `if`，避免判断括号被预处理指令切开。
+				parallaxTexel = tilesPixelBase + (parallaxTexel & iTextureResolution); // 把像素折回本图块。
+			}
 			sampleHeight = texelFetch(normals, parallaxTexel, 0).a; // 读新像素的高度。
 			sampleHeight += saturate(1.0 - sampleHeight * 1e20); // 高度为零时补成完整高度。
 		}
@@ -615,9 +619,13 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 					shadowTexel += stepNext * sdir; // 前进到下一个像素。
 					totalStep += vec2(stepNext) * ardir; // 累加边界距离。
 					#ifndef OMNI_TERRAIN_PASS
-						if (isBlock) // 实体用到方块图集时回绕。
+						bool wrapTile = isBlock; // 实体只在用到方块图集时回绕。
+					#else
+						bool wrapTile = true; // 地形阶段总是回绕。
 					#endif
-					shadowTexel = tilesPixelBase + (shadowTexel & iTextureResolution); // 折回本图块。
+					if (wrapTile){ // 先用宏决定是否回绕，再走一条完整的 `if`。
+						shadowTexel = tilesPixelBase + (shadowTexel & iTextureResolution); // 折回本图块。
+					}
 					sampleHeight = texelFetch(normals, shadowTexel, 0).a; // 读高度。
 					sampleHeight += saturate(1.0 - sampleHeight * 1e20); // 高度为零时补成完整高度。
 					if (sampleHeight > stepHeight){ // 表面高过光线，说明被遮挡。

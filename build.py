@@ -303,8 +303,11 @@ def program_files() -> dict[Path, str]:
                 if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 生成入口只允许项目自有宏名；程序宏带编号，如 `OMNI_COMPOSITE10_PASS`。
                     raise ValueError("程序宏必须使用受控名称")
                 lines = ["#version 330 compatibility", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 首行必须先声明语言版本，再说明生成来源。
-                for define in flags:  # 入口只选择类别。
-                    lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define + " 1"]  # 带值的宏不会被加载器当成布尔开关，避免出现含义不明的同名开关。
+                # 三条说明分别按阶段、程序、维度措辞，避免同一个入口里重复同一句话；宏都带值 1，加载器才不会当成含义不明的布尔开关。
+                lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define " + stage + " 1"]  # 阶段宏只选顶点、片元或几何。
+                for define in defines:  # 每个程序登记一条程序宏。
+                    lines += ["// 指定本入口对应的绘制程序。", "#define " + define + " 1"]
+                lines += ["// 指定本入口所属维度，主体靠它选维度分支。", "#define " + flag + " 1"]
                 lines += ["// 先引入本维度的中间画面与常量声明。", f'#include "/rendering/{buffers}.glsl"', "// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
                 result[SHADERS / dimension / (name + suffix)] = "\n".join(lines) + "\n"  # 统一换行使本地与自动检查得到相同文本。
         for name, (rendering, *defines) in data.get("compute", {}).items():  # 计算程序单独登记，不生成顶点片元。
@@ -314,8 +317,10 @@ def program_files() -> dict[Path, str]:
             if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 计算入口宏也使用同一受控名称规则。
                 raise ValueError("计算程序宏必须使用受控名称")
             lines = ["#version 430", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 计算阶段需要更高版本。
-            for define in flags:  # 入口只选择类别。
-                lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define + " 1"]  # 计算入口的宏也带值，理由同上。
+            lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define OMNI_COMPUTE 1"]  # 计算入口固定是计算阶段。
+            for define in defines:  # 计算入口目前没有程序宏，循环保留以便将来登记。
+                lines += ["// 指定本入口对应的绘制程序。", "#define " + define + " 1"]
+            lines += ["// 指定本入口所属维度，主体靠它选维度分支。", "#define " + flag + " 1"]
             lines += ["// 先引入本维度的中间画面与常量声明。", f'#include "/rendering/{buffers}.glsl"', "// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
             result[SHADERS / dimension / (name + ".csh")] = "\n".join(lines) + "\n"  # 独立计算阶段不虚构顶点片元配对。
     return result  # 核对入口生成结果。
@@ -332,7 +337,7 @@ def generate() -> None:
         for path in folder.glob("*"):
             if path.suffix in (".vsh", ".fsh", ".gsh", ".csh") and path not in files:  # 只检查由流程表生成的阶段，几何阶段也由流程表生成。
                 text = path.read_text(encoding="utf-8")  # 只删除旧流程生成且没有手动修改的薄入口。
-                generated_comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 选择本程序的绘制阶段或物体类别。","// 先引入本维度的中间画面与常量声明。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 只有生成器自己的说明才可随旧入口删除。
+                generated_comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 指定本入口在绘制的哪个阶段运行。","// 指定本入口对应的绘制程序。","// 指定本入口所属维度，主体靠它选维度分支。","// 先引入本维度的中间画面与常量声明。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 只有生成器自己的说明才可随旧入口删除。
                 untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z0-9_]+(?: 1)?|#include "/rendering/[a-z_]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式（含带值与带编号的宏、逐维度声明文件），额外内容视为人工修改。
                 lines = text.splitlines()
                 if len(lines) < 2 or not lines[0].startswith("#version ") or not lines[1].startswith("// 生成的") or not untouched:  # 格式不完整或含人工说明时拒绝删除。
@@ -519,10 +524,11 @@ def check() -> None:
     reference_seen = set()  # 全树引用校验共享已访问集合，每个文件只走一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
         check_references(source, SHADERS, seen=reference_seen)  # 只走引用树，不拼接文本，避免为校验再做一次全量展开。
-    # 十秒预算内的编译探针：只编体积小的程序，覆盖几何、阴影、远景与最终显示；合成与延迟的完整覆盖由 `python build.py compile` 负责。
+    # 十秒预算内的编译探针：只编体积小的程序，覆盖地形、水、阴影与最终显示四条轻量通路；合成与延迟的完整覆盖由 `python build.py compile` 负责。
     # 为什么这样分：合成本体展开后有两千多万字符，单编一个就要八九秒，塞不进常规验证的预算；缩到小程序仍能挡住语法、引入与宏撞名错误。
-    key_programs = {"gbuffers_terrain"}  # 这三类在全部代表配置与两组环境下再编一次。
-    smoke = {"gbuffers_terrain", "final"}
+    # 实测这四条编默认配置与基础环境，再加地形一组全高与开远景，共 5 组唯一程序，整条 `verify` 约 8.4 秒。
+    key_programs = {"gbuffers_terrain"}  # 只有地形一组在全部代表配置与两组环境下再编一次。
+    smoke = {"gbuffers_terrain", "gbuffers_water", "shadow", "final"}  # 默认配置与基础环境编译这四条。
     probes = [source for source in entries if source.parent.name == "world0" and source.stem in smoke]  # 主世界的轻量程序，默认配置与基础环境。
     compile_shaders(probes, found, profiles, key_programs)  # 关键程序另加全高配置与开远景环境。
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。

@@ -115,9 +115,13 @@ void main(){
 			#endif
 		#elif defined OMNI_ENTITIES_PASS // 普通实体单独看玩家开关。
 			#ifdef OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 关闭玩家抗锯齿时玩家不加抖动。
-				if(entityId != 7003) // 七千零三是玩家自身。
+				bool jitterVertex = entityId != 7003; // 七千零三是玩家自身，跳过它。
+			#else
+				bool jitterVertex = true; // 未关闭时所有实体都加抖动。
 			#endif
+			if (jitterVertex){ // 先用宏决定是否加抖动，再走一条完整的 `if`，避免判断被预处理指令切开。
 				gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加本帧抖动。
+			}
 		#else // 方块与蜘蛛眼总是加抖动。
 			gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加本帧抖动。
 		#endif
@@ -310,9 +314,9 @@ void SampleEntitySurface(vec2 texCoord, vec2 duv1, vec2 duv2, mat3 tbnMat, vec3 
 				if (albedoTex.a + noDiscard <= 0.004) discard; // 其它情况按透明度丢弃。
 			#endif
 		#elif defined OMNI_SPIDEREYES_PASS // 蜘蛛眼用更高的阈值。
-			if (albedoTex.a < 0.1) discard;
+			if (albedoTex.a < 0.1) discard; // 低于零点一才丢弃，保留大部分蜘蛛眼。
 		#else // 方块与手持物按更小阈值丢弃。
-			if (albedoTex.a < 0.004) discard;
+			if (albedoTex.a < 0.004) discard; // 几乎全透明才丢弃，保留细小边缘。
 		#endif
 
 		#ifdef MC_SPECULAR_MAP
