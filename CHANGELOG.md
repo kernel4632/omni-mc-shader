@@ -1,5 +1,15 @@
 # 更新记录
 
+## 0.0.0-dev.127
+
+Eclipse 缺失能力第一批：后处理。新增色彩分级、镜头形变三项与胶片颗粒，默认全部中性，默认画面不变。
+
+- 色彩分级（`effects/color/colorgrade.glsl`）：阴影/中间调/高光三段色带与亮度曲线，照 Eclipse `composite12` 的实现接在色调映射之后，10 个选项默认关闭或中性。
+- 镜头形变（`effects/lens/distortion.glsl`）：全屏色差、鱼眼与像素化（含色数量化），照 Eclipse `final` 的实现；与既有散景色散作用对象不同，不重复处理同一像素。开启形变时最终画面按畸变坐标重采样 `colortex1`。
+- 胶片颗粒（`effects/clarity/grain.glsl`）：照 Eclipse `final` 的 `FILM_GRAIN` 段，接在色调映射之后、显示空间里，默认关闭；时间来源用 `frameTimeCounter`。
+
+只做过离线编译、审计与单元测试；游戏内画面、性能与兼容性仍未验证。
+
 ## 0.0.0-dev.126
 
 按三份独立对抗式审查（iterationT 覆盖、Eclipse 覆盖、HOP 符合度）修问题，并补上 iterationT 唯一未移植的 `TITLE` 标志叠加。

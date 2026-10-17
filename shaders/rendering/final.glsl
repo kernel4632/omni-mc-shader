@@ -11,6 +11,8 @@
     强光压缩的序号只在十四号分派，这里不做色调整，只做锐化、抖动与黑边，与原程序一致。
     原 `final.fsh` 还引入 `PrintFloat.glsl` 但 `main` 从未调用它；这里照合同引入 `effects/dev/debug.glsl` 并真正调用
     `debugColor` 与 `omniProfiler`，默认关闭，关闭时画面与原程序一致。
+    镜头形变（色差、鱼眼、像素化）照 Eclipse `dimensions/final.fsh` 也放在本程序：它们要按畸变坐标重采样已经完整的
+    最终画面，只有在这里才有一张写完的显示域画面可读，默认全关时 `LensDistortion` 原样返回，画面与原程序一致。
 */
 #ifndef OMNI_FINAL_BODY_INCLUDED // 只引入一次，避免 `main()` 与输出变量重复定义。
 #define OMNI_FINAL_BODY_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -50,6 +52,8 @@
 	#include "/effects/clarity/upscale.glsl"
 	// 调试画面与耗时条；原程序一并引入，这里把 `debugColor`、`omniProfiler` 真正接到最终屏幕颜色上。
 	#include "/effects/dev/debug.glsl"
+	// 屏幕空间镜头形变：色差、鱼眼与像素化，默认全关时原样返回画面。
+	#include "/effects/lens/distortion.glsl"
 
 	void main(){
 		vec3 color = vec3(0.0); // 最终要写的屏幕颜色。
@@ -89,6 +93,9 @@
 		}else{ // 其它情况：按连续坐标读一号画面。
 			color = textureLod(colortex1, texCoord, 0.0).rgb; // 双线性读一号画面。
 		}
+
+		// 镜头形变：按选项对最终画面做色差、鱼眼或像素化重采样；三项默认全关时原样返回，画面不变。
+		color = LensDistortion(color, texCoord);
 
 		color += InterleavedGradientNoise(gl_FragCoord.xy) * (1.0 / 255.0); // 叠加一点抖动，减小色带。
 

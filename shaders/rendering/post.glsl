@@ -191,7 +191,15 @@
 		layout(location = 0) out vec4 compositeOutput1; // 一号色调映射后的场景颜色。
 		// 合并泛光、曝光与调色的算法体。
 		#include "/effects/color/post_tonemap.glsl"
-		void main(){ TonemapColor(); } // 合并泛光、曝光与调色并写回一号。
+		// 胶片颗粒算法体；默认关闭时调用原样返回，画面不变。
+		#include "/effects/clarity/grain.glsl"
+		// 色调映射之后的色彩分级与亮度曲线，两个开关默认关闭时不改画面。
+		#include "/effects/color/colorgrade.glsl"
+		void main(){
+			TonemapColor(); // 合并泛光、曝光与调色并写回一号。
+			compositeOutput1 = vec4(OmniColorGrade(compositeOutput1.rgb), compositeOutput1.a); // 在色调映射后的显示域颜色上做色彩分级，透明度沿用原值。
+			compositeOutput1.rgb = OmniFilmGrain(compositeOutput1.rgb, texCoord); // 在显示空间叠加胶片颗粒；默认关闭时原样返回。
+		} // 合成十四号结束。
 	#endif
 
 #endif // 合成六号、八号、九号到十四号结束。
