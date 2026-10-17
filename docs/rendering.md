@@ -14,12 +14,13 @@
 - 每个入口先声明 GLSL 330 compatibility、阶段宏与维度宏，再引入本维度的缓冲声明文件，最后引入对应绘制主体。顺序是：阶段宏（`OMNI_VERTEX`、`OMNI_GEOMETRY`、`OMNI_FRAGMENT`、`OMNI_COMPUTE`）与维度宏（`OMNI_OVERWORLD`、`OMNI_NETHER`、`OMNI_END`）→ `rendering/buffers_main.glsl`（或 `buffers_nether.glsl`、`buffers_end.glsl`）→ `rendering/` 下按阶段分组的对应主体文件（例如 `rendering/composite.glsl`）。
 - 缓冲声明必须由入口引入才会生效：加载器只读取每个程序展开之后的片元源码里的 `const`，写在别处或写进不参与编译的文件都不会被看到。这正是它拆成共享层加逐维度层的原因。
 - 几何阶段入口只在登记了几何着色器的程序上生成：主世界是 `gbuffers_terrain` 与 `gbuffers_skytextured`，下界和末地只有 `gbuffers_terrain`。
+- 可选加载器特性在 `pipeline.properties` 用 `iris.features.optional` 声明：`ENTITY_TRANSLUCENT`、`COMPUTE_SHADERS`、`CUSTOM_IMAGES` 与 `FADE_VARIABLE`（`rendering/pipeline.properties:406`）。原版区块淡入依赖 `FADE_VARIABLE` 与属性 `mc_chunkFade`，缺这项能力时地形与水面的淡入整套不参与编译（`rendering/terrain.glsl:134`、`rendering/translucent.glsl:117`），基础画面不受影响。
 
 `rendering/` 的绘制主体按绘制阶段分组，不按效果分组：地形、实体、半透明、覆盖层、天体、远景、阴影、光照顶点、延迟、合成、后期、最终，再加计算主体 `lpv`。同一个主体里的多个程序靠程序宏区分，例如 `composite` 与 `composite1`–`composite5` 都在 `rendering/composite.glsl`。
 
 ## 中间画面协议
 
-每张中间画面的编号、格式、每帧是否清除、清除色都在 `rendering/buffers.glsl` 一层里定义。下表取主世界取值，七号与八号的格式在下界和末地不同，见「三个维度的差异」。
+每张中间画面的编号、格式、每帧是否清除、清除色都在 `rendering/buffers.glsl` 一层里定义。下表取主世界取值，七号与八号的格式在下界和末地不同，见「三个维度的差异」。九号画面是 Omni 为 Eclipse 程序化草新增的额外缓冲（iterationT 只用零到八号），只有主世界会写和读。
 
 | 编号 | 格式 | 每帧清除 | 用途 |
 | --- | --- | --- | --- |
@@ -32,8 +33,9 @@
 | 6 | `RGBA16` | 是 | 半透明颜色材质与水遮罩；延迟阶段被 32 立方云噪声替换采样 |
 | 7 | `RGBA16` | 否 | 焦散法线方块 → 时间抗锯齿历史 |
 | 8 | `RGBA8`（尺寸 2.0） | — | 放大输出（`FSR`）；延迟与合成阶段被预计算大气三维贴图替换采样 |
+| 9 | `RGBA8` | 否 | 方块编号与生物群系（程序化草用的体素编号通路，Omni 额外）；地形片元写入方块编号与生物群系，几何阶段按世界坐标投影回来查隔壁方块。与 `docs/parity.md` 第十二节偏离记录第 38 条一致 |
 
-零号、三号到六号每帧清除，一、二、七号不清除以跨帧接力。四号、六号在延迟阶段、八号在延迟与合成阶段会被三维贴图替换采样，采样器类型由引入的程序自己打开宏来选。
+零号、三号到六号每帧清除，一、二、七、九号不清除以跨帧接力。九号画面要读上一帧内容，所以不清除。四号、六号在延迟阶段、八号在延迟与合成阶段会被三维贴图替换采样，采样器类型由引入的程序自己打开宏来选。
 
 颜色编码：所有中间颜色按 `LinearToCurve(x / MAIN_OUTPUT_FACTOR)` 存进十六位固定点画面，`MAIN_OUTPUT_FACTOR = 2048`，曲线是四次方根，这样暗部才保得住精度。曝光在最终阶段乘回：自动曝光是 `8.5 × MAIN_OUTPUT_FACTOR × 平均亮度^(-AE_CURVE) × 2^AE_OFFSET`。
 

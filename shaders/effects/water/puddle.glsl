@@ -3,11 +3,12 @@
 来源：选项取 `references/Eclipse/shaders/lib/settings.glsl` 第三百五十九到三百六十一行，算法取
   `references/Eclipse/shaders/dimensions/composite1.fsh` 第八百四十七到九百三十三行的 `applyPuddles`。
 职责：只提供两个纯计算函数和它们的选项，不读写中间画面，也不声明加载器输入。
-调用位置：`OmniPuddleCoverage` 已由 `effects/water/water.glsl` 的 `GetRainNormal` 在「仅水洼」模式里调用，
+调用位置：`OmniPuddleCoverage` 由 `effects/water/water.glsl` 的 `GetRainNormal` 在「仅水洼」模式里调用，
   覆盖范围因此跟随 `OMNI_PUDDLE_SIZE`；入参是该处的湿润度 `wet` 与水洼形状噪声 `puddleNoise`。
-  `OmniPuddleRoughness` 需要材质粗糙度，而本项目的粗糙度在合成阶段由 `MaterialFromTex` 解出，
-  那份文件不在本次接线范围，所以这个函数当前没有调用点，`OMNI_PUDDLE_REFLECTION_SHARPNESS` 暂时不生效；
-  缺的原因是粗糙度只存在于合成阶段，接它会越出本次允许改动的文件范围。
+  `OmniPuddleRoughness` 由 `effects/ground/material.glsl` 的 `MaterialFromTex` 调用，用那里的湿润度
+  改写湿表面粗糙度，让 `OMNI_PUDDLE_REFLECTION_SHARPNESS` 真正影响反射清晰度。
+已知差距：本项目的积雪只叠底色，没有 Eclipse 的 `snowR`，所以湿表面粗糙度固定取零点五；
+  `OMNI_PUDDLE_SIZE` 目前只改涟漪覆盖范围，不改水洼几何本身（Eclipse 的 `applyPuddles` 在合成阶段做这件事）。
 可复制示例（`halfWet`、`puddleNoise`、`wetnessStages` 由调用方按现有湿润流程准备）：
   `float puddles = OmniPuddleCoverage(halfWet, puddleNoise);`
   `float wetnessStages = max(puddles, fullWet) * lightmap;`
@@ -40,7 +41,7 @@ float OmniPuddleCoverage(float halfWet, float noise){
 // 湿面反射锐度：把干表面粗糙度往「湿表面粗糙度」混合，湿得越深反射越清晰。
 // `OMNI_PUDDLE_REFLECTION_SHARPNESS` 就是混合比例的上限，默认 0.0 时原样返回，不改变画面。
 // 数学与 Eclipse 一致：`mix(roughness, wetRoughness, wetnessStages * 锐度)`，此处不做额外夹取，保持等价。
-// 当前没有调用点：本项目的材质粗糙度在合成阶段由 `MaterialFromTex` 解出，接它要改那份文件，越出本次接线范围。
+// 调用点：`effects/ground/material.glsl` 的 `MaterialFromTex`，湿润度取那里的 `wet` 参数。
 float OmniPuddleRoughness(float roughness, float wetRoughness, float wetnessStages){
 	return mix(roughness, wetRoughness, wetnessStages * OMNI_PUDDLE_REFLECTION_SHARPNESS); // 湿润阶段乘锐度作为混合比例，锐度为零则不混合。
 }

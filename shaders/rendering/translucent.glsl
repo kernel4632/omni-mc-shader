@@ -92,6 +92,19 @@ void main(){
 	vec3 planetViewPos = v_viewPos.xyz; // 复制水面视空间位置给行星曲率改写。
 	omniPlanetCurvatureView(planetViewPos); // 行星曲率：远处水面顶点沿纵向下沉，模拟星球弯曲；关闭时为原样。
 	v_viewPos.xyz = planetViewPos; // 写回改写后的视空间位置。
+
+	float chunkFadeRaw = 1.0; // 加载器不提供淡入进度时保持一，等于水面一直完全显现。
+	#ifdef IRIS_FEATURE_FADE_VARIABLE // 请求加载器特性后 `mc_chunkFade` 属性才存在。
+		chunkFadeRaw = mc_chunkFade; // 读取原版区块淡入进度：未淡入时为负，淡入完成时为一。
+	#endif
+	chunkFade = omniChunkFadeValue(chunkFadeRaw); // 取正并夹到零到一，选项关闭时返回一。
+
+	// 区块淡入的滑动档：把远处未淡入的水面从下方滑入，和地形共用同一个函数与判据。
+	// 为什么先换到相机相对世界坐标：滑动量按水平距离算，视空间里相机是原点、拿不到距离。
+	vec4 slideWorldPos = gbufferModelViewInverse * v_viewPos; // 视空间回到相机相对世界坐标。
+	slideWorldPos.xyz = omniChunkFadeSlide(slideWorldPos.xyz, chunkFade, eyeBrightnessZeroSmooth, far); // 关闭或不在滑动档时原样返回。
+	v_viewPos = gbufferModelView * slideWorldPos; // 滑动后再回到视空间投影。
+
 	viewPos = v_viewPos.xyz; // 传给片元。
 
 	gl_Position = gl_ProjectionMatrix * v_viewPos; // 投影到裁剪空间。
@@ -112,12 +125,6 @@ void main(){
 
 	vec2 lmcoord = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy; // 原版光照图坐标。
 	blockLight = saturate(lmcoord * 1.103449 - 0.0689656); // 重整到零到一。
-
-	float chunkFadeRaw = 1.0; // 加载器不提供淡入进度时保持一，等于水面一直完全显现。
-	#ifdef IRIS_FEATURE_FADE_VARIABLE // 请求加载器特性后 `mc_chunkFade` 属性才存在。
-		chunkFadeRaw = mc_chunkFade; // 读取原版区块淡入进度：未淡入时为负，淡入完成时为一。
-	#endif
-	chunkFade = omniChunkFadeValue(chunkFadeRaw); // 取正并夹到零到一，选项关闭时返回一。
 
 	materialIDs = MATID_STAINEDGLASS; // 默认按染色玻璃处理，透明表面多是这样。
 

@@ -76,9 +76,9 @@ float OmniSandStorm(){
 }
 
 // --- 每日匀雾：把每日天气表里当天的匀雾密度取出来 ---
-// 为什么放在这里：暴风雾是本文件夹里唯一已经接进体积雾步进的通道，每日天气的雾借它进入画面；
-// 云量部分由主助手接入 `effects/cloud/cloud.glsl`，本文件只负责雾这一项。
-// 说明：Eclipse 的匀雾密度多数日子取零，所以这项对画面的改变通常很小，属于完整接线前的过渡通道。
+// 为什么放在这里：本函数与暴风雾同属体积雾的密度来源，放同一处便于对照 Eclipse 的雾密度合成顺序。
+// 云量部分由 `effects/cloud/cloud.glsl` 另行接入，本文件只负责雾这一项。
+// 说明：Eclipse 的匀雾密度多数日子取零，所以这项对画面的改变通常很小。
 float OmniDailyWeatherFog(){
 	#ifdef OMNI_DAILY_WEATHER // 每日天气关闭时恒为零，不改变暴风雾。
 		return omniWeatherFog().x; // 当天匀雾密度，`x` 是匀雾、`y` 是云雾。

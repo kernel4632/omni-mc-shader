@@ -14,8 +14,9 @@
   三、时间平滑的替代。Eclipse 用 Iris 自定义量 `smooth()` 对低血量与受击做时间平滑；本项目这一小步
     不能改 `rendering/pipeline.properties`，所以低血量改成对血量做平滑阶跃，受击没有血量历史，
     直接用 `is_hurt` 触发，且不再区分大伤小伤。这是已知的近似，过渡会比 Eclipse 稍硬。
-  四、未移植的部分。同一段原程序里的镜头发水与着火形变依赖 Eclipse 平滑过的入水与离水自定义量，
-    本步不移植，留给后续单独小步。
+  四、仍近似与未移植的部分。着火热浪用 `is_burning` 直接触发，没有跨帧平滑，火焰跳动靠每像素噪声；
+    溺水按“在水下且血量低于低血量阈值”近似，因为 Iris 不提供氧气量；同一段原程序里的镜头发水
+    依赖 Eclipse 平滑过的入水与离水自定义量，本步不移植，留给后续单独小步。
 */
 #ifndef OMNI_HURT_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_HURT_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -33,6 +34,10 @@
 #define OMNI_HURT_CRITICAL_START 2.0 // [1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 21.0 22.0 23.0 24.0]
 // @option {"label":{"zh_cn":"心跳抖动强度","en_us":"Heartbeat distortion"},"slider":true,"description":{"zh_cn":"低血量时边缘随心跳的抖动量；默认零点二五，来源 Eclipse `MOTION_AMOUNT`。","en_us":"How much the edges wobble with the heartbeat at low health; default 0.25, from Eclipse `MOTION_AMOUNT`."}}
 #define OMNI_HURT_MOTION 0.25 // [0.0 0.05 0.1 0.15 0.2 0.25 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0]
+// @option {"label":{"zh_cn":"着火热浪","en_us":"On-fire heat"},"description":{"zh_cn":"身上着火时边缘染橙并随火焰抖动；默认开启，只有打开总开关才生效。来源 Eclipse `ON_FIRE_DISTORT_EFFECT`。","en_us":"Orange edges and a heat wobble while burning; on by default, only active when the master effect is enabled. From Eclipse `ON_FIRE_DISTORT_EFFECT`."}}
+#define OMNI_HURT_FIRE
+// @option {"label":{"zh_cn":"溺水压暗","en_us":"Drowning darkening"},"description":{"zh_cn":"在水下且血量偏低时整屏偏蓝压暗；默认开启，只有打开总开关才生效。本项目拿不到氧气量，用“在水下且血量低于低血量阈值”近似，来源 Eclipse `DROWNING_EFFECT`。","en_us":"Bluish darkening while underwater at low health; on by default, only active when the master effect is enabled. Air level is unavailable here, so underwater plus low health is used as an approximation. From Eclipse `DROWNING_EFFECT`."}}
+#define OMNI_HURT_DROWNING
 
 // 加载器输入声明；调用方通常已先引入，这里再引入一次由守卫去重，保证单独引用也能编译。
 #include "/common/uniforms.glsl"
@@ -44,6 +49,7 @@
 uniform float currentPlayerHealth; // 相对血量，零到一；创造与旁观模式给负一。
 uniform float maxPlayerHealth; // 最大血量，单位半颗心；创造与旁观模式给负一。
 uniform bool is_hurt; // 玩家受击后短暂为真，对应原版的受击闪烁计时。
+uniform bool is_burning; // 玩家着火时为真；本文件是唯一的声明处，别处要用需自行引入。
 #endif
 
 // --- 受伤与低血量 ---
@@ -85,6 +91,16 @@ vec3 omniHurtEffect(vec3 color, vec2 texcoord){
 	#if defined OMNI_HURT_DAMAGE // 受击：给边缘闪一层红。
 		float minorDamage = float(is_hurt); // 受击后短暂为一。
 		color = mix(color, distortedLuma, vignette * sqrt(min(minorDamage, 1.0))); // 只作用在边缘。
+	#endif
+	#if defined OMNI_HURT_FIRE // 着火：边缘染橙并随火焰抖动。
+		float burning = float(is_burning); // 身上着火时为一。
+		vec3 fireEdge = vec3(1.0, 0.45, 0.12) * max(dot(color, vec3(0.21, 0.72, 0.07)), 0.15); // 橙色边缘的基色，至少留一点亮。
+		color = mix(color, mix(color, fireEdge, 0.6), vignette * burning * (0.5 + noise * 0.5)); // 越靠边缘染得越多，噪声让火焰跳动。
+	#endif
+	#if defined OMNI_HURT_DROWNING // 溺水：水下且血量偏低时整屏偏蓝压暗。
+		// 为什么这样近似：原版溺水按氧气量表现，Iris 不提供氧气量；这里用“在水下且血量低于低血量阈值”代表已经快淹死。
+		float drowning = float(isEyeInWater == 1) * step(absHealth, OMNI_HURT_LOW_HEALTH_START); // 在水下且血量偏低时为一时压暗。
+		color = mix(color, color * vec3(0.55, 0.7, 1.0), drowning * 0.5); // 偏蓝压暗一半。
 	#endif
 	if (isDead) color = distortedLuma * 0.35; // 死亡：整屏压成暗红。
 #endif // 效果开关结束。

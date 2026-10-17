@@ -193,6 +193,10 @@ const Material material_water = Material(0.0, 0.0, 0.02, 0.0, 0.0, 1.0);
 const Material material_glass = Material(0.0, 0.0, 0.042, 0.0, 0.0, 1.0);
 // 冰材质：反射率介于水与玻璃之间。
 const Material material_ice = Material(0.0, 0.0, 0.018, 0.0, 0.0, 1.0);
+// 水洼的湿面反射锐度（`OmniPuddleRoughness`）在 water/puddle.glsl：粗糙度只在本文件的 `MaterialFromTex` 解出，
+// 所以由本文件引入并在那里调用；水洼覆盖（`OmniPuddleCoverage`）仍由水效果自己引入，两边各取所需。
+// 为什么放在函数之前：GLSL 要求先声明后使用，放在文件末尾会报找不到函数。
+#include "/effects/water/puddle.glsl"
 // 从表面贴图解出材质：孔隙率决定吸水压暗，其余通道解出粗糙、金属、自发光与散射。
 // 参数 `wet` 是这一处的湿润度，`baseTex` 会被吸水压暗，所以是 `inout`。
 Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
@@ -210,6 +214,10 @@ Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
 	float rawSmoothness = mix(specTex.r, 1.0, saturate(wet * (1.7 - porosity * 0.7))); // 湿润把表面拉向光滑，孔隙率大则拉得少。
 	material.roughness = 1.0 - rawSmoothness; // 平滑度取反得到粗糙度。
 	material.roughness *= material.roughness; // 再平方，让光滑面更集中。
+	// 湿面反射锐度：把干表面粗糙度朝湿表面粗糙度混合，湿得越深反射越清晰。
+	// 为什么接在平方之后：Eclipse 在 `applyPuddles` 里就是对已经算好的粗糙度做这一步混合，顺序一致才等价。
+	// 为什么没有雪面粗糙度：本项目的积雪只叠底色，没有 Eclipse 的 `snowR`，所以湿表面粗糙度固定取零点五。
+	material.roughness = OmniPuddleRoughness(material.roughness, 0.5, wet);
 	float rawMetalness = specTex.g; // 绿色通道是金属度。
 	#if OMNI_TEXTURE_PBR_FORMAT == 0
 		rawMetalness = saturate(rawMetalness + step(0.9, rawMetalness)); // labPBR 允许预设金属，把高位拉满。
@@ -387,14 +395,22 @@ void ApplyMaterial(inout Material material, in MaterialMask materialMask, inout 
 //   合并成一个纯函数，每个调用点只把现有 `DecodeNormalTex` 换成它，避免各写一份倍率与遮蔽。
 // 为什么仍复用 `common/math.glsl` 的 `DecodeNormalTex`：那是全项目唯一的法线解码口径，另起一份会与别处不一致。
 // 返回值：`xyz` 是单位切线空间法线；`w` 是可乘到底色上的遮蔽系数，未开材质遮蔽时恒为一。
-vec4 omniMaterialNormal(vec3 normalTexRGB){
-	float materialAO = 1.0; // 默认不遮蔽。
+// 材质遮蔽：资源包把遮蔽存在法线贴图的蓝通道，取出来乘到底色上；未开该选项时恒为一。
+// 为什么单独拆出来：视差路径已经自己解出法线，只差遮蔽要另外取一次贴图，拆开才能单独复用。
+float omniMaterialAO(vec3 normalTexRGB){
 	#ifdef OMNI_MATERIAL_AO // 打开才拿蓝通道当遮蔽。
-		materialAO = normalTexRGB.b * 0.5 + 0.5; // 蓝通道零到一映射到零点五到一，来源 Eclipse 同一行。
+		return normalTexRGB.b * 0.5 + 0.5; // 蓝通道零到一映射到零点五到一，来源 Eclipse 同一行。
+	#else
+		return 1.0; // 未开时不做任何遮蔽。
 	#endif
-	vec3 normal = DecodeNormalTex(normalTexRGB); // 复用共用法线解码，无效贴图会退回朝外法线。
-	normal = normal * OMNI_NORMAL_MAP_MULT + vec3(0.0, 0.0, 1.0 - OMNI_NORMAL_MAP_MULT); // 围绕朝外方向缩放起伏，z 补齐，与 Eclipse `applyBump` 数学等价。
-	return vec4(normalize(normal), materialAO); // 重新单位化，遮蔽随法线一起交回。
+}
+// 法线倍率：围绕朝外方向缩放起伏，`OMNI_NORMAL_MAP_MULT` 越大起伏越强；为一等于原样。
+// 传入的已经是切线空间单位法线，所以视差路径解出的法线也能直接套用，不必重采贴图。
+vec3 omniMaterialNormalScale(vec3 tangentNormal){
+	return normalize(tangentNormal * OMNI_NORMAL_MAP_MULT + vec3(0.0, 0.0, 1.0 - OMNI_NORMAL_MAP_MULT)); // z 补齐后重新单位化，与 Eclipse `applyBump` 数学等价。
+}
+vec4 omniMaterialNormal(vec3 normalTexRGB){
+	return vec4(omniMaterialNormalScale(DecodeNormalTex(normalTexRGB)), omniMaterialAO(normalTexRGB)); // 解码后按选项缩放起伏，并把遮蔽一起交回。
 }
 // 视差算法（`ParallaxOcclusionMapping`）在 ground/parallax.glsl：它只服务地表材质，且只在地形、实体等几何片元阶段编译。
 // 为什么放在这里引入：任何引入本文件的阶段都靠这一行拿到视差算法，原有调用点（地形、实体）一个都不用改。

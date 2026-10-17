@@ -6,15 +6,15 @@
   顶点把进度取成正的零到一、可选地把远处的块从下方滑入；片元按进度抖动丢弃，半透明的水按进度压透明度。
 为什么单独成一个文件：这三处分别落在顶点与片元两个阶段、地形与水两个程序，但数学只有一种；
   放在一处便于对照 Eclipse，也避免在多个绘制主体里各抄一份。
-调用位置（本节暂未接入任何程序，待绘制主体添加调用点；下面给出可直接复制的最小接法）：
-  一、`gbuffers_terrain` 顶点阶段（Eclipse `all_solid.vsh:255-256`）：先请求加载器特性 `FADE_VARIABLE`（见下），
+调用位置（已接入绘制主体，下面列出实际调用点与最小接法）：
+  一、`gbuffers_terrain` 顶点阶段（Eclipse `all_solid.vsh:255-256`）：请求加载器特性 `FADE_VARIABLE`（见下），
     再写 `#ifdef IRIS_FEATURE_FADE_VARIABLE` 内 `float chunkFade = omniChunkFadeValue(mc_chunkFade);`，
     并把 `chunkFade` 作为插值量经几何阶段转发到片元。
   二、`gbuffers_terrain` 片元阶段（Eclipse `all_solid.fsh:572-578`）：先算本像素抖动（开时间抗锯齿用蓝噪声，
     否则用交错梯度噪声），再写 `if (omniChunkFadeDiscard(chunkFade, dither)) discard;`。
   三、`gbuffers_water` 片元阶段（Eclipse `all_translucent.fsh:662-670`）：
     写 `gl_FragData[0] = omniChunkFadeWaterColor(gl_FragData[0], chunkFade);`。
-  这些调用点所在文件不在本子任务的允许改动范围，所以本文件当前不被任何程序引用。
+  实际落点见 `rendering/terrain.glsl` 与 `rendering/translucent.glsl` 的对应阶段；水面的滑动档尚未接。
 关键设计原因与取舍：
   一、默认关闭。`OMNI_CHUNK_FADE` 取零时三个函数都原样返回，绘制主体即使接上也不改变画面。
   二、依赖的加载器能力。进度值 `mc_chunkFade` 是 Iris 在 `gbuffers_*.vsh` 里按需提供的顶点属性，

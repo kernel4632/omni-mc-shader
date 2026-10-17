@@ -521,6 +521,13 @@ void SampleTerrainSurface(mat3 tbn, vec2 coord, vec2 duv1, vec2 duv2, vec3 shado
 			specularTex = vec4(0.0); // 没有高光贴图时全零。
 		#endif
 
+		#ifdef MC_NORMAL_MAP
+			// 视差函数已经解出交点法线，这里补上法线倍率与材质遮蔽，让这两个选项在视差路径同样生效。
+			// 为什么遮蔽要另取一次贴图：遮蔽存在法线贴图的蓝通道，视差函数只回传解好的法线，没带回原始通道。
+			normalTex = omniMaterialNormalScale(normalTex); // 按选项缩放起伏。
+			materialAO = omniMaterialAO(texelFetch(normals, parallaxTexel, 0).rgb); // 取交点处的材质遮蔽，未开时为一。
+		#endif
+
 	#else // 未开视差时按各向异性过滤或普通采样取贴图。
 
 		#if OMNI_ANISOTROPIC_FILTERING_QUALITY > 0 // 开启各向异性过滤。
