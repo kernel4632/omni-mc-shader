@@ -16,20 +16,32 @@ import audit  # 中文说明解码与比例统计。
 import build  # 实际生成与发布边界。
 import game  # 专用实例路径和进程匹配。
 import options  # 分享格式唯一来源。
+import support  # 共享展开缓存，避免重复读取整棵源码树。
 
 class BoundaryTests(unittest.TestCase):
     """外部输入必须在文件写入与外部进程之前拒绝。"""
     def test_loader_world_folders_are_complete(self):
-        """官方旧维度规则要求主世界world0，存在worldN后根程序不会加载。"""
+        """官方旧维度规则要求主世界world0，存在worldN后根程序不会加载；每个维度的程序集由流程表裁减。"""
         generated = build.program_files()  # 只接受显式的三组实际加载位置。
-        names = {p.name for p in generated if p.parent.name=="world0"}  # 三个维度必须覆盖完全相同的程序集。
-        self.assertIn("final.fsh",names)  # 主世界拥有真实最终显示入口。
-        for dimension in ("world0","world-1","world1"):
-            self.assertEqual({p.name for p in generated if p.parent.name==dimension},names)  # 每个世界都提供完整程序。
-        self.assertFalse(any(p.parent==build.SHADERS for p in generated))  # 根入口是被忽略的重复代码。
-        settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 阴影开关必须对应实际目录。
-        for dimension in ("world0","world-1","world1"):
-            self.assertEqual(settings[f"program.{dimension}/shadow.enabled"],"OMNI_SHADOW_ENABLED")  # 世界开关与入口路径成对。
+        data = json.loads((build.SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))  # 维度、缺席与几何清单是唯一来源。
+        names = {p.name for p in generated if p.parent.name == "world0"}  # 主世界拥有完整程序集。
+        self.assertIn("final.fsh", names)  # 主世界拥有真实最终显示入口。
+        for dimension, setting in data["dimensions"].items():
+            absent = set(setting.get("absent", []))  # 这个维度没有的程序。
+            geometry = set(setting.get("geometry", []))  # 额外生成几何阶段的程序。
+            expected = set()
+            for name in data["programs"]:
+                if name in absent:
+                    continue
+                expected |= {name + ".vsh", name + ".fsh"}  # 顶点片元始终配对。
+                if name in geometry:
+                    expected.add(name + ".gsh")  # 只有登记过的程序生成几何阶段。
+            expected |= {name + ".csh" for name in data.get("compute", {})}  # 计算入口每个维度都有。
+            self.assertEqual({p.name for p in generated if p.parent.name == dimension}, expected, dimension)
+        self.assertFalse(any(p.parent == build.SHADERS for p in generated))  # 根入口是被忽略的重复代码。
+        settings = options.read_pipeline(build.SHADERS / "rendering/pipeline.properties")  # 程序开关必须对应实际维度目录。
+        self.assertTrue(any(key.startswith("program.world-1/") for key in settings))  # 下界开关带维度前缀。
+        self.assertTrue(any(key.startswith("program.world1/") for key in settings))  # 末地开关带维度前缀。
 
     def test_generated_comments_are_ascii_chinese(self):
         """转义中文说明保持加载器编码，英语生成说明仍被拒绝。"""
@@ -99,7 +111,7 @@ class BoundaryTests(unittest.TestCase):
         """当前属性不冒充旧版；旧版只迁移原来存在的调试接口。"""
         found,_ = options.scan(build.SHADERS)  # 外部配置值使用真实选项范围。
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary); source = root/"current.properties"; source.write_text("OMNI_CLOUD_COVERAGE=0.75\n",encoding="ascii")
+            root = Path(temporary); source = root/"current.properties"; source.write_text("OMNI_TONEMAP_OPERATOR=1\n",encoding="ascii")  # 用当前真实选项写出加载器属性配置。
             current = options.shared(source,found,build.version())  # 没有标记的加载器配置默认是当前版。
             self.assertEqual(current["shaderVersion"],build.version()); self.assertEqual(current["schemaVersion"],options.SHARE_SCHEMA)
             with self.assertRaisesRegex(ValueError,"旧版配置只能"): options.shared(source,found,build.version(),legacy=True)
@@ -158,9 +170,15 @@ class BoundaryTests(unittest.TestCase):
             self.assertFalse((outside/"user.json").exists()); self.assertFalse((outside/"setup.mcfunction").exists())  # 拒绝发生在首次写入之前。
 
     def test_water_and_lens_combination_contract(self):
-        """瀑布保留侧面法线，所有镜头采样保持同一效果顺序。"""
-        water = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")  # 直接核对生产波浪的表面输入。
-        self.assertIn("worldNormal.y<0.9",water); self.assertIn("abs(relativeHeight)",water)  # 顶面波浪与近水互动有实际输入条件。
-        lens = (build.SHADERS/"effects/lens.glsl").read_text(encoding="utf-8")
-        self.assertIn("sum += omniFocusSample",lens); self.assertIn("sum += omniLensSample",lens)  # 快门和景深不再覆盖原始红蓝通道。
-        self.assertIn("texelFetch(colortex1,pixel,0).a==2.0",lens)  # 手持物不参与景深。
+        """水面法线供折射与雾共用同一来源，镜头各步骤各由自己的开关控制，互不覆盖。"""
+        found,_,_ = support.configuration()  # 真实选项供逐项核对。
+        water = support.text("effects/water/water.glsl")  # 水面效果主体。
+        self.assertIn("GetWavesNormal",water)  # 波浪法线独立成函数。
+        self.assertIn("GetWaterParallaxCoord",water)  # 视差坐标独立成函数。
+        self.assertIn("WaterFog",water)  # 水雾复用同一份波高与吸收。
+        self.assertIn("RefractSampleOnce",water)  # 折射独立成函数。
+        lens = support.text("effects/lens/lens.glsl")  # 镜头效果主体。
+        for name in ("DepthOfField","LensFlare","MotionBlur","Vignette"):
+            self.assertIn(name,lens)  # 景深、光斑、运动模糊与暗角各自独立成函数。
+        for option in ("OMNI_DOF","OMNI_LENS_FLARE","OMNI_MOTION_BLUR","OMNI_VIGNETTE"):
+            self.assertIn(option,found)  # 四个镜头步骤各由自己的开关控制，不会互相覆盖。

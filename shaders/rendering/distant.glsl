@@ -1,123 +1,306 @@
-// 远景几何：处理加载器额外送来的 `Distant Horizons`（下文简称 DH）远景地形与水面。
-// 管什么：本文件只管远景这一条路径——顶点变换、类别与自发光映射、水波，以及按缓冲协议写附件；
-//   它不安排绘制顺序，也不复制近景地形的算法，顺序由世界目录里成对的入口决定。
-// 调用位置：
-//   主世界、下界、末地三个维度目录下的 dh_terrain.vsh 声明 OMNI_VERTEX 后引入，dh_terrain.fsh 声明 OMNI_FRAGMENT 后引入，
-//   dh_water.vsh 与 dh_water.fsh 再额外声明 OMNI_WATER_PASS；顶点与片元各取所需，共用本文件。
-// 可复制示例（一对薄入口里）：
-//   #define OMNI_VERTEX
-//   #define OMNI_FRAGMENT
-//   三个维度目录的 dh_terrain 与 dh_water 入口引入本文件。
-// 设计原因与取舍：
-//   近景与远景各用各自的投影与深度：远景由加载器在极远处生成，坐标落在普通近远裁剪面之外，
-//   所以顶点用 dhProjection 投影、重建时用 dhProjectionInverse；普通地形那边用 gl_ProjectionMatrix 与普通逆投影，两者不能混用。
-//   远景不读普通地形贴图：加载器只给一个小编号（例如水、岩浆）加顶点色，材质因此是保守的默认值，不做 labPBR 解码。
-//   内部数据互相信任：本文件只信任加载器已经给好的输入，不在层与层之间重复检查。
-// 顶点抖动来自抗锯齿文件，水波来自水面文件，行星曲率来自世界文件，三者顶点与片元都要用，显式引入。
-#include "/effects/antialiasing.glsl"
-#include "/effects/water.glsl"
-#include "/effects/world.glsl"
-#ifdef OMNI_VERTEX
-out vec3 viewPosition, viewNormal; // 传给片元的视空间位置与法线。
-out vec4 tint; out vec2 lightUv; // 传给片元的顶点色与原版光照坐标。
-flat out int materialId; // 远景小编号不插值，按整数原样传到片元。
-// --- 顶点阶段：把加载器给的原版顶点转到视空间，再按远景投影写出坐标 ---
-void main() {
-    viewPosition = (gl_ModelViewMatrix*gl_Vertex).xyz; // 用兼容内置矩阵进入视空间，远景顶点同样适用。
-    viewNormal = omniNormalize(gl_NormalMatrix*gl_Normal); // 远景面法线，归一化后交给照明。
-    tint = gl_Color; lightUv = clamp(gl_MultiTexCoord2.xy/240.0,0.0,1.0); // 远景没有底色纹理，光照坐标按原版等级换算到零一。
-#ifdef DISTANT_HORIZONS
-    materialId = dhMaterialId; // 加载器自动声明的小编号，标记这块远景是什么。
-#if defined OMNI_WATER_PASS
-    if (materialId==DH_BLOCK_WATER && viewNormal.y>0.9) { // 远景顶面水按近景同一海浪抬升，近远交界处水面才不断开。
-        vec3 waterWorld = omniWorld(viewPosition); // 位移前的相机相对世界位置。
-        waterWorld.y += omniOceanHeight((waterWorld+cameraPosition).xz); // 与近景共用同一海浪高度函数，只抬朝上的面。
-        viewPosition = (gbufferModelView*vec4(waterWorld,1.0)).xyz; // 世界位移后再变回视空间，投影前完成。
-    }
+/*
+远景绘制主体：把 iterationT 的远景地形与远景水四组程序合成一个主体文件。
+来源：`Lib/Programs/Gbuffers/DH_Terrain_VS.glsl`、`DH_Terrain_FS.glsl`、`DH_Water_VS.glsl`、`DH_Water_FS.glsl`
+  一比一移植；原程序用入口文件选择，这里用 `OMNI_DH_TERRAIN_PASS` 与 `OMNI_DH_WATER_PASS` 在一个文件里分开。
+调用位置：各维度 `dh_terrain`、`dh_water` 入口定义阶段宏与对应程序宏后引入本文件；入口按 `rendering/programs.json` 生成。
+可复制示例：入口写 `#define OMNI_FRAGMENT 1`、`#define OMNI_DH_WATER_PASS 1`、`#define OMNI_OVERWORLD 1`，
+  再写 `#include "/rendering/distant.glsl"`。
+输出约定：远景地形写零号、三号、五号，对应 `DRAWBUFFERS:035`；远景水写四号、六号，对应 `DRAWBUFFERS:46`。
+设计原因与取舍：
+  远景由加载器按远景模组的投影矩阵绘制，顶点用远景投影，片元只处理贴图噪声、剔除与简单的湿润；
+  远景地形的逐块噪声与剔除在 `effects/world/world.glsl`，远景水的波法线在 `effects/water/water.glsl`。
+  顶点阶段不引入含 `discard` 与导数函数的效果文件；`effects/world/world.glsl`、`effects/water/water.glsl` 都只用力的片元。
+  注意：`effects/water/water.glsl` 合并了水波与雨点，雨点函数依赖 `gaux1` 到 `gaux3` 与 `rainStrength`，而 iterationT 的
+  远景水只引入水波；`effects/weather/weather.glsl` 的雨函数依赖 `colorShadowlight` 与 `colorSkylight`，这里按需声明。
+*/
+#ifndef OMNI_DISTANT_BODY_INCLUDED // 只引入一次，避免选项与函数重复定义。
+#define OMNI_DISTANT_BODY_INCLUDED // 置上标记。
+
+// 加载器输入声明，最先引入。
+#include "/common/uniforms.glsl"
+// 共用纯计算：曲线、法线编解码与打包。
+#include "/common/math.glsl"
+// 远景程序依赖加载器在开启远景模组时提供的投影与材质编号；基础环境缺这些名字，按原程序取值补回退。
+// 为什么用 `#ifndef`：开启远景模组时由加载器与构建环境注入，重复定义会报错。
+#ifndef DISTANT_HORIZONS
+	uniform mat4 dhProjection; // 远景投影矩阵。
+	const int dhMaterialId = 0; // 远景材质编号，基础环境当作普通方块。
 #endif
-    viewPosition = omniPlanetCurve(viewPosition); // 远景按水平距离下沉，做出地平线弧度。
-    gl_Position = dhProjection*vec4(viewPosition,1.0); // 远景很远，必须用加载器的远景投影，不能用普通近远裁剪面。
-#else
-    materialId = 0; viewPosition = omniPlanetCurve(viewPosition); gl_Position = gl_ProjectionMatrix*vec4(viewPosition,1.0); // 未启用远景的离线基础路径仍能编译，运行时不会被调用。
+#ifndef DH_BLOCK_UNKNOWN
+	#define DH_BLOCK_UNKNOWN 0
+	#define DH_BLOCK_LEAVES 1
+	#define DH_BLOCK_STONE 2
+	#define DH_BLOCK_WOOD 3
+	#define DH_BLOCK_METAL 4
+	#define DH_BLOCK_DIRT 5
+	#define DH_BLOCK_LAVA 6
+	#define DH_BLOCK_DEEPSLATE 7
+	#define DH_BLOCK_SNOW 8
+	#define DH_BLOCK_SAND 9
+	#define DH_BLOCK_TERRACOTTA 10
+	#define DH_BLOCK_NETHER_STONE 11
+	#define DH_BLOCK_WATER 12
+	#define DH_BLOCK_GRASS 13
+	#define DH_BLOCK_AIR 14
+	#define DH_BLOCK_ILLUMINATED 15
 #endif
-#ifdef OMNI_AA_ENABLED
-    gl_Position.xy += omniJitter(frameCounter)*2.0/vec2(viewWidth,viewHeight)*gl_Position.w; // 和近景用同一像素抖动，时间合成才能对齐。
-#endif
-}
-#endif
+// 时间抗锯齿选项：远景顶点抖动要用。
+#include "/effects/clarity/antialiasing.glsl"
+// 材质与视差：提供 `MATID_*` 与物理光照选项。
+#include "/effects/ground/material.glsl"
+// 远景噪声与剔除、水面波法线都只在片元引入。
 #ifdef OMNI_FRAGMENT
-// 统一光照只在片元用到（会计算屏幕导数），放进片元块，避免顶点阶段编译到导数调用。
-#include "/effects/sunlight.glsl"
-in vec3 viewPosition, viewNormal; // 顶点传下来的视空间位置与法线。
-in vec4 tint; in vec2 lightUv; // 顶点色与原版光照坐标。
-flat in int materialId; // 远景小编号，不插值。
-#ifdef OMNI_WATER_PASS
-/* RENDERTARGETS: 0,7,8 */
-#else
-/* RENDERTARGETS: 0,1,2,7 */
+	// 天气选项与雨函数：远景地形的湿润要读 `OMNI_SURFACE_WETNESS`。
+	#include "/effects/weather/weather.glsl"
+	// 天气的 `Rain` 读取阳光与天光颜色，按它的调用前提给两个空全局。
+	vec3 colorShadowlight; // 阳光颜色，本程序不调用 `Rain`。
+	vec3 colorSkylight; // 天光颜色，本程序不调用 `Rain`。
+	// 天气的风偏移读取露天标记，按它的调用前提给一个空输入。
+	// 水面与雨点：远景水要 `GetWavesNormal`；雨点函数要涟漪贴图与降雨强度，一并声明。
+	uniform sampler2D gaux1; // 雨点第一张动画贴图，本程序不调用雨点函数。
+	uniform sampler2D gaux2; // 雨点第二张动画贴图。
+	uniform sampler2D gaux3; // 雨点第三张动画贴图。
+	uniform float rainStrength; // 降雨强度。
+	// 波浪、涟漪与水波法线。
+	#include "/effects/water/water.glsl"
+	// 远景噪声与剔除。
+	#include "/effects/world/world.glsl"
 #endif
-layout(location=0) out vec4 scene; // 远景线性颜色。
-#ifndef OMNI_WATER_PASS
-layout(location=1) out vec4 normalsOut; // 远景法线与类别。
-layout(location=2) out vec4 materialOut; // 远景基础材质。
-layout(location=3) out vec4 lightOut; // 远景光照记录。
-#else
-layout(location=1) out vec4 overlayMarker; // 远景透明物不改底层类别。
-layout(location=2) out vec4 waterSurface; // 水面的独立法线与实际视深度。
-#endif
-// --- 把加载器小编号映射成远景类别与自发光 ---
-// 做什么：把小号翻译成本项目统一的表面类别（正常、水），并判断是否自发光。
-// 为什么单独成函数：映射只在这一处定义，造波和写附件都读同一结果，不会两边不一致。
-// 考虑点：没有加载器编号（离线编译）时返回普通类别、无自发光，保证基础路径能编译。
-void omniDistantCategory(out float category, out float emission) {
-    category = 3.0; // 默认普通远景类别，和近景普通表面区分开。
-    emission = 0.0; // 默认没有自发光。
-#ifdef DISTANT_HORIZONS
-    if (materialId==DH_BLOCK_LAVA || materialId==DH_BLOCK_ILLUMINATED) emission = 1.0; // 岩浆与发光方块按自发光处理。
-#endif
-#if defined DISTANT_HORIZONS && defined OMNI_WATER_PASS
-    if (materialId==DH_BLOCK_WATER) category = 1.0; // 只有水面通道才把远景水当成水类别。
-#endif
+
+#ifdef OMNI_VERTEX // 顶点阶段：远景地形与远景水分开写。
+#if defined OMNI_DH_TERRAIN_PASS // 远景地形顶点着色器。
+// 传给片元的插值量。
+out vec3 color; // 顶点色。
+out vec3 viewPos; // 视空间位置。
+out vec3 viewNormal; // 视空间法线。
+out vec2 blockLight; // 方块光与天光。
+flat out float materialIDs; // 材质编号。
+
+
+// 顶点主函数：远景投影，按远景材质编号挑类别。
+void main(){
+	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
+	viewPos = v_viewPos.xyz; // 传给片元。
+	gl_Position = dhProjection * v_viewPos; // 用远景投影。
+
+	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
+		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加抖动。
+	#endif
+
+	color = gl_Color.rgb; // 顶点色取三通道。
+	viewNormal = normalize(gl_NormalMatrix * gl_Normal); // 法线转到视空间。
+	vec2 lmcoord = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy; // 原版光照图坐标。
+	blockLight = saturate(lmcoord * 1.103449 - 0.0689656); // 重整到零到一。
+
+	materialIDs = 1.0; // 默认普通方块。
+
+	switch(dhMaterialId){ // 按远景材质编号分类。
+	// 树叶。
+		case DH_BLOCK_LEAVES:
+			materialIDs = MATID_LEAVES; // 记为树叶。
+			break; // 结束该分支。
+		case DH_BLOCK_SNOW:
+			materialIDs = MATID_LEAVES + 0.1; // 雪用树叶编号加一点，后面按小数部分判断。
+			break; // 结束该分支。
+	// 岩浆。
+		case DH_BLOCK_LAVA:
+			materialIDs = MATID_LAVA; // 记为岩浆。
+			break; // 结束该分支。
+	// 荧石与灯。
+		case DH_BLOCK_ILLUMINATED:
+			materialIDs = MATID_GLOWSTONE; // 记为荧石。
+			break; // 结束该分支。
+	}
+
+	if (materialIDs == 1.0 && blockLight.x > 0.93) materialIDs = MATID_GLOWSTONE; // 方块光很高的自身发光方块也算荧石。
 }
-// --- 让远景水面也起波 ---
-// 做什么：片元属于水类别时，用本项目的统一波浪给远景水重建法线。
-// 为什么复用近景造波：近远水面在同一世界里，波参数必须一致，否则近远景交界处水面会断开。
-// 考虑点：只改水类别的法线，远景瀑布与水流的侧面保留原始法线；没有加载器编号时不动法线。
-void omniDistantWaterNormal(inout vec3 normal, vec3 world, float category) {
-#if defined DISTANT_HORIZONS && defined OMNI_WATER_PASS
-    if (category==1.0) normal = omniWaterNormal(world,normal); // 远景水也保留侧面原始法线。
-#endif
+#elif defined OMNI_DH_WATER_PASS // 远景水顶点着色器。
+// 传给片元的插值量。
+out vec4 color; // 顶点色。
+out vec3 viewPos; // 视空间位置。
+out mat3 tbn; // 切线基。
+out vec2 blockLight; // 方块光与天光。
+flat out float materialIDs; // 材质编号。
+
+
+// 顶点主函数：按面法线构造切线基，按远景材质编号挑水或普通表面。
+void main(){
+	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
+	viewPos = v_viewPos.xyz; // 传给片元。
+	gl_Position = dhProjection * v_viewPos; // 用远景投影。
+
+	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
+		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加抖动。
+	#endif
+
+	color = gl_Color; // 顶点色。
+
+	vec3 T = vec3(0.0); // 切线初值。
+	vec3 B = vec3(0.0); // 副切线初值。
+	vec3 N = normalize(gl_NormalMatrix * gl_Normal); // 法线转到视空间。
+
+	if (gl_Normal.x > 0.5) { // 朝正横轴的面。
+		T = normalize(gl_NormalMatrix * vec3( 0.0,  0.0, -1.0)); // 切线取纵轴负向。
+		B = normalize(gl_NormalMatrix * vec3( 0.0, -1.0,  0.0)); // 副切线取竖轴负向。
+	} else if (gl_Normal.x < -0.5){ // 朝负横轴的面。
+		T = normalize(gl_NormalMatrix * vec3( 0.0,  0.0,  1.0)); // 切线取纵轴正向。
+		B = normalize(gl_NormalMatrix * vec3( 0.0, -1.0,  0.0)); // 副切线取竖轴负向。
+	} else if (gl_Normal.y > 0.5){ // 朝上。
+		T = normalize(gl_NormalMatrix * vec3( 1.0,  0.0,  0.0)); // 切线取横轴正向。
+		B = normalize(gl_NormalMatrix * vec3( 0.0,  0.0,  1.0)); // 副切线取纵轴正向。
+	} else if (gl_Normal.y < -0.5){ // 朝下。
+		T = normalize(gl_NormalMatrix * vec3( 1.0,  0.0,  0.0)); // 切线取横轴正向。
+		B = normalize(gl_NormalMatrix * vec3( 0.0,  0.0,  1.0)); // 副切线取纵轴正向。
+	} else if (gl_Normal.z > 0.5){ // 朝正纵轴。
+		T = normalize(gl_NormalMatrix * vec3( 1.0,  0.0,  0.0)); // 切线取横轴正向。
+		B = normalize(gl_NormalMatrix * vec3( 0.0, -1.0,  0.0)); // 副切线取竖轴负向。
+	} else if (gl_Normal.z < -0.5){ // 朝负纵轴。
+		T = normalize(gl_NormalMatrix * vec3(-1.0,  0.0,  0.0)); // 切线取横轴负向。
+		B = normalize(gl_NormalMatrix * vec3( 0.0, -1.0,  0.0)); // 副切线取竖轴负向。
+	}
+	
+	tbn = mat3(T, B, N); // 组装切线基。
+
+	vec2 lmcoord = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy; // 原版光照图坐标。
+	blockLight = saturate(lmcoord * 1.103449 - 0.0689656); // 重整到零到一。
+	
+	materialIDs = MATID_STAINEDGLASS; // 默认按染色玻璃处理。
+
+	if (dhMaterialId == DH_BLOCK_WATER){ // 远景水材质。
+		materialIDs = MATID_WATER; // 记为水。
+	}
 }
-// --- 按缓冲协议写入远景附件 ---
-// 做什么：所有远景片元都写线性颜色；不透明通道再写类别、材质和光照，水面通道改写法线与实际视深度。
-// 为什么单独成函数：附件协议集中在一条直线上，主流程只剩"算表面再写结果"，接手者一屏读完。
-// 考虑点：水在颜色透明通道里存不透明快照，避免水下与水面重叠；非水表面拒绝匹配，保留底层类别。
-void omniDistantWrite(vec3 lit, vec3 normal, vec3 materialParams, float category) {
-    scene = vec4(lit,1.0); // 所有路径都写颜色，透明通道先按不透明。
-#ifndef OMNI_WATER_PASS
-    normalsOut = vec4(normal*0.5+0.5,category); // 法线编码到零一，类别写在透明通道。
-    materialOut = vec4(materialParams,lightUv.y); // 基础材质和原版光照强度。
-    lightOut = vec4(lightUv,0.0,1.0); // 真实光照输入，标记几何有效。
-#else
-    scene.a = category==1.0 ? 1.0 : tint.a; // 水用不透明快照，非水沿用顶点透明度。
-    overlayMarker = vec4(0.0); waterSurface = vec4(0.0); // 先默认非水：拒绝匹配、无独立水面。
-    if (category==1.0) { overlayMarker = vec4(lightUv,2.0,1.0); waterSurface = vec4(normal*0.5+0.5,viewPosition.z); } // 水标记来源为远景，并写自身法线与实际视深度。
-#endif
+#endif // 顶点程序分支结束。
+#endif // 顶点阶段结束。
+
+#if defined OMNI_FRAGMENT && defined OMNI_DH_TERRAIN_PASS // 远景地形片元着色器。
+/* DRAWBUFFERS:035 */
+layout(location = 0) out vec4 gbufferOutput0; // 零号贴图色。
+layout(location = 1) out vec4 gbufferOutput3; // 三号法线光照图。
+layout(location = 2) out vec4 gbufferOutput5; // 五号高光材质。
+
+// 从顶点阶段接收的插值量。
+in vec3 color; // 顶点色。
+in vec3 viewPos; // 视空间位置。
+in vec3 viewNormal; // 视空间法线。
+in vec2 blockLight; // 方块光与天光。
+flat in float materialIDs; // 材质编号。
+
+
+// 片元主函数：先剔除近处远景，再对贴图加噪声、算湿润，最后写三张画面。
+void main(){
+	#ifdef OMNI_DH_TERRAIN_CULLING // 远景地形剔除：丢掉和正常区块重叠的近处远景块。
+		if (length(viewPos) < far * 0.7) discard; // 距离小于远景距离的七成就丢掉。
+	#endif
+
+	DHChunkFading(length(viewPos)); // 远景区块淡入：靠近交界时按距离随机淡出，减少远景与近景的硬边。
+
+	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz; // 还原相机相对世界位置。
+
+// 底色：顶点色，开启噪声时叠逐块噪声。
+	vec3 albedo = color; // 底色取顶点色。
+	#ifdef OMNI_DH_TEXTURE_NOISE
+		if (fract(materialIDs) != 0.1) DH_noise(albedo, worldPos + cameraPosition + mat3(gbufferModelView) * viewNormal * 0.001, materialIDs); // 雪不叠噪声，其余按世界位置叠逐块噪声。界位置叠噪声。
+	#endif
+
+	#ifdef OMNI_WHITE_DEBUG_WORLD
+		albedo = vec3(1.0); // 调试白光时全白。
+	#endif
+
+// 湿润：远景只按半强与朝向，主世界看降雨，其余维度只用地表基础湿润。
+	#ifdef OMNI_ENABLE_PBR
+
+		float NdotU = dot(viewNormal, gbufferModelView[1].xyz); // 表面法线与世上方向的夹角。
+
+		#ifdef OMNI_OVERWORLD
+			#ifndef OMNI_DISABLE_LOCAL_PRECIPITATION
+				float wet = wetness * (1.0 - eyeSnowySmooth) * (1.0 - eyeNoPrecipitationSmooth) + OMNI_SURFACE_WETNESS; // 降雨湿润加基础湿润。
+			#else
+				float wet = wetness + OMNI_SURFACE_WETNESS; // 只看整体降雨。
+			#endif
+			wet *= 0.5; // 远景压半。
+			wet *= saturate(blockLight.y * 10.0 - 9.0); // 只有露天才积雨。
+			wet *= saturate(NdotU * 0.5 + 0.5); // 朝向权重。
+		#else
+			float wet = OMNI_SURFACE_WETNESS; // 只用基础湿润。
+			wet *= 0.5; // 压半。
+			wet *= saturate(NdotU * 0.5 + 0.5); // 朝向权重。
+		#endif
+
+	#else
+		float wet = 0.0; // 关闭物理光照时不做湿润。
+	#endif
+
+// 法线：远景直接用面法线。
+	vec2 normalEnc = EncodeNormal(viewNormal); // 八面体编码法线。
+
+
+	gbufferOutput0 = vec4(albedo, 1.0); // 零号写不透明底色。
+	gbufferOutput3 = vec4(normalEnc, blockLight); // 三号写法线与光照图。
+	gbufferOutput5 = vec4(0.0, 0.0, (materialIDs + 0.1) / 255.0, Pack2x8(vec2(wet, 1.0))); // 五号写材质编号与湿润，视差阴影记为一。
 }
-// --- 片元主流程：先算远景表面，再写结果 ---
-void main() {
-    if (tint.a<0.01) discard; // 完全透明的远景片元直接丢弃，不写颜色与元数据。
-    vec3 world = omniWorld(viewPosition); // 相机相对世界位置，波浪按它锚定。
-    vec3 normal = omniNormalize(viewNormal); // 统一视空间法线。
-    float category, emission; // 远景类别与自发光。
-    omniDistantCategory(category,emission); // 小编号映射到类别与自发光。
-    omniDistantWaterNormal(normal,world,category); // 只有水类别才造波。
-    vec3 materialParams = vec3(category==1.0?0.06:0.85,0.04,emission); // 远景基础材质：水更光滑，其余偏粗糙。
-#ifdef OMNI_DH_ENABLED
-    vec3 lit = omniLighting(omniLinear(tint.rgb),normal,world,lightUv,materialParams,1.0); // 开启时复用统一光照算远景颜色。
-#else
-    vec3 lit = omniLinear(tint.rgb)*(0.25+0.75*lightUv.y); // 关闭时只按原版光照亮度上色，不算阴影与高光，作为基础路径。
-#endif
-    omniDistantWrite(lit,normal,materialParams,category); // 按协议写全部附件。
+#elif defined OMNI_FRAGMENT && defined OMNI_DH_WATER_PASS // 远景水片元着色器。
+/* DRAWBUFFERS:46 */
+layout(location = 0) out vec4 gbufferOutput4; // 四号半透明法线光照图。
+layout(location = 1) out vec4 gbufferOutput6; // 六号半透明颜色材质。
+
+// 从顶点阶段接收的插值量。
+in vec4 color; // 顶点色。
+in vec3 viewPos; // 视空间位置。
+in mat3 tbn; // 切线基。
+in vec2 blockLight; // 方块光与天光。
+flat in float materialIDs; // 材质编号。
+
+
+// 片元主函数：被近景挡住的远景水丢弃，再算波法线与打包颜色。
+void main(){
+	if (texelFetch(depthtex0, ivec2(gl_FragCoord.xy), 0).x < 1.0) discard; // 已有近景几何遮住时丢弃该远景水像素。
+
+	DHChunkFading(length(viewPos)); // 远景区块淡入：远景水同样在交界处按距离随机淡出。
+
+	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz; // 还原相机相对世界位置。
+
+	
+// 底色：顶点色，开启噪声时叠逐块噪声。
+	#ifdef OMNI_DH_TEXTURE_NOISE
+		vec4 tex = DH_noise(color, worldPos + cameraPosition + mat3(gbufferModelView) * tbn[2] * 0.001); // 按水表位置叠噪声。
+	#else
+		vec4 tex = color; // 直接用顶点色。
+	#endif
+
+
+	#ifdef OMNI_WHITE_DEBUG_WORLD
+		tex.rgb = vec3(1.0); // 调试白光时全白。
+	#endif
+
+// 波法线：水用波浪函数，冰与玻璃用面法线。
+	vec3 waterNormal = vec3(0.0, 0.0, 1.0); // 默认朝外。
+
+	vec3 mcPos = worldPos + cameraPosition; // 世界位置。
+
+	bool iswater = materialIDs == MATID_WATER; // 是否为水。
+	
+	if (iswater){
+		waterNormal = GetWavesNormal(mcPos, 18.0); // 远景波高固定，比近景更平。
+	}
+
+	waterNormal = tbn * waterNormal; // 转到视空间。
+
+	if (iswater){ // 水面把法线偏向水平。
+		vec3 viewDir = normalize(-viewPos); // 视线方向。
+		#ifdef DISTANT_HORIZONS
+			const float weight = 0.3; // 有远景时的权重。
+		#else
+			const float weight = 0.07; // 常规权重。
+		#endif
+		waterNormal = normalize(waterNormal + (tbn[2] / (max(0.0, dot(tbn[2], viewDir)) + 0.001)) * weight); // 按掠射程度把法线拉向面法线。
+	}
+
+	vec2 normalEnc = EncodeNormal(waterNormal); // 八面体编码法线。
+
+
+	gbufferOutput4 = vec4(normalEnc, blockLight); // 四号写法线与方块光。
+	gbufferOutput6 = vec4(Pack2x8(tex.rg), Pack2x8(tex.ba), (materialIDs + 0.1) / 255.0, float(iswater)); // 六号打包颜色、材质编号与水遮罩。
 }
-#endif
+#endif // 片元阶段结束。
+#endif // 文件守卫结束。

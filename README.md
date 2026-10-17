@@ -50,19 +50,18 @@ uv pip sync requirements-dev.lock
 | 改开发工具安装 | `dev.py` 和 `dev-tools.lock.json` |
 | 改独立游戏启动 | `game.py` |
 | 改版本号 | `VERSION` |
-| 查实际能力与限制 | `docs/capabilities.md` |
+| 查实际能力与限制 | `docs/parity.md` 与 `docs/eclipse-parity.md` |
 | 检查中文注释与未实现标记 | `audit.py` |
 | 导入、导出、对比、重置配置 | `options.py` 命令入口 |
 
 ## 文档
 
 - [开发、调试与发布](docs/development.md)
+- [移植合同与分片状态](docs/parity.md)
+- [Eclipse 效果对照](docs/eclipse-parity.md)
 - [绘制流程](docs/rendering.md)
 - [兼容性与验证状态](docs/compatibility.md)
 - [性能测量方法](docs/performance.md)
-- [代码能力与验证边界](docs/capabilities.md)
-- [菜单设计](docs/menu.md)
-- [参数总表](docs/parameters.md)
 - [可复用库与框架](docs/libraries.md)
 - [算法参考与可复用实现](docs/references.md)
 - [项目开发约定](AGENTS.md)
@@ -71,7 +70,7 @@ uv pip sync requirements-dev.lock
 
 - [Iris 开发文档](https://shaders.properties/)
 - [Iris 调试说明](https://github.com/IrisShaders/docs/blob/main/src/content/docs/current/Reference/Miscellaneous/debugging_shaders.mdx)
-- [第三方来源与许可](THIRD_PARTY.md)：云密度直接采用固定版本的 Ashima 噪声，保留 MIT 原文；参考包原件未复制。
+- [第三方来源与许可](THIRD_PARTY.md)：当前没有随包的第三方库，云密度用 iterationT 的预计算噪声贴图；参考包原件未复制。
 - [RenderDoc](https://renderdoc.org/) 与 [GFX-Debuggers](https://modrinth.com/mod/gfx-debuggers)
 
 Minecraft 本体由玩家通过自己的启动器合法安装。调试整合包只记录模组下载信息。

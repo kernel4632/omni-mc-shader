@@ -37,10 +37,43 @@ CONST = re.compile(  # 只读取声明中的类型和字面量，不求值任意
 CONST_OPTIONS = {  # 只允许加载器真正认识的原生常量，避免生成无效菜单。
     "shadowMapResolution": "int",
     "shadowDistance": "float",
+    "sunPathRotation": "float",
+    "wetnessHalflife": "float",
+    "drynessHalflife": "float",
 }
-OPTION_RENAMES = {  # 保留历史名称对照；当前导入不使用此表，不会自动接受或改写旧名称。
-    "OMNI_SHADOW_RESOLUTION": "shadowMapResolution",
-    "OMNI_SHADOW_DISTANCE": "shadowDistance",
+OPTION_RENAMES = {  # 保留历史名称对照；旧配置按新名迁移，移植前的旧参数合并见 docs/parity.md 第十二节。
+    "OMNI_SHADOW_RESOLUTION": "shadowMapResolution",  # 旧名迁移到新名。
+    "OMNI_SHADOW_DISTANCE": "shadowDistance",  # 旧名迁移到新名。
+    "OMNI_SHADOW_PENUMBRA": "OMNI_VARIABLE_PENUMBRA_SHADOWS",  # 旧名迁移到新名。
+    "OMNI_SHADOW_PENUMBRA_QUALITY": "OMNI_VPS_QUALITY",  # 旧名迁移到新名。
+    "OMNI_SHADOW_BLUR": "OMNI_SHADOW_BASIC_BLUR",  # 旧名迁移到新名。
+    "OMNI_SHADOW_SOFTNESS": "OMNI_VPS_SPREAD",  # 旧名迁移到新名。
+    "OMNI_MATERIAL_DETAIL": "OMNI_ENABLE_PBR",  # 旧名迁移到新名。
+    "OMNI_VEGETATION_WIND": "OMNI_WAVING_PLANTS",  # 旧名迁移到新名。
+    "OMNI_RAIN_WIND": "OMNI_RAIN_WIND_X",  # 旧名迁移到新名。
+    "OMNI_NETHER_FOG_DENSITY": "OMNI_NETHERFOG_DENSITY",  # 旧名迁移到新名。
+    "OMNI_UNDERWATER_DENSITY": "OMNI_WATERFOG_DENSITY",  # 旧名迁移到新名。
+    "OMNI_VFOG_STEPS": "OMNI_VFOG_QUALITY",  # 旧名迁移到新名。
+    "OMNI_AA_ENABLED": "OMNI_TAA",  # 旧名迁移到新名。
+    "OMNI_TAA_WEIGHT": "OMNI_TAA_BLENDWEIGHT",  # 旧名迁移到新名。
+    "OMNI_BLOOM_ENABLED": "OMNI_BLOOM",  # 旧名迁移到新名。
+    "OMNI_BLOOM_STRENGTH": "OMNI_BLOOM_AMOUNT",  # 旧名迁移到新名。
+    "OMNI_AUTO_EXPOSURE": "OMNI_MANUAL_EXPOSURE",  # 旧名迁移到新名。
+    "OMNI_TONEMAP_MODE": "OMNI_TONEMAP_OPERATOR",  # 旧名迁移到新名。
+    "OMNI_UPSCALE": "OMNI_FSR",  # 旧名迁移到新名。
+    "OMNI_UPSCALE_STRENGTH": "OMNI_FSR_SHARPNESS",  # 旧名迁移到新名。
+    "OMNI_CLOUD_COVERAGE": "OMNI_CLOUD_CLEAR_COVERAGE",  # 旧名迁移到新名。
+    "OMNI_CLOUD_HEIGHT": "OMNI_CLOUD_CLEAR_ALTITUDE",  # 旧名迁移到新名。
+    "OMNI_CLOUD_THICKNESS": "OMNI_CLOUD_CLEAR_THICKNESS",  # 旧名迁移到新名。
+    "OMNI_CLOUD_DENSITY": "OMNI_CLOUD_CLEAR_DENSITY",  # 旧名迁移到新名。
+    "OMNI_CLOUD_SCALE": "OMNI_CLOUD_CLEAR_SCALE",  # 旧名迁移到新名。
+    "OMNI_CLOUD_SUNLIGHT": "OMNI_CLOUD_CLEAR_SUNLIGHTING",  # 旧名迁移到新名。
+    "OMNI_CLOUD_SKYLIGHT": "OMNI_CLOUD_CLEAR_SKYLIGHTING",  # 旧名迁移到新名。
+    "OMNI_CLOUD_RAIN_SUNLIGHT": "OMNI_CLOUD_RAIN_SUNLIGHTING",  # 旧名迁移到新名。
+    "OMNI_CLOUD_RAIN_SKYLIGHT": "OMNI_CLOUD_RAIN_SKYLIGHTING",  # 旧名迁移到新名。
+    "OMNI_CLOUD_BOTTOM": "OMNI_CLOUD_BOTTOM_BRIGHTNESS",  # 旧名迁移到新名。
+    "OMNI_CLOUD_OUTSCATTER": "OMNI_CLOUD_OUTSCATTER_FACTOR",  # 旧名迁移到新名。
+    "OMNI_CLOUD_NOISE_SCALE": "OMNI_CLOUD_DETAILED_NOISE_SCALE",  # 旧名迁移到新名。
 }
 
 
@@ -98,25 +131,6 @@ MAIN_PAGES: list[tuple[str, dict[str, str]]] = [
     ("world", {"zh_cn": "世界与远景", "en_us": "World & distance"}),
     ("dev", {"zh_cn": "开发者", "en_us": "Development"}),
 ]  # 封面分类只在一处定义，菜单与翻译都从这里取。
-
-# 效果文件位置到主页面：一个页面可以合并多个效果文件；单个选项可用 `@option` 的 `page` 覆盖。
-PAGE_OF_GROUP: dict[str, str] = {
-    "sky": "sky", "atmosphere": "sky",
-    "cloud": "cloud",
-    "fog": "fog",
-    "water": "water",
-    "material": "ground", "vegetation": "ground",
-    "sunlight": "lighting", "lpv": "lighting", "ambient": "lighting",
-    "shadow": "shadow",
-    "reflection": "reflection",
-    "color": "color", "bloom": "color",
-    "lens": "lens",
-    "antialiasing": "clarity", "upscale": "clarity",
-    "season": "weather", "weather": "weather",
-    "entity": "entity",
-    "world": "world",
-    "debug": "dev",
-}  # 归属只在这里维护一份，效果文件新增后在此登记。
 
 
 @dataclass(frozen=True)
@@ -181,9 +195,9 @@ def scan(shaders: Path) -> tuple[dict[str, Option], dict[str, dict[str, str]]]:
     options: dict[str, Option] = {}  # 效果源码是默认值唯一来源。
     groups: dict[str, dict[str, str]] = {}  # 文件主体自动形成菜单。
     for source in sorted((shaders / "effects").rglob("*.glsl")):  # 文件新增后自动登记，不改中央表。
-        group = source.relative_to(shaders / "effects").parts[0].removesuffix(".glsl")  # 效果名称来自目录主体。
-        if not re.fullmatch(r"[a-z][a-z0-9_]*", group):
-            raise ValueError(f"{source}：效果名称只能使用小写英文、数字和下划线")
+        group = source.relative_to(shaders / "effects").with_suffix("").as_posix()  # 效果名称是“文件夹/文件”，文件夹按主页面命名。
+        if not all(re.fullmatch(r"[a-z][a-z0-9_]*", part) for part in group.split("/")):
+            raise ValueError(f"{source}：效果名称每段只能使用小写英文、数字和下划线")
         lines = source.read_text(encoding="utf-8").splitlines()  # 保留原始行号便于定位错误。
         for index, line in enumerate(lines):
             stripped = line.strip()  # 说明允许缩进但不允许跨行。
@@ -366,14 +380,16 @@ def profile_values(values: dict[str, str], options: dict[str, Option]) -> str:
 def page_of(option: Option) -> str:
     """返回选项所属的主页面名称。
 
-    优先用 `@option` 声明的 `page`，否则按效果文件位置查 `PAGE_OF_GROUP`；两者都没有时
-    直接报错，避免选项悄悄消失或落到错误分类里。
+    优先用 `@option` 声明的 `page`；否则用效果文件所在的文件夹名（文件夹按主页面命名）。
+    文件夹名就是页面的唯一来源，没有第二张映射表；都不匹配时直接报错，
+    避免选项悄悄消失或落到错误分类里。
     """
     if option.page:
         return option.page  # 单个选项可覆盖所在效果的默认页面。
-    if option.group not in PAGE_OF_GROUP:
-        raise ValueError(f"{option.source}：效果 {option.group} 没有登记主页面")
-    return PAGE_OF_GROUP[option.group]
+    folder = option.group.split("/")[0]  # 效果分组是“文件夹/文件”，文件夹就是主页面名。
+    if folder in {pid for pid, _ in MAIN_PAGES}:
+        return folder  # 文件夹名直接就是页面，不用再登记。
+    raise ValueError(f"{option.source}：效果 {option.group} 没有登记主页面")
 
 
 def _subpages(pages: dict[str, list[str]], options: dict[str, Option]) -> dict[str, dict[str, list[str]]]:
@@ -427,7 +443,7 @@ def generated(shaders: Path, options: dict[str, Option], groups: dict,
         if pid in subpages:
             buttons = []  # 这一页只放子页面入口，顺序沿用源码扫描顺序。
             for group in subpages[pid]:
-                sub = f"{pid.upper()}_{group.upper()}"  # 子页名带分类前缀，避免不同分类的同名效果互相覆盖。
+                sub = f"{pid.upper()}_{group.replace('/', '_').upper()}"  # 子页名带分类前缀，并用下划线替换路径分隔符，避免不同分类的同名效果互相覆盖。
                 buttons.append(f"[{sub}]")  # 子页面以方括号按钮出现，点击进入。
                 lines.append(f"screen.{sub} = " + " ".join(subpages[pid][group]))  # 子页面内的选项归属唯一。
                 lines.append(f"screen.{sub}.columns = 3")  # 子页面同样三栏。
@@ -460,7 +476,7 @@ def _language(options: dict[str, Option], groups: dict, profiles: list[Preset], 
             lines.append(f"screen.{pid.upper()}={escape(label[locale])}")
     for pid, by_group in _subpages(pages, options).items():  # 子页面标题直接复用效果自己的名称。
         for group in by_group:
-            lines.append(f"screen.{pid.upper()}_{group.upper()}={escape(groups[group][locale])}")
+            lines.append(f"screen.{pid.upper()}_{group.replace('/', '_').upper()}={escape(groups[group][locale])}")
     for option in options.values():  # 选项标题与帮助使用相同语言，避免混用另一套翻译。
         lines.append(f"option.{option.name}={escape(option.label[locale])}")
         if option.description:  # 没有帮助内容时不生成空白提示。

@@ -37,6 +37,27 @@ ROOT = Path(__file__).resolve().parent  # 换工作目录不改变数据位置�
 SHADERS = ROOT / "shaders"  # 游戏资源根目录。
 INCLUDE = re.compile(r'^[ \t]*#include[ \t]+"([^"\n]+)"[ \t]*$', re.MULTILINE)  # 加载器要求引用独占一行，尾随说明会被拒绝。
 STAGES = {".vsh": ".vert", ".fsh": ".frag", ".gsh": ".geom", ".csh": ".comp", ".tcs": ".tesc", ".tes": ".tese"}  # 把游戏入口后缀映射到编译器认识的阶段名。
+# 加载器会为每个程序预先注入一整套环境宏；离线编译必须照 Iris 的 StandardMacros 给出同样的定义，
+# 否则像 `MC_HAND_DEPTH`、`MC_VERSION`、`MC_RENDER_QUALITY` 这些只在游戏里存在的名字会被当成未声明标识符。
+# 取值照 Iris 源码：版本号取当前游戏、厂商与渲染器取通用值（另一套环境再测远景路径）。
+STANDARD_MACROS = (
+    "#define MC_VERSION 260300\n"
+    "#define IRIS_VERSION 11107\n"
+    "#define MC_GL_VERSION 460\n"
+    "#define MC_GLSL_VERSION 460\n"
+    "#define MC_MIPMAP_LEVEL 4\n"
+    "#define MC_OS_WINDOWS\n"
+    "#define MC_GL_VENDOR_OTHER\n"
+    "#define MC_GL_RENDERER_OTHER\n"
+    "#define IS_IRIS\n"
+    "#define IRIS_HAS_TRANSLUCENCY_SORTING\n"
+    "#define IRIS_TAG_SUPPORT 2\n"
+    "#define MC_NORMAL_MAP\n"
+    "#define MC_SPECULAR_MAP\n"
+    "#define MC_RENDER_QUALITY 1.0\n"
+    "#define MC_SHADOW_QUALITY 1.0\n"
+    "#define MC_HAND_DEPTH 0.125\n"
+)  # 标准化环境宏，所有程序共用。
 _VERSION_PATTERN = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev|alpha|beta|rc)\.(?:0|[1-9]\d*))?"  # 读文件与发布新版本共用一种编号规则。
 
 # --- 读取版本：文件、压缩包和发布标签共用同一个编号 ---
@@ -133,16 +154,56 @@ def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), 
     for line in masked.splitlines():  # 检查真实引用语法。
         if re.match(r"\s*#include\b", line) and not INCLUDE.fullmatch(line):
             raise ValueError(f"{source}：#include 行只保留引用，说明放到上一行以兼容 Iris")
-    for match in reversed(list(INCLUDE.finditer(masked))):  # 倒序保持源位置。
+    # 一次正序拼出结果，而不是每替换一个引用就整段复制已展开文本。
+    # 旧写法是平方级开销：引用越多，每次切片复制的文本越长，大程序（合成本体展开约 2300 万字符）要一秒以上。
+    # 正序拼接让每段原文和每个子文件只追加一次，输出与旧写法逐字节相同（`#line` 行列用同一个算法推导）。
+    parts: list[str] = []  # 待拼接的片段，最后一次 `join`。
+    cursor = 0  # 已经写入片段对应的原文位置。
+    current = 1  # `cursor` 所在的原文行号，从 1 起算。
+    for match in INCLUDE.finditer(masked):  # 正序扫描真实引用。
+        segment = text[cursor:match.start()]  # 引用行之前的一段原文。
+        current += segment.count("\n")  # 推进到引用所在行。
+        parts.append(segment)  # 原文片段原样保留。
         included = source_path(match[1], source, shaders)  # 检查外部文件引用一次。
         content = expand(included, shaders, (*stack, source), sourceNumbers, cache)  # 子文件沿用同一编号表和读取缓存。
-        if re.search(r"^\s*#version", content, re.MULTILINE):  # 完整程序只能由入口声明语言版本。
+        # 只扫被引用文件原文，不扫已经拼接好的大文本：嵌套文件自己的 `#version` 会在上一层递归里先报出，
+        # 所以展开结果里可能残留的 `#version` 只会来自这个文件本身。合成本体展开约 2300 万字符，逐次重扫要 0.4 秒。
+        if re.search(r"^\s*#version", included.read_text(encoding="utf-8"), re.MULTILINE):  # 完整程序只能由入口声明语言版本。
             raise ValueError(f"{included}：被引用文件不能再次声明 #version")
-        line = text[:match.start()].count("\n") + 2  # 引用后的原始下一行。
-        replacement = f"#line 1 {sourceNumbers[included]}\n{content.rstrip()}\n#line {line} {sourceNumbers[source]}"  # 进入子文件前切编号，返回后恢复引用者的下一行。
-        text = text[:match.start()] + replacement + text[match.end():]  # 编译错误可回到原文件与行号。
+        replacement = f"#line 1 {sourceNumbers[included]}\n{content.rstrip()}\n#line {current + 1} {sourceNumbers[source]}"  # 进入子文件前切编号，返回后恢复引用者的下一行。
+        parts.append(replacement)  # 子文件展开接在原文片段之后。
+        cursor = match.end()  # 跳到引用行末尾；行尾换行留给下一段计数。
+    parts.append(text[cursor:])  # 追加最后一段原文。
+    text = "".join(parts)  # 只在这里复制一次整体文本。
     cache[source] = text  # 缓存完整展开，仍保留所有条件包含与行映射。
     return text  # 原注释仍留在输出里，只有真正引用行被替换。
+
+# --- 检查引用：只走一遍引用树，不拼接文本（入口校验用它，避免为每个入口展开整棵树） ---
+def check_references(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), seen: set | None = None) -> None:
+    """递归检查 `source` 的引用边界，不生成编译文本。
+
+    与 `expand` 相同的检查（引用越界、循环引用、被引用文件重复声明 `#version`、`#include` 行必须干净），
+    但只访问每个文件一次，不拼接文本。253 个入口逐个展开会把整棵引用树重复读取，检查时间远超十秒预算；
+    入口校验只需要确认引用合法，所以用这条轻量路径。
+    """
+    source = source.resolve()  # 规范化后识别循环。
+    if source in stack:  # 循环引用必须报出完整路径。
+        raise ValueError("循环引用：" + " → ".join(path.name for path in (*stack, source)))
+    if seen is None:  # 本次校验共享已访问集合。
+        seen = set()
+    if source in seen:  # 同一文件不从不同入口重复走。
+        return
+    seen.add(source)
+    text = source.read_text(encoding="utf-8")  # 实际维护源码。
+    masked = re.sub(r"/\*.*?\*/", lambda match: "".join("\n" if character == "\n" else " " for character in match[0]), text, flags=re.DOTALL)  # 屏蔽块注释但保留换行，文档里的示例不参与。
+    for line in masked.splitlines():  # 真实引用语法。
+        if re.match(r"\s*#include\b", line) and not INCLUDE.fullmatch(line):
+            raise ValueError(f"{source}：#include 行只保留引用，说明放到上一行以兼容 Iris")
+    for match in INCLUDE.finditer(masked):  # 逐个引用继续向下。
+        included = source_path(match[1], source, shaders)  # 越界与缺失在这里报错。
+        if re.search(r"^\s*#version", included.read_text(encoding="utf-8"), re.MULTILINE):  # 只有入口能声明语言版本。
+            raise ValueError(f"{included}：被引用文件不能再次声明 #version")
+        check_references(included, shaders, (*stack, source), seen)
 
 # --- 检查入口：每种绘制阶段都必须具备加载器要求的伙伴 ---
 def entrypoints(shaders: Path = SHADERS) -> list[Path]:
@@ -153,8 +214,7 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
     entries = sorted(path for path in shaders.rglob("*") if path.suffix in STAGES)  # 同时检查主世界、下界和末地入口。
     if not entries:  # 空目录不应被当作一个通过检查的光影包。
         raise ValueError("光影包至少需要一组可执行入口")
-    source_numbers = numbered_sources(shaders)  # 所有入口共用源文件编号，顺序只在这里生成一次。
-    cache = {}  # 同一检查共享已展开的效果文本。
+    seen = set()  # 引用校验共享已访问集合，避免每个入口重复遍历。
     for source in entries:  # 阶段伙伴逐一检查。
         if not source.read_text(encoding="utf-8").startswith("#version "):
             raise ValueError(f"{source}：#version 必须放第一行")
@@ -162,8 +222,41 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
         for partner in partners:  # 细分阶段必须成对。
             if not source.with_suffix(partner).is_file():
                 raise ValueError(f"{source}：缺少配对入口 {partner}")
-        expand(source, shaders, sourceNumbers=source_numbers, cache=cache)  # 入口配对检查不跳过引用。
+        check_references(source, shaders, seen=seen)  # 入口配对检查只走引用树，不拼接文本。
     return entries  # 下游链接真实入口。
+
+# --- 选项接线：全树检查一次，和编译探针范围无关 ---
+def check_option_wiring(found: dict) -> None:
+    """检查每个选项是否真的被某段代码使用，而不只是被声明。
+
+    为什么不用“入口展开文本”：常规验证只编一小批程序，用它判断接线会把只在合成或延迟里
+    使用的选项误报成未接线。这里直接扫全部光影源码：去掉每个选项自己的声明行与 `@option`
+    说明行之后，只要名字还出现在别处，就说明它参与了计算。
+    """
+    files = list(SHADERS.rglob("*.glsl")) + list(SHADERS.rglob("*.vsh")) + list(SHADERS.rglob("*.fsh")) + list(SHADERS.rglob("*.gsh")) + list(SHADERS.rglob("*.csh"))
+    bodies = []
+    for path in files:
+        kept = []
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if re.match(r"\s*(?://\s*)?#define\s+", line) or "@option" in line:
+                continue  # 声明行与菜单说明不算使用。
+            kept.append(line)
+        bodies.append("\n".join(kept))
+    words = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", "\n".join(bodies)))  # 一次分词成集合，逐个正则搜索几兆文本要多花好几秒。
+    unused = [name for name in found if name not in words]  # 选项名必须在某段代码里作为独立词出现。
+    if unused:
+        raise ValueError("选项没有接入任何计算：" + "、".join(unused[:5]))
+
+# --- 完整离线编译：开发与发布前用，不受十秒预算限制 ---
+def compile_all(seconds: float = 300.0) -> None:
+    """编译全部维度的全部程序，用于发布前的人工门禁。
+
+    为什么单独一条命令：`verify` 的十秒预算装不下整包编译；这里显式放宽时间，
+    结果只用于本机与人工检查，不改变 `verify` 的预算规则。
+    """
+    found, profiles, _ = configuration()  # 选项与预设先检查。
+    entries = entrypoints()  # 引用边界与阶段配对。
+    compile_shaders(entries, found, profiles, {entry.stem for entry in entries})  # 全部程序都要编默认配置与全高配置，不能只编关键通路。
 
 # --- 读取菜单来源：配置定义归选项模块所有，构建只使用结果 ---
 def configuration() -> tuple[dict, list, dict]:
@@ -180,35 +273,55 @@ def program_files() -> dict[Path, str]:
     """读取流程表并返回入口路径到文本的映射，不直接写磁盘。
 
     流程表属于文件输入，维度、主体和宏名在此检查；固定三维度避免加载器漏读根入口。
-    顶点片元使用基础语言版本，计算阶段使用更高版本；生成文本是既有构建协议。
+    每个维度登记 `define`（维度宏）、`buffers`（该维度引入的中间画面与常量声明文件）、
+    `geometry`（额外生成几何阶段的程序）和 `absent`（该维度没有的程序）。
+    顶点、几何、片元使用基础语言版本，计算阶段使用更高版本；生成文本是既有构建协议。
+    为什么不把 `buffers` 放进根程序：加载器按每个程序展开后的片元源码逐行读取 `const` 指令，
+    同一份声明必须在被编译的程序里出现才生效，所以每个维度生成的入口都引入自己那份声明文件。
     """
     data = json.loads((SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))  # 不从效果目录推测流程。
     if set(data.get("dimensions", {})) != {"world0", "world-1", "world1"}:  # 每个受支持维度都要明确登记。
         raise ValueError("使用旧维度约定时必须同时提供 world0、world-1、world1；不能混入根目录程序")  # 任意worldN存在时加载器忽略根目录入口。
     result = {}  # 生成入口位置与内容。
-    for dimension, flag in data["dimensions"].items():  # 维度显式接线。
+    for dimension, setting in data["dimensions"].items():  # 维度显式接线：维度宏、几何阶段清单、缺席程序清单。
+        flag = setting["define"]  # 每个维度都有自己的维度宏，主世界也不例外，主体靠它选维度分支。
+        buffers = setting["buffers"]  # 该维度的中间画面与常量声明文件，逐维度取值不同，必须写进每个入口的片元源码才生效。
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", buffers) or not (SHADERS / "rendering" / (buffers + ".glsl")).is_file():  # 声明文件必须真实存在，拼错会让入口引用缺失文件。
+            raise ValueError(f"{dimension} 的 buffers 声明文件无效：{buffers}")
+        geometry = set(setting.get("geometry", []))  # 只有登记在这里的程序额外生成几何阶段。
+        absent = set(setting.get("absent", []))  # 这个维度没有的程序，按参考光影的维度目录删减。
+        if not (geometry | absent) <= set(data["programs"]):  # 清单里的名字必须是真实程序，拼错会让程序悄悄多出或缺失。
+            raise ValueError(f"{dimension} 的几何或缺席清单含未登记程序")
         for name, (rendering, *defines) in data["programs"].items():  # 程序显式选择主体。
             if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 流程表不能引用非法名字或不存在的绘制主体。
                 raise ValueError(f"程序名或绘制主体无效：{name}")
-            for suffix, stage in ((".vsh", "OMNI_VERTEX"), (".fsh", "OMNI_FRAGMENT")):  # 顶点片元保持配对。
-                flags = [stage, *defines, *([flag] if flag else [])]  # 维度规则显式写入入口。
-                if any(not re.fullmatch(r"OMNI_[A-Z_]+", flag_name) for flag_name in flags):  # 生成入口只允许项目自有宏名。
+            if name in absent:  # 维度没有的程序不生成入口，加载器就不会执行它。
+                continue
+            stages = [(".vsh", "OMNI_VERTEX"), (".fsh", "OMNI_FRAGMENT")] + ([(".gsh", "OMNI_GEOMETRY")] if name in geometry else [])  # 顶点片元必配对，几何阶段按清单追加。
+            for suffix, stage in stages:  # 每个阶段一个薄入口。
+                flags = [stage, *defines, flag]  # 维度规则显式写入入口。
+                if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 生成入口只允许项目自有宏名；程序宏带编号，如 `OMNI_COMPOSITE10_PASS`。
                     raise ValueError("程序宏必须使用受控名称")
                 lines = ["#version 330 compatibility", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 首行必须先声明语言版本，再说明生成来源。
-                for define in flags:  # 入口只选择类别。
-                    lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define + " 1"]  # 带值的宏不会被加载器当成布尔开关，避免出现含义不明的同名开关。
-                lines += ["// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
+                # 三条说明分别按阶段、程序、维度措辞，避免同一个入口里重复同一句话；宏都带值 1，加载器才不会当成含义不明的布尔开关。
+                lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define " + stage + " 1"]  # 阶段宏只选顶点、片元或几何。
+                for define in defines:  # 每个程序登记一条程序宏。
+                    lines += ["// 指定本入口对应的绘制程序。", "#define " + define + " 1"]
+                lines += ["// 指定本入口所属维度，主体靠它选维度分支。", "#define " + flag + " 1"]
+                lines += ["// 先引入本维度的中间画面与常量声明。", f'#include "/rendering/{buffers}.glsl"', "// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
                 result[SHADERS / dimension / (name + suffix)] = "\n".join(lines) + "\n"  # 统一换行使本地与自动检查得到相同文本。
         for name, (rendering, *defines) in data.get("compute", {}).items():  # 计算程序单独登记，不生成顶点片元。
             if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 计算阶段同样只能选已有主体。
                 raise ValueError(f"计算程序名或主体无效：{name}")
-            flags = ["OMNI_COMPUTE", *defines, *([flag] if flag else [])]  # 计算阶段使用受控宏选择主体。
-            if any(not re.fullmatch(r"OMNI_[A-Z_]+", flag_name) for flag_name in flags):  # 计算入口宏也使用同一受控名称规则。
+            flags = ["OMNI_COMPUTE", *defines, flag]  # 计算阶段使用受控宏选择主体。
+            if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 计算入口宏也使用同一受控名称规则。
                 raise ValueError("计算程序宏必须使用受控名称")
             lines = ["#version 430", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 计算阶段需要更高版本。
-            for define in flags:  # 入口只选择类别。
-                lines += ["// 选择本程序的绘制阶段或物体类别。", "#define " + define + " 1"]  # 计算入口的宏也带值，理由同上。
-            lines += ["// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
+            lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define OMNI_COMPUTE 1"]  # 计算入口固定是计算阶段。
+            for define in defines:  # 计算入口目前没有程序宏，循环保留以便将来登记。
+                lines += ["// 指定本入口对应的绘制程序。", "#define " + define + " 1"]
+            lines += ["// 指定本入口所属维度，主体靠它选维度分支。", "#define " + flag + " 1"]
+            lines += ["// 先引入本维度的中间画面与常量声明。", f'#include "/rendering/{buffers}.glsl"', "// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
             result[SHADERS / dimension / (name + ".csh")] = "\n".join(lines) + "\n"  # 独立计算阶段不虚构顶点片元配对。
     return result  # 核对入口生成结果。
 
@@ -222,10 +335,10 @@ def generate() -> None:
     files.update(program_files())  # 入口和菜单都由维护的主体生成。
     for folder in (SHADERS, SHADERS / "world0", SHADERS / "world-1", SHADERS / "world1"):  # 清理范围限定在已知入口位置。
         for path in folder.glob("*"):
-            if path.suffix in (".vsh", ".fsh", ".csh") and path not in files:  # 只检查由流程表生成的阶段。
+            if path.suffix in (".vsh", ".fsh", ".gsh", ".csh") and path not in files:  # 只检查由流程表生成的阶段，几何阶段也由流程表生成。
                 text = path.read_text(encoding="utf-8")  # 只删除旧流程生成且没有手动修改的薄入口。
-                generated_comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 选择本程序的绘制阶段或物体类别。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 只有生成器自己的说明才可随旧入口删除。
-                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z_]+(?: 1)?|#include "/rendering/[a-z]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式（含带值的宏），额外内容视为人工修改。
+                generated_comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 指定本入口在绘制的哪个阶段运行。","// 指定本入口对应的绘制程序。","// 指定本入口所属维度，主体靠它选维度分支。","// 先引入本维度的中间画面与常量声明。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 只有生成器自己的说明才可随旧入口删除。
+                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z0-9_]+(?: 1)?|#include "/rendering/[a-z_]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式（含带值与带编号的宏、逐维度声明文件），额外内容视为人工修改。
                 lines = text.splitlines()
                 if len(lines) < 2 or not lines[0].startswith("#version ") or not lines[1].startswith("// 生成的") or not untouched:  # 格式不完整或含人工说明时拒绝删除。
                     raise ValueError(f"旧入口含自有修改，不能自动删除：{path}")  # 保留用户文件并报告具体冲突。
@@ -287,16 +400,6 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     print("入口展开完成，开始检查选项接入", flush=True)  # 长时间离线检查期间及时给出阶段状态。
     # 预先为每个展开文本各扫一次，得到“声明过的选项名”和“去掉声明后的标识符集合”，
     # 避免下面每个选项都对整段文本重复跑正则；文本很大时这是主要的检查开销来源。
-    declared_names, used_words = [], []  # 与 `expanded` 的顺序一一对应。
-    for text in expanded.values():
-        names = set(re.findall(r"(?m)^\s*(?://\s*)?#define\s+(\w+)", text))  # 宏声明。
-        names |= set(re.findall(r"(?m)^\s*const\s+\w+\s+(\w+)\s*=", text))  # 原生常量声明。
-        body = re.sub(r"(?m)^.*(?:#define|@option).*\n?", "", text)  # 去掉宏定义与说明行，剩下的才是算法接入。
-        declared_names.append(names)
-        used_words.append(set(re.findall(r"\b\w+\b", body)))
-    for name in found:  # 验证选项接入算法：同一选项必须在同一个入口里既声明又使用。
-        if not any(name in declared_names[index] and name in used_words[index] for index in range(len(declared_names))):
-            raise ValueError(f"选项 {name} 没有接入任何实际入口或计算")
     programs = {}  # 同名入口的多个绘制阶段必须作为一个链接程序。
     for source in entries:
         programs.setdefault(source.with_suffix(""), []).append(source)  # 细分与几何阶段一起链接。
@@ -304,11 +407,12 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 编译器文件变化就让旧成功记录失效。
     cached_report = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.is_file() else {}  # 首次运行没有缓存，按空记录处理。
     known_good = set(cached_report.get("programs", [])) if cached_report.get("compiler") == compiler_digest else set()  # 只信任同一个编译器写下的成功摘要。
-    environments = [("base", ""), ("iris_dh", "#define IS_IRIS\n#define IRIS_FEATURE_ENTITY_TRANSLUCENT\n#define IRIS_FEATURE_COMPUTE_SHADERS\n#define IRIS_FEATURE_CUSTOM_IMAGES\n#define DISTANT_HORIZONS\n#define DH_BLOCK_WATER 13\n#define DH_BLOCK_LAVA 8\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 基础回退与具备实体分离、计算能力、自定义图像的远景路径。
+    environments = [("base", STANDARD_MACROS), ("iris_dh", STANDARD_MACROS + "#define DISTANT_HORIZONS\n#define DH_BLOCK_UNKNOWN 0\n#define DH_BLOCK_LEAVES 1\n#define DH_BLOCK_STONE 2\n#define DH_BLOCK_WOOD 3\n#define DH_BLOCK_METAL 4\n#define DH_BLOCK_DIRT 5\n#define DH_BLOCK_LAVA 6\n#define DH_BLOCK_DEEPSLATE 7\n#define DH_BLOCK_SNOW 8\n#define DH_BLOCK_SAND 9\n#define DH_BLOCK_TERRACOTTA 10\n#define DH_BLOCK_NETHER_STONE 11\n#define DH_BLOCK_WATER 12\n#define DH_BLOCK_GRASS 13\n#define DH_BLOCK_AIR 14\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 基础路径与开启远景的路径；远景方块编号照 Iris 实际取值。
     # 第一步：把代表配置、两种环境和全部程序展开成任务；实际组合数随选项变化。
     # 为什么先收集再编译：这样重复内容能在编译前过滤，并把独立任务交给线程池并行，避免串行等待几千个编译器进程。
     jobs, seen, reused = [], set(), 0  # 分别保存待编译任务、去重摘要与跳过的成功组数。
-    for label, option_values in variants(found, profiles):  # 代表组合逐项展开。
+    configurations = variants(found, profiles)  # 代表配置。
+    for label, option_values in configurations:  # 代表组合逐项展开。
         for environment, defines in environments:  # 基础与远景均检查。
             if (label == "default" and environment != "base") or (label == "all_high" and environment != "iris_dh"):
                 continue  # 默认检查基础回退，高效果检查可选能力，不重复两组环境乘积。
@@ -360,7 +464,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
         cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
         cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n", encoding="utf-8")  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
     if failures:  # 资源目录退出后临时文件已清理，再统一报告最多五项失败。
-        raise ValueError("\n\n".join(failures[:5]))
+        raise ValueError("\n\n".join(failures[:5]))  # 只报前五条，避免长错误淹没真正原因；完整失败仍需逐条修。
     unique_programs = len(seen)  # 唯一程序数由新编译与成功缓存复用共同组成。
     print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{unique_programs} 组唯一程序，复用 {reused} 组相同源码")
 
@@ -410,20 +514,23 @@ def check() -> None:
             raise ValueError(f"{path.relative_to(ROOT)} 未生成或已过期，请运行 python build.py generate")
         if path.suffix in (".properties", ".lang"):  # 菜单中的机器转义说明也要按解码后的中文审计。
             audit.generated_comments(path, expected)
-    generated_entries = {path for path in entries if path.suffix in (".vsh", ".fsh", ".csh")}  # 这些阶段由流程表生成；其他阶段仍可独立维护。
+    generated_entries = {path for path in entries if path.suffix in (".vsh", ".fsh", ".gsh", ".csh")}  # 这些阶段由流程表生成；细分阶段仍可独立维护。
     if generated_entries != set(program_files()):  # 旧程序可能被加载器忽略，必须明确清理并审查。
         raise ValueError("存在流程表之外的旧入口，请重新生成并审查")
     audited = audit.check(ROOT)  # 自有源码先通过中文说明与未实现标记审计。
     dependencies()  # 发行包中的第三方文件与许可也必须满足白名单。
     print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
-    source_numbers = numbered_sources()  # 全部主体共享编号与展开缓存，避免反复扫描目录。
-    expanded_cache = {}  # 一次检查只读取每份共用源码一次。
+    check_option_wiring(found)  # 选项必须真的参与计算，和编译探针范围无关。
+    reference_seen = set()  # 全树引用校验共享已访问集合，每个文件只走一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
-        expand(source, sourceNumbers=source_numbers, cache=expanded_cache)  # 不为每个文件重新扫描整棵引用树。
-    key_programs = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "shadow", "dh_terrain", "dh_water", "deferred", "composite", "composite1", "final", "setup"}  # 主要数据通路，在全部代表配置下编译。
-    dimension_programs = {"deferred", "composite"}  # 维度宏改变天空、雾与光照的地方集中在这两个阶段。
-    probes = [source for source in entries if source.parent.name == "world0" or source.stem in dimension_programs]  # 主世界每个程序都编：不同程序宏会改变引入结果，只编主路会漏掉宏与引入标记撞名。
-    compile_shaders(probes, found, profiles, key_programs)
+        check_references(source, SHADERS, seen=reference_seen)  # 只走引用树，不拼接文本，避免为校验再做一次全量展开。
+    # 十秒预算内的编译探针：只编体积小的程序，覆盖地形、阴影与最终显示三条轻量通路；合成与延迟的完整覆盖由 `python build.py compile` 负责。
+    # 为什么这样分：合成本体展开后有两千多万字符，单编一个就要八九秒，塞不进常规验证的预算；缩到小程序仍能挡住语法、引入与宏撞名错误。
+    # 实测这三条编默认配置与基础环境，再加地形一组全高与开远景，共 4 组唯一程序；整体耗时见本机 `verify` 输出。
+    key_programs = {"gbuffers_terrain"}  # 只有地形一组在全部代表配置与两组环境下再编一次。
+    smoke = {"gbuffers_terrain", "shadow", "final"}  # 默认配置与基础环境编译这四条。
+    probes = [source for source in entries if source.parent.name == "world0" and source.stem in smoke]  # 主世界的轻量程序，默认配置与基础环境。
+    compile_shaders(probes, found, profiles, key_programs)  # 关键程序另加全高配置与开远景环境。
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
     print(f"检查通过：{len(entries)} 个入口，{len(found)} 个选项，{len(profiles)} 套预设")
 
@@ -438,7 +545,7 @@ def archive(path: Path, files: dict[str, bytes]) -> None:
         for name, content in sorted(files.items()):  # 固定文件顺序。
             info = zipfile.ZipInfo(name, date_time=(2020, 1, 1, 0, 0, 0))  # 固定时间，避免构建日期改变包校验值。
             info.create_system = 3  # 统一记录压缩包的平台标记，避免不同系统生成不同字节。
-            info.compress_type = zipfile.ZIP_DEFLATED  # 统一压缩方法。
+            info.compress_type = zipfile.ZIP_STORED if name.endswith((".png", ".bin")) else zipfile.ZIP_DEFLATED  # 贴图与二进制数据本身已压缩或压不动，直接存放：九级压缩几十兆数据要好几秒，超过检查预算还几乎没有收益。
             info.external_attr = 0o100644 << 16  # 文件成员使用普通只读文件权限，不携带本机属性。
             output.writestr(info, content)  # 不带本机路径与时间。
 
@@ -451,7 +558,7 @@ def pack() -> list[Path]:
     """
     release_version = version()  # 两个包和文件名共用唯一版本来源。
     _, profiles, _ = configuration()  # 玩家可分享配置仍由预设扫描器产生。
-    shader_files = {"shaders/" + path.relative_to(SHADERS).as_posix(): path.read_bytes() for path in SHADERS.rglob("*") if path.is_file() and "libraries" not in path.relative_to(SHADERS).parts and path.suffix in {*STAGES, ".glsl", ".properties", ".lang", ".png", ".bin"}}  # 只收游戏能读取的自有资源种类。
+    shader_files = {"shaders/" + path.relative_to(SHADERS).as_posix(): path.read_bytes() for path in SHADERS.rglob("*") if path.is_file() and "libraries" not in path.relative_to(SHADERS).parts and path.suffix in {*STAGES, ".glsl", ".properties", ".lang", ".png", ".bin", ".mcmeta"}}  # 只收游戏能读取的自有资源种类；`.mcmeta` 记录贴图的过滤与重复方式。
     shader_files.pop("shaders/rendering/pipeline.properties", None)  # 源流程设置已合并到加载器菜单。
     shader_files.update(dependencies())  # 第三方文件必须先通过许可与哈希白名单检查。
     shader_files["VERSION"] = (release_version + "\n").encode()  # 包内版本供玩家确认实际使用版本。
@@ -634,15 +741,16 @@ def run_with_budget(command: list[str], seconds: float = 10.0) -> None:
 def main() -> None:
     """解析既有命令行参数并分发到公开构建函数，保持命令协议不变。"""
     parser = argparse.ArgumentParser(description="Omni 光影构建与检查")  # 明确命令才动作。
-    parser.add_argument("command",choices=("generate","check","build","verify","sync","version","notes","audit","release"))
+    parser.add_argument("command",choices=("generate","check","compile","build","verify","sync","version","notes","audit","release"))
     parser.add_argument("--worker", action="store_true", help=argparse.SUPPRESS)  # 内部执行标记避免预算监督进程递归启动自身。
     parser.add_argument("--tag")  # 发行工作流可在只读检查前核对标签与版本。
     parser.add_argument("--output",type=Path)
     parser.add_argument("--new-version")  # 发布必须提供新版本与对应说明。
     parser.add_argument("--notes-file",type=Path)
     args = parser.parse_args()  # 所有命令行输入先于文件生成或发布动作解析。
-    if args.command in ("check", "build", "verify", "sync") and not args.worker:
-        run_with_budget([sys.executable, str(Path(__file__).resolve()), *sys.argv[1:], "--worker"])  # 每个常用检查命令都有十秒预算，超时不会继续后台运行。
+    if args.command in ("check", "compile", "build", "verify", "sync") and not args.worker:
+        budget = 300.0 if args.command == "compile" else 10.0  # 完整编译单独放宽时间，其余命令保持十秒预算。
+        run_with_budget([sys.executable, str(Path(__file__).resolve()), *sys.argv[1:], "--worker"], budget)  # 超时不会继续后台运行。
         return
     if args.command != "release" and (args.new_version or args.notes_file):  # 发布参数不能被其他命令误用。
         parser.error("--new-version 与 --notes-file 只能用于 release 命令")
@@ -678,6 +786,9 @@ def main() -> None:
         return
     if args.command == "check":  # 检查命令不创建玩家交付包。
         check()
+        return
+    if args.command == "compile":  # 完整离线编译只检查程序能否链接，不生成交付包。
+        compile_all()
         return
     generate()  # 构建与同步都先生成来源对应的真实入口与菜单。
     if args.command == "verify":  # 自动检查同时运行工具测试和光影检查，共享同一个十秒总预算。

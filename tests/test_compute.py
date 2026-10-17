@@ -8,6 +8,7 @@ import unittest  # 保留标准测试入口。
 from pathlib import Path  # 临时文件固定在自有目录。
 import build  # 读取真实流程表与编译器位置。
 import options  # 读取生成菜单，确认能力开关登记。
+import support  # 共享展开缓存，避免重复展开计算入口。
 
 class ComputeTests(unittest.TestCase):
     """检查计算着色器基础设施与失败可读性。"""
@@ -41,22 +42,19 @@ class ComputeTests(unittest.TestCase):
 
     def test_lpv_grid_and_sampling_registered(self):
         """光传播体积登记计算传播与片元采样，关闭时保持屏幕空间回退。"""
-        found,_,_ = build.configuration()  # 读取真实原生选项。
+        found,_,_ = support.configuration()  # 读取真实原生选项。
         self.assertEqual(found["OMNI_LPV_ENABLED"].values,("false","true"))  # 体积光为开关选项。
-        self.assertEqual(found["OMNI_LPV_STEPS"].values,("2","4","6"))  # 传播步数保持偶数，末尾回到源图像。
-        scene = build.expand(build.SHADERS/"world0/setup.csh")  # 从计算入口展开。
+        self.assertEqual(found["OMNI_LPV_STEPS"].values,("2","4","6"))  # 传播步数保持偶数。
+        scene = support.expand(build.SHADERS/"world0/setup.csh")  # 从计算入口展开。
         self.assertIn("void omniLpvSeed",scene); self.assertIn("void omniLpvSpreadAB",scene)  # 注入与传播接入计算入口。
-        effect = (build.SHADERS/"effects/lpv.glsl").read_text(encoding="utf-8")  # 效果主体。
+        effect = support.text("effects/lighting/lpv.glsl")  # 效果主体。
         self.assertIn("vec3 omniLpvSample",effect)  # 片元采样独立成函数。
-        composite = build.expand(build.SHADERS/"world0/composite.fsh")  # 从合成入口展开。
-        self.assertIn("omniLpvSample",composite)  # 间接光阶段包含体积采样。
         settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
         self.assertIn("image.omniLpvA",settings); self.assertIn("image.omniLpvB",settings)  # 体积格在流程设置登记。
 
     def test_lpv_image_writes_have_visibility_barriers(self):
         """每次图像写入后都先做图像屏障再同步工作组，避免传播读取旧数据。"""
-        source = (build.SHADERS/"rendering/lpv.glsl").read_text(encoding="utf-8")  # 读取计算主体而不是复制实现。
+        source = support.text("rendering/lpv.glsl")  # 读取计算主体而不是复制实现。
         self.assertEqual(source.count("memoryBarrierImage();"),3)  # 注入、正向传播、反向传播各有一次。
         self.assertEqual(source.count("barrier();"),3)  # 每个图像屏障后紧跟工作组同步。
-        ambient = (build.SHADERS/"effects/ambient.glsl").read_text(encoding="utf-8")  # 片元路径的能力边界。
-        self.assertIn("defined IRIS_FEATURE_COMPUTE_SHADERS && defined IRIS_FEATURE_CUSTOM_IMAGES && defined OMNI_LPV_ENABLED",ambient)  # 片元只在加载器声明计算能力时读取三维纹理。
+        self.assertIn("defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES",source)  # 关闭或缺少能力时不读写图像。

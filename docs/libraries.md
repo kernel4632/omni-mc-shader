@@ -15,7 +15,7 @@
 
 | 库 | 提供什么 | 许可 | 接入方式 |
 | --- | --- | --- | --- |
-| Ashima 三维单纯形噪声 | 噪声 | MIT | 已采用，随包许可 |
+| Ashima 三维单纯形噪声 | 噪声 | MIT | 未采用；云改用 iterationT 预计算噪声贴图 |
 | SMAA（iryoku/smaa） | 形态学抗锯齿 | MIT | 引入 GLSL，另带 AreaTex/SearchTex 查找表纹理 |
 | XeGTAO（GameTechDev） | 环境光遮蔽 | MIT（Intel） | 以着色器方式接入，需适配 Iris |
 | glsl-atmosphere（wwwtyro） | 瑞利/米氏天空散射 | 公有领域（Unlicense） | 单函数，直接 `#include` |
@@ -68,7 +68,6 @@
 
 ```
 shaders/libraries/
-  ashima/          噪声（已采用）
   smaa/            抗锯齿（+ 查找表纹理）
   xegtao/          环境光遮蔽
   atmosphere/      解析大气（wwwtyro）
@@ -95,4 +94,4 @@ shaders/libraries/
 1. 你确认此清单后，我逐个核实「待核实」库的许可。
 2. 按确认结果把库放进 `shaders/libraries/`，登记 `dependencies.json` 与 `THIRD_PARTY.md`。
 3. 用库替换现有自写实现：先换噪声与抗锯齿，再换 AO 与大气。
-4. 按 `parameters.md` 的「缺失」列，用库+公开论文逐个补效果。
+4. 按 `docs/eclipse-parity.md` 的合并建议与 `docs/parity.md` 的偏离记录，用库与公开论文逐个补效果。

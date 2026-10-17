@@ -21,8 +21,64 @@ CHINESE = re.compile(r"[\u3400-\u9fff]")  # 只有汉字能证明说明不是纯
 DIRECTIVE = re.compile(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b")  # 属性文件里的条件指令是机器语句，加载器按选项宏挑选分支。
 MACHINE = re.compile(r"\s*(?:#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include)\b|const\s+\w+\s+\w+\s*=)")  # 注释里成行的机器语句（预处理指令、常量声明）不是给接手者的自然语言说明；普通注释仍按中文检查。
 EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__"}  # 环境、参考和第三方内容不是本项目的维护边界。
+MACHINE_FILES = {"shaders/shaders.properties", "shaders/block.properties", "shaders/entity.properties", "shaders/item.properties"}  # 生成菜单和从 iterationT 原样移植的方块、实体、物品编号表是逐行可对照的机器数据，加中文说明会破坏对照；它们是数据不是业务代码。
 SUFFIXES = {".py", ".glsl", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除。
-TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT Ashima snoise sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup SSBO AgX ACES Filmic Uncharted Narkowicz PCSS".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
+TERMS = set("GLSL glsl Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup SSBO AgX ACES Filmic Uncharted Narkowicz PCSS Omni iterationT Eclipse".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
+# GLSL 的关键字、类型与内建函数是技术词，放进术语表，代码示例里的类型名和调用名不会被误报成英语说明。
+TERMS |= set("uniform in out void float int bool ivec2 ivec3 ivec4 mat2 mat3 mat4 if else for while return discard flat attribute varying layout location struct sampler2DShadow min max abs clamp mix floor ceil fract pow exp log sqrt dot cross length normalize reflect refract texture textureLod texelFetch smoothstep step saturate far near".split())  # 只补技术词，不放行整句英文。
+EXTRA = {"VERSION", "CHANGELOG", "ROOT", "STAGES", "INCLUDE", "UTF", "BOM"}  # 自己源码里反复出现、又不必进术语表的大写标识符。
+EXTRA_LOWER = {word.lower() for word in EXTRA}  # 大小写不同的同一标识符按同一个小写形式比较。
+TERMS_LOWER = {term.lower() for term in TERMS}  # 拆词时按小写比较，驼峰与全大写都能对上术语。
+
+
+def _strip_code(text: str) -> str:
+    """去掉路径、命令与函数调用示例，只留下可能夹带英语自然语言的文字。
+
+    反引号里的代码和可复制命令是引用而不是说明；先移走它们，随后才逐词判断英文，
+    这样真实英文句子不会借代码外形躲过检查。
+    """
+    text = re.sub(r"https?://\S+|www\.\S+|[\w./\\:-]+\.(?:py|glsl|vsh|fsh|csh|json|md|zip|txt|exe|properties|lang|ya?ml)\b|\b(?:effects|presets|rendering|common)/", "", text)  # 链接与文件名是引用。
+    text = re.sub(r"(?:python\s+-m\s+unittest\s+discover\s+-s\s+tests|python\s+(?:build|audit|generate|check|setup|doctor|watch)|--[\w-]+(?:\s+[\w./:-]+)?)", "", text)  # 可复制命令不是英语说明。
+    return re.sub(r"\b[A-Za-z_]\w*\([^\n]*?\)", "", text)  # 函数调用示例是代码。
+
+
+def _unknown_word(word: str) -> bool:
+    """判断一个英文词是否是必须报出的未知自然语言。
+
+    放行已知术语、全大写接口宏（如 `OMNI_TAA`）和拆开后英文词段不超过两个的标识符；
+    含三个以上未知英文词段的写法（如 `some_english_snake_words`）说明它其实是一句英文，报出。
+    """
+    if word.lower() in TERMS_LOWER or word.lower() in EXTRA_LOWER or len(word) <= 1:
+        return False  # 已知术语、单字母与常见大写标识符不算英语句子。
+    if "_" not in word and not re.search(r"\d|[a-z][A-Z]", word):
+        return True  # 纯大小写单词不是术语就是裸英语。
+    if re.fullmatch(r"[A-Z][A-Z0-9_]*", word) and "_" in word:
+        return False  # 全大写加下划线是接口宏，例如 `MC_HAND_DEPTH`。
+    parts = [part for part in re.split(r"_|\d+", word) if part]  # 先按下划线、数字切开。
+    parts = [piece for part in parts for piece in re.split(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", part) if piece]  # 再把驼峰拆成词段。
+    prose = [part for part in parts if len(part) >= 3 and part.isalpha() and part.lower() not in TERMS_LOWER]  # 未知词段才算英语。
+    return len(prose) >= 3  # 三个以上未知词段合起来就是一句英文。
+
+
+def _backtick_prose(span: str) -> str:
+    """找出反引号里被当作标识符藏起来的英语自然语言，触发时返回该词，否则返回空串。
+
+    不含空格的内容是单个标识符或路径，按代码跳过；含空格但出现赋值、调用或分号等代码
+    符号的也按代码跳过。剩下只由英文单词和空格组成的内容里，连续三个未知小写英文词
+    说明这里其实写了一句英文，要报出来，避免整句英语套上反引号就通过审计。
+    """
+    if not re.search(r"\s", span) or re.search(r"[=();{}\[\]<>#/\\+*;:\"'\d]", span):
+        return ""  # 单个标识符或带代码符号的内容按代码跳过。
+    run = 0  # 连续未知英文词的计数。
+    for word in re.findall(r"[A-Za-z_][A-Za-z_0-9]*", _strip_code(span)):  # 先去代码外形再逐词判断。
+        prose = bool(re.fullmatch(r"[a-z]{2,}", word)) and word not in TERMS_LOWER  # 纯小写的未知词才像英语。
+        if prose:
+            run += 1  # 累加连续英文词。
+        elif len(word) > 1:
+            run = 0  # 遇到术语或标识符就清零，只统计真正连续的英文。
+        if run >= 3:
+            return word  # 连续三个未知英文词就是一句话。
+    return ""  # 没有发现藏起来的英文句子。
 
 
 def chinese_explanation(line: str) -> bool:
@@ -40,13 +96,19 @@ def chinese_explanation(line: str) -> bool:
         if not CHINESE.search(data["label"]["zh_cn"]): raise ValueError("机器说明的中文名称必须包含中文")  # 只豁免机器键和值的格式，不豁免中文字段。
         for field in ("label", "description"):
             if isinstance(data.get(field), dict) and isinstance(data[field].get("zh_cn"), str): chinese_explanation(data[field]["zh_cn"])  # 中文字段仍拒绝夹带英语自然语言。
+        if isinstance(data.get("values"), dict):  # 档位名称同样是玩家可见的说明，结构检查放行不代表语言合格。
+            for name in data["values"].values():  # 每个档位取值都要说明文字。
+                if not isinstance(name, dict) or not isinstance(name.get("zh_cn"), str): raise ValueError("机器说明的档位名称需要中文说明对象")  # 档位名称必须提供中文字段。
+                chinese_explanation(name["zh_cn"])  # 档位名称同样拒绝夹带英语自然语言。
         return True  # 菜单其他字段交给选项扫描器，避免重复定义机器规则。
-    if re.fullmatch(r"(?:#?define\s+)?[A-Z][A-Z0-9_]*(?:\s+[-\d.]+)?", text) or re.fullmatch(r"RENDERTARGETS:\s*[\d, ]+", text): return False  # 原生宏和附件指令是机器配置，不是业务说明。
-    text = re.sub(r"`[^`]*`|https://\S+|[\w./\\:-]+\.(?:py|glsl|vsh|fsh|csh|json|md|zip|txt|exe|properties|lang|ya?ml)\b|\b(?:effects|presets|rendering|common)/", "", text)  # 文件名和链接是代码引用，普通英语句子仍需拒绝。
-    text = re.sub(r"(?:python\s+-m\s+unittest\s+discover\s+-s\s+tests|python\s+(?:build|audit|generate|check|setup|doctor|watch)|--[\w-]+(?:\s+[\w./:-]+)?)", "", text)  # 明确的命令示例可以原样复制，不应当成英语说明。
-    text = re.sub(r"\b[A-Za-z_]\w*\([^\n]*?\)", "", text)  # 函数调用示例是代码，不是自然语言句子。
+    if re.fullmatch(r"(?:#?define\s+)?[A-Z][A-Z0-9_]*(?:\s+[-\d.]+)?", text) or re.fullmatch(r"(?:RENDERTARGETS|DRAWBUFFERS):\s*[\d, ]+", text): return False  # 原生宏和附件指令是机器配置，不是业务说明。
+    for span in re.findall(r"`([^`]*)`", text):  # 反引号里的内容按标识符或代码看待，但整句英文仍要报出。
+        prose = _backtick_prose(span)  # 找出藏在反引号里的英语自然语言。
+        if prose: raise ValueError("自然语言说明必须中文：" + prose)  # 反引号不能把英文句子整体藏起来。
+    text = re.sub(r"`[^`]*`", "", text)  # 检查过反引号后统一按代码引用移除。
+    text = _strip_code(text)  # 去掉路径、命令与函数调用示例。
     words = re.findall(r"[A-Za-z_][A-Za-z_0-9]*", text)  # 即使混有中文，也逐个检查英文词，避免漏掉一句英文。
-    unknown = [word for word in words if word not in TERMS and word not in {"VERSION", "CHANGELOG", "ROOT", "STAGES", "INCLUDE", "UTF", "BOM"} and len(word) > 1 and "_" not in word and not re.search(r"[a-z][A-Z]|\d", word)]  # 只放行已知术语，不能让大写或接口名掩盖英语句子。
+    unknown = [word for word in words if _unknown_word(word)]  # 只放行已知术语与接口名，下划线和驼峰不再整体豁免。
     if unknown: raise ValueError("自然语言说明必须中文：" + ", ".join(unknown))  # 拒绝裸英语，保证接手者不必猜说明含义。
     return len(CHINESE.findall(text)) >= 4  # 至少四个中文字符才算完整说明，不接受单字凑比例。
 
@@ -97,7 +159,7 @@ def check(root: Path) -> list[dict]:
     reports, errors = [], []  # 汇总所有文件的结果，让维护者一次看到全部需要修正的位置。
     for file_path in sorted(root.rglob("*")):
         relative_path = file_path.relative_to(root).as_posix()  # 报告使用项目相对路径，避免泄露本机目录。
-        if not file_path.is_file() or file_path.suffix not in SUFFIXES or EXCLUDED.intersection(file_path.relative_to(root).parts) or relative_path == "shaders/shaders.properties": continue  # 第三方和生成菜单有自己的来源，不在这里重复审计。
+        if not file_path.is_file() or file_path.suffix not in SUFFIXES or EXCLUDED.intersection(file_path.relative_to(root).parts) or relative_path in MACHINE_FILES: continue  # 第三方、机器数据和生成菜单有自己的来源，不在这里重复审计。
         nonempty_lines = {number for number, line in enumerate(file_path.read_text(encoding="utf-8").splitlines(), 1) if line.strip()}  # 空行没有业务内容，不应稀释说明比例。
         commented_lines, fragments = comments(file_path)
         ratio = len(commented_lines & nonempty_lines) / max(len(nonempty_lines), 1)  # 行尾说明既是代码行也是说明行，分子分母都保留。

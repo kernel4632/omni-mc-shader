@@ -28,27 +28,33 @@ class PipelineTests(unittest.TestCase):
                 self.assertTrue(text.startswith("#version 330 compatibility"))  # 兼容版本必须第一行。
             self.assertIn('#include "/rendering/',text)  # 不依赖加载器猜回退。
             self.assertEqual(text,path.read_text(encoding="utf-8"))  # 实际入口没有遗漏维度宏。
-        for folder in ("world0","world-1","world1"):
-            self.assertIn(build.SHADERS/folder/"composite1.fsh",files)  # 时间签名覆盖各维度。
-            self.assertIn(build.SHADERS/folder/"setup.csh",files)  # 每个维度都登记计算入口。
+        dimensions = json.loads((build.SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))["dimensions"]  # 维度到声明文件的映射是唯一来源。
+        for path,text in files.items():  # 每个入口在引入主体前都要引入本维度的中间画面与常量声明。
+            declaration = dimensions[path.parent.name]["buffers"] + ".glsl"  # 这个维度登记的那份声明文件。
+            self.assertIn(f'#include "/rendering/{declaration}"',text)  # 声明必须真的进入被编译的程序，加载器才会读取它。
+        for folder in ("world0", "world-1", "world1"):
+            self.assertIn(build.SHADERS / folder / "setup.csh", files)  # 每个维度都登记计算入口。
+        self.assertIn(build.SHADERS / "world0/composite1.fsh", files)  # 主世界有水后雾阶段。
+        self.assertNotIn(build.SHADERS / "world-1/composite1.fsh", files)  # 参考光影的下界没有这个阶段。
 
     def test_buffer_history_and_snapshot_contract(self):
-        """历史不清除，折射从透明阶段无法覆盖的快照读取。"""
-        buffers = (build.SHADERS/"rendering/buffers.glsl").read_text(encoding="utf-8")
-        self.assertIn("colortex4Clear = false",buffers); self.assertIn("colortex5Clear = false",buffers)  # 历史跨帧保留。
-        deferred = build.expand(build.SHADERS/"world0/deferred.fsh")  # 从加载器实际主世界路径检查快照。
-        self.assertIn("RENDERTARGETS: 0,3",deferred)
-        water = build.expand(build.SHADERS/"world0/gbuffers_water.fsh")  # 水几何禁止写快照。
-        self.assertIn("RENDERTARGETS: 0,7,8",water)  # 水独立保存法线与实际深度，不覆盖底层类别。
-        temporal = build.expand(build.SHADERS/"world0/composite1.fsh")
-        self.assertIn("RENDERTARGETS: 0,4,5",temporal)  # 当前与历史输出分开。
-        self.assertIn("!overlay && omniHistoryValid()",temporal)  # 翻转前的历史有效性传给最终镜头。
-        self.assertIn("texelFetch(colortex5,oldPixel,0)",temporal)  # 整数历史状态禁止线性过滤。
-        for condition in ("size.x!=viewWidth","size.y!=viewHeight","size.z!=omniDimension()","frameCounter-1","camera.xyz-cameraPosition"):
-            self.assertIn(condition,temporal)  # 历史失效条件不能遗漏。
-        programs = json.loads((build.SHADERS/"rendering/programs.json").read_text(encoding="utf-8"))["programs"]
-        for name in ("gbuffers_weather","gbuffers_damagedblock","gbuffers_armor_glint","gbuffers_spidereyes"):
-            self.assertIn("OMNI_OVERLAY",programs[name])  # 不写深度的覆盖程序必须只写颜色。
+        """跨帧历史不清除；每个程序写出的画面编号与移植合同一致。"""
+        buffers = (build.SHADERS / "rendering/buffers.glsl").read_text(encoding="utf-8")
+        self.assertIn("colortex1Clear = false", buffers); self.assertIn("colortex2Clear = false", buffers); self.assertIn("colortex7Clear = false", buffers)  # 场景颜色、全局光历史与时间抗锯齿历史跨帧保留。
+        self.assertIn("colortex0Clear = true", buffers); self.assertIn("colortex5Clear = true", buffers)  # 贴图色与高光材质每帧重写。
+        source_numbers = build.numbered_sources()  # 四个入口引用同一棵源码树，编号只建立一次。
+        expanded: dict = {}  # 已展开文本只在本次测试内复用，不改业务语义也不改断言内容。
+        def drawbuffers(name: str) -> str:
+            """展开 `world0` 下名为 `name` 的入口，返回可搜索附件指令的文本。"""
+            return build.expand(build.SHADERS / "world0" / name, sourceNumbers=source_numbers, cache=expanded)  # 共用缓存，避免每个断言都重读重拼整棵树。
+        self.assertIn("DRAWBUFFERS:7", drawbuffers("deferred.fsh"))  # 焦散法线写在七号。
+        self.assertIn("DRAWBUFFERS:460", drawbuffers("gbuffers_water.fsh"))  # 半透明层写四号、六号与贴图色。
+        self.assertIn("DRAWBUFFERS:1", drawbuffers("composite.fsh"))  # 不透明光照写一号。
+        self.assertIn("DRAWBUFFERS:7", drawbuffers("composite7.fsh"))  # 时间抗锯齿历史写七号。
+        programs = json.loads((build.SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))["programs"]
+        for name in ("gbuffers_weather", "gbuffers_damagedblock", "gbuffers_armor_glint"):
+            self.assertEqual(programs[name][0], "overlay", name)  # 不写深度的覆盖程序共用叠加绘制主体。
+        self.assertEqual(programs["gbuffers_spidereyes"][0], "entities")  # 蜘蛛眼与实体共用实体绘制主体。
 
     def test_tessellation_pair_and_source_map(self):
         """细分不完整时拒绝，引用映射保留原始行号。"""
@@ -157,6 +163,24 @@ class PipelineTests(unittest.TestCase):
                 (shaders/"libraries/unlisted.glsl").write_text("float x;",encoding="utf-8")
                 with self.assertRaises(ValueError): build.dependencies()  # 白名单不能漏掉新代码。
 
+    def test_every_runtime_dependency_is_referenced(self):
+        """登记的第三方库必须至少被一个光影文件引用，避免再次留下死依赖。"""
+        text = "\n".join(  # 自有光影文件的全部引用文本，库自身不算对自己的引用。
+            path.read_text(encoding="utf-8") for path in build.SHADERS.rglob("*")
+            if path.is_file() and "libraries" not in path.relative_to(build.SHADERS).parts and path.suffix in {".glsl", ".vsh", ".fsh", ".gsh", ".csh", ".properties"}
+        )
+        def assert_referenced(libraries):
+            """逐个检查登记的库文件都被引用；许可原文随包但不参与引用。"""
+            for item in libraries:  # 每个已登记的库都要真的接入。
+                for reference in item["files"]:
+                    if any(tag in reference.lower() for tag in ("license", "copying")):  # 许可原文跳过。
+                        continue
+                    name = reference.rsplit("/", 1)[-1]  # 完整路径匹配 `#include`，文件名匹配 `pipeline.properties` 里的资源引用。
+                    self.assertTrue(reference in text or name in text, f"{reference} 未被任何光影文件引用，属于死依赖")
+        data = json.loads((build.ROOT/"dependencies.json").read_text(encoding="utf-8"))  # 运行库唯一清单。
+        assert_referenced(data["libraries"])  # 当前清单必须全部接入。
+        with self.assertRaises(AssertionError): assert_referenced([{"files": {"libraries/dead/omni_library_name_guard.glsl": "0"*64}}])  # 未引用的库必须被这条检查挡住，证明它不是空跑。
+
     def test_pack_contents_are_reproducible_and_complete(self):
         """真实打包包含各维度入口和完整预设，不包含参考、开发配置或过期流程源。"""
         found,profiles,_ = build.configuration()  # 所有预设从当前源码补齐。
@@ -170,7 +194,7 @@ class PipelineTests(unittest.TestCase):
                 with zipfile.ZipFile(first[0]) as package:
                     names = set(package.namelist())
                     self.assertIn("shaders/world0/gbuffers_terrain.fsh",names)  # 官方旧维度规则从world0加载主世界。
-                    self.assertIn("shaders/world-1/composite1.fsh",names)
+                    self.assertIn("shaders/world-1/composite.fsh",names)
                     self.assertNotIn("shaders/gbuffers_terrain.fsh",names)  # 根目录可执行程序会被worldN忽略，不随包放重复入口。
                     self.assertIn("THIRD_PARTY.md",names); self.assertIn("VERSION",names)  # 来源与版本可追溯。
                     self.assertNotIn("shaders/rendering/programs.json",names); self.assertNotIn("shaders/rendering/pipeline.properties",names)  # 开发源表已经生成实际入口和加载器设置。

@@ -18,14 +18,14 @@
 
 | 效果 / 主题 | 参考实现 | 语言 | 许可 | 处理方式 |
 | --- | --- | --- | --- | --- |
-| 噪声（单纯形/值/沃利） | Ashima、Stefan Gustavson、FastNoiseLite、stb_perlin | GLSL/C | MIT / 公有领域 | 已用 Ashima；其余只补缺的噪声类型 |
+| 噪声（单纯形/值/沃利） | Ashima、Stefan Gustavson、FastNoiseLite、stb_perlin | GLSL/C | MIT / 公有领域 | 未采用第三方库；云用 iterationT 预计算噪声贴图，其余只补缺的噪声类型 |
 | 蓝噪声采样 | Christoph Peters blue noise | 多语言 | MIT | 按原理重写 |
 | 抗锯齿（形态学） | SMAA（iryoku/smaa） | HLSL/GLSL | MIT | 直接采用，自带查找表纹理 |
 | 抗锯齿（时间） | Filament TAA、Godot TAA、three.js TAARenderPass、Karis 重投影 | GLSL | Apache-2.0 / MIT | 按原理重写 |
 | 快速近似抗锯齿 | NVIDIA FXAA、three.js FXAAShader | GLSL | 宽松 | 按原理重写 |
 | 超分 | FidelityFX FSR（EASU/RCAS）、SGSR | HLSL/GLSL | MIT（核对） | 直接采用或按原理重写 |
 | 环境光遮蔽 | Intel XeGTAO、FidelityFX CACAO、three.js GTAOPass、Filament SSAO | GLSL/HLSL | MIT / Apache-2.0 | 直接采用 XeGTAO |
-| 大气 / 天空 | Bruneton 预计算、wwwtyro glsl-atmosphere、Hosek-Wilkie、Preetham、Nishita | 多语言 | BSD-3 / 公有领域 / 公开论文 | 已用解析近似；后续换 Bruneton 或 Hosek-Wilkie |
+| 大气 / 天空 | Bruneton 预计算、wwwtyro glsl-atmosphere、Hosek-Wilkie、Preetham、Nishita | 多语言 | BSD-3 / 公有领域 / 公开论文 | 已用 Bruneton 预计算大气贴图（随包 `AtmoData_620_540_440_n4.bin`，三维 `RGBA32F`），不再走解析近似 |
 | 云（体积） | Sebastian Lague Clouds、shadertoy 体积云、Horizon Zero Dawn 方案、Frostbite | C#/GLSL/论文 | MIT（SebLague 已核实）/ 公开论文 | 按原理重写 |
 | 云（平面） | 各 shadertoy | GLSL | 公开 | 按原理重写 |
 | 雾（体积） | Filament froxel fog、Godot volumetric fog、Frostbite volumetrics | GLSL/论文 | Apache-2.0 / MIT / 公开 | 按原理重写 |
@@ -72,4 +72,4 @@
 
 1. 逐个核对标「需核实」的许可（FidelityFX、Sebastian Lague、若干 shadertoy）。
 2. 先落地四个主力来源里最适合直接用的：SMAA、XeGTAO、glsl-atmosphere、Bruneton。
-3. 其余按 `parameters.md` 的「缺失」列，读论文重写。
+3. 其余按 `docs/eclipse-parity.md` 的合并建议与 `docs/parity.md` 的偏离记录，读论文重写。

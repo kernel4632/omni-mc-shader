@@ -1,72 +1,106 @@
 /*
-最终显示：把时间合成后的线性场景变成屏幕上一帧最终颜色，并在调试时改看中间数据。
-它是整个绘制流程的最后一站，最后一步结果直接进屏幕。
-
-调用位置：
-  三个维度的 final 顶点与像素入口经 include 引入本文件；
-  像素入口定义 OMNI_FRAGMENT 走下面的函数，顶点入口定义 OMNI_VERTEX 只负责铺满屏幕。
-
-可复制示例：
-  像素入口自动调用 main，无需手工触发；
-  想单独取一帧线性颜色：`vec3 scene = omniSceneColor(texcoord);`
-
-显示顺序（为什么是这个顺序）：
-  一、超分：内部渲染分辨率低于输出时先重采样，之后的计算都在输出分辨率上进行。
-  二、镜头与泛光：色差、景深、耀斑、暗角是作用在场景本身的成像变形，
-      泛光是在此之上叠加的光晕，所以放在镜头之后，不跟着被暗角压暗；两者都在线性空间，方便直接相加。
-  三、调色与显示编码：omniColor 内部完成曝光、高光压缩和屏幕编码，
-      编码把所有线性计算收敛成屏幕颜色，必须最后做且只做一次，否则颜色会被反复压暗。
-  四、调试：debugColor 直接观察真实中间缓冲，放在最后；正常画面时它原样返回，不改变结果。
-
-关键设计取舍：
-  显示阶段不新增任何中间画面，只读时间合成留下的线性颜色和曝光；
-  超分是唯一可选的额外取样步骤，默认关闭，关闭时它不产生任何额外开销。
+最终绘制主体：把 iterationT `Lib/Programs/Final.glsl` 的 `PROGRAM_FINAL_2` 段搬进一个文件，直接写屏幕。
+来源：`Lib/Programs/Final.glsl` 的 `PROGRAM_FINAL_2` 与 `final.fsh`、`final.vsh` 一比一移植；算法函数来自效果文件。
+调用位置：各维度 `final` 入口定义阶段宏、维度宏与 `OMNI_FINAL_PASS` 后引入本文件；
+    本文件不写 `#version`，语言版本由入口声明；顶点用 `Lib/Programs/PostVS.glsl` 的整屏三角形。
+可复制示例：入口写 `#define OMNI_FRAGMENT 1`、`#define OMNI_FINAL_PASS 1`、`#define OMNI_OVERWORLD 1` 再引入本文件。
+输出约定：直接写屏幕 `gl_FragData[0]`，不声明绘制缓冲；原程序在这里做锐化、手与玩家的抗锯齿、抖动与黑边。
+关键设计原因与取舍：
+    渲染比例等于一时，先按已开启的排除选项决定哪些像素用手或玩家的边缘抗锯齿 `Fxaa`，其余像素做 `CAS` 锐化；
+    渲染比例小于一时改用八号画面里的放大结果再锐化（`FidelityFX_FSR1`），所以本程序读过放大输出。
+    强光压缩的序号只在十四号分派，这里不做色调整，只做锐化、抖动与黑边，与原程序一致。
+    原 `final.fsh` 还引入 `PrintFloat.glsl` 但 `main` 从未调用它；这里照合同引入 `effects/dev/debug.glsl` 并真正调用
+    `debugColor` 与 `omniProfiler`，默认关闭，关闭时画面与原程序一致。
 */
+#ifndef OMNI_FINAL_BODY_INCLUDED // 只引入一次，避免 `main()` 与输出变量重复定义。
+#define OMNI_FINAL_BODY_INCLUDED // 置上标记，后续再次引用直接跳过。
+
+// 八号画面在这里要按二维画面采样，和原程序一样在引入加载器输入前打开这个宏，采样器类型才正确。
+#define COLORTEX8_2D 1 // 打开后 `colortex8` 由 `common/uniforms.glsl` 声明成二维采样器。
+
+// 加载器输入最先引入，提供画面尺寸、深度与各号画面。
+#include "/common/uniforms.glsl"
+
+// ================================ 顶点阶段 ================================
+// 原 `final.vsh` 只引入 `Lib/Programs/PostVS.glsl`，顶点铺满屏幕。
 #ifdef OMNI_VERTEX
-out vec2 texcoord; // 传给像素阶段的屏幕坐标，范围零到一。
-void main() { gl_Position = ftransform(); texcoord = gl_MultiTexCoord0.xy; } // 铺满屏幕的最终四边形。
-#endif
-#ifdef OMNI_FRAGMENT
-// 最终显示用到的效果能力，一行引入一个主体，顺序与上面说明一致。
-#include "/effects/color.glsl"
-#include "/effects/bloom.glsl"
-#include "/effects/lens.glsl"
-#include "/effects/upscale.glsl"
-#include "/effects/debug.glsl"
-#include "/rendering/buffers.glsl"
-in vec2 texcoord; // 像素阶段的屏幕坐标，与顶点阶段同名传入。
-layout(location=0) out vec4 color; // 写入默认画面缓冲的最终屏幕颜色。
+	void main(){
+		gl_Position = vec4(gl_Vertex.xy * 2.0 - 1.0, 0.0, 1.0); // 加载器把顶点放在零到一的方块上，乘二减一铺满屏幕。
+	}
+#endif // 顶点阶段结束。
 
-// --- 取这一帧的线性颜色 ---
+// ================================ 片元阶段 ================================
+#if defined OMNI_FRAGMENT && defined OMNI_FINAL_PASS
 
-// 取最终显示要用的线性颜色：从时间合成写回的附件读取，玩家开启超分时先对颜色重采样。
-// 为什么超分放在最前：它是分辨率相关的重采样，后面的镜头泛光都按输出分辨率计算，顺序反了会先糊再算。
-vec3 omniSceneColor(vec2 uv) {
-    vec3 scene = texture(colortex0,uv).rgb; // 时间合成写回零号附件的线性颜色，范围可以高于一。
-#ifdef OMNI_UPSCALE
-    scene = omniUpscale(scene,uv); // 只有开启超分时才做边缘自适应重采样，关闭时不产生任何开销。
-#endif
-    return scene; // 返回仍是线性空间、尚未压缩的颜色，交给后面的效果。
-}
+	// 本程序按放大后的分辨率工作，坐标与像素尺寸都要用放大后的尺寸算。
+	vec2 finalScreenSize = ceil(screenSize / MC_RENDER_QUALITY); // 放大后的目标尺寸。
+	vec2 finalPixelSize = 1.0 / finalScreenSize; // 放大后一个像素的坐标大小。
+	ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标，供效果文件引用。
+	vec2 texCoord = gl_FragCoord.xy * finalPixelSize; // 零到一屏幕坐标，黑边与边缘抗锯齿用。
 
-// --- 在线性空间叠加镜头与泛光 ---
+	// 共用数学：亮度、颜色曲线与交错梯度噪声。
+	#include "/common/math.glsl"
+	// 提供材质编号 `MATID_*`，手与玩家的排除判断用它。
+	#include "/effects/ground/material.glsl"
+	// 边缘抗锯齿 `Fxaa`；内部再引入坐标换算。
+	#include "/effects/clarity/antialiasing.glsl"
+	// 黑边 `BlackBar`。
+	#include "/effects/color/color.glsl"
+	// 对比度自适应锐化与放大。
+	#include "/effects/clarity/upscale.glsl"
+	// 调试画面与耗时条；原程序一并引入，这里把 `debugColor`、`omniProfiler` 真正接到最终屏幕颜色上。
+	#include "/effects/dev/debug.glsl"
 
-// 在给定的线性颜色上叠加镜头与泛光：镜头改造场景本身的成像，泛光再把强光的光晕加回去。
-// 为什么泛光在镜头之后：暗角和色差只该作用在场景成像上，光晕是最后叠上去的附加亮光，
-// 若先加泛光，暗角会把它一起压暗，亮部光晕就不自然。
-vec3 omniLensColor(vec3 scene, vec2 uv) {
-    return omniLens(scene,uv)+omniBloom(uv); // 两者都在线性空间相加，不会引入偏色。
-}
+	void main(){
+		vec3 color = vec3(0.0); // 最终要写的屏幕颜色。
 
-// --- 一个像素的最终显示 ---
+		// 是否需要给手或玩家这类没有时间积累的像素补一次边缘抗锯齿；由排除选项决定，先算成一个布尔量。
+		bool useEdgeAA = false;
+		#if defined OMNI_DISABLE_HAND_TAA || defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只有相关排除选项开启时才读材质编号。
+			float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读材质编号，判断像素是不是手或玩家。
+		#endif
+		#if defined OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都关了时间抗锯齿。
+			useEdgeAA = materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER; // 这两类像素没有时间积累。
+		#elif defined OMNI_DISABLE_HAND_TAA // 只关了手的时间抗锯齿。
+			useEdgeAA = materialIDs == MATID_HAND; // 手没有时间积累。
+		#elif defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只关了玩家的时间抗锯齿与动态模糊。
+			useEdgeAA = materialIDs == MATID_ENTITIES_PLAYER; // 玩家没有时间积累。
+		#endif
 
-// 像素阶段主流程：取线性颜色、叠加镜头泛光、按曝光调色编码，最后输出或改看调试数据。
-// 为什么调色放最后：它内部包含曝光和屏幕编码，编码必须在所有线性计算之后才做，且只做一次。
-void main() {
-    vec3 scene = omniSceneColor(texcoord); // 时间合成的线性颜色，可选超分。
-    vec3 lit = omniLensColor(scene,texcoord); // 镜头与泛光仍在线性空间叠加。
-    float exposure = texture(colortex5,vec2(0.5)).g; // 时间合成保存的真实曝光，整屏共用一个值。
-    vec3 shown = omniColor(lit,exposure); // 调色把线性颜色压成屏幕颜色，显示编码包含在内。
-    color = vec4(omniProfiler(debugColor(shown,texture(depthtex0,texcoord).r,texcoord),texcoord),1.0); // 调试视图观察真实缓冲，正常画面原样返回；性能计时在最后叠加。
-}
-#endif
+		// 内部渲染比例低于一且开着放大程序时，画面来自放大输出；同样先算成布尔量，让后面的判断是一整条 if。
+		bool fsrUpscaled = false;
+		#if MC_VERSION >= 11801 // 放大功能只在一点一八点一以后可用。
+			#ifdef OMNI_FSR // 开着放大程序。
+				fsrUpscaled = MC_RENDER_QUALITY < 1.0; // 内部比例低于一才走放大输出。
+			#endif
+		#endif
+
+		if (MC_RENDER_QUALITY == 1.0){ // 内部渲染比例为一：画面就是一比一，直接读一号画面并就地锐化。
+			color = texelFetch(colortex1, texelCoord, 0).rgb; // 读一号画面的当前像素。
+			if (useEdgeAA){ // 手或玩家没有时间积累。
+				color = Fxaa(color, texCoord); // 改用边缘抗锯齿补一次。
+			}else{ // 其余像素就地锐化。
+				#if OMNI_CAS_SHARPNESS > 0 && defined OMNI_TAA && (!defined OMNI_FSR || MC_VERSION < 11801) // 开了锐化、开着时间抗锯齿，且没有独立的放大程序时。
+					color = FidelityFX_CAS(color, texelCoord); // 按十字邻域对比度自适应锐化。
+				#endif
+			}
+		}else if (fsrUpscaled){ // 内部渲染比例低于一：画面已经过放大。
+			color = FidelityFX_FSR1(texelCoord); // 从八号画面读放大结果并锐化。
+		}else{ // 其它情况：按连续坐标读一号画面。
+			color = textureLod(colortex1, texCoord, 0.0).rgb; // 双线性读一号画面。
+		}
+
+		color += InterleavedGradientNoise(gl_FragCoord.xy) * (1.0 / 255.0); // 叠加一点抖动，减小色带。
+
+		color *= BlackBar(OMNI_SCREEN_RATIO); // 按电影比例裁黑边，零表示不加。
+
+		// 调试视图：按选项把最终颜色换成法线、深度或光照图；默认零不改变画面。
+		color = debugColor(color, textureLod(depthtex0, texCoord, 0.0).x, texCoord);
+		// 帧耗时条：把整帧耗时画在左下角；默认关闭时原样返回。
+		color = omniProfiler(color, texCoord);
+
+		gl_FragData[0] = vec4(color, 0.0); // 直接写屏幕。
+	}
+
+#endif // 片元阶段结束。
+#endif // 文件守卫结束。

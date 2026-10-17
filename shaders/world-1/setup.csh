@@ -1,9 +1,11 @@
 #version 430
 // 生成的setup入口：修改绘制主体与显式流程表。
-// 选择本程序的绘制阶段或物体类别。
+// 指定本入口在绘制的哪个阶段运行。
 #define OMNI_COMPUTE 1
-// 选择本程序的绘制阶段或物体类别。
+// 指定本入口所属维度，主体靠它选维度分支。
 #define OMNI_NETHER 1
+// 先引入本维度的中间画面与常量声明。
+#include "/rendering/buffers_nether.glsl"
 // 显式引入完整绘制主体。
 #include "/rendering/lpv.glsl"
 // 输出由主体按统一缓冲协议写入。
