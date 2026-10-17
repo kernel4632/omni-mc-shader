@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.0.0-dev.158
+
+受伤照 Eclipse 补上「重击整屏红」：受击闪红不再只用 `is_hurt` 一档，改成按一次掉落量区分小伤与重击，默认画面不变。
+
+- 判定量移交给加载器（`shaders/rendering/pipeline.properties`）：新增自定义输入 `Currenthealth`／`interpolatedHealth`／`smallHealthDifference`／`largeHealthDifference`／`delayedCritDamage` 与两个强度 `MinorDamageTaken`／`CriticalDamageTaken`，照 Eclipse `shaders.properties:729-750`。为什么交给加载器：判断「这一次掉了多少血」需要跨帧的旧血量，GLSL 拿不到上一帧，只有加载器的 `smooth` 能保存状态——受击瞬间血量立刻下降、平滑血量还在高位，两者之差就是掉落量；差值过阈值即触发。只在本项目受伤效果开启（`OMNI_HURT_EFFECT`）且运行在 Iris 时登记，其它加载器与默认关时不产生代码。
+- 画面表现（`shaders/effects/lens/hurt.glsl`）：`OMNI_HURT_DAMAGE` 下，小伤（一次掉一点五颗心以上）按 `MinorDamageTaken` 给边缘闪红，重击（一次掉三点五颗心以上）按 `CriticalDamageTaken` 整屏染红，并照 Eclipse 把边缘抖动升级成整屏抖动。阈值与原程序同值（三点零／七点零个半颗心），未做成选项；删掉了旧的 `is_hurt` 近似路径。
+- 一个行为改变：受击总开关开启后，轻击（掉落不足一点五颗心）与 Eclipse 一样不再闪红。总开关默认关闭，默认画面与原来完全一致。
+- 差异说明记入 `docs/eclipse-parity.md` 的「受伤与低血量」行：受击闪红由「含近似」改为小伤/重击的真实掉落量判定。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.157
 
 水洼照 Eclipse 补齐法线压平，与已有的粗糙度改写、反照率压暗凑齐 `applyPuddles` 三步，默认画面不变。
