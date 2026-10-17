@@ -1,11 +1,13 @@
 /*
 雾与空气：照 iterationT `Lib/IndividualFounctions/VolumetricFog.glsl`、`UnderwaterVolumetricFog.glsl`
 与 `Lib/BasicFounctions/VanillaComposite.glsl` 的 `VanillaFog` 一比一移植。
-职责分成四块：
-  一、选项与内部常数：体积雾、水下体积雾、地面大气散射、原版雾开关与体积光照步数，全项目只在这里定义一次；
+职责分成六块：
+  一、选项与内部常数：体积雾、水下体积雾、地面大气散射、原版雾开关、洞穴雾、边界雾与时段雾，全项目只在这里定义一次；
   二、体积雾：`VolumetricFog` 沿视线与光方向在雾里步进，算出体积雾颜色与透射率；
   三、水下体积雾：`UnderwaterVolumetricFog` 在水下沿视线步进阴影可见性并叠焦散，画出蓝色光柱；
-  四、地面大气散射与原版雾：`LandAtmosphericScattering` 补地表方向的空气散射，`VanillaFog` 处理失明、黑暗与岩浆雪盲。
+  四、地面大气散射与原版雾：`LandAtmosphericScattering` 补地表方向的空气散射，`VanillaFog` 处理失明、黑暗与岩浆雪盲；
+  五、洞穴雾与边界雾：`CaveFog`、`BorderFog` 来自 Eclipse，默认关闭，开启后在 `VanillaFog` 里补洞内雾与渲染距离附近的雾墙；
+  六、时段雾：`FogDensityScale` 按主世界一天时间与雾类型给出体积雾密度，来自 Eclipse，默认关闭。
 调用位置：
   `rendering/composite.glsl` 的 `composite2` 程序在反射里补体积雾与地表散射；
   `rendering/composite.glsl` 的 `composite5` 程序对整幅画面补体积雾、水下体积雾、地表散射与原版雾。
@@ -87,12 +89,57 @@
 // @option {"label":{"zh_cn":"限制体积雾渲染距离","en_us":"Limit volumetric fog distance"},"description":{"zh_cn":"把体积雾渲染范围限制在一百区块以内，防止远处质量严重下降；可能导致远处体积雾缺失。","en_us":"Limits fog rendering to about 100 chunks to avoid quality collapse; may cut fog in the far distance."}}
 #define OMNI_DH_LIMIT_VFOG_DIST
 
+// --- 洞穴雾与边界雾：来源 Eclipse `lib/settings.glsl:219-233` 与 `dimensions/composite4.fsh:449-533` ---
+// 两项在原程序里都默认开启且会改变画面，本项目按“默认中性”约定默认关闭，开启后才生效。
+// @option {"label":{"zh_cn":"洞穴雾","en_us":"Cave fog"},"description":{"zh_cn":"洞穴深处单独的一层雾，用可调颜色与衰减把黑暗空间填出空气感；默认关闭，开启后洞穴内画面会变化。","en_us":"A separate fog layer deep in caves with adjustable colour and falloff; off by default, turning it on changes the look inside caves."}}
+//#define OMNI_CAVE_FOG
+// @option {"label":{"zh_cn":"洞穴雾衰减","en_us":"Cave fog falloff"},"description":{"zh_cn":"洞穴雾由近向远变浓的快慢，越大越早变浓；只在洞穴雾开启时生效。","en_us":"How quickly cave fog thickens from near to far; larger thickens sooner; only used when Cave fog is on."},"slider":true}
+#define OMNI_CAVE_FOG_FALLOFF 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 4.0 5.0]
+// @option {"label":{"zh_cn":"洞穴雾红","en_us":"Cave fog red"},"description":{"zh_cn":"洞穴雾的红色分量，三个颜色分量一起决定雾色；只在洞穴雾开启时生效。","en_us":"Red component of the cave fog colour; only used when Cave fog is on."},"slider":true}
+#define OMNI_CAVE_FOG_COLOR_R 0.1 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99 1.0]
+// @option {"label":{"zh_cn":"洞穴雾绿","en_us":"Cave fog green"},"description":{"zh_cn":"洞穴雾的绿色分量，三个颜色分量一起决定雾色；只在洞穴雾开启时生效。","en_us":"Green component of the cave fog colour; only used when Cave fog is on."},"slider":true}
+#define OMNI_CAVE_FOG_COLOR_G 0.2 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99 1.0]
+// @option {"label":{"zh_cn":"洞穴雾蓝","en_us":"Cave fog blue"},"description":{"zh_cn":"洞穴雾的蓝色分量，三个颜色分量一起决定雾色；只在洞穴雾开启时生效。","en_us":"Blue component of the cave fog colour; only used when Cave fog is on."},"slider":true}
+#define OMNI_CAVE_FOG_COLOR_B 0.5 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99 1.0]
+// @option {"label":{"zh_cn":"区块边界雾","en_us":"Chunk border fog"},"description":{"zh_cn":"在渲染距离附近拉起一层天空色的雾墙，遮住区块加载；默认关闭，开启后远处会出现雾墙。","en_us":"Fades distant terrain into a sky-coloured fog wall near the render distance to hide chunk loading; off by default."}}
+//#define OMNI_BORDER_FOG
+// @option {"label":{"zh_cn":"边界雾浓度","en_us":"Border fog intensity"},"description":{"zh_cn":"边界雾雾墙出现的位置，数值越大雾墙离得越近、越明显；只在区块边界雾开启时生效。","en_us":"Where the fog wall appears; larger brings it closer and thicker; only used when Chunk border fog is on."},"slider":true}
+#define OMNI_BORDER_FOG_INTENSITY 0.6 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
+
+// --- 时段雾：来源 Eclipse `lib/settings.glsl:191-203` 与 `lib/climate_settings.glsl:172-201` 的 `FogDensities` ---
+// 把一天按 `worldTime` 切成晨、午、晚、夜四段，每段给一段权重；密度系数分成“均匀雾”与“多云雾”两套，
+// 分别对应“仅高度衰减”雾与“团雾”，与 Eclipse 的均匀、多云两个分量一致。
+// Eclipse 默认开启且会改变画面，本项目按“默认中性”约定把总开关默认关闭；下面的系数与总倍率虽然
+// 默认启用，但只在总开关打开后才参与计算，所以默认画面与原来一致。
+// @option {"label":{"zh_cn":"时段雾","en_us":"Time-of-day fog"},"description":{"zh_cn":"让体积雾密度随主世界一天时间与雾类型变化，来自 Eclipse；默认关闭，打开后夜间更浓、清晨与傍晚居中。","en_us":"Varies volumetric fog density by time of day and fog type, from Eclipse; off by default."}}
+//#define OMNI_TOD_FOG
+// @option {"label":{"zh_cn":"时段雾总倍率","en_us":"Time-of-day fog multiplier"},"description":{"zh_cn":"统一放大或缩小四段时段密度，对应 Eclipse 的总倍率。","en_us":"Overall multiplier on the four time-of-day densities; matches Eclipse."},"slider":true}
+#define OMNI_TOD_FOG_MULT 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 3.0 4.0 5.0]
+// @option {"label":{"zh_cn":"清晨均匀雾密度","en_us":"Morning uniform fog density"},"description":{"zh_cn":"清晨“均匀雾”（仅高度衰减的雾）的密度；只在时段雾开启且体积雾噪声类型为仅高度衰减时生效。","en_us":"Morning density of the uniform (height-only) fog; used only when Time-of-day fog is on and the fog noise type is height only."},"slider":true}
+#define OMNI_TOD_FOG_MORNING_UNIFORM 0.01 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.15 0.2 0.25 0.3 0.4 0.5 0.7 1.0]
+// @option {"label":{"zh_cn":"正午均匀雾密度","en_us":"Noon uniform fog density"},"description":{"zh_cn":"正午“均匀雾”（仅高度衰减的雾）的密度；只在时段雾开启且体积雾噪声类型为仅高度衰减时生效。","en_us":"Noon density of the uniform (height-only) fog; used only when Time-of-day fog is on and the fog noise type is height only."},"slider":true}
+#define OMNI_TOD_FOG_NOON_UNIFORM 0.01 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.15 0.2 0.25 0.3 0.4 0.5 0.7 1.0]
+// @option {"label":{"zh_cn":"傍晚均匀雾密度","en_us":"Evening uniform fog density"},"description":{"zh_cn":"傍晚“均匀雾”（仅高度衰减的雾）的密度；只在时段雾开启且体积雾噪声类型为仅高度衰减时生效。","en_us":"Evening density of the uniform (height-only) fog; used only when Time-of-day fog is on and the fog noise type is height only."},"slider":true}
+#define OMNI_TOD_FOG_EVENING_UNIFORM 0.05 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.15 0.2 0.25 0.3 0.4 0.5 0.7 1.0]
+// @option {"label":{"zh_cn":"夜间均匀雾密度","en_us":"Night uniform fog density"},"description":{"zh_cn":"夜间“均匀雾”（仅高度衰减的雾）的密度；只在时段雾开启且体积雾噪声类型为仅高度衰减时生效。","en_us":"Night density of the uniform (height-only) fog; used only when Time-of-day fog is on and the fog noise type is height only."},"slider":true}
+#define OMNI_TOD_FOG_NIGHT_UNIFORM 0.2 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.15 0.2 0.25 0.3 0.4 0.5 0.7 1.0]
+// @option {"label":{"zh_cn":"清晨多云雾密度","en_us":"Morning cloudy fog density"},"description":{"zh_cn":"清晨“多云雾”（团雾）的密度；只在时段雾开启且体积雾噪声类型为团雾时生效。","en_us":"Morning density of the cloudy (wispy) fog; used only when Time-of-day fog is on and the fog noise type is wispy."},"slider":true}
+#define OMNI_TOD_FOG_MORNING_CLOUDY 0.05 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.15 0.2 0.25 0.3 0.4 0.5 0.7 1.0]
+// @option {"label":{"zh_cn":"正午多云雾密度","en_us":"Noon cloudy fog density"},"description":{"zh_cn":"正午“多云雾”（团雾）的密度；只在时段雾开启且体积雾噪声类型为团雾时生效。","en_us":"Noon density of the cloudy (wispy) fog; used only when Time-of-day fog is on and the fog noise type is wispy."},"slider":true}
+#define OMNI_TOD_FOG_NOON_CLOUDY 0.01 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.15 0.2 0.25 0.3 0.4 0.5 0.7 1.0]
+// @option {"label":{"zh_cn":"傍晚多云雾密度","en_us":"Evening cloudy fog density"},"description":{"zh_cn":"傍晚“多云雾”（团雾）的密度；只在时段雾开启且体积雾噪声类型为团雾时生效。","en_us":"Evening density of the cloudy (wispy) fog; used only when Time-of-day fog is on and the fog noise type is wispy."},"slider":true}
+#define OMNI_TOD_FOG_EVENING_CLOUDY 0.01 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.15 0.2 0.25 0.3 0.4 0.5 0.7 1.0]
+// @option {"label":{"zh_cn":"夜间多云雾密度","en_us":"Night cloudy fog density"},"description":{"zh_cn":"夜间“多云雾”（团雾）的密度；只在时段雾开启且体积雾噪声类型为团雾时生效。","en_us":"Night density of the cloudy (wispy) fog; used only when Time-of-day fog is on and the fog noise type is wispy."},"slider":true}
+#define OMNI_TOD_FOG_NIGHT_CLOUDY 0.05 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.15 0.2 0.25 0.3 0.4 0.5 0.7 1.0]
+
 // --- 内部常数：原 `Settings.glsl` 里不进菜单的取值，名字保持原名 ---
 #define VFOG_SUNLIGHT_STEPS 4 // 体积光照沿阳光方向的步数。
 #define VFOG_SUNLIGHT_STEPLENGTH 5.0 // 体积光照沿阳光方向的起始步长，单位米，每步放大一点五倍。
 
 // 数学提供相位函数与曲线，蓝噪声提供步进抖动，阴影提供阴影图坐标、焦散与波法线，天空云提供大气数据与云影，光照提供强度选项。
 #include "/common/math.glsl"
+// 洞穴雾与边界雾要从像素坐标还原视线方向，用这里的 `ViewPos_From_ScreenPos_Raw`；文件自带守卫，重复引入无副作用。
+#include "/common/coordinates.glsl"
 #include "/common/noise.glsl"
 #include "/effects/shadow/shadow.glsl"
 #include "/effects/sky/sky.glsl"
@@ -187,6 +234,35 @@ float FogLightMarch(inout vec3 fogPos, vec3 wind){
 	return lightingDensity; // 返回原始累计密度，供调用方乘吸收率与选项。
 }
 
+// --- 时段雾：密度随一天时间变化 ---
+// 时段雾密度标度：来源 Eclipse `lib/climate_settings.glsl:172-201` 的 `FogDensities`。
+// 一天按 `worldTime` 切成晨、午、晚、夜四段并各给一段权重；两套系数分别给“均匀雾”（仅高度衰减）
+// 与“多云雾”（团雾），按当前雾类型取其中一套。返回体积雾的密度标度：
+// 总开关关闭或非主世界时返回固定密度选项，画面与原来完全一致。
+float FogDensityScale(){
+	#ifdef OMNI_TOD_FOG // 总开关默认关闭，打开后密度才随一天变化。
+		#ifdef OMNI_OVERWORLD // 时段雾只属于主世界；下界与末地没有正常昼夜循环。
+			float todTime = mod(float(worldTime), 24000.0); // 当天时刻，取一天内的循环。
+
+			float todMorning = clamp((todTime - 22000.0) / 2000.0, 0.0, 1.0) + clamp((2000.0 - todTime) / 2000.0, 0.0, 1.0); // 晨：跨午夜的两段相加。
+			float todNoon    = clamp(todTime / 2000.0, 0.0, 1.0) * clamp((12000.0 - todTime) / 2000.0, 0.0, 1.0); // 午：日出后到正午前。
+			float todEvening = clamp((todTime - 10000.0) / 2000.0, 0.0, 1.0) * clamp((14000.0 - todTime) / 2000.0, 0.0, 1.0); // 晚：黄昏前后一段。
+			float todNight   = clamp((todTime - 13000.0) / 2000.0, 0.0, 1.0) * clamp((23000.0 - todTime) / 2000.0, 0.0, 1.0); // 夜：入夜到深夜一段。
+
+			#if OMNI_VFOG_NOISE_TYPE == 0 // 仅高度衰减的雾取“均匀”一套系数。
+				float todDensity = todMorning * OMNI_TOD_FOG_MORNING_UNIFORM + todNoon * OMNI_TOD_FOG_NOON_UNIFORM
+				                 + todEvening * OMNI_TOD_FOG_EVENING_UNIFORM + todNight * OMNI_TOD_FOG_NIGHT_UNIFORM; // 四段权重乘各自密度求和。
+			#else // 团雾取“多云”一套系数。
+				float todDensity = todMorning * OMNI_TOD_FOG_MORNING_CLOUDY + todNoon * OMNI_TOD_FOG_NOON_CLOUDY
+				                 + todEvening * OMNI_TOD_FOG_EVENING_CLOUDY + todNight * OMNI_TOD_FOG_NIGHT_CLOUDY; // 同上，换成多云一套。
+			#endif
+
+			return todDensity * OMNI_TOD_FOG_MULT; // 乘总倍率，对应 Eclipse 的 `TOD_Fog_mult`。
+		#endif
+	#endif
+	return OMNI_VFOG_DENSITY; // 总开关关闭或非主世界，返回固定密度选项，画面不变。
+}
+
 // 体积雾主体：沿视线一步步在雾里前进，同时沿光方向估遮挡，累加雾色与阳光散射。
 // 输入是待修改颜色、起点、终点、世界方向、全局云影、时间因子；输出透射率，颜色就地叠加雾。
 // 为什么步长用指数递增：近处雾细节重要、远处可以粗，指数步长把采样集中在前段。
@@ -232,6 +308,8 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		baseDensity *= eyeBrightnessSmoothCurved; // 乘天空光曲线平滑值。
 	#endif
 
+	float fogDensityScale = FogDensityScale(); // 密度标度：时段雾关闭时为固定密度选项，开启后随一天时间变化。
+
 	#ifdef OMNI_VFOG_VOLUMETRIC_LIGHTING // 打开体积光照时用多级相位，否则用单一相位。
 		float phases[4]; // 四级散射相位。
 		MultiScatteringPhases(VdotL, phases); // 一次算好四级相位。
@@ -266,13 +344,13 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		vec3 shadowPos = shadowStart + stepLength * shadowRayVector; // 这一步的阴影图坐标。
 
 		float density = FogDensity(fogPos, wind); // 算这一点的雾密度，仅高度衰减模式忽略风。
-		density = (density * OMNI_VFOG_DENSITY + baseDensity) * fogTimeFactor; // 噪声密度乘选项再加基础密度，再乘时间因子。
+		density = (density * fogDensityScale + baseDensity) * fogTimeFactor; // 噪声密度乘密度标度再加基础密度，再乘时间因子。
 		float absorption = exp2(-density * stepDensity); // 这一步吸收掉的光。
 
 		#ifdef OMNI_VFOG_VOLUMETRIC_LIGHTING // 体积光照：沿阳光方向估吸收。
 			float lightingDensity = FogLightMarch(fogPos, wind); // 沿光方向累计密度，并就地推进 `fogPos`。
 
-			lightingDensity = (lightingDensity * OMNI_VFOG_SUNLIGHT_ABSORPTION * OMNI_VFOG_DENSITY + baseDensity) * fogTimeFactor; // 乘吸收率与选项再算总密度。
+			lightingDensity = (lightingDensity * OMNI_VFOG_SUNLIGHT_ABSORPTION * fogDensityScale + baseDensity) * fogTimeFactor; // 乘吸收率与密度标度再算总密度。
 			float lightingAbsorption = exp2(-lightingDensity * stepDensity); // 光方向上的吸收。
 
 			float stepRayDensity = 0.0; // 这一步的阳光散射量。
@@ -474,10 +552,75 @@ void LandAtmosphericScattering(inout vec3 color, in float dist, vec3 startPos, v
 }
 
 
+// --- 洞穴雾与边界雾：来源 Eclipse `dimensions/composite4.fsh` 的 `blendAllFogTypes` 与 `getBorderFogDensity` ---
+// 洞内程度：Eclipse 用加载器按“黑暗里停留的计时”平滑出一个量；本项目没有这个计时，
+// 用等价的天空光曲线反推，天空光越暗越接近洞内，返回零到一，洞穴雾与边界雾共用。
+float OmniCaveDetection(){
+	return 1.0 - eyeBrightnessSmoothCurved; // 天空光曲线为一说明露天，为零说明洞内。
+}
+
+// 某方向的天空色：替代 Eclipse 边界雾查询用的天空贴图 `skyFromTex`，改用本项目等价的预计算大气天空辐射。
+// 为什么相机高度抬到最低高度：贴地时大气几何退化，抬高后地平线一带不会裂开，与地表散射同法。
+vec3 BorderFogSkyColor(vec3 worldDir){
+	#ifdef OMNI_ATMO_HORIZON // 打开地平线时相机高度有下限，与天空渲染一致。
+		vec3 camera = vec3(0.0, max(cameraPosition.y, ATMO_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 高度换成公里并加星球半径。
+	#else
+		vec3 camera = vec3(0.0, max(cameraPosition.y, 63.0) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 默认按海平面高度。
+	#endif
+	vec3 transmittance; // 大气透过率，这里不用，只作查表输出。
+	bool rayIntersectsGround; // 视线是否打到地面，这里不用，只作查表输出。
+	return GetSkyRadiance(camera, worldDir, worldSunVector, worldMoonVector, true, transmittance, rayIntersectsGround); // 查该方向的天空辐射。
+}
+
+// 洞穴雾：照 Eclipse `dimensions/composite4.fsh:452-472` 一比一搬运，把洞内空气填成一层可调的雾。
+// 输入是待修改颜色与这条视线的距离；就地把洞穴雾加到颜色上。
+// 依赖替代：Eclipse 的归一化玩家位置取本像素的世界视线方向，`caveDetection` 用 `OmniCaveDetection` 的等价量。
+void CaveFog(inout vec3 color, float linearDistance){
+	vec3 worldDir = normalize(mat3(gbufferModelViewInverse) * ViewPos_From_ScreenPos_Raw(gl_FragCoord.xy * pixelSize, 1.0)); // 本像素的世界视线方向，等于 Eclipse 归一化后的玩家位置。
+	float caveDetection = OmniCaveDetection(); // 洞内程度，替代 Eclipse 的加载器驱动量。
+
+	vec3 cavefogCol = vec3(OMNI_CAVE_FOG_COLOR_R, OMNI_CAVE_FOG_COLOR_G, OMNI_CAVE_FOG_COLOR_B) * 0.3; // 基础雾色按原程序缩到零点三。
+	cavefogCol *= 1.0 - pow(1.0 - pow(1.0 - max(1.0 - linearDistance / far, 0.0), 2.0), OMNI_CAVE_FOG_FALLOFF); // 随距离由近向远变浓。
+	cavefogCol *= exp(-7.0 * clamp(worldDir.y * 0.5 + 0.5, 0.0, 1.0)) * 0.999 + 0.001; // 朝下看最浓、朝上看最淡的竖直梯度。
+
+	float skyhole = pow(clamp(1.0 - pow(max(worldDir.y - 0.6, 0.0) * 5.0, 2.0), 0.0, 1.0), 2.0); // 抬头天空方向的洞顶权重。
+	float caveFactor = 1.0 - smoothstep(60.0, 63.0, cameraPosition.y); // 高度窗：六十到六十三米之间淡出，对应 Eclipse `CAVE_DETECTION` 的默认档。
+	bool isSky = texelFetch(depthtex0, ivec2(gl_FragCoord.xy), 0).x >= 1.0; // 天空像素单独按洞顶权重混合。
+
+	color = mix(color + cavefogCol * caveDetection, cavefogCol, isSky ? skyhole * caveDetection * caveFactor : 0.0); // 与 Eclipse 同一行公式。
+}
+
+// 区块边界雾：照 Eclipse `dimensions/composite4.fsh:519-533` 与 `:827-863` 搬运，把渲染距离附近的画面淡到天空色。
+// 输入是待修改颜色与这条视线的距离；就地把远处地形混向该方向的天空颜色，遮住区块加载。
+// 依赖替代：雾色改用预计算大气天空辐射；原程序对不透明与半透明各算一次边界雾，这里只有一条距离，合并成一次。
+void BorderFog(inout vec3 color, float linearDistance){
+	vec3 worldDir = normalize(mat3(gbufferModelViewInverse) * ViewPos_From_ScreenPos_Raw(gl_FragCoord.xy * pixelSize, 1.0)); // 本像素的世界视线方向。
+	float caveDetection = OmniCaveDetection(); // 洞内程度，洞穴里不出现边界雾。
+
+	float distanceFactor = min(max(1.0 - linearDistance / far, 0.0) * 3.0 / OMNI_BORDER_FOG_INTENSITY, 1.0); // 越接近远裁剪面越接近一。
+	float borderFogDensity = smoothstep(0.0, 1.0, 1.0 - distanceFactor); // 只在远处拉起一层雾墙；写成正序阈值，与原程序的反序写法数学等价。
+	borderFogDensity *= exp(-10.0 * pow(clamp(worldDir.y, 0.0, 1.0) * 4.0, 2.0)); // 只在朝下的方向出现。
+	borderFogDensity *= 1.0 - caveDetection; // 洞穴里不出边界雾。
+
+	bool isSky = texelFetch(depthtex0, ivec2(gl_FragCoord.xy), 0).x >= 1.0; // 天空像素本身不用再补边界雾。
+	borderFogDensity *= isSky ? 0.0 : 1.0; // 与 Eclipse `getBorderFogDensity` 天空返回零一致。
+
+	color = mix(color, BorderFogSkyColor(worldDir), borderFogDensity); // 把远处画面混向天空色。
+}
+
 // --- 原版雾：处理失明、黑暗与岩浆、细雪等特殊视效 ---
 // 输入是待修改颜色与距离；就地把画面往对应颜色混合。
 // 为什么这些单独处理：它们来自原版药水与介质状态，不属于自定义雾，改动可能影响玩法判断，所以按原版逻辑照搬。
 void VanillaFog(inout vec3 color, float dist){
+	#ifdef OMNI_OVERWORLD // 洞穴雾与边界雾只属于主世界，下界与末地不画。
+		#ifdef OMNI_CAVE_FOG // 洞内空气里的洞穴雾：与 Eclipse 一样只在空气中且相机高度低于一千五百米。
+			if (isEyeInWater == 0 && cameraPosition.y < 1500.0) CaveFog(color, dist); // 按距离与视线方向补洞内雾。
+		#endif
+		#ifdef OMNI_BORDER_FOG // 渲染距离附近的区块边界雾。
+			BorderFog(color, dist); // 把远处画面混向天空色，遮住区块加载。
+		#endif
+	#endif
+
 	#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 调试开关，关闭后不看失明与黑暗。
 		if (darknessFactor > 0.0) color = mix(color, vec3(0.0), smoothstep(5.0, mix(far, 15.0, darknessFactor), dist) * darknessFactor); // 黑暗效果：越远越黑。
 		if (blindness > 0.0) color = mix(color, vec3(0.0), smoothstep(1.5, mix(far, 4.5, blindness), dist) * blindness); // 失明效果：更近就开始变黑。
