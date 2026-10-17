@@ -266,14 +266,16 @@ class EffectTests(unittest.TestCase):
         self.assertIn("MergeBloom", support.text("effects/color/post_tonemap.glsl"))  # 后期色调映射效果文件调用合并。
 
     def test_auto_exposure_controls(self):
-        """自动曝光的手动模式、测光方式、平滑与时间都可调。"""
+        """自动曝光的手动模式、测光方式、平滑、时间与三项曝光增益都可调。"""
         found, _, _ = support.configuration()  # 真实选项。
-        for name in ("OMNI_MANUAL_EXPOSURE", "OMNI_AE_MODE", "OMNI_AE_OFFSET", "OMNI_SMOOTH_EXPOSURE", "OMNI_EXPOSURE_TIME"):
+        for name in ("OMNI_MANUAL_EXPOSURE", "OMNI_AE_MODE", "OMNI_AE_OFFSET", "OMNI_SMOOTH_EXPOSURE", "OMNI_EXPOSURE_TIME",
+                     "OMNI_EXPOSURE_MULTIPLIER", "OMNI_EXPOSURE_DARKENING", "OMNI_EXPOSURE_BRIGHTENING"):
             self.assertIn(name, found)  # 每个曝光参数由调色源码定义。
         color = support.text("effects/color/color.glsl")  # 曝光在调色主体。
         self.assertIn("GetExposureValue", color)  # 求曝光值独立成函数。
         self.assertIn("OMNI_AE_MODE", color)  # 测光方式参与曝光。
         self.assertIn("OMNI_MANUAL_EXPOSURE", color)  # 手动模式参与曝光。
+        self.assertIn("OMNI_EXPOSURE_MULTIPLIER * OMNI_EXPOSURE_DARKENING * OMNI_EXPOSURE_BRIGHTENING", color)  # 三项增益叠在曝光值上。
 
     def test_gtao_controls(self):
         """地平线遮蔽可开关，质量、半径模式与强度都可调并接入合成。"""

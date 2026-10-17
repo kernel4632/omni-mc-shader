@@ -176,7 +176,7 @@ common/uniforms.glsl → common/math.glsl →（定义本程序所需选项的�
 - 每个选项只在下表归属文件里定义一次，其他文件通过引入归属文件使用它。
 - Omni 已有选项：
   - 与 iterationT 选项同名（如 `OMNI_DOF`、`OMNI_GAMMA`）：直接改成 iterationT 含义、默认值与取值。
-  - 含义相同但名字不同：删除旧定义，在交付报告里写“旧名 → 新名”，主助手统一登记进 `options.py` 的 `OPTION_RENAMES`。
+  - 含义相同但名字不同：删除旧定义，在交付报告里写“旧名 → 新名”，主助手统一登记进 `config.py` 的 `OPTION_RENAMES`。
   - iterationT 没有的额外功能：保留并接到新管线的真实计算，默认值必须让画面与 iterationT 一致（默认关闭或取不改变画面的值）。
   - 只属于被替换旧算法、在新算法里再也找不到含义的参数：不要直接删除，写进报告由主助手决定。
 
@@ -317,7 +317,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
       末地把全局光时间滤波放在延迟二号、空间滤波放在延迟四号（`world1/deferred2.fsh`、`world1/deferred4.fsh`）。
       因此 `effects/lighting/ambient.glsl` 的两段编译条件同时认末地对应的程序宏，并在 `OMNI_END` 下不再被延迟一号/二号触发。
     - 下界与末地的合成五号原程序只写一号画面，不画镜头光斑，`rendering/composite.glsl` 的这两个分支因此不声明三号输出。
-25. 主世界缺口补齐（主世界片）：`DEBUG_COUNTER`、`SODIUM_TEMPFIX` 在 iterationT 3.2.0 只在 `Lib/Settings.glsl` 出现且没有任何计算引用（属于菜单装饰），按 HOP “不做不起作用的假开关”不移植。同批把 iterationT 里带范围滑块、此前被误当内部常数的三个量恢复为玩家选项：`FTC_OFFSET`→`OMNI_FTC_OFFSET`（归属从 `common/math.glsl` 移到 `effects/cloud/cloud.glsl`）、`PARALLAX_MAX_REFINEMENTS`→`OMNI_PARALLAX_MAX_REFINEMENTS`、`TAA_DEPTH_COMPARE_THRESHOLD`→`OMNI_TAA_DEPTH_COMPARE_THRESHOLD`；`TAA_CLOSEST_DEPTH` 仍作内部开关保持原名；`WHITE_DEBUG_WORLD`、`DISABLE_NIGHTVISION`、`DISABLE_BLINDNESS_DARKNESS` 移植为 `OMNI_` 前缀的开发者（`dev`）选项。第九节选项清单与九点二内部常数清单需由主助手登记这四处新增/移动。（后续小步做命名统一：`OMNI_FTC_OFFSET` 改名为 `OMNI_CLOUD_TIME_OFFSET`，`OMNI_PC_COVERAGE`、`OMNI_PC_NOISE_SCALE`、`OMNI_PC_ALTITUDE` 统一为 `OMNI_PLANAR_*`；旧名到新名的迁移登记在 `options.py` 的 `OPTION_RENAMES`，老配置不丢设置。视差算法同时从 `effects/ground/material.glsl` 拆到 `effects/ground/parallax.glsl`，选项仍留在材质文件。）
+25. 主世界缺口补齐（主世界片）：`DEBUG_COUNTER`、`SODIUM_TEMPFIX` 在 iterationT 3.2.0 只在 `Lib/Settings.glsl` 出现且没有任何计算引用（属于菜单装饰），按 HOP “不做不起作用的假开关”不移植。同批把 iterationT 里带范围滑块、此前被误当内部常数的三个量恢复为玩家选项：`FTC_OFFSET`→`OMNI_FTC_OFFSET`（归属从 `common/math.glsl` 移到 `effects/cloud/cloud.glsl`）、`PARALLAX_MAX_REFINEMENTS`→`OMNI_PARALLAX_MAX_REFINEMENTS`、`TAA_DEPTH_COMPARE_THRESHOLD`→`OMNI_TAA_DEPTH_COMPARE_THRESHOLD`；`TAA_CLOSEST_DEPTH` 仍作内部开关保持原名；`WHITE_DEBUG_WORLD`、`DISABLE_NIGHTVISION`、`DISABLE_BLINDNESS_DARKNESS` 移植为 `OMNI_` 前缀的开发者（`dev`）选项。第九节选项清单与九点二内部常数清单需由主助手登记这四处新增/移动。（后续小步做命名统一：`OMNI_FTC_OFFSET` 改名为 `OMNI_CLOUD_TIME_OFFSET`，`OMNI_PC_COVERAGE`、`OMNI_PC_NOISE_SCALE`、`OMNI_PC_ALTITUDE` 统一为 `OMNI_PLANAR_*`；旧名到新名的迁移登记在 `config.py` 的 `OPTION_RENAMES`，老配置不丢设置。视差算法同时从 `effects/ground/material.glsl` 拆到 `effects/ground/parallax.glsl`，选项仍留在材质文件。）
 26. 末地屏幕空间阴影方向修正：`rendering/composite.glsl` 合成零号的末地分支原来把**世界空间** `worldShadowVector` 传给 `ScreenSpaceShadow`，与原程序不符。`ScreenSpaceShadow` 内部把传入方向当视空间射线方向并与视空间法线点乘（原程序读全局 `shadowVector`），这是偏离记录第 13 条把依赖全局量的函数改成参数传入时产生的一处调用错误。已改为传视空间 `shadowVector`，与主世界分支及原程序一致。
 27. 按维度覆盖的画面格式与阴影常量（**存疑，未按维度生效**）：`colortex7Format`、`colortex8Format`、`ambientOcclusionLevel`、`shadowDistanceRenderMul`、`shadowHardwareFiltering1`、`shadowtex0Mipmap` 在 `rendering/buffers.glsl` 加了 `#if defined OMNI_NETHER`/`#elif defined OMNI_END` 分支，值逐项照 iterationT `composite.fsh`、`world-1/composite.fsh`、`world1/composite.fsh` 文件头。**但** Iris 的指令解析器（`ConstDirectiveParser`）逐行读取已展开引用的文本、不评估 `#if`，同名常量只保留文本里最后出现的一条，所以这些分支在 Iris 下不会按维度生效，运行时取 `#else`（主世界）的值。要真正逐维度生效须把声明移进各维度各自的入口文件，属结构性改动，留给主助手裁决（该结构性问题已按第 35 条拆成逐维度入口声明）。其余维度未点名的常量（`shadowIntervalSize`、`shadowtex0Nearest` 等）照主世界值，未逐项核对下界末地默认值，标未确认。
 28. 泛光链下界/末地恒开（行为差异，不是笔误）：原程序 `program.world-1/program.composite9.enabled` 等多写了一个 `program.`，加载器当成无效程序名忽略，实际效果是下界与末地泛光链恒开、不受 `BLOOM` 控制。原移植把它“修正”成受 `OMNI_BLOOM` 控制，改变了行为；现按原程序实际行为去掉这两组门控键，恢复恒开。是否真正叠加仍由合成十四号的 `OMNI_BLOOM` 决定，所以默认画面不变，只影响那几遍是否执行。

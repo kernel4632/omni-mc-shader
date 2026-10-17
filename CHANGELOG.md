@@ -1,5 +1,35 @@
 # 更新记录
 
+## 0.0.0-dev.146
+
+给体积云加渲染分辨率选项：可让基础体积云在更低的分辨率上步进，再放大贴回天空。
+
+- 体积云渲染分辨率 `OMNI_CLOUD_RENDER_SCALE`（`shaders/effects/cloud/cloud.glsl`，默认 1）：一为原分辨率（画面与行为不变），二或四让基础体积云在更低分辨率上算。对应 Eclipse `VL_RENDER_SCALE`（`lib/res_params.glsl:16`，原程序取 0.25/0.5/1.0）；本项目用整数除数 1/2/4 表达同一件事。
+- 低分辨率模式新增两个延迟阶段（`shaders/rendering/deferred.glsl`、`shaders/rendering/programs.json`）：`deferred7` 在按选项缩小的十号画面上只步进基础体积云，写云的加色与透过率；`deferred8` 把十号画面按双线性放大，用「天空乘透过率加云色」贴回一号天空，再在全分辨率上补平面云与卷云、高层云、积雨云附加层。新增十号画面（`shaders/rendering/buffers.glsl` 的 `colortex10Format`、`colortex10Clear`，`shaders/common/uniforms.glsl` 的采样器）。
+- 尺寸与开关接在绘制设置里（`shaders/rendering/pipeline.properties`）：按 `OMNI_CLOUD_RENDER_SCALE` 给十号画面设 `size.buffer.colortex10`（一半或四分之一边长），并用 `program.world0/deferred7.enabled`、`program.world0/deferred8.enabled` 只在分辨率大于一时执行这两步。这两个程序只存在于主世界，下界与末地不生成入口。
+- 主天空与天空盒分流（`shaders/effects/sky/skyrender.glsl`）：`AccumulateSkyClouds` 增加 `applyClouds` 参数；低分辨率模式下主天空先只叠大气与天体，云留给延迟八号贴回，反射天空盒仍保持全分辨率算云。云影贴图不受影响。
+- 默认与原分辨率：取一时 `OMNI_CLOUD_LOWRES` 不定义，天空仍由延迟三号内联算云，两条新阶段不运行，默认画面与行为完全不变。
+- 近似与边界：低分辨率模式下，日月圆盘按体积云透过率整体压暗，与原来「雨天按湿润度在两套衰减之间插值」略有不同；放大只用双线性，未移植 Eclipse 的深度感知高质量上采样 `HQ_CLOUD_UPSAMPLE`；云在更低分辨率上算，边缘更软属预期。
+- 差异说明记入 `docs/eclipse-parity.md` 的「体积云」行：`VL_RENDER_SCALE` 按近似合并，`HQ_CLOUD_UPSAMPLE` 仍无对应。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
+## 0.0.0-dev.145
+
+把主世界星场整体换成 Eclipse `lib/stars.glsl` 的实现，并补上 Eclipse 的曝光乘数与加亮变暗三项控制。
+
+- 星空核（`shaders/effects/sky/sky.glsl`）：删除 iterationT 的 `CalculateStars` 星场，改按 Eclipse `lib/stars.glsl` 移植 `hash13`、`NoisyStarField`、`StableStarField`、`stars`，以及彩色路径的 `hash12`（Eclipse `hash12_alt`）、`starTemp`、`starplane`、`starbox`。默认画面改成 Eclipse 默认的白色星点；`stars()` 的 `STARS_AMOUNT`/`STARS_BRIGHTNESS` 对应既有 `OMNI_STARS_AMOUNT`/`OMNI_STARS_BRIGHTNESS`，行为不变。
+- 新选项 `OMNI_STARS_COLORED`（默认关）：开启后改用带星温的彩色星盒（Eclipse 的 `starbox`，对应 Eclipse 未默认开启的彩色路径）；只编进开启时的代码，默认关闭不产生无用分支。
+- 与 Eclipse 的差异：Eclipse 用 `customRotation(sunPathRotation, worldTimeSmooth)` 摆星场，本项目沿用原有「绕日轴旋转」对齐天球；Eclipse 在合成阶段把星场乘十，本项目改用 `starScale` 对齐既有夜间曝光（白色路径最亮星与改动前一致）。
+- 边界：本次只动主世界星空。末地星空仍是 iterationT 的 `EndCalculateStars`（`effects/world/end_sky.glsl`），未改。
+- 接线核对：`docs/eclipse-parity.md`「星空」行由「近似」改为「已合并」，统计从「已合并 21 项 / 近似 6 项」更新为「22 项 / 5 项」。
+- 曝光乘数 `OMNI_EXPOSURE_MULTIPLIER`（`shaders/effects/color/color.glsl`，默认 1.0）：在整个曝光上再乘一个系数，来源 Eclipse `lib/settings.glsl:773` 的 `EXPOSURE_MULTIPLIER`。
+- 曝光变暗 `OMNI_EXPOSURE_DARKENING`（默认 1.0，取值 0.0–1.0）：把整个曝光往下压，一为不变、零为全黑，来源 Eclipse `lib/settings.glsl:778` 的 `EXPOSURE_DARKENING`。
+- 曝光增亮 `OMNI_EXPOSURE_BRIGHTENING`（默认 1.0，取值 1.0–4.0）：把整个曝光往上抬，一为不变、越大越亮，来源 Eclipse `lib/settings.glsl:779` 的 `EXPOSURE_BRIGHTENING`。
+- 三项都在 `GetExposureValue` 末尾叠到基础曝光上，手动与自动曝光都生效。近似说明：Eclipse 把这三项放进对数曝光曲线，与本项目的亮度单位不同，直接照搬会让增亮项几乎不起作用，这里改成整体增益，并把玩家看得到的名字 `EXPOSURE_BRIGHTENING` 取为正方向（原程序该项在分母里、方向相反）；默认都为一，乘一等于原样，画面与原来一致，原因记入 `docs/eclipse-parity.md` 的「色调与曝光」行。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.144
 
 给雨点涟漪补上强度与对比两个选项。

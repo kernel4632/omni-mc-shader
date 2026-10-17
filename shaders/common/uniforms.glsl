@@ -86,6 +86,7 @@ uniform sampler2D colortex2; // 二号：全局光历史、天空盒、云影、
 uniform sampler2D colortex3; // 三号：不透明法线光照图、反射、镜头光斑。
 uniform sampler2D colortex5; // 五号：高光材质与泛光。
 uniform sampler2D colortex7; // 七号：焦散法线方块与时间抗锯齿历史。
+uniform sampler2D colortex10; // 十号：低分辨率体积云的加色与透过率，只在体积云低分辨率模式下有值。
 uniform sampler2D depthtex0; // 含半透明的深度。
 uniform sampler2D depthtex1; // 不含半透明的深度。
 

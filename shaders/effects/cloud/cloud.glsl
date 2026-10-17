@@ -4,10 +4,13 @@
     三号主体右上角写云影贴图时调用 `CloudShadowTex`；
     延迟四号与五号主体对云影贴图做横向、纵向模糊时调用 `CloudShadowAxialBlur`；
     合成主体算地表直射光与天光被云遮挡多少时调用 `CloudShadowFromTex`、`GetSmoothCloudShadow`。
+    体积云渲染分辨率大于一时（低分辨率模式）额外用到延迟七号：它在更低的分辨率上只算基础体积云，
+    结果存进十号画面；延迟八号再把十号画面放大贴回一号天空，并补上平面云与附加层。
 可复制示例：
     `NubisCumulus(compositeColor, worldDir, cloudAltitude, windDirection, camera, noise, cloudTransmittance);`
     `PlanarClouds(compositeColor, worldDir, camera, dither, cloudTransmittance);`
     `float shadow = CloudShadowFromTex(worldPos);`
+    `vec4 cloudImage = omniCloudImage(worldDir, camera, noise, cloudAltitude, windDirection, intersectsGround, worldDir.y < 0.0);`
 设计原因与取舍：
     体积云与平面云都能出图，各自带开关，默认都开；两者共用同一份云量、云高、云厚、云色等选项，
     切换或叠加时色调不突变。
@@ -33,6 +36,13 @@
 #define OMNI_CLOUD_QUALITY 1.0 // [0.4 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.5 3.0 5.0 7.0 10.0]
 // @option {"label":{"zh_cn":"体积云采样数","en_us":"Cloud Samples"},"description":{"zh_cn":"体积云沿视线采样的次数上限（朝天看时略少），越大越细也越慢；与上面的精细度倍率相乘。","en_us":"Upper bound on volumetric cloud view samples (slightly fewer looking up); higher is finer and slower; multiplied by the quality factor above."},"slider":true}
 #define OMNI_CLOUD_SAMPLES 20 // [8 10 12 16 20 24 28 32 40 48 56 64 80 96 128]
+// @option {"label":{"zh_cn":"体积云渲染分辨率","en_us":"Volumetric Cloud Render Resolution"},"description":{"zh_cn":"体积云单独在更低的分辨率上步进，再放大贴回天空；一为原分辨率（默认，画面与从前一致），二或四更省性能但云边缘更软。","en_us":"Steps the volumetric clouds at a lower resolution, then upsamples onto the sky; one is the original resolution (default, unchanged picture), two or four is cheaper but softer."},"values":{"1":{"zh_cn":"原分辨率","en_us":"Full"},"2":{"zh_cn":"一半","en_us":"Half"},"4":{"zh_cn":"四分之一","en_us":"Quarter"}}}
+#define OMNI_CLOUD_RENDER_SCALE 1 // [1 2 4]
+// 体积云低分辨率模式：渲染分辨率大于一时打开。低分辨率模式把体积云搬到独立阶段，
+// 主天空不再内联计算体积云；原分辨率下整段不生效，默认画面与行为完全不变。
+#if OMNI_CLOUD_RENDER_SCALE > 1
+#define OMNI_CLOUD_LOWRES 1
+#endif
 // @option {"label":{"zh_cn":"晴天云高度","en_us":"Clear Cloud Altitude"},"description":{"zh_cn":"晴天云层底部高度，单位方块。","en_us":"Base altitude of the clear-weather cloud layer in blocks."}}
 #define OMNI_CLOUD_CLEAR_ALTITUDE 500.0 // [300.0 350.0 400.0 450.0 500.0 550.0 600.0 650.0 700.0 750.0 800.0 850.0 900.0 950.0 1000.0 1100.0 1200.0 1300.0 1400.0 1500.0 1600.0 1700.0 1800.0 1900.0 2000.0 2250.0 2500.0 2750.0 3000.0 4000.0 5000.0]
 // @option {"label":{"zh_cn":"晴天云厚度","en_us":"Clear Cloud Thickness"},"description":{"zh_cn":"晴天云层有多厚，单位方块。","en_us":"Thickness of the clear-weather cloud layer in blocks."}}
@@ -154,7 +164,8 @@
 #include "/effects/weather/dailyweather.glsl"
 // 体积云与平面云只延迟三号用，且要读三维云噪声；别的程序（合成、云影模糊）不该把它们编译进来，
 // 否则会把三维噪声贴图当成二维采样。原程序靠“只有延迟三号引入这两个文件”区分，这里用一个显式守卫。
-#if defined COLORTEX_CLOUDNOISE && defined OMNI_DEFERRED3_PASS
+// 低分辨率云阶段（延迟七号算云、延迟八号贴回天空）也要这一整套密度与光照函数，所以与延迟三号一起放行。
+#if defined COLORTEX_CLOUDNOISE && (defined OMNI_DEFERRED3_PASS || defined OMNI_DEFERRED7_PASS || defined OMNI_DEFERRED8_PASS)
 // --- 亨耶-格林斯坦相位函数：云这种大粒子的前向散射，输入夹角余弦与不透明度参数 ---
 float HenyeyGreenstein(float inCosAngle, float inG){
 	float num = 1.0 - inG * inG; // 分子，归一化用。
@@ -522,6 +533,20 @@ void PlanarClouds(inout vec3 color, vec3 worldDir, vec3 camera, float dither, fl
 		}
 	}
 }
+#ifdef OMNI_DEFERRED7_PASS // 低分辨率体积云总图：只算基础体积云，供放大后贴回天空。
+// 为什么从透明底算起：体积云的加色与透过率与背景天空无关；先算出这两项，再在合成阶段用
+// 「天空颜色乘透过率加云色」还原，就能在低分辨率上算云、在全分辨率上贴回，画面不裂开。
+// 返回 `rgb` 是云的加色项，`a` 是云留下的透过率；平面云与附加层仍留在全分辨率的合成阶段。
+vec4 omniCloudImage(vec3 worldDir, vec3 cloudCamera, vec2 noise, vec2 cloudAltitude, vec3 windDirection, bool intersectsGround, bool dirBelowHorizon){
+	vec3 color = vec3(0.0); // 从透明底开始，得到的颜色就是云的加色项。
+	float cloudTransmittance = 1.0; // 云留下的透过率初值。
+	#ifdef OMNI_VOLUMETRIC_CLOUDS // 与延迟三号同一可见判据，只在相机能看到云层时步进。
+		if ((cameraPosition.y > cloudAltitude.x || !intersectsGround) && (cameraPosition.y < cloudAltitude.y || dirBelowHorizon))
+			NubisCumulus(color, worldDir, cloudAltitude, windDirection, cloudCamera, noise, cloudTransmittance); // 基础体积云。
+	#endif
+	return vec4(color, cloudTransmittance); // 返回加色与透过率。
+}
+#endif // 低分辨率体积云总图结束。
 #endif // 体积云与平面云结束。
 // --- 云影三次采样：与共用数学里的同名函数返回类型和参数都不同，按合同留在云影这里一份 ---
 // 读一张二维纹理的十六像素三次模糊，返回第一个通道，`texSize` 是纹理尺寸。

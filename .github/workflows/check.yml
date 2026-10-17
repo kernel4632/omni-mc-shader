@@ -28,7 +28,7 @@ jobs:
           path: | # 工具按锁定哈希缓存；编译结果按源码内容缓存。
             .dev/tools
             .dev/reports/glsl-cache.json
-          key: omni-build-${{ runner.os }}-${{ hashFiles('dev-tools.lock.json','shaders/**','presets/**','build.py','options.py','audit.py') }}
+          key: omni-build-${{ runner.os }}-${{ hashFiles('dev-tools.lock.json','shaders/**','presets/**','build.py','options.py','config.py','audit.py') }}
           restore-keys: | # 内容未命中时退回同系统较新的缓存，仅复用工具。
             omni-build-${{ runner.os }}-
       - name: 安装锁定检查工具

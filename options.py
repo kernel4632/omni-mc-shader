@@ -1,27 +1,22 @@
-"""选项与分享配置：从效果源码生成菜单、翻译和可迁移配置。
+"""选项菜单：从效果源码的原生声明生成菜单、翻译和可迁移预设。
 
-调用位置：`build.py` 调用 `scan`、`presets` 和 `generated` 生成菜单；
-`options.py` 自己的命令入口负责导入、导出、对比和重置配置。
-可复制示例：`python options.py export --input .dev/config/user.json --output .dev/config/share.json --format json`。
+调用位置：`build.py` 调用 `scan`、`presets` 和 `generated` 生成菜单；`config.py` 的
+配置读写复用这里的 `unique_object` 与 `read_properties` 两个配置读取器。
+可复制示例：`options.scan(build.SHADERS)` 读取选项，`options.generated(shaders, found, groups, profiles)` 生成菜单内容。
 设计取舍：源码中直接交给加载器的宏声明 `#define`、常量声明 `const` 和旁边的 `@option`
 说明是唯一来源；常量仅扫描加载器明确支持的名称，工具不另存默认值。
-加载器 `properties` 是单行键值格式，分享 `JSON` 是带字段结构并携带格式与版本的数据，
-因此两者只在明确的导入、导出边界转换。未知选项和重复字段直接报错，避免分享者不知道配置已经丢失。
+分享配置的读写、版本格式和命令入口都在 `config.py`，本文件只负责从源码生成菜单，两者都不手工维护产物。
 """
 
 from __future__ import annotations
 
-import argparse  # 配置分享命令入口。
-import json  # 读取受控配置与机器说明。
+import json  # 读取选项旁的机器说明。
 import re  # 检查选项名称与数值格式。
-import sys  # 唯一入口报告错误。
 from dataclasses import dataclass, field  # 保存已检查的选项数据。
-from pathlib import Path  # 所有用户输出限制在开发目录。
-import paths  # 开发目录写入边界在专用模块里只检查一次。
+from pathlib import Path  # 效果源码与预设路径。
+import config  # 配置读取器与分享格式在配置模块里只维护一份。
 
 LOCALES = ("zh_cn", "en_us")  # 菜单同时支持中文与英文玩家。
-SHARE_SCHEMA = 2  # JSON分享与打包清单共用这一个格式版本。
-LEGACY_VERSION = "0.0.0-dev.3"  # 旧配置格式只描述效果开发前的调试选项。
 NAME = re.compile(r"[A-Z][A-Z0-9_]*\Z")  # 接口名称保持加载器可识别。
 NUMBER = re.compile(  # 原生数值范围不允许任意表达式，只接受数字字面量。
     r"-?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?\Z"
@@ -41,66 +36,6 @@ CONST_OPTIONS = {  # 只允许加载器真正认识的原生常量，避免生�
     "wetnessHalflife": "float",
     "drynessHalflife": "float",
 }
-OPTION_RENAMES = {  # 保留历史名称对照；旧配置按新名迁移，移植前的旧参数合并见 docs/parity.md 第十二节。
-    "OMNI_SHADOW_RESOLUTION": "shadowMapResolution",  # 旧名迁移到新名。
-    "OMNI_SHADOW_DISTANCE": "shadowDistance",  # 旧名迁移到新名。
-    "OMNI_SHADOW_PENUMBRA": "OMNI_VARIABLE_PENUMBRA_SHADOWS",  # 旧名迁移到新名。
-    "OMNI_SHADOW_PENUMBRA_QUALITY": "OMNI_VPS_QUALITY",  # 旧名迁移到新名。
-    "OMNI_SHADOW_BLUR": "OMNI_SHADOW_BASIC_BLUR",  # 旧名迁移到新名。
-    "OMNI_SHADOW_SOFTNESS": "OMNI_VPS_SPREAD",  # 旧名迁移到新名。
-    "OMNI_MATERIAL_DETAIL": "OMNI_ENABLE_PBR",  # 旧名迁移到新名。
-    "OMNI_VEGETATION_WIND": "OMNI_WAVING_PLANTS",  # 旧名迁移到新名。
-    "OMNI_RAIN_WIND": "OMNI_RAIN_WIND_X",  # 旧名迁移到新名。
-    "OMNI_NETHERFOG_DENSITY": "OMNI_NETHER_FOG_DENSITY",  # 旧名迁移到新名：补全单词分隔，与 `VFOG` 一系写法统一。
-    "OMNI_WATERFOG_DENSITY": "OMNI_WATER_FOG_DENSITY",  # 旧名迁移到新名：同上。
-    "OMNI_UNDERWATER_DENSITY": "OMNI_WATER_FOG_DENSITY",  # 旧名迁移到新名。
-    "OMNI_VFOG_STEPS": "OMNI_VFOG_QUALITY",  # 旧名迁移到新名。
-    "OMNI_AA_ENABLED": "OMNI_TAA",  # 旧名迁移到新名。
-    "OMNI_TAA_WEIGHT": "OMNI_TAA_BLENDWEIGHT",  # 旧名迁移到新名。
-    "OMNI_BLOOM_ENABLED": "OMNI_BLOOM",  # 旧名迁移到新名。
-    "OMNI_BLOOM_STRENGTH": "OMNI_BLOOM_AMOUNT",  # 旧名迁移到新名。
-    "OMNI_AUTO_EXPOSURE": "OMNI_MANUAL_EXPOSURE",  # 旧名迁移到新名。
-    "OMNI_TONEMAP_MODE": "OMNI_TONEMAP_OPERATOR",  # 旧名迁移到新名。
-    "OMNI_UPSCALE": "OMNI_FSR",  # 旧名迁移到新名。
-    # iterationT 自带拼写错误的选项名，导入 iterationT 配置时按这里对照迁移到正确拼写。
-    "OMNI_SEREEN_RATIO": "OMNI_SCREEN_RATIO",  # 旧名把屏幕一词拼错，按正确写法迁移。
-    "OMNI_DOF_DEPTH_SMMOOTH_HALFLIFE": "OMNI_DOF_DEPTH_SMOOTH_HALFLIFE",  # 旧名把平滑一词多写了一个字母，按正确写法迁移。
-    "OMNI_CLOUD_CLEAR_COVERY": "OMNI_CLOUD_CLEAR_COVERAGE",  # 旧名少写覆盖度一词的末尾字母，按正确写法迁移。
-    "OMNI_CLOUD_RAIN_COVERY": "OMNI_CLOUD_RAIN_COVERAGE",  # 旧名少写覆盖度一词的末尾字母，按正确写法迁移。
-    "OMNI_MOTION_BLUR_SUTTER_ANGLE": "OMNI_MOTION_BLUR_SHUTTER_ANGLE",  # 旧名把快门一词漏了一个字母，按正确写法迁移。
-    "OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGTITUDE": "OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE",  # 旧名把经度一词拼错，按正确写法迁移。
-    "OMNI_UPSCALE_STRENGTH": "OMNI_FSR_SHARPNESS",  # 旧名迁移到新名。
-    "OMNI_CLOUD_COVERAGE": "OMNI_CLOUD_CLEAR_COVERAGE",  # 旧名迁移到新名。
-    "OMNI_CLOUD_HEIGHT": "OMNI_CLOUD_CLEAR_ALTITUDE",  # 旧名迁移到新名。
-    "OMNI_CLOUD_THICKNESS": "OMNI_CLOUD_CLEAR_THICKNESS",  # 旧名迁移到新名。
-    "OMNI_CLOUD_DENSITY": "OMNI_CLOUD_CLEAR_DENSITY",  # 旧名迁移到新名。
-    "OMNI_CLOUD_SCALE": "OMNI_CLOUD_CLEAR_SCALE",  # 旧名迁移到新名。
-    "OMNI_CLOUD_SUNLIGHT": "OMNI_CLOUD_CLEAR_SUNLIGHTING",  # 旧名迁移到新名。
-    "OMNI_CLOUD_SKYLIGHT": "OMNI_CLOUD_CLEAR_SKYLIGHTING",  # 旧名迁移到新名。
-    "OMNI_CLOUD_RAIN_SUNLIGHT": "OMNI_CLOUD_RAIN_SUNLIGHTING",  # 旧名迁移到新名。
-    "OMNI_CLOUD_RAIN_SKYLIGHT": "OMNI_CLOUD_RAIN_SKYLIGHTING",  # 旧名迁移到新名。
-    "OMNI_CLOUD_BOTTOM": "OMNI_CLOUD_BOTTOM_BRIGHTNESS",  # 旧名迁移到新名。
-    "OMNI_CLOUD_OUTSCATTER": "OMNI_CLOUD_OUTSCATTER_FACTOR",  # 旧名迁移到新名。
-    "OMNI_CLOUD_NOISE_SCALE": "OMNI_CLOUD_DETAILED_NOISE_SCALE",  # 旧名迁移到新名。
-    "OMNI_PC_COVERAGE": "OMNI_PLANAR_COVERAGE",  # 旧名迁移到新名：`PC` 与同文件 `PLANAR` 两种写法统一为 `PLANAR`。
-    "OMNI_PC_NOISE_SCALE": "OMNI_PLANAR_NOISE_SCALE",  # 旧名迁移到新名：同上。
-    "OMNI_PC_ALTITUDE": "OMNI_PLANAR_ALTITUDE",  # 旧名迁移到新名：同上。
-    "OMNI_FTC_OFFSET": "OMNI_CLOUD_TIME_OFFSET",  # 旧名迁移到新名：把自造缩写 `FTC` 换成普通词 `CLOUD_TIME`。
-}
-
-
-def unique_object(pairs: list[tuple]) -> dict:
-    """拒绝重复键，避免不同读取器得到不同配置。
-
-    输入边界：只接收 `json.loads` 提供的键值对；同一对象中的键必须唯一。
-    单源原因：后续流程只信任这里返回的对象，不再重复猜测哪个值才是有效值。
-    """
-    result = {}  # 输入对象不允许后值覆盖前值。
-    for name, value in pairs:
-        if name in result:
-            raise ValueError(f"重复配置字段：{name}")  # 重复值必须由分享者明确修正。
-        result[name] = value  # 检查后下游信任唯一键。
-    return result
 
 
 @dataclass(frozen=True)
@@ -164,9 +99,9 @@ def metadata(text: str, location: str, allowed: set[str]) -> dict:
     单源原因：菜单名称和帮助文字只从源码旁边读取，不在生成器中复制第二份。
     """
     data = json.loads(  # 用户写入的机器说明在边界检查一次。
-        text, object_pairs_hook=unique_object
+        text, object_pairs_hook=config.unique_object
     )
-    if not isinstance(data, dict) or set(data) - allowed:
+    if not isinstance(data, dict) or set(data) - allowed:  # 说明必须是对象，且只含允许字段。
         raise ValueError(f"{location}：说明必须是对象，且只能含 {sorted(allowed)}")
     for field in ("label", "description"):  # 名称必填，帮助说明可选。
         if field not in data and field == "description":  # 菜单帮助可以省略，名称必须提供。
@@ -192,7 +127,7 @@ def metadata(text: str, location: str, allowed: set[str]) -> dict:
                          and all(isinstance(value, str) and value.strip() and "\n" not in value and "\r" not in value
                                  for value in text.values())
                          for text in mapping.values()))
-        if not valid:
+        if not valid:  # 档位名称结构不合格时拒绝生成菜单。
             raise ValueError(f"{location}：values 必须是取值到双语单行名称的映射")
     return data  # 下游信任已检查的字段。
 
@@ -211,7 +146,7 @@ def scan(shaders: Path) -> tuple[dict[str, Option], dict[str, dict[str, str]]]:
         if not all(re.fullmatch(r"[a-z][a-z0-9_]*", part) for part in group.split("/")):
             raise ValueError(f"{source}：效果名称每段只能使用小写英文、数字和下划线")
         lines = source.read_text(encoding="utf-8").splitlines()  # 保留原始行号便于定位错误。
-        for index, line in enumerate(lines):
+        for index, line in enumerate(lines):  # 逐行读取说明与紧随其后的声明。
             stripped = line.strip()  # 说明允许缩进但不允许跨行。
             if stripped.startswith("// @effect "):  # 每个效果提供自己的菜单标题。
                 data = metadata(stripped.removeprefix("// @effect "), str(source), {"label"})
@@ -247,7 +182,7 @@ def _read_option(source: Path, lines: list[str], index: int, group: str,
     line = lines[index + 1] if index + 1 < len(lines) else ""  # 文件末尾没有声明时按相邻格式错误处理。
     definition = DEFINE.fullmatch(line)  # 原生宏允许无数值开关以及带范围的数字。
     constant = CONST.fullmatch(line)  # 常量必须带类型、默认值和明确范围。
-    if definition is None and constant is None:
+    if definition is None and constant is None:  # 说明下一行必须是受支持的原生声明。
         raise ValueError(f"{location}：@option 下一行必须是原生 #define 或受支持的 const 选项")
     declaration = "define"  # 保留对外数据中区分宏和常量的原有字段值。
     if constant:
@@ -266,41 +201,21 @@ def _read_option(source: Path, lines: list[str], index: int, group: str,
     if constant and name in options:  # 一个名字只能对应一处默认值，不让后面的文件覆盖它。
         raise ValueError(f"{location}：选项名称重复：{name}")
     choices = tuple(values.split()) if values else ("false", "true")  # 范围文字原样保留，不把浮点值重新格式化。
-    if default is None:
+    if default is None:  # 无数值宏按是否被注释表示开关。
         default = "false" if commented else "true"  # 无数值宏按是否被注释表示开关，范围不能伪造布尔类型。
         if values or data.get("slider", False):
             raise ValueError(f"{location}：布尔开关不能声明数值范围或滑块")
     elif (not constant and (commented or not values)) or not all(NUMBER.fullmatch(value) for value in choices):
         raise ValueError(f"{location}：数值选项必须启用定义并提供数字范围")
-    if default not in choices or len(set(choices)) != len(choices):
+    if default not in choices or len(set(choices)) != len(choices):  # 默认值必须在范围内且取值不重复。
         raise ValueError(f"{location}：默认值不在范围内，或范围含重复值")
     valueLabels = data.get("values", {})  # 档位名称必须对应真实取值，避免菜单写出用不到的按钮文字。
-    if any(key not in choices for key in valueLabels):
+    if any(key not in choices for key in valueLabels):  # 档位名称必须对应真实取值。
         raise ValueError(f"{location}：values 里的名字必须来自声明的数值范围")
     return Option(
         name, default, choices, data["label"], data.get("description", {}),
         data.get("slider", False), group, source, index + 2, declaration, data.get("page", ""), valueLabels,
     )  # 返回同时包含菜单文字和原生取值的数据，不再另存一份默认值。
-
-
-def read_properties(source: Path) -> dict[str, str]:
-    """读取单行 `properties` 键值，拒绝重复键和含糊的续行。
-
-    输入边界：只接受外部配置文件中的单行 `key=value`；空行和注释可存在，续行不接受。
-    格式取舍：`properties` 是加载器直接读取的单行键值文本，没有分享对象的字段结构。
-    工具额外写出的版本注释由 `shared` 单独读取，不会被这里当成玩家选项。
-    """
-    result = {}  # 同一个键只允许定义一次。
-    for index, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
-        stripped = line.strip()  # 配置输入先整理空白。
-        if not stripped or stripped.startswith(("#", "!")):
-            continue  # 空行与说明不影响玩家值。
-        key, separator, value = stripped.partition("=")  # 只支持明确的单行键值。
-        key, value = key.strip(), value.strip()  # 键值分别规范化。
-        if not separator or not key or key in result or stripped.endswith("\\"):
-            raise ValueError(f"{source}:{index}：需要唯一的单行 key=value")
-        result[key] = value  # 下游再检查具体选项范围。
-    return result  # 不悄悄覆盖重复配置。
 
 
 def read_pipeline(source: Path) -> dict[str, str]:
@@ -314,10 +229,10 @@ def read_pipeline(source: Path) -> dict[str, str]:
     seen: dict[str, list[tuple]] = {}  # 键名到它出现过的分支路径。
     stack: list[list[int]] = []  # 每层条件块记录自身编号和当前分支序号。
     blocks = 0  # 条件块编号，区分前后两个互不相干的块。
-    result = {}
-    for index, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+    result = {}  # 只用于检查同名设置是否冲突，不决定取哪一支。
+    for index, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):  # 逐行读取设置与条件分支。
         stripped = line.strip()
-        directive = re.match(r"#\s*(if|ifdef|ifndef|elif|else|endif)\b", stripped)
+        directive = re.match(r"#\s*(if|ifdef|ifndef|elif|else|endif)\b", stripped)  # 条件指令只维护分支路径。
         if directive:
             word = directive[1]
             if word in ("if", "ifdef", "ifndef"):
@@ -365,7 +280,7 @@ def presets(folder: Path, options: dict[str, Option]) -> list[Preset]:
         if len(labels) != 1:
             raise ValueError(f"{source}：需要一条 # @preset 菜单说明")
         label = metadata(labels[0], str(source), {"label"})["label"]  # 外部预设说明同样检查翻译。
-        changes = read_properties(source)  # 预设同样经过配置边界检查。
+        changes = config.read_properties(source)  # 预设同样经过配置边界检查。
         for name, value in changes.items():  # 玩家分享的取值必须属于真实选项范围。
             if name not in options or value not in options[name].values:
                 raise ValueError(f"{source}：未知选项或无效取值：{name}={value}")
@@ -508,200 +423,3 @@ def escape(text: str) -> str:
     """
     text = text.replace("\\", "\\\\").replace("=", "\\=").replace(":", "\\:")  # 不让说明改变属性语法。
     return text.encode("ascii", "backslashreplace").decode("ascii")  # 加载器读取兼容的转义中文。
-
-
-def shared(source: Path, found: dict[str, Option], shader_version: str, legacy: bool = False) -> dict:
-    """读取分享配置或旧属性配置，并迁移为当前完整配置。
-
-    输入边界：`.properties` 按加载器配置读取，其他后缀仍按分享 `JSON` 读取；所有字段、版本、
-    选项名称和值都在这里一次检查。`found` 必须来自当前源码扫描，`shader_version` 必须来自
-    唯一版本文件；`legacy` 只允许命令入口明确打开旧格式迁移。
-    迁移原因：旧配置只有调试选项，当前配置增加了更多效果，不能把旧字段静默套到新含义上；
-    迁移后补齐当前默认值，并保留未知选项错误，让分享者知道哪些内容无法导入。
-    """
-    if source.suffix == ".properties":
-        data = _properties_share(source, shader_version, legacy)  # 键值格式先补上版本结构，再走共同检查。
-    else:
-        data = json.loads(source.read_text(encoding="utf-8"), object_pairs_hook=unique_object)  # 重复字段会产生不同解释，必须在读取时拒绝。
-    # 格式版本必须是真整数；布尔值在语言中也能参与整数比较，但不是合法的版本号。
-    if (not isinstance(data, dict)
-            or set(data) != {"schemaVersion", "shaderVersion", "values"}
-            or type(data["schemaVersion"]) is not int
-            or data["schemaVersion"] not in (1, SHARE_SCHEMA)
-            or not isinstance(data["values"], dict)):
-        raise ValueError("分享配置必须包含格式版本、目标版本和选项对象")
-    if not isinstance(data["shaderVersion"], str) or not re.fullmatch(r"\d+\.\d+\.\d+(?:-(?:dev|alpha|beta|rc)\.\d+)?", data["shaderVersion"]):
-        raise ValueError("分享配置的光影版本无效")
-    if data["schemaVersion"] == SHARE_SCHEMA and data["shaderVersion"] != shader_version:
-        raise ValueError("格式二只能导入当前光影版本")  # 当前格式不隐式猜测字段含义。
-    if data["schemaVersion"] == 1 and (not _older_or_equal(data["shaderVersion"], LEGACY_VERSION)
-                                       or not _older_or_equal(data["shaderVersion"], shader_version)):
-        raise ValueError("格式一只接受开发准备阶段的旧版配置")  # 没有定义迁移的版本不能隐式套用旧规则。
-    changes = data["values"]  # 分享数据进入已检查的选项边界。
-    if data["schemaVersion"] == 1 and any(name != "OMNI_DEBUG_VIEW" or value not in ("0", "1", "2") for name, value in changes.items()):
-        raise ValueError("旧版配置只能包含原有调试视图；当前选项请按当前格式导入")  # 不把当前水云等选项伪装成旧接口。
-    changes = rename(changes)  # 旧名先按对照表迁移，玩家改过名的设置不丢，改过名又写错才在这里报错。
-    for name, value in changes.items():  # 逐项报告未知名称与非法取值，不把拼写错误当成缺省值。
-        if name not in found or not isinstance(value, str) or value not in found[name].values:
-            raise ValueError(f"未知选项或无效取值：{name}={value}")  # 静默忽略会让分享者误以为配置已完整生效。
-    values = {name: changes.get(name, option.default) for name, option in found.items()}  # 缺少的当前选项补源码默认值，导入总是完整替换。
-    return {"schemaVersion": SHARE_SCHEMA, "shaderVersion": shader_version, "values": values}  # 旧格式只升级结构，不臆测或重命名未知字段。
-
-
-def rename(values: dict[str, str]) -> dict[str, str]:
-    """把旧选项名按 `OPTION_RENAMES` 迁移到当前名，返回新字典。
-
-    输入边界：`values` 是外部配置里的键值，必须先检查是字典才能进来。
-    为什么单独成函数：导入路径与预设读取都要用同一份对照表，写两遍迟早会不一致。
-    行为：旧名出现就换名；新旧名同时出现直接报错，避免同一项出现两个互相矛盾的取值。
-    未知名字原样保留，交给后面的选项边界统一报错，不在这里静默丢弃。
-    """
-    result = {}  # 迁移后的键值。
-    for name, value in values.items():
-        current = OPTION_RENAMES.get(name, name)  # 没有登记的名字保持原样。
-        if current in result or (current != name and current in values):
-            raise ValueError(f"配置里同时给了旧名与新名：{name}、{current}")  # 两个来源冲突时不能替玩家猜哪个优先。
-        result[current] = value  # 旧名落到当前名下。
-    return result
-
-
-def _properties_share(source: Path, shader_version: str, legacy: bool) -> dict:
-    """给加载器键值配置补上分享结构，让两种输入使用相同的版本与取值检查。
-
-    版本注释不影响游戏读取；没有注释时默认按当前版解释，只有显式旧格式参数才启用旧版规则。
-    本函数只整理外部文件格式，不替调用方检查选项，避免两种输入各自维护一套范围判断。
-    """
-    lines = source.read_text(encoding="utf-8").splitlines()  # 从原始注释读版本，不把它混入玩家选项。
-    versions = [line.removeprefix("# @shaderVersion ").strip()
-                for line in lines if line.startswith("# @shaderVersion ")]  # 只识别约定前缀，不从任意说明猜版本。
-    if len(versions) > 1:
-        raise ValueError("properties 配置只能有一个 @shaderVersion")  # 即使两个标记相同，也要求作者消除重复来源。
-    source_version = versions[0] if versions else (LEGACY_VERSION if legacy else shader_version)  # 有明确标记时优先尊重文件，而非命令猜测。
-    return {
-        "schemaVersion": 1 if legacy else SHARE_SCHEMA,  # 当前配置不会因缺少版本注释被误标成旧格式。
-        "shaderVersion": source_version,  # 后续共同边界负责验证版本是否合法且可迁移。
-        "values": read_properties(source),  # 原始键值读取仍拒绝重复键和续行。
-    }
-
-
-def _older_or_equal(source: str, current: str) -> bool:
-    """比较两个配置版本，供旧格式迁移判断先后顺序。
-
-    先比较三个数字，再比较开发、测试、候选和正式阶段，最后比较阶段内序号。
-    无法识别的版本返回否，不能因为解析失败就获得旧版迁移资格。
-    """
-    pattern = re.compile(r"^(\d+)\.(\d+)\.(\d+)(?:-(dev|alpha|beta|rc)\.(\d+))?$")
-    left, right = pattern.fullmatch(source), pattern.fullmatch(current)  # 两边使用同一种版本语法。
-    if not left or not right:
-        return False  # 只有已知版本才能按历史迁移规则解释，不能用文字排序猜先后。
-    stage = {"dev": 0, "alpha": 1, "beta": 2, "rc": 3, None: 4}  # 正式版本排在所有预发布阶段之后。
-    source_order = tuple(map(int, left.group(1, 2, 3))) + (stage[left.group(4)], int(left.group(5) or 0))  # 序号按数字比较，避免十排在二前面。
-    current_order = tuple(map(int, right.group(1, 2, 3))) + (stage[right.group(4)], int(right.group(5) or 0))  # 正式阶段没有序号时用零占位。
-    return source_order <= current_order  # 相同版本也可按已有规则导入。
-
-
-def save(destination: Path, values: dict, shader_version: str, root: Path) -> None:
-    """把完整分享 `JSON` 写入项目 `.dev`，不修改玩家设置。
-
-    输入边界：本函数用 `paths.development_path` 检查 `destination`；`values` 必须是已经检查过的完整选项，
-    `shader_version` 必须来自当前版本来源。`JSON` 保存格式版本和目标光影版本，便于分享与迁移。
-    """
-    destination = paths.development_path(destination, root, ".json")  # 格式与路径同时在写入边界检查。
-    destination.parent.mkdir(parents=True, exist_ok=True)  # 只在确认边界后建立输出目录。
-    content = {"schemaVersion": SHARE_SCHEMA, "shaderVersion": shader_version, "values": values}  # 版本信息与值一起分享，读取者才知道该用哪套规则解释。
-    destination.write_text(json.dumps(content, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")  # 保留中文和稳定缩进，方便人阅读与比较。
-
-
-def save_properties(destination: Path, values: dict[str, str], shader_version: str, root: Path) -> None:
-    """写出可直接交给加载器的完整 `properties`，并保留工具版本标记。
-
-    输入边界：目标路径必须通过 `paths.development_path`，`values` 必须是完整且已检查的选项值。
-    格式取舍：这里输出加载器能直接读取的单行键值，而不是带对象结构的分享 `JSON`；版本注释
-    只供本工具迁移读取，不改变加载器的选项语法。
-    """
-    destination = paths.development_path(destination, root, ".properties")  # 加载器配置沿用同一受控输出边界。
-    destination.parent.mkdir(parents=True, exist_ok=True)  # 输出边界检查后才创建目录。
-    content = [
-        f"# @shaderVersion {shader_version}",  # 版本放注释里，加载器仍只接收原来的选项键值。
-        "# Omni \\u5171\\u4eab\\u914d\\u7f6e\\uff1b\\u6bcf\\u4e2a\\u9009\\u9879\\u503c\\u6765\\u81ea\\u6548\\u679c\\u6e90\\u7801\\u7684\\u539f\\u751f\\u5b9a\\u4e49\\u3002",  # 说明保留原有转义内容与顺序。
-        *(f"{name}={value}" for name, value in values.items()),  # 已检查的字符串原样写入，不重新格式化数字。
-    ]
-    destination.write_text("\n".join(content) + "\n", encoding="ascii")  # 中文说明使用转义，键和值保持加载器可读编码。
-
-
-def _arguments() -> tuple[argparse.Namespace, argparse.ArgumentParser]:
-    """读取并检查命令参数组合，返回参数和保留原错误出口的解析器。
-
-    参数名、帮助文字和拒绝顺序保持原样。先拒绝不相关参数，再扫描源码，避免错误命令触发文件操作。
-    """
-    parser = argparse.ArgumentParser(description="Omni 配置分享")  # 参数错误继续通过解析器退出，保留命令退出码。
-    parser.add_argument("command", choices=("import", "export", "diff", "reset"))  # 每条命令完成一个玩家动作。
-    parser.add_argument("--input", type=Path)  # 分享操作显式指定外部输入，不隐式读取玩家设置。
-    parser.add_argument("--other", type=Path)  # 另一份配置只允许用于只读比较。
-    parser.add_argument("--output", type=Path)  # 文件后缀与内容格式必须一致，避免导出文件名误导玩家。
-    parser.add_argument("--legacy", action="store_true", help="按开发准备阶段格式一导入旧properties")  # 旧属性没有自带格式结构，必须由用户明确选择。
-    parser.add_argument("--format", choices=("json", "properties"), help="输出格式；export默认properties，import与reset默认json")  # 显式格式只开放给导出命令。
-    args = parser.parse_args()  # 参数不匹配时在任何输出文件写入前拒绝。
-    if args.legacy and (args.command != "import" or not args.input or args.input.suffix != ".properties"):
-        parser.error("--legacy 只能用于 import 的旧properties输入")
-    if args.other and args.command != "diff":
-        parser.error("--other 只能用于 diff")  # 不把第二份输入误当成导出或导入对象。
-    if args.format and args.command != "export":
-        parser.error("--format 只能用于 export")  # 此处已覆盖对比、导入和重置，无需再次检查相同组合。
-    if args.output and args.command == "diff":
-        parser.error("diff 不写入文件，不能指定 --output")  # 对比只打印差异，不创建配置。
-    if args.command == "reset" and args.input:
-        parser.error("reset 从源码重置，不接受 --input")  # 重置的唯一数据源是原生默认值。
-    return args, parser  # 文件后缀仍在确定最终输出格式后用同一解析器报错。
-
-
-def main() -> None:
-    """执行配置导入、导出、对比和重置命令。
-
-    命令边界：参数由 `_arguments` 检查，外部配置由 `shared` 检查，保存时统一检查输出路径。
-    外部行为：保留现有命令名、参数名、默认输出路径和中文结果文字，方便脚本继续调用。
-    模块末尾统一报告可预期错误；未知选项、路径越界或格式错误都不会被静默跳过。
-    """
-    import build  # 延迟引入避免构建与配置循环初始化，保持原有入口依赖顺序。
-    args, parser = _arguments()  # 参数检查完成后才读取当前源码与版本。
-    found, _ = scan(build.SHADERS)  # 当前所有取值仍来自效果原生定义。
-    release = build.version()  # 文件目标版本只来自唯一版本文件，不在命令中硬编码。
-    if args.format:
-        output_format = args.format  # 显式指定优先，后面仍要检查后缀一致。
-    elif args.command == "export" and not args.output:
-        output_format = "properties"  # 没指定目标的导出默认生成加载器可读配置。
-    else:
-        output_format = "properties" if args.output and args.output.suffix == ".properties" else "json"  # 其余情况沿用原来的后缀推断规则。
-    filename = f".dev/config/load.{output_format}" if args.command == "export" else ".dev/config/user.json"  # 保留各命令的默认目标。
-    destination = args.output or build.ROOT / filename  # 指定目标时沿用用户路径，不自动替换后缀。
-    if destination.suffix != "." + output_format:
-        parser.error("--format 必须与 --output 的文件后缀一致")  # 内容格式和文件名不符时在写盘前拒绝。
-    defaults = {name: option.default for name, option in found.items()}  # 默认值来自真实声明，不来自旧配置或预设。
-    if args.command == "reset":
-        save(destination, defaults, release, build.ROOT)  # 重置只保存工具管理的共享配置。
-        print("已重置开发共享配置")  # 保留现有成功文字，供用户和脚本识别。
-        return  # 重置无需输入文件，不进入分享读取流程。
-    if not args.input:
-        parser.error("此命令需要 --input")  # 导入、导出与对比均需明确输入。
-    current = shared(args.input, found, release, args.legacy)["values"]  # 检查后内部只使用完整且合法的配置。
-    if args.command == "diff":
-        other = shared(args.other, found, release)["values"] if args.other else defaults  # 不给另一份配置时与源码默认值对比。
-        for name in found:  # 仅显示两份完整配置实际不同的值。
-            if current[name] != other[name]:
-                print(f"{name}: {other[name]} → {current[name]}")  # 箭头继续从对照值指向输入值。
-        return  # 对比到此结束，不触发任何保存函数。
-    if args.command == "export" and destination.suffix == ".properties":
-        save_properties(destination, current, release, build.ROOT)  # 导出的完整属性可直接交给加载器。
-    else:
-        save(destination, current, release, build.ROOT)  # 分享对象保留格式和目标光影版本。
-    print("共享配置已保存到开发目录")  # 只有实际保存成功后才报告完成。
-
-
-if __name__ == "__main__":
-    sys.stdout.reconfigure(encoding="utf-8")  # 成功信息和差异文字保持中文可读。
-    sys.stderr.reconfigure(encoding="utf-8")  # 参数错误与配置错误采用相同编码。
-    try:
-        main()  # 所有命令走同一条检查、读取和反馈主线。
-    except (ValueError, OSError) as error:
-        print(f"错误：{error}", file=sys.stderr)  # 配置与文件错误统一报告原因，不吞掉异常内容。
-        sys.exit(1)  # 保留失败退出码，让调用脚本能识别保存失败。

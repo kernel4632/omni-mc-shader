@@ -14,7 +14,8 @@ from unittest.mock import patch  # 模拟发布前置条件，不执行版本控
 import audit  # 实际词法注释统计。
 import build  # 实际流程与打包接口。
 import game  # 实际回归与性能汇总。
-import options  # 实际分享迁移接口。
+import options  # 选项扫描与菜单接口。
+import config  # 配置读写与版本格式来源。
 
 class PipelineTests(unittest.TestCase):
     """检查自有代码、配置、缓冲和安全发布协议。"""
@@ -78,38 +79,38 @@ class PipelineTests(unittest.TestCase):
             root = Path(temporary); source = root/"old.json"  # 不修改真实共享配置。
             data = {"schemaVersion":1,"shaderVersion":"0.0.0-dev.3","values":{"OMNI_DEBUG_VIEW":"2"}}
             source.write_text(json.dumps(data),encoding="utf-8")
-            migrated = options.shared(source,found,build.version())  # 调用真实迁移。
+            migrated = config.shared(source,found,build.version())  # 调用真实迁移。
             self.assertEqual(migrated["schemaVersion"],2); self.assertEqual(set(migrated["values"]),set(found))  # 迁移不会留下上一套参数。
-            options.save(root/".dev/user.json",migrated["values"],build.version(),root)
-            self.assertEqual(options.shared(root/".dev/user.json",found,build.version()),migrated)  # 导出可再次导入。
-            with self.assertRaises(ValueError): options.save(root/"player.json",{},build.version(),root)  # 用户目录不能成为输出。
+            config.save(root/".dev/user.json",migrated["values"],build.version(),root)
+            self.assertEqual(config.shared(root/".dev/user.json",found,build.version()),migrated)  # 导出可再次导入。
+            with self.assertRaises(ValueError): config.save(root/"player.json",{},build.version(),root)  # 用户目录不能成为输出。
             for values in ({"UNKNOWN":"1"},{"OMNI_EXPOSURE":"9"},{"OMNI_EXPOSURE":2}):
                 data["values"] = values; source.write_text(json.dumps(data),encoding="utf-8")
-                with self.assertRaises(ValueError): options.shared(source,found,build.version())  # 未知键值都失败。
+                with self.assertRaises(ValueError): config.shared(source,found,build.version())  # 未知键值都失败。
             data["values"]={}; data["shaderVersion"]="9.0.0"; source.write_text(json.dumps(data),encoding="utf-8")
-            with self.assertRaises(ValueError): options.shared(source,found,build.version())  # 没有未来版本迁移规则。
+            with self.assertRaises(ValueError): config.shared(source,found,build.version())  # 没有未来版本迁移规则。
             loadable = root/".dev/load.properties"
-            options.save_properties(loadable,migrated["values"],build.version(),root)  # 导出路径保持加载器使用的properties格式。
+            config.save_properties(loadable,migrated["values"],build.version(),root)  # 导出路径保持加载器使用的properties格式。
             text = loadable.read_text(encoding="ascii")
-            self.assertIn(f"# @shaderVersion {build.version()}",text); self.assertEqual(options.shared(loadable,found,build.version()),migrated)  # properties能再次导入且版本来自当前源码。
+            self.assertIn(f"# @shaderVersion {build.version()}",text); self.assertEqual(config.shared(loadable,found,build.version()),migrated)  # properties能再次导入且版本来自当前源码。
 
     def test_option_rename_migrates_old_names(self):
         """旧选项名按对照表迁移到当前名，新旧名同时出现时拒绝导入。"""
-        self.assertGreater(len(options.OPTION_RENAMES), 0)  # 对照表为空时这条测试没有意义。
-        old, new = next(iter(options.OPTION_RENAMES.items()))  # 取任意一条真实对照做验证。
-        self.assertEqual(options.rename({old: "1"}), {new: "1"})  # 旧名落到当前名下。
-        self.assertEqual(options.rename({"OMNI_KEEP_ME": "1"}), {"OMNI_KEEP_ME": "1"})  # 未登记的名字原样保留，交给选项边界报错。
+        self.assertGreater(len(config.OPTION_RENAMES), 0)  # 对照表为空时这条测试没有意义。
+        old, new = next(iter(config.OPTION_RENAMES.items()))  # 取任意一条真实对照做验证。
+        self.assertEqual(config.rename({old: "1"}), {new: "1"})  # 旧名落到当前名下。
+        self.assertEqual(config.rename({"OMNI_KEEP_ME": "1"}), {"OMNI_KEEP_ME": "1"})  # 未登记的名字原样保留，交给选项边界报错。
         with self.assertRaisesRegex(ValueError, "同时给了旧名与新名"):
-            options.rename({old: "1", new: "1"})  # 两个来源冲突时不能替玩家猜。
+            config.rename({old: "1", new: "1"})  # 两个来源冲突时不能替玩家猜。
         found, _ = options.scan(build.SHADERS)  # 真实源码取范围。
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); source = root/"legacy.json"  # 不修改真实共享配置。
             if new not in found:
                 return  # 该对照只是安装器旧名（当前源码没有同名选项）时无需继续验证导入。
-            data = {"schemaVersion": options.SHARE_SCHEMA, "shaderVersion": build.version(),
+            data = {"schemaVersion": config.SHARE_SCHEMA, "shaderVersion": build.version(),
                     "values": {old: found[new].default}}  # 用旧名给一个当前选项。
             source.write_text(json.dumps(data), encoding="utf-8")
-            migrated = options.shared(source, found, build.version())  # 走真实导入路径。
+            migrated = config.shared(source, found, build.version())  # 走真实导入路径。
             self.assertEqual(migrated["values"][new], found[new].default)  # 旧名确实被迁移到新名上。
 
     def test_comment_audit_ignores_normal_strings(self):
@@ -231,4 +232,4 @@ class PipelineTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             source = Path(temporary)/"duplicate.json"
             source.write_text('{"schemaVersion":2,"shaderVersion":"0.0.0-dev.4","values":{"OMNI_EXPOSURE":"1","OMNI_EXPOSURE":"2"}}',encoding="utf-8")
-            with self.assertRaisesRegex(ValueError,"重复配置字段"): options.shared(source,found,build.version())  # 不同解析器不能得到不同风格。
+            with self.assertRaisesRegex(ValueError,"重复配置字段"): config.shared(source,found,build.version())  # 不同解析器不能得到不同风格。

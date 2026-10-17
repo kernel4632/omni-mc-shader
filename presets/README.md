@@ -15,4 +15,4 @@ OMNI_DEBUG_VIEW=0
 `shaderpacks/光影包文件名.txt`（例如 `Omni-0.0.0-dev.1.zip.txt`），然后重载光影。
 该格式采用 Iris / OptiFine 的选项名称；未知选项在构建检查时会报错。
 
-开发分享工具可运行 `python options.py import --input 预设.properties --output .dev/config/share.json`。无版本标记的加载器配置默认按当前VERSION检查；旧版properties必须显式添加 `--legacy`，只迁移原有调试视图。带版本标记的当前文件要求与VERSION一致。`python options.py export --input .dev/config/share.json --output .dev/config/load.properties` 会写出可直接交给加载器的完整properties；也可通过 `.json` 后缀或 `--format json` 保留分享结构。导入、导出与重置只写本项目 `.dev`，拒绝符号链接与目录联接。未知版本、重复键、未知选项与非法值报错。
+开发分享工具可运行 `python config.py import --input 预设.properties --output .dev/config/share.json`。无版本标记的加载器配置默认按当前VERSION检查；旧版properties必须显式添加 `--legacy`，只迁移原有调试视图。带版本标记的当前文件要求与VERSION一致。`python config.py export --input .dev/config/share.json --output .dev/config/load.properties` 会写出可直接交给加载器的完整properties；也可通过 `.json` 后缀或 `--format json` 保留分享结构。导入、导出与重置只写本项目 `.dev`，拒绝符号链接与目录联接。未知版本、重复键、未知选项与非法值报错。

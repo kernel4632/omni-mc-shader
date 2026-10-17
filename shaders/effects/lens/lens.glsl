@@ -3,6 +3,8 @@
 来源：景深照 iterationT `Lib/IndividualFounctions/DOF.glsl` 一比一移植；
   景深的散景变形与色散照 Eclipse `lib/settings.glsl:720-721` 的 `DOF_ANAMORPHIC_RATIO`、`DOF_DISPERSION_MULT`
   与 `dimensions/composite11.fsh:251-258` 的采样方式移植，两项默认值一表示不变形、不色散，默认画面不变；
+  景深的焦距与光圈照 Eclipse `lib/settings.glsl:725-727` 的 `focal`、`fstop` 与 `aperture = focal/fstop`
+  换算相对模糊倍数，默认五十毫米、f/2.8 正好等于一，不改动原来由 `OMNI_DOF_BLUR` 决定的模糊量；
   眩光与光斑照 iterationT `Lib/IndividualFounctions/LensGlareFlare.glsl` 一比一移植；
   相机速度与动态模糊照 iterationT `Lib/IndividualFounctions/MotionBlur.glsl` 的模糊部分一比一移植；
   暗角照 iterationT `Lib/Programs/Final.glsl` 的 `Vignette` 一比一移植。
@@ -37,6 +39,10 @@
 //#define OMNI_DOF
 // @option {"label": {"zh_cn": "景深模糊量", "en_us": "Blur Amount"}, "slider": true, "description": {"zh_cn": "失焦处模糊的强度。", "en_us": "Strength of the out-of-focus blur."}}
 #define OMNI_DOF_BLUR 0.01 // [0.001 0.0015 0.002 0.003 0.005 0.007 0.01 0.015 0.02 0.03 0.05 0.07 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0]
+// @option {"label": {"zh_cn": "焦距", "en_us": "Focal Length"}, "slider": true, "description": {"zh_cn": "镜头的焦距，单位毫米。越长失焦越强，像把镜头拉远拍特写；默认五十毫米是常见标准镜。来源 Eclipse `lib/settings.glsl:725` 的 `focal`。", "en_us": "Lens focal length in millimetres; longer blurs the out-of-focus areas more, like zooming in for a close-up. The default 50 mm is a common standard lens. From Eclipse `lib/settings.glsl:725` `focal`."}}
+#define OMNI_DOF_FOCAL_LENGTH 50.0 // [8.0 12.0 16.0 20.0 24.0 28.0 35.0 40.0 50.0 60.0 70.0 85.0 100.0 135.0 150.0 200.0 250.0 300.0]
+// @option {"label": {"zh_cn": "光圈", "en_us": "Aperture"}, "slider": true, "description": {"zh_cn": "光圈 f 值。数字越小光圈越大、失焦越糊，数字越大画面越锐利；默认 f/2.8 是常见大光圈。来源 Eclipse `lib/settings.glsl:726` 的 `fstop`。", "en_us": "Aperture f-number. A smaller number opens the aperture wider and blurs more; a larger number keeps more in focus. The default f/2.8 is a common fast aperture. From Eclipse `lib/settings.glsl:726` `fstop`."}}
+#define OMNI_DOF_APERTURE 2.8 // [0.7 0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.2 2.5 2.8 3.2 3.5 4.0 4.5 5.0 5.6 6.3 7.1 8.0 9.0 10.0 11.0 13.0 14.0 16.0 18.0 20.0 22.0]
 // @option {"label": {"zh_cn": "景深采样数", "en_us": "Quality"}, "slider": true, "description": {"zh_cn": "散焦取样次数，越高越平滑也越慢。", "en_us": "Blur samples per pixel; higher is smoother and slower."}}
 #define OMNI_DOF_QUALITY 10 // [5 7 10 15 20 30 50 70 100]
 // @option {"label": {"zh_cn": "前景弥散范围采样数", "en_us": "CoC Spread Quality"}, "slider": true, "description": {"zh_cn": "统计前景弥散范围的搜索次数。", "en_us": "Search steps used to estimate foreground blur spread."}}
@@ -101,6 +107,18 @@ float CalculateCoCRadius(float f, float d, float a){
 	return abs(a * (d - f) / (d * f)); // 薄透镜近似。
 }
 
+// --- 景深：焦距与光圈换算成模糊倍数 ---
+// 真实镜头里，失焦的模糊程度正比于「焦距的平方除以光圈 f 值」：换长焦或开大光圈都会让画面更糊。
+// 这里拿五十毫米、f/2.8 这套常见镜头做基准，两者相除得到相对倍数，好处是焦距与光圈取默认值时结果正好为一，
+// 完全保留原来由 `OMNI_DOF_BLUR` 决定的模糊量，玩家不动这两项也能得到与移植前一致的画面。
+const float DoF_RefFocal = 50.0; // 基准焦距，毫米。
+const float DoF_RefAperture = 2.8; // 基准光圈，f 值。
+float DoFLensFactor(){
+	float focalRatio = OMNI_DOF_FOCAL_LENGTH / DoF_RefFocal; // 焦距相对基准的倍数，越长越大。
+	float apertureRatio = DoF_RefAperture / OMNI_DOF_APERTURE; // f 值越小口径越大，取倒数表示反比。
+	return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
+}
+
 // 读某个坐标的米制深度；远景像素改用远景深度，并给一个近处下限避免紧贴相机时数值失控。
 float GetLinearDepth(vec2 coord){
 	float depth = textureLod(depthtex0, coord, 0.0).x; // 读含半透明的深度。
@@ -128,7 +146,7 @@ float GetFocus(){
 // 在螺旋上撒一圈样本，找出附近比当前点更近、弥散更大的点，把它们的弥散并进来。
 // 为什么需要它：一个像素要被足够大的前景散焦覆盖，否则近处物体边缘会显得又硬又细。
 float CoCSpread(){
-	float cocRadiusfactor = OMNI_DOF_BLUR * gbufferProjection[1][1]; // 口径系数，投影矩阵的纵向缩放乘以模糊量。
+	float cocRadiusfactor = OMNI_DOF_BLUR * gbufferProjection[1][1] * DoFLensFactor(); // 口径系数：模糊量乘投影缩放，再乘焦距光圈换算的倍数。
 	const float maxCoc = OMNI_DOF_MAX_COC; // 最大弥散半径。
 	const float rMaxCoc = 1.0 / maxCoc; // 半径倒数，用于归一化。
 	float rAspectRatio = 1.0 / aspectRatio; // 宽高比倒数，让椭圆散景在像素上是圆的。
@@ -179,7 +197,7 @@ void AccumulateDOFDepth(bool isSelfSample, bool isBlurredSample, float sampleDep
 }
 
 vec4 DepthOfField(){
-	float cocRadiusfactor = OMNI_DOF_BLUR * gbufferProjection[1][1]; // 口径系数。
+	float cocRadiusfactor = OMNI_DOF_BLUR * gbufferProjection[1][1] * DoFLensFactor(); // 口径系数，与弥散统计用同一个换算。
 	float minCoc = 0.5641895835 * pixelSize.y; // 一个像素大小的最小弥散，避免零半径时除零。
 	const float maxCoc = OMNI_DOF_MAX_COC; // 最大弥散半径。
 	float rAspectRatio = 1.0 / aspectRatio; // 宽高比倒数。

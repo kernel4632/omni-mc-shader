@@ -20,8 +20,9 @@
 // --- 天空与云的共用累积 ---
 // 把大气辐射与全部云层累积到 `color`，并回填大气透过率、云透过率与月食压暗因子。
 // 主天空与反射天空盒共用这一段：方向、相机、噪声不同，公式相同。
+// `applyClouds` 为假时只叠大气，跳过全部云层；低分辨率模式用它让主天空先不画云，云改到延迟八号贴回。
 void AccumulateSkyClouds(vec3 dir, vec3 atmosphereCamera, vec3 cloudCamera, vec2 noise, float planarNoise,
-						 bool horizon, bool dirBelowHorizon, vec2 cloudAltitude, vec3 windDirection,
+						 bool horizon, bool dirBelowHorizon, vec2 cloudAltitude, vec3 windDirection, bool applyClouds,
 						 inout vec3 color, out vec3 transmittance, out float cloudTransmittance, out float eclipseDarkening){
 	transmittance = vec3(1.0); // 大气透过率初值，由下面的查表回填。
 	bool ray_r_mu_intersects_ground; // 视线是否打到地面，由大气查表回填。
@@ -31,17 +32,17 @@ void AccumulateSkyClouds(vec3 dir, vec3 atmosphereCamera, vec3 cloudCamera, vec2
 
 	cloudTransmittance = 1.0; // 云留下的透过率初值。
 	#ifdef OMNI_VOLUMETRIC_CLOUDS // 打开体积云才步进。
-		if ((cameraPosition.y > cloudAltitude.x || !ray_r_mu_intersects_ground) && (cameraPosition.y < cloudAltitude.y || dirBelowHorizon)) // 相机在云层附近或朝上看才需要步进。
+		if (applyClouds && (cameraPosition.y > cloudAltitude.x || !ray_r_mu_intersects_ground) && (cameraPosition.y < cloudAltitude.y || dirBelowHorizon)) // 相机在云层附近或朝上看才需要步进。
 			NubisCumulus(color, dir, cloudAltitude, windDirection, cloudCamera, noise, cloudTransmittance); // 体积云。
 	#endif
 
 	#ifdef OMNI_PLANAR_CLOUDS // 打开平面云才算。
-		if (cameraPosition.y < OMNI_PLANAR_ALTITUDE && !ray_r_mu_intersects_ground) // 相机在云平面以下才看得到。
+		if (applyClouds && cameraPosition.y < OMNI_PLANAR_ALTITUDE && !ray_r_mu_intersects_ground) // 相机在云平面以下才看得到。
 			PlanarClouds(color, dir, atmosphereCamera, planarNoise, cloudTransmittance); // 平面云。
 	#endif
 
 	#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
-		NubisExtraLayers(color, dir, windDirection, cloudCamera, noise, ray_r_mu_intersects_ground, cloudTransmittance); // 卷云、高层云与积雨云。
+		if (applyClouds) NubisExtraLayers(color, dir, windDirection, cloudCamera, noise, ray_r_mu_intersects_ground, cloudTransmittance); // 卷云、高层云与积雨云。
 	#endif
 }
 
@@ -101,7 +102,12 @@ void RenderDeferredSky(){
 		vec3 transmittance; // 大气透过率，由共用累积回填；主天空要拿它给天体做衰减。
 		float cloudTransmittance; // 云留下的透过率。
 		float eclipseDarkening; // 月食压暗因子，太阳圆盘也要用。
-		AccumulateSkyClouds(worldDir, camera, camera, noise_1, noise_1.y, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, finalComposite, transmittance, cloudTransmittance, eclipseDarkening); // 叠大气与全部云层。
+		#ifdef OMNI_CLOUD_LOWRES // 低分辨率模式：主天空先不画云，云留给延迟八号放大贴回。
+			bool applyClouds = false; // 跳过云层，只叠大气与天体。
+		#else // 原分辨率：与从前完全一致，天空这一步就把云画好。
+			bool applyClouds = true; // 天空与云一起累积。
+		#endif
+		AccumulateSkyClouds(worldDir, camera, camera, noise_1, noise_1.y, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, applyClouds, finalComposite, transmittance, cloudTransmittance, eclipseDarkening); // 叠大气与全部云层。
 
 		vec3 celestial = GammaToLinear(texelFetch(colortex0, texelCoord, 0).rgb) * (OMNI_SKY_TEXTURE_BRIGHTNESS * 0.2); // 零号画面的天体颜色转线性并按选项缩放。
 
@@ -157,7 +163,7 @@ void RenderDeferredSky(){
 		vec3 transmittance; // 大气透过率，本段不使用，仅满足共用累积的输出。
 		float cloudTransmittance; // 云留下的透过率，写进二号透明通道供顶点阶段读云量。
 		float eclipseDarkening; // 月食压暗因子，本段不使用。
-		AccumulateSkyClouds(viewVector, cameraSkyBox, camera, noise_0, noise_0.x, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, skyImage, transmittance, cloudTransmittance, eclipseDarkening); // 与主天空同一流程，只是相机与噪声不同。
+		AccumulateSkyClouds(viewVector, cameraSkyBox, camera, noise_0, noise_0.x, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, true, skyImage, transmittance, cloudTransmittance, eclipseDarkening); // 与主天空同一流程，只是相机与噪声不同；天空盒始终保持全分辨率。
 
 		#ifdef OMNI_CAVE_MODE
 			skyImage = mix(skyImage, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00005) * 0.07), eyeBrightnessZeroSmooth); // 洞穴模式下的极暗天空盒。

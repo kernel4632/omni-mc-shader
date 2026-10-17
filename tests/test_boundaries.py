@@ -16,6 +16,7 @@ import audit  # 中文说明解码与比例统计。
 import build  # 实际生成与发布边界。
 import game  # 专用实例路径和进程匹配。
 import options  # 分享格式唯一来源。
+import config  # 配置读写与版本格式唯一来源。
 import support  # 共享展开缓存，避免重复读取整棵源码树。
 
 class BoundaryTests(unittest.TestCase):
@@ -112,15 +113,15 @@ class BoundaryTests(unittest.TestCase):
         found,_ = options.scan(build.SHADERS)  # 外部配置值使用真实选项范围。
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); source = root/"current.properties"; source.write_text("OMNI_TONEMAP_OPERATOR=1\n",encoding="ascii")  # 用当前真实选项写出加载器属性配置。
-            current = options.shared(source,found,build.version())  # 没有标记的加载器配置默认是当前版。
-            self.assertEqual(current["shaderVersion"],build.version()); self.assertEqual(current["schemaVersion"],options.SHARE_SCHEMA)
-            with self.assertRaisesRegex(ValueError,"旧版配置只能"): options.shared(source,found,build.version(),legacy=True)
+            current = config.shared(source,found,build.version())  # 没有标记的加载器配置默认是当前版。
+            self.assertEqual(current["shaderVersion"],build.version()); self.assertEqual(current["schemaVersion"],config.SHARE_SCHEMA)
+            with self.assertRaisesRegex(ValueError,"旧版配置只能"): config.shared(source,found,build.version(),legacy=True)
             source.write_text("OMNI_DEBUG_VIEW=2\n",encoding="ascii")
-            migrated = options.shared(source,found,build.version(),legacy=True)  # 明确旧版迁移后补齐当前默认值。
-            loadable = root/".dev/load.properties"; options.save_properties(loadable,migrated["values"],build.version(),root)
-            self.assertEqual(options.read_properties(loadable),migrated["values"])  # 加载器只读完整合法键值。
-            self.assertEqual(options.shared(loadable,found,build.version()),migrated)  # 版本标记不会回到旧格式。
-            with self.assertRaises(ValueError): options.save_properties(root/"player.properties",{},build.version(),root)
+            migrated = config.shared(source,found,build.version(),legacy=True)  # 明确旧版迁移后补齐当前默认值。
+            loadable = root/".dev/load.properties"; config.save_properties(loadable,migrated["values"],build.version(),root)
+            self.assertEqual(config.read_properties(loadable),migrated["values"])  # 加载器只读完整合法键值。
+            self.assertEqual(config.shared(loadable,found,build.version()),migrated)  # 版本标记不会回到旧格式。
+            with self.assertRaises(ValueError): config.save_properties(root/"player.properties",{},build.version(),root)
 
     def test_dependency_wrong_files_type_is_readable(self):
         """外部依赖清单类型错误必须可读报错，而不是属性访问异常。"""
@@ -133,7 +134,7 @@ class BoundaryTests(unittest.TestCase):
 
     def test_cli_rejects_unrelated_parameters(self):
         """错误发布参数不启动生成，错误导出参数不写配置。"""
-        commands = [["build.py","version","--new-version","0.0.0-dev.5"],["build.py","generate","--notes-file","missing.md"],["options.py","reset","--legacy"]]
+        commands = [["build.py","version","--new-version","0.0.0-dev.5"],["build.py","generate","--notes-file","missing.md"],["config.py","reset","--legacy"]]
         for command in commands:
             result = subprocess.run([sys.executable,*command],cwd=build.ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace")  # 只运行必定在参数边界退出的命令。
             self.assertEqual(result.returncode,2,result.stdout+result.stderr)  # 拒绝无效参数而不执行后续动作。
@@ -165,8 +166,8 @@ class BoundaryTests(unittest.TestCase):
             try: (functions/"function").symlink_to(outside,target_is_directory=True)
             except OSError: self.skipTest("本机不允许建立符号链接")  # 显式记录环境限制，不伪装链接验证通过。
             with patch.object(game,"ROOT",root),self.assertRaises(ValueError): game.regression("safe",99)
-            config = root/".dev/config"; config.symlink_to(outside,target_is_directory=True)
-            with self.assertRaises(ValueError): options.save(config/"user.json",{},build.version(),root)
+            config_dir = root/".dev/config"; config_dir.symlink_to(outside,target_is_directory=True)
+            with self.assertRaises(ValueError): config.save(config_dir/"user.json",{},build.version(),root)
             self.assertFalse((outside/"user.json").exists()); self.assertFalse((outside/"setup.mcfunction").exists())  # 拒绝发生在首次写入之前。
 
     def test_water_and_lens_combination_contract(self):

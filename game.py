@@ -161,28 +161,10 @@ def prepare_launcher(directory: Path, version: str) -> Path:
     return launcher
 
 
-# --- 生成回归场景 ---
-def regression(world: str, pack_format: int) -> Path:
-    """在专用测试世界生成可执行场景，并写出未运行的回归报告。
-
-    `world` 只允许指向 `.dev/minecraft/saves` 下已有的专用世界；命令只准备
-    测试材料，不会误建目录或操作玩家存档。数据包、函数、报告和每个写入文件
-    都在写入前检查路径链接，安全优先于替用户修复错误目录。
-    """
-    if not re_world(world) or type(pack_format) is not int or pack_format<1:
-        raise ValueError("需要单个测试世界名与实际数据包格式编号")  # 玩家输入先检查，不建立任何目录。
-    folder = development_path(ROOT / ".dev/minecraft/saves" / world)  # 世界目录不能通过链接指向玩家存档。
-    if not (folder / "level.dat").is_file(): raise ValueError("请先在专用实例创建测试世界，不能指向真实玩家存档")  # 不创建伪造世界。
-    pack = development_path(folder / "datapacks/Omni-regression")  # 数据包目录也必须留在自有实例。
-    functions = development_path(pack / "data/omni/function")  # 函数目录链接不能逃逸。
-    pack_file = development_path(pack / "pack.mcmeta")  # 数据包描述不能写入链接目标。
-    setup_file = development_path(functions / "setup.mcfunction")  # 初始化函数必须属于本次测试包。
-    for member in pack.rglob("*"):
-        development_path(member)  # 任何现有成员链接在第一次写入前统一拒绝。
-    destination = development_path(ROOT / ".dev/reports/regression.json")  # 报告路径也在所有写入之前检查。
-    functions.mkdir(parents=True,exist_ok=True)  # 不碰其他数据包。
-    pack_file.write_text(json.dumps({"pack":{"pack_format":pack_format,"description":"Omni 专用场景回归"}},ensure_ascii=False)+"\n",encoding="utf-8")
-    setup = [
+# --- 回归场景内容：专用平台、对照方块与固定观察点 ---
+def _regression_setup() -> list[str]:
+    """返回初始化函数要执行的命令：搭建专用平台与对照方块，并冻结时间与天气。"""
+    return [
         "execute in minecraft:overworld run forceload add -16 -16 16 16",  # 确保专用区域在命令执行时已加载。
         "execute in minecraft:overworld run fill -16 79 -16 16 79 16 minecraft:stone",  # 专用测试平台。
         "execute in minecraft:overworld run fill -16 80 -16 16 92 16 minecraft:air",  # 清除平台上方遮挡。
@@ -204,8 +186,11 @@ def regression(world: str, pack_format: int) -> Path:
         "gamerule minecraft:advance_weather false",  # 当前版本规则注册表的天气冻结名称。
         "gamemode creative @s",  # 防止固定测试位置导致坠落或窒息。
     ]
-    setup_file.write_text("\n".join(setup)+"\n",encoding="utf-8")  # 只有玩家执行函数后才改变专用世界。
-    scenes = {
+
+# --- 回归场景命令：每个固定条件先设天气与时间，再把相机移到观察点 ---
+def _regression_scenes() -> dict[str, list[str]]:
+    """返回全部固定场景命令，键是场景名，值是玩家执行时依次运行的指令。"""
+    return {
         "day":["time set noon","weather clear","execute in minecraft:overworld run tp @s 12 83 12 135 20"],  # 日间同场景对照。
         "night":["time set midnight","weather clear","execute in minecraft:overworld run tp @s 12 83 12 135 20"],  # 月光与星空。
         "rain":["time set noon","weather rain","execute in minecraft:overworld run tp @s 12 83 12 135 20"],  # 晴雨转换与湿润。
@@ -214,6 +199,30 @@ def regression(world: str, pack_format: int) -> Path:
         "nether":["execute in minecraft:the_nether run tp @s 0 100 0 0 0"],  # 下界环境与历史重置。
         "end":["execute in minecraft:the_end run tp @s 0 90 0 0 0"],  # 末地环境与历史重置。
     }
+
+# --- 生成回归场景 ---
+def regression(world: str, pack_format: int) -> Path:
+    """在专用测试世界生成可执行场景，并写出未运行的回归报告。
+
+    `world` 只允许指向 `.dev/minecraft/saves` 下已有的专用世界；命令只准备
+    测试材料，不会误建目录或操作玩家存档。数据包、函数、报告和每个写入文件
+    都在写入前检查路径链接，安全优先于替用户修复错误目录。
+    """
+    if not re_world(world) or type(pack_format) is not int or pack_format<1:
+        raise ValueError("需要单个测试世界名与实际数据包格式编号")  # 玩家输入先检查，不建立任何目录。
+    folder = development_path(ROOT / ".dev/minecraft/saves" / world)  # 世界目录不能通过链接指向玩家存档。
+    if not (folder / "level.dat").is_file(): raise ValueError("请先在专用实例创建测试世界，不能指向真实玩家存档")  # 不创建伪造世界。
+    pack = development_path(folder / "datapacks/Omni-regression")  # 数据包目录也必须留在自有实例。
+    functions = development_path(pack / "data/omni/function")  # 函数目录链接不能逃逸。
+    pack_file = development_path(pack / "pack.mcmeta")  # 数据包描述不能写入链接目标。
+    setup_file = development_path(functions / "setup.mcfunction")  # 初始化函数必须属于本次测试包。
+    for member in pack.rglob("*"):
+        development_path(member)  # 任何现有成员链接在第一次写入前统一拒绝。
+    destination = development_path(ROOT / ".dev/reports/regression.json")  # 报告路径也在所有写入之前检查。
+    functions.mkdir(parents=True,exist_ok=True)  # 不碰其他数据包。
+    pack_file.write_text(json.dumps({"pack":{"pack_format":pack_format,"description":"Omni 专用场景回归"}},ensure_ascii=False)+"\n",encoding="utf-8")
+    setup_file.write_text("\n".join(_regression_setup())+"\n",encoding="utf-8")  # 只有玩家执行函数后才改变专用世界。
+    scenes = _regression_scenes()  # 固定场景命令集中在一处维护。
     for name,commands in scenes.items():
         scene_file = development_path(functions / (name+".mcfunction"))  # 每个场景文件都单独拒绝链接逃逸。
         scene_file.write_text("\n".join(commands)+"\n",encoding="utf-8")  # 不自动传送玩家。

@@ -52,7 +52,7 @@ uv pip sync requirements-dev.lock
 | 改版本号 | `VERSION` |
 | 查实际能力与限制 | `docs/parity.md` 与 `docs/eclipse-parity.md` |
 | 检查中文注释与未实现标记 | `audit.py` |
-| 导入、导出、对比、重置配置 | `options.py` 命令入口 |
+| 导入、导出、对比、重置配置 | `config.py` 命令入口 |
 
 ## 文档
 
@@ -68,7 +68,7 @@ uv pip sync requirements-dev.lock
 
 ## 参考资料
 
-- [Iris 开发文档](https://shaders.properties/)
+- [Iris 开发文档](https://shaders.properties/current/reference/overview/)
 - [Iris 调试说明](https://github.com/IrisShaders/docs/blob/main/src/content/docs/current/Reference/Miscellaneous/debugging_shaders.mdx)
 - [第三方来源与许可](THIRD_PARTY.md)：当前没有随包的第三方库，云密度用 iterationT 的预计算噪声贴图；参考包原件未复制。
 - [RenderDoc](https://renderdoc.org/) 与 [GFX-Debuggers](https://modrinth.com/mod/gfx-debuggers)

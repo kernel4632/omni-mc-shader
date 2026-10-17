@@ -4,7 +4,8 @@
   自动曝光统计照 iterationT `Lib/IndividualFounctions/MotionBlur.glsl` 的 `GetExposureTiles` 一比一移植；
   可配置的宽色域压缩照 iterationT `Lib/IndividualFounctions/AgX.glsl` 一比一移植；
   浦肯野效应照 iterationT `composite5.fsh` 的 `PurkinjeEffect` 一比一移植；
-  白平衡色温照 Eclipse `lib/settings.glsl:748` 的 `WHITE_BALANCE` 与 `composite11.fsh:318-320` 的乘法移植（默认中性）。
+  白平衡色温照 Eclipse `lib/settings.glsl:748` 的 `WHITE_BALANCE` 与 `composite11.fsh:318-320` 的乘法移植（默认中性）；
+  三项曝光增益照 Eclipse `lib/settings.glsl:773/778/779` 的 `EXPOSURE_MULTIPLIER`/`EXPOSURE_DARKENING`/`EXPOSURE_BRIGHTENING` 移植（默认一，画面不变）。
 调用位置：
   合成八号片元在顶行统计像素处调用 `GetExposureTiles` 并把结果写进二号画面，供后续帧与最终阶段读取；
   合成十四号片元调用 `GetExposureValue` 取曝光、`WhiteBalance` 做白平衡，再按 `TONEMAP_OPERATOR` 做色调映射与高级调色；
@@ -22,6 +23,8 @@
   曝光分两级：八号片元按分块平均亮度算出目标曝光并写进顶行像素，最终阶段再把它换算成实际乘数；
   强光压缩先转宽色域再压，暗部和亮部都保留色彩；简单曲线把所有亮部压向纯白，代价是丢掉高光颜色。
   自动曝光的目标是画面中间灰，适应速度按帧时间计算，帧率高低走同一条曲线，避免亮暗突变时跳动。
+  Eclipse 的三项曝光控制是普通增益：原程序把它们放进对数曲线里，与本项目的亮度单位不同，直接照搬会让增亮项几乎不起作用；
+  这里按同一意图做成整体增益，默认都为一、画面不变，逐条重建改为「曝光变暗」「曝光增亮」，见 `docs/eclipse-parity.md` 色调与曝光行。
 */
 #ifndef OMNI_COLOR_INCLUDED // 只引入一次，避免选项、内部常数与函数重复定义。
 #define OMNI_COLOR_INCLUDED // 置上标记。
@@ -50,6 +53,12 @@
 #define OMNI_EV_VALUE 14.0 // [0.0 0.33 0.67 1.0 1.33 1.67 2.0 2.33 2.67 3.0 3.33 3.67 4.0 4.33 4.67 5.0 5.33 5.67 6.0 6.33 6.67 7.0 7.33 7.67 8.0 8.33 8.67 9.0 9.33 9.67 10.0 10.33 10.67 11.0 11.33 11.67 12.0 12.33 12.67 13.0 13.33 13.67 14.0 14.33 14.67 15.0 15.33 15.67 16.0 16.33 16.67 17.0 17.33 17.67 18.0 18.33 18.67 19.0 19.33 19.67 20.0]
 // @option {"label": {"zh_cn": "曝光偏移", "en_us": "AE Offset"}, "slider": true, "description": {"zh_cn": "在自动曝光结果上整体加减的曝光，负值更暗。", "en_us": "Exposure added on top of the auto result; negative is darker."}}
 #define OMNI_AE_OFFSET 0.0 // [-5.0 -4.67 -4.33 -4.0 -3.67 -3.33 -3.0 -2.67 -2.33 -2.0 -1.67 -1.33 -1.0 -0.67 -0.33 0.0 0.33 0.67 1.0 1.33 1.67 2.0 2.33 2.67 3.0 3.33 3.67 4.0 4.33 4.67 5.0]
+// @option {"label": {"zh_cn": "曝光乘数", "en_us": "Exposure Multiplier"}, "slider": true, "description": {"zh_cn": "在整个曝光上再乘一个系数，调大整体更亮。来源 Eclipse `lib/settings.glsl:773` 的 `EXPOSURE_MULTIPLIER`。", "en_us": "Extra gain applied to the whole exposure; larger is brighter. From Eclipse `lib/settings.glsl:773` `EXPOSURE_MULTIPLIER`."}}
+#define OMNI_EXPOSURE_MULTIPLIER 1.0 // [0.25 0.4 0.5 0.6 0.7 0.75 0.8 0.85 0.9 0.95 1.0 1.1 1.2 1.3 1.4 1.5 2.0 3.0 4.0]
+// @option {"label": {"zh_cn": "曝光变暗", "en_us": "Exposure Darkening"}, "slider": true, "description": {"zh_cn": "把整个曝光往下压，一为不变、零为全黑。来源 Eclipse `lib/settings.glsl:778` 的 `EXPOSURE_DARKENING`。", "en_us": "Pushes the whole exposure down; one is unchanged, zero is black. From Eclipse `lib/settings.glsl:778` `EXPOSURE_DARKENING`."}}
+#define OMNI_EXPOSURE_DARKENING 1.0 // [0.0 0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95 1.0]
+// @option {"label": {"zh_cn": "曝光增亮", "en_us": "Exposure Brightening"}, "slider": true, "description": {"zh_cn": "把整个曝光往上抬，一为不变、越大越亮。来源 Eclipse `lib/settings.glsl:779` 的 `EXPOSURE_BRIGHTENING`，按名称取为增亮（原程序该项在分母里，方向相反）。", "en_us": "Lifts the whole exposure; one is unchanged, larger is brighter. From Eclipse `lib/settings.glsl:779` `EXPOSURE_BRIGHTENING`, oriented as a brightening (the original sits in the denominator, opposite direction)."}}
+#define OMNI_EXPOSURE_BRIGHTENING 1.0 // [1.0 1.05 1.1 1.2 1.3 1.4 1.5 1.6 1.8 2.0 2.5 3.0 4.0]
 // @option {"label": {"zh_cn": "测光方式", "en_us": "AE Mode"}, "description": {"zh_cn": "自动曝光如何给画面的不同位置计权。", "en_us": "How auto exposure weights different screen areas."}, "values": {"0": {"zh_cn": "默认", "en_us": "Default"}, "1": {"zh_cn": "中心权重", "en_us": "Center Weighted"}, "2": {"zh_cn": "只看中心", "en_us": "Center Only"}, "3": {"zh_cn": "全屏平均", "en_us": "Screen Average"}}}
 #define OMNI_AE_MODE 0 // [0 1 2 3]
 // @option {"label": {"zh_cn": "曝光曲线", "en_us": "AE Curve"}, "slider": true, "description": {"zh_cn": "平均亮度到曝光的曲线指数，越大越克制。", "en_us": "Exponent mapping average luminance to exposure."}}
@@ -207,10 +216,12 @@ float GetExposureTiles(){
 }
 
 // --- 曝光值：把顶行像素里的统计换算成这一帧要乘的曝光 ---
-// 手动模式直接由曝光值换算；自动模式再按曲线和偏移调整，并乘回管线单位。
+// 手动模式直接由曝光值换算；自动模式再按曲线和偏移调整，并乘回管线单位；
+// 最后统一叠三项 Eclipse 曝光增益（乘数、变暗、增亮），默认均为一时结果与原来相同。
 float GetExposureValue(){
+	float exposure; // 先算出基础曝光，再统一叠增益。
 	#ifdef OMNI_MANUAL_EXPOSURE // 手动曝光。
-		return 1.5e5 * MAIN_OUTPUT_FACTOR * exp2(-OMNI_EV_VALUE); // 由曝光值直接换算。
+		exposure = 1.5e5 * MAIN_OUTPUT_FACTOR * exp2(-OMNI_EV_VALUE); // 由曝光值直接换算。
 	#else // 自动曝光。
 		float ae = CurveToLinear(texelFetch(colortex2, ivec2(0, screenSize.y - 1.0), 0).a) * (5120.0 / EXPOSURE_OUTPUT_FACTOR); // 读顶行自动曝光统计。
 		float aeCurve = OMNI_AE_CURVE; // 曲线指数初值。
@@ -228,8 +239,9 @@ float GetExposureValue(){
 		#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 黑暗效果时压低曝光。
 			ae *= 1.0 - min(darknessLightFactor * 2.0, 0.9); // 按黑暗脉动亮度压低。
 		#endif
-		return 8.5 * MAIN_OUTPUT_FACTOR * ae; // 乘回管线单位并给出最终曝光。
+		exposure = 8.5 * MAIN_OUTPUT_FACTOR * ae; // 乘回管线单位得到基础曝光。
 	#endif
+	return exposure * OMNI_EXPOSURE_MULTIPLIER * OMNI_EXPOSURE_DARKENING * OMNI_EXPOSURE_BRIGHTENING; // 叠三项增益，默认一为原样。
 }
 
 // --- 黑边：按电影比例在画面上下画黑边 ---

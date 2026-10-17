@@ -1,8 +1,8 @@
 {
   "dimensions": {
     "world0": {"define": "OMNI_OVERWORLD", "buffers": "buffers_main", "geometry": ["gbuffers_terrain", "gbuffers_skytextured"], "absent": []},
-    "world-1": {"define": "OMNI_NETHER", "buffers": "buffers_nether", "geometry": ["gbuffers_terrain"], "absent": ["dh_shadow", "composite1", "deferred1", "deferred2", "deferred3", "deferred4", "deferred5", "deferred6"]},
-    "world1": {"define": "OMNI_END", "buffers": "buffers_end", "geometry": ["gbuffers_terrain"], "absent": ["composite1", "deferred3", "deferred5", "deferred6"]}
+    "world-1": {"define": "OMNI_NETHER", "buffers": "buffers_nether", "geometry": ["gbuffers_terrain"], "absent": ["dh_shadow", "composite1", "deferred1", "deferred2", "deferred3", "deferred4", "deferred5", "deferred6", "deferred7", "deferred8"]},
+    "world1": {"define": "OMNI_END", "buffers": "buffers_end", "geometry": ["gbuffers_terrain"], "absent": ["composite1", "deferred3", "deferred5", "deferred6", "deferred7", "deferred8"]}
   },
   "programs": {
     "shadow": ["shadow", "OMNI_SHADOW_PASS"],
@@ -32,6 +32,8 @@
     "deferred4": ["deferred", "OMNI_DEFERRED4_PASS"],
     "deferred5": ["deferred", "OMNI_DEFERRED5_PASS"],
     "deferred6": ["deferred", "OMNI_DEFERRED6_PASS"],
+    "deferred7": ["deferred", "OMNI_DEFERRED7_PASS"],
+    "deferred8": ["deferred", "OMNI_DEFERRED8_PASS"],
     "composite": ["composite", "OMNI_COMPOSITE0_PASS"],
     "composite1": ["composite", "OMNI_COMPOSITE1_PASS"],
     "composite2": ["composite", "OMNI_COMPOSITE2_PASS"],

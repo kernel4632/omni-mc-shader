@@ -9,7 +9,7 @@
 
 构建主线：生成入口和菜单 → 检查来源与产物一致 → 离线编译链接 → 打包并计算校验值。
 链接是把同一程序的绘制阶段放在一起检查；它不能证明游戏画面或显卡性能正确。
-版本只读 `VERSION`，选项与预设交给 `options.py`；本文件不另存一份配置定义。
+版本只读 `VERSION`，版本号格式与配置读写交给 `config.py`，选项与预设交给 `options.py`；本文件不另存一份定义。
 路径以本文件为起点，换启动目录仍指向同一项目；临时编译文件自动清理，成功记录留在 `.dev/`。
 只复用同编译器、同阶段与同源码的成功链接，减少重复进程；离线宏只模拟部分加载器输入。
 普通构建不执行版本控制；只有 `release` 在交互确认后修改版本、测试、提交并推送标签。
@@ -30,7 +30,8 @@ import time  # 总预算按真实经过时间计算，包含进程创建与系�
 import zipfile  # 生成玩家使用的光影包。
 from concurrent.futures import ThreadPoolExecutor  # 并行等待多个编译器进程。
 from pathlib import Path  # 路径相对项目定位。
-import options as menu  # 原生选项是配置唯一来源。
+import options as menu  # 原生选项与预设是配置唯一来源。
+import config  # 版本号格式、分享格式编号与版本比较只在这里定义一处。
 import audit  # 审计自有代码注释与未实现标记。
 
 ROOT = Path(__file__).resolve().parent  # 换工作目录不改变数据位置。
@@ -62,7 +63,6 @@ STANDARD_MACROS = (
     "#define IRIS_FEATURE_CUSTOM_IMAGES\n"
     "#define IRIS_FEATURE_COMPUTE_SHADERS\n"
 )  # 标准化环境宏，所有程序共用。
-_VERSION_PATTERN = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev|alpha|beta|rc)\.(?:0|[1-9]\d*))?"  # 读文件与发布新版本共用一种编号规则。
 
 # --- 读取版本：文件、压缩包和发布标签共用同一个编号 ---
 def version(root: Path = ROOT) -> str:
@@ -71,7 +71,7 @@ def version(root: Path = ROOT) -> str:
     文件内容属于外部输入，在这里检查格式，避免版本被当作路径或产生歧义标签。
     """
     value = (root / "VERSION").read_text(encoding="utf-8").strip()  # 文件名与标签使用同一版本。
-    if not re.fullmatch(_VERSION_PATTERN, value):  # 版本将进入文件名，不能接受任意文字或路径。
+    if not config.VERSION_RE.fullmatch(value):  # 版本将进入文件名，不能接受任意文字或路径。
         raise ValueError("VERSION 必须是 x.y.z 或 x.y.z-dev.N 等版本号")  # 拒绝路径与含糊编号。
     return value  # 返回检查后的原编号，不擅自补零或改发布阶段。
 
@@ -272,6 +272,44 @@ def configuration() -> tuple[dict, list, dict]:
     profiles = menu.presets(ROOT / "presets", found)  # 预设合法范围检查。
     return found, profiles, menu.generated(SHADERS, found, groups, profiles)  # 返回待比较或待写入的菜单，不隐式落盘。
 
+# --- 生成入口行：把阶段、程序与维度宏拼成薄入口文本 ---
+def _draw_entry(name: str, rendering: str, stage: str, defines: list[str],
+                dimension_flag: str, buffers: str, extensions: list[str]) -> str:
+    """返回一个基础绘制阶段入口（顶点、片元或几何）的完整文本。
+
+    语言版本、程序级扩展、阶段宏、程序宏、维度宏和两次引用按固定顺序生成；
+    扩展必须紧跟 `#version` 之后、任何非预处理记号之前，所以只有入口生成能写它。
+    """
+    lines = ["#version 330 compatibility"] + [f"#extension {text} : enable" for text in extensions] + [f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 语言版本、按程序声明的扩展、生成说明。
+    # 三条说明分别按阶段、程序、维度措辞，避免同一个入口里重复同一句话；宏都带值 1，加载器才不会当成含义不明的布尔开关。
+    lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define " + stage + " 1"]  # 阶段宏只选顶点、片元或几何。
+    for define in defines:  # 每个程序登记一条程序宏。
+        lines += ["// 指定本入口对应的绘制程序。", "#define " + define + " 1"]
+    lines += ["// 指定本入口所属维度，主体靠它选维度分支。", "#define " + dimension_flag + " 1"]
+    lines += ["// 先引入本维度的中间画面与常量声明。", f'#include "/rendering/{buffers}.glsl"', "// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
+    return "\n".join(lines) + "\n"  # 统一换行使本地与自动检查得到相同文本。
+
+def _compute_entry(name: str, rendering: str, defines: list[str],
+                   dimension_flag: str, buffers: str) -> str:
+    """返回一个计算阶段入口的完整文本；计算阶段用更高语言版本，也不虚构顶点片元配对。"""
+    lines = ["#version 430", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 计算阶段需要更高版本。
+    lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define OMNI_COMPUTE 1"]  # 计算入口固定是计算阶段。
+    for define in defines:  # 计算入口目前没有程序宏，循环保留以便将来登记。
+        lines += ["// 指定本入口对应的绘制程序。", "#define " + define + " 1"]
+    lines += ["// 指定本入口所属维度，主体靠它选维度分支。", "#define " + dimension_flag + " 1"]
+    lines += ["// 先引入本维度的中间画面与常量声明。", f'#include "/rendering/{buffers}.glsl"', "// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
+    return "\n".join(lines) + "\n"  # 独立计算阶段不虚构顶点片元配对。
+
+def _program_extensions(data: dict) -> dict:
+    """检查并返回流程表顶层的程序级扩展表，键是程序名，值是要开启的图形扩展名列表。"""
+    extensions = data.get("extensions", {})  # 顶层可选的程序级扩展表。
+    if not isinstance(extensions, dict) or not set(extensions) <= set(data["programs"]):  # 只允许给已登记程序加扩展。
+        raise ValueError("extensions 只能登记在 programs 里已有的程序名上")
+    for extension_name, names in extensions.items():  # 逐程序检查扩展名。
+        if not isinstance(names, list) or any(not re.fullmatch(r"GL_[A-Za-z0-9_]+", text) for text in names):  # 扩展名必须是受控的图形扩展名。
+            raise ValueError(f"{extension_name} 的 extensions 必须是 GL_ 开头的名字列表")
+    return extensions
+
 # --- 生成薄入口文本：显式流程表决定哪些程序真正参与绘制 ---
 def program_files() -> dict[Path, str]:
     """读取流程表并返回入口路径到文本的映射，不直接写磁盘。
@@ -290,12 +328,7 @@ def program_files() -> dict[Path, str]:
     if set(data.get("dimensions", {})) != {"world0", "world-1", "world1"}:  # 每个受支持维度都要明确登记。
         raise ValueError("使用旧维度约定时必须同时提供 world0、world-1、world1；不能混入根目录程序")  # 任意worldN存在时加载器忽略根目录入口。
     result = {}  # 生成入口位置与内容。
-    extensions = data.get("extensions", {})  # 顶层可选的程序级扩展表，键是程序名。
-    if not isinstance(extensions, dict) or not set(extensions) <= set(data["programs"]):  # 只允许给已登记程序加扩展。
-        raise ValueError("extensions 只能登记在 programs 里已有的程序名上")
-    for extension_name, names in extensions.items():  # 逐程序检查扩展名。
-        if not isinstance(names, list) or any(not re.fullmatch(r"GL_[A-Za-z0-9_]+", text) for text in names):  # 扩展名必须是受控的图形扩展名。
-            raise ValueError(f"{extension_name} 的 extensions 必须是 GL_ 开头的名字列表")
+    extensions = _program_extensions(data)  # 程序级扩展先在边界检查一次。
     for dimension, setting in data["dimensions"].items():  # 维度显式接线：维度宏、几何阶段清单、缺席程序清单。
         flag = setting["define"]  # 每个维度都有自己的维度宏，主世界也不例外，主体靠它选维度分支。
         buffers = setting["buffers"]  # 该维度的中间画面与常量声明文件，逐维度取值不同，必须写进每个入口的片元源码才生效。
@@ -312,31 +345,15 @@ def program_files() -> dict[Path, str]:
                 continue
             stages = [(".vsh", "OMNI_VERTEX"), (".fsh", "OMNI_FRAGMENT")] + ([(".gsh", "OMNI_GEOMETRY")] if name in geometry else [])  # 顶点片元必配对，几何阶段按清单追加。
             for suffix, stage in stages:  # 每个阶段一个薄入口。
-                flags = [stage, *defines, flag]  # 维度规则显式写入入口。
-                if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 生成入口只允许项目自有宏名；程序宏带编号，如 `OMNI_COMPOSITE10_PASS`。
+                if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in [stage, *defines, flag]):  # 生成入口只允许项目自有宏名；程序宏带编号，如 `OMNI_COMPOSITE10_PASS`。
                     raise ValueError("程序宏必须使用受控名称")
-                # 扩展必须紧跟 `#version` 之后，任何非预处理记号之前，所以效果文件里写扩展会太晚。
-                lines = ["#version 330 compatibility"] + [f"#extension {text} : enable" for text in extensions.get(name, [])] + [f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 语言版本、按程序声明的扩展、生成说明。
-                # 三条说明分别按阶段、程序、维度措辞，避免同一个入口里重复同一句话；宏都带值 1，加载器才不会当成含义不明的布尔开关。
-                lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define " + stage + " 1"]  # 阶段宏只选顶点、片元或几何。
-                for define in defines:  # 每个程序登记一条程序宏。
-                    lines += ["// 指定本入口对应的绘制程序。", "#define " + define + " 1"]
-                lines += ["// 指定本入口所属维度，主体靠它选维度分支。", "#define " + flag + " 1"]
-                lines += ["// 先引入本维度的中间画面与常量声明。", f'#include "/rendering/{buffers}.glsl"', "// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
-                result[SHADERS / dimension / (name + suffix)] = "\n".join(lines) + "\n"  # 统一换行使本地与自动检查得到相同文本。
+                result[SHADERS / dimension / (name + suffix)] = _draw_entry(name, rendering, stage, defines, flag, buffers, extensions.get(name, []))  # 组装这一阶段的入口文本。
         for name, (rendering, *defines) in data.get("compute", {}).items():  # 计算程序单独登记，不生成顶点片元。
             if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 计算阶段同样只能选已有主体。
                 raise ValueError(f"计算程序名或主体无效：{name}")
-            flags = ["OMNI_COMPUTE", *defines, flag]  # 计算阶段使用受控宏选择主体。
-            if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 计算入口宏也使用同一受控名称规则。
+            if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in ["OMNI_COMPUTE", *defines, flag]):  # 计算入口宏也使用同一受控名称规则。
                 raise ValueError("计算程序宏必须使用受控名称")
-            lines = ["#version 430", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 计算阶段需要更高版本。
-            lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define OMNI_COMPUTE 1"]  # 计算入口固定是计算阶段。
-            for define in defines:  # 计算入口目前没有程序宏，循环保留以便将来登记。
-                lines += ["// 指定本入口对应的绘制程序。", "#define " + define + " 1"]
-            lines += ["// 指定本入口所属维度，主体靠它选维度分支。", "#define " + flag + " 1"]
-            lines += ["// 先引入本维度的中间画面与常量声明。", f'#include "/rendering/{buffers}.glsl"', "// 显式引入完整绘制主体。", f'#include "/rendering/{rendering}.glsl"', "// 输出由主体按统一缓冲协议写入。"]
-            result[SHADERS / dimension / (name + ".csh")] = "\n".join(lines) + "\n"  # 独立计算阶段不虚构顶点片元配对。
+            result[SHADERS / dimension / (name + ".csh")] = _compute_entry(name, rendering, defines, flag, buffers)  # 计算入口使用更高语言版本。
     return result  # 核对入口生成结果。
 
 def generate() -> None:
@@ -399,40 +416,36 @@ def variants(found: dict, profiles: list) -> list[tuple[str, dict]]:
             result.append((label, option_values))  # 相同配置不重复测试。
     return result  # 不指数穷举。
 
-# --- 编译与链接：多阶段成组检查，缓存只信任成功的相同源码 ---
-def compile_shaders(entries: list[Path], found: dict, profiles: list, full_programs: set[str]) -> None:
-    """对 `entries` 的程序编译并链接代表选项配置，失败时映回光影相对路径。
+# --- 编译环境：基础路径与开启远景的路径 ---
+def _compile_environments() -> list[tuple[str, str]]:
+    """返回离线编译要模拟的两组加载器环境：基础路径和开启远景的路径。
 
-    `found` 与 `profiles` 来自配置扫描。`full_programs` 列出要在全部代表配置下编译的程序名，
-    其余程序只编译默认配置。离线环境只模拟基础与远景宏，不替代游戏验证。
-    缓存位于开发报告目录，并同时核对编译器文件摘要和展开后源码摘要。
+    远景方块编号照 Iris 实际取值；两组环境的宏只注入临时文本，不修改入口文件或游戏行为。
     """
-    validator = tool("glslang")  # 真正执行编译器。
-    source_numbers = numbered_sources()  # 所有入口共用编号，编译器报错可指回原文件。
-    expanded_cache = {}  # 本次检查共享读取结果，不把源码缓存带到下次运行。
-    expanded = {source: expand(source, sourceNumbers=source_numbers, cache=expanded_cache) for source in entries}  # 展开后保留原始文件编号。
-    print("入口展开完成，开始检查选项接入", flush=True)  # 长时间离线检查期间及时给出阶段状态。
-    # 预先为每个展开文本各扫一次，得到“声明过的选项名”和“去掉声明后的标识符集合”，
-    # 避免下面每个选项都对整段文本重复跑正则；文本很大时这是主要的检查开销来源。
-    programs = {}  # 同名入口的多个绘制阶段必须作为一个链接程序。
-    for source in entries:
-        programs.setdefault(source.with_suffix(""), []).append(source)  # 细分与几何阶段一起链接。
-    cache_path = ROOT / ".dev/reports/glsl-cache.json"  # 成功源码缓存只服务开发，不进入发行包。
-    compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 编译器文件变化就让旧成功记录失效。
-    cached_report = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.is_file() else {}  # 首次运行没有缓存，按空记录处理。
-    known_good = set(cached_report.get("programs", [])) if cached_report.get("compiler") == compiler_digest else set()  # 只信任同一个编译器写下的成功摘要。
-    environments = [("base", STANDARD_MACROS), ("iris_dh", STANDARD_MACROS + "#define DISTANT_HORIZONS\n#define DH_BLOCK_UNKNOWN 0\n#define DH_BLOCK_LEAVES 1\n#define DH_BLOCK_STONE 2\n#define DH_BLOCK_WOOD 3\n#define DH_BLOCK_METAL 4\n#define DH_BLOCK_DIRT 5\n#define DH_BLOCK_LAVA 6\n#define DH_BLOCK_DEEPSLATE 7\n#define DH_BLOCK_SNOW 8\n#define DH_BLOCK_SAND 9\n#define DH_BLOCK_TERRACOTTA 10\n#define DH_BLOCK_NETHER_STONE 11\n#define DH_BLOCK_WATER 12\n#define DH_BLOCK_GRASS 13\n#define DH_BLOCK_AIR 14\n#define DH_BLOCK_ILLUMINATED 15\n")]  # 基础路径与开启远景的路径；远景方块编号照 Iris 实际取值。
-    # 第一步：把代表配置、两种环境和全部程序展开成任务；实际组合数随选项变化。
-    # 为什么先收集再编译：这样重复内容能在编译前过滤，并把独立任务交给线程池并行，避免串行等待几千个编译器进程。
+    distant_horizons = ("#define DISTANT_HORIZONS\n#define DH_BLOCK_UNKNOWN 0\n#define DH_BLOCK_LEAVES 1\n#define DH_BLOCK_STONE 2\n"
+                        "#define DH_BLOCK_WOOD 3\n#define DH_BLOCK_METAL 4\n#define DH_BLOCK_DIRT 5\n#define DH_BLOCK_LAVA 6\n"
+                        "#define DH_BLOCK_DEEPSLATE 7\n#define DH_BLOCK_SNOW 8\n#define DH_BLOCK_SAND 9\n#define DH_BLOCK_TERRACOTTA 10\n"
+                        "#define DH_BLOCK_NETHER_STONE 11\n#define DH_BLOCK_WATER 12\n#define DH_BLOCK_GRASS 13\n#define DH_BLOCK_AIR 14\n"
+                        "#define DH_BLOCK_ILLUMINATED 15\n")  # 远景方块编号照 Iris 实际取值。
+    return [("base", STANDARD_MACROS), ("iris_dh", STANDARD_MACROS + distant_horizons)]
+
+# --- 收集编译任务：代表配置 × 环境 × 程序，过滤重复与已缓存内容 ---
+def _program_jobs(programs: dict, expanded: dict, found: dict, profiles: list,
+                  full_programs: set[str], environments: list, known_good: set[str]) -> tuple[list, set, int]:
+    """把代表配置、两种环境和全部程序展开成待编译任务，返回任务、去重摘要和跳过数。
+
+    为什么先收集再编译：重复内容能在编译前过滤，独立任务随后交给线程池并行，避免串行等待
+    几千个编译器进程。非主要通路只在默认配置下编一次，足以挡住引入与宏撞名错误，又不让十秒
+    预算被挤爆；成功缓存只跳过之前确实链接成功过的相同内容。
+    """
     jobs, seen, reused = [], set(), 0  # 分别保存待编译任务、去重摘要与跳过的成功组数。
-    configurations = variants(found, profiles)  # 代表配置。
-    for label, option_values in configurations:  # 代表组合逐项展开。
+    for label, option_values in variants(found, profiles):  # 代表组合逐项展开。
         for environment, defines in environments:  # 基础与远景均检查。
             if (label == "default" and environment != "base") or (label == "all_high" and environment != "iris_dh"):
                 continue  # 默认检查基础回退，高效果检查可选能力，不重复两组环境乘积。
             for program, sources in programs.items():  # 各维度不遗漏。
                 if label != "default" and program.name not in full_programs:
-                    continue  # 非主要通路只在默认配置下编一次：足以挡住引入与宏撞名错误，又不让十秒预算被挤爆。
+                    continue  # 非主要通路只在默认配置下编一次，足以挡住引入与宏撞名错误。
                 texts = [option_source(expanded[source], found, option_values) for source in sources]  # 每个阶段使用同一份选项取值。
                 texts = [text.replace("#version 330 compatibility", "#version 330 compatibility\n" + defines, 1) for text in texts]  # 环境宏只注入临时文本，不修改入口文件。
                 if program.name.startswith("dh_") and environment == "iris_dh":
@@ -446,18 +459,22 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
                     reused += 1  # 记录本次跳过的成功链接组。
                     continue  # 完整展开源码与配置完全相同才复用先前链接。
                 jobs.append({"digest": source_digest, "label": label, "environment": environment, "program": program, "sources": sources, "texts": texts})  # 保留错误报告需要的配置、程序与源码。
-    number_to_path = {str(index): path.relative_to(SHADERS).as_posix() for path, index in numbered_sources().items()}  # 编译器数字编号反查为项目内相对路径。
+    return jobs, seen, reused
+
+# --- 运行编译任务：并行链接，主线程统一翻译错误并汇总 ---
+def _run_compile_jobs(jobs: list, validator: Path, number_to_path: dict, known_good: set[str]) -> list[str]:
+    """并行编译 `jobs`，把编译器数字编号还原成源码相对路径，返回失败说明列表。
+
+    `known_good` 直接收集本次确实链接成功的摘要，供调用方写回缓存。
+    阶段文件写在自动清理的临时目录，绝不落入源码树；错误只由主线程汇总，避免不同线程交错输出。
+    """
     failures = []  # 收集全部失败，一次报告，避免只看到第一条。
     workers = max(1, len(jobs))  # 任务数量已主动缩减，所有独立链接一次并行启动，不再人为排成长队。
     with tempfile.TemporaryDirectory(prefix="omni-glsl-") as temporary:
-        temporary_folder = Path(temporary)  # 所有阶段文件放在自动清理目录，绝不落入源码树。
+        temporary_folder = Path(temporary)  # 所有阶段文件放在自动清理目录。
 
         def compile_one(job: dict):
-            """把一组阶段写入 `temporary_folder` 并调用编译器，返回任务和原始结果。
-
-            `job` 由本函数内部的任务收集步骤创建；摘要前缀保证并行任务文件名不同。
-            不在工作线程解释错误，主线程统一映射路径并汇总，避免不同线程交错输出。
-            """
+            """把一组阶段写入临时目录并调用编译器，返回任务和原始结果。"""
             stage_files = []  # 本程序所有临时阶段文件，必须一起交给链接器。
             for source_path, source_text in zip(job["sources"], job["texts"]):  # 按任务阶段顺序配对原文。
                 stage_file = temporary_folder / (job["digest"][:16] + STAGES[source_path.suffix])  # 摘要前缀避免并行时互相覆盖。
@@ -475,8 +492,33 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
                     failures.append(f"GLSL 编译/链接失败：{job['program'].relative_to(SHADERS)} / {job['label']} / {job['environment']}\n{message}")  # 同时报告程序、配置和环境。
                 else:
                     known_good.add(job["digest"])  # 只有本次确实链接成功才写入缓存候选。
-        cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
-        cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n", encoding="utf-8")  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
+    return failures
+
+# --- 编译与链接：多阶段成组检查，缓存只信任成功的相同源码 ---
+def compile_shaders(entries: list[Path], found: dict, profiles: list, full_programs: set[str]) -> None:
+    """对 `entries` 的程序编译并链接代表选项配置，失败时映回光影相对路径。
+
+    `found` 与 `profiles` 来自配置扫描。`full_programs` 列出要在全部代表配置下编译的程序名，
+    其余程序只编译默认配置。离线环境只模拟基础与远景宏，不替代游戏验证。
+    缓存位于开发报告目录，并同时核对编译器文件摘要和展开后源码摘要。
+    """
+    validator = tool("glslang")  # 真正执行编译器。
+    source_numbers = numbered_sources()  # 所有入口共用编号，编译器报错可指回原文件。
+    expanded_cache = {}  # 本次检查共享读取结果，不把源码缓存带到下次运行。
+    expanded = {source: expand(source, sourceNumbers=source_numbers, cache=expanded_cache) for source in entries}  # 展开后保留原始文件编号。
+    print("入口展开完成，开始检查选项接入", flush=True)  # 长时间离线检查期间及时给出阶段状态。
+    programs = {}  # 同名入口的多个绘制阶段必须作为一个链接程序。
+    for source in entries:
+        programs.setdefault(source.with_suffix(""), []).append(source)  # 细分与几何阶段一起链接。
+    cache_path = ROOT / ".dev/reports/glsl-cache.json"  # 成功源码缓存只服务开发，不进入发行包。
+    compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 编译器文件变化就让旧成功记录失效。
+    cached_report = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.is_file() else {}  # 首次运行没有缓存，按空记录处理。
+    known_good = set(cached_report.get("programs", [])) if cached_report.get("compiler") == compiler_digest else set()  # 只信任同一个编译器写下的成功摘要。
+    jobs, seen, reused = _program_jobs(programs, expanded, found, profiles, full_programs, _compile_environments(), known_good)  # 先把代表配置、环境与程序展开成任务。
+    number_to_path = {str(index): path.relative_to(SHADERS).as_posix() for path, index in numbered_sources().items()}  # 编译器数字编号反查为项目内相对路径。
+    failures = _run_compile_jobs(jobs, validator, number_to_path, known_good)  # 并行编译并汇总失败。
+    cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
+    cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n", encoding="utf-8")  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
     if failures:  # 资源目录退出后临时文件已清理，再统一报告最多五项失败。
         raise ValueError("\n\n".join(failures[:5]))  # 只报前五条，避免长错误淹没真正原因；完整失败仍需逐条修。
     unique_programs = len(seen)  # 唯一程序数由新编译与成功缓存复用共同组成。
@@ -579,7 +621,7 @@ def pack() -> list[Path]:
     shader_output = ROOT / "dist" / f"Omni-{release_version}.zip"  # 产物放在项目发行目录，不碰游戏实例。
     archive(shader_output, shader_files)  # 玩家包不包含开发工具。
     preset_files = {f"{profile.name}.properties": (f"# @shaderVersion {release_version}\n" + "\n".join(f"{name}={value}" for name, value in profile.values.items()) + "\n").encode("ascii") for profile in profiles}  # 每套完整预设标记适用版本。
-    preset_files["manifest.json"] = (json.dumps({"schemaVersion": menu.SHARE_SCHEMA, "shaderVersion": release_version, "presets": [profile.name for profile in profiles]}, indent=2) + "\n").encode()  # 分享格式版本只由配置主体定义。
+    preset_files["manifest.json"] = (json.dumps({"schemaVersion": config.SHARE_SCHEMA, "shaderVersion": release_version, "presets": [profile.name for profile in profiles]}, indent=2) + "\n").encode()  # 分享格式版本只由配置主体定义。
     preset_files["README.md"] = (ROOT / "presets/README.md").read_bytes()  # 保留预设使用说明。
     preset_output = ROOT / "dist" / f"Omni-presets-{release_version}.zip"  # 配置包可独立分享。
     archive(preset_output, preset_files)
@@ -598,56 +640,40 @@ def sync() -> None:
     shutil.copyfile(pack()[0], destination)  # 只复制刚生成的光影包，不复制预设包或校验清单。
     print("已同步 .dev/minecraft/shaderpacks/Omni-dev.zip")
 
-# --- 发布：检查干净且同步的主分支，确认后才改版本并推送 ---
-def release(target: str, notes: Path) -> None:
-    """将 `target` 和 `notes` 发布为版本提交与标签；先核对边界，再要求交互确认。
+# --- 运行发布流程的 git 命令：只拼接固定参数，不接用户命令 ---
+def _git_output(*args: str) -> str:
+    """运行发布流程固定的 `git` 参数并返回输出；状态行保留前导空格供路径解析。"""
+    command_result = subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True, encoding="utf-8")  # 参数由固定流程传入，不拼接用户命令。
+    if args[:1] == ("status",):  # 状态前两列有意义，不能像普通文字那样去掉左侧空白。
+        return command_result.stdout.rstrip("\r\n")
+    return command_result.stdout.strip()  # 其他命令只去掉输出首尾空白。
 
-    只接受干净、位于 main 且已与远端同步的工作区；本地和远端目标标签都必须不存在。
-    确认之前不改文件。确认之后按版本、说明、生成、测试、检查、打包、提交、标签、推送顺序执行。
+# --- 发布前置条件：干净且同步的主分支，合法且向前的新版本，标签未占用 ---
+def _verify_release_ready(target: str) -> None:
+    """核对发布前置条件，全部通过后打印最近提交与差异；不改动任何文件。"""
+    if _git_output("status", "--porcelain") or _git_output("branch", "--show-current") != "main":  # 发布不能混入待审查代码或从其他分支产生。
+        raise ValueError("发布要求干净的 main 工作区")
+    current_version = version(ROOT)  # 所有比较从当前唯一版本文件读取。
+    if not config.VERSION_RE.fullmatch(target) or target == current_version:  # 命令参数是外部输入，先检查格式与重复。
+        raise ValueError("必须指定一个不同的合法新版本")
+    if config.version_order(target) <= config.version_order(current_version):  # 版本只能向前，防止重复或倒退发布。
+        raise ValueError("发布版本必须向前增长")
+    remote_main = _git_output("ls-remote", "--heads", "origin", "main").split()  # 远端主分支必须存在且指向当前提交。
+    if not remote_main or remote_main[0] != _git_output("rev-parse", "HEAD"):  # 不把尚未推送的源码藏进版本发布。
+        raise ValueError("发布前 main 必须已经与远端同步")
+    if _git_output("tag", "--list", "v" + target):  # 已用过的本地标签不能被覆盖。
+        raise ValueError("目标标签已存在，禁止改写")
+    if _git_output("ls-remote", "--tags", "origin", "refs/tags/v" + target):  # 服务器也要检查，不能依赖推送时才发现冲突。
+        raise ValueError("远端目标标签已存在，禁止复用")
+    print(_git_output("log", "--oneline", "-10"))  # 用户确认前展示最近提交，核对发布起点。
+    print(_git_output("diff", "--stat"))  # 同时展示当前差异统计；干净检查后通常为空。
+
+# --- 执行发布：写版本与说明，测试、检查、打包，然后提交、打标签、原子推送 ---
+def _apply_release(target: str, notes_body: str) -> None:
+    """确认后按版本、说明、生成、测试、检查、打包、提交、标签、推送顺序执行。
+
     中途错误会停止并留下现场供审查，不自动撤销文件或改写既有提交、标签。
     """
-    def git_output(*args: str) -> str:
-        """运行发布流程固定的 `git` 参数并返回输出；保留状态行前导空格供路径解析。"""
-        command_result = subprocess.run(["git", *args], cwd=ROOT, check=True, capture_output=True, text=True, encoding="utf-8")  # 参数由下方固定流程传入，不拼接用户命令。
-        if args[:1] == ("status",):  # 状态前两列有意义，不能像普通文字那样去掉左侧空白。
-            return command_result.stdout.rstrip("\r\n")
-        return command_result.stdout.strip()  # 其他命令只去掉输出首尾空白。
-
-    notes_body = notes.read_text(encoding="utf-8").strip()  # 先检查说明文件，确保确认发布前不改版本文件。
-    if not notes_body or re.search(r"^## ", notes_body, re.MULTILINE):  # 发行说明只收正文，标题由构建流程统一添加。
-        raise ValueError("发布说明应为非空正文，不能含版本章节")
-
-    if git_output("status", "--porcelain") or git_output("branch", "--show-current") != "main":  # 发布不能混入待审查代码或从其他分支产生。
-        raise ValueError("发布要求干净的 main 工作区")
-
-    current_version = version(ROOT)  # 所有比较从当前唯一版本文件读取。
-    if not re.fullmatch(_VERSION_PATTERN, target) or target == current_version:  # 命令参数是外部输入，先检查格式与重复。
-        raise ValueError("必须指定一个不同的合法新版本")
-
-    def version_order(value: str) -> tuple:
-        """把已检查的版本拆成可比较数字；正式版排在同编号预发布版之后。"""
-        base, _, suffix = value.partition("-")  # 主版本三段始终按数字比较。
-        stage, _, number = suffix.partition(".")  # 预发布阶段再按名称和序号排序。
-        stage_order = {"dev": 0, "alpha": 1, "beta": 2, "rc": 3, "": 4}
-        return (*map(int, base.split(".")), stage_order[stage], int(number or 0))
-
-    if version_order(target) <= version_order(current_version):  # 版本只能向前，防止重复或倒退发布。
-        raise ValueError("发布版本必须向前增长")
-
-    remote_main = git_output("ls-remote", "--heads", "origin", "main").split()  # 远端主分支必须存在且指向当前提交。
-    if not remote_main or remote_main[0] != git_output("rev-parse", "HEAD"):  # 不把尚未推送的源码藏进版本发布。
-        raise ValueError("发布前 main 必须已经与远端同步")
-    if git_output("tag", "--list", "v" + target):  # 已用过的本地标签不能被覆盖。
-        raise ValueError("目标标签已存在，禁止改写")
-    if git_output("ls-remote", "--tags", "origin", "refs/tags/v" + target):  # 服务器也要检查，不能依赖推送时才发现冲突。
-        raise ValueError("远端目标标签已存在，禁止复用")
-
-    print(git_output("log", "--oneline", "-10"))  # 用户确认前展示最近提交，核对发布起点。
-    print(git_output("diff", "--stat"))  # 同时展示当前差异统计；干净检查后通常为空。
-    confirmation = "发布 " + target  # 要求输入完整版本，避免误触发自动发布。
-    if not sys.stdin.isatty() or input(f"将测试、提交并推送 main 与 v{target}，输入 {confirmation} 确认：") != confirmation:
-        raise ValueError("未明确确认发布，未修改版本或标签")  # 自动任务无法静默发布。
-
     changelog_path = ROOT / "CHANGELOG.md"  # 版本说明集中在既有更新记录文件。
     old_changelog = changelog_path.read_text(encoding="utf-8")  # 读入旧内容，后续只在首个标题后插入新章节。
     (ROOT / "VERSION").write_text(target + "\n", encoding="utf-8")  # 确认后才更新唯一版本来源。
@@ -656,15 +682,14 @@ def release(target: str, notes: Path) -> None:
     generate()  # 新版本可能改变生成文件，先重新生成再检查工作区。
 
     version_changes = {"VERSION", "CHANGELOG.md"}  # 发布准备只允许这两个版本文件被改动。
-    worktree_lines = git_output("status", "--porcelain").splitlines()
-    unexpected = [line for line in worktree_lines if line[3:] not in version_changes]  # 状态行前缀长度固定，保留路径原文比较。
+    unexpected = [line for line in _git_output("status", "--porcelain").splitlines() if line[3:] not in version_changes]  # 状态行前缀长度固定，保留路径原文比较。
     if unexpected:  # 生成器或并行工作若改了其他文件，不能让 git add 掩盖变化。
         raise ValueError("生成或测试改变了非版本文件，停止发布：" + "；".join(unexpected))
 
     subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests"], cwd=ROOT, check=True)  # 发布必须先通过项目回归测试。
     check()  # 全量检查与打包本身不执行版本控制。
     pack()
-    unexpected = [line for line in git_output("status", "--porcelain").splitlines() if line[3:] not in version_changes]  # 测试或打包不得留下其他跟踪文件改动。
+    unexpected = [line for line in _git_output("status", "--porcelain").splitlines() if line[3:] not in version_changes]  # 测试或打包不得留下其他跟踪文件改动。
     if unexpected:  # 任何非版本变化都停止，确保提交范围可预测。
         raise ValueError("检查或打包后出现非版本文件变化，停止发布：" + "；".join(unexpected))
 
@@ -672,6 +697,22 @@ def release(target: str, notes: Path) -> None:
     subprocess.run(["git", "commit", "-m", f"chore(release): 准备 {target} 版本"], cwd=ROOT, check=True)  # 发布说明与版本组成单独提交。
     subprocess.run(["git", "tag", "-a", "v" + target, "-m", notes_body], cwd=ROOT, check=True)  # 创建不可覆盖的注释标签。
     subprocess.run(["git", "push", "--atomic", "origin", "main", "v" + target], cwd=ROOT, check=True)  # 分支和标签要么一起推送，要么都不推送。
+
+# --- 发布：检查干净且同步的主分支，确认后才改版本并推送 ---
+def release(target: str, notes: Path) -> None:
+    """将 `target` 和 `notes` 发布为版本提交与标签；先核对边界，再要求交互确认。
+
+    只接受干净、位于 main 且已与远端同步的工作区；本地和远端目标标签都必须不存在。
+    确认之前不改文件。确认之后交给 `_apply_release` 按固定顺序执行。
+    """
+    notes_body = notes.read_text(encoding="utf-8").strip()  # 先检查说明文件，确保确认发布前不改版本文件。
+    if not notes_body or re.search(r"^## ", notes_body, re.MULTILINE):  # 发行说明只收正文，标题由构建流程统一添加。
+        raise ValueError("发布说明应为非空正文，不能含版本章节")
+    _verify_release_ready(target)  # 全部前置条件在交互确认前检查。
+    confirmation = "发布 " + target  # 要求输入完整版本，避免误触发自动发布。
+    if not sys.stdin.isatty() or input(f"将测试、提交并推送 main 与 v{target}，输入 {confirmation} 确认：") != confirmation:
+        raise ValueError("未明确确认发布，未修改版本或标签")  # 自动任务无法静默发布。
+    _apply_release(target, notes_body)  # 确认后才写版本、测试、打包并推送。
 
 # --- 检查时间预算：超时杀掉整组进程，失败不能伪装成通过 ---
 def windows_job(process: subprocess.Popen):

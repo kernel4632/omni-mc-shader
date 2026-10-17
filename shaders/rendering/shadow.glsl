@@ -14,8 +14,8 @@
   与时间抗锯齿选项，所以先引入 `effects/ground/material.glsl` 与 `effects/clarity/antialiasing.glsl`。
   调用前提（iterationT 与效果文件原样保留）：`effects/shadow/shadow.glsl` 的采样函数读取 `worldShadowVector` 与
   `shadowVector`，本节不调用采样函数，仍按它的调用前提给两个空全局。
-  注意：`effects/shadow/shadow.glsl` 无条件引入 `common/noise.glsl`，其中函数用到只有片元可用的 `gl_FragCoord`，
-  顶点阶段引入它会在顶点阶段报错；需要该文件补 `OMNI_FRAGMENT` 守卫，见交付报告存疑项。
+  注意：`effects/shadow/shadow.glsl` 无条件引入 `common/noise.glsl`；该文件用 `OMNI_FRAGMENT` 守卫把 `gl_FragCoord`
+  限制在片元阶段（顶点阶段改用常量零），所以阴影顶点引入它不会因缺少片元内建量而报错。
 */
 #ifndef OMNI_SHADOW_BODY_INCLUDED // 只引入一次，避免选项与常量重复定义。
 #define OMNI_SHADOW_BODY_INCLUDED // 置上标记。

@@ -183,15 +183,15 @@ ZIP 平台标记固定为同一值，Windows 与 Linux 不因操作系统标记�
 ## 配置分享与回归
 
 ```powershell
-python options.py reset
-python options.py import --input presets/realistic.properties --output .dev/config/realistic.json
-python options.py export --input .dev/config/realistic.json --output .dev/config/load.properties
-python options.py export --input .dev/config/realistic.json --output .dev/config/share.json --format json
-python options.py diff --input .dev/config/share.json
-python options.py diff --input .dev/config/share.json --other .dev/config/user.json
+python config.py reset
+python config.py import --input presets/realistic.properties --output .dev/config/realistic.json
+python config.py export --input .dev/config/realistic.json --output .dev/config/load.properties
+python config.py export --input .dev/config/realistic.json --output .dev/config/share.json --format json
+python config.py diff --input .dev/config/share.json
+python config.py diff --input .dev/config/share.json --other .dev/config/user.json
 ```
 
-JSON格式二保存 `schemaVersion`、`shaderVersion` 和完整 `values`，格式版本只有 `options.SHARE_SCHEMA` 一个来源。无标记properties默认按当前VERSION导入；旧properties必须使用 `--legacy`，只接受旧调试选项。export默认生成可直接供加载器使用的properties，按后缀或 `--format json` 可以导出JSON分享。未知版本、非法取值与重复键报错，所有输出只写本项目 `.dev` 且拒绝符号链接或目录联接。
+JSON格式二保存 `schemaVersion`、`shaderVersion` 和完整 `values`，格式版本只有 `config.SHARE_SCHEMA` 一个来源。无标记properties默认按当前VERSION导入；旧properties必须使用 `--legacy`，只接受旧调试选项。export默认生成可直接供加载器使用的properties，按后缀或 `--format json` 可以导出JSON分享。未知版本、非法取值与重复键报错，所有输出只写本项目 `.dev` 且拒绝符号链接或目录联接。
 
 先在专用实例创建测试世界，再运行 `python game.py regression --world 世界目录名 --pack-format 实际格式编号`。工具只向 `.dev/minecraft/saves/该世界/datapacks/Omni-regression` 写命令，不启动游戏。进入测试世界执行 `/reload` 与 `/function omni:setup`；这会覆盖原点附近的专用测试区域，随后用 `omni:day`、`night`、`rain`、`underwater`、`cave`、`nether`、`end` 固定条件。当前版本的规则名为 `minecraft:advance_time` 和 `minecraft:advance_weather`，相机水下位置在实际深水池内，重复准备只清理带工具标记的实体。报告初始全部是“未运行”，需要实际观察与截图后记录证据。
 
