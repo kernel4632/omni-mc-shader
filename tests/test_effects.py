@@ -256,16 +256,19 @@ class EffectTests(unittest.TestCase):
         self.assertIn("AgX(color)", post)  # 默认走 AgX。
 
     def test_bloom_switch_and_amount(self):
-        """泛光可开关、强度可调，合并阶段按选项叠加；雾内泛光可调并接入合并。"""
+        """泛光可开关、强度可调，合并阶段按选项叠加；雾内泛光与水下雾内泛光都可调并接入合并。"""
         found, _, _ = support.configuration()  # 真实选项。
         self.assertEqual(found["OMNI_BLOOM"].values, ("false", "true"))  # 泛光可开关。
         self.assertIn("OMNI_BLOOM_AMOUNT", found)  # 泛光强度可调。
         self.assertIn("OMNI_FOG_BLOOM", found)  # 雾内泛光强度可调。
         self.assertEqual(found["OMNI_FOG_BLOOM"].default, "0.0")  # 默认关闭，画面不变。
+        self.assertIn("OMNI_UNDERWATER_FOG_BLOOM", found)  # 水下雾内泛光强度可调。
+        self.assertEqual(found["OMNI_UNDERWATER_FOG_BLOOM"].default, "0.0")  # 默认关闭，画面不变。
         bloom = support.text("effects/color/bloom.glsl")  # 泛光主体。
         self.assertIn("MergeBloom", bloom)  # 合并泛光独立成函数。
         self.assertIn("OMNI_BLOOM_AMOUNT", bloom)  # 强度参与合并。
         self.assertIn("OMNI_FOG_BLOOM", bloom)  # 雾内泛光参与合并。
+        self.assertIn("OMNI_UNDERWATER_FOG_BLOOM", bloom)  # 水下雾内泛光参与合并。
         scene = support.text("effects/world/composite_scene.glsl")  # 合成五号写泛光引导。
         self.assertIn("compositeOutput3.a = 1.0 - fogTransmittance", scene)  # 体积雾吸收存进三号引导。
         self.assertIn("MergeBloom", support.text("effects/color/post_tonemap.glsl"))  # 后期色调映射效果文件调用合并。

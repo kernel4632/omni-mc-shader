@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.0.0-dev.155
+
+补齐雾内泛光的水下分支：照 Eclipse `UNDERWATER_BLOOMY_FOG` 让水下浑水也有柔光。
+
+- 新增选项 `OMNI_UNDERWATER_FOG_BLOOM`（`shaders/effects/color/bloom.glsl`，默认零、画面不变）：对应 Eclipse `lib/settings.glsl:216` 的 `UNDERWATER_BLOOMY_FOG`，档位照原程序。
+- 合并泛光（`MergeBloom`）：Omni 水下不跑体积雾，引导改用水体的距离吸收（与合成五号同一式子），倍率换成 `OMNI_UNDERWATER_FOG_BLOOM`；水上仍用体积雾吸收与 `OMNI_FOG_BLOOM`，公式照 Eclipse `dimensions/composite11.fsh:314`。
+- 接入条件：`OMNI_UNDERWATER_FOG`、`OMNI_VFOG` 与未开景深；默认倍率零，只在玩家打开时生效，默认画面与原来一致。
+- `docs/eclipse-parity.md` 的「泛光」与「水雾与焦散」两行由「未合并」改为已合并；测试 `tests/test_effects.py` 补水下雾内泛光的选项与接入检查。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.154
 
 补齐配置迁移：选项从开关改成多档时旧取值也能导入，被新算法整体替换的选项不再让旧配置直接失败。
