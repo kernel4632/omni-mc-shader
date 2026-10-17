@@ -62,6 +62,32 @@ STANDARD_MACROS = (
     # 让「高效果」环境真的编译到光传播体积与波浪模拟那几条只在能力存在时才有的代码路径。
     "#define IRIS_FEATURE_CUSTOM_IMAGES\n"
     "#define IRIS_FEATURE_COMPUTE_SHADERS\n"
+    # 绘制阶段宏：Iris 按内部绘制阶段序号（`WorldRenderingPhase` 的 `ordinal`）定义这些名字，取值与 Iris 源码逐一对应。
+    # 阴影顶点用它们区分地形、方块实体与实体，离线编译必须补上同样的名字，否则只在游戏里存在的常量会被当成未声明标识符。
+    "#define MC_RENDER_STAGE_NONE 0\n"
+    "#define MC_RENDER_STAGE_SKY 1\n"
+    "#define MC_RENDER_STAGE_SUNSET 2\n"
+    "#define MC_RENDER_STAGE_CUSTOM_SKY 3\n"
+    "#define MC_RENDER_STAGE_SUN 4\n"
+    "#define MC_RENDER_STAGE_MOON 5\n"
+    "#define MC_RENDER_STAGE_STARS 6\n"
+    "#define MC_RENDER_STAGE_VOID 7\n"
+    "#define MC_RENDER_STAGE_TERRAIN_SOLID 8\n"
+    "#define MC_RENDER_STAGE_TERRAIN_CUTOUT_MIPPED 9\n"
+    "#define MC_RENDER_STAGE_TERRAIN_CUTOUT 10\n"
+    "#define MC_RENDER_STAGE_ENTITIES 11\n"
+    "#define MC_RENDER_STAGE_BLOCK_ENTITIES 12\n"
+    "#define MC_RENDER_STAGE_DESTROY 13\n"
+    "#define MC_RENDER_STAGE_OUTLINE 14\n"
+    "#define MC_RENDER_STAGE_DEBUG 15\n"
+    "#define MC_RENDER_STAGE_HAND_SOLID 16\n"
+    "#define MC_RENDER_STAGE_TERRAIN_TRANSLUCENT 17\n"
+    "#define MC_RENDER_STAGE_TRIPWIRE 18\n"
+    "#define MC_RENDER_STAGE_PARTICLES 19\n"
+    "#define MC_RENDER_STAGE_CLOUDS 20\n"
+    "#define MC_RENDER_STAGE_RAIN_SNOW 21\n"
+    "#define MC_RENDER_STAGE_WORLD_BORDER 22\n"
+    "#define MC_RENDER_STAGE_HAND_TRANSLUCENT 23\n"
 )  # 标准化环境宏，所有程序共用。
 
 # --- 读取版本：文件、压缩包和发布标签共用同一个编号 ---

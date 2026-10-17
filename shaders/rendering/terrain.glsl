@@ -157,6 +157,13 @@ void main(){
 		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 抖动按齐次坐标缩放后叠加。
 	#endif
 
+	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD && OMNI_REPLACE_SHORT_GRASS
+		// 替换原版矮草：范围内的矮草三个顶点塌到同一点，退化三角形不产生片元，等于隐藏原版模型。
+		if (mc_Entity.x == OMNI_SHORT_GRASS_BLOCK_ID && length(worldPos.xyz) < OMNI_GRASS_RANGE){
+			gl_Position = vec4(0.0, 0.0, 0.0, 1.0); // 三个顶点落到同一处，三角形退化被剔除。
+		}
+	#endif
+
 	#ifdef OMNI_TERRAIN_VS_TBN // 开关顶点切线时构造切线基。
 		vec3 N = normalize(gl_NormalMatrix * gl_Normal); // 法线转到视空间。
 		vec3 T = normalize(gl_NormalMatrix * at_tangent.xyz); // 切线转到视空间。
@@ -175,7 +182,7 @@ void main(){
 
 	switch(int(mc_Entity.x)){ // 按方块实体编号挑材质类别。
 	// 草与植物类编号。
-		case 7000: case 7010: case 7011: case 7020: case 7021: case 7040:
+		case 12: case 7000: case 7010: case 7011: case 7020: case 7021: case 7040:
 			v_materialIDs = MATID_GRASS; // 记为草。
 			break; // 结束该分支。
 
@@ -224,13 +231,8 @@ void main(){
 // 几何阶段输入一个三角形，输出一个三角带。
 layout(triangles) in; // 输入三角形。
 #if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
-#if OMNI_GRASS_QUALITY == 2
-layout(triangle_strip, max_vertices = 24) out; // 高密度：基准三角形加七段草叶。
-#elif OMNI_GRASS_QUALITY == 1
-layout(triangle_strip, max_vertices = 18) out; // 中密度：基准三角形加五段草叶。
-#else
-layout(triangle_strip, max_vertices = 12) out; // 低密度：基准三角形加三段草叶。
-#endif
+// 顶点上限：三个基准顶点，加每片草（密度）乘每片段数乘每段三点；由 `effects/ground/grass.glsl` 按质量与密度列出。
+layout(triangle_strip, max_vertices = OMNI_GRASS_MAX_VERTICES) out;
 #else
 layout(triangle_strip, max_vertices = 3) out; // 关闭草丛时只转发原来的三个顶点。
 #endif

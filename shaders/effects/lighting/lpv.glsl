@@ -21,10 +21,11 @@
      阴影阶段本来就按阴影距离画一遍近处方块，正好用来给体素格填编号。
   四、方块光表把每个编号映射到“光色、光强、透光率、可透方向掩码”，只在计算阶段生成，片元只读。
   五、默认关闭、缺自定义图像能力时整段退回屏幕空间间接光，画面与原来完全一致。
-  六、已合并的 Eclipse 细项：彩色蜡烛（`OMNI_LPV_COLORED_CANDLES`）、实体光源（`OMNI_LPV_ENTITY_LIGHTS`）、
-     雾照明（`OMNI_LPV_VL_FOG_ILLUMINATION`）；手持光阴影对应本项目的 `OMNI_HELDLIGHT_SHADOW`（见
-     `effects/lighting/blocklight.glsl`），对照记在 docs/eclipse-parity.md 的「LPV/间接光」行。
-     彩色灯（Eclipse 的独立灯具分类）与方块实体光未接入，逐条见该文档。
+  六、已合并的 Eclipse 细项：彩色蜡烛（`OMNI_LPV_COLORED_CANDLES`）；实体光源、方块实体光与掉落物光
+     （`OMNI_LPV_ENTITY_LIGHTS` 一个开关同时管发光实体、发光方块实体与掉落的发光物品，照 Eclipse
+     把它们放在同一个 `LPV_ENTITY_LIGHTS` 里）；雾照明（`OMNI_LPV_VL_FOG_ILLUMINATION`）；手持光阴影
+     对应本项目的 `OMNI_HELDLIGHT_SHADOW`（见 `effects/lighting/blocklight.glsl`），对照记在
+     docs/eclipse-parity.md 的「LPV/间接光」行。彩色灯（Eclipse 的独立灯具分类）未接入，见该文档。
 */
 #ifndef OMNI_LPV // 只引入一次，重复引用会让选项与函数重复定义。
 #define OMNI_LPV // 置上标记。
@@ -46,7 +47,7 @@
 #define OMNI_LPV_STRENGTH 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0 3.0]
 // @option {"label":{"zh_cn":"彩色蜡烛","en_us":"Colored candles"},"description":{"zh_cn":"让点亮的彩色蜡烛按自身颜色在体积光里发光；默认关闭，打开后蜡烛周围会带上对应颜色。","en_us":"Lets lit colored candles emit light in their own colour into the volume; off by default."}}
 //#define OMNI_LPV_COLORED_CANDLES
-// @option {"label":{"zh_cn":"实体光源","en_us":"Entity lights"},"description":{"zh_cn":"让烈焰人、发光鱿鱼、岩浆怪、点燃的炸药、末地水晶与光灵箭在体积光里发光；只在体积光开启时生效，默认开、等于 Eclipse。","en_us":"Lets blazes, glow squid, magma cubes, primed TNT, end crystals and spectral arrows add light to the volume; only used when the volume is on; on by default to match Eclipse."}}
+// @option {"label":{"zh_cn":"实体光源","en_us":"Entity lights"},"description":{"zh_cn":"让烈焰人、发光鱿鱼、岩浆怪、点燃的炸药、末地水晶与光灵箭，以及信标、潮涌核心、附魔台、酿造台这些发光方块实体，还有掉在地上的火把、荧石等发光物品，在体积光里发光；只在体积光开启时生效，默认开、等于 Eclipse。","en_us":"Lets blazes, glow squid, magma cubes, primed TNT, end crystals and spectral arrows, glowing block entities (beacon, conduit, enchanting table, brewing stand) and dropped glowing items (torches, glowstone) add light to the volume; only used when the volume is on; on by default to match Eclipse."}}
 #define OMNI_LPV_ENTITY_LIGHTS
 // @option {"label":{"zh_cn":"雾照明","en_us":"Fog illumination"},"description":{"zh_cn":"让体积里的彩色光照亮周围的空气，洞穴里能看到带颜色的光晕；默认关闭，开启后雾会带上颜色。","en_us":"Lets the volume's colored light illuminate the surrounding air so caves show colored glow; off by default."}}
 //#define OMNI_LPV_VL_FOG_ILLUMINATION
@@ -124,6 +125,42 @@ uint omniLpvEntityVoxelId(int entity){
 		|| entity == omniLpvEntityFireball || entity == omniLpvEntityEndCrystal
 		|| entity == omniLpvEntitySpectralArrow) return uint(entity); // 是发光实体就交回自身编号。
 	return 0u; // 其它实体不发光，不写体素。
+}
+
+// --- 方块实体光源编号：与 `shaders/block.properties` 给这些方块实体分配的编号一一对应 ---
+// 为什么单独列一份：方块实体用 `blockEntityId`（`block.properties` 编号）而不是顶点属性 `mc_Entity`，
+// 阴影顶点要靠这组常数判断“这是不是发光方块实体”；改 `block.properties` 的编号时要同步改这里。
+// 为什么只列发光方块实体：不发光的不写体素，光正常穿过它们，也不会误把信标光束这类大体积几何写成挡光格子。
+const int omniLpvBlockBeacon = 89; // 信标，沿用本项目已有的荧石一族编号。
+const int omniLpvBlockEndPortal = 119; // 末地传送门与末地折跃门，沿用本项目已有编号。
+const int omniLpvBlockConduit = 7310; // 潮涌核心，新编号。
+const int omniLpvBlockEnchantingTable = 7311; // 附魔台，新编号。
+const int omniLpvBlockBrewingStand = 7312; // 酿造台，新编号。
+// 把一个方块实体编号映射成写进体素图的编号；不是发光方块实体就返回零，阴影顶点据此跳过写图。
+uint omniLpvBlockEntityVoxelId(int blockEntity){
+	if (blockEntity == omniLpvBlockBeacon || blockEntity == omniLpvBlockEndPortal
+		|| blockEntity == omniLpvBlockConduit || blockEntity == omniLpvBlockEnchantingTable
+		|| blockEntity == omniLpvBlockBrewingStand) return uint(blockEntity); // 是发光方块实体就交回自身编号。
+	return 0u; // 其它方块实体不发光，不写体素。
+}
+
+// --- 掉落物光源编号：`currentRenderedItemId` 对方块物品给 `block.properties` 编号，对其它物品给 `item.properties` 编号 ---
+// 为什么在这里再列一遍编号：顶点阶段读不到只在计算阶段生成的方块光表，只能就地判断哪些编号会发光；
+// 改 `omniLpvBlockData` 的光源编号时要同步改这里，否则掉落物光会丢失或写到错误编号。
+// 为什么只写已知会发光的编号：普通掉落方块（石头、泥土等）不写体素，光正常穿过，避免掉在地上的普通方块挡光。
+const int omniLpvItemLavaBucket = 7400; // 岩浆桶，见 `item.properties`。
+const int omniLpvItemGlowstoneDust = 7401; // 荧石粉，见 `item.properties`。
+uint omniLpvDroppedItemVoxelId(int item){
+	if (item == omniLpvItemLavaBucket || item == omniLpvItemGlowstoneDust) return uint(item); // 非方块物品：岩浆桶、荧石粉。
+	if (item == 10 || item == 50 || item == 51 || item == 89 || item == 119 || item == 213
+		|| item == 7100 || item == 7101 || item == 7102) return uint(item); // 方块物品：与 `omniLpvBlockData` 的方块光源编号一致。
+	#ifdef OMNI_LPV_REDSTONE_LIGHTS
+	if (item == 55 || item == 76) return uint(item); // 红石线、红石火把。
+	#endif
+	#ifdef OMNI_LPV_COLORED_CANDLES
+	if (item >= 7200 && item <= 7267) return uint(item); // 彩色蜡烛。
+	#endif
+	return 0u; // 其它物品不发光，不写体素。
 }
 
 // ========================= 片元取样：读体积图并混回表面 =========================
@@ -231,7 +268,7 @@ uvec2 omniLpvBlockData(uint id){
 	if (id == 8u) mixWeight = 0.8; // 水：大部分透过，颜色基本不染。
 	else if (id == 79u) mixWeight = 0.5; // 冰：透过一半。
 	else if (id == 95u) mixWeight = 1.0; // 染色玻璃：本项目把所有颜色合成一个编号，统一按全透处理（近似，未逐色染光）。
-	else if (id == 7000u || id == 7010u || id == 7011u || id == 7020u || id == 7021u || id == 7040u) mixWeight = 0.9; // 植物：几乎全透。
+	else if (id == 12u || id == 7000u || id == 7010u || id == 7011u || id == 7020u || id == 7021u || id == 7040u) mixWeight = 0.9; // 植物：几乎全透（十二是单独的矮草）。
 	else if (id == 7030u) mixWeight = 0.5; // 树叶：透一半，光穿过会变柔。
 
 	// --- 方块光源：颜色与光强照 Eclipse 同名条目 ---
@@ -271,6 +308,18 @@ uvec2 omniLpvBlockData(uint id){
 	if (id == uint(omniLpvEntityFireball)) { lightColor = vec3(0.000, 1.000, 0.000); lightRange = 8.0; mixWeight = 1.0; } // 小火球。
 	if (id == uint(omniLpvEntityEndCrystal)) { lightColor = vec3(1.0, 0.0, 1.0); lightRange = 10.0; } // 末地水晶。
 	if (id == uint(omniLpvEntitySpectralArrow)) { lightColor = vec3(0.839, 0.541, 0.2); lightRange = 8.0; mixWeight = 1.0; } // 光灵箭。
+	#endif
+
+	// --- 方块实体光源：颜色与光强照 Eclipse `setup.csh`，编号来自 `block.properties` 的方块实体编号与 `omniLpvBlockEntityVoxelId` ---
+	// 信标与末地传送门已在上面按荧石与末地传送门编号发光；这里补上潮涌核心、附魔台与酿造台。
+	#ifdef OMNI_LPV_ENTITY_LIGHTS
+	if (id == uint(omniLpvBlockConduit)) { lightColor = vec3(1.0); lightRange = 15.0; } // 潮涌核心（`setup.csh:488`）。
+	if (id == uint(omniLpvBlockEnchantingTable)) { lightColor = vec3(0.416, 0.509, 0.979); lightRange = 10.0; mixWeight = 0.1; } // 附魔台（`setup.csh:130`）。
+	if (id == uint(omniLpvBlockBrewingStand)) { lightColor = vec3(0.636, 0.509, 0.179); lightRange = 1.0; mixWeight = 0.8; } // 酿造台（`setup.csh:124`）。
+
+	// --- 掉落物光源：只处理非方块物品（方块物品在 `omniLpvBlockData` 里已按方块编号发光），颜色与光强照 Eclipse `setup.csh` ---
+	if (id == uint(omniLpvItemLavaBucket)) { lightColor = vec3(0.759, 0.302, 0.106); lightRange = 8.0; } // 岩浆桶（`setup.csh:572`）。
+	if (id == uint(omniLpvItemGlowstoneDust)) { lightColor = vec3(0.747, 0.594, 0.326); lightRange = 8.0; } // 荧石粉（`setup.csh:552`）。
 	#endif
 
 	// --- 打包：光色与光强打进低字，染色与掩码打进高字，照 Eclipse `setup.csh:1216` ---

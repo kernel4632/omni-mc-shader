@@ -1,5 +1,28 @@
 # 更新记录
 
+## 0.0.0-dev.150
+
+程序化草补上细分等级、随机与替换矮草三项，照 Eclipse 补齐缺口。
+
+- 细分等级 `OMNI_GRASS_DENSITY`（`shaders/effects/ground/grass.glsl`、`grass_geometry.glsl`、`shaders/rendering/terrain.glsl`）：本项目没有细分着色器，改成在几何阶段让一个顶面按档位长出一到四片草。
+- 随机 `OMNI_GRASS_RANDOMNESS`（默认 0.2）：原先写死的弯曲量升为滑块，并按草片序号错开随机种子，让同一面的几片草各自弯折。
+- 替换矮草 `OMNI_REPLACE_SHORT_GRASS`（默认关）：把原版矮草拆成独立编号 `block.12`，开启后范围内原版矮草顶点退化并被剔除，由草方块顶面的草代替；`vegetation`、`shadow`、`lpv`、`voxel` 同步补上该编号的植物判定。
+- 差异说明记入 `docs/eclipse-parity.md` 的「程序化草」行（Eclipse 的「仅矮草」第三档与两套高度、邻接压低未搬）。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
+## 0.0.0-dev.149
+
+给体积光补上方块实体光与掉落物光，都接在已有的实体光源开关上（对应 Eclipse 把实体、方块实体与掉落物放在同一个 `LPV_ENTITY_LIGHTS`）。
+
+- 方块实体光（`shaders/effects/lighting/lpv.glsl`、`shaders/rendering/shadow.glsl`、`shaders/block.properties`）：`block.properties` 给潮涌核心、附魔台、酿造台登记新编号 7310–7312，信标与末地传送门沿用已有的 `block.89` 与 `block.119`；阴影顶点用 Iris 的 `renderStage` 区分方块实体（读 `blockEntityId`）与地形，按 `omniLpvBlockEntityVoxelId` 只给会发光的方块实体写体素，光照颜色与强度照 Eclipse `dimensions/setup.csh`。不发光方块实体不写，避免把信标光束这类大体积几何误写成挡光格子。
+- 掉落物光（`shaders/item.properties`、`shaders/effects/lighting/lpv.glsl`、`shaders/rendering/shadow.glsl`）：阴影顶点在实体阶段按 `currentRenderedItemId` 写体素，经 `omniLpvDroppedItemVoxelId` 判断是不是发光物品。方块物品（火把、荧石、灯笼、红石火把、彩色蜡烛等）用 `block.properties` 编号；非方块物品给岩浆桶、荧石粉登记 `item.7400`、`item.7401`。普通掉落的方块不写，光正常穿过。
+- 两个都由已有开关 `OMNI_LPV_ENTITY_LIGHTS` 控制，默认开；但体积光 `OMNI_LPV_ENABLED` 默认关，默认画面与原来完全一致。
+- 构建（`build.py`）：离线编译补齐 Iris 标准宏 `MC_RENDER_STAGE_*`（取值照 Iris `WorldRenderingPhase` 序号），让阴影顶点里按绘制阶段分支的代码能进入全高配置编译。
+- 差异说明记入 `docs/eclipse-parity.md` 的「LPV/间接光」行：方块实体光与掉落物光由「未合并」改为已合并；仍缺手持光与水下雾照明。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.148
 
 给远景补上 TAA 抖动开关，并把远景进阴影图对照 Eclipse 记录清楚。

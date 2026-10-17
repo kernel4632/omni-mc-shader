@@ -10,6 +10,8 @@
   远景由加载器按远景模组的投影矩阵绘制，顶点用远景投影，片元只处理贴图噪声、剔除与简单的湿润；
   远景地形的逐块噪声与剔除在 `effects/world/world.glsl`，远景水的波法线在 `effects/water/water.glsl`，
   过绘防护与噪声远距衰减在 `effects/world/distant.glsl`，两者默认关闭，不改变现有画面。
+  远景顶点是否抖动由 `effects/clarity/antialiasing.glsl` 的 `OMNI_TAA` 与 `OMNI_DH_TAA_JITTER` 共同决定，
+  两者默认都开、与移植前一致；关掉 `OMNI_DH_TAA_JITTER` 后远景不抖，`common/coordinates.glsl` 的远景撤销抖动同步跳过。
   顶点阶段不引入含 `discard` 与导数函数的效果文件；`effects/world/world.glsl`、`effects/water/water.glsl` 都只用力的片元。
   注意：`effects/water/water.glsl` 合并了水波与雨点，雨点函数依赖 `gaux1` 到 `gaux3` 与 `rainStrength`，而 iterationT 的
   远景水只引入水波；`effects/weather/weather.glsl` 的雨函数依赖 `colorShadowlight` 与 `colorSkylight`，这里按需声明。
@@ -91,7 +93,7 @@ void main(){
 	viewPos = v_viewPos.xyz; // 传给片元，用下沉后的位置重建世界坐标。
 	gl_Position = dhProjection * v_viewPos; // 用远景投影。
 
-	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
+	#if defined(OMNI_TAA) && defined(OMNI_DH_TAA_JITTER) // 远景自己也抖动时才加本帧抖动；关掉远景抖动时远景稳定、不与近景同抖。
 		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加抖动。
 	#endif
 
@@ -140,7 +142,7 @@ void main(){
 	viewPos = v_viewPos.xyz; // 传给片元，用下沉后的位置重建世界坐标。
 	gl_Position = dhProjection * v_viewPos; // 用远景投影。
 
-	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
+	#if defined(OMNI_TAA) && defined(OMNI_DH_TAA_JITTER) // 远景自己也抖动时才加本帧抖动；关掉远景抖动时远景稳定、不与近景同抖。
 		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加抖动。
 	#endif
 

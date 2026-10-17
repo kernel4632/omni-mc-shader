@@ -26,6 +26,8 @@
 // @effect {"label":{"zh_cn":"时域抗锯齿","en_us":"Temporal AA"}}
 // @option {"label": {"zh_cn": "时间抗锯齿", "en_us": "TAA"}, "description": {"zh_cn": "用上一帧历史把边缘和噪点叠平滑；开启前请先在着色器设置里打开抗锯齿。", "en_us": "Uses previous-frame history to smooth edges and noise; enable antialiasing in shader settings first."}}
 #define OMNI_TAA
+// @option {"label": {"zh_cn": "远景也参与抖动", "en_us": "Jitter distant terrain"}, "description": {"zh_cn": "远景地块随近景一起做逐帧抖动，交界处才和近景对齐；关掉后远景不抖、更稳，但交界可能与近景错半像素。默认开启。来源 Eclipse 的 DH_TAA_JITTER。", "en_us": "Lets distant chunks share the per-frame jitter with nearby terrain so the boundary stays aligned; off keeps distant terrain steadier but may misalign it by half a pixel. On by default. Ports Eclipse's DH_TAA_JITTER."}}
+#define OMNI_DH_TAA_JITTER
 // @option {"label": {"zh_cn": "历史混合权重", "en_us": "History Blend Weight"}, "slider": true, "description": {"zh_cn": "越高画面越稳、越容易留轻微拖影。", "en_us": "Higher is steadier but more prone to slight smearing."}}
 #define OMNI_TAA_BLENDWEIGHT 0.97 // [0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
 // @option {"label": {"zh_cn": "历史裁剪强度", "en_us": "History Clip Aggression"}, "slider": true, "description": {"zh_cn": "邻域裁剪的松紧，越大越容易拒绝历史、减少拖影。", "en_us": "Tightness of neighbourhood clipping; higher rejects more history and reduces smearing."}}

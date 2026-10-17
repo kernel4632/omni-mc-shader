@@ -701,6 +701,22 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniLpvApply", effect)  # 片元混光独立成函数。
         self.assertIn("omniVoxelBlockId", effect)  # 体素编号映射独立成函数。
 
+    def test_lpv_block_entity_and_item_lights(self):
+        """体积光的实体光源同一开关也覆盖发光方块实体与掉落物，编号与属性文件一一对应。"""
+        effect = support.text("effects/lighting/lpv.glsl")  # 效果主体。
+        self.assertIn("omniLpvBlockEntityVoxelId", effect)  # 方块实体编号映射独立成函数。
+        self.assertIn("omniLpvDroppedItemVoxelId", effect)  # 掉落物编号映射独立成函数。
+        shadow = support.text("rendering/shadow.glsl")  # 阴影顶点写体素。
+        self.assertIn("MC_RENDER_STAGE_BLOCK_ENTITIES", shadow)  # 用原版绘制阶段区分方块实体与地形。
+        self.assertIn("omniLpvBlockEntityVoxelId(blockEntityId)", shadow)  # 方块实体按 `blockEntityId` 写体素。
+        self.assertIn("omniLpvDroppedItemVoxelId(currentRenderedItemId)", shadow)  # 掉落物按 `currentRenderedItemId` 写体素。
+        blocks = support.text("block.properties")  # 方块编号来源。
+        for line in ("block.7310 = conduit", "block.7311 = enchanting_table", "block.7312 = brewing_stand"):  # 发光方块实体编号。
+            self.assertIn(line, blocks)  # 每个发光方块实体登记一个编号。
+        items = support.text("item.properties")  # 物品编号来源。
+        for line in ("item.7400=lava_bucket", "item.7401=glowstone_dust"):  # 发光非方块物品编号。
+            self.assertIn(line, items)  # 每个发光非方块物品登记一个编号。
+
     def test_custom_images_feature_is_declared(self):
         """用自定义图像就必须声明能力开关，缺能力时体积光回退屏幕空间间接光。"""
         settings = options.read_pipeline(build.SHADERS / "rendering/pipeline.properties")  # 流程设置唯一来源。

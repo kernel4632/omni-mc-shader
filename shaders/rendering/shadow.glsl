@@ -84,6 +84,12 @@ out float tilted; // 是否是倾斜面，用来判断背面丢弃。
 
 // 实体编号：玩家在阴影里要变黑。
 uniform int entityId;
+// 当前几何的原版绘制阶段，取值与 Iris 的 `MC_RENDER_STAGE_*` 对应；体积光靠它区分地形、方块实体与实体。
+uniform int renderStage;
+// 方块实体编号：按 `block.properties` 映射，供体积光把发光方块实体当光源。
+uniform int blockEntityId;
+// 当前渲染的物品编号：方块物品按 `block.properties` 映射、其它物品按 `item.properties` 映射，供体积光把掉落物当光源。
+uniform int currentRenderedItemId;
 
 
 // 顶点主函数：按顺序算摆动、末地矩阵、法线与投影压缩。
@@ -103,6 +109,18 @@ void main(){
 
 	#if (defined OMNI_LPV_ENABLED || defined OMNI_VOXEL_REFLECTION) && defined IRIS_FEATURE_CUSTOM_IMAGES
 	#if !defined OMNI_DH_SHADOW_PASS && !defined OMNI_END
+		#ifdef OMNI_LPV_ENTITY_LIGHTS
+		if (renderStage == MC_RENDER_STAGE_BLOCK_ENTITIES){
+			// 方块实体光源：只给信标、潮涌核心、附魔台、酿造台、末地传送门这些发光方块实体写体素，让它们点亮体积光；
+			// 其它方块实体不写，避免把信标光束这类大体积几何误写成挡光格子。
+			uint blockEntityVoxel = omniLpvBlockEntityVoxelId(blockEntityId); // 方块实体编号映射成体素编号，非光源得到零。
+			if (blockEntityVoxel > 0u){
+				vec3 voxelPos = (shadowModelViewInverse * v_viewPos).xyz; // 方块实体顶点直接换成相机相对世界坐标，不加方块中心偏移。
+				omniVoxelStore(omniVoxelIndex(voxelPos), blockEntityVoxel); // 写进体素图，越界自动丢弃。
+			}
+		}
+		else
+		#endif
 		// 光传播体积：地形写体素；顶点代表方块的一个角，加上方块中心偏移后落到该方块所属的整格，整块六个面写到同一格。
 		if (entityId == 0){
 			vec3 voxelPos = (shadowModelViewInverse * v_viewPos).xyz + at_midBlock / 64.0; // 相机相对世界位置加中心偏移。
@@ -114,8 +132,9 @@ void main(){
 		}
 		#ifdef OMNI_LPV_ENTITY_LIGHTS
 		else {
-			// 实体光源：只给发光实体写体素，让烈焰人、末地水晶等实体也点亮体积光；不发光实体不写，光会正常穿过它们。
+			// 实体与掉落物光源：先给发光实体写体素，再给掉落的发光物品写体素；都不发光就跳过，光正常穿过它们。
 			uint entityVoxel = omniLpvEntityVoxelId(entityId); // 把实体编号映射成体素编号，非发光实体得到零。
+			if (entityVoxel == 0u) entityVoxel = omniLpvDroppedItemVoxelId(currentRenderedItemId); // 不是发光实体再看它是不是发光的掉落物品。
 			if (entityVoxel > 0u){
 				vec3 voxelPos = (shadowModelViewInverse * v_viewPos).xyz; // 实体顶点直接换成相机相对世界坐标，不加方块中心偏移。
 				omniVoxelStore(omniVoxelIndex(voxelPos), entityVoxel); // 写进体素图；同一实体的多个顶点会重复写同一格，结果一致。
@@ -164,6 +183,7 @@ void main(){
 		normal = gl_Normal; // 远景阴影直接用模型法线。
 	#else
 		if (mc_Entity.x == 7000.0 || // 闪电。
+			mc_Entity.x == 12.0 || // 单独的矮草。
 			mc_Entity.x == 7010.0 || // 一种草。
 			mc_Entity.x == 7011.0 || // 小麦。
 			mc_Entity.x == 7020.0 || // 一种双层草。

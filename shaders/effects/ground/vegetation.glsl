@@ -66,7 +66,7 @@ void WavingPlants(inout vec3 worldPos, float entityId, float blockLightY, float 
 		grassWeight = grassWeight * 0.7 + 0.7; // 再补七成，整株都摆。
 	}
 // --- 草：轻风与重风按随机风强混合 ---
-	if (entityId == 7010.0 || entityId == 7020.0 || entityId == 7021.0){ // 这几类编号是草。
+	if (entityId == 12.0 || entityId == 7010.0 || entityId == 7020.0 || entityId == 7021.0){ // 这几类编号是草（十二是单独的矮草）。
 		float windStrength = mix(0.85, 1.0, wetness); // 雨天风略大。
 		vec2 pn = worldPos.xz; // 取水平位置查随机风强。
 		pn.x *= 2.0; // 横向频率加倍。

@@ -61,7 +61,7 @@ const int omniVoxelMaxSteps = 320; // 每根射线最多走的格数，覆盖整
 // 半透明方块：水、冰、玻璃，光线穿过后只给后面的画面染色，不停下。
 bool omniVoxelIsTranslucent(uint id){ return id == 8u || id == 79u || id == 95u; }
 // 植物：草、花、树叶等，不挡光也不算实体，直接穿过。
-bool omniVoxelIsPlant(uint id){ return id == 7000u || id == 7010u || id == 7011u || id == 7020u || id == 7021u || id == 7030u || id == 7040u; }
+bool omniVoxelIsPlant(uint id){ return id == 12u || id == 7000u || id == 7010u || id == 7011u || id == 7020u || id == 7021u || id == 7030u || id == 7040u; }
 
 // 给命中的体素面上色：底色乘（方块光加天光的间接光，再加直射太阳光）。
 // 参数 `packedLight` 是写入端打包的方块光与天光，`voxelNormal` 是进入面朝外的法线。

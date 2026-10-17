@@ -10,6 +10,8 @@
     带 `_Raw` 的版本不处理抖动，用于已经撤销过抖动的坐标或不需要对齐历史的地方。
     原程序用 `TAA` 宏判断是否抖动，这里换成 Omni 选项名 `OMNI_TAA`；调用方必须先引入定义它的效果文件，
     否则这里看不到选项，会悄悄按“不抖动”计算，画面和历史对不上。
+    远景版本的撤销抖动额外要求 `OMNI_DH_TAA_JITTER`（近景版本只看 `OMNI_TAA`）：远景顶点在
+    `rendering/distant.glsl` 里按同一个开关决定是否抖动，两端口径必须一致，否则远景会整体偏半像素。
     远景版本只在加载远景模组时存在，函数名加 `_DH` 后缀，与原程序一致。
     相机速度在原程序四处各写一份且内容不同，按移植合同留在各自效果文件并改成用途名：
     `TaaCameraVelocity`、`GiCameraVelocity`、`MotionBlurCameraVelocity`，见偏离记录。
@@ -71,7 +73,7 @@ float ScreenDepth_From_LinearDepth(float depth){
 
 	// 远景版的屏幕到视空间，远景裁剪面不同，必须用远景逆投影。
 	vec3 ViewPos_From_ScreenPos_DH(vec2 coord, float depth){
-		#ifdef OMNI_TAA
+		#if defined(OMNI_TAA) && defined(OMNI_DH_TAA_JITTER) // 远景顶点抖过才撤销；关掉远景抖动时远景像素本就落在真实位置。
 			coord -= taaJitter * 0.5; // 撤销本帧抖动。
 		#endif
 		vec3 ndcPos = vec3(coord, depth) * 2.0 - 1.0; // 零到一转到负一到一。
