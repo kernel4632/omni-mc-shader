@@ -157,14 +157,27 @@ def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), 
     for line in masked.splitlines():  # 检查真实引用语法。
         if re.match(r"\s*#include\b", line) and not INCLUDE.fullmatch(line):
             raise ValueError(f"{source}：#include 行只保留引用，说明放到上一行以兼容 Iris")
-    for match in reversed(list(INCLUDE.finditer(masked))):  # 倒序保持源位置。
+    # 一次正序拼出结果，而不是每替换一个引用就整段复制已展开文本。
+    # 旧写法是平方级开销：引用越多，每次切片复制的文本越长，大程序（合成本体展开约 2300 万字符）要一秒以上。
+    # 正序拼接让每段原文和每个子文件只追加一次，输出与旧写法逐字节相同（`#line` 行列用同一个算法推导）。
+    parts: list[str] = []  # 待拼接的片段，最后一次 `join`。
+    cursor = 0  # 已经写入片段对应的原文位置。
+    current = 1  # `cursor` 所在的原文行号，从 1 起算。
+    for match in INCLUDE.finditer(masked):  # 正序扫描真实引用。
+        segment = text[cursor:match.start()]  # 引用行之前的一段原文。
+        current += segment.count("\n")  # 推进到引用所在行。
+        parts.append(segment)  # 原文片段原样保留。
         included = source_path(match[1], source, shaders)  # 检查外部文件引用一次。
         content = expand(included, shaders, (*stack, source), sourceNumbers, cache)  # 子文件沿用同一编号表和读取缓存。
-        if re.search(r"^\s*#version", content, re.MULTILINE):  # 完整程序只能由入口声明语言版本。
+        # 只扫被引用文件原文，不扫已经拼接好的大文本：嵌套文件自己的 `#version` 会在上一层递归里先报出，
+        # 所以展开结果里可能残留的 `#version` 只会来自这个文件本身。合成本体展开约 2300 万字符，逐次重扫要 0.4 秒。
+        if re.search(r"^\s*#version", included.read_text(encoding="utf-8"), re.MULTILINE):  # 完整程序只能由入口声明语言版本。
             raise ValueError(f"{included}：被引用文件不能再次声明 #version")
-        line = text[:match.start()].count("\n") + 2  # 引用后的原始下一行。
-        replacement = f"#line 1 {sourceNumbers[included]}\n{content.rstrip()}\n#line {line} {sourceNumbers[source]}"  # 进入子文件前切编号，返回后恢复引用者的下一行。
-        text = text[:match.start()] + replacement + text[match.end():]  # 编译错误可回到原文件与行号。
+        replacement = f"#line 1 {sourceNumbers[included]}\n{content.rstrip()}\n#line {current + 1} {sourceNumbers[source]}"  # 进入子文件前切编号，返回后恢复引用者的下一行。
+        parts.append(replacement)  # 子文件展开接在原文片段之后。
+        cursor = match.end()  # 跳到引用行末尾；行尾换行留给下一段计数。
+    parts.append(text[cursor:])  # 追加最后一段原文。
+    text = "".join(parts)  # 只在这里复制一次整体文本。
     cache[source] = text  # 缓存完整展开，仍保留所有条件包含与行映射。
     return text  # 原注释仍留在输出里，只有真正引用行被替换。
 

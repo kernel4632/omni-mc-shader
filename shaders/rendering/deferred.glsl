@@ -426,6 +426,10 @@
 					PlanarClouds(finalComposite, worldDir, camera, noise_1.y, cloudTransmittance); // 平面云。
 			#endif
 
+			#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
+				NubisExtraLayers(finalComposite, worldDir, windDirection, camera, noise_1, ray_r_mu_intersects_ground, cloudTransmittance); // 卷云、高层云与积雨云。
+			#endif
+
 			vec3 celestial = GammaToLinear(texelFetch(colortex0, texelCoord, 0).rgb) * (OMNI_SKY_TEXTURE_BRIGHTNESS * 0.2); // 零号画面的天体颜色转线性并按选项缩放。
 
 			#if OMNI_STAR_TYPE == 1
@@ -493,6 +497,10 @@
 			#ifdef OMNI_PLANAR_CLOUDS
 				if (cameraPosition.y < OMNI_PC_ALTITUDE && !ray_r_mu_intersects_ground) // 相机在云平面以下。
 					PlanarClouds(skyImage, viewVector, cameraSkyBox, noise_0.x, cloudTransmittance); // 平面云。
+			#endif
+
+			#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
+				NubisExtraLayers(skyImage, viewVector, windDirection, camera, noise_0, ray_r_mu_intersects_ground, cloudTransmittance); // 天空盒里也叠加附加层，保证反射里的云一致。
 			#endif
 
 			#ifdef OMNI_CAVE_MODE

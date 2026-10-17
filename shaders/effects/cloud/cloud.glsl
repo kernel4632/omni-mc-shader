@@ -87,10 +87,66 @@
 #define OMNI_CLOUD_SHADOWTEX_SIZE 256.0 // [128.0 192.0 256.0 384.0 512.0 768.0 1024.0]
 // @option {"label":{"zh_cn":"雨天阴影","en_us":"Rain Shadow"},"description":{"zh_cn":"阴雨天直射光被云挡掉多少，越大雨天越暗。","en_us":"How much rain clouds block direct light; higher is darker."},"slider":true}
 #define OMNI_RAIN_SHADOW 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
+// 下面是合并 Eclipse 多层云新增的附加层选项：卷云、高层云与积雨云。附加层默认全部关闭，
+// 关闭时下面的采样与光照整段不参与编译，默认画面与只有基础云时完全一致。
+// @option {"label":{"zh_cn":"卷云层","en_us":"Cirrus Layer"},"description":{"zh_cn":"在最高处加一层薄卷云；附加层默认关闭，关闭时不产生任何采样。","en_us":"Adds a thin cirrus sheet at the top; off by default and adds no sampling when off."}}
+//#define OMNI_CLOUD_CIRRUS
+// @option {"label":{"zh_cn":"卷云高度","en_us":"Cirrus Altitude"},"description":{"zh_cn":"卷云层底部高度，单位方块，取值照 Eclipse 的卷云高度。","en_us":"Base altitude of the cirrus in blocks; value from Eclipse."}}
+#define OMNI_CLOUD_CIRRUS_ALTITUDE 7000.0 // [3000.0 4000.0 5000.0 6000.0 7000.0 8000.0 9000.0 10000.0]
+// @option {"label":{"zh_cn":"卷云厚度","en_us":"Cirrus Thickness"},"description":{"zh_cn":"卷云层厚度，单位方块；Eclipse 把卷云当成薄面，这里体积步进需要一点厚度。","en_us":"Thickness of the cirrus in blocks; Eclipse treats it as a thin sheet, our volumetric march needs some thickness."}}
+#define OMNI_CLOUD_CIRRUS_THICKNESS 400.0 // [100.0 200.0 300.0 400.0 500.0 600.0 800.0 1000.0 1500.0 2000.0]
+// @option {"label":{"zh_cn":"卷云量","en_us":"Cirrus Coverage"},"description":{"zh_cn":"卷云铺满天空的程度，取值照 Eclipse 的卷云云量。","en_us":"How much the cirrus covers the sky; value from Eclipse."},"slider":true}
+#define OMNI_CLOUD_CIRRUS_COVERAGE 0.07 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.12 0.14 0.16 0.18 0.2 0.22 0.24 0.26 0.28 0.3]
+// @option {"label":{"zh_cn":"卷云密度","en_us":"Cirrus Density"},"description":{"zh_cn":"卷云的消光强度，取值照 Eclipse 的卷云密度，默认很薄。","en_us":"Extinction of the cirrus; value from Eclipse, very thin by default."},"slider":true}
+#define OMNI_CLOUD_CIRRUS_DENSITY 0.005 // [0.001 0.002 0.003 0.004 0.005 0.006 0.007 0.008 0.009 0.01 0.02 0.03 0.04 0.05 0.06 0.08 0.1 0.15 0.2 0.3 0.5]
+// @option {"label":{"zh_cn":"卷云块大小","en_us":"Cirrus Scale"},"description":{"zh_cn":"卷云块的大小，取值照 Eclipse 的卷云尺度。","en_us":"Block size of the cirrus; value from Eclipse."},"slider":true}
+#define OMNI_CLOUD_CIRRUS_SCALE 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"卷云受光","en_us":"Cirrus Sunlighting"},"description":{"zh_cn":"卷云受的直射光强度；Eclipse 没有单列这一项，这里照基础云的受光补一个可调值。","en_us":"Direct sunlight strength on the cirrus; Eclipse has no such option, added to match the base cloud lighting."},"slider":true}
+#define OMNI_CLOUD_CIRRUS_SUNLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"卷云天光","en_us":"Cirrus Skylighting"},"description":{"zh_cn":"卷云受的环境光强度；同受光一样是补的可调值。","en_us":"Ambient light strength on the cirrus; an added knob like the sunlighting."},"slider":true}
+#define OMNI_CLOUD_CIRRUS_SKYLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"高层云层","en_us":"Altostratus Layer"},"description":{"zh_cn":"在中等高度加一层较平的高层云；默认关闭，关闭时不产生采样。","en_us":"Adds a flatter altostratus sheet at mid altitude; off by default."}}
+//#define OMNI_CLOUD_ALTOSTRATUS
+// @option {"label":{"zh_cn":"高层云高度","en_us":"Altostratus Altitude"},"description":{"zh_cn":"高层云层底部高度，单位方块，取值照 Eclipse 的高层云高度。","en_us":"Base altitude of the altostratus in blocks; value from Eclipse."}}
+#define OMNI_CLOUD_ALTOSTRATUS_ALTITUDE 5000.0 // [2000.0 2500.0 3000.0 3500.0 4000.0 4500.0 5000.0 5500.0 6000.0 6500.0 7000.0]
+// @option {"label":{"zh_cn":"高层云厚度","en_us":"Altostratus Thickness"},"description":{"zh_cn":"高层云层厚度，单位方块；Eclipse 把它当成薄面，这里步进需要一点厚度。","en_us":"Thickness of the altostratus in blocks; Eclipse treats it as a thin sheet."}}
+#define OMNI_CLOUD_ALTOSTRATUS_THICKNESS 600.0 // [100.0 200.0 300.0 400.0 600.0 800.0 1000.0 1500.0 2000.0]
+// @option {"label":{"zh_cn":"高层云量","en_us":"Altostratus Coverage"},"description":{"zh_cn":"高层云铺满天空的程度，取值照 Eclipse 的高层云云量。","en_us":"How much the altostratus covers the sky; value from Eclipse."},"slider":true}
+#define OMNI_CLOUD_ALTOSTRATUS_COVERAGE 0.6 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"高层云密度","en_us":"Altostratus Density"},"description":{"zh_cn":"高层云的消光强度，取值照 Eclipse 的高层云密度。","en_us":"Extinction of the altostratus; value from Eclipse."},"slider":true}
+#define OMNI_CLOUD_ALTOSTRATUS_DENSITY 0.1 // [0.01 0.02 0.03 0.04 0.05 0.06 0.08 0.1 0.12 0.15 0.2 0.3 0.4 0.5 0.6 0.8 1.0]
+// @option {"label":{"zh_cn":"高层云块大小","en_us":"Altostratus Scale"},"description":{"zh_cn":"高层云块的大小，取值照 Eclipse 的高层云尺度。","en_us":"Block size of the altostratus; value from Eclipse."},"slider":true}
+#define OMNI_CLOUD_ALTOSTRATUS_SCALE 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"高层云受光","en_us":"Altostratus Sunlighting"},"description":{"zh_cn":"高层云受的直射光强度；同卷云一样是补的可调值。","en_us":"Direct sunlight strength on the altostratus; an added knob."},"slider":true}
+#define OMNI_CLOUD_ALTOSTRATUS_SUNLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"高层云天光","en_us":"Altostratus Skylighting"},"description":{"zh_cn":"高层云受的环境光强度；同受光一样是补的可调值。","en_us":"Ambient light strength on the altostratus; an added knob."},"slider":true}
+#define OMNI_CLOUD_ALTOSTRATUS_SKYLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"积雨云层","en_us":"Cumulonimbus Layer"},"description":{"zh_cn":"加一层高耸的雷暴积雨云；默认关闭，关闭时不产生采样。Eclipse 的三档模式因缺少场景强度输入并入开关。","en_us":"Adds a towering cumulonimbus; off by default. Eclipse's three modes collapse to a toggle because the scene strength input is absent."}}
+//#define OMNI_CLOUD_CUMULONIMBUS
+// @option {"label":{"zh_cn":"积雨云高度","en_us":"Cumulonimbus Altitude"},"description":{"zh_cn":"积雨云底部高度，单位方块，取值照 Eclipse 积雨云底部高度。","en_us":"Base altitude of the cumulonimbus in blocks; value from Eclipse."}}
+#define OMNI_CLOUD_CUMULONIMBUS_ALTITUDE 600.0 // [300.0 400.0 500.0 600.0 800.0 1000.0 1500.0 2000.0]
+// @option {"label":{"zh_cn":"积雨云厚度","en_us":"Cumulonimbus Thickness"},"description":{"zh_cn":"积雨云层厚度，单位方块，取值照 Eclipse 积雨云高度范围。","en_us":"Thickness of the cumulonimbus in blocks; value from Eclipse."}}
+#define OMNI_CLOUD_CUMULONIMBUS_THICKNESS 4000.0 // [1000.0 2000.0 3000.0 4000.0 5000.0 6000.0 8000.0]
+// @option {"label":{"zh_cn":"积雨云量","en_us":"Cumulonimbus Coverage"},"description":{"zh_cn":"积雨云铺满天空的程度；Eclipse 没有这一项，这里用与基础云一致的云量下限。","en_us":"How much the cumulonimbus covers the sky; Eclipse has no such option."},"slider":true}
+#define OMNI_CLOUD_CUMULONIMBUS_COVERAGE 0.5 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5]
+// @option {"label":{"zh_cn":"积雨云密度","en_us":"Cumulonimbus Density"},"description":{"zh_cn":"积雨云的消光强度，取值照 Eclipse 积雨云固定密度零点八。","en_us":"Extinction of the cumulonimbus; Eclipse uses a fixed 0.8."},"slider":true}
+#define OMNI_CLOUD_CUMULONIMBUS_DENSITY 0.8 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.5 2.0]
+// @option {"label":{"zh_cn":"积雨云块大小","en_us":"Cumulonimbus Scale"},"description":{"zh_cn":"积雨云块的大小；Eclipse 没有这一项，默认与基础云相同。","en_us":"Block size of the cumulonimbus; default matches the base cloud."},"slider":true}
+#define OMNI_CLOUD_CUMULONIMBUS_SCALE 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"积雨云受光","en_us":"Cumulonimbus Sunlighting"},"description":{"zh_cn":"积雨云受的直射光强度；同其它附加层一样是补的可调值。","en_us":"Direct sunlight strength on the cumulonimbus; an added knob."},"slider":true}
+#define OMNI_CLOUD_CUMULONIMBUS_SUNLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"积雨云天光","en_us":"Cumulonimbus Skylighting"},"description":{"zh_cn":"积雨云受的环境光强度；同受光一样是补的可调值。","en_us":"Ambient light strength on the cumulonimbus; an added knob."},"slider":true}
+#define OMNI_CLOUD_CUMULONIMBUS_SKYLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label":{"zh_cn":"积雨云内闪电","en_us":"Cumulonimbus Lightning"},"description":{"zh_cn":"积雨云内部被真实闪电照亮；需要同时打开积雨云层与闪电照明，关闭时无任何计算。","en_us":"Lights the cumulonimbus from real lightning; requires both the cumulonimbus layer and lightning illumination."}}
+//#define OMNI_CUMULONIMBUS_LIGHTNING
+// @option {"label":{"zh_cn":"积雨云闪电亮度","en_us":"Cumulonimbus Lightning Brightness"},"description":{"zh_cn":"积雨云内闪电多亮，取值照 Eclipse 的闪电亮度。","en_us":"How bright the cumulonimbus lightning is; value from Eclipse."},"slider":true}
+#define OMNI_CUMULONIMBUS_LIGHTNING_BRIGHTNESS 100.0 // [25.0 50.0 75.0 100.0 125.0 150.0 200.0]
 // 云的算法依赖大气透视与共用数学，显式引入而不依赖调用顺序。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 #include "/effects/sky/sky.glsl"
+// 积雨云内闪电复用氛围文件里的闪电开关与加载器输入（`lightningBoltPosition`），显式引入而不依赖调用顺序。
+#include "/effects/sky/atmosphere.glsl"
 // 体积云与平面云只延迟三号用，且要读三维云噪声；别的程序（合成、云影模糊）不该把它们编译进来，
 // 否则会把三维噪声贴图当成二维采样。原程序靠“只有延迟三号引入这两个文件”区分，这里用一个显式守卫。
 #if defined COLORTEX_CLOUDNOISE && defined OMNI_DEFERRED3_PASS
@@ -108,7 +164,8 @@ float curveTop(float x){
 }
 // 采样云密度：先叠基础形状与云量得到不透明密度，再叠细节噪声得到碎边。
 // 返回 `x` 是基础密度、`y` 是用于消光的最终密度；`sampleDetail` 为假时跳过细节以省性能。
-vec2 SampleDensity(vec4 cloudPos, vec3 windDirection, bool sampleDetail){
+// `coverage` 是这一层的云量下限：基础云传晴雨混合值，附加层传各自的云量选项。
+vec2 SampleCloudDensity(vec4 cloudPos, vec3 windDirection, bool sampleDetail, float coverage){
 	// 基础形状：低频三维噪声决定云块大轮廓。
 		vec4 baseNoise = textureLod(colortex4, cloudPos.xyz * OMNI_CLOUD_BASE_NOISE_SCALE + windDirection * 10.0, 0.0); // 按云坐标与风偏移读基础噪声。
 		float baseDensity = baseNoise.y * 0.4 + baseNoise.z * 0.4 + baseNoise.w * 0.2; // 三个通道加权得到形状。
@@ -120,7 +177,6 @@ vec2 SampleDensity(vec4 cloudPos, vec3 windDirection, bool sampleDetail){
 		baseDensity *= mix(1.0, curveTop(saturate(cloudPos.w * 3.0)), wetness); // 雨天让云更集中在顶部。
 	// 云量：单独的更低频噪声决定这一块区域有没有云。
 		float coverageNoise = textureLod(colortex4, cloudPos.xyz * vec3(8.5e-5, -1e-5, 8.5e-5) + windDirection + OMNI_CLOUD_COVERAGE_NOISE_OFFSET, 0.0).x; // 极低频云量噪声。
-		float coverage = mix(OMNI_CLOUD_CLEAR_COVERAGE, OMNI_CLOUD_RAIN_COVERAGE, wetness); // 晴雨两档云量。
 		coverage = remapSaturate(1.0 - coverageNoise, coverage * 0.2, coverage); // 把云量映射成密度下限。
 		baseDensity = remapSaturate(baseDensity, coverage, 1.0); // 低于下限的部分去掉。
 	// 密度控制：竖直方向再塑形，让云底更密云顶更薄。
@@ -142,6 +198,10 @@ vec2 SampleDensity(vec4 cloudPos, vec3 windDirection, bool sampleDetail){
 	}
 	return vec2(baseDensity, detailedDensity); // 返回两份密度。
 }
+// 基础云的密度采样：云量取晴雨混合值，行为与 iterationT 的 `SampleDensity` 完全一致。
+vec2 SampleDensity(vec4 cloudPos, vec3 windDirection, bool sampleDetail){
+	return SampleCloudDensity(cloudPos, windDirection, sampleDetail, mix(OMNI_CLOUD_CLEAR_COVERAGE, OMNI_CLOUD_RAIN_COVERAGE, wetness)); // 传入晴雨混合云量。
+}
 // 把步进位置换成云坐标：竖直方向按行星曲率弯曲，水平方向加随高度增大的偏移。
 vec4 SetCloudPos(vec3 marchingPos, vec2 cloudAltitude, float planetRadius, float cloudScale, vec3 windDirection){
 	vec4 cloudPos = vec4(marchingPos, 0.0); // 前三通道是位置，第四通道是层内高度。
@@ -151,12 +211,13 @@ vec4 SetCloudPos(vec3 marchingPos, vec2 cloudAltitude, float planetRadius, float
 	return cloudPos; // 返回云坐标。
 }
 // 云的光照：沿光方向在云里步进估遮挡，再算直射与环境的合成颜色。
-vec3 CloudLighting(vec3 marchingPos, vec2 cloudAltitude, float planetRadius, float cloudScale, vec2 lightingStrength, vec2 cloudDensity, vec4 cloudPos, vec3 windDirection, float noise, float VdotL){
+// `coverage` 是这一层的云量下限，供光照步进复用同一份形状，基础云与附加层各自传入。
+vec3 CloudLighting(vec3 marchingPos, vec2 cloudAltitude, float planetRadius, float cloudScale, vec2 lightingStrength, vec2 cloudDensity, vec4 cloudPos, vec3 windDirection, float noise, float VdotL, float coverage){
 	float stepLength = 28.0; // 光照步进起始步长。
 	float lightingDensity = 0.0; // 沿光方向累积的云密度。
 	for (int i = 0; i < 5; i++, stepLength *= 1.5){ // 五步，步长逐步放大。
 		vec4 checkPos = SetCloudPos(marchingPos + worldShadowVector * stepLength * noise, cloudAltitude, planetRadius, cloudScale, windDirection); // 取样点。
-		lightingDensity += SampleDensity(checkPos, windDirection, i < 3).y * stepLength; // 前三步带细节，后两步省掉。
+		lightingDensity += SampleCloudDensity(checkPos, windDirection, i < 3, coverage).y * stepLength; // 前三步带细节，后两步省掉。
 		marchingPos += worldShadowVector * stepLength; // 沿光方向推进。
 	}
 	// 直射散射：透过云层的阳光，含一个很宽的环境项。
@@ -173,9 +234,10 @@ vec3 CloudLighting(vec3 marchingPos, vec2 cloudAltitude, float planetRadius, flo
 		cloudColor += colorSkylight * (ambientScattering * lightingStrength.y * 0.35); // 乘天光色与强度。
 	return cloudColor; // 返回云的颜色。
 }
-// 体积云主函数：沿视线在云层里步进，累加颜色与透过率，最后按空气透视与天空混合。
+// 体积云步进核心：沿视线在云层里步进，累加颜色与透过率，最后按空气透视与天空混合。
+// 受光强度、云块尺度、密度与云量都由调用方给出，基础云与附加层因此共用同一套步进与光照。
 // 调用前提：`color` 是已经算好的天空颜色（会被就地修改）、`worldDir` 是单位方向、`camera` 是米制相机位置。
-void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 windDirection, vec3 camera, vec2 noise, out float cloudTransmittance){
+void NubisCloudLayer(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 windDirection, vec3 camera, vec2 noise, out float cloudTransmittance, vec2 lightingStrength, float cloudScale, float cloudDensityOption, float cloudCoverage){
 	const float planetRadius = atmosphereModel_bottom_radius * 1e3; // 行星半径从大气常数换成米。
 	// 步进区间：先求视线与云层上下界的交点。
 		vec3 rayStartPos = vec3(0.0, planetRadius + cameraPosition.y, 0.0); // 相机在行星球上的位置。
@@ -196,11 +258,8 @@ void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 wind
 		vec3 marchingIncrement = (marchingEnd - marchingStart) * marchingStepSize; // 每步位移。
 		vec3 marchingPos = marchingStart + marchingIncrement * noise.x; // 起点加抖动量，减少条带。
 		float marchingLength = length(marchingIncrement); // 每步的米制长度。
-	// 云参数：晴雨两档按湿润度插值。
-		vec2 lightingStrength = vec2(mix(OMNI_CLOUD_CLEAR_SUNLIGHTING, OMNI_CLOUD_RAIN_SUNLIGHTING, wetness), // 直射强度。
-									 mix(OMNI_CLOUD_CLEAR_SKYLIGHTING, OMNI_CLOUD_RAIN_SKYLIGHTING, wetness)); // 环境强度。
-		float cloudScale = 			 mix(OMNI_CLOUD_CLEAR_SCALE,       OMNI_CLOUD_RAIN_SCALE,       wetness); // 云块大小。
-		float cloudDensityMul = 	 mix(OMNI_CLOUD_CLEAR_DENSITY,     OMNI_CLOUD_RAIN_DENSITY,     wetness); // 密度倍率。
+	// 云参数：受光、尺度与云量已由调用方算好，这里只把密度换算成消光系数。
+		float cloudDensityMul = cloudDensityOption; // 调用方给的密度倍率。
 		cloudDensityMul *= (cloudAltitude.y - cloudAltitude.x) * marchingStepSize; // 乘层厚与归一化步长得消光系数。
 		float VdotL = dot(worldDir, worldShadowVector); // 视线与光方向的夹角余弦。
 	// 步进：前向累积颜色，透过率降到很低就提前结束。
@@ -210,9 +269,9 @@ void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 wind
 		float sumTransmit = 0.0; // 透过率权重和。
 		for (int i = 0; i < int(marchingSteps); i++, marchingPos += marchingIncrement){	// 逐步推进。
 			vec4 cloudPos = SetCloudPos(marchingPos, cloudAltitude, planetRadius, cloudScale, windDirection); // 当前云坐标。
-			vec2 cloudDensity = SampleDensity(cloudPos, windDirection, true); // 采样密度。
+			vec2 cloudDensity = SampleCloudDensity(cloudPos, windDirection, true, cloudCoverage); // 采样密度，用本层云量。
 			if (cloudDensity.y < 1e-6) continue; // 这一步没有云就跳过。
-			vec3 cloudColor = CloudLighting(marchingPos, cloudAltitude, planetRadius, cloudScale, lightingStrength, cloudDensity, cloudPos, windDirection, noise.y, VdotL); // 这一段云的光照。
+			vec3 cloudColor = CloudLighting(marchingPos, cloudAltitude, planetRadius, cloudScale, lightingStrength, cloudDensity, cloudPos, windDirection, noise.y, VdotL, cloudCoverage); // 这一段云的光照。
 			float absorption = exp2(-cloudDensity.y * cloudDensityMul); // 这一段的透过率。
 			cloudAccum += cloudColor * (cloudTransmittance - absorption * cloudTransmittance); // 把这一段发出并被后面吸收的部分加进来。
 			rayHitPos += marchingPos * cloudTransmittance; // 记录命中位置。
@@ -248,6 +307,61 @@ void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 wind
 			}
 		#endif
 }
+// 基础体积云：把晴雨两档的受光、尺度、密度与云量按湿润度插值后交给步进核心，行为与 iterationT 一致。
+// 调用前提：同一套步进核心，参数取晴雨混合值。
+void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 windDirection, vec3 camera, vec2 noise, out float cloudTransmittance){
+	vec2 lightingStrength = vec2(mix(OMNI_CLOUD_CLEAR_SUNLIGHTING, OMNI_CLOUD_RAIN_SUNLIGHTING, wetness), // 直射强度按天气插值。
+								 mix(OMNI_CLOUD_CLEAR_SKYLIGHTING, OMNI_CLOUD_RAIN_SKYLIGHTING, wetness)); // 环境强度按天气插值。
+	float cloudScale = mix(OMNI_CLOUD_CLEAR_SCALE, OMNI_CLOUD_RAIN_SCALE, wetness); // 云块大小按天气插值。
+	float cloudDensityMul = mix(OMNI_CLOUD_CLEAR_DENSITY, OMNI_CLOUD_RAIN_DENSITY, wetness); // 密度倍率按天气插值。
+	float cloudCoverage = mix(OMNI_CLOUD_CLEAR_COVERAGE, OMNI_CLOUD_RAIN_COVERAGE, wetness); // 云量按天气插值。
+	NubisCloudLayer(color, worldDir, cloudAltitude, windDirection, camera, noise, cloudTransmittance, lightingStrength, cloudScale, cloudDensityMul, cloudCoverage); // 交给步进核心。
+}
+// 附加层：卷云、高层云与积雨云，默认全部关闭；关闭时整段不参与编译，不产生任何额外采样。
+// 打开后各自把海拔、厚度、云量、密度、尺度与受光交给同一套步进核心，按 Eclipse 的分层顺序叠加。
+// 调用前提：`color` 是已叠好天空与基础云的天空颜色，`intersectsGround` 是视线是否打到地面。
+#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS
+void NubisExtraLayers(inout vec3 color, vec3 worldDir, vec3 windDirection, vec3 camera, vec2 noise, bool intersectsGround, inout float cloudTransmittance){
+	#ifdef OMNI_CLOUD_CUMULONIMBUS // 积雨云：高耸的雷暴云，最先叠在基础云之上。
+		vec2 cumulonimbusAltitude = vec2(OMNI_CLOUD_CUMULONIMBUS_ALTITUDE); // 底部高度。
+		cumulonimbusAltitude.y += OMNI_CLOUD_CUMULONIMBUS_THICKNESS; // 顶部高度。
+		if ((cameraPosition.y > cumulonimbusAltitude.x || !intersectsGround) && (cameraPosition.y < cumulonimbusAltitude.y || worldDir.y < 0.0)){ // 与基础体积云同一可见判据。
+			float cumulonimbusTransmittance; // 这一层留下的透过率。
+			NubisCloudLayer(color, worldDir, cumulonimbusAltitude, windDirection, camera, noise, cumulonimbusTransmittance, // 复用基础云的步进核心。
+				vec2(OMNI_CLOUD_CUMULONIMBUS_SUNLIGHTING, OMNI_CLOUD_CUMULONIMBUS_SKYLIGHTING), OMNI_CLOUD_CUMULONIMBUS_SCALE, OMNI_CLOUD_CUMULONIMBUS_DENSITY, OMNI_CLOUD_CUMULONIMBUS_COVERAGE); // 受光、尺度、密度与云量。
+			#if defined OMNI_CUMULONIMBUS_LIGHTNING && defined OMNI_LIGHTNING && defined IS_IRIS // 只有真实闪电输入可用时才加云内闪电。
+				if (lightningBoltPosition.w > 0.0){ // 没有闪电事件时不加。
+					float boltDistance = length(lightningBoltPosition.xyz); // 闪电到相机的距离，闪电位置是相机相对坐标。
+					float distanceWeight = saturate(1.0 - boltDistance / 7500.0); // 超过七千五百格的闪电照不到云。
+					float flash = lightningBoltPosition.w * distanceWeight * (1.0 - cumulonimbusTransmittance); // 云越厚被照亮越明显。
+					color += vec3(0.63, 0.756, 1.22) * (flash * OMNI_CUMULONIMBUS_LIGHTNING_BRIGHTNESS * 0.01); // 冷色闪光，亮度照 Eclipse 选项。
+				}
+			#endif
+			cloudTransmittance *= cumulonimbusTransmittance; // 积雨云也挡住后面的天体。
+		}
+	#endif
+	#ifdef OMNI_CLOUD_ALTOSTRATUS // 高层云：中等高度的一片云层。
+		vec2 altostratusAltitude = vec2(OMNI_CLOUD_ALTOSTRATUS_ALTITUDE); // 底部高度。
+		altostratusAltitude.y += OMNI_CLOUD_ALTOSTRATUS_THICKNESS; // 顶部高度。
+		if ((cameraPosition.y > altostratusAltitude.x || !intersectsGround) && (cameraPosition.y < altostratusAltitude.y || worldDir.y < 0.0)){ // 同一可见判据。
+			float altostratusTransmittance; // 这一层留下的透过率。
+			NubisCloudLayer(color, worldDir, altostratusAltitude, windDirection, camera, noise, altostratusTransmittance, // 复用基础云的步进核心。
+				vec2(OMNI_CLOUD_ALTOSTRATUS_SUNLIGHTING, OMNI_CLOUD_ALTOSTRATUS_SKYLIGHTING), OMNI_CLOUD_ALTOSTRATUS_SCALE, OMNI_CLOUD_ALTOSTRATUS_DENSITY, OMNI_CLOUD_ALTOSTRATUS_COVERAGE); // 受光、尺度、密度与云量。
+			cloudTransmittance *= altostratusTransmittance; // 高层云也挡住后面的天体。
+		}
+	#endif
+	#ifdef OMNI_CLOUD_CIRRUS // 卷云：最高处的一层薄云。
+		vec2 cirrusAltitude = vec2(OMNI_CLOUD_CIRRUS_ALTITUDE); // 底部高度。
+		cirrusAltitude.y += OMNI_CLOUD_CIRRUS_THICKNESS; // 顶部高度。
+		if ((cameraPosition.y > cirrusAltitude.x || !intersectsGround) && (cameraPosition.y < cirrusAltitude.y || worldDir.y < 0.0)){ // 同一可见判据。
+			float cirrusTransmittance; // 这一层留下的透过率。
+			NubisCloudLayer(color, worldDir, cirrusAltitude, windDirection, camera, noise, cirrusTransmittance, // 复用基础云的步进核心。
+				vec2(OMNI_CLOUD_CIRRUS_SUNLIGHTING, OMNI_CLOUD_CIRRUS_SKYLIGHTING), OMNI_CLOUD_CIRRUS_SCALE, OMNI_CLOUD_CIRRUS_DENSITY, OMNI_CLOUD_CIRRUS_COVERAGE); // 受光、尺度、密度与云量。
+			cloudTransmittance *= cirrusTransmittance; // 卷云也挡住后面的天体。
+		}
+	#endif
+}
+#endif // 附加层结束。
 // 云影贴图：从地表坐标沿光方向投到云层，取两处云密度合成阴影值。
 // 调用前提：`coord` 是零到一的云影贴图坐标，采样方向用全局量 `worldShadowVector`。
 float CloudShadowTex(vec2 coord, vec2 cloudAltitude, vec3 windDirection){

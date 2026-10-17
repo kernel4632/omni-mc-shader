@@ -42,10 +42,15 @@ class PipelineTests(unittest.TestCase):
         buffers = (build.SHADERS / "rendering/buffers.glsl").read_text(encoding="utf-8")
         self.assertIn("colortex1Clear = false", buffers); self.assertIn("colortex2Clear = false", buffers); self.assertIn("colortex7Clear = false", buffers)  # 场景颜色、全局光历史与时间抗锯齿历史跨帧保留。
         self.assertIn("colortex0Clear = true", buffers); self.assertIn("colortex5Clear = true", buffers)  # 贴图色与高光材质每帧重写。
-        self.assertIn("DRAWBUFFERS:7", build.expand(build.SHADERS / "world0/deferred.fsh"))  # 焦散法线写在七号。
-        self.assertIn("DRAWBUFFERS:460", build.expand(build.SHADERS / "world0/gbuffers_water.fsh"))  # 半透明层写四号、六号与贴图色。
-        self.assertIn("DRAWBUFFERS:1", build.expand(build.SHADERS / "world0/composite.fsh"))  # 不透明光照写一号。
-        self.assertIn("DRAWBUFFERS:7", build.expand(build.SHADERS / "world0/composite7.fsh"))  # 时间抗锯齿历史写七号。
+        source_numbers = build.numbered_sources()  # 四个入口引用同一棵源码树，编号只建立一次。
+        expanded: dict = {}  # 已展开文本只在本次测试内复用，不改业务语义也不改断言内容。
+        def drawbuffers(name: str) -> str:
+            """展开 `world0` 下名为 `name` 的入口，返回可搜索附件指令的文本。"""
+            return build.expand(build.SHADERS / "world0" / name, sourceNumbers=source_numbers, cache=expanded)  # 共用缓存，避免每个断言都重读重拼整棵树。
+        self.assertIn("DRAWBUFFERS:7", drawbuffers("deferred.fsh"))  # 焦散法线写在七号。
+        self.assertIn("DRAWBUFFERS:460", drawbuffers("gbuffers_water.fsh"))  # 半透明层写四号、六号与贴图色。
+        self.assertIn("DRAWBUFFERS:1", drawbuffers("composite.fsh"))  # 不透明光照写一号。
+        self.assertIn("DRAWBUFFERS:7", drawbuffers("composite7.fsh"))  # 时间抗锯齿历史写七号。
         programs = json.loads((build.SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))["programs"]
         for name in ("gbuffers_weather", "gbuffers_damagedblock", "gbuffers_armor_glint"):
             self.assertEqual(programs[name][0], "overlay", name)  # 不写深度的覆盖程序共用叠加绘制主体。
