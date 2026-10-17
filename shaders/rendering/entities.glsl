@@ -13,7 +13,7 @@
   方块实体在末地传送门上叠十六层贴图，蜘蛛眼只发光不写深度。
   `DIMENSION_MAIN` 在 iterationT 里不只是“主世界”：蜘蛛眼程序在下界与末地也走主世界分支，
   所以这里用 `OMNI_OVERWORLD` 或蜘蛛眼程序还原同一条件，见下方 `OMNI_MAIN_DIMENSION`。
-  顶点阶段不引入 `effects/water.glsl`，它含只有片元能用的导数函数。
+  顶点阶段不引入 `effects/water/water.glsl`，它含只有片元能用的导数函数。
 */
 #ifndef OMNI_ENTITIES_BODY_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_ENTITIES_BODY_INCLUDED // 置上标记。
@@ -327,16 +327,16 @@ void SampleEntitySurface(vec2 texCoord, vec2 duv1, vec2 duv2, mat3 tbnMat, vec3 
 
 		albedoTex = textureGrad(tex, texCoord, duv1, duv2); // 按屏幕导数采底色。
 
-		#if defined OMNI_ENTITIES_PASS // 普通实体丢弃规则同上。
+		#if defined OMNI_ENTITIES_PASS // 普通实体：按透明度丢弃。
 			#ifdef IS_IRIS
-				if (albedoTex.a + noDiscard <= 0.004 || materialIDs > 255.0) discard;
+				if (albedoTex.a + noDiscard <= 0.004 || materialIDs > 255.0) discard; // Iris 下发光实体整体丢弃。
 			#else
-				if (albedoTex.a + noDiscard <= 0.004) discard;
+				if (albedoTex.a + noDiscard <= 0.004) discard; // 其它情况按透明度丢弃。
 			#endif
-		#elif defined OMNI_SPIDEREYES_PASS
-			if(albedoTex.a < 0.1) discard;
-		#else
-			if (albedoTex.a < 0.004) discard;
+		#elif defined OMNI_SPIDEREYES_PASS // 蜘蛛眼用更高的阈值。
+			if(albedoTex.a < 0.1) discard; // 低于零点一才丢弃，保留大部分蜘蛛眼。
+		#else // 方块与手持物按更小阈值丢弃。
+			if (albedoTex.a < 0.004) discard; // 几乎全透明才丢弃，保留细小边缘。
 		#endif
 
 		#ifdef MC_NORMAL_MAP

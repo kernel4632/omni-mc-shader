@@ -15,7 +15,7 @@
   `colorTorchlight` 由合成主程序声明，是火把光色，本文件只读取；
   `heldBlockLightValue`、`heldBlockLightValue2`、`eyeRxSmooth`、`eyeRySmooth` 由 `common/uniforms.glsl` 声明；
   `texelCoord`、`texCoord`、`depthtex1`、`dhDepthTex1`、`gbufferProjection`、`pixelSize`、`taaJitter` 由主程序或加载器提供；
-  `OMNI_TAA` 由 `effects/antialiasing.glsl` 提供，`Material` 与 `MaterialMask` 由 `effects/material.glsl` 提供（本文件已引入）。
+  `OMNI_TAA` 由 `effects/clarity/antialiasing.glsl` 提供，`Material` 与 `MaterialMask` 由 `effects/ground/material.glsl` 提供（本文件已引入）。
 关键设计原因与取舍：
   主世界与下界末地用不同的亮度常数：原程序把两套数值写在同一分支里，这里照搬，保证两个维度各自的手持光强度与原程序一致；
   自发光分「仅硬编码」「仅资源包」「两者相加」三种模式，默认相加，关闭资源包自发光时不改方块自身发光；

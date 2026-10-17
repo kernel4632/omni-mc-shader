@@ -10,8 +10,8 @@
 输出约定：只写零号，对应 `DRAWBUFFERS:0`，`deferred3` 把它当天体颜色读取。
 设计原因与取舍：
   天空基础画原版天空渐变，天空贴图画日月与天空盒贴图，两者都靠叠加混合进零号画面。
-  日月与天空盒的开关选项归属 `effects/sky.glsl`，只在片元引入它；顶点与几何阶段只用时间抗锯齿选项。
-  `effects/sky.glsl` 的星点函数读取世界太阳方向，引入前要给它一个空全局，几何阶段不引入它所以不需要。
+  日月与天空盒的开关选项归属 `effects/sky/sky.glsl`，只在片元引入它；顶点与几何阶段只用时间抗锯齿选项。
+  `effects/sky/sky.glsl` 的星点函数读取世界太阳方向，引入前要给它一个空全局，几何阶段不引入它所以不需要。
 */
 #ifndef OMNI_CELESTIAL_BODY_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_CELESTIAL_BODY_INCLUDED // 置上标记。
@@ -24,7 +24,7 @@
 #include "/effects/clarity/antialiasing.glsl"
 // 天空选项归属文件，只在片元引入；它的星点函数读取世界太阳方向，先给一个空全局满足调用前提。
 #ifdef OMNI_FRAGMENT
-	// `effects/sky.glsl` 的星点函数读取世界太阳方向，几何阶段不用，这里给一个空全局。
+	// `effects/sky/sky.glsl` 的星点函数读取世界太阳方向，几何阶段不用，这里给一个空全局。
 	vec3 worldSunVector;
 	// 天空：提供日月贴图与天空盒贴图、星点类型的选项。
 	#include "/effects/sky/sky.glsl"

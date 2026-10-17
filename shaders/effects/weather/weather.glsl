@@ -9,7 +9,7 @@
 调用位置：
   `rendering/composite.glsl` 合成阶段在雾之后调用 `Rain`；
   `rendering/overlay.glsl` 的雨雪程序顶点阶段调用 `RainWindOffset`，片元阶段调用 `WeatherRainMask`；
-  `effects/water.glsl` 的水面与 `effects/material.glsl` 的地表湿润读 `OMNI_SURFACE_WETNESS` 与 `OMNI_DISABLE_LOCAL_PRECIPITATION`。
+  `effects/water/water.glsl` 的水面与 `effects/ground/material.glsl` 的地表湿润读 `OMNI_SURFACE_WETNESS` 与 `OMNI_DISABLE_LOCAL_PRECIPITATION`。
 可复制示例：
   `Rain(color, rainMask);`  合成阶段给整幅画面叠雨色；
   `vec2 offset = RainWindOffset(worldPos); worldPos.xz += offset;`  顶点阶段倾斜雨雪几何；
@@ -17,7 +17,7 @@
 调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明这些全局量）：
   `Rain` 需要合成主程序的 `in vec3 colorShadowlight`、`in vec3 colorSkylight`；
   `RainWindOffset` 需要程序声明 `uniform float eyeBrightnessOneSmooth;`（该值在 `rendering/pipeline.properties` 里由加载器计算）；
-  `OMNI_RAIN_SHADOW` 属于 `effects/cloud.glsl`，调用方需先引入该文件；
+  `OMNI_RAIN_SHADOW` 属于 `effects/cloud/cloud.glsl`，调用方需先引入该文件；
   `OMNI_DISABLE_LOCAL_PRECIPITATION` 与 `wetness`、`eyeSnowySmooth`、`eyeNoPrecipitationSmooth` 由天气选项与加载器输入提供。
 关键设计原因与取舍：
   雨雪几何只在顶点阶段水平推移，不引入顶点着色器的复杂运算；晴天不出雨是因为加载器已经不给雨遮罩值，这里不再额外判断；

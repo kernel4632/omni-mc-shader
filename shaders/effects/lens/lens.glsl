@@ -6,7 +6,7 @@
   眩光与光斑照 iterationT `Lib/IndividualFounctions/LensGlareFlare.glsl` 一比一移植；
   相机速度与动态模糊照 iterationT `Lib/IndividualFounctions/MotionBlur.glsl` 的模糊部分一比一移植；
   暗角照 iterationT `Lib/Programs/Final.glsl` 的 `Vignette` 一比一移植。
-  曝光统计（平均亮度与 `AE_*`）不属于本文件，按合同放在 `effects/color.glsl`。
+  曝光统计（平均亮度与 `AE_*`）不属于本文件，按合同放在 `effects/color/color.glsl`。
 调用位置：
   合成五号片元在景深开启时调用 `CoCSpread` 取弥散范围，并调用 `LensFlare` 写镜头光斑到三号画面；
   合成六号片元调用 `DepthOfField` 做景深；
@@ -24,8 +24,8 @@
   调用方必须先声明 `texCoord`、`texelCoord` 全局量，并让材质编号 `MATID_*` 可见；
   `LensFlare` 还要用到从合成顶点程序插值进来的 `sunCoord`、`colorSunlight`、`sunVisibility`；
   `CoCSpread`、`DepthOfField`、`MotionBlur` 里的随机数按 `OMNI_TAA` 决定是否随时间变化，
-  所以本文件先引入定义该选项的 `effects/antialiasing.glsl`；`LensFlare` 用到 `OMNI_VFOG_DENSITY`，
-  由 `effects/fog.glsl` 提供。
+  所以本文件先引入定义该选项的 `effects/clarity/antialiasing.glsl`；`LensFlare` 用到 `OMNI_VFOG_DENSITY`，
+  由 `effects/fog/fog.glsl` 提供。
 设计原因与取舍：
   这些效果共用同一套屏幕元数据与坐标约定，放在一个文件里，读取同一份深度和颜色；
   每个效果各自成函数，关闭时用预处理器在编译期直接去掉对应循环，不为关闭的功能付出逐像素开销。
@@ -165,8 +165,19 @@ float CoCSpread(){
 }
 
 // --- 景深：散焦合成 ---
-// 按弥散半径在螺旋上取样，只让"更近且弥散足够"的样本散到当前像素上，得到背景向近处的柔和过渡。
+// 按弥散半径在螺旋上取样，只让"更近且弥散够大"的样本散到当前像素上，得到背景向近处的柔和过渡。
 // 这样做能避免远处背景糊到近处清晰物体上，也能让近处前景盖住后面的背景。
+
+// 下界散焦要把深度也一起带出画面：把这一样本的深度按它属于当前点自己、还是散焦进来，累加进对应累加器。
+// 主世界与末地不需要这份深度，函数体只在为下界编译时生效，调用点也随宏去掉，不产生额外开销。
+// 输入是“属于当前点自己”“散焦进来”两个判断、样本深度、散焦权重与两个累加器；就地更新两个累加器。
+void AccumulateDOFDepth(bool isSelfSample, bool isBlurredSample, float sampleDepth, float sampleWeight, inout float selfDepth, inout float blendedDepth){
+	#ifdef OMNI_NETHER
+		if (isSelfSample) selfDepth += sampleDepth; // 属于当前点自己的样本累加自贡献深度。
+		else if (isBlurredSample) blendedDepth += sampleDepth * sampleWeight; // 散焦进来的样本按权重累加深度。
+	#endif
+}
+
 vec4 DepthOfField(){
 	float cocRadiusfactor = OMNI_DOF_BLUR * gbufferProjection[1][1]; // 口径系数。
 	float minCoc = 0.5641895835 * pixelSize.y; // 一个像素大小的最小弥散，避免零半径时除零。
@@ -231,43 +242,36 @@ vec4 DepthOfField(){
 		}else{ // 默认无色散：只取一次样本，与未加色散前完全一致。
 			sampleColor = CurveToLinear(textureLod(colortex1, sampleCoord, 0.0).rgb); // 样本线性颜色。
 		}
-		#ifdef OMNI_NETHER // 下界分支额外累积深度。
-			if (currCoc >= sampleRadius && sampleDepth >= currDepth){ // 当前点比样本更近，样本属于当前点自己。
-				selfColor += sampleColor; // 记为自贡献。
-				selfDepth += sampleDepth; // 自贡献深度。
-				selfSamples += 1.0; // 自贡献样本数。
-			}else if (sampleCoC >= sampleRadius && sampleDepth < currDepth){ // 样本更近且弥散够大，散焦进来。
-				float sampleWeight = max(1.0, currCoc / sampleCoC); // 近处前方样本权重更高。
-				sampleWeight *= sampleWeight; // 平方加强。
-				dof += sampleColor * sampleWeight; // 累加散焦颜色。
-				blendedDepth += sampleDepth * sampleWeight; // 累加散焦深度。
-				weights += sampleWeight; // 累加权重。
-			}else{ // 样本不满足条件，记进中心权重。
-				selfWeights += centerWeight; // 累加中心权重。
-			}
+		float sampleWeight = max(1.0, currCoc / sampleCoC); // 近处前方样本权重更高，散焦累加时用。
+		sampleWeight *= sampleWeight; // 平方加强。
+		bool isSelfSample = currCoc >= sampleRadius && sampleDepth >= currDepth; // 样本属于当前点自己。
+		bool isBlurredSample = sampleCoC >= sampleRadius && sampleDepth < currDepth; // 样本更近且弥散够大，散焦进来。
+
+		if (isSelfSample){ // 样本属于当前点自己。
+			selfColor += sampleColor; // 记为自贡献。
+			selfSamples += 1.0; // 自贡献样本数。
+		}else if (isBlurredSample){ // 样本散焦进来。
+			dof += sampleColor * sampleWeight; // 累加散焦颜色。
+			weights += sampleWeight; // 累加权重。
+		}else{ // 样本不满足条件，记进中心权重。
+			selfWeights += centerWeight; // 累加中心权重。
 		}
-		dof += selfColor * (1.0 + selfWeights / selfSamples); // 把自贡献按被拒绝样本的补偿加回来。
-		dof /= weights + selfSamples + selfWeights; // 归一化。
+
+		#ifdef OMNI_NETHER // 下界额外把深度也累加，供写出屏幕深度使用。
+			AccumulateDOFDepth(isSelfSample, isBlurredSample, sampleDepth, sampleWeight, selfDepth, blendedDepth); // 按归属累加深度。
+		#endif
+	}
+
+	dof += selfColor * (1.0 + selfWeights / selfSamples); // 把自贡献按被拒绝样本的补偿加回来。
+	dof /= weights + selfSamples + selfWeights; // 归一化。
+
+	#ifdef OMNI_NETHER // 下界把深度按同一套补偿与归一化后一起返回。
 		blendedDepth += selfDepth * (1.0 + selfWeights / selfSamples); // 深度同样补偿。
 		blendedDepth /= weights + selfSamples + selfWeights; // 归一化深度。
 		return vec4(LinearToCurve(dof), ScreenDepth_From_LinearDepth(blendedDepth)); // 返回曲线编码颜色与换回的屏幕深度。
-		#else // 主世界与末地不带深度。
-			if (currCoc >= sampleRadius && sampleDepth >= currDepth){ // 当前点更近。
-				selfColor += sampleColor; // 自贡献。
-				selfSamples += 1.0; // 自贡献样本数。
-			}else if (sampleCoC >= sampleRadius && sampleDepth < currDepth){ // 样本更近且弥散够大。
-				float sampleWeight = max(1.0, currCoc / sampleCoC); // 近处样本权重更高。
-				sampleWeight *= sampleWeight; // 平方加强。
-				dof += sampleColor * sampleWeight; // 累加散焦颜色。
-				weights += sampleWeight; // 累加权重。
-			}else{ // 不满足条件记进中心权重。
-				selfWeights += centerWeight; // 累加中心权重。
-			}
-		}
-		dof += selfColor * (1.0 + selfWeights / selfSamples); // 自贡献补偿。
-		dof /= weights + selfSamples + selfWeights; // 归一化。
+	#else
 		return vec4(LinearToCurve(dof), 0.0); // 返回曲线编码颜色，透明度留零。
-		#endif
+	#endif
 }
 
 // --- 镜头眩光与光斑 ---

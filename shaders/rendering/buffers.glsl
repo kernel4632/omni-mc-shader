@@ -28,8 +28,8 @@
     零号、三号到六号每帧清除，一、二、七号不清除以跨帧接力；三个维度按主世界取值统一写出。
     iterationT 的下界、末地文件头省略了部分清除行，依靠加载器默认值；一号画面在主世界不清除、下界末地默认清除，
     但下界与末地的合成零号每帧完整重写一号画面，清除与否不影响画面，故统一按主世界取值，见 `docs/parity.md` 第十二节。
-    `sunPathRotation`、`wetnessHalflife`、`drynessHalflife` 是玩家选项，按合同由 `effects/sky.glsl`、`effects/weather.glsl` 定义，这里不重复。
-    `shadowMapResolution`、`shadowDistance` 同样是选项，由 `effects/shadow.glsl` 定义。
+    `sunPathRotation`、`wetnessHalflife`、`drynessHalflife` 是玩家选项，按合同由 `effects/sky/sky.glsl`、`effects/weather/weather.glsl` 定义，这里不重复。
+    `shadowMapResolution`、`shadowDistance` 同样是选项，由 `effects/shadow/shadow.glsl` 定义。
 */
 #ifndef OMNI_BUFFERS_INCLUDED // 只引入一次，重复声明常量会让编译失败。
 #define OMNI_BUFFERS_INCLUDED // 置上标记。

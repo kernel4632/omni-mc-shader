@@ -9,7 +9,7 @@
     渲染比例等于一时，先按已开启的排除选项决定哪些像素用手或玩家的边缘抗锯齿 `Fxaa`，其余像素做 `CAS` 锐化；
     渲染比例小于一时改用八号画面里的放大结果再锐化（`FidelityFX_FSR1`），所以本程序读过放大输出。
     强光压缩的序号只在十四号分派，这里不做色调整，只做锐化、抖动与黑边，与原程序一致。
-    原 `final.fsh` 还引入 `PrintFloat.glsl` 但 `main` 从未调用它；这里照合同引入 `effects/debug.glsl` 并真正调用
+    原 `final.fsh` 还引入 `PrintFloat.glsl` 但 `main` 从未调用它；这里照合同引入 `effects/dev/debug.glsl` 并真正调用
     `debugColor` 与 `omniProfiler`，默认关闭，关闭时画面与原程序一致。
 */
 #ifndef OMNI_FINAL_BODY_INCLUDED // 只引入一次，避免 `main()` 与输出变量重复定义。

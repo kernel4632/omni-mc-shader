@@ -9,12 +9,12 @@
     `#define VS_CLOUD_LIGHTING 1` 再 `#include "/rendering/lights.glsl"`，得到延迟三号用的顶点阶段；
     `#define VS_SHADOW_HIGHLIGHT 1` 再引入，会多算一个 `shadowHighlightStrength` 交给合成二号。
 关键设计原因与取舍：
-    原程序把输出声明放在引入大气之后，但 Omni 的 `effects/sky.glsl` 把 `CalculateStars` 也收了进来，
+    原程序把输出声明放在引入大气之后，但 Omni 的 `effects/sky/sky.glsl` 把 `CalculateStars` 也收了进来，
     那个函数在函数体里读 `worldSunVector`，所以这里把 `out` 声明提前到引入大气之前，保证整段可编译。
-    原程序在本文件里自带一份 `ProjectSky`，Omni 已把它合并进 `effects/sky.glsl` 只留一份，这里直接调用那份。
-    `VS_SUN_VISIBILITY` 分支里的镜头光晕选项属于 `effects/lens.glsl`，本文件不把它引入（那份文件含
+    原程序在本文件里自带一份 `ProjectSky`，Omni 已把它合并进 `effects/sky/sky.glsl` 只留一份，这里直接调用那份。
+    `VS_SUN_VISIBILITY` 分支里的镜头光晕选项属于 `effects/lens/lens.glsl`，本文件不把它引入（那份文件含
     片元专用的 `gl_FragCoord`，不能在顶点阶段编译），因此调用本文件的合成五号主体必须先让这些选项可见。
-    顶点阶段不调用 `effects/ambient.glsl`、`effects/shadow.glsl` 里的查询函数，但整个效果文件会被一起编译，
+    顶点阶段不调用 `effects/lighting/ambient.glsl`、`effects/shadow/shadow.glsl` 里的查询函数，但整个效果文件会被一起编译，
     所以这里给出它们引用的输入声明；这些声明在顶点阶段没有实际取值，仅用于让文件通过编译。
 */
 #ifndef OMNI_LIGHTS_INCLUDED // 只引入一次，避免 `main()` 与输出变量重复定义。

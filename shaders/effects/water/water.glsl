@@ -5,16 +5,16 @@
     以及雨点涟漪范围 `OMNI_PUDDLE_MODE`（照 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`，默认与原来一致），全项目只在这里定义一次；
   二、波浪：`GetWaves`、`GetWavesNormal`、`GetWaterParallaxCoord` 用噪声贴图叠多层正弦，算出波高、波法线与视差坐标；
   三、物理海浪：`physics_*` 一组函数按迭代正弦合成海面，供海洋物理扩展使用；
-  四、屏幕合成：`WaterFog` 水下与水面雾、`WaterRefractionLite` 折射、`TransparentAbsorption` 彩色玻璃吸收，以及雨点涟漪 `GetRainNormal`。
+  四、屏幕合成：`WaterFog` 水下与水面雾、`RefractSampleOnce` 折射、`TransparentAbsorption` 彩色玻璃吸收，以及雨点涟漪 `GetRainNormal`。
 调用位置：
   `rendering/translucent.glsl` 顶点阶段用 `GetWaterParallaxCoord`、`GetWavesNormal` 抬升水面并造波；
-  `rendering/composite.glsl` 屏幕合成阶段用 `WaterFog`、`WaterRefractionLite`、`TransparentAbsorption`；
-  `effects/shadow.glsl` 的焦散读取七号画面里的波法线，与本文件共用 `GetWavesNormal` 写出的数据。
+  `rendering/composite.glsl` 屏幕合成阶段用 `WaterFog`、`RefractSampleOnce`、`TransparentAbsorption`；
+  `effects/shadow/shadow.glsl` 的焦散读取七号画面里的波法线，与本文件共用 `GetWavesNormal` 写出的数据。
 可复制示例：
   `vec3 normal = GetWavesNormal(worldPos, OMNI_WAVE_HEIGHT);`  由世界位置得到波法线；
   `WaterFog(color, viewDir, opaqueDist, waterDist, normal, mask, occludedWater, waterSkylight, totalInternalReflection);`  水下与水后雾。
 调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明这些全局量）：
-  `MaterialMask` 结构由 `effects/material.glsl` 提供（本文件已显式引入）；
+  `MaterialMask` 结构由 `effects/ground/material.glsl` 提供（本文件已显式引入）；
   `ivec2 texelCoord`、`vec2 screenCoordInput` 由延迟与合成主程序声明；
   `in vec3 colorShadowlight`、`in vec3 colorSkylight` 等光色输入由合成主程序声明；
   物理海浪的 `physics_*` 输入由外部海洋物理扩展提供，缺失时对应函数不被调用，不影响基础水面；
@@ -22,7 +22,9 @@
 关键设计原因与取舍：
   波浪高度与法线都从 `GetWaves` 一处取，顶点抬升和片元法线不会各写一套而对不上；
   折射采样附带防泄漏：偏移后的位置若落在水面前方就退回原位，避免前景颜色漏进水里；
-  水下雾与彩色玻璃吸收只用分波段衰减，红衰减最快、蓝最慢，水越深越偏青绿。
+  水下雾与彩色玻璃吸收只用分波段衰减，红衰减最快、蓝最慢，水越深越偏青绿；
+  折射函数 `RefractSampleOnce` 就是 iterationT `composite5.fsh` 的 `WaterRefractionLite`，下界、末地各有一份加 `Nether`、`End` 后缀；
+    移植后改名，是为了说明它只把采样坐标偏移一次再读回场景色，原来的 `Lite` 说不清和谁比、差在哪。
 */
 #ifndef OMNI_WATER_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_WATER_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -491,13 +493,14 @@ void WaterFog(inout vec3 color, vec3 viewDir, float opaqueDist, float waterDist,
 	color = mix(waterFogColor, color, visibility); // 用可见度在雾色与场景色之间混合。
 }
 
-// --- 水面折射Lite：只移动一次采样坐标的轻量折射 ---
+// --- 水面折射：把采样坐标偏移一次再读回场景色 ---
 // 调用位置：`rendering/composite.glsl`；先把采样点按水面法线偏移，再读一号画面的颜色。
+// 对应 iterationT `composite5.fsh` 的 `WaterRefractionLite`，移植后改名以说明它只采样一次，避免含糊的 `Lite`。
 // 防泄漏：偏移后的采样点若比当前水面更近，说明采到了前景物体，直接退回原位。
 // 为什么分成水面与水外两条路：水面用波法线偏移更贴合，水外的玻璃等用整段折射方向偏移更准确。
 // 为什么像素坐标由调用方传 `texelCoord`：渲染缩放或放大链下 `screenCoordInput` 与 `screenSize` 的口径可能不同，
 //   用传入的整数像素坐标直接读深度，才与原程序一致，不会差出一个像素。
-void WaterRefractionLite(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist, float fogTimeFactor, float cloudShadow, vec2 screenCoordInput, ivec2 texelCoord){
+void RefractSampleOnce(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist, float fogTimeFactor, float cloudShadow, vec2 screenCoordInput, ivec2 texelCoord){
 	vec2 refractCoord = screenCoordInput; // 默认不折射，用原屏幕坐标。
 
 	float waterDeep = opaqueDist - waterDist; // 水面到水底的厚度，越厚折射越强。

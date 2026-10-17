@@ -10,8 +10,8 @@
 设计原因与取舍：
   地形是本项目最重的程序，顶点做植物摆动与材质编号判定，几何做纹理分辨率估计，片元做视差、各向异性过滤、
   遮挡、湿润与打包。算法函数都留在效果文件里，这里只按 iterationT 的顺序串起流程与输入输出。
-  顶点阶段不引入 `effects/water.glsl`：它里面有只有片元能用的导数函数；湿润与雨点只在片元里需要。
-  各向异性过滤与自发光模式用到的 `OMNI_TEXTURE_EMISSIVENESS_MODE` 归属 `effects/blocklight.glsl`，
+  顶点阶段不引入 `effects/water/water.glsl`：它里面有只有片元能用的导数函数；湿润与雨点只在片元里需要。
+  各向异性过滤与自发光模式用到的 `OMNI_TEXTURE_EMISSIVENESS_MODE` 归属 `effects/lighting/blocklight.glsl`，
   只在有高光贴图（`MC_SPECULAR_MAP`）时才引入，避免把整份方块光算法带进地形。
 */
 #ifndef OMNI_TERRAIN_BODY_INCLUDED // 只引入一次，避免选项与函数重复定义。

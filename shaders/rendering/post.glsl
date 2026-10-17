@@ -14,15 +14,15 @@
     原程序一个程序一个文件，本文件按程序宏分派；每个程序的片元 `main()` 与 iterationT 逐行一致，只换程序宏与选项名。
     泛光五级与放大程序各自缩放整屏四边形，所以顶点阶段也按程序宏分出不同 `main()`，缩放公式照原程序。
     效果文件把选项分散在各文件里，所以本主体按第六片合同的顺序把它们引入，并为被引入文件的函数补齐它们引用的全局量与采样器。
-    景深与动态模糊的算法合并在 `effects/lens.glsl`，泛光在 `effects/bloom.glsl`，曝光与调色在 `effects/color.glsl`，锐化在 `effects/upscale.glsl`。
-    注意：`effects/lens.glsl` 里编译整个文件，镜头光斑函数引用 `sunCoord`、`colorSunlight`、`sunVisibility`，
+    景深与动态模糊的算法合并在 `effects/lens/lens.glsl`，泛光在 `effects/color/bloom.glsl`，曝光与调色在 `effects/color/color.glsl`，锐化在 `effects/clarity/upscale.glsl`。
+    注意：`effects/lens/lens.glsl` 里编译整个文件，镜头光斑函数引用 `sunCoord`、`colorSunlight`、`sunVisibility`，
     本程序的顶点不输出这些值，所以按调用前提声明成空全局，让整份文件可编译而本程序不调用它们。
 */
 #ifndef OMNI_POST_BODY_INCLUDED // 只引入一次，避免 `main()` 与输出变量重复定义。
 #define OMNI_POST_BODY_INCLUDED // 置上标记，后续再次引用直接跳过。
 
 // 放大程序要把八号画面当二维纹理采样，和原程序一样在引入加载器输入前打开这个宏。
-#if defined OMNI_COMPOSITE15_PASS || defined OMNI_COMPOSITE16_PASS // 十五号与十六号都引入 `effects/upscale.glsl`。
+#if defined OMNI_COMPOSITE15_PASS || defined OMNI_COMPOSITE16_PASS // 十五号与十六号都引入 `effects/clarity/upscale.glsl`。
 	#define COLORTEX8_2D 1 // 打开后 `colortex8` 由 `common/uniforms.glsl` 声明成二维采样器。
 #endif
 
@@ -81,7 +81,7 @@
 // ================================ 片元阶段 ================================
 
 // --- 合成七号：时间抗锯齿历史 ---
-// 只需时间抗锯齿与材质编号；坐标换算依赖 `effects/antialiasing.glsl` 定义的 `OMNI_TAA`，所以先引入材质再引入它。
+// 只需时间抗锯齿与材质编号；坐标换算依赖 `effects/clarity/antialiasing.glsl` 定义的 `OMNI_TAA`，所以先引入材质再引入它。
 #if defined OMNI_FRAGMENT && defined OMNI_COMPOSITE7_PASS
 
 	// 加载器输入；与前文重复但因守卫只会生效一次。
@@ -148,8 +148,8 @@
 #endif // 合成七号结束。
 
 // --- 合成六号、八号、九号到十四号：共用同一批效果文件 ---
-// 为什么共用：景深、动态模糊、泛光与合并泛光都编译整份效果文件；`effects/lens.glsl` 的镜头光斑读体积雾选项，
-// `effects/bloom.glsl` 的合并泛光读雨、水雾与体积雾选项，`effects/color.glsl` 的曝光统计读洞穴模式选项，
+// 为什么共用：景深、动态模糊、泛光与合并泛光都编译整份效果文件；`effects/lens/lens.glsl` 的镜头光斑读体积雾选项，
+// `effects/color/bloom.glsl` 的合并泛光读雨、水雾与体积雾选项，`effects/color/color.glsl` 的曝光统计读洞穴模式选项，
 // 所以这些程序都要先把选项归属文件按顺序引入，才不会在编译时看到未定义的宏。选项归属见 `docs/parity.md` 第九节。
 #if defined OMNI_FRAGMENT && (defined OMNI_COMPOSITE6_PASS || defined OMNI_COMPOSITE8_PASS || defined OMNI_COMPOSITE9_PASS || defined OMNI_COMPOSITE10_PASS || defined OMNI_COMPOSITE11_PASS || defined OMNI_COMPOSITE12_PASS || defined OMNI_COMPOSITE13_PASS || defined OMNI_COMPOSITE14_PASS)
 

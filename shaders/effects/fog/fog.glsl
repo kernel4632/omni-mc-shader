@@ -17,11 +17,11 @@
   `worldShadowVector`、`worldSunVector`、`colorSkylight`、`colorShadowlight`、`cameraPosition`、
   `gbufferModelViewInverse`、`wetness`、`isEyeInWater`、`eyeBrightnessSmoothCurved`、`timeNoon`、`timeMidnight`、
   `screenSize`、`pixelSize`、`colortex7`、`shadowtex0`、`shadowtex1` 由合成主程序声明；
-  `OMNI_SKYLIGHT_INTENSITY`、`OMNI_SUNLIGHT_INTENSITY`、`OMNI_CAVE_MODE` 由 `effects/sunlight.glsl` 提供，绘制主体需在本文件之前引入它；
-  `OMNI_UNDERWATER_FOG`、`OMNI_WATERFOG_DENSITY` 由 `effects/water.glsl` 提供，本文件已在函数定义之后引入它。
+  `OMNI_SKYLIGHT_INTENSITY`、`OMNI_SUNLIGHT_INTENSITY`、`OMNI_CAVE_MODE` 由 `effects/lighting/sunlight.glsl` 提供，绘制主体需在本文件之前引入它；
+  `OMNI_UNDERWATER_FOG`、`OMNI_WATERFOG_DENSITY` 由 `effects/water/water.glsl` 提供，本文件已在函数定义之后引入它。
 关键设计原因与取舍：
   `VFOG_LQ` 由 `composite2` 程序自己打开，体积雾在那一步只用三步，省下反射通道的开销，本文件保留原宏名；
-  `GetWavesNormalFromTex` 与 `CalculateWaterCaustics` 已由 `effects/shadow.glsl` 提供，本文件不重复定义；水下体积雾需要的那份焦散与阴影文件不同名，按合同改名为 `CalculateUnderwaterCaustics` 并记入偏离记录；
+  `GetWavesNormalFromTex` 与 `CalculateWaterCaustics` 已由 `effects/shadow/shadow.glsl` 提供，本文件不重复定义；水下体积雾需要的那份焦散与阴影文件不同名，按合同改名为 `CalculateUnderwaterCaustics` 并记入偏离记录；
   原版雾的失明与黑暗只在加载器给出对应状态时才生效，默认关闭，画面与 iterationT 一致。
 */
 #ifndef OMNI_FOG_INCLUDED // 只引入一次，避免选项与函数重复定义。
@@ -173,6 +173,19 @@ float FogDensity(vec3 fogPos, vec3 wind){
 
 #endif
 
+// 沿阳光方向估这一段雾对光的吸收：从雾采样点出发按逐步放大的步长前进，累加各处的原生密度。
+// 输入是雾采样位置与风；就地推进 `fogPos`，返回沿光方向累计的密度（尚未乘选项、基础密度与时间因子）。
+// 为什么步长逐步放大：靠近采样点的雾对光柱影响最大，远处用大步长近似即可，四步就能看出吸收差异。
+float FogLightMarch(inout vec3 fogPos, vec3 wind){
+	float lightingDensity = 0.0; // 沿光方向累计的密度。
+	float lightingStepLength = VFOG_SUNLIGHT_STEPLENGTH; // 沿光方向起始步长。
+
+	for (int i = 0; i < VFOG_SUNLIGHT_STEPS; i++, fogPos += worldShadowVector * lightingStepLength, lightingStepLength *= 1.5){ // 沿光方向步进，步长逐步放大。
+		lightingDensity += FogDensity(fogPos, wind) * lightingStepLength; // 累加这一段的原生密度。
+	}
+
+	return lightingDensity; // 返回原始累计密度，供调用方乘吸收率与选项。
+}
 
 // 体积雾主体：沿视线一步步在雾里前进，同时沿光方向估遮挡，累加雾色与阳光散射。
 // 输入是待修改颜色、起点、终点、世界方向、全局云影、时间因子；输出透射率，颜色就地叠加雾。
@@ -229,6 +242,8 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 	#if OMNI_VFOG_NOISE_TYPE > 0 // 团雾模式要按风移动。
 		float windTimer = (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_FTC_OFFSET) * 0.0025; // 风速时间，与云速一致。
 		vec3 wind = vec3(-1.0, -0.05, 0.6) * windTimer; // 固定的风方向。
+	#else // 仅高度衰减模式不用风。
+		vec3 wind = vec3(0.0); // 给一个零值，让密度与光照步进共用一个调用写法。
 	#endif
 
 
@@ -250,26 +265,12 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		vec3 fogPos = start + stepLength * rayVector; // 这一步的雾采样位置。
 		vec3 shadowPos = shadowStart + stepLength * shadowRayVector; // 这一步的阴影图坐标。
 
-		#if OMNI_VFOG_NOISE_TYPE == 0
-			float density = FogDensity(fogPos, vec3(0.0)); // 仅高度衰减模式不用风。
-		#else
-			float density = FogDensity(fogPos, wind); // 团雾模式叠加风。
-		#endif
+		float density = FogDensity(fogPos, wind); // 算这一点的雾密度，仅高度衰减模式忽略风。
 		density = (density * OMNI_VFOG_DENSITY + baseDensity) * fogTimeFactor; // 噪声密度乘选项再加基础密度，再乘时间因子。
 		float absorption = exp2(-density * stepDensity); // 这一步吸收掉的光。
 
 		#ifdef OMNI_VFOG_VOLUMETRIC_LIGHTING // 体积光照：沿阳光方向估吸收。
-			float lightingDensity = 0.0; // 沿光方向累计的密度。
-
-			float lightingStepLength = VFOG_SUNLIGHT_STEPLENGTH; // 沿光方向起始步长。
-			
-			for (int i = 0; i < VFOG_SUNLIGHT_STEPS; i++, fogPos += worldShadowVector * lightingStepLength, lightingStepLength *= 1.5){ // 沿光方向步进，步长逐步放大。
-				#if OMNI_VFOG_NOISE_TYPE == 0
-					lightingDensity += FogDensity(fogPos, vec3(0.0)) * lightingStepLength; // 仅高度衰减模式。
-				#else
-					lightingDensity += FogDensity(fogPos, wind) * lightingStepLength; // 团雾模式。
-				#endif
-			}
+			float lightingDensity = FogLightMarch(fogPos, wind); // 沿光方向累计密度，并就地推进 `fogPos`。
 
 			lightingDensity = (lightingDensity * OMNI_VFOG_SUNLIGHT_ABSORPTION * OMNI_VFOG_DENSITY + baseDensity) * fogTimeFactor; // 乘吸收率与选项再算总密度。
 			float lightingAbsorption = exp2(-lightingDensity * stepDensity); // 光方向上的吸收。
@@ -492,7 +493,7 @@ void VanillaFog(inout vec3 color, float dist){
 #include "/effects/water/water.glsl"
 
 // --- 水下焦散：水下体积雾需要一份范围很窄的焦散值来收窄光柱 ---
-// 说明：原 `UnderwaterVolumetricFog.glsl` 里的 `CalculateWaterCaustics` 与 `effects/shadow.glsl` 里的同名函数内容不同，
+// 说明：原 `UnderwaterVolumetricFog.glsl` 里的 `CalculateWaterCaustics` 与 `effects/shadow/shadow.glsl` 里的同名函数内容不同，
 // 同名会冲突，按移植合同九点五节的处理方式改名，函数体保持不变；两份都记入偏离记录。
 float CalculateUnderwaterCaustics(vec3 worldPos){
 	worldPos.xyz += cameraPosition; // 相机相对世界位置补上相机位置，换成绝对坐标。

@@ -176,7 +176,7 @@ class BoundaryTests(unittest.TestCase):
         self.assertIn("GetWavesNormal",water)  # 波浪法线独立成函数。
         self.assertIn("GetWaterParallaxCoord",water)  # 视差坐标独立成函数。
         self.assertIn("WaterFog",water)  # 水雾复用同一份波高与吸收。
-        self.assertIn("WaterRefractionLite",water)  # 折射独立成函数。
+        self.assertIn("RefractSampleOnce",water)  # 折射独立成函数。
         lens = support.text("effects/lens/lens.glsl")  # 镜头效果主体。
         for name in ("DepthOfField","LensFlare","MotionBlur","Vignette"):
             self.assertIn(name,lens)  # 景深、光斑、运动模糊与暗角各自独立成函数。

@@ -74,9 +74,9 @@ vec3 NetherFog(float dist){
 	return fogFactor * fogColor; // 整条视线的雾。
 }
 
-// --- 下界水面折射：与主世界同名函数形状不同，加 `Nether` 后缀区分 ---
+// --- 下界水面折射：与主世界 `RefractSampleOnce` 形状不同，加 `Nether` 后缀区分 ---
 // 与主世界版的差别：下界用 `NetherFog` 补雾，不再走体积雾与地表散射，也不带时间因子与云影参数。
-void WaterRefractionLiteNether(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist){
+void RefractSampleOnceNether(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist){
 	vec2 refractCoord = texCoord; // 默认不折射，用原屏幕坐标。
 
 	float waterDeep = opaqueDist - waterDist; // 水面到水底的厚度。

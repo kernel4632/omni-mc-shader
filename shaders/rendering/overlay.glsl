@@ -12,9 +12,9 @@
 设计原因与取舍：
   七组程序彼此独立，只在材质编号、选择框颜色与雨遮罩上共用效果文件；颜色类程序只写零号，表面类程序写完整三张画面。
   天气顶点用风把雨雪几何推斜，片元把雨遮罩乘进零号透明度，都与 iterationT 一致。
-  线条图像输出用的扩展声明必须在任何实际代码之前，只能放在文件最上方；选项定义在 `effects/selection.glsl`，
+  线条图像输出用的扩展声明必须在任何实际代码之前，只能放在文件最上方；选项定义在 `effects/ground/selection.glsl`，
   引入之后才读得到，所以扩展按线条阶段用 `enable` 打开，缺扩展时只警告不报错。
-  注意：`effects/weather.glsl` 的 `WeatherRainMask` 含只有片元能用的 `discard`，天气顶点引入它会在顶点阶段报错，
+  注意：`effects/weather/weather.glsl` 的 `WeatherRainMask` 含只有片元能用的 `discard`，天气顶点引入它会在顶点阶段报错，
   需要该文件补 `OMNI_FRAGMENT` 守卫；这里按效果文件声明的用法保留调用，见交付报告存疑项。
 */
 #ifndef OMNI_OVERLAY_BODY_INCLUDED // 只引入一次，避免选项与函数重复定义。

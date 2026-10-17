@@ -16,11 +16,11 @@
     顶点阶段按原程序给合成二号打开 `VS_SHADOW_HIGHLIGHT`、给合成五号打开 `VS_SUN_VISIBILITY`，再引入统一顶点文件。
     被引入的效果文件会整段编译，所以它们引用的加载器输入（阴影采样器、涟漪贴图、降雨强度、天空光满值标记）
     由本文件声明一次；本程序自己不一定用到这些量，声明只为让整段可编译，名字照 iterationT。
-    `composite5` 的 `sunCoord`、`sunVisibility` 由顶点阶段算出；镜头选项位于 `effects/lens.glsl`，
+    `composite5` 的 `sunCoord`、`sunVisibility` 由顶点阶段算出；镜头选项位于 `effects/lens/lens.glsl`，
     那份文件含片元专用的 `gl_FragCoord`，不能在顶点阶段引入，因此顶点阶段看不到 `OMNI_LENS_GLARE`，
     两个变量在顶点阶段不会被写出。本条属于跨片边界，处理方式见交付报告，不在本文件里改动别的效果文件。
     阴影样本 `shadowtex1` 按 `rendering/buffers.glsl` 的 `shadowHardwareFiltering1` 声明成带比较的采样器，
-    与 `effects/shadow.glsl` 的读取方式一致；`effects/fog.glsl` 在英伟达分支按二维深度读同一张图，两者冲突见交付报告。
+    与 `effects/shadow/shadow.glsl` 的读取方式一致；`effects/fog/fog.glsl` 在英伟达分支按二维深度读同一张图，两者冲突见交付报告。
 */
 #ifndef OMNI_COMPOSITE_BODY_INCLUDED // 只引入一次，避免 `main()` 与输出变量重复定义。
 #define OMNI_COMPOSITE_BODY_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -354,7 +354,7 @@ void main(){
 }
 #else // 主世界
 // 本程序是唯一使用可变半影阴影的合成阶段，声明比较采样器 `shadowtex1` 并按需要打开阴影效果里的对应段。
-#define OMNI_SHADOW_COMPARE 1 // 让 `effects/shadow.glsl` 编译可变半影阴影函数。
+#define OMNI_SHADOW_COMPARE 1 // 让 `effects/shadow/shadow.glsl` 编译可变半影阴影函数。
 // 加载器输入先声明。
 #include "/common/uniforms.glsl"
 // 共用数学与颜色曲线。
@@ -517,14 +517,16 @@ void main(){
 			#endif
 		#endif
 
-		#if defined OMNI_DISABLE_HAND_GI && defined OMNI_DISABLE_PLAYER_GI
-			if (materialMaskSolid.hand < 0.5 && materialMaskSolid.entityPlayer < 0.5)
-		#elif defined OMNI_DISABLE_HAND_GI
-			if (materialMaskSolid.hand < 0.5)
-		#elif defined OMNI_DISABLE_PLAYER_GI
-			if (materialMaskSolid.entityPlayer < 0.5)
+		// 先把“这个像素要不要接收全局光”算成一个布尔量，避免判断条件被预处理指令切成分开的几段。
+		bool applyGi = true; // 默认接收全局光。
+		#ifdef OMNI_DISABLE_HAND_GI
+			applyGi = applyGi && materialMaskSolid.hand < 0.5; // 开启排除手时，手不接收全局光。
 		#endif
-			finalComposite += rsm; // 手与玩家按选项排除后叠全局光。
+		#ifdef OMNI_DISABLE_PLAYER_GI
+			applyGi = applyGi && materialMaskSolid.entityPlayer < 0.5; // 开启排除玩家时，玩家不接收全局光。
+		#endif
+		if (applyGi)
+			finalComposite += rsm; // 通过手与玩家的排除条件后叠全局光。
 
 		#ifdef OMNI_GTAO
 			#ifdef OMNI_GTAO_MULTIBOUNCE
@@ -687,8 +689,6 @@ void main(){
 	#endif
 	float opaqueDist = gbuffer.depthL < 1.0 ? length(viewPos) : farDist; // 不透明表面距离。
 	float waterDist = gbuffer.depthW < 1.0 ? length(viewPosTranslucent) : farDist; // 半透明表面距离。
-
-	float cloudShadow = 1.0; // 云影占位，本程序不使用。
 
 	vec3 finalComposite = CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb) * MAIN_OUTPUT_FACTOR; // 一号画面换回线性用于合成。
 
@@ -933,12 +933,12 @@ uniform float rainStrength; // 降雨强度，雨点涟漪用。
 #if defined OMNI_NETHER
 	// 雾文件带入水面、天空、云、光照，并提供 `VanillaFog` 与雾选项。
 	#include "/effects/fog/fog.glsl"
-	// 下界配色、雾与折射 `NetherFogColor`、`NetherFog`、`WaterRefractionLiteNether`。
+	// 下界配色、雾与折射 `NetherFogColor`、`NetherFog`、`RefractSampleOnceNether`。
 	#include "/effects/world/nether.glsl"
 #elif defined OMNI_END
 	// 雾文件带入水面与 `VanillaFog`，并提供星空类型与阳光强度选项。
 	#include "/effects/fog/fog.glsl"
-	// 末地天空、雾与折射 `EndFog`、`WaterRefractionLiteEnd`。
+	// 末地天空、雾与折射 `EndFog`、`RefractSampleOnceEnd`。
 	#include "/effects/world/end.glsl"
 #else
 	// 带入天空、云、环境光与方块光依赖。
@@ -1003,7 +1003,7 @@ void main(){
 	vec3 color = CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb); // 读一号画面当前颜色。
 
 	if (materialMask.ice + materialMask.stainedGlass > 0.5) // 冰面与彩色玻璃做折射。
-		WaterRefractionLiteNether(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist); // 下界折射。
+		RefractSampleOnceNether(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist); // 下界折射。
 
 	if (materialMask.stainedGlass > 0.5) // 彩色玻璃吸收。
 		TransparentAbsorptionNether(color, gbuffer.albedoW); // 下界彩色玻璃吸收。
@@ -1046,8 +1046,6 @@ void main(){
 	MaterialMask materialMaskSoild = CalculateMasks(gbuffer.materialIDL); // 不透明层材质掩码。
 	MaterialMask materialMask = CalculateMasks(gbuffer.materialIDW); // 半透明层材质掩码。
 
-	float globalCloudShadow = 1.0; // 原程序保留的占位，末地不走体积雾，本值不被使用。
-
 	FixParticleMask(materialMaskSoild, materialMask); // 薄粒子修正。
 	bool isSmooth = false; // 光滑面标记，由材质覆盖函数回填。
 	ApplyMaterial(gbuffer.material, materialMask, isSmooth); // 水玻璃冰用写死材质。
@@ -1082,7 +1080,7 @@ void main(){
 	vec3 color = CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb); // 读一号画面当前颜色。
 
 	if (materialMask.water + materialMask.ice + materialMask.stainedGlass > 0.5) // 水、冰与彩色玻璃做折射。
-		WaterRefractionLiteEnd(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist); // 末地折射。
+		RefractSampleOnceEnd(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist); // 末地折射。
 
 	if (materialMask.stainedGlass > 0.5) // 彩色玻璃吸收。
 		TransparentAbsorptionEnd(color, gbuffer.albedoW); // 末地彩色玻璃吸收。
@@ -1165,7 +1163,7 @@ void main(){
 	vec3 color = CurveToLinear(texelFetch(colortex1, texelCoord, 0).rgb); // 读一号画面当前颜色。
 
 	if (materialMask.water + materialMask.ice + materialMask.stainedGlass > 0.5)
-		WaterRefractionLite(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist, fogTimeFactor, globalCloudShadow, texCoord, texelCoord); // 水玻璃冰做折射。
+		RefractSampleOnce(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist, fogTimeFactor, globalCloudShadow, texCoord, texelCoord); // 水玻璃冰做折射。
 
 	float waterAbsorption = 1.0; // 水的吸收系数。
 	if (isEyeInWater == 1) waterAbsorption = saturate(exp2(-waterDist * 0.06 * OMNI_WATERFOG_DENSITY)); // 水下按距离算吸收。

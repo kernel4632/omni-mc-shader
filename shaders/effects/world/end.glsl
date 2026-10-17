@@ -627,7 +627,7 @@ vec3 EndIslandLighting(vec3 worldPos, vec3 normal, vec3 viewDir, vec3 albedo, fl
 }
 
 // --- 末地假天空反射：屏幕反射没命中时用末地天空兜底 ---
-// 为什么加 `End` 后缀：主世界 `effects/reflection.glsl` 另有一份形状不同的 `ComputeFakeSkyReflection`，按合同区分开。
+// 为什么加 `End` 后缀：主世界 `effects/reflection/reflection.glsl` 另有一份形状不同的 `ComputeFakeSkyReflection`，按合同区分开。
 // 调用前提：`worldShadowVector` 已由绘制主体声明。
 vec3 ComputeFakeSkyReflectionEnd(vec3 reflectWorldDir, bool isSmooth){
 	vec3 sky = vec3(0.0); // 累积的反射天空颜色。
@@ -639,10 +639,10 @@ vec3 ComputeFakeSkyReflectionEnd(vec3 reflectWorldDir, bool isSmooth){
 	return sky / MAIN_OUTPUT_FACTOR; // 换算到管线存储单位。
 }
 
-// --- 末地水面折射：与主世界同名函数形状不同，加 `End` 后缀区分 ---
+// --- 末地水面折射：与主世界 `RefractSampleOnce` 形状不同，加 `End` 后缀区分 ---
 // 与主世界版的差别：末地用 `EndFog` 补雾，不再走体积雾与地表散射，也不带时间因子与云影参数。
 // 调用前提：`texCoord`、`texelCoord`、水面波法线与坐标换算已由绘制主体引入。
-void WaterRefractionLiteEnd(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist){
+void RefractSampleOnceEnd(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist){
 	vec2 refractCoord = texCoord; // 默认不折射，用原屏幕坐标。
 
 	float waterDeep = opaqueDist - waterDist; // 水面到水底的厚度。

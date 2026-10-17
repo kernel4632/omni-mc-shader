@@ -7,7 +7,7 @@
     `color = omniLightning(color, worldPos, skylight);` 再按真实闪电事件照亮附近表面。
 设计原因与取舍：
     极光与彩虹各自独立成一个函数、各自带开关，默认关闭，关掉后连采样都不生成，默认画面与 iterationT 一致；
-    大气散射已由 `effects/sky.glsl` 的预计算模型统一出图，这里不再重复叠一份；
+    大气散射已由 `effects/sky/sky.glsl` 的预计算模型统一出图，这里不再重复叠一份；
     闪电只在加载器给出真实事件、并且玩家主动打开时才叠加；iterationT 不使用 `lightningBoltPosition`，所以默认关闭以免雷暴时多出一层闪光；
     雨天判据用新管线的 `wetness`（平滑后的降雨），与 iterationT 保持一致。
 */

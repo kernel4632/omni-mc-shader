@@ -16,7 +16,7 @@
     调用前提（iterationT 原样保留）：冻结 `OMNI_DEFERRED1_PASS` 的程序要先声明 `shadowtex0`、`shadowtex1`、
     `shadowcolor0`、`shadowcolor1` 与 `texelCoord`、`texCoord`，并让材质编号 `MATID_ENTITIES_PLAYER` 可见；
     `OMNI_DEFERRED2_PASS` 的程序要先声明 `gbufferProjection`、`depthtex1`、`texCoord`；
-    坐标换算按合同要先引入定义 `OMNI_TAA` 的效果文件。为什么这里不直接引入 `effects/material.glsl`：
+    坐标换算按合同要先引入定义 `OMNI_TAA` 的效果文件。为什么这里不直接引入 `effects/ground/material.glsl`：
     那份文件带只在几何阶段存在的贴图取样器，延迟程序引不动，材质编号由绘制主体保证可见。
     末地把延迟程序重新排序（时间滤波在二号、空间滤波在四号），所以本文件的编译条件同时认末地对应的程序宏。
 */
@@ -73,8 +73,7 @@
 #include "/common/noise.glsl"
 #include "/effects/shadow/shadow.glsl"
 #ifdef OMNI_GI_RSM // 只有打开全局光才需要下面的函数。
-////////////////////PROGRAM_GI_0////////////////////////////////////////////////////////////////////
-////////////////////PROGRAM_GI_0////////////////////////////////////////////////////////////////////
+// --- 反射阴影图反弹与全局光时间滤波：主世界在延迟一号、末地在延迟二号 ---
 #if (defined OMNI_DEFERRED1_PASS && !defined OMNI_END) || (defined OMNI_END && defined OMNI_DEFERRED2_PASS) // 主世界在延迟一号、末地在延迟二号做反射阴影图与时间滤波。
 // 反射阴影图反弹：从阴影图里可见的表面取光照与底色，按法线朝向和距离估计给当前点补一份光。
 vec3 RSM(vec3 viewPos, vec3 normal){
@@ -221,6 +220,32 @@ vec2 GiCameraVelocity(vec2 coord, float depth){
 	return coord - projection.xy; // 返回屏幕位移。
 }
 #endif
+// 上一帧全局光的四像素双线性插值：按法线与深度给每个历史像素加权，取回历史反弹颜色。
+// 输入是本帧法线、本帧到相机距离、相机速度与上一帧纹素坐标；`out weightSum` 回传权重和供调用方混合。
+// 为什么用一个循环枚举四个纹素：原来嵌套两层循环把滤波深度堆高，这里用下标拼出四个角，读数一样但更平。
+vec3 GiHistorySample(vec3 currNormal, float currDist, vec3 cameraVelocity, vec2 prevCoord, out float weightSum){
+	vec2 prevTexel = floor(prevCoord); // 历史纹素整数部分。
+	vec3 prevGi = vec3(0.0); // 累积的历史反弹。
+	weightSum = 0.0; // 权重和。
+
+	for (int k = 0; k < 4; k++){ // 左下、右下、左上、右上四个历史纹素。
+		vec2 sampleTexelcoord = prevTexel + vec2(float(k >> 1), float(k & 1)); // 按下标拼出四个角的偏移。
+		vec4 prevData = texelFetch(colortex2, ivec2(sampleTexelcoord.x + OMNI_GI_RENDER_RESOLUTION * screenSize.x, sampleTexelcoord.y), 0); // 读历史法线深度。
+		vec3 prevNormal = prevData.xyz * 2.0 - 1.0; // 还原历史法线。
+		float normalWeight = float(dot(currNormal, prevNormal) > 0.5); // 法线相近才参与。
+		float prevDist = prevData.a * 1000.0; // 历史距离。
+		float depthWeight = max(abs(currDist - prevDist - cameraVelocity.z), 0.0); // 距离差。
+		depthWeight = exp(-depthWeight / (currDist * 0.1 + 0.1)); // 差距越大权重越低。
+		depthWeight = saturate(depthWeight * 2.0); // 放大后再收敛。
+		float bilinearWeight = (1.0 - abs(prevCoord.x - sampleTexelcoord.x)) * (1.0 - abs(prevCoord.y - sampleTexelcoord.y)); // 双线性权重。
+		bilinearWeight *= normalWeight * depthWeight; // 总权重。
+		prevGi += CurveToLinear(texelFetch(colortex2, ivec2(sampleTexelcoord), 0).rgb) * bilinearWeight; // 累加解码后的历史反弹。
+		weightSum += bilinearWeight; // 累加权重。
+	}
+
+	return prevGi; // 返回加权历史反弹（未归一化，调用方按权重和混合）。
+}
+
 // 全局光时间滤波：把本帧反射阴影图与历史帧按法线和深度做双向插值，抑制闪烁。
 vec4 GI_TemporalFilter(){
 	vec4 prev = texelFetch(colortex2, texelCoord, 0); // 先取历史像素。
@@ -266,29 +291,12 @@ vec4 GI_TemporalFilter(){
 			vec2 pcoord = coord - velocity; // 映射到上一帧坐标。
 			vec2 prevCoord = clamp(pcoord, vec2(0.0), vec2(1.0) - pixelSize * 2.0); // 夹到画面内。
 			if (prevCoord == pcoord){ // 历史坐标有效才做滤波。
-				prevCoord = prevCoord * OMNI_GI_RENDER_RESOLUTION * screenSize - 0.5; // 换成历史纹素坐标。
-				vec2 prevTexel = floor(prevCoord); // 历史纹素整数部分。
-				vec3 prevGi = vec3(0.0); // 累积的历史反弹。
-				float weights = 0.0; // 权重和。
-				for(float i = 0.0; i <= 1.0; i++){ // 四个历史像素双向插值。
-				for(float j = 0.0; j <= 1.0; j++){ // 纵方向。
-					vec2 sampleTexelcoord = prevTexel + vec2(i, j); // 历史纹素。
-					vec4 prevData = texelFetch(colortex2, ivec2(sampleTexelcoord.x + OMNI_GI_RENDER_RESOLUTION * screenSize.x, sampleTexelcoord.y), 0); // 读历史法线深度。
-					vec3 prevNormal = prevData.xyz * 2.0 - 1.0; // 还原历史法线。
-					float normalWeight = float(dot(currNormal, prevNormal) > 0.5); // 法线相近才参与。
-					float currDist = -currViewPos.z; // 本帧到相机的距离。
-					currDist = min(currDist, 1000.0); // 限长避免远处权重异常。
-					float prevDist = prevData.a * 1000.0; // 历史距离。
-					vec3 cameraVelocity = mat3(gbufferModelView) * (cameraPosition - previousCameraPosition); // 相机速度转到视空间。
-					float depthWeight = max(abs(currDist - prevDist - cameraVelocity.z), 0.0); // 距离差。
-					depthWeight = exp(-depthWeight / (currDist * 0.1 + 0.1)); // 差距越大权重越低。
-					depthWeight = saturate(depthWeight * 2.0); // 放大后再收敛。
-					float bilinearWeight = (1.0 - abs(prevCoord.x - sampleTexelcoord.x)) * (1.0 - abs(prevCoord.y - sampleTexelcoord.y)); // 双线性权重。
-					bilinearWeight *= normalWeight * depthWeight; // 总权重。
-					prevGi += CurveToLinear(texelFetch(colortex2, ivec2(sampleTexelcoord), 0).rgb) * bilinearWeight; // 累加解码后的历史反弹。
-					weights += bilinearWeight; // 累加权重。
-				}}
-				gi = mix(gi, prevGi, 0.95 * weights); // 与历史混合。
+				vec2 prevTexelCoord = prevCoord * OMNI_GI_RENDER_RESOLUTION * screenSize - 0.5; // 换成历史纹素坐标。
+				float currDist = min(-currViewPos.z, 1000.0); // 本帧到相机的距离，限长避免远处权重异常。
+				vec3 cameraVelocity = mat3(gbufferModelView) * (cameraPosition - previousCameraPosition); // 相机速度转到视空间。
+				float weightSum = 0.0; // 权重和。
+				vec3 prevGi = GiHistorySample(currNormal, currDist, cameraVelocity, prevTexelCoord, weightSum); // 取上一帧加权历史反弹。
+				gi = mix(gi, prevGi, 0.95 * weightSum); // 与历史混合。
 			}
 			prev = vec4(LinearToCurve(gi), 0.0); // 编码回历史格式。
 		}
@@ -318,9 +326,7 @@ vec4 GI_TemporalFilter(){
 	return prev; // 返回本帧要写回二号画面的数据。
 }
 #endif // 延迟一号结束。
-////////////////////END_IF//////////////////////////////////////////////////////////////////////////
-////////////////////PROGRAM_GI_1////////////////////////////////////////////////////////////////////
-////////////////////PROGRAM_GI_1////////////////////////////////////////////////////////////////////
+// --- 全局光空间滤波：主世界在延迟二号、末地在延迟四号 ---
 #if (defined OMNI_DEFERRED2_PASS && !defined OMNI_END) || (defined OMNI_END && defined OMNI_DEFERRED4_PASS) // 主世界在延迟二号、末地在延迟四号做全局光空间滤波。
 // 全局光空间滤波：在七乘七邻域里按法线与深度加权平均，抑制半分辨率带来的噪点。
 vec3 GI_SpatialFilter(float dist, vec3 normal, vec3 viewDir){
@@ -358,7 +364,6 @@ vec3 GI_SpatialFilter(float dist, vec3 normal, vec3 viewDir){
 	return LinearToCurve(gi); // 编码后返回。
 }
 #endif // 延迟二号结束。
-////////////////////END_IF//////////////////////////////////////////////////////////////////////////
 #endif // 全局光结束。
 // 地平线遮蔽：沿视线做多切片搜索最大地平线角，积分出半球被挡住的比重。
 // 调用前提：`texCoord`、`gbufferProjection`、`depthtex1` 已声明。

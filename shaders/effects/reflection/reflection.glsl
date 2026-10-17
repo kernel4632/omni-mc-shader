@@ -20,7 +20,7 @@
   `timeNoon`、`wetness`、`eyeNoPrecipitationSmooth`、`isEyeInWater`、`far`、`colortex1`…`colortex5`、`depthtex0`、`depthtex1` 由合成主程序声明；
   本文件按阶段引入所需效果文件：`composite2` 引入雾与天空云反射，`composite5` 只引入材质，`composite3`/`composite4` 只引入坐标。
 关键设计原因与取舍：
-  原程序把 `ProjectSky` 写在 SSR 与天空两处，按合同只在 `effects/sky.glsl` 保留一份，本文件直接调用；
+  原程序把 `ProjectSky` 写在 SSR 与天空两处，按合同只在 `effects/sky/sky.glsl` 保留一份，本文件直接调用；
   两份 `CalculateSpecularReflections` 参数不同、用途不同，原程序靠所在程序区分，这里按程序宏 `OMNI_COMPOSITE2_PASS`、`OMNI_COMPOSITE5_PASS` 分开，避免把只属于反射通道的采样编译进滤波通道；
   接近全反射的像素（`colortex1` 的 a 通道大于零点五）直接取当前场景色，避免反射处出现黑洞。
 */
@@ -91,6 +91,20 @@ vec3 sampleGGXVNDF(vec3 viewVector, float roughness, vec2 noise) {
 	return normalize(vec3(roughness * sampleVector.xy, max(sampleVector.z, 0.0))); // 按粗糙度压扁并归一化。
 }
 
+// 取追踪采样点的深度：手部读手部深度，其他读不透明深度，近景是天空时改读远景深度。
+// 为什么单独成函数：追踪循环每前进一步、每细化一步都要重读深度，抽到一处后循环体只剩一条读深度，
+// 既能保证三种读法一致，也让追踪循环少一层预处理嵌套，整段读起来是一段平铺的步进。
+float TraceSampleDepth(vec2 coord, bool isHand){
+	#if MC_VERSION >= 11605 // 一点一六点五以后手部有单独深度。
+		if (isHand) return textureLod(depthtex2, coord, 0.0).x; // 手部读不含玩家的深度。
+	#endif
+	float depth = textureLod(depthtex1, coord, 0.0).x; // 其他像素读普通不透明深度。
+	#ifdef DISTANT_HORIZONS // 近景是天空时改读远景深度。
+		if (depth == 1.0) depth = ScreenDepth_From_DHScreenDepth(textureLod(dhDepthTex1, coord, 0.0).x); // 换成同一距离在近景投影下的深度。
+	#endif
+	return depth; // 返回该坐标的深度。
+}
+
 // 屏幕空间追踪：从起点沿反射方向在屏幕里逐步前进，撞到比射线更近的几何就命中。
 // 输入是射线起点与方向、视线余弦、抖动噪声、最小步长与是否手部；就地推进 `screenPos`，返回是否命中。
 // 为什么命中后要二分细化：粗步长会跨过薄几何，细化几次把交点收窄到表面附近，反射边界才不抖。
@@ -108,33 +122,25 @@ bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float nois
 
 	bool hit = false; // 命中标记，初值未命中。
 
-	screenPos += rayDir * stepLength * noise; // 起点按噪声抖动，减少规则条纹。
-	float depth = textureLod(depthtex1, screenPos.xy, 0.0).x; // 读该点不透明深度。
-	#ifdef DISTANT_HORIZONS // 有远景时，近景是天空就改用远景深度。
-		if (depth == 1.0){ // 近景是天空。
-			depth = textureLod(dhDepthTex1, screenPos.xy, 0.0).x; // 改读远景深度。
-			depth = ScreenDepth_From_DHScreenDepth(depth); // 换成同一距离在近景投影下的深度。
-		}
-
-		float maxDepth = ScreenDepth_From_LinearDepth(LinearDepth_From_ScreenDepth_DH(1.0)); // 远景最远距离对应的近景深度，作为步进上限。
+	#ifdef DISTANT_HORIZONS // 有远景时步进上限是远景最远距离，没有远景时是近景最远处。
+		float maxDepth = ScreenDepth_From_LinearDepth(LinearDepth_From_ScreenDepth_DH(1.0)); // 远景最远距离对应的近景深度，作为有效深度与步进上限。
+	#else
+		float maxDepth = 1.0; // 没有远景时近景最远处为一。
 	#endif
+
+	screenPos += rayDir * stepLength * noise; // 起点按噪声抖动，减少规则条纹。
+	float depth = TraceSampleDepth(screenPos.xy, false); // 读该点深度，起始点不按手部处理。
 
 	for(int i = 0; i < OMNI_RAYTRACE_QUALITY + 3; i++){ // 最多走质量加三次，多出的几次用于边界收尾。
 
 		if (saturate(screenPos.xy) != screenPos.xy) break; // 出了屏幕就停止，屏幕外没有可靠深度。
 
-		#ifdef DISTANT_HORIZONS
-			if (screenPos.z >= maxDepth){ // 射线到达远景最远处。
-				hit = depth >= maxDepth; // 该处也是尽头才算命中天空终点。
-		#else
-			if (screenPos.z >= 1.0){ // 射线到达近景最远处。
-				hit = depth >= 1.0; // 该处也是尽头才算命中。
-		#endif
-				break; // 结束步进。
-			}else if (screenPos.z < 0.7 && !isHand){ // 射线跑到相机很近的地方，后面没有可靠深度。
-				break; // 结束步进。
-			}
-
+		if (screenPos.z >= maxDepth){ // 射线到达最远处。
+			hit = depth >= maxDepth; // 该处也是尽头才算命中。
+			break; // 结束步进。
+		}else if (screenPos.z < 0.7 && !isHand){ // 射线跑到相机很近的地方，后面没有可靠深度。
+			break; // 结束步进。
+		}
 
 		if (depth < screenPos.z){ // 几何深度比射线更近，说明可能撞上几何。
 
@@ -143,28 +149,7 @@ bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float nois
 			for (int j = 0; j < OMNI_RAYTRACE_REFINEMENT_STEPS; j++, refineDir *= 0.5) { // 二分细化交点。
 
 				screenPos += refineDir * (step(screenPos.z, depth) * 2.0 - 1.0); // 越过就回退半步，没越过就前进半步。
-
-				#if MC_VERSION >= 11605 // 一点一六点五以后手部有单独深度。
-					if (isHand){ // 手部读不含玩家的深度。
-						depth = textureLod(depthtex2, screenPos.xy, 0.0).x; // 读手部深度。
-					}else{ // 其他像素读普通不透明深度。
-						depth = textureLod(depthtex1, screenPos.xy, 0.0).x; // 读不透明深度。
-						#ifdef DISTANT_HORIZONS // 近景是天空时改读远景。
-							if (depth == 1.0){
-								depth = textureLod(dhDepthTex1, screenPos.xy, 0.0).x;
-								depth = ScreenDepth_From_DHScreenDepth(depth);
-							}
-						#endif
-					}
-				#else // 旧版本没有单独的手部深度。
-					depth = textureLod(depthtex1, screenPos.xy, 0.0).x; // 一律读不透明深度。
-					#ifdef DISTANT_HORIZONS
-						if (depth == 1.0){
-							depth = textureLod(dhDepthTex1, screenPos.xy, 0.0).x;
-							depth = ScreenDepth_From_DHScreenDepth(depth);
-						}
-					#endif
-				#endif
+				depth = TraceSampleDepth(screenPos.xy, isHand); // 重读该点深度，手部读手部深度。
 			}
 
 			if (depth > screenPos.z) continue; // 细化后几何又跑到后面，这一步不算命中。
@@ -174,28 +159,15 @@ bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float nois
 
 			float distDiff = abs(sampleDist - stepDist) / stepDist; // 两点的相对深度差。
 
-			#ifdef DISTANT_HORIZONS
-				if (distDiff < OMNI_RAYTRACE_ZDIFF_THRESHOLD && screenPos.z > 0.0 && screenPos.z < maxDepth){ // 差足够小且深度在有效范围内才算命中。
-					hit = true;
-					break;
-				}
-			#else
-				if (distDiff < OMNI_RAYTRACE_ZDIFF_THRESHOLD && screenPos.z > 0.0 && screenPos.z < 1.0){ // 差足够小且深度在有效范围内才算命中。
-					hit = true;
-					break;
-				}
-			#endif
+			if (distDiff < OMNI_RAYTRACE_ZDIFF_THRESHOLD && screenPos.z > 0.0 && screenPos.z < maxDepth){ // 差足够小且深度在有效范围内才算命中。
+				hit = true;
+				break;
+			}
 		}
 
 		stepLength = clamp(abs(depth - screenPos.z) * zScaling, minStepLength, rSteps); // 按深度差自适应下一步长度，落在最小与最大之间。
 		screenPos += rayDir * stepLength; // 前进一步。
-		depth = textureLod(depthtex1, screenPos.xy, 0.0).x; // 读新位置的深度。
-		#ifdef DISTANT_HORIZONS
-			if (depth == 1.0){
-				depth = textureLod(dhDepthTex1, screenPos.xy, 0.0).x;
-				depth = ScreenDepth_From_DHScreenDepth(depth);
-			}
-		#endif
+		depth = TraceSampleDepth(screenPos.xy, false); // 读新位置的深度，步进点不按手部处理。
 	}
 
 	return hit; // 返回是否命中。
@@ -519,9 +491,13 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 
 	vec3 reflection = CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb); // 读三号画面的反射颜色并换回线性。
 
-	#ifndef OMNI_NETHER // 下界没有全反射标记这一套，跳过条件判断。
-		if (texelFetch(colortex1, texelCoord, 0).a < 0.5){ // 一号画面 a 通道小于零点五表示不是全反射像素。
+	#ifndef OMNI_NETHER // 下界没有全反射标记这一套。
+		bool notTotalReflection = texelFetch(colortex1, texelCoord, 0).a < 0.5; // 一号画面 a 通道小于零点五表示不是全反射像素。
+	#else
+		bool notTotalReflection = true; // 下界没有全反射标记，一律按普通像素处理。
 	#endif
+
+	if (notTotalReflection){ // 先算好布尔量再走一条完整的 `if`，避免判断括号被预处理指令切开。
 
 		reflection *= mix(vec3(1.0), albedo, vec3(material.metalness)); // 金属面用底色给反射染色。
 
@@ -543,19 +519,16 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 		diff = sign(diff) * sqrt(abs(diff)); // 开方让差的分布更平缓。
 		specular += 0.75 * diff * (1.0 - specular) * specular; // 亮度差大时补一点反射。
 
-	#ifdef OMNI_OVERWORLD
-		color = mix(color, reflection, saturate(specular * waterAbsorption)); // 主世界按水吸收缩反射权重。
-		color += temp * (material.metalness * waterAbsorption); // 金属面再加一份底色。
-	#else
-		color = mix(color, reflection, saturate(specular)); // 下界末地按反射权重混合。
-		color += temp * material.metalness; // 金属面再加一份底色。
-	#endif
-
-	#ifndef OMNI_NETHER // 下界没有这个分支。
-		}else{ // 全反射像素。
-			color = reflection; // 直接取反射颜色。
-		}
-	#endif
+		#ifdef OMNI_OVERWORLD
+			color = mix(color, reflection, saturate(specular * waterAbsorption)); // 主世界按水吸收缩反射权重。
+			color += temp * (material.metalness * waterAbsorption); // 金属面再加一份底色。
+		#else
+			color = mix(color, reflection, saturate(specular)); // 下界末地按反射权重混合。
+			color += temp * material.metalness; // 金属面再加一份底色。
+		#endif
+	}else{ // 全反射像素。
+		color = reflection; // 直接取反射颜色。
+	}
 }
 #endif // composite5 段结束。
 

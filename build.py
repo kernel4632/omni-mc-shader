@@ -37,10 +37,6 @@ ROOT = Path(__file__).resolve().parent  # 换工作目录不改变数据位置�
 SHADERS = ROOT / "shaders"  # 游戏资源根目录。
 INCLUDE = re.compile(r'^[ \t]*#include[ \t]+"([^"\n]+)"[ \t]*$', re.MULTILINE)  # 加载器要求引用独占一行，尾随说明会被拒绝。
 STAGES = {".vsh": ".vert", ".fsh": ".frag", ".gsh": ".geom", ".csh": ".comp", ".tcs": ".tesc", ".tes": ".tese"}  # 把游戏入口后缀映射到编译器认识的阶段名。
-# 移植 iterationT 期间的临时开关：旧效果文件在各片改写前没有入口引用，为真时“选项未接入”只警告不报错。
-# 它只影响这一处宽松判断，不再缩减编译范围：`verify` 的编译探针与 `compile` 的全矩阵都照各自范围完整编译。
-# 移植收尾、确认每个选项都接入入口后，删除这个开关与它的分支，恢复严格报错。
-PORTING = True
 # 加载器会为每个程序预先注入一整套环境宏；离线编译必须照 Iris 的 StandardMacros 给出同样的定义，
 # 否则像 `MC_HAND_DEPTH`、`MC_VERSION`、`MC_RENDER_QUALITY` 这些只在游戏里存在的名字会被当成未声明标识符。
 # 取值照 Iris 源码：版本号取当前游戏、厂商与渲染器取通用值（另一套环境再测远景路径）。
@@ -251,22 +247,16 @@ def check_option_wiring(found: dict) -> None:
     if unused:
         raise ValueError("选项没有接入任何计算：" + "、".join(unused[:5]))
 
-# --- 完整离线编译：开发与移植期用，不受十秒预算限制 ---
+# --- 完整离线编译：开发与发布前用，不受十秒预算限制 ---
 def compile_all(seconds: float = 300.0) -> None:
-    """编译全部维度的全部程序，用于移植期和发布前的人工门禁。
+    """编译全部维度的全部程序，用于发布前的人工门禁。
 
     为什么单独一条命令：`verify` 的十秒预算装不下整包编译；这里显式放宽时间，
     结果只用于本机与人工检查，不改变 `verify` 的预算规则。
     """
     found, profiles, _ = configuration()  # 选项与预设先检查。
     entries = entrypoints()  # 引用边界与阶段配对。
-    global PORTING  # 完整编译要求选项都已接线：临时关掉移植期“未接线只警告”的宽松，让未接线选项直接失败。
-    saved = PORTING
-    PORTING = False
-    try:
-        compile_shaders(entries, found, profiles, {entry.stem for entry in entries})  # 全部程序都要编默认配置与全高配置，不能只编关键通路。
-    finally:
-        PORTING = saved
+    compile_shaders(entries, found, profiles, {entry.stem for entry in entries})  # 全部程序都要编默认配置与全高配置，不能只编关键通路。
 
 # --- 读取菜单来源：配置定义归选项模块所有，构建只使用结果 ---
 def configuration() -> tuple[dict, list, dict]:
@@ -469,8 +459,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
         cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
         cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n", encoding="utf-8")  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
     if failures:  # 资源目录退出后临时文件已清理，再统一报告最多五项失败。
-        limit = 400 if PORTING else 5  # 移植期一次列全，便于统一修；正常开发只报前五条。
-        raise ValueError("\n\n".join(failures[:limit]))
+        raise ValueError("\n\n".join(failures[:5]))  # 只报前五条，避免长错误淹没真正原因；完整失败仍需逐条修。
     unique_programs = len(seen)  # 唯一程序数由新编译与成功缓存复用共同组成。
     print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{unique_programs} 组唯一程序，复用 {reused} 组相同源码")
 
@@ -527,14 +516,13 @@ def check() -> None:
     dependencies()  # 发行包中的第三方文件与许可也必须满足白名单。
     print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
     check_option_wiring(found)  # 选项必须真的参与计算，和编译探针范围无关。
-    source_numbers = numbered_sources()  # 全部主体共享编号与展开缓存，避免反复扫描目录。
-    expanded_cache = {}  # 一次检查只读取每份共用源码一次。
+    reference_seen = set()  # 全树引用校验共享已访问集合，每个文件只走一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
-        expand(source, sourceNumbers=source_numbers, cache=expanded_cache)  # 不为每个文件重新扫描整棵引用树。
+        check_references(source, SHADERS, seen=reference_seen)  # 只走引用树，不拼接文本，避免为校验再做一次全量展开。
     # 十秒预算内的编译探针：只编体积小的程序，覆盖几何、阴影、远景与最终显示；合成与延迟的完整覆盖由 `python build.py compile` 负责。
     # 为什么这样分：合成本体展开后有两千多万字符，单编一个就要八九秒，塞不进常规验证的预算；缩到小程序仍能挡住语法、引入与宏撞名错误。
-    key_programs = {"gbuffers_terrain", "gbuffers_water", "shadow"}  # 这三类在全部代表配置与两组环境下再编一次。
-    smoke = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "gbuffers_basic", "gbuffers_skybasic", "shadow", "dh_terrain", "dh_water", "final"}
+    key_programs = {"gbuffers_terrain"}  # 这三类在全部代表配置与两组环境下再编一次。
+    smoke = {"gbuffers_terrain", "final"}
     probes = [source for source in entries if source.parent.name == "world0" and source.stem in smoke]  # 主世界的轻量程序，默认配置与基础环境。
     compile_shaders(probes, found, profiles, key_programs)  # 关键程序另加全高配置与开远景环境。
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。

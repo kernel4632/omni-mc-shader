@@ -8,10 +8,10 @@
 输出约定：远景地形写零号、三号、五号，对应 `DRAWBUFFERS:035`；远景水写四号、六号，对应 `DRAWBUFFERS:46`。
 设计原因与取舍：
   远景由加载器按远景模组的投影矩阵绘制，顶点用远景投影，片元只处理贴图噪声、剔除与简单的湿润；
-  远景地形的逐块噪声与剔除在 `effects/world.glsl`，远景水的波法线在 `effects/water.glsl`。
-  顶点阶段不引入含 `discard` 与导数函数的效果文件；`effects/world.glsl`、`effects/water.glsl` 都只用力的片元。
-  注意：`effects/water.glsl` 合并了水波与雨点，雨点函数依赖 `gaux1` 到 `gaux3` 与 `rainStrength`，而 iterationT 的
-  远景水只引入水波；`effects/weather.glsl` 的雨函数依赖 `colorShadowlight` 与 `colorSkylight`，这里按需声明。
+  远景地形的逐块噪声与剔除在 `effects/world/world.glsl`，远景水的波法线在 `effects/water/water.glsl`。
+  顶点阶段不引入含 `discard` 与导数函数的效果文件；`effects/world/world.glsl`、`effects/water/water.glsl` 都只用力的片元。
+  注意：`effects/water/water.glsl` 合并了水波与雨点，雨点函数依赖 `gaux1` 到 `gaux3` 与 `rainStrength`，而 iterationT 的
+  远景水只引入水波；`effects/weather/weather.glsl` 的雨函数依赖 `colorShadowlight` 与 `colorSkylight`，这里按需声明。
 */
 #ifndef OMNI_DISTANT_BODY_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_DISTANT_BODY_INCLUDED // 置上标记。

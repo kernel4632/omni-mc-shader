@@ -10,11 +10,11 @@
   加载器对阴影程序按固定的两张阴影缓冲绑定，默认写零号与一号。
 设计原因与取舍：
   阴影图是深度写入，顶点负责植物摆动、法线判定与投影压缩，片元写入贴图色与法线天光。
-  阴影相关选项、常量与末地阴影相机矩阵都在 `effects/shadow.glsl`，主体引入它；它内部还要 `MaterialMask`
-  与时间抗锯齿选项，所以先引入 `effects/material.glsl` 与 `effects/antialiasing.glsl`。
-  调用前提（iterationT 与效果文件原样保留）：`effects/shadow.glsl` 的采样函数读取 `worldShadowVector` 与
+  阴影相关选项、常量与末地阴影相机矩阵都在 `effects/shadow/shadow.glsl`，主体引入它；它内部还要 `MaterialMask`
+  与时间抗锯齿选项，所以先引入 `effects/ground/material.glsl` 与 `effects/clarity/antialiasing.glsl`。
+  调用前提（iterationT 与效果文件原样保留）：`effects/shadow/shadow.glsl` 的采样函数读取 `worldShadowVector` 与
   `shadowVector`，本节不调用采样函数，仍按它的调用前提给两个空全局。
-  注意：`effects/shadow.glsl` 无条件引入 `common/noise.glsl`，其中函数用到只有片元可用的 `gl_FragCoord`，
+  注意：`effects/shadow/shadow.glsl` 无条件引入 `common/noise.glsl`，其中函数用到只有片元可用的 `gl_FragCoord`，
   顶点阶段引入它会在顶点阶段报错；需要该文件补 `OMNI_FRAGMENT` 守卫，见交付报告存疑项。
 */
 #ifndef OMNI_SHADOW_BODY_INCLUDED // 只引入一次，避免选项与常量重复定义。
@@ -24,13 +24,13 @@
 #include "/common/uniforms.glsl"
 // 共用纯计算：三次模糊、曲线与法线编解码。
 #include "/common/math.glsl"
-// 时间抗锯齿选项：`effects/shadow.glsl` 的屏幕空间阴影要用。
+// 时间抗锯齿选项：`effects/shadow/shadow.glsl` 的屏幕空间阴影要用。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MaterialMask`，阴影采样函数要用。
 #include "/effects/ground/material.glsl"
 // 植物摆动：提供 `WavingPlants` 与阴影摆动开关。
 #include "/effects/ground/vegetation.glsl"
-// `effects/shadow.glsl` 的采样函数读取这两个方向，本节不调用采样函数，按调用前提给空全局。
+// `effects/shadow/shadow.glsl` 的采样函数读取这两个方向，本节不调用采样函数，按调用前提给空全局。
 vec3 worldShadowVector; // 世界空间阳光方向。
 vec3 shadowVector; // 视空间阳光方向。
 // 远景阴影依赖加载器在开启远景模组时提供的材质编号；基础环境缺这些名字，按原程序取值补回退。

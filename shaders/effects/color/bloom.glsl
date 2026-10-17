@@ -32,7 +32,7 @@
 #include "/common/math.glsl"
 #include "/effects/clarity/antialiasing.glsl"
 #include "/common/coordinates.glsl"
-// 合并泛光要读水雾密度 `OMNI_WATERFOG_DENSITY`（定义在 `effects/water.glsl`），这里引入它的归属文件。
+// 合并泛光要读水雾密度 `OMNI_WATERFOG_DENSITY`（定义在 `effects/water/water.glsl`），这里引入它的归属文件。
 #include "/effects/water/water.glsl"
 // 合并泛光用失明与黑暗的调试开关 `OMNI_DISABLE_BLINDNESS_DARKNESS`，它的归属文件是颜色效果，这里引入才拿到定义。
 #include "/effects/color/color.glsl"

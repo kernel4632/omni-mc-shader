@@ -1,7 +1,7 @@
 /*
 坐标换算：照 iterationT `Lib/Uniform/GbufferTransforms.glsl` 一比一移植，屏幕、视空间与深度互相换算。
 调用位置：绘制主体在 `common/uniforms.glsl`、`common/math.glsl` 和定义 `OMNI_TAA` 的
-`effects/antialiasing.glsl` 之后引入本文件。
+`effects/clarity/antialiasing.glsl` 之后引入本文件。
 可复制示例：
     `vec3 viewPos = ViewPos_From_ScreenPos(texCoord, depth);`        还原视空间位置，自动撤销抖动
     `vec3 screenPos = ScreenPos_From_ViewPos(viewPos);`              投回屏幕，自动补上抖动

@@ -13,8 +13,8 @@
   `vec3 shadow = VariablePenumbraShadow(worldPos, worldNormal, sunlight, albedo, scattering, mask, sss);`  不透明表面阴影可见度。
 调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明这些全局量）：
   `shadowtex0`、`shadowtex1`、`shadowcolor0` 三个阴影采样器，以及主程序的 `in vec3 worldShadowVector`、`in vec3 shadowVector`；
-  `ivec2 texelCoord`、`vec2 texCoord` 由延迟与合成主程序声明；`MaterialMask` 结构由 `effects/material.glsl` 提供；
-  `OMNI_TAA`、`OMNI_DISABLE_HAND_TAA`、`OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR` 由 `effects/antialiasing.glsl` 提供。
+  `ivec2 texelCoord`、`vec2 texCoord` 由延迟与合成主程序声明；`MaterialMask` 结构由 `effects/ground/material.glsl` 提供；
+  `OMNI_TAA`、`OMNI_DISABLE_HAND_TAA`、`OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR` 由 `effects/clarity/antialiasing.glsl` 提供。
 关键设计原因与取舍：
   坐标变换与遮挡查询分成两层，写入端只复用变换、不引入深度采样，读取端只关心比较，职责不混；
   主世界与末地用不同的阴影相机矩阵，编译期二选一，运行时不再多一次分支；
