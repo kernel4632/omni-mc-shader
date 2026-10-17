@@ -17,7 +17,7 @@ jobs:
     timeout-minutes: 3 # 排队不计入；下载与上传受平台限制，实际检查另有十秒预算。
     steps:
       - name: 读取代码
-        uses: actions/checkout@v6 # 检查当前提交，不读取玩家目录。
+        uses: actions/checkout@v7 # 检查当前提交，不读取玩家目录。
       - name: 准备 Python
         uses: actions/setup-python@v6 # 使用项目要求的解释器版本。
         with:
