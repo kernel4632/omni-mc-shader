@@ -1,4 +1,5 @@
 #version 330 compatibility
+#extension GL_ARB_shader_image_load_store : enable
 // 生成的shadow入口：修改绘制主体与显式流程表。
 // 指定本入口在绘制的哪个阶段运行。
 #define OMNI_FRAGMENT 1

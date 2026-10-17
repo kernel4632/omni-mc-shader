@@ -279,6 +279,9 @@ def program_files() -> dict[Path, str]:
     流程表属于文件输入，维度、主体和宏名在此检查；固定三维度避免加载器漏读根入口。
     每个维度登记 `define`（维度宏）、`buffers`（该维度引入的中间画面与常量声明文件）、
     `geometry`（额外生成几何阶段的程序）和 `absent`（该维度没有的程序）。
+    顶层可选的 `extensions` 登记“某程序需要打开的 GLSL 扩展”，例如阴影顶点要写三维图像需要
+    `GL_ARB_shader_image_load_store`；扩展必须紧跟 `#version` 之后（语言规定要在任何非预处理记号之前），
+    所以只有生成入口能写它，效果文件里写会太晚。
     顶点、几何、片元使用基础语言版本，计算阶段使用更高版本；生成文本是既有构建协议。
     为什么不把 `buffers` 放进根程序：加载器按每个程序展开后的片元源码逐行读取 `const` 指令，
     同一份声明必须在被编译的程序里出现才生效，所以每个维度生成的入口都引入自己那份声明文件。
@@ -287,6 +290,12 @@ def program_files() -> dict[Path, str]:
     if set(data.get("dimensions", {})) != {"world0", "world-1", "world1"}:  # 每个受支持维度都要明确登记。
         raise ValueError("使用旧维度约定时必须同时提供 world0、world-1、world1；不能混入根目录程序")  # 任意worldN存在时加载器忽略根目录入口。
     result = {}  # 生成入口位置与内容。
+    extensions = data.get("extensions", {})  # 顶层可选的程序级扩展表，键是程序名。
+    if not isinstance(extensions, dict) or not set(extensions) <= set(data["programs"]):  # 只允许给已登记程序加扩展。
+        raise ValueError("extensions 只能登记在 programs 里已有的程序名上")
+    for extension_name, names in extensions.items():  # 逐程序检查扩展名。
+        if not isinstance(names, list) or any(not re.fullmatch(r"GL_[A-Za-z0-9_]+", text) for text in names):  # 扩展名必须是受控的图形扩展名。
+            raise ValueError(f"{extension_name} 的 extensions 必须是 GL_ 开头的名字列表")
     for dimension, setting in data["dimensions"].items():  # 维度显式接线：维度宏、几何阶段清单、缺席程序清单。
         flag = setting["define"]  # 每个维度都有自己的维度宏，主世界也不例外，主体靠它选维度分支。
         buffers = setting["buffers"]  # 该维度的中间画面与常量声明文件，逐维度取值不同，必须写进每个入口的片元源码才生效。
@@ -306,7 +315,8 @@ def program_files() -> dict[Path, str]:
                 flags = [stage, *defines, flag]  # 维度规则显式写入入口。
                 if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in flags):  # 生成入口只允许项目自有宏名；程序宏带编号，如 `OMNI_COMPOSITE10_PASS`。
                     raise ValueError("程序宏必须使用受控名称")
-                lines = ["#version 330 compatibility", f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 首行必须先声明语言版本，再说明生成来源。
+                # 扩展必须紧跟 `#version` 之后，任何非预处理记号之前，所以效果文件里写扩展会太晚。
+                lines = ["#version 330 compatibility"] + [f"#extension {text} : enable" for text in extensions.get(name, [])] + [f"// 生成的{name}入口：修改绘制主体与显式流程表。"]  # 语言版本、按程序声明的扩展、生成说明。
                 # 三条说明分别按阶段、程序、维度措辞，避免同一个入口里重复同一句话；宏都带值 1，加载器才不会当成含义不明的布尔开关。
                 lines += ["// 指定本入口在绘制的哪个阶段运行。", "#define " + stage + " 1"]  # 阶段宏只选顶点、片元或几何。
                 for define in defines:  # 每个程序登记一条程序宏。
@@ -342,7 +352,7 @@ def generate() -> None:
             if path.suffix in (".vsh", ".fsh", ".gsh", ".csh") and path not in files:  # 只检查由流程表生成的阶段，几何阶段也由流程表生成。
                 text = path.read_text(encoding="utf-8")  # 只删除旧流程生成且没有手动修改的薄入口。
                 generated_comments = {f"// 生成的{path.stem}入口：修改绘制主体与显式流程表。","// 指定本入口在绘制的哪个阶段运行。","// 指定本入口对应的绘制程序。","// 指定本入口所属维度，主体靠它选维度分支。","// 先引入本维度的中间画面与常量声明。","// 显式引入完整绘制主体。","// 输出由主体按统一缓冲协议写入。"}  # 只有生成器自己的说明才可随旧入口删除。
-                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#define OMNI_[A-Z0-9_]+(?: 1)?|#include "/rendering/[a-z_]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式（含带值与带编号的宏、逐维度声明文件），额外内容视为人工修改。
+                untouched = all(line in generated_comments or line in ("#version 330 compatibility","#version 430") or re.fullmatch(r'#extension GL_[A-Z0-9_]+ : enable|#define OMNI_[A-Z0-9_]+(?: 1)?|#include "/rendering/[a-z_]+\.glsl"',line) for line in text.splitlines() if line.strip())  # 逐行匹配旧生成格式（含带值与带编号的宏、逐维度声明文件、程序级扩展），额外内容视为人工修改。
                 lines = text.splitlines()
                 if len(lines) < 2 or not lines[0].startswith("#version ") or not lines[1].startswith("// 生成的") or not untouched:  # 格式不完整或含人工说明时拒绝删除。
                     raise ValueError(f"旧入口含自有修改，不能自动删除：{path}")  # 保留用户文件并报告具体冲突。
@@ -531,8 +541,8 @@ def check() -> None:
     # 十秒预算内的编译探针：只编体积小的程序，覆盖地形、阴影与最终显示三条轻量通路；合成与延迟的完整覆盖由 `python build.py compile` 负责。
     # 为什么这样分：合成本体展开后有两千多万字符，单编一个就要八九秒，塞不进常规验证的预算；缩到小程序仍能挡住语法、引入与宏撞名错误。
     # 实测这三条编默认配置与基础环境，再加地形一组全高与开远景，共 4 组唯一程序；整体耗时见本机 `verify` 输出。
-    key_programs = {"gbuffers_terrain"}  # 只有地形一组在全部代表配置与两组环境下再编一次。
-    smoke = {"gbuffers_terrain", "shadow", "final"}  # 默认配置与基础环境编译这四条。
+    key_programs = {"gbuffers_terrain", "shadow", "setup", "shadowcomp"}  # 这几组在全部代表配置与两组环境下再编一次；地形之外再算上阴影顶点与两个计算阶段，才能编到光传播体积开启时的分支。
+    smoke = {"gbuffers_terrain", "shadow", "final", "setup", "shadowcomp"}  # 默认配置与基础环境编译这几条；两个计算阶段体积小，加进来挡住计算着色器的语法错误。
     probes = [source for source in entries if source.parent.name == "world0" and source.stem in smoke]  # 主世界的轻量程序，默认配置与基础环境。
     compile_shaders(probes, found, profiles, key_programs)  # 关键程序另加全高配置与开远景环境。
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。

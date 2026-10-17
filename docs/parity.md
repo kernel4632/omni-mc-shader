@@ -135,7 +135,7 @@ Iris 的执行顺序：阴影 → 不透明几何 → deferred 0–6 → 半透�
 | `final` | `final` | `OMNI_FINAL_PASS` |
 
 阶段宏：`OMNI_VERTEX`、`OMNI_GEOMETRY`、`OMNI_FRAGMENT`、`OMNI_COMPUTE`。维度宏：`OMNI_OVERWORLD`、`OMNI_NETHER`、`OMNI_END`。
-光传播体积的 `setup` 计算程序保留，主体仍是 `rendering/lpv.glsl`。
+光传播体积的 `setup`（填方块光表）与 `shadowcomp`（每帧传播）两个计算程序保留，主体仍是 `rendering/lpv.glsl`；体素化写在 `rendering/shadow.glsl` 的顶点阶段，`shadow` 入口按 `rendering/programs.json` 的 `extensions` 打开图像访问扩展。
 
 ### 地基接口（甲片交付，各片必须按此写）
 

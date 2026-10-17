@@ -37,11 +37,6 @@ void WriteOverworldSurface(vec3 albedo, float metalnessMask, vec3 specularHighli
 	finalComposite += specularHighlight; // 叠高光。
 	finalComposite += vec3(1.0) * lightning; // 闪电自发光。
 	finalComposite = omniLightning(finalComposite, worldPos, skylight); // Omni 额外功能：真实闪电事件照亮附近表面。
-	#ifdef OMNI_LPV_ENABLED // Omni 额外功能：光传播体积给空气补间接光；缺少自定义图像能力时整段不编译。
-		#ifdef IRIS_FEATURE_CUSTOM_IMAGES
-		finalComposite += omniLpvSample(omniLpvTex, worldPos) * OMNI_LPV_STRENGTH; // 三线性采样体积间接光。
-		#endif
-	#endif
 	finalComposite /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
 	finalComposite = LinearToCurve(finalComposite); // 四次方根编码。
 	compositeOutput1 = vec4(finalComposite, 0.0); // 写回一号画面。
@@ -170,7 +165,13 @@ void CompositeSurfaceLighting(){
 		if(heldBlockLightValue + heldBlockLightValue2 > 0.0)
 			finalComposite += HeldLighting(viewPos, viewDir, gbuffer.normalL, gbuffer.material.roughness, ao, materialMask.hand > 0.5); // 叠手持光源。
 
-		finalComposite += BlockLighting(gbuffer.lightmapL.r, ao, materialMaskSolid); // 叠方块光。
+		vec3 blockLighting = BlockLighting(gbuffer.lightmapL.r, ao, materialMaskSolid); // 原版方块光。
+		#ifdef OMNI_LPV_ENABLED // Omni 额外功能：用体积彩色光替换方块光；缺少自定义图像能力时整段不编译。
+			#ifdef IRIS_FEATURE_CUSTOM_IMAGES
+			blockLighting = omniLpvApply(blockLighting, worldPos, worldNormal); // 按体积边缘淡出把体积光混进来。
+			#endif
+		#endif
+		finalComposite += blockLighting; // 叠方块光（可能已被体积光替换）。
 		finalComposite += TextureLighting(gbuffer.albedo, gbuffer.lightmapL.r, gbuffer.material.emissiveness, materialMaskSolid); // 叠资源包自发光。
 
 		float sunlight = Fd_Burley(worldNormal, -worldDir, worldShadowVector, gbuffer.material.roughness); // 阳光漫反射项。

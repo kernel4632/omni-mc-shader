@@ -663,32 +663,34 @@ class EffectTests(unittest.TestCase):
         self.assertIn("debugColor", support.text("rendering/final.glsl"))  # 最终阶段调用调试视图。
 
     def test_lpv_compute_options(self):
-        """光传播体积可开关、步数可选，计算阶段写入自定义图像，片元阶段采样。"""
+        """光传播体积可开关、体积大小可选，计算阶段填方块光表与传播，片元阶段混回方块光。"""
         found, _, _ = support.configuration()  # 真实选项。
         self.assertEqual(found["OMNI_LPV_ENABLED"].values, ("false", "true"))  # 体积光可开关。
-        self.assertEqual(found["OMNI_LPV_STEPS"].values, ("2", "4", "6"))  # 传播步数保持偶数。
-        scene = support.expand(build.SHADERS / "world0/setup.csh")  # 从计算入口展开。
-        self.assertIn("omniLpvSeed", scene)  # 注入接入计算入口。
-        self.assertIn("omniLpvSpreadAB", scene)  # 传播接入计算入口。
+        self.assertEqual(found["OMNI_LPV_SIZE"].values, ("6", "7", "8"))  # 体积边长保持三档。
+        scene = support.expand(build.SHADERS / "world0/setup.csh")  # 从填表计算入口展开。
+        self.assertIn("omniLpvBlockData", scene)  # 方块光表接入 setup 阶段。
+        shadowcomp = support.expand(build.SHADERS / "world0/shadowcomp.csh")  # 从传播计算入口展开。
+        self.assertIn("omniLpvMixNeighbours", shadowcomp)  # 邻居混合接入传播阶段。
         effect = support.text("effects/lighting/lpv.glsl")  # 效果主体。
-        self.assertIn("omniLpvSample", effect)  # 片元采样独立成函数。
+        self.assertIn("omniLpvApply", effect)  # 片元混光独立成函数。
+        self.assertIn("omniVoxelBlockId", effect)  # 体素编号映射独立成函数。
 
     def test_custom_images_feature_is_declared(self):
         """用自定义图像就必须声明能力开关，缺能力时体积光回退屏幕空间间接光。"""
         settings = options.read_pipeline(build.SHADERS / "rendering/pipeline.properties")  # 流程设置唯一来源。
         self.assertIn("CUSTOM_IMAGES", settings["iris.features.optional"])  # 声明为可选能力。
         self.assertIn("COMPUTE_SHADERS", settings["iris.features.optional"])  # 计算能力同时声明。
-        self.assertIn("image.omniLpvA", settings)  # 自定义图像仍由绘制设置提供。
-        fields = settings["image.omniLpvA"].split()  # 字段顺序与取值必须符合加载器要求。
+        self.assertIn("image.omniLpv1", settings)  # 自定义图像仍由绘制设置提供。
+        fields = settings["image.omniLpv1"].split()  # 字段顺序与取值必须符合加载器要求。
         self.assertEqual(len(fields), 9, fields)  # 采样器名加八个设置项。
-        for path in ("rendering/lpv.glsl", "effects/lighting/lpv.glsl", "rendering/composite.glsl"):
+        for path in ("rendering/lpv.glsl", "effects/lighting/lpv.glsl", "rendering/shadow.glsl"):
             self.assertIn("IRIS_FEATURE_CUSTOM_IMAGES", support.text(path))  # 每处图像读写都按能力开关回退。
 
     def test_lpv_image_writes_have_visibility_barriers(self):
-        """每次图像写入后都先做图像屏障再同步工作组，避免传播读取旧数据。"""
+        """传播只在单次派发里写一张图、读另一张图，靠共享缓冲与一次工作组同步，不需要图像屏障。"""
         source = support.text("rendering/lpv.glsl")  # 计算主体而不是复制实现。
-        self.assertEqual(source.count("memoryBarrierImage();"), 3)  # 注入、正向传播、反向传播各有一次。
-        self.assertEqual(source.count("barrier();"), 3)  # 每个图像屏障后紧跟工作组同步。
+        self.assertNotIn("memoryBarrierImage", source)  # 读写的不是同一张图，没有同派发内的先后依赖。
+        self.assertEqual(source.count("barrier();"), 1)  # 共享缓冲填充完成后同步一次工作组。
         self.assertIn("defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES", source)  # 关闭或缺少能力时不读写图像。
 
     def test_selection_box_options(self):

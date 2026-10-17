@@ -73,13 +73,8 @@ uniform sampler2DShadow shadowtex1; // 阴影实心图，可变半影阴影按�
 #include "/effects/water/water.glsl"
 // Omni 额外功能：真实闪电事件照亮表面。
 #include "/effects/sky/atmosphere.glsl"
-// Omni 额外功能：光传播体积的采样映射与选项。
+// Omni 额外功能：光传播体积的采样映射、选项与片元取样函数。
 #include "/effects/lighting/lpv.glsl"
-#ifdef OMNI_LPV_ENABLED // 开启光传播体积时，缺失自定义图像能力则整段不编译。
-	#ifdef IRIS_FEATURE_CUSTOM_IMAGES
-	uniform sampler3D omniLpvTex; // 计算阶段写入的体积间接光，片元这里三线性采样。
-	#endif
-#endif
 #endif // 合成零号维度分支结束。
 // 不透明表面光照算法在效果文件里。
 #include "/effects/lighting/composite_surface.glsl"

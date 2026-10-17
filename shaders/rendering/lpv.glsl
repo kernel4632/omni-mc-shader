@@ -1,82 +1,142 @@
 /*
-LPV 计算入口：清空、注入并双缓冲传播光传播体积，是 Omni 自己的额外功能。
-调用位置：各维度的 `setup.csh` 定义 `OMNI_COMPUTE` 后引入本文件；选项与坐标映射来自 `effects/lighting/lpv.glsl`。
-可复制示例：无（计算程序由 `rendering/programs.json` 的 `compute` 段登记，入口由构建生成）。
+光传播体积计算入口：`setup` 阶段填方块光表，`shadowcomp` 阶段每帧推进一拍彩色光传播。
+来源：Eclipse 的 `dimensions/setup.csh`（方块光表分发）与 `dimensions/shadowcomp.csh`（共享内存里的 floodfill），
+  按本项目的计算入口约定改写成“一个主体、两个阶段”：
+  `rendering/programs.json` 把 `setup` 与 `shadowcomp` 都登记到本文件，靠 `OMNI_LPV_SETUP`、`OMNI_LPV_SHADOWCOMP` 选分支。
+调用位置：各维度 `setup.csh`、`shadowcomp.csh` 入口定义 `OMNI_COMPUTE` 与对应阶段宏后引入本文件；入口由构建生成。
+可复制示例：入口写 `#define OMNI_COMPUTE 1`、`#define OMNI_LPV_SHADOWCOMP 1`、`#define OMNI_OVERWORLD 1`，
+  再写 `#include "/rendering/lpv.glsl"`；选项、光表与坐标映射都来自 `effects/lighting/lpv.glsl`。
 设计原因与取舍：
-    一个工作组覆盖整格，所以可以用工作组屏障同步双缓冲的两张图像；
-    关闭体积光或缺少自定义图像能力时，整段保持空实现，由 `effects/lighting/ambient.glsl` 的屏幕空间路径接管。
+  一、`setup` 只在加载时跑一次，把每个方块编号的颜色、光强、透光率与方向掩码写进一张一维光表；
+  二、`shadowcomp` 每次阴影之后跑，用共享内存把每个工作组周围一圈的真实体积值读进来，
+     再按邻居掩码与染色混合、叠上本格自发光的“一步”传播，结果写回与上一帧相反的一张体积图；
+  三、双缓冲靠 `frameCounter` 的奇偶切换，读一张写另一张，下一帧再交换，保证读到完整的上一步结果；
+  四、关闭功能或缺自定义图像能力时两个阶段都保持空实现，不写图也不读图。
 */
-// LPV 光传播体积的计算入口：清空、注入和双缓冲传播。
-// 调用位置：各维度的 setup.csh 定义 OMNI_COMPUTE 后引入本文件。
-// 设计原因：每轮传播先写入一张图像，再用图像内存屏障和工作组屏障让下一轮读到完整结果。
-// 设计取舍：这里只负责计算阶段，不改变 LPV 的选项、体积坐标或缓冲协议；没有计算阶段时由 ambient.glsl 保留屏幕空间路径。
 #ifndef OMNI_LPV_LIB // 防止重复引用造成重复声明。
 #define OMNI_LPV_LIB // 标记本文件已经引入。
-// 效果选项与采样映射来自效果主体。
+// 效果选项、光表、坐标映射与体素读写来自效果主体。
 #include "/effects/lighting/lpv.glsl"
-#ifdef OMNI_COMPUTE // 只有计算阶段编译下面的入口。
-layout(local_size_x=8, local_size_y=8, local_size_z=8) in; // 单一工作组覆盖整格，可用工作组屏障。
-// 读取源图像的一个单元并夹紧到网格内，避免越界。
-vec3 omniLpvReadA(ivec3 cell) {
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不做任何图像读取。
-    return imageLoad(omniLpvA,clamp(cell,ivec3(0),ivec3(lpvSide-1))).rgb; // 边界重复自身。
-#else // 关闭体积光时的安全回退。
-    return vec3(0.0); // 不读取图像，返回零能量。
-#endif // 结束读取分支。
+
+// ========================= 阶段一 setup：填方块光表 =========================
+#ifdef OMNI_LPV_SETUP // 只有本阶段编译下面的入口。
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in; // 二维工作组，逐个填表项。
+const ivec3 workGroups = ivec3(16, 16, 1); // 每轴十六组，覆盖 128×128 个表项，足够放八千一百九十二项。
+// 填表主函数：每个线程负责一个方块编号，算出它的光色、光强、透光率与掩码后写进光表。
+void main(){
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时不填表。
+	int blockId = int(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * 128u); // 展平成一维编号，每行 128 项。
+	if (blockId < 0 || blockId >= int(omniLpvBlockTableSize)) return; // 超出表范围直接返回。
+	uvec2 row = omniLpvBlockData(uint(blockId)); // 算出这个编号的光表项。
+	imageStore(omniLpvBlocks, blockId, uvec4(row, 0u, 0u)); // 写入光表，后两字留空。
+#endif // 关闭分支结束。
 }
-// 读取目标图像的一个单元并夹紧到网格内。
-vec3 omniLpvReadB(ivec3 cell) {
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不做任何图像读取。
-    return imageLoad(omniLpvB,clamp(cell,ivec3(0),ivec3(lpvSide-1))).rgb; // 边界重复自身。
-#else // 关闭体积光时的安全回退。
-    return vec3(0.0); // 不读取图像，返回零能量。
-#endif // 结束读取分支。
+#endif // setup 阶段结束。
+
+// ========================= 阶段二 shadowcomp：每帧一步传播 =========================
+#ifdef OMNI_LPV_SHADOWCOMP // 只有本阶段编译下面的入口。
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; // 三维工作组，逐个填体积格。
+const ivec3 workGroups = ivec3(int(omniLpvSide) / 8); // 每轴覆盖整条体积边长，八格一组。
+
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时 main 保持空实现。
+
+// 共享缓冲比工作组大一圈（十格）：中间八格是本职工作项，外面一圈是邻居，读邻居不用再访存图。
+shared vec4 omniLpvShared[10 * 10 * 10]; // 体积值，含前一帧的时间累积。
+shared uint omniVoxelShared[10 * 10 * 10]; // 体素编号，本帧刚写完。
+const ivec3 omniLpvFlatten = ivec3(1, 10, 100); // 把三维共享下标展平成一维，照 Eclipse `shadowcomp.csh:18`。
+const float omniLpvFalloff = 0.96; // 每步传播的衰减，照 Eclipse `LpvBlockSkyFalloff`。
+
+// 三维下标展平成一维共享下标。
+int omniLpvSharedIndex(ivec3 pos){ return dot(pos, omniLpvFlatten); }
+// 把一个格子的体积值与体素编号读进共享缓冲：体积值加上跨帧格偏移，体素用本帧坐标。
+void omniLpvPopulate(ivec3 imgCoordOffset, ivec3 workGroupOffset, uint i){
+	int flat = int(i); // 展平下标，共享缓冲共一千格。
+	ivec3 grid = ivec3(flat / omniLpvFlatten.x, flat / omniLpvFlatten.y, flat / omniLpvFlatten.z) % 10; // 共享格坐标，零到九。
+	ivec3 pos = workGroupOffset + grid; // 该共享格在体积里的坐标，外面一圈会到负一或边长。
+	omniLpvShared[flat] = omniLpvReadAt(imgCoordOffset + pos); // 体积值：读上一帧那张图，并补偿体积随玩家移动的整格位移。
+	omniVoxelShared[flat] = omniVoxelRead(pos); // 体素编号：本帧阴影阶段刚写入，直接用当前坐标。
 }
-// 清空并注入：给每格写入方向光近似，作为传播起点。
-void omniLpvSeed() {
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不写图像。
-    ivec3 cell = ivec3(gl_GlobalInvocationID); // 当前单元。
-    vec3 light = vec3(0.0); // 没有几何数据时按方向光给基础能量。
-#if !defined OMNI_NETHER && !defined OMNI_END // 其他维度没有主世界方向光。
-    float height = 0.5 + 0.5 * omniNormalize(mat3(gbufferModelViewInverse)*shadowLightPosition).y; // 天体高度。
-    light = vec3(0.8,0.8,0.9) * height; // 直射光近似颜色。
-#endif // 结束维度判断。
-    imageStore(omniLpvA,cell,vec4(light*0.05,1.0)); // 把方向光近似写入传播源，作为后续每轮扩散的起点。
-    memoryBarrierImage(); // 先提交图像写入，避免同一工作组后续读取到旧的源数据。
-    barrier(); // 再同步整个工作组，保证所有单元都完成初次注入后才开始读取。
-#endif // 结束注入分支。
+// 取一个邻居的体积值，按该格的方向掩码决定它能不能把光传过来。
+vec4 omniLpvSampleNeighbour(ivec3 pos, int maskIndex){
+	int sharedIndex = omniLpvSharedIndex(pos + 1); // 共享坐标要加一圈偏移。
+	uint mask = 0xFFFFu; // 默认六个方向都通。
+	uint blockId = omniVoxelShared[sharedIndex]; // 该格的方块编号。
+	if (blockId > 0u){ // 空气为零，跳过查表。
+		uvec2 blockData = omniLpvBlockRow(blockId); // 读光表项。
+		mask = (blockData.g >> 24) & 0xFFFFu; // 高字里的方向掩码。
+	}
+	return omniLpvShared[sharedIndex] * float((mask >> maskIndex) & 1u); // 该方向不可透就把光清零。
 }
-// 正向传播一步：从源读取六邻居，写回目标。
-void omniLpvSpreadAB() {
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不做传播。
-    ivec3 cell = ivec3(gl_GlobalInvocationID); // 当前单元。
-    vec3 sum = omniLpvReadA(cell); // 自身先参与平均。
-    sum += omniLpvReadA(cell+ivec3(1,0,0)) + omniLpvReadA(cell-ivec3(1,0,0)); // 左右邻居。
-    sum += omniLpvReadA(cell+ivec3(0,1,0)) + omniLpvReadA(cell-ivec3(0,1,0)); // 上下邻居。
-    sum += omniLpvReadA(cell+ivec3(0,0,1)) + omniLpvReadA(cell-ivec3(0,0,1)); // 前后邻居。
-    imageStore(omniLpvB,cell,vec4(sum/7.0,1.0)); // 把源图像的七个位置平均后写入目标图像。
-    memoryBarrierImage(); // 先让目标图像写入对工作组可见，再允许主流程同步所有工作项。
-    barrier(); // 再同步整个工作组，保证下一轮不会读到尚未写完的目标图像。
-#endif // 结束正向传播分支。
+// 混合六个邻居：每个方向各挡一次，再乘传播衰减，得到本格接收到的光。
+vec4 omniLpvMixNeighbours(ivec3 fragCoord, uint mask){
+	uvec3 m1 = (uvec3(mask) >> uvec3(0, 2, 4)) & uvec3(1u); // 负方向（西、下、北）。
+	uvec3 m2 = (uvec3(mask) >> uvec3(1, 3, 5)) & uvec3(1u); // 正方向（东、上、南）。
+
+	vec4 sX1 = omniLpvSampleNeighbour(fragCoord + ivec3(-1, 0, 0), 1) * float(m1.x); // 西邻居，本格西向掩码。
+	vec4 sX2 = omniLpvSampleNeighbour(fragCoord + ivec3( 1, 0, 0), 0) * float(m2.x); // 东邻居，本格东向掩码。
+	vec4 sY1 = omniLpvSampleNeighbour(fragCoord + ivec3(0, -1, 0), 3) * float(m1.y); // 下邻居，本格下向掩码。
+	vec4 sY2 = omniLpvSampleNeighbour(fragCoord + ivec3(0,  1, 0), 2) * float(m2.y); // 上邻居，本格上向掩码。
+	vec4 sZ1 = omniLpvSampleNeighbour(fragCoord + ivec3(0, 0, -1), 5) * float(m1.z); // 北邻居，本格北向掩码。
+	vec4 sZ2 = omniLpvSampleNeighbour(fragCoord + ivec3(0, 0,  1), 4) * float(m2.z); // 南邻居，本格南向掩码。
+
+	vec4 avgFalloff = vec4(omniLpvFalloff / 6.0, omniLpvFalloff / 6.0, omniLpvFalloff / 6.0, omniLpvFalloff / 6.0); // 六分之一乘衰减。
+	return (sX1 + sX2 + sY1 + sY2 + sZ1 + sZ2) * avgFalloff; // 六个邻居求和后取平均。
 }
-// 反向传播一步：从目标读取六邻居，写回源图像。
-void omniLpvSpreadBA() {
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时不做传播。
-    ivec3 cell = ivec3(gl_GlobalInvocationID); // 当前单元。
-    vec3 sum = omniLpvReadB(cell); // 自身先参与平均。
-    sum += omniLpvReadB(cell+ivec3(1,0,0)) + omniLpvReadB(cell-ivec3(1,0,0)); // 左右邻居。
-    sum += omniLpvReadB(cell+ivec3(0,1,0)) + omniLpvReadB(cell-ivec3(0,1,0)); // 上下邻居。
-    sum += omniLpvReadB(cell+ivec3(0,0,1)) + omniLpvReadB(cell-ivec3(0,0,1)); // 前后邻居。
-    imageStore(omniLpvA,cell,vec4(sum/7.0,1.0)); // 把目标图像的七个位置平均后写回源图像。
-    memoryBarrierImage(); // 先提交回写结果，避免下一轮再次读取到上一轮的旧源数据。
-    barrier(); // 再同步整个工作组，保证双缓冲轮换时源图像已经完整更新。
-#endif // 结束反向传播分支。
+#endif // 开关与能力条件结束。
+
+// 传播主函数：先把周围十立方读进共享，再一个格子算一次混合加自发光，最后写回本帧那张图。
+void main(){
+#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时保持空实现。
+	uvec3 chunkPos = gl_WorkGroupID * gl_WorkGroupSize; // 本工作组的起点格。
+	if (any(greaterThanEqual(chunkPos, uvec3(omniLpvSide)))) return; // 超出体积边长的工作组直接退出。
+
+	uint i = uint(gl_LocalInvocationIndex) * 2u; // 每个线程搬两个共享格，512 线程刚好搬满 1000 格。
+	if (i < 1000u){ // 共享缓冲共一千格。
+		ivec3 imgCoordOffset = ivec3(floor(cameraPosition) - floor(previousCameraPosition)); // 体积随玩家移动的整格位移。
+		ivec3 workGroupOffset = ivec3(gl_WorkGroupID * gl_WorkGroupSize) - 1; // 共享缓冲比工作组大一圈，起点减一。
+		omniLpvPopulate(imgCoordOffset, workGroupOffset, i); // 搬第一格。
+		omniLpvPopulate(imgCoordOffset, workGroupOffset, i + 1u); // 搬第二格。
+	}
+	barrier(); // 等所有线程读完共享缓冲，后面的邻居读取才完整。
+
+	ivec3 imgCoord = ivec3(gl_GlobalInvocationID); // 本线程负责的体积格。
+	if (any(greaterThanEqual(imgCoord, ivec3(int(omniLpvSide))))) return; // 超出边长直接退出。
+
+	vec4 lightValue = vec4(0.0); // 本格最终的光。
+	vec3 lightColor = vec3(0.0); // 本格自发光的颜色。
+	vec3 tintColor = vec3(1.0); // 本格给穿过的光染的色。
+	float lightRange = 0.0; // 本格自发光的强度。
+	uint mixMask = 0xFFFFu; // 本格的方向掩码。
+
+	uint blockId = omniVoxelShared[omniLpvSharedIndex(ivec3(gl_LocalInvocationID) + 1)]; // 本格的方块编号。
+	if (blockId > 0u){ // 空气为零，跳过查表。
+		uvec2 blockData = omniLpvBlockRow(blockId); // 读光表项。
+		vec4 lightColorRange = unpackUnorm4x8(blockData.r); // 低字：光色与光强。
+		lightColor = omniSrgbToLinear(lightColorRange.rgb); // 颜色转线性。
+		lightRange = lightColorRange.a * 255.0; // 光强还原成格数。
+		vec4 tintColorMask = unpackUnorm4x8(blockData.g); // 高字：染色与掩码。
+		tintColor = omniSrgbToLinear(tintColorMask.rgb); // 染色也转线性。
+		mixMask = (blockData.g >> 24) & 0xFFFFu; // 方向掩码。
+	}
+
+	if (any(greaterThan(tintColor, vec3(0.0)))){ // 只有还透光才做邻居混合。
+		vec4 lightMixed = omniLpvMixNeighbours(ivec3(gl_LocalInvocationID), mixMask); // 混合六个邻居。
+		lightMixed.rgb *= tintColor; // 按本格染色滤一遍，透光率零时这里归零，光就被挡住。
+		lightValue += lightMixed; // 累加进本格。
+	}
+
+	if (lightRange > 0.0){ // 本格自己发光。
+		vec3 hsv = omniRgbToHsv(lightColor); // 拆出颜色。
+		hsv.z = exp2(lightRange) - 1.0; // 光强按指数放大，照 Eclipse `shadowcomp.csh:159`。
+		lightValue.rgb += omniHsvToRgb(hsv); // 累加自发光。
+	}
+
+	vec4 encoded = omniLpvEncode(lightValue); // 按对数编码压住动态范围。
+	if ((frameCounter % 2) == 0)
+		imageStore(omniLpv1, imgCoord, encoded); // 偶数帧写第一张，片元下一帧从这两张里读最新的一张。
+	else
+		imageStore(omniLpv2, imgCoord, encoded); // 奇数帧写第二张。
+#endif // 开关与能力条件结束。
 }
-void main() {
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭时计算入口保持空实现。
-    omniLpvSeed(); // 初次注入函数内部已经按图像屏障、工作组屏障的顺序完成同步。
-    for (int k=0;k<OMNI_LPV_STEPS;k++) { if (k%2==0) omniLpvSpreadAB(); else omniLpvSpreadBA(); } // 每轮函数内部完成双缓冲传播和同步，奇偶轮次交替使用两张图像。
-#endif // 结束计算入口分支。
-}
-#endif // 结束计算阶段。
-#endif // 结束文件守卫。
+#endif // shadowcomp 阶段结束。
+#endif // 文件守卫结束。

@@ -1,5 +1,20 @@
 # 更新记录
 
+## 0.0.0-dev.141
+
+把 Eclipse 的 floodfill 彩色光传播体积（LPV）整体搬进 Omni，替换原来八格立方的简易体积光，并按需要补上体素化。
+
+- 体素化（effects/lighting/lpv.glsl、rendering/shadow.glsl）：阴影顶点阶段把地形方块编号写进一张三维体素图，来源 Eclipse lib/voxel_write.glsl 的 PopulateShadowVoxel；只给地形与方块实体写，实体与玩家不挡光。写体素图要从顶点阶段访问图像，构建为此新增“程序级扩展声明”（rendering/programs.json 的 extensions，rendering/shadow 打开 GL_ARB_shader_image_load_store）。
+- 方块光表（rendering/lpv.glsl 的 setup 阶段、effects/lighting/lpv.glsl 的 omniLpvBlockData）：计算阶段把每个方块编号的颜色、光强、透光率与六向可透掩码填进一张一维光表，颜色与光强照 Eclipse dimensions/setup.csh 逐类对照；表长 8192，比 Eclipse 的 2048 大，因为本项目方块编号最大到七千一百零二。
+- 传播（rendering/lpv.glsl 的 shadowcomp 阶段）：每帧一步、双缓冲交替的 floodfill，用一个工作组覆盖一整块、先搬进共享内存再按掩码混合邻居，来源 Eclipse dimensions/shadowcomp.csh；体积随玩家按整格平移，搬共享内存时用上一帧相机位置补偿。
+- 取样（effects/lighting/composite_surface.glsl）：合成零号按体积边缘淡出把彩色体积光混回方块光，法线偏移减少贴面漏光，来源 Eclipse lib/diffuse_lighting.glsl 的 doBlockLightLighting。
+- 新选项：OMNI_LPV_SIZE（6/7/8，对应 64/128/256）、OMNI_LPV_SATURATION、OMNI_LPV_TINT_SATURATION、OMNI_LPV_NORMAL_STRENGTH、OMNI_LPV_REDSTONE_LIGHTS、OMNI_LPV_STRENGTH；移除旧的 OMNI_LPV_STEPS（旧简易算法被整体替换，配置需重设；旧名未保留迁移）。
+- 验证探针：verify 的关键程序加入 shadow、setup、shadowcomp，并在全高配置再编一次，才能真正编到体积光开启时的分支；此前只有地形一组进全高，开启分支不会被编译。
+- 未合并（记入 docs/eclipse-parity.md 的「LPV/间接光」行）：彩色蜡烛、彩色灯、实体光源、雾照明（LPV_VL_FOG_ILLUMINATION）、手持阴影，留作后续小步。
+- 差异说明：体积光默认关闭，默认画面与原来完全一致；缺计算能力或自定义图像能力时整段不编译，退回屏幕空间间接光。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.140
 
 补上 Eclipse 三处尚未实现的独立小选项，全部默认中性、默认画面不变。

@@ -45,6 +45,8 @@ vec3 shadowVector; // 视空间阳光方向。
 #endif
 // 阴影：提供全部阴影选项、`shadowDistance`、`shadowMapResolution` 与末地阴影相机矩阵。
 #include "/effects/shadow/shadow.glsl"
+// 光传播体积：提供体素编号映射与写体素图的函数，选项关闭或缺能力时整段不编译。
+#include "/effects/lighting/lpv.glsl"
 #ifdef OMNI_FRAGMENT
 	// 远景阴影淡入要用的 `DHShadowChunkFading`；它用到片元专用的 `discard` 与蓝噪声，所以只在片元阶段引入。
 	#include "/effects/world/world.glsl"
@@ -68,6 +70,10 @@ out float tilted; // 是否是倾斜面，用来判断背面丢弃。
 		// 方块纹理坐标中点：判断植物哪一半顶点会摆。
 		attribute vec4 mc_midTexCoord;
 	#endif
+	#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
+		// 方块中心相对顶点的偏移：把火把、花这类小模型对齐到正确的整格，体素才填得准。
+		attribute vec3 at_midBlock;
+	#endif
 #endif
 
 // 实体编号：玩家在阴影里要变黑。
@@ -83,6 +89,17 @@ void main(){
 	blockLight = saturate(lmcoord * 1.103449 - 0.0689656); // 重整到零到一。
 
 	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到阴影相机视空间。
+
+	#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
+	#if !defined OMNI_DH_SHADOW_PASS && !defined OMNI_END
+		// 光传播体积：只给地形与方块实体写体素，实体与玩家不挡光（照 Eclipse 排除实体的做法）；
+		// 顶点代表方块的一个角，加上方块中心偏移后落到该方块所属的整格，整块六个面写到同一格。
+		if (entityId == 0){
+			vec3 voxelPos = (shadowModelViewInverse * v_viewPos).xyz + at_midBlock / 64.0; // 相机相对世界位置加中心偏移。
+			omniVoxelStore(omniVoxelIndex(voxelPos), omniVoxelBlockId(mc_Entity.x)); // 写进体素图，越界自动丢弃。
+		}
+	#endif
+	#endif
 
 	#ifdef OMNI_DH_SHADOW_PASS
 		viewPos = v_viewPos.xyz; // 远景阴影记下视空间位置。

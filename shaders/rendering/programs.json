@@ -52,9 +52,13 @@
     "final": ["final", "OMNI_FINAL_PASS"]
   },
   "compute": {
-    "setup": ["lpv"],
+    "setup": ["lpv", "OMNI_LPV_SETUP"],
+    "shadowcomp": ["lpv", "OMNI_LPV_SHADOWCOMP"],
     "prepare": ["watersim", "OMNI_WAVE_SIM_PREPARE"],
     "prepare1": ["watersim", "OMNI_WAVE_SIM_SPREAD"],
     "prepare2": ["watersim", "OMNI_WAVE_SIM_GRADIENT"]
+  },
+  "extensions": {
+    "shadow": ["GL_ARB_shader_image_load_store"]
   }
 }

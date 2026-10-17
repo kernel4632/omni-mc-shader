@@ -41,22 +41,25 @@ class ComputeTests(unittest.TestCase):
             message = result.stdout+result.stderr; self.assertIn(shader.name,message); self.assertIn(":3",message)  # 报错包含文件名与出错行。
 
     def test_lpv_grid_and_sampling_registered(self):
-        """光传播体积登记计算传播与片元采样，关闭时保持屏幕空间回退。"""
+        """光传播体积登记 setup 与 shadowcomp 两个计算阶段、四张图像与片元混光。"""
         found,_,_ = support.configuration()  # 读取真实原生选项。
         self.assertEqual(found["OMNI_LPV_ENABLED"].values,("false","true"))  # 体积光为开关选项。
-        self.assertEqual(found["OMNI_LPV_STEPS"].values,("2","4","6"))  # 传播步数保持偶数。
-        scene = support.expand(build.SHADERS/"world0/setup.csh")  # 从计算入口展开。
-        self.assertIn("void omniLpvSeed",scene); self.assertIn("void omniLpvSpreadAB",scene)  # 注入与传播接入计算入口。
-        effect = support.text("effects/lighting/lpv.glsl")  # 效果主体。
-        self.assertIn("vec3 omniLpvSample",effect)  # 片元采样独立成函数。
+        self.assertEqual(found["OMNI_LPV_SIZE"].values,("6","7","8"))  # 体积边长保持三档。
         settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
-        self.assertIn("image.omniLpvA",settings); self.assertIn("image.omniLpvB",settings)  # 体积格在流程设置登记。
+        for name in ("image.omniLpv1","image.omniLpv2","image.omniLpvVoxel","image.omniLpvBlocks"):  # 两张传播缓冲、体素图与方块光表。
+            self.assertIn(name,settings)  # 体积图像在流程设置登记。
+        scene = support.expand(build.SHADERS/"world0/shadowcomp.csh")  # 从传播计算入口展开。
+        self.assertIn("omniLpvMixNeighbours",scene)  # 邻居混合接入传播阶段。
+        self.assertIn("omniLpvReadAt",scene)  # 上一帧体积值读取接入传播阶段。
+        effect = support.text("effects/lighting/lpv.glsl")  # 效果主体。
+        self.assertIn("uvec2 omniLpvBlockData",effect)  # 方块光表独立成函数。
+        self.assertIn("vec3 omniLpvApply",effect)  # 片元混光独立成函数。
 
     def test_lpv_image_writes_have_visibility_barriers(self):
-        """每次图像写入后都先做图像屏障再同步工作组，避免传播读取旧数据。"""
+        """传播只在单次派发里写一张图、读另一张图，靠共享缓冲与一次工作组同步，不需要图像屏障。"""
         source = support.text("rendering/lpv.glsl")  # 读取计算主体而不是复制实现。
-        self.assertEqual(source.count("memoryBarrierImage();"),3)  # 注入、正向传播、反向传播各有一次。
-        self.assertEqual(source.count("barrier();"),3)  # 每个图像屏障后紧跟工作组同步。
+        self.assertNotIn("memoryBarrierImage",source)  # 读写的不是同一张图，没有同派发内的先后依赖。
+        self.assertEqual(source.count("barrier();"),1)  # 共享缓冲填充完成后同步一次工作组。
         self.assertIn("defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES",source)  # 关闭或缺少能力时不读写图像。
 
     def test_wave_simulation_compute_and_images_registered(self):
