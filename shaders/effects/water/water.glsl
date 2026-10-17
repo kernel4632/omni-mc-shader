@@ -241,36 +241,6 @@ float physics_waveHeight(vec2 position, int iterations, float factor, float time
 	return height / waveSum * physics_oceanHeight * factor - physics_oceanHeight * factor * 0.5; // 归一化并按海面高度缩放、居中。
 }
 
-// 按迭代正弦求波形方向，与波高同源，只是累加拖拽力。
-vec2 physics_waveDirection(vec2 position, int iterations, float time) {
-	position = (position - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale; // 换到波形空间。
-	float iter = 0.0; // 每层方向角。
-	float frequency = PHYSICS_FREQUENCY; // 当前层频率。
-	float speed = PHYSICS_SPEED; // 当前层速度。
-	float weight = 1.0; // 当前层权重。
-	float waveSum = 0.0; // 累加权重。
-	float modifiedTime = time * PHYSICS_TIME_MULTIPLICATOR; // 缩放后的时间。
-	vec2 dx = vec2(0.0); // 累加方向。
-
-	for (int i = 0; i < iterations; i++) { // 逐层叠加。
-		vec2 direction = vec2(sin(iter), cos(iter)); // 当前层方向。
-		float x = dot(direction, position) * frequency + modifiedTime * speed; // 当前层的相位。
-		float wave = exp(sin(x) - 1.0); // 波峰更尖的包络。
-		float result = wave * cos(x); // 波形值。
-		vec2 force = result * weight * direction; // 对采样点的拖拽力。
-
-		dx += force / pow(weight, PHYSICS_W_DETAIL); // 按细节指数累加方向。
-		position -= force * PHYSICS_DRAG_MULT; // 采样点被拖拽。
-		iter += PHYSICS_ITER_INC; // 方向角前进。
-		waveSum += weight; // 累加权重。
-		weight *= PHYSICS_WEIGHT; // 权重衰减。
-		frequency *= PHYSICS_FREQUENCY_MULT; // 频率放大。
-		speed *= PHYSICS_SPEED_MULT; // 速度放大。
-	}
-
-	return vec2(dx / pow(waveSum, 1.0 - PHYSICS_W_DETAIL)); // 归一化方向。
-}
-
 // 合成海面法线：波形法线再混入涟漪贴图的凹凸，涟漪越强权重越大。
 vec3 physics_waveNormal(const in vec2 position, const in vec2 direction, const in float factor, const in float time) {
 	float oceanHeightFactor = physics_oceanHeight / 13.0; // 海面高度相对基础值十三的倍率。

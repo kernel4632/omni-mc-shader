@@ -51,40 +51,10 @@
 #define fsign(x)                        uintBitsToFloat((floatBitsToUint(x) & 0x80000000u) | 0x3f800000u) // 位运算取正负一，零也按正号。
 #define fsqrt(x)                        intBitsToFloat(0x1fbd1df5 + (floatBitsToInt(x) >> 1)) // 位运算近似平方根，速度快、精度低。
 
-// --- 向量与重映射 ---
-// 取三维向量里最小的分量。
-float minVec3(vec3 v){
-	return min(v.x, min(v.y, v.z)); // 依次比较三个分量。
-}
-
-// 取三维向量里最大的分量。
-float maxVec3(vec3 v){
-	return max(v.x, max(v.y, v.z)); // 依次比较三个分量。
-}
-
+// --- 区间重映射 ---
 // 把落在 `e0` 到 `e1` 的值映射到零到一并夹紧。
 float remapSaturate(float x, float e0, float e1){
 	return saturate((x - e0) / (e1 - e0)); // 先线性映射再夹紧。
-}
-
-// 把一个区间线性映射到另一个区间，不夹紧；下面三个是同名的向量版本。
-float remap(float x, float minOrigin, float maxOrigin, float minNew, float maxNew){
-	return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 归一化后放大到新区间。
-}
-
-// 二维版本的区间映射。
-vec2 remap(vec2 x, vec2 minOrigin, vec2 maxOrigin, vec2 minNew, vec2 maxNew){
-	return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 每个分量各自映射。
-}
-
-// 三维版本的区间映射。
-vec3 remap(vec3 x, vec3 minOrigin, vec3 maxOrigin, vec3 minNew, vec3 maxNew){
-	return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 每个分量各自映射。
-}
-
-// 四维版本的区间映射。
-vec4 remap(vec4 x, vec4 minOrigin, vec4 maxOrigin, vec4 minNew, vec4 maxNew){
-	return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 每个分量各自映射。
 }
 
 // --- 角度近似 ---
@@ -343,22 +313,7 @@ float bayer2(vec2 a) {
 
 float bayer4  (vec2 a) { return bayer2 (0.5   * a) * 0.25     + bayer2(a); } // 四乘四拜尔矩阵。
 float bayer8  (vec2 a) { return bayer4 (0.5   * a) * 0.25     + bayer2(a); } // 八乘八拜尔矩阵。
-float bayer16 (vec2 a) { return bayer4 (0.25  * a) * 0.0625   + bayer4(a); } // 十六乘十六拜尔矩阵。
-float bayer32 (vec2 a) { return bayer8 (0.25  * a) * 0.0625   + bayer4(a); } // 三十二乘三十二拜尔矩阵。
 float bayer64 (vec2 a) { return bayer8 (0.125 * a) * 0.015625 + bayer8(a); } // 六十四乘六十四拜尔矩阵。
-float bayer128(vec2 a) { return bayer16(0.125 * a) * 0.015625 + bayer8(a); } // 一百二十八乘一百二十八拜尔矩阵。
-
-// 一维低差异序列：第 `n` 个样本，比纯随机更均匀。
-float Sequences_R1(float n) {
-	const float alpha = 1.0 / goldenRatio; // 步长取黄金比倒数。
-	return fract(0.5 + n * alpha); // 从零点五起步逐个累加取小数。
-}
-
-// 二维低差异序列：步长取塑料数的倒数与倒数平方。
-vec2 Sequences_R2(float n) {
-	const vec2 alpha = 1.0 / vec2(plasticRatio, plasticRatio * plasticRatio); // 两个方向的步长。
-	return fract(0.5 + n * alpha); // 同样从零点五起步。
-}
 
 // --- 三次采样：原程序在两种时间抗锯齿里各写一份且逐字相同，按移植合同合并到这里一份 ---
 // 五次采样近似卡特穆尔-罗姆三次插值，放大历史画面时比双线性更锐利。

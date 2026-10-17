@@ -13,11 +13,11 @@
     入口写 `#define OMNI_FRAGMENT 1`、`#define OMNI_DEFERRED2_PASS 1`、`#define OMNI_OVERWORLD 1` 再引入本文件；
     入口写 `#define OMNI_VERTEX 1`、`#define OMNI_DEFERRED3_PASS 1` 再引入本文件即得延迟三号顶点阶段。
 关键设计原因与取舍：
-    延迟三号、四号、五号把四号六号画面当三维云噪声读，所以文件顶部按这三个程序打开 `COLORTEX_CLOUDNOISE`，
-    采样器类型才由 `common/uniforms.glsl` 选对；其余程序保持二维画面。
-    原程序一个程序一个文件，本文件把它们合成一个主体，按程序宏分派；每个程序的片元 `main()` 与 iterationT 逐行一致。
-    延迟顶点里只有三号要算光色（走 `rendering/lights.glsl`），四号五号要算云影贴图坐标，其余只需铺满屏幕。
-    效果文件算法与本文件里的合并方式见 `docs/parity.md`；本文件只安排阶段流程与输入输出，不复制算法。
+    延迟三号、四号、五号把四号六号画面当三维云噪声读，所以文件顶部按这三个程序打开 `COLORTEX_CLOUDNOISE`，采样器类型才由 `common/uniforms.glsl` 选对；其余程序保持二维画面。
+    原程序一个程序一个文件，本文件把它们合成一个主体，按程序宏分派；算法体已经搬进对应效果文件：
+        焦散法线 `effects/water/caustics.glsl` 的 `RenderCaustics`（延迟零号主世界、延迟一号末地）；全局光空间滤波 `effects/lighting/globalillumination.glsl` 的 `RenderGISpatialFilter`（延迟二号主世界、延迟四号末地）。
+        天空、云、日月星与天空盒 `effects/sky/skyrender.glsl` 的 `RenderDeferredSky`（延迟三号，主天空与天空盒共用一段累积）。
+    本文件只按绘制顺序安排每个程序的输入输出与调用，不复制算法；全屏复制、时间滤波与云影模糊就是一两次现成函数调用，留在原处；延迟顶点里只有三号要算光色（走 `rendering/lights.glsl`），四号五号要算云影贴图坐标，其余只需铺满屏幕。
 */
 #ifndef OMNI_DEFERRED_BODY_INCLUDED // 只引入一次，避免 `main()` 与输出变量重复定义。
 #define OMNI_DEFERRED_BODY_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -121,17 +121,10 @@
 	#include "/common/noise.glsl"
 	// 体积雾选项供丢弃判断，并带入水面、阴影、天空、云与光照依赖。
 	#include "/effects/fog/fog.glsl"
+	// 焦散法线的算法在效果文件里，这里只调用并写七号。
+	#include "/effects/water/caustics.glsl"
 	void main(){
-		#if !defined OMNI_CAUSTICS && (!defined OMNI_VFOG || !defined OMNI_UNDERWATER_VFOG)
-			discard; // 既不开焦散又不开水下体积雾时没人读这张法线图，整片丢弃。
-		#endif
-		const float maxCausticsNormalHeight = CAUSTICS_TEX_RESOLUTION; // 方块边长上限，来自内部常数。
-
-		vec3 screenCaustics = vec3(0.0, 0.0, 1.0); // 默认朝上的波法线。
-		vec2 causticsCoord = gl_FragCoord.xy * (50.0 / min(screenSize.y, maxCausticsNormalHeight)); // 把屏幕坐标换算到波浪空间。
-		screenCaustics = GetWavesNormal(vec3(causticsCoord.x, 1.0, causticsCoord.y), 25.0).xyz; // 求该处的波法线。
-
-		deferredOutput7 = vec4(EncodeNormal(screenCaustics), 0.0, 0.0); // 八面体编码后写进七号。
+		RenderCaustics(); // 算波法线并写七号；不开焦散与水下体积雾时由效果文件整片丢弃。
 	}
 	#endif // 延迟零号维度分支结束。
 #elif defined OMNI_FRAGMENT && defined OMNI_DEFERRED1_PASS // 延迟一号。
@@ -171,12 +164,10 @@
 		#include "/common/noise.glsl"
 		// 雾文件带入水面、阴影、天空、云与光照依赖，也提供 `GetWavesNormal`。
 		#include "/effects/fog/fog.glsl"
+		// 焦散法线的算法在效果文件里，这里只调用并写七号。
+		#include "/effects/water/caustics.glsl"
 		void main(){
-			const float maxCausticsNormalHeight = CAUSTICS_TEX_RESOLUTION; // 方块边长上限，来自内部常数。
-			vec3 screenCaustics = vec3(0.0, 0.0, 1.0); // 默认朝上的波法线。
-			vec2 causticsCoord = gl_FragCoord.xy * (50.0 / min(screenSize.y, maxCausticsNormalHeight)); // 把屏幕坐标换算到波浪空间。
-			screenCaustics = GetWavesNormal(vec3(causticsCoord.x, 1.0, causticsCoord.y), 25.0).xyz; // 求该处的波法线。
-			deferredOutput7 = vec4(EncodeNormal(screenCaustics), 0.0, 0.0); // 八面体编码后写进七号。
+			RenderCaustics(); // 算波法线并写七号；末地没有丢弃判断，总是写七号。
 		}
 	#else // 主世界与下界：全局光时间滤波。
 	/* DRAWBUFFERS:2 */
@@ -285,34 +276,10 @@
 	#include "/common/noise.glsl"
 	// 提供阳光泄漏修正选项，并带入环境光与阴影文件。
 	#include "/effects/lighting/sunlight.glsl"
+	// 全局光空间滤波的算法在效果文件里，这里只取深度并写一号。
+	#include "/effects/lighting/globalillumination.glsl"
 	void main(){
-		float depth = texelFetch(depthtex1, texelCoord, 0).x; // 不含半透明的不透明深度。
-		vec3 viewPos = ViewPos_From_ScreenPos(texCoord, depth); // 还原视空间位置，自动撤销抖动。
-
-		#ifdef DISTANT_HORIZONS
-			if (depth == 1.0){ // 天空像素改读远景深度。
-				depth = texelFetch(dhDepthTex0, texelCoord, 0).x; // 远景深度。
-				viewPos = ViewPos_From_ScreenPos_DH(texCoord, depth); // 用远景逆投影还原。
-			}
-		#endif
-
-		vec4 gi = vec4(0.0, 0.0, 0.0, 1.0); // 默认没有全局光，遮蔽为一。
-
-		if (depth < 1.0){ // 有几何才算全局光与遮蔽。
-			vec3 viewDir = normalize(viewPos); // 视线方向。
-			vec3 normal = DecodeNormal(texelFetch(colortex3, texelCoord, 0).xy); // 从三号画面解出法线。
-			float opaqueDist = length(viewPos); // 不透明表面到相机的距离。
-
-			#ifdef OMNI_GTAO
-				if (-viewPos.z > 0.15) gi.a = GroundTruthBasedAmbientOcclusion(viewPos, -viewDir, normal); // 太近的像素不算遮蔽。
-			#endif
-
-			#ifdef OMNI_GI_RSM
-				gi.rgb = GI_SpatialFilter(-viewPos.z, normal, viewDir); // 半分辨率全局光做空间滤波。
-			#endif
-		}
-
-		deferredOutput1 = gi; // 写回一号画面。
+		deferredOutput1 = RenderGISpatialFilter(texelFetch(depthtex1, texelCoord, 0).x); // 用不含半透明的深度做遮蔽与空间滤波。
 	}
 	#endif // 全局光空间滤波分支结束。
 #elif defined OMNI_FRAGMENT && defined OMNI_DEFERRED3_PASS // 延迟三号：天空、云与统计像素。
@@ -355,172 +322,10 @@
 	#include "/effects/lighting/sunlight.glsl"
 	// Omni 额外功能：极光与彩虹，默认关闭。
 	#include "/effects/sky/atmosphere.glsl"
+	// 天空、云、日月星与天空盒的算法在效果文件里，这里只调用并写一号与二号。
+	#include "/effects/sky/skyrender.glsl"
 	void main(){
-		float depth = texelFetch(depthtex1, texelCoord, 0).x; // 不含半透明的不透明深度。
-		vec3 viewPos = ViewPos_From_ScreenPos(texCoord, depth); // 还原视空间位置。
-
-		#ifdef DISTANT_HORIZONS
-			if (depth == 1.0){ // 天空像素改读远景深度。
-				depth = texelFetch(dhDepthTex0, texelCoord, 0).x; // 远景深度。
-				viewPos = ViewPos_From_ScreenPos_DH(texCoord, depth); // 用远景逆投影还原。
-			}
-		#endif
-
-		vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos; // 视空间转相机相对世界空间。
-
-		vec3 viewDir = normalize(viewPos); // 视线方向。
-		vec3 worldDir = normalize(worldPos); // 世界方向。
-
-		#ifdef DISTANT_HORIZONS
-			float farDist = max(dhFarPlane, 1024.0); // 有远景时用远景远裁剪面。
-		#else
-			float farDist = max(far * 1.2, 1024.0); // 否则用近景远裁剪面留一点余量。
-		#endif
-		float cloudShadow = 1.0; // 全局云影初值，本程序不使用。
-
-		#ifdef OMNI_ATMO_HORIZON
-			vec3 camera = vec3(0.0, max(cameraPosition.y, ATMO_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 打开地平线时相机高度有下限。
-		#else
-			vec3 camera = vec3(0.0, max(cameraPosition.y, 63.0) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 否则至少按海平面高度算。
-		#endif
-
-		vec3 cameraSkyBox = vec3(0.0, max(cameraPosition.y, ATMO_SKYBOX_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 天空盒投影用的相机高度。
-
-		vec2 noise_0 = vec2(bayer64(gl_FragCoord.xy), 0.5); // 天空盒像素用的固定拜尔抖动。
-		vec2 noise_1 = BlueNoiseTemporal().xy; // 主画面用的逐帧蓝噪声。
-
-		vec2 cloudAltitude = vec2(mix(OMNI_CLOUD_CLEAR_ALTITUDE, OMNI_CLOUD_RAIN_ALTITUDE, wetness)); // 晴雨两档云底高度。
-		cloudAltitude.y += mix(OMNI_CLOUD_CLEAR_THICKNESS, OMNI_CLOUD_RAIN_THICKNESS, wetness); // 加上层厚得到云顶高度。
-
-		float wind = 0.0005 * (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_FTC_OFFSET); // 云漂动的时间量。
-		vec3 windDirection = vec3(1.0, wetness * 0.1 - 0.05, -0.4) * wind; // 云漂动的方向与位移。
-
-		deferredOutput1 = texelFetch(colortex1, texelCoord, 0); // 默认原样保留场景颜色。
-
-		// ------------------------------ 天空 ------------------------------
-		if (depth == 1.0){ // 只有天空像素才重画。
-			vec3 finalComposite = vec3(0.0); // 累积的天空颜色。
-
-			vec3 transmittance = vec3(1.0); // 大气透过率。
-
-			#ifdef OMNI_ATMO_HORIZON
-				bool horizon = true; // 打开地平线时地平线方向也算地面大气。
-			#else
-				bool horizon = false; // 否则地平线以下不算地面大气。
-			#endif
-			bool ray_r_mu_intersects_ground; // 视线是否打到地面，由大气函数回填。
-			vec3 atmosphere = GetSkyRadiance(camera, worldDir, worldSunVector, worldMoonVector, horizon, transmittance, ray_r_mu_intersects_ground); // 查预计算大气的天空辐射。
-			float eclipseDarkening = CalculateEclipseDarkening(worldDir, worldSunVector, worldMoonVector); // 月食：日月对齐时把天空压暗，默认轨道下日月相对所以不触发。
-			atmosphere *= eclipseDarkening; // 把压暗因子乘到天空辐射上。
-
-			finalComposite += atmosphere; // 先叠大气。
-
-			float cloudTransmittance = 1.0; // 云留下的透过率。
-			#ifdef OMNI_VOLUMETRIC_CLOUDS
-				if ((cameraPosition.y > cloudAltitude.x || !ray_r_mu_intersects_ground) && (cameraPosition.y < cloudAltitude.y || worldDir.y < 0.0)) // 相机在云层附近或朝上看才需要步进。
-					NubisCumulus(finalComposite, worldDir, cloudAltitude, windDirection, camera, noise_1, cloudTransmittance); // 体积云。
-			#endif
-
-			#ifdef OMNI_PLANAR_CLOUDS
-				if (cameraPosition.y < OMNI_PC_ALTITUDE && !ray_r_mu_intersects_ground) // 相机在云平面以下才看得到。
-					PlanarClouds(finalComposite, worldDir, camera, noise_1.y, cloudTransmittance); // 平面云。
-			#endif
-
-			#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
-				NubisExtraLayers(finalComposite, worldDir, windDirection, camera, noise_1, ray_r_mu_intersects_ground, cloudTransmittance); // 卷云、高层云与积雨云。
-			#endif
-
-			vec3 celestial = GammaToLinear(texelFetch(colortex0, texelCoord, 0).rgb) * (OMNI_SKY_TEXTURE_BRIGHTNESS * 0.2); // 零号画面的天体颜色转线性并按选项缩放。
-
-			#if OMNI_STAR_TYPE == 1
-				celestial += CalculateStars(worldDir, worldSunVector); // 点状星空，太阳方向由本程序传入。
-			#endif
-
-			celestial *= OMNI_NIGHT_BRIGHTNESS; // 天体整体按夜间亮度缩放。
-
-			vec3 sunDisc = RenderSunDisc(worldDir, worldSunVector) * (0.2 + timeNoon * 3.0) * eclipseDarkening; // 太阳圆盘，白天更亮，月食时一起压暗。
-			vec3 moonDisc = CalculateMoonDiscColor() * (RenderMoonDisc(worldDir, worldMoonVector) * OMNI_NIGHT_BRIGHTNESS * CalculateMoonPhaseBrightness(worldSunVector, worldMoonVector)); // 月亮圆盘：颜色由真实月亮选项决定，亮度再乘月相比例。
-
-			#ifdef OMNI_MOON_TEXTURE
-				celestial = mix(celestial * cloudTransmittance + sunDisc + moonDisc, // 用贴图月亮时水下不画月亮。
-								(celestial + sunDisc + moonDisc * float(isEyeInWater != 0)) * cloudTransmittance,
-								mix(1.0, OMNI_RAIN_SHADOW, wetness));
-			#else
-				celestial = mix(celestial * cloudTransmittance + sunDisc + moonDisc, // 不用贴图月亮时水里也画月亮。
-								(celestial + sunDisc + moonDisc) * cloudTransmittance,
-								mix(1.0, OMNI_RAIN_SHADOW, wetness));
-			#endif
-
-			finalComposite += celestial * transmittance * 200.0; // 天体带大气透过率叠到天空上。
-			finalComposite = omniAtmosphere(finalComposite, worldDir); // Omni 额外功能：叠加极光与彩虹，默认关闭。
-			#ifdef OMNI_CAVE_MODE
-				finalComposite = mix(finalComposite, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00007) * 0.05), saturate(eyeBrightnessZeroSmooth)); // 完全看不到天空时换成极暗配色。
-			#endif
-
-			finalComposite /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
-			finalComposite = LinearToCurve(finalComposite); // 四次方根编码。
-
-			deferredOutput1 = vec4(finalComposite, 1.0); // 写回一号画面。
-		}
-
-		// ------------------------------ 天空盒图 ------------------------------
-		deferredOutput2 = texelFetch(colortex2, texelCoord, 0); // 默认原样保留二号画面。
-
-		float tileSize = min(OMNI_SKY_IMAGE_RESOLUTION, floor(min(screenSize.x / 3.3, screenSize.y * 0.45))); // 天空盒图边长。
-		vec2 skyImageTexel = gl_FragCoord.xy; // 当前像素坐标。
-		skyImageTexel.y -= ceil(screenSize.y * 0.5 + 1.0); // 抬到上半屏。
-		vec2 boundary = tileSize * vec2(3.0, 2.0); // 三乘二张面的总范围。
-
-		if (clamp(skyImageTexel, vec2(0.0), boundary) == skyImageTexel){ // 只有落在天空盒图范围内才重画。
-			vec3 skyImage = vec3(0.0); // 累积的天空盒颜色。
-
-			vec3 viewVector = UnprojectSky(skyImageTexel, tileSize); // 纹素坐标反解成世界方向。
-
-			#ifdef OMNI_ATMO_REFLECTION_HORIZON
-				bool horizon = true; // 反射天空盒是否处理地平线。
-			#else
-				bool horizon = false;
-			#endif
-			vec3 transmittance = vec3(1.0); // 大气透过率。
-			bool ray_r_mu_intersects_ground; // 是否打到地面。
-			vec3 atmosphere = GetSkyRadiance(cameraSkyBox, viewVector, worldSunVector, worldMoonVector, horizon, transmittance, ray_r_mu_intersects_ground); // 查该方向的天空辐射。
-			atmosphere *= CalculateEclipseDarkening(viewVector, worldSunVector, worldMoonVector); // 反射天空盒同样按月食压暗。
-
-			skyImage += atmosphere; // 叠大气。
-
-			float cloudTransmittance = 1.0; // 云留下的透过率。
-			#ifdef OMNI_VOLUMETRIC_CLOUDS
-				if ((cameraPosition.y > cloudAltitude.x || !ray_r_mu_intersects_ground) && (cameraPosition.y < cloudAltitude.y || worldDir.y < 0.0)) // 与主天空同一判据。
-					NubisCumulus(skyImage, viewVector, cloudAltitude, windDirection, camera, noise_0, cloudTransmittance); // 体积云。
-			#endif
-
-			#ifdef OMNI_PLANAR_CLOUDS
-				if (cameraPosition.y < OMNI_PC_ALTITUDE && !ray_r_mu_intersects_ground) // 相机在云平面以下。
-					PlanarClouds(skyImage, viewVector, cameraSkyBox, noise_0.x, cloudTransmittance); // 平面云。
-			#endif
-
-			#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
-				NubisExtraLayers(skyImage, viewVector, windDirection, camera, noise_0, ray_r_mu_intersects_ground, cloudTransmittance); // 天空盒里也叠加附加层，保证反射里的云一致。
-			#endif
-
-			#ifdef OMNI_CAVE_MODE
-				skyImage = mix(skyImage, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00005) * 0.07), eyeBrightnessZeroSmooth); // 洞穴模式下的极暗天空盒。
-			#endif
-
-			skyImage /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
-			skyImage = LinearToCurve(skyImage); // 四次方根编码。
-			deferredOutput2 = vec4(skyImage, cloudTransmittance); // 透过率存进透明通道供顶点阶段读云量。
-		}
-
-		#ifdef OMNI_CLOUD_SHADOW
-			vec2 shadowTexel = screenSize - gl_FragCoord.xy; // 云影贴在画面右上角，坐标要翻转。
-			float shadowTexSize = floor(min(screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)); // 方贴图边长。
-			shadowTexel /= shadowTexSize; // 换成零到一的贴图坐标。
-
-			if (saturate(shadowTexel) == shadowTexel){ // 只有落在方贴图范围内才算云影。
-				deferredOutput2.r = CloudShadowTex(shadowTexel, cloudAltitude, windDirection); // 从云密度算出该处云影。
-			}
-		#endif
+		RenderDeferredSky(); // 画天空像素、天空盒图与右上角云影贴图。
 	}
 #elif defined OMNI_FRAGMENT && (defined OMNI_DEFERRED4_PASS || defined OMNI_DEFERRED5_PASS) // 延迟四号五号。
 	#if defined OMNI_END
@@ -556,33 +361,10 @@
 		#include "/common/noise.glsl"
 		// 提供阳光泄漏修正选项，并带入环境光与阴影文件（末地版阴影相机由 `OMNI_END` 选择）。
 		#include "/effects/lighting/sunlight.glsl"
+		// 全局光空间滤波的算法在效果文件里，这里只取深度并写一号。
+		#include "/effects/lighting/globalillumination.glsl"
 		void main(){
-			float depth = texelFetch(depthtex0, texelCoord, 0).x; // 末地用含半透明的深度。
-			vec3 viewPos = ViewPos_From_ScreenPos(texCoord, depth); // 还原视空间位置。
-
-			#ifdef DISTANT_HORIZONS
-				if (depth == 1.0){ // 天空像素改读远景深度。
-					depth = texelFetch(dhDepthTex0, texelCoord, 0).x; // 远景深度。
-					viewPos = ViewPos_From_ScreenPos_DH(texCoord, depth); // 用远景逆投影还原。
-				}
-			#endif
-
-			vec4 gi = vec4(0.0, 0.0, 0.0, 1.0); // 默认没有全局光，遮蔽为一。
-
-			if (depth < 1.0){ // 有几何才算全局光与遮蔽。
-				vec3 viewDir = normalize(viewPos); // 视线方向。
-				vec3 normal = DecodeNormal(texelFetch(colortex3, texelCoord, 0).xy); // 从三号画面解出法线。
-
-				#ifdef OMNI_GTAO
-					if (-viewPos.z > 0.15) gi.a = GroundTruthBasedAmbientOcclusion(viewPos, -viewDir, normal); // 太近的像素不算遮蔽。
-				#endif
-
-				#ifdef OMNI_GI_RSM
-					gi.rgb = GI_SpatialFilter(-viewPos.z, normal, viewDir); // 半分辨率全局光做空间滤波。
-				#endif
-			}
-
-			deferredOutput1 = gi; // 写回一号画面。
+			deferredOutput1 = RenderGISpatialFilter(texelFetch(depthtex0, texelCoord, 0).x); // 末地用含半透明的深度做遮蔽与空间滤波。
 		}
 	#else // 主世界：云影横向与纵向模糊。
 	/* DRAWBUFFERS:2 */

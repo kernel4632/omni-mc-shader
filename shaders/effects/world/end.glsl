@@ -336,25 +336,6 @@ float CalculateCloudFBM(vec3 position, vec3 shift){
 	return accum + octShift; // 返回归一化后的噪声。
 }
 
-// --- 云状分形噪声低质量版：三层，频率与权重都更粗，供反射里的吸积盘使用 ---
-float CalculateCloudFBM_LQ(vec3 position, vec3 shift){
-	const int octaves = 3; // 层数。
-	const float octAlpha = 0.9; // 每层权重衰减。
-	const float octScale = 2.0; // 每层频率放大。
-	const float octShift = (octAlpha / octScale) / octaves; // 层间偏移。
-
-	float accum = 0.0; // 累积噪声。
-	float alpha = 0.5; // 当前层权重。
-
-	for (int i = 0; i < octaves; i++) { // 逐层叠加。
-		accum += alpha * EndCalculate3DNoise(position); // 加这一层。
-		position = (position + shift) * octScale; // 抬高频率并加位移。
-		alpha *= octAlpha; // 权重衰减。
-	}
-
-	return accum + octShift; // 返回归一化后的噪声。
-}
-
 float pcurve(float x){
 	float x2 = x * x; // 平方。
 	return 12.207 * x2 * x2 * (1.0 - x); // 四次方乘线性衰减，得到环带的径向轮廓。

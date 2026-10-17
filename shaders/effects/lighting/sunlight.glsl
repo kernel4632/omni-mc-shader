@@ -1,7 +1,7 @@
 /*
 光照颜色与天光：算出太阳、月亮、天空、火把四种光色，并按表面朝向给表面加上天光照明。
 调用位置：合成顶点阶段算好四种光色后传给片元，用 `CalculateSunlightColors`；
-    延迟三号与合成主体在主循环开头算日月高度因子 `timeNoon`、`timeMidnight`，用 `CalculateTimeFactors`；
+    延迟三号与合成主体在主循环开头内联算出日月高度因子 `timeNoon`、`timeMidnight`（见 `rendering/lights.glsl`），本文件不提供；
     合成主体给不透明表面算天光与天光云影时用 `SkyLighting`。
 可复制示例：
     `CalculateSunlightColors(camera, worldSunVector, -worldSunVector, colorSunlight, colorMoonlight, colorSunSkylight, colorMoonSkylight, colorShadowlight, colorSkylight, colorTorchlight);`
@@ -34,11 +34,6 @@
 #include "/effects/cloud/cloud.glsl"
 #include "/effects/lighting/ambient.glsl"
 #include "/effects/lighting/blocklight.glsl"
-// 算日月高度因子：太阳越高 `timeNoon` 越大，月亮越高 `timeMidnight` 越大，供太阳圆盘与镜头效果缩放用。
-void CalculateTimeFactors(float SdotU, float MdotU, out float timeNoon, out float timeMidnight){
-	timeNoon = 1.0 - pow(1.0 - (clamp(SdotU, 0.2, 0.99) - 0.2) / 0.8, 6.0); // 太阳从低到高平滑升到一。
-	timeMidnight = 1.0 - curve(saturate((1.0 - saturate(MdotU)) * 5.0 - 4.0)); // 月亮越高越接近一。
-}
 // 算四种光色：太阳与月亮各出直射与环境两项，再加它们之和与火把光色。
 // 调用前提：`camera` 是米制相机位置，`worldSunVector`、`worldMoonVector` 是单位世界方向。
 void CalculateSunlightColors(vec3 camera, vec3 worldSunVector, vec3 worldMoonVector,

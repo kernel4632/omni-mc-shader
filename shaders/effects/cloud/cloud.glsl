@@ -22,11 +22,11 @@
 // @option {"label":{"zh_cn":"平面云","en_us":"Planar Clouds"},"description":{"zh_cn":"把云画在一层固定高度的平面上，便宜且连续。","en_us":"Draws the clouds on one fixed-altitude sheet; cheap and continuous."}}
 #define OMNI_PLANAR_CLOUDS
 // @option {"label":{"zh_cn":"平面云量","en_us":"Planar Cloud Coverage"},"description":{"zh_cn":"平面云铺满天空的程度。","en_us":"How much the planar clouds cover the sky."},"slider":true}
-#define OMNI_PC_COVERAGE 0.5 // [0.3 0.32 0.34 0.36 0.38 0.4 0.42 0.44 0.46 0.48 0.5 0.52 0.54 0.56 0.58 0.6 0.62 0.64 0.66 0.68 0.7 0.72 0.74 0.76 0.78 0.8 0.82 0.84 0.86 0.88 0.9]
+#define OMNI_PLANAR_COVERAGE 0.5 // [0.3 0.32 0.34 0.36 0.38 0.4 0.42 0.44 0.46 0.48 0.5 0.52 0.54 0.56 0.58 0.6 0.62 0.64 0.66 0.68 0.7 0.72 0.74 0.76 0.78 0.8 0.82 0.84 0.86 0.88 0.9]
 // @option {"label":{"zh_cn":"平面云噪声尺度","en_us":"Planar Cloud Noise Scale"},"description":{"zh_cn":"平面云块的大小，越大云块越小越碎。","en_us":"Planar cloud block size; larger is smaller and more broken."},"slider":true}
-#define OMNI_PC_NOISE_SCALE 0.025 // [0.01 0.015 0.02 0.025 0.03 0.035 0.04 0.045 0.5]
+#define OMNI_PLANAR_NOISE_SCALE 0.025 // [0.01 0.015 0.02 0.025 0.03 0.035 0.04 0.045 0.5]
 // @option {"label":{"zh_cn":"平面云高度","en_us":"Planar Cloud Altitude"},"description":{"zh_cn":"平面云挂的高度，单位方块。","en_us":"Altitude of the planar clouds in blocks."}}
-#define OMNI_PC_ALTITUDE 6000.0 // [2000.0 2500.0 3000.0 3500.0 4000.0 5000.0 6000.0 7000.0 8000.0 9000.0 10000.0]
+#define OMNI_PLANAR_ALTITUDE 6000.0 // [2000.0 2500.0 3000.0 3500.0 4000.0 5000.0 6000.0 7000.0 8000.0 9000.0 10000.0]
 // @option {"label":{"zh_cn":"体积云","en_us":"Volumetric Clouds"},"description":{"zh_cn":"沿视线在云层里步进得到厚实的云，代价较高。","en_us":"Marches through the cloud layer for thick clouds; costlier."}}
 #define OMNI_VOLUMETRIC_CLOUDS
 // @option {"label":{"zh_cn":"云精细度","en_us":"Cloud Quality"},"description":{"zh_cn":"体积云沿视线的步数倍率，越大越细也越慢。","en_us":"Multiplier on the volumetric cloud steps; higher is finer and slower."},"slider":true}
@@ -76,7 +76,7 @@
 // @option {"label":{"zh_cn":"云速","en_us":"Cloud Speed"},"description":{"zh_cn":"云飘动的快慢。","en_us":"How fast the clouds drift."},"slider":true}
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0 3.0 4.0 5.0 7.5 10.0 15.0 20.0 30.0 40.0 50.0 75.0 100.0]
 // @option {"label":{"zh_cn":"云时间偏移","en_us":"Cloud Time Offset"},"description":{"zh_cn":"给云和平面云的飘动时间加一个固定偏移，用来错开云的位置；不改变飘动速度。","en_us":"Offsets the cloud drift time by a fixed amount to shift their position; does not change speed."},"slider":true}
-#define OMNI_FTC_OFFSET 0 // [0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 105 110 115 120 125 130 135 140 145 150 155 160 165 170 175 180 185 190 195 200 205 210 215 220 225 230 235 240 245 250 255 260 265 270 275 280 285 290 295 300 305 310 315 320 325 330 335 340 345 350 355]
+#define OMNI_CLOUD_TIME_OFFSET 0 // [0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 105 110 115 120 125 130 135 140 145 150 155 160 165 170 175 180 185 190 195 200 205 210 215 220 225 230 235 240 245 250 255 260 265 270 275 280 285 290 295 300 305 310 315 320 325 330 335 340 345 350 355]
 // @option {"label":{"zh_cn":"云影","en_us":"Cloud Shadow"},"description":{"zh_cn":"云在地上投下阴影。","en_us":"Clouds cast shadows on the ground."}}
 #define OMNI_CLOUD_SHADOW
 // @option {"label":{"zh_cn":"云影淡出","en_us":"Cloud Shadow Fade"},"description":{"zh_cn":"太阳贴近地平线时让云影变淡，避免阴影拉得过长。","en_us":"Fades cloud shadows as the sun nears the horizon."}}
@@ -409,7 +409,7 @@ float GetPlanarCloudsDistortion(vec2 position, vec2 windDirection){
 }
 // 平面云密度：位置先被扭曲，再叠多层旋转噪声得到云块。
 float GetPlanarCloudsDensity(vec2 position, vec2 windDirection){
-	position *= OMNI_PC_NOISE_SCALE; // 按选项缩放位置。
+	position *= OMNI_PLANAR_NOISE_SCALE; // 按选项缩放位置。
 	float distortion = GetPlanarCloudsDistortion(position, windDirection); // 取扭曲量。
 	position += distortion * 50.0; // 用扭曲量偏移位置。
 	const float octScale = 2.8; // 每层频率倍数。
@@ -426,13 +426,13 @@ float GetPlanarCloudsDensity(vec2 position, vec2 windDirection){
 		weights += weight; // 累加权重。
 	}
 	density /= weights; // 平均到零到一附近。
-	density = saturate(density + OMNI_PC_COVERAGE - 1.0); // 用云量抬阈值。
+	density = saturate(density + OMNI_PLANAR_COVERAGE - 1.0); // 用云量抬阈值。
 	density *= exp(-distortion); // 扭曲大的地方压薄。
 	return density * density; // 平方让边缘更收。
 }
 // 平面云的光照密度：与上面同理，但用双线性噪声且层数更少，专供光照估计。
 float GetPlanarCloudsLightingDensity(vec2 position, vec2 windDirection){
-	position *= OMNI_PC_NOISE_SCALE; // 按选项缩放位置。
+	position *= OMNI_PLANAR_NOISE_SCALE; // 按选项缩放位置。
 	float distortion = GetPlanarCloudsDistortion(position, windDirection); // 取扭曲量。
 	position += distortion * 50.0; // 用扭曲量偏移位置。
 	const float octScale = 2.8; // 每层频率倍数。
@@ -449,7 +449,7 @@ float GetPlanarCloudsLightingDensity(vec2 position, vec2 windDirection){
 		weights += weight; // 累加权重。
 	}
 	density /= weights; // 平均。
-	density = saturate(density + OMNI_PC_COVERAGE - 1.0); // 用云量抬阈值。
+	density = saturate(density + OMNI_PLANAR_COVERAGE - 1.0); // 用云量抬阈值。
 	density *= exp(-distortion); // 扭曲大的地方压薄。
 	return density * density; // 平方收口。
 }
@@ -458,9 +458,9 @@ float GetPlanarCloudsLightingDensity(vec2 position, vec2 windDirection){
 void PlanarClouds(inout vec3 color, vec3 worldDir, vec3 camera, float dither, float cloudTransmittance){
 	float planetRadius = atmosphereModel_bottom_radius * 1e3; // 行星半径从大气常数换成米。
 	vec3 rayStartPos = vec3(0.0, planetRadius + cameraPosition.y, 0.0); // 相机在行星球上的位置。
-	float intersection = RaySphereIntersection(rayStartPos, worldDir, planetRadius + OMNI_PC_ALTITUDE).y; // 视线与云平面的远交点。
+	float intersection = RaySphereIntersection(rayStartPos, worldDir, planetRadius + OMNI_PLANAR_ALTITUDE).y; // 视线与云平面的远交点。
 	if (intersection > 0.0){ // 只有真的相交才画。
-		float wind = 2.5 * (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_FTC_OFFSET); // 随风移动的时间量。
+		float wind = 2.5 * (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_CLOUD_TIME_OFFSET); // 随风移动的时间量。
 		vec2 windDirection = vec2(-wind, wind * 0.2); // 主风向与一点横向分量。
 		float VdotL = dot(worldDir, worldShadowVector) * 0.5 + 0.5; // 视线与光方向夹角余弦映射到零到一。
 		vec3 centerPosition = worldDir * intersection; // 交点相对相机的方向。

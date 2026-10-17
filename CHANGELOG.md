@@ -1,5 +1,18 @@
 # 更新记录
 
+## 0.0.0-dev.126
+
+按三份独立对抗式审查（iterationT 覆盖、Eclipse 覆盖、HOP 符合度）修问题，并补上 iterationT 唯一未移植的 `TITLE` 标志叠加。
+
+- 结构：`rendering/composite.glsl` 1241 → 197 行、`deferred.glsl` 618 → 400 行、`post.glsl` 581 → 234 行，算法体分别落到 `effects/` 下的效果文件；同一批全局声明不再在每个程序块重复，收进共享头。
+- 效果文件：把视差从通用名 `ground/material.glsl` 拆到 `ground/parallax.glsl`，搜索即可命中；合成零号的维度变体拆成 `composite_surface.glsl` 主本体与下界、末地两份；末地天空两段重复代码合并为一个共用函数。
+- 清理：删除 14 个零调用函数与两条与实现不符的注释。
+- 命名：选项 `OMNI_PC_*` 统一为 `OMNI_PLANAR_*`，`OMNI_FTC_OFFSET` 改为 `OMNI_CLOUD_TIME_OFFSET`，旧名保留在迁移表里，老配置不丢设置。
+- 补齐 iterationT：移植 `TITLE` 标志叠加（默认开），默认画面在右下角显示 logo 并把加载计时写进二号画面顶行 `(20,H-1)`，行为与 iterationT 一致；下界图标染色暂用曝光替代，原因记录在 `docs/parity.md`。
+- 文档：`docs/eclipse-parity.md` 按实际代码改回真实状态（月亮轨道与月食月相已合并；色彩分级、色差、颗粒、鱼眼、洞穴与边界雾等标明未合并），`docs/parity.md` 更正已删函数清单并新增偏离记录。
+
+只做过离线编译、审计与单元测试；游戏内画面、性能与兼容性仍未验证。
+
 ## 0.0.0-dev.125
 
 把 `itt-port` 的移植成果合入 `main` 并推送（合并提交 `c23eb0a`），随后同步文档里的分支状态，并把 `verify` 的选项接线检查改为一次分词，回到约五到七秒。
@@ -9,6 +22,7 @@
 - 探针：`verify` 的编译探针收为三个程序（`gbuffers_terrain`、`shadow`、`final`），加地形一组全高与开远景共四组唯一程序；文档里的程序数与耗时按实际同步。
 - 文档：`AGENTS.md` 与 `docs/parity.md` 改为说明移植已合入 `main`；`docs/review.md` 的 Ashima 行标注为当时文件；测试计数统一为 114。
 - 退役：删除已无引用的 Ashima 噪声库并新增「登记库必须被引用」测试。
+- 文档：按独立审查更正 `docs/eclipse-parity.md` 的合并状态与 Omni `file:line`（月亮轨道/月相/月食已合并、近似与未合并逐项标注），更正 `docs/parity.md` 的 `common/` 函数清单与函数计数，并补记未移植的 `TITLE` 标志叠加（偏离记录第 37 条）。
 
 只做过离线编译、审计与单元测试；游戏内画面、性能与兼容性仍未验证。
 

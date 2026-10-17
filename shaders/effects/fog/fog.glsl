@@ -240,7 +240,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 	#endif
 
 	#if OMNI_VFOG_NOISE_TYPE > 0 // 团雾模式要按风移动。
-		float windTimer = (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_FTC_OFFSET) * 0.0025; // 风速时间，与云速一致。
+		float windTimer = (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_CLOUD_TIME_OFFSET) * 0.0025; // 风速时间，与云速一致。
 		vec3 wind = vec3(-1.0, -0.05, 0.6) * windTimer; // 固定的风方向。
 	#else // 仅高度衰减模式不用风。
 		vec3 wind = vec3(0.0); // 给一个零值，让密度与光照步进共用一个调用写法。

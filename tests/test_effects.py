@@ -248,7 +248,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         self.assertEqual(found["OMNI_TONEMAP_OPERATOR"].values, ("0", "1", "2"))  # 三档算子。
         self.assertIn("OMNI_GAMMA", found)  # 显示伽马可调。
-        post = support.text("rendering/post.glsl")  # 分派在后期阶段。
+        post = support.text("effects/color/post_tonemap.glsl")  # 分派在后期色调映射效果文件里。
         self.assertIn("#if OMNI_TONEMAP_OPERATOR == 1", post)  # 一档取 ACES。
         self.assertIn("#elif OMNI_TONEMAP_OPERATOR == 2", post)  # 二档取无压缩曲线。
         self.assertIn("AgX(color)", post)  # 默认走 AgX。
@@ -261,7 +261,7 @@ class EffectTests(unittest.TestCase):
         bloom = support.text("effects/color/bloom.glsl")  # 泛光主体。
         self.assertIn("MergeBloom", bloom)  # 合并泛光独立成函数。
         self.assertIn("OMNI_BLOOM_AMOUNT", bloom)  # 强度参与合并。
-        self.assertIn("MergeBloom", support.text("rendering/post.glsl"))  # 后期阶段调用合并。
+        self.assertIn("MergeBloom", support.text("effects/color/post_tonemap.glsl"))  # 后期色调映射效果文件调用合并。
 
     def test_auto_exposure_controls(self):
         """自动曝光的手动模式、测光方式、平滑与时间都可调。"""
@@ -282,7 +282,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("GroundTruthBasedAmbientOcclusion", ambient)  # 遮蔽独立成函数。
         self.assertIn("GTAOMultiBounce", ambient)  # 多次反弹独立成函数。
         self.assertIn("OMNI_GTAO_STRENGTH", ambient)  # 强度参与遮蔽系数。
-        self.assertIn("GroundTruthBasedAmbientOcclusion", support.text("rendering/composite.glsl"))  # 合成阶段调用遮蔽。
+        self.assertIn("GroundTruthBasedAmbientOcclusion", support.text("effects/lighting/composite_surface_nether.glsl"))  # 合成零号的下界变体调用遮蔽。
 
     def test_gi_rsm_controls(self):
         """反射阴影图全局光可开关，质量、半径与亮度都可调并接入延迟阶段。"""
@@ -292,7 +292,7 @@ class EffectTests(unittest.TestCase):
         ambient = support.text("effects/lighting/ambient.glsl")  # 全局光主体。
         self.assertIn("RSM(", ambient)  # 反射阴影图独立成函数。
         self.assertIn("GI_TemporalFilter", ambient)  # 时间滤波独立成函数。
-        self.assertIn("#ifdef OMNI_GI_RSM", support.text("rendering/deferred.glsl"), )  # 延迟阶段按选项执行时间滤波。
+        self.assertIn("#ifdef OMNI_GI_RSM", support.text("effects/lighting/globalillumination.glsl"), )  # 延迟阶段按选项执行时间滤波。
 
     def test_shadow_penumbra_and_bias(self):
         """可变半影阴影可开关、质量与展开可调，阴影偏置参与投影压缩。"""
@@ -342,9 +342,9 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         self.assertEqual(found["OMNI_PLANAR_CLOUDS"].values, ("false", "true"))  # 平面云可开关。
         self.assertEqual(found["OMNI_VOLUMETRIC_CLOUDS"].values, ("false", "true"))  # 体积云可开关。
-        deferred = support.text("rendering/deferred.glsl")  # 云在延迟阶段绘制。
-        self.assertIn("#ifdef OMNI_PLANAR_CLOUDS", deferred)  # 平面云分支存在。
-        self.assertIn("#ifdef OMNI_VOLUMETRIC_CLOUDS", deferred)  # 体积云分支存在。
+        skyrender = support.text("effects/sky/skyrender.glsl")  # 云在延迟三号主体、天空盒与主天空共用一段累积。
+        self.assertIn("#ifdef OMNI_PLANAR_CLOUDS", skyrender)  # 平面云分支存在。
+        self.assertIn("#ifdef OMNI_VOLUMETRIC_CLOUDS", skyrender)  # 体积云分支存在。
         cloud = support.text("effects/cloud/cloud.glsl")  # 云主体。
         self.assertIn("PlanarClouds", cloud)  # 平面云做法存在。
         self.assertIn("NubisCumulus", cloud)  # 体积云做法存在。
@@ -486,7 +486,7 @@ class EffectTests(unittest.TestCase):
         antialiasing = support.text("effects/clarity/antialiasing.glsl")  # 抗锯齿主体。
         self.assertIn("TemporalReprojection", antialiasing)  # 重投影独立成函数。
         self.assertIn("OMNI_TAA_BLENDWEIGHT", antialiasing)  # 混合权重参与累积。
-        self.assertIn("#ifdef OMNI_TAA", support.text("rendering/post.glsl"))  # 后期阶段按选项执行。
+        self.assertIn("#ifdef OMNI_TAA", support.text("effects/clarity/post_taa.glsl"))  # 后期时间抗锯齿效果文件按选项执行。
 
     def test_fsr_and_cas(self):
         """`FSR` 放大可开关、锐化与去噪可调，`CAS` 锐化强度独立可调。"""
@@ -632,7 +632,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("PlanetEnd2", end)  # 末地行星独立成函数。
         self.assertIn("EndFog", end)  # 末地雾独立成函数。
         self.assertIn("EndCalculateStars", end)  # 末地星空使用带 `End` 前缀的函数名。
-        self.assertIn("PlanetEnd2", support.text("rendering/composite.glsl"))  # 合成阶段调用末地行星。
+        self.assertIn("PlanetEnd2", support.text("effects/lighting/composite_surface_end.glsl"))  # 合成零号的末地变体调用末地行星。
 
     def test_debug_view_and_profiler(self):
         """调试视图与性能计时都可开关，默认关闭时不改变画面。"""

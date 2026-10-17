@@ -86,32 +86,10 @@ float ScreenDepth_From_LinearDepth(float depth){
 		return viewPos.xyz / viewPos.w; // 透视除法。
 	}
 
-	// 远景版的视空间到屏幕，补上抖动。
-	vec3 ScreenPos_From_ViewPos_DH(vec3 viewPos){
-		vec3 screenPos = vec3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + dhProjection[3].xyz; // 远景投影的非零项。
-		screenPos = screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法并转到零到一。
-		#ifdef OMNI_TAA
-			screenPos.xy += taaJitter * 0.5; // 与几何阶段的抖动对齐。
-		#endif
-		return screenPos; // 远景屏幕坐标与深度。
-	}
-
-	// 远景版，不补抖动。
-	vec3 ScreenPos_From_ViewPos_Raw_DH(vec3 viewPos){
-		vec3 screenPos = vec3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + dhProjection[3].xyz; // 远景投影的非零项。
-		return screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法并转到零到一。
-	}
-
 	// 远景深度换成米制距离。
 	float LinearDepth_From_ScreenDepth_DH(float depth){
 		depth = depth * 2.0 - 1.0; // 零到一转到负一到一。
 		return 1.0 / (depth * dhProjectionInverse[2][3] + dhProjectionInverse[3][3]); // 远景逆投影的深度部分。
-	}
-
-	// 米制距离换回远景深度。
-	float ScreenDepth_From_LinearDepth_DH(float depth){
-		depth = (1.0 / depth - dhProjectionInverse[3][3]) / dhProjectionInverse[2][3]; // 解出负一到一深度。
-		return depth * 0.5 + 0.5; // 转回零到一。
 	}
 
 	// 远景深度换算成同一距离在近景投影下的深度，远近两种深度才能直接比较。
