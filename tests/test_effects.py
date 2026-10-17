@@ -218,7 +218,9 @@ class EffectTests(unittest.TestCase):
         menu = files[build.SHADERS / "shaders.properties"]  # 读取真实生成内容。
         self.assertIn("screen.SKY = ", menu)  # 天空分类存在。
         self.assertIn("screen.SKY_SKY_ATMOSPHERE = ", menu)  # 天空下的子页面自带选项列表。
-        self.assertIn("screen.WATER = OMNI_WAVE_SCALE", menu)  # 单效果分类保持平铺。
+        self.assertIn("screen.WATER_WATER_WATER = OMNI_WAVE_SCALE", menu)  # 水面基础选项落在自己的子页面。
+        self.assertIn("screen.WATER_WATER_WAVESIM = OMNI_WAVE_SIMULATION", menu)  # 波浪模拟独立成一个水面子页面。
+        self.assertIn("screen.CLOUD = OMNI_PLANAR_CLOUDS", menu)  # 单效果分类保持平铺，不建子页面。
         lang = files[build.SHADERS / "lang" / "zh_cn.lang"]  # 中文翻译文件。
         self.assertIn("value.OMNI_TONEMAP_OPERATOR.0=AgX", lang)  # 色调映射的档位名称已生成。
         self.assertIn("value.OMNI_DEBUG_VIEW.0=", lang)  # 调试视图的档位名称已生成。

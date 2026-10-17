@@ -52,6 +52,9 @@
     "final": ["final", "OMNI_FINAL_PASS"]
   },
   "compute": {
-    "setup": ["lpv"]
+    "setup": ["lpv"],
+    "prepare": ["watersim", "OMNI_WAVE_SIM_PREPARE"],
+    "prepare1": ["watersim", "OMNI_WAVE_SIM_SPREAD"],
+    "prepare2": ["watersim", "OMNI_WAVE_SIM_GRADIENT"]
   }
 }

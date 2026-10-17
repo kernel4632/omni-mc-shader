@@ -57,6 +57,10 @@ STANDARD_MACROS = (
     "#define MC_RENDER_QUALITY 1.0\n"
     "#define MC_SHADOW_QUALITY 1.0\n"
     "#define MC_HAND_DEPTH 0.125\n"
+    # 可选能力宏：真实 Iris 在显卡支持时才定义，这里按现代显卡支持补上，
+    # 让「高效果」环境真的编译到光传播体积与波浪模拟那几条只在能力存在时才有的代码路径。
+    "#define IRIS_FEATURE_CUSTOM_IMAGES\n"
+    "#define IRIS_FEATURE_COMPUTE_SHADERS\n"
 )  # 标准化环境宏，所有程序共用。
 _VERSION_PATTERN = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-(?:dev|alpha|beta|rc)\.(?:0|[1-9]\d*))?"  # 读文件与发布新版本共用一种编号规则。
 

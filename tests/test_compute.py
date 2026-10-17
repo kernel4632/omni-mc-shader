@@ -58,3 +58,20 @@ class ComputeTests(unittest.TestCase):
         self.assertEqual(source.count("memoryBarrierImage();"),3)  # 注入、正向传播、反向传播各有一次。
         self.assertEqual(source.count("barrier();"),3)  # 每个图像屏障后紧跟工作组同步。
         self.assertIn("defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES",source)  # 关闭或缺少能力时不读写图像。
+
+    def test_wave_simulation_compute_and_images_registered(self):
+        """波浪模拟登记三个计算阶段与三张图像，选项默认关闭，采样接入水面片元。"""
+        found,_,_ = support.configuration()  # 读取真实原生选项。
+        self.assertEqual(found["OMNI_WAVE_SIMULATION"].values,("false","true"))  # 波浪模拟为开关选项。
+        self.assertEqual(found["OMNI_WAVE_SIMULATION"].default,"false")  # 默认关闭，默认画面不变。
+        files = build.program_files()  # 读取真实流程表。
+        for name,stage in (("prepare","OMNI_WAVE_SIM_PREPARE"),("prepare1","OMNI_WAVE_SIM_SPREAD"),("prepare2","OMNI_WAVE_SIM_GRADIENT")):  # 三个阶段各自一个计算入口。
+            path = build.SHADERS/"world0"/(name + ".csh")  # 主世界的该阶段入口。
+            self.assertIn(path,files)  # 阶段在流程表登记。
+            self.assertIn("#define " + stage,files[path])  # 入口带对应阶段宏。
+        settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
+        for key in ("image.omniWaveSim","image.omniWaveSim2","image.omniWaveState"):  # 两张模拟场加一张跨帧状态图像。
+            self.assertIn(key,settings)  # 三张图像在流程设置登记。
+        self.assertIn("omniWaveSimStep",support.text("rendering/watersim.glsl"))  # 推进公式在计算主体里。
+        self.assertIn("omniWaveSimNormal",support.text("effects/water/wavesim.glsl"))  # 片元采样独立成函数。
+        self.assertIn("omniWaveSimNormal",support.text("rendering/translucent.glsl"))  # 模拟法线接入水面片元。

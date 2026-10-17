@@ -45,6 +45,8 @@
 	#endif
 	// 波浪、涟漪、物理海浪、湿润调制与水体光学。
 	#include "/effects/water/water.glsl"
+	// 波浪模拟：提供 `omniWaveSimNormal` 与两张模拟场采样器，把玩家带起的波纹混进波法线；默认关闭。
+	#include "/effects/water/wavesim.glsl"
 #endif
 // 海洋物理扩展存在时顶点需要同一个文件里的波高函数。
 #ifdef OMNI_VERTEX
@@ -292,11 +294,18 @@ void main(){
 	#else // 无物理扩展时用波浪函数造形。
 
 		if (iswater){
+			vec3 simWorldPos = mcPos; // 视差改写前的世界位置：模拟场按它取坐标，不受波高偏移影响。
 			#ifdef OMNI_WATER_PARALLAX // 开启水面视差时按波高偏移采样位置。
 				mcPos = GetWaterParallaxCoord(mcPos, normalize(viewPos.xyz * tbn)); // 找到真正可见的波面位置。
 			#endif
 			NdotU = saturate(NdotU + float(isEyeInWater == 1) * 2.0); // 在水下时朝向视为朝上。
 			waterNormal = GetWavesNormal(mcPos, max(NdotU * 15.0 + 3.0, 0.0)); // 取波浪法线，逆光时更平。
+
+			#ifdef OMNI_WAVE_SIM_ON // 波浪模拟：把玩家带起的模拟波法线按压强权重混进基础波法线。
+				float simUpness = dot(tbn[2], gbufferModelView[1].xyz); // 水面法线与世上方向的夹角。
+				vec4 simWave = omniWaveSimNormal(omniWaveSim2Tex, omniWaveStateTex, simWorldPos, simUpness); // 模拟法线与权重。
+				waterNormal = normalize(mix(waterNormal, simWave.xyz, simWave.w)); // 权重为零时保持基础波法线。
+			#endif
 
 		}else{
 			#ifdef MC_NORMAL_MAP
