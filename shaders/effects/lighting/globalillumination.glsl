@@ -22,10 +22,12 @@ vec4 RenderGISpatialFilter(float startDepth){
 	vec3 viewPos = ViewPos_From_ScreenPos(texCoord, depth); // 还原视空间位置，自动撤销抖动。
 
 	#ifdef DISTANT_HORIZONS // 有远景时天空像素改读远景深度。
-		if (depth == 1.0){ // 天空像素改读远景深度。
-			depth = texelFetch(dhDepthTex0, texelCoord, 0).x; // 远景深度。
-			viewPos = ViewPos_From_ScreenPos_DH(texCoord, depth); // 用远景逆投影还原。
-		}
+		#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何，关闭时远景像素按天空处理。
+			if (depth == 1.0){ // 天空像素改读远景深度。
+				depth = texelFetch(dhDepthTex0, texelCoord, 0).x; // 远景深度。
+				viewPos = ViewPos_From_ScreenPos_DH(texCoord, depth); // 用远景逆投影还原。
+			}
+		#endif
 	#endif
 
 	vec4 gi = vec4(0.0, 0.0, 0.0, 1.0); // 默认没有全局光，遮蔽为一。

@@ -46,6 +46,8 @@
 #define OMNI_SSS_BRIGHTNESS 1.0 // [0.0 0.1 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
 // @option {"label":{"zh_cn":"透光朝向","en_us":"Directional translucency"},"description":{"zh_cn":"让透过的光随观察角度变化，逆光看叶片时更亮。","en_us":"Makes the light through leaves vary with view angle, brighter when backlit."}}
 //#define OMNI_SSS_NORMAL
+// @option {"label":{"zh_cn":"远景透光（次表面散射）","en_us":"Distant SSS"},"description":{"zh_cn":"让远景地形的叶片与雪像近景一样透光；关闭后远景叶片与雪不透光，影子更硬。默认开启，与原来一致。来源 Eclipse 的 DH_SUBSURFACE_SCATTERING。","en_us":"Lets distant leaves and snow pass light like nearby ones; when off they stop being translucent and shadows get harder. On by default. Ports Eclipse's DH_SUBSURFACE_SCATTERING."}}
+#define OMNI_DH_SSS
 // @option {"label":{"zh_cn":"远景进阴影","en_us":"Distant terrain in shadows"},"description":{"zh_cn":"让远景地形也投进阴影图，远处山体才能挡住阳光。","en_us":"Casts distant terrain into the shadow map so far hills can block sunlight."}}
 //#define OMNI_DH_SHADOW
 // @option {"label":{"zh_cn":"远景阴影剔除","en_us":"Distant shadow culling"},"description":{"zh_cn":"剔除阴影图里被近处地形挡住、看不到的远景块，省性能；极端情况下可能出现阴影缺口。","en_us":"Culls distant chunks hidden behind near terrain in the shadow map to save cost; may rarely cut a shadow."}}

@@ -35,6 +35,8 @@
 #define OMNI_RAYTRACE_REFINEMENT_STEPS 5 //[2 3 4 5 6 7 8 9 10 12 14 16 18 20 22 24 26 28 30 32]
 // @option {"label":{"zh_cn":"深度差阈值","en_us":"Depth difference"},"description":{"zh_cn":"命中判定的相对深度差阈值，越小越严格。","en_us":"Relative depth-difference threshold for a hit; smaller is stricter."},"slider":true}
 #define OMNI_RAYTRACE_ZDIFF_THRESHOLD 0.2 //[0.05 0.1 0.15 0.2 0.3 0.4 0.5]
+// @option {"label":{"zh_cn":"远景反射","en_us":"Distant reflections"},"description":{"zh_cn":"让屏幕空间反射也能命中远景地形；关闭后反射只打到近景几何，远景处反射天空。默认开启，与原来一致。来源 Eclipse 的 DH_SCREENSPACE_REFLECTIONS。","en_us":"Lets screen-space reflections hit distant terrain; when off, rays only hit near geometry and reflect the sky over distant chunks. On by default. Ports Eclipse's DH_SCREENSPACE_REFLECTIONS."}}
+#define OMNI_DH_SSR
 // 数学提供光照模型与颜色曲线，坐标换算提供屏幕与视空间互转，两份都供三个通道共用。
 #include "/common/math.glsl"
 #include "/common/coordinates.glsl"
@@ -99,7 +101,7 @@ float TraceSampleDepth(vec2 coord, bool isHand){
 		if (isHand) return textureLod(depthtex2, coord, 0.0).x; // 手部读不含玩家的深度。
 	#endif
 	float depth = textureLod(depthtex1, coord, 0.0).x; // 其他像素读普通不透明深度。
-	#ifdef DISTANT_HORIZONS // 近景是天空时改读远景深度。
+	#if defined DISTANT_HORIZONS && defined OMNI_DH_SSR // 近景是天空且开启远景反射时改读远景深度；关闭时远景按天空处理，反射只打到近景几何。
 		if (depth == 1.0) depth = ScreenDepth_From_DHScreenDepth(textureLod(dhDepthTex1, coord, 0.0).x); // 换成同一距离在近景投影下的深度。
 	#endif
 	return depth; // 返回该坐标的深度。

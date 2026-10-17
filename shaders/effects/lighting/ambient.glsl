@@ -65,6 +65,8 @@
 #define OMNI_GTAO_STRENGTH 0.95 // [0.0 0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5 0.525 0.55 0.575 0.6 0.625 0.65 0.675 0.7 0.725 0.75 0.775 0.8 0.85 0.9 0.95 1.0]
 // @option {"label":{"zh_cn":"遮蔽多弹射","en_us":"GTAO Multibounce"},"description":{"zh_cn":"按表面底色给遮蔽做一次多弹射补偿，暗部不会压死。","en_us":"Multi-bounce correction using albedo so dark areas do not crush."}}
 #define OMNI_GTAO_MULTIBOUNCE
+// @option {"label":{"zh_cn":"远景遮蔽","en_us":"Distant AO"},"description":{"zh_cn":"让远景地形参与地平线遮蔽与全局光；关闭后远景不接收遮蔽，近景也不会被远景挡住。默认开启，与原来一致。来源 Eclipse 的 DH_AMBIENT_OCCLUSION。","en_us":"Lets distant terrain take part in ground-truth AO and GI; when off, distant chunks get no occlusion and nearby pixels are not occluded by distant geometry. On by default. Ports Eclipse's DH_AMBIENT_OCCLUSION."}}
+#define OMNI_DH_AO
 // 相对坐标、数学、噪声与共享效果按下述顺序引入；本文件末尾的算法只在这里定义一次。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
@@ -255,10 +257,12 @@ vec4 GI_TemporalFilter(){
 		float currDepth = texelFetch(depthtex1, texel, 0).x; // 本帧不透明深度。
 		#ifdef DISTANT_HORIZONS // 有远景时天空像素改读远景深度。
 			bool isDH = false; // 标记是否远景像素。
-			if (currDepth == 1.0){ // 天空像素。
-				currDepth = texelFetch(dhDepthTex0, texel, 0).x; // 改读远景深度。
-				isDH = true; // 标记为远景。
-			}
+			#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何，关闭时远景像素按天空处理。
+				if (currDepth == 1.0){ // 天空像素。
+					currDepth = texelFetch(dhDepthTex0, texel, 0).x; // 改读远景深度。
+					isDH = true; // 标记为远景。
+				}
+			#endif
 		#endif
 		if (currDepth < 1.0){ // 有几何才算反弹。
 			vec4 data3 = texelFetch(colortex3, texel, 0); // 读法线光照图。
@@ -307,10 +311,12 @@ vec4 GI_TemporalFilter(){
 		float depth = texelFetch(depthtex1, texel, 0).x; // 不透明深度。
 		#ifdef DISTANT_HORIZONS // 远景处理。
 			bool isDH = false; // 远景标记。
-			if (depth == 1.0){ // 天空像素。
-				depth = texelFetch(dhDepthTex0, texel, 0).x; // 改读远景深度。
-				isDH = true; // 标记远景。
-			}
+			#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何。
+				if (depth == 1.0){ // 天空像素。
+					depth = texelFetch(dhDepthTex0, texel, 0).x; // 改读远景深度。
+					isDH = true; // 标记远景。
+				}
+			#endif
 		#endif
 		if (depth < 1.0){ // 有几何才写历史数据。
 			vec3 normal = DecodeNormal(texelFetch(colortex3, texel, 0).xy); // 解法线。
@@ -420,12 +426,16 @@ float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
 				float sampleDepth = textureLod(depthtex1, sampleCoord, 0.0).x; // 采样深度。
 				#ifdef DISTANT_HORIZONS // 远景处理。
 					vec3 sampleVector = vec3(0.0); // 采样向量。
-					if (sampleDepth == 1.0){ // 天空像素改读远景深度。
-						sampleDepth = textureLod(dhDepthTex0, sampleCoord, 0.0).x; // 远景深度。
-						sampleVector = ViewPos_From_ScreenPos_DH(sampleCoord, sampleDepth); // 远景还原。
-					}else{ // 近景像素正常还原。
-						sampleVector = ViewPos_From_ScreenPos(sampleCoord, sampleDepth); // 近景还原。
-					}
+					#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景样本当作遮挡物。
+						if (sampleDepth == 1.0){ // 天空像素改读远景深度。
+							sampleDepth = textureLod(dhDepthTex0, sampleCoord, 0.0).x; // 远景深度。
+							sampleVector = ViewPos_From_ScreenPos_DH(sampleCoord, sampleDepth); // 远景还原。
+						}else{ // 近景像素正常还原。
+							sampleVector = ViewPos_From_ScreenPos(sampleCoord, sampleDepth); // 近景还原。
+						}
+					#else // 关闭远景遮蔽时天空样本按无穷远，不产生遮挡。
+						sampleVector = ViewPos_From_ScreenPos(sampleCoord, sampleDepth); // 只用近景深度还原。
+					#endif
 					sampleVector = sampleVector - viewPos; // 换成相对当前点。
 				#else // 没有远景时直接还原。
 					vec3 sampleVector = ViewPos_From_ScreenPos(sampleCoord, sampleDepth) - viewPos; // 采样点相对当前点。
@@ -445,12 +455,16 @@ float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
 				float sampleDepth = textureLod(depthtex1, sampleCoord, 0.0).x; // 采样深度。
 				#ifdef DISTANT_HORIZONS // 远景处理。
 					vec3 sampleVector = vec3(0.0); // 采样向量。
-					if (sampleDepth == 1.0){ // 天空像素改读远景深度。
-						sampleDepth = textureLod(dhDepthTex0, sampleCoord, 0.0).x; // 远景深度。
-						sampleVector = ViewPos_From_ScreenPos_DH(sampleCoord, sampleDepth); // 远景还原。
-					}else{ // 近景像素正常还原。
-						sampleVector = ViewPos_From_ScreenPos(sampleCoord, sampleDepth); // 近景还原。
-					}
+					#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景样本当作遮挡物。
+						if (sampleDepth == 1.0){ // 天空像素改读远景深度。
+							sampleDepth = textureLod(dhDepthTex0, sampleCoord, 0.0).x; // 远景深度。
+							sampleVector = ViewPos_From_ScreenPos_DH(sampleCoord, sampleDepth); // 远景还原。
+						}else{ // 近景像素正常还原。
+							sampleVector = ViewPos_From_ScreenPos(sampleCoord, sampleDepth); // 近景还原。
+						}
+					#else // 关闭远景遮蔽时天空样本按无穷远，不产生遮挡。
+						sampleVector = ViewPos_From_ScreenPos(sampleCoord, sampleDepth); // 只用近景深度还原。
+					#endif
 					sampleVector = sampleVector - viewPos; // 换成相对当前点。
 				#else // 没有远景时直接还原。
 					vec3 sampleVector = ViewPos_From_ScreenPos(sampleCoord, sampleDepth) - viewPos; // 采样点相对当前点。

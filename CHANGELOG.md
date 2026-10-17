@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.0.0-dev.138
+
+补上 Eclipse 远景的三项参与开关：远景环境光遮蔽、叶片与雪透光、屏幕空间反射，三项默认开、等于现有画面，关闭才改变。
+
+- `OMNI_DH_AO`（`effects/lighting/ambient.glsl`）：远景地形是否参与地平线遮蔽与全局光；接在 `ambient.glsl` 的时间滤波与遮蔽采样、`globalillumination.glsl` 的远景深度替换上，关闭时远景像素按天空处理。
+- `OMNI_DH_SSS`（`effects/shadow/shadow.glsl`）：远景叶片与雪是否透光；接在 `composite_surface.glsl` 与 `composite_surface_end.glsl` 的远景叶片调整上，来源 Eclipse `DH_SUBSURFACE_SCATTERING`。
+- `OMNI_DH_SSR`（`effects/reflection/reflection.glsl`）：屏幕空间反射是否命中远景地形；接在 `reflection.glsl` 的追踪取深度上，来源 Eclipse `DH_SCREENSPACE_REFLECTIONS`。
+- 与 Eclipse 的差别属近似：Omni 没有独立远景深度缓冲，AO/SSS/SSR 走 iterationT 路径读 `dhDepthTex0/1` 与材质编号，开关只让远景像素按天空处理或不透光，不等价于 Eclipse 的独立滤波与网格化 SSS（对照 `docs/eclipse-parity.md` 的「远景（DH）」行与 `docs/parity.md` 偏离 48）。
+
+只做过离线编译、审计与单元测试；游戏内画面、性能与兼容性仍未验证。
+
 ## 0.0.0-dev.137
 
 把 Eclipse 的天空散射系数引进预计算大气：新增天空亮度与瑞利/米氏散射系数倍率，默认全一、画面不变。
