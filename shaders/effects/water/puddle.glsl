@@ -8,11 +8,11 @@
   `OmniPuddleRoughness` 由 `effects/ground/material.glsl` 的 `MaterialFromTex` 调用，用那里的湿润度改写湿表面粗糙度；
   `OmniPuddleSurface` 由 `effects/lighting/composite_surface.glsl` 在「仅水洼」模式里调用，用 `OMNI_PUDDLE_SIZE` 决定的水洼覆盖
     改写水洼表面的粗糙度与底色，让这个尺寸选项真正表现为水洼大小，而不只是雨点涟漪的范围。
-已知差距：本项目的积雪只叠底色，没有 Eclipse 的 `snowR`，所以湿表面粗糙度固定取零点五；
+已知差距：雪面粗糙度已在几何阶段写进五号画面的平滑度，但合成阶段读不到单独的 `snowR`，所以这里湿表面粗糙度固定取零点五，未照 Eclipse 的 `0.5*(1+snowR)`；
   `OmniPuddleSurface` 只按世界横纵坐标取水洼噪声，没有照 Eclipse 按面的朝向换轴，竖直墙面的水洼形状会与 Eclipse 略不同。
 可复制示例（`halfWet`、`puddleNoise`、`lightmap` 由调用方按现有湿润流程准备）：
   `float puddles = OmniPuddleCoverage(halfWet, puddleNoise);`
-  `roughness = OmniPuddleRoughness(roughness, 0.5, wetnessStages);`  本项目没有雪面粗糙度，湿表面粗糙度固定取零点五
+  `roughness = OmniPuddleRoughness(roughness, 0.5, wetnessStages);`  合成阶段读不到雪粗糙度贴图 `snowR`，湿表面粗糙度固定取零点五
   `OmniPuddleSurface(albedo, roughness, f0, skyLight, worldPos);`  只有在 `OMNI_PUDDLE_MODE == 2` 时调用
 与现有选项的关系：`effects/water/water.glsl` 的 `OMNI_PUDDLE_MODE` 决定雨点涟漪铺满整片湿面还是只出现在低洼处；
   `OmniPuddleSurface` 只在「仅水洼」（模式二）里执行，模式一、三保持原有的雨点涟漪行为。

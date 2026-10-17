@@ -216,7 +216,7 @@ Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
 	material.roughness *= material.roughness; // 再平方，让光滑面更集中。
 	// 湿面反射锐度：把干表面粗糙度朝湿表面粗糙度混合，湿得越深反射越清晰。
 	// 为什么接在平方之后：Eclipse 在 `applyPuddles` 里就是对已经算好的粗糙度做这一步混合，顺序一致才等价。
-	// 为什么没有雪面粗糙度：本项目的积雪只叠底色，没有 Eclipse 的 `snowR`，所以湿表面粗糙度固定取零点五。
+	// 为什么湿表面粗糙度固定取零点五：雪面粗糙度已在几何阶段写进五号画面的平滑度，合成阶段读不到单独的 `snowR`。
 	material.roughness = OmniPuddleRoughness(material.roughness, 0.5, wet);
 	float rawMetalness = specTex.g; // 绿色通道是金属度。
 	#if OMNI_TEXTURE_PBR_FORMAT == 0

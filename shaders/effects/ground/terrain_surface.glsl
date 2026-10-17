@@ -329,6 +329,19 @@ void omniTerrainFragment(){
 	#endif
 
 
+// 积雪覆盖：把雪的底色、法线与粗糙度按露天程度与朝向叠进这个像素，默认关闭时不执行。
+// 为什么放在算视空间法线之前：雪会改切线空间法线，先叠雪再算视空间法线，光照才能用上雪面的起伏。
+	#ifdef OMNI_SNOW_OVERLAY
+		// 世界位置：视空间位置回到相机相对世界坐标，再加上相机绝对位置。
+		vec3 snowWorldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz + cameraPosition;
+		// 叠雪前的世界法线：当前切线空间法线经切线基转视空间、再转世界，用来判断面的朝上程度。
+		vec3 snowWorldNormal = mat3(gbufferModelViewInverse) * (tbn * normalize(normalTex));
+		// 几何面世界法线：切线基第三列转到世界，用来判断面的朝向。
+		vec3 snowWorldFlatNormal = mat3(gbufferModelViewInverse) * tbn[2];
+		omniSnowOverlay(albedo, normalTex, specularTex.r, snowWorldPos, snowWorldNormal, snowWorldFlatNormal, blockLight.y); // 改底色、切线法线与平滑度。
+	#endif
+
+
 	vec3 viewNormal = tbn * normalize(normalTex); // 切线空间法线转到视空间。
 
 	#if defined OMNI_ENABLE_PBR && defined OMNI_OVERWORLD && defined OMNI_RAIN_SPLASH_EFFECT 
@@ -341,18 +354,6 @@ void omniTerrainFragment(){
 	#endif
 
 	vec2 normalEnc = EncodeNormal(viewNormal); // 八面体编码法线。
-
-
-// 积雪覆盖：把雪按露天程度与朝向叠到底色，默认关闭时不执行。
-	#ifdef OMNI_SNOW_OVERLAY
-		// 世界位置：视空间位置回到相机相对世界坐标，再加上相机绝对位置。
-		vec3 snowWorldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz + cameraPosition;
-		// 带贴图扰动的世界法线：视空间法线转到世界。
-		vec3 snowWorldNormal = mat3(gbufferModelViewInverse) * viewNormal;
-		// 几何面世界法线：切线基第三列转到世界，用来判断面的朝向。
-		vec3 snowWorldFlatNormal = mat3(gbufferModelViewInverse) * tbn[2];
-		albedo = omniSnowOverlay(albedo, snowWorldPos, snowWorldNormal, snowWorldFlatNormal, blockLight.y);
-	#endif
 
 
 // 高光：按资源包编码取出，并给红石线一个最小发光。

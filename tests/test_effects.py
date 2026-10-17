@@ -12,7 +12,7 @@ import build  # 读取真实流程表、原生选项与编译器位置。
 import options  # 核对菜单分类与流程设置解析。
 import support  # 共享扫描、展开与效果原文缓存。
 
-DESCENDING_EDGES = {"end.glsl": "末地行星阴影与大气米散射用下降遮罩，照 iterationT 原样保留", "end_sky.glsl": "末地大气米散射的下降遮罩随算法体拆到该文件，照 iterationT 原样保留"}  # 允许反序阈值的文件，值写明原因。
+DESCENDING_EDGES = {"end.glsl": "末地行星阴影与大气米散射用下降遮罩，照 iterationT 原样保留", "end_sky.glsl": "末地大气米散射的下降遮罩随算法体拆到该文件，照 iterationT 原样保留", "snow.glsl": "积雪融化阶段用下降遮罩判断雪量区间，照 Eclipse 原样保留"}  # 允许反序阈值的文件，值写明原因。
 
 
 class EffectTests(unittest.TestCase):
@@ -351,6 +351,15 @@ class EffectTests(unittest.TestCase):
         self.assertIn("PlanarClouds", cloud)  # 平面云做法存在。
         self.assertIn("NubisCumulus", cloud)  # 体积云做法存在。
 
+    def test_cloud_step_controls(self):
+        """体积云步数由采样数上限与精细度倍率共同决定，两者都接入步进。"""
+        found, _, _ = support.configuration()  # 真实选项。
+        self.assertIn("OMNI_CLOUD_SAMPLES", found)  # 采样数由云源码定义。
+        self.assertIn("OMNI_CLOUD_QUALITY", found)  # 精细度倍率仍在。
+        cloud = support.text("effects/cloud/cloud.glsl")  # 云主体。
+        self.assertIn("OMNI_CLOUD_SAMPLES -", cloud)  # 采样数参与步数上限。
+        self.assertIn("marchingSteps * OMNI_CLOUD_QUALITY", cloud)  # 倍率参与步数。
+
     def test_cloud_shadow_controls(self):
         """云影可开关，范围、贴图尺寸与淡出都可调，并接入直射光与雾。"""
         found, _, _ = support.configuration()  # 真实选项。
@@ -432,6 +441,16 @@ class EffectTests(unittest.TestCase):
         self.assertIn("WaterFog", water)  # 水下水雾独立成函数。
         self.assertIn("TransparentAbsorption", water)  # 彩色玻璃吸收独立成函数。
         self.assertIn("CalculateWaterCaustics", support.text("effects/shadow/shadow.glsl"))  # 焦散来自阴影主体。
+
+    def test_rain_ripple_options(self):
+        """雨点涟漪的强度与对比可调，两者都作用在同一个雨点法线上，默认都为一、画面不变。"""
+        found, _, _ = support.configuration()  # 真实选项。
+        for name in ("OMNI_RAIN_RIPPLE_STRENGTH", "OMNI_RAIN_RIPPLE_CONTRAST"):
+            self.assertIn(name, found)  # 两个选项由水源码定义。
+            self.assertEqual(found[name].default, "1.0")  # 默认为一，乘一与取一次幂都是原样。
+        water = support.text("effects/water/water.glsl")  # 水主体。
+        self.assertIn("OMNI_RAIN_RIPPLE_STRENGTH", water)  # 强度乘在雨点法线上。
+        self.assertIn("OMNI_RAIN_RIPPLE_CONTRAST", water)  # 对比指数作用在雨点法线上。
 
     def test_reflection_raytrace_options(self):
         """屏幕空间反射可调射线数量、细分步数与深度差阈值，默认画面不变。"""
@@ -602,14 +621,19 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_SEASON_TINT", season)  # 色调参与着色。
 
     def test_snow_overlay(self):
-        """积雪覆盖可开关、强度可调，默认关闭时函数与贴图都不被编译。"""
+        """积雪覆盖可开关、强度可调，默认关闭时函数与贴图都不被编译；底色、法线与粗糙度三张贴图都接入。"""
         found, _, _ = support.configuration()  # 真实选项。
         self.assertEqual(found["OMNI_SNOW_OVERLAY"].default, "false")  # 默认关闭。
         self.assertIn("OMNI_SNOW_OVERLAY_STRENGTH", found)  # 强度可调。
         snow = support.text("effects/weather/snow.glsl")  # 积雪主体。
         self.assertIn("omniSnowOverlay", snow)  # 积雪独立成函数。
         self.assertIn("#ifdef OMNI_SNOW_OVERLAY", snow)  # 关闭时不增加代码。
+        for name in ("snowTexA", "snowTexN", "snowTexR"):  # 三张贴图都在函数体里采样。
+            self.assertIn(name, snow)  # 底色、法线、粗糙度各一张，缺一就是没接入。
+        self.assertIn("inout vec3 normal", snow)  # 法线通过 `inout` 传回，参与光照。
+        self.assertIn("inout float smoothness", snow)  # 粗糙度以平滑度通过 `inout` 传回五号画面。
         self.assertIn("#ifdef OMNI_SNOW_OVERLAY", support.text("effects/ground/terrain_surface.glsl"))  # 地形片元主函数体按开关调用。
+        self.assertIn("omniSnowOverlay", support.text("rendering/entities.glsl"))  # 实体与方块实体也调用同一份函数。
 
     def test_entity_status_and_hand_fov(self):
         """实体状态色与眼部光照可开关，手持物视野模式与角度可调。"""

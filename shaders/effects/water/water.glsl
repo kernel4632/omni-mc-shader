@@ -2,7 +2,7 @@
 水面：把 iterationT 的波浪、海洋物理波、雨点涟漪、水下雾、折射与彩色玻璃吸收集中到一个文件。
 职责分成四块：
   一、选项：`OMNI_WAVE_SCALE`、`OMNI_WAVE_HEIGHT`、`OMNI_WATER_PARALLAX`、`OMNI_UNDERWATER_FOG`、`OMNI_WATER_FOG_DENSITY`、`OMNI_CAUSTICS`、
-    雨点涟漪范围 `OMNI_PUDDLE_MODE`（照 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`，默认与原来一致），
+    雨点涟漪范围 `OMNI_PUDDLE_MODE`（照 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`，默认与原来一致）与其强度 `OMNI_RAIN_RIPPLE_STRENGTH`、对比 `OMNI_RAIN_RIPPLE_CONTRAST`（默认都为一，与原来一致），
     以及玩家交互水面 `OMNI_PLAYER_WATER` 与其强度 `OMNI_PLAYER_WATER_STRENGTH`，全项目只在这里定义一次；
   二、波浪：`GetWaves`、`GetWavesNormal`、`GetWaterParallaxCoord` 用噪声贴图叠多层正弦，算出波高、波法线与视差坐标；
   三、物理海浪：`physics_*` 一组函数按迭代正弦合成海面，供海洋物理扩展使用；
@@ -46,6 +46,10 @@
 #define OMNI_CAUSTICS
 // @option {"label":{"zh_cn":"水洼与涟漪范围","en_us":"Puddles & ripples"},"description":{"zh_cn":"雨点涟漪出现的位置：整个湿表面均匀铺满，还是只在低洼积水处出现。「仅水洼」还会按「水洼尺寸」决定水洼范围，并让水洼表面更光滑更暗（照 Eclipse 的 `applyPuddles`）。默认与原来一致。来源 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`。","en_us":"Where rain ripples appear: evenly over the whole wet surface, or only in low-lying puddles. \"Only puddles\" also uses \"Puddle size\" to shape the puddles and makes their surface smoother and darker (Eclipse's applyPuddles). Default matches the previous behaviour. From Eclipse `lib/settings.glsl:359` `PUDDLE_MODE`."},"values":{"0":{"zh_cn":"无雨点","en_us":"Off"},"1":{"zh_cn":"水洼与全湿润","en_us":"Puddles + fully wet"},"2":{"zh_cn":"仅水洼","en_us":"Only puddles"},"3":{"zh_cn":"仅全湿润","en_us":"Only fully wet"}}}
 #define OMNI_PUDDLE_MODE 1 // [0 1 2 3]
+// @option {"label":{"zh_cn":"雨点涟漪强度","en_us":"Rain ripple strength"},"description":{"zh_cn":"雨点砸在水面与地面时涟漪的起伏高低，一为不变；调大涟漪更明显，取零等于不画雨点。","en_us":"Height of the ripples where raindrops hit water and ground, one is unchanged; larger makes them stronger, zero draws none."},"slider":true}
+#define OMNI_RAIN_RIPPLE_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0]
+// @option {"label":{"zh_cn":"雨点涟漪对比","en_us":"Rain ripple contrast"},"description":{"zh_cn":"雨点涟漪的明暗分离程度，一为不变；调大亮圈更锐、圈外更平，调小则整片更柔和。","en_us":"How sharply the ripple rings separate from the flat surface, one is unchanged; larger makes the rings crisper and the rest flatter, smaller makes everything softer."},"slider":true}
+#define OMNI_RAIN_RIPPLE_CONTRAST 1.0 // [0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.75 2.0 2.5 3.0]
 // @option {"label":{"zh_cn":"玩家交互水面","en_us":"Player water interaction"},"description":{"zh_cn":"玩家在水里移动时，水面从玩家处向外推出一圈圈涟漪。默认关闭；Eclipse 默认用波浪模拟，本项目未移植那套计算着色器方案。来源 Eclipse `dimensions/all_translucent.fsh` 的 `WATER_INTERACTION == 1`。","en_us":"Ripples spread out from the player across the water surface while moving in water. Off by default; Eclipse defaults to its wave-simulation mode, whose compute-shader pipeline is not ported here. From Eclipse `dimensions/all_translucent.fsh` `WATER_INTERACTION == 1`."},"values":{"0":{"zh_cn":"关闭","en_us":"Off"},"1":{"zh_cn":"简单涟漪","en_us":"Simple ripples"}}}
 #define OMNI_PLAYER_WATER 0 // [0 1]
 // @option {"label":{"zh_cn":"玩家涟漪强度","en_us":"Player ripple strength"},"description":{"zh_cn":"玩家水波涟漪的高低；调大涟漪更明显。上一个选项关闭时不生效。","en_us":"Height of the player water ripples; larger makes them more visible. Has no effect while the option above is off."},"slider":true}
@@ -379,6 +383,7 @@ vec2 GetRainAnimationTex(sampler2D texSampler, vec2 coord, float rp){
 
 // 雨点法线：按动画相位在贴图上采样，三层按降雨强弱叠加。
 // 为什么用整数帧取模：让动画按固定帧率推进，避免不同刷新设备上速度不一致。
+// 末尾再按「雨点涟漪强度」与「雨点涟漪对比」两个选项统一缩放，两个默认都为一、画面不变。
 vec2 GetRainNormal(vec3 pos, float strength, inout float wet){
 	pos.xyz *= 0.5; // 缩放坐标，让落点更大。
 	#ifdef OMNI_DISABLE_LOCAL_PRECIPITATION // 强制局部无降水时只看整体降雨。
@@ -415,7 +420,8 @@ vec2 GetRainNormal(vec3 pos, float strength, inout float wet){
 	float lod = dot(fwidth(pos.xz), vec2(1.0)); // 屏幕上的坐标变化量，用来按距离衰减。
 
 	n /= lod * 5.0 + 1.0; // 越远越平，避免远处闪烁。
-	n *= strength; // 乘降雨强度。
+	n *= strength * OMNI_RAIN_RIPPLE_STRENGTH; // 乘降雨强度与「雨点涟漪强度」选项。
+	n = sign(n) * pow(abs(n), vec2(OMNI_RAIN_RIPPLE_CONTRAST)); // 「雨点涟漪对比」：对幅度取幂并保留符号，指数大于一让亮圈更锐、圈外更平；指数为一原样返回。
 	#if OMNI_PUDDLE_MODE == 2 // 模式二「仅水洼」：只在低洼处出现。
 		float puddleNoise = textureLod(noisetex, pos.xz * 0.02, 0.0).b; // 水洼形状噪声，值越低表示地势越低。
 		n *= OmniPuddleCoverage(wet, puddleNoise); // 用统一的水洼覆盖公式，`OMNI_PUDDLE_SIZE` 越大水洼越大越连片，只在低洼处出水洼。

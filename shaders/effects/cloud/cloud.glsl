@@ -31,6 +31,8 @@
 #define OMNI_VOLUMETRIC_CLOUDS
 // @option {"label":{"zh_cn":"云精细度","en_us":"Cloud Quality"},"description":{"zh_cn":"体积云沿视线的步数倍率，越大越细也越慢。","en_us":"Multiplier on the volumetric cloud steps; higher is finer and slower."},"slider":true}
 #define OMNI_CLOUD_QUALITY 1.0 // [0.4 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.5 3.0 5.0 7.0 10.0]
+// @option {"label":{"zh_cn":"体积云采样数","en_us":"Cloud Samples"},"description":{"zh_cn":"体积云沿视线采样的次数上限（朝天看时略少），越大越细也越慢；与上面的精细度倍率相乘。","en_us":"Upper bound on volumetric cloud view samples (slightly fewer looking up); higher is finer and slower; multiplied by the quality factor above."},"slider":true}
+#define OMNI_CLOUD_SAMPLES 20 // [8 10 12 16 20 24 28 32 40 48 56 64 80 96 128]
 // @option {"label":{"zh_cn":"晴天云高度","en_us":"Clear Cloud Altitude"},"description":{"zh_cn":"晴天云层底部高度，单位方块。","en_us":"Base altitude of the clear-weather cloud layer in blocks."}}
 #define OMNI_CLOUD_CLEAR_ALTITUDE 500.0 // [300.0 350.0 400.0 450.0 500.0 550.0 600.0 650.0 700.0 750.0 800.0 850.0 900.0 950.0 1000.0 1100.0 1200.0 1300.0 1400.0 1500.0 1600.0 1700.0 1800.0 1900.0 2000.0 2250.0 2500.0 2750.0 3000.0 4000.0 5000.0]
 // @option {"label":{"zh_cn":"晴天云厚度","en_us":"Clear Cloud Thickness"},"description":{"zh_cn":"晴天云层有多厚，单位方块。","en_us":"Thickness of the clear-weather cloud layer in blocks."}}
@@ -255,8 +257,8 @@ void NubisCloudLayer(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 w
 		iInner = min(iInner, 5000.0); // 限长避免步进过远。
 		marchingStart = marchingStart * (1.0 - inCloud) + cameraPosition; // 相机在云内时起点改到相机。
 		marchingEnd = mix(marchingEnd, iInner * worldDir, inCloud) + cameraPosition; // 相机在云内时终点改到云内一点。
-		float marchingSteps = 20.0 - saturate(fsqrt(abs(worldDir.y)) * 1.4 - 0.4) * 8.0; // 越朝上步数越少。
-		marchingSteps = floor(marchingSteps * OMNI_CLOUD_QUALITY); // 乘精细度选项。
+		float marchingSteps = OMNI_CLOUD_SAMPLES - saturate(fsqrt(abs(worldDir.y)) * 1.4 - 0.4) * 8.0; // 采样数上限，越朝上步数越少。
+		marchingSteps = max(floor(marchingSteps * OMNI_CLOUD_QUALITY), 1.0); // 乘精细度倍率，并保证至少一步。
 		float marchingStepSize = 1.0 / marchingSteps; // 归一化步长。
 		vec3 marchingIncrement = (marchingEnd - marchingStart) * marchingStepSize; // 每步位移。
 		vec3 marchingPos = marchingStart + marchingIncrement * noise.x; // 起点加抖动量，减少条带。

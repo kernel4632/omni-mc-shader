@@ -512,6 +512,19 @@ void main(){
 		normalTex = mix(normalize(normalTex), vec3(0.0, 0.0, 1.0), saturate(wet * (1.6 - porosity * 0.6))); // 越湿越接近平整水面。
 	#endif
 
+// 积雪覆盖：只给普通实体与方块实体叠雪，手持物与蜘蛛眼不叠；默认关闭时不执行。
+// 为什么放在算视空间法线之前：雪会改切线空间法线，先叠雪再算视空间法线，光照才能用上雪面的起伏。
+	#if (defined OMNI_ENTITIES_PASS || defined OMNI_BLOCK_PASS) && defined OMNI_SNOW_OVERLAY
+		// 世界位置：视空间位置回到相机相对世界坐标，再加上相机绝对位置。
+		vec3 snowWorldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz + cameraPosition;
+		// 叠雪前的世界法线：当前切线空间法线经切线基转视空间、再转世界，用来判断面的朝上程度。
+		vec3 snowWorldNormal = mat3(gbufferModelViewInverse) * (tbnMat * normalize(normalTex));
+		// 几何面世界法线：切线基第三列转到世界，用来判断面的朝向。
+		vec3 snowWorldFlatNormal = mat3(gbufferModelViewInverse) * tbnMat[2];
+		omniSnowOverlay(albedo.rgb, normalTex, specularTex.r, snowWorldPos, snowWorldNormal, snowWorldFlatNormal, blockLight.y); // 改底色、切线法线与平滑度。
+	#endif
+
+
 	vec3 viewNormal = tbnMat * normalize(normalTex); // 切线空间法线转到视空间。
 
 	#if !defined OMNI_HAND_PASS && defined OMNI_ENABLE_PBR && defined OMNI_MAIN_DIMENSION && defined OMNI_RAIN_SPLASH_EFFECT
@@ -533,18 +546,6 @@ void main(){
 			vec3 viewDir = -normalize(viewPos); // 视线方向。
 			viewNormal = normalize(viewNormal + tbnMat[2] * inversesqrt(saturate(dot(viewNormal, viewDir)) + 0.001)); // 压住极端法线。
 		#endif
-	#endif
-
-
-// 积雪覆盖：只给普通实体与方块实体叠雪，手持物与蜘蛛眼不叠；默认关闭时不执行。
-	#if (defined OMNI_ENTITIES_PASS || defined OMNI_BLOCK_PASS) && defined OMNI_SNOW_OVERLAY
-		// 世界位置：视空间位置回到相机相对世界坐标，再加上相机绝对位置。
-		vec3 snowWorldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz + cameraPosition;
-		// 带贴图扰动的世界法线：视空间法线转到世界。
-		vec3 snowWorldNormal = mat3(gbufferModelViewInverse) * viewNormal;
-		// 几何面世界法线：切线基第三列转到世界，用来判断面的朝向。
-		vec3 snowWorldFlatNormal = mat3(gbufferModelViewInverse) * tbnMat[2];
-		albedo.rgb = omniSnowOverlay(albedo.rgb, snowWorldPos, snowWorldNormal, snowWorldFlatNormal, blockLight.y);
 	#endif
 
 

@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.0.0-dev.144
+
+给雨点涟漪补上强度与对比两个选项。
+
+- 雨点涟漪强度 `OMNI_RAIN_RIPPLE_STRENGTH`（`shaders/effects/water/water.glsl`，默认 1.0）：雨点砸在水面与地面时涟漪的起伏高低，乘在 `GetRainNormal` 末尾的雨点法线上；对应 Eclipse `settings.glsl:369` 的 `RIPPLE_STRENGTH` 搬动幅度的大意，取值按本项目重取。
+- 雨点涟漪对比 `OMNI_RAIN_RIPPLE_CONTRAST`（默认 1.0）：对雨点法线幅度取幂、保留符号，调大亮圈更锐、圈外更平；Eclipse 没有这一项，是照本项目焦散「亮度 + 对比」的成对写法补的。
+- 积雪法线与粗糙度（`shaders/effects/weather/snow.glsl`）：从 Eclipse 引入 `snowN.png`、`snowR.png`，积雪现在同时改底色、切线空间法线与粗糙度；本项目粗糙度由平滑度平方得到，所以按平方根反推后混入，属近似移植。
+- 体积云采样数 `OMNI_CLOUD_SAMPLES`（`shaders/effects/cloud/cloud.glsl`，默认 20）：与既有的画质倍率相乘得到步数上限，默认值与移植前写死的步数逐行等价。
+- 两个选项默认都为一，乘一与取一次幂都是原样，默认画面与原来完全一致。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.143
 
 把 Eclipse 的世界空间体素反射整套搬进 Omni，并新建一张存方块颜色的体素图像。
