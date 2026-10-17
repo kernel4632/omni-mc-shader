@@ -10,11 +10,13 @@
   `vec3 blur = AxialGaussianBlur(colortex5, coord, vec2(2.0, 1.0), 0.0, originSize, vec2(1.0, 0.0), BLOOM_SIZE_LOD3, BLOOM_STEP_LOD3);`
   `color = MergeBloom(color, 1.0 - data1.a);`
 调用前提（iterationT 原样保留）：各级函数按加载器给的 `texCoord`、`pixelSize`、`screenSize` 工作；
-  `MergeBloom` 还要用到 `colortex0` 的雨遮罩、`colortex3` 的体积雾透过率与雨、雾、天气等选项，
+  `MergeBloom` 还要用到 `colortex0` 的雨遮罩、`colortex3` 的体积雾吸收（泛光引导）与雨、雾、天气等选项，
   这些选项由各自的归属效果文件定义，绘制主体负责按顺序引入。
 设计原因与取舍：
   泛光不逐像素判断阈值，而是靠一条固定的降采样升采样链把亮部扩散开，链的半径与步长全是内部常数；
   光晕按物体透明度与雾的浓淡增强，让暴雨、水下和下界雾里的亮部更明显，这是原程序的表现手法。
+  `OMNI_FOG_BLOOM` 按 Eclipse `dimensions/composite11.fsh:290-315` 的做法，用体积雾吸收作引导把光晕往雾里混，
+  让雾变柔；Eclipse 另算一条平均光晕，这里复用同一条，属近似，默认零、画面不变。
 */
 #ifndef OMNI_BLOOM_INCLUDED // 只引入一次，避免函数与内部常数重复定义。
 #define OMNI_BLOOM_INCLUDED // 置上标记。
@@ -27,6 +29,8 @@
 #define OMNI_NETHER_END_BLOOM_BOOST 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label": {"zh_cn": "体积雾散射泛光", "en_us": "Volumetric Fog Scattering Bloom"}, "description": {"zh_cn": "用体积雾的散射引导泛光，让光柱周围一起发亮。", "en_us": "Uses volumetric fog scattering to guide the glow around light shafts."}}
 #define OMNI_VFOG_BLOOM
+// @option {"label": {"zh_cn": "雾内泛光", "en_us": "Bloomy Fog"}, "slider": true, "description": {"zh_cn": "把光晕往体积雾里按雾的浓淡混进去，让雾看起来柔和、顺带盖住一点噪点；零为关闭、画面不变。来源 Eclipse `lib/settings.glsl:215` 的 `BLOOMY_FOG`（原程序默认零点五）。", "en_us": "Blends the glow into volumetric fog by how thick the fog is, making it look soft and hiding a little noise; zero is off and changes nothing. From Eclipse `BLOOMY_FOG` (upstream default 0.5)."}}
+#define OMNI_FOG_BLOOM 0.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 3.0 4.0 6.0 10.0 15.0 20.0]
 // 颜色曲线、亮度与共享数学，以及做深度换算的坐标函数都要先引入。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
@@ -170,12 +174,16 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 	#endif
 	rainBloomAmount = saturate(rainBloomAmount + rainAlpha * 0.2); // 叠加雨遮罩。
 	bloomAmount = max(bloomAmount, rainBloomAmount); // 取两者较大值。
-	#if defined OMNI_VFOG && !defined OMNI_DOF // 开体积雾且没开景深时，用雾的透过率引导。
+	#if defined OMNI_VFOG && !defined OMNI_DOF // 开体积雾且没开景深时，用雾的浓淡引导。
+		float fogGuide = textureLod(colortex3, texCoord + taaJitter * 0.5, 0.0).a; // 读体积雾吸收（一减透过率），雾越浓越大。
 		#ifdef OMNI_VFOG_BLOOM // 只有开启体积雾散射泛光才处理。
-			float fogTransmittance = textureLod(colortex3, texCoord + taaJitter * 0.5, 0.0).a * bloomGuide; // 读体积雾透过率。
-			float fogBloomAmount = fsqrt(fogTransmittance); // 用近似平方根做一次曲线调整。
-			bloomAmount = max(bloomAmount, fogTransmittance); // 取两者较大值。
+			bloomAmount = max(bloomAmount, fogGuide * bloomGuide); // 只在亮的地方随雾增强。
 		#endif
+		// 雾内泛光：照 Eclipse `dimensions/composite11.fsh:314` 把光晕往雾里按雾的浓淡混，让雾变柔、盖住噪点。
+		// 近似：Eclipse 另用一条平均光晕，这里复用同一条光晕；引导取体积雾吸收，来自 Omni 的体积雾透过率。
+		float fogBloomEdge = clamp(1.0 - pow(max(abs(texCoord.x - 0.5), abs(texCoord.y - 0.5)) * 2.0, 15.0), 0.0, 1.0); // 屏幕边缘淡出掩码，照原程序的 `cdist`。
+		float fogBloomAmount = saturate(fogGuide * OMNI_FOG_BLOOM * 0.75 * (1.0 + rainStrength)) * fogBloomEdge; // 吸收乘倍率与雨天放大，再乘边缘掩码。
+		bloomAmount = max(bloomAmount, fogBloomAmount); // 并入光晕混入占比。
 	#endif
 #endif
 	#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 失明或黑暗效果时不加光晕。

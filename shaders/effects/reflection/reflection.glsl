@@ -393,13 +393,14 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 
 	#if defined OMNI_VOXEL_REFLECTION && defined IRIS_FEATURE_CUSTOM_IMAGES // 屏幕空间没命中时再用体素反射补一次。
 		if(!hit && !totalInternalReflection && isEyeInWater == 0){ // 空中且屏幕空间没命中才追踪体素。
-			vec4 voxelHit = omniVoxelReflection(worldPos, rayWorldDir, normal); // 世界空间追踪体素图。
+			vec3 voxelHitWorld; // 体素命中的相机相对世界位置，用来把反射雾的雾段算到真实命中点。
+			vec4 voxelHit = omniVoxelReflection(worldPos, rayWorldDir, normal, voxelHitWorld); // 世界空间追踪体素图。
 			if(voxelHit.a >= 0.0){ // `a` 不为负就是命中。
 				reflection = voxelHit.rgb; // 用体素里存下的方块颜色作为反射。
 				hit = true; // 当作命中几何，后面的雾按命中处理。
 				isSky = false; // 命中的不是天空。
 				hitDist = voxelHit.a; // 归一化命中距离，供反射滤波使用。
-				screenPos = vec3(texCoord, gbufferdepth); // 雾段按当前像素算距离，等效于不给体素反射补反射雾。
+				screenPos = ScreenPos_From_ViewPos(mat3(gbufferModelView) * voxelHitWorld); // 把命中点投回屏幕，反射雾、地表散射与雾照明就按这段距离罩住体素反射，而不是当成零长度。
 			}
 		}
 	#endif

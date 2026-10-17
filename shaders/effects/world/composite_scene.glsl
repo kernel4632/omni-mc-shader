@@ -277,15 +277,15 @@ void CompositeSceneColor(){
 		compositeOutput1 = vec4(color.rgb, 0.0); // 否则透明通道留零。
 	#endif
 
-	#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE || (defined OMNI_VFOG && defined OMNI_VFOG_BLOOM && !defined OMNI_DOF)
+	#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE || (defined OMNI_VFOG && !defined OMNI_DOF)
 		compositeOutput3 = vec4(0.0); // 默认没有镜头光斑。
 
 		#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE
 			if (sunVisibility > 0.0 && isEyeInWater == 0) compositeOutput3.rgb = LensFlare(); // 看得到太阳时画眩光与光斑。
 		#endif
 
-		#if defined OMNI_VFOG && defined OMNI_VFOG_BLOOM && !defined OMNI_DOF
-			compositeOutput3.a = 1.0 - fogTransmittance; // 体积雾泛光引导存进透明通道。
+		#if defined OMNI_VFOG && !defined OMNI_DOF
+			compositeOutput3.a = 1.0 - fogTransmittance; // 体积雾吸收（泛光引导）存进透明通道，供泛光合并读取。
 		#endif
 	#endif
 }

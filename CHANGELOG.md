@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.0.0-dev.152
+
+体素反射补三项细节，并补上雾内泛光选项，默认画面不变。
+
+- 反射雾（`shaders/effects/reflection/voxel.glsl`、`reflection.glsl`）：体素反射命中的真实世界点回传给合成阶段，因此能走既有的反射雾、地表散射与雾照明通路。
+- 铁块镜面（`shaders/block.properties`）：按 Eclipse 给铁块登记编号，追踪撞到时按进入面法线弹开继续追，最多四次。
+- 彩色水（`shaders/effects/reflection/voxel.glsl`）：半透明方块按自身底色归一化出的色相染色，水按生物群系水色偏蓝或偏绿。
+- 雾内泛光 `OMNI_FOG_BLOOM`（`shaders/effects/bloom.glsl`、`composite_scene.glsl`、`rendering/composite.glsl`，默认 0）：把光晕按雾的浓淡混进体积雾，Eclipse 原默认 0.5，本项取零以保持默认画面；同时把「体积雾吸收」写进三号画面透明通道，不再只在开散射泛光时才写。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.151
 
 把 Eclipse 的自发光矿石与自发光纹饰合并进来，各做成一个独立开关，照 Eclipse 补齐 `docs/eclipse-parity.md` 记的缺口。
