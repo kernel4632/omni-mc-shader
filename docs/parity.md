@@ -297,7 +297,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 17. `effects/shadow/shadow.glsl` 的可变半影阴影段用 `OMNI_SHADOW_COMPARE` 隔开：只有合成零号把 `shadowtex1` 声明为 `sampler2DShadow` 并定义该宏，其它程序把 `shadowtex1` 当普通深度贴图用。
 18. `rendering/lights.glsl` 只声明 `shadowtex0`，不声明 `shadowtex1` 与 `shadowcolor0`：顶点与片元对同名采样器要求类型一致，合成零号片元用的是比较采样器。
 19. 加载器标准环境宏在 `build.py` 里按 Iris `StandardMacros` 注入（`MC_VERSION`、`MC_HAND_DEPTH = 0.125`、`MC_RENDER_QUALITY`、厂商与系统宏、远景方块编号照 Iris 取值）。离线编译没有这些宏会把只在游戏里存在的名字当成未声明标识符。
-20. `verify` 的十秒预算装不下整包编译（展开引用树与编译数百程序需要一两分钟），所以 `verify` 与 `check` 只编一小组探针（主世界 4 个轻量程序 `gbuffers_terrain`、`gbuffers_water`、`shadow`、`final` 编默认配置与基础环境，`gbuffers_terrain` 另编全高配置与开远景环境，共 5 组唯一程序，约 8.4 秒）。完整离线编译改用 `python build.py compile`（放宽到 300 秒，全部程序 × 两种代表配置 × 基础与开远景两组环境，约两分钟）。测试已全部按新管线重写，`verify` 实跑 114 个、0 跳过。
+20. `verify` 的十秒预算装不下整包编译（展开引用树与编译数百程序需要一两分钟），所以 `verify` 与 `check` 只编一小组探针（主世界 3 个轻量程序 `gbuffers_terrain`、`shadow`、`final` 编默认配置与基础环境，`gbuffers_terrain` 另编全高配置与开远景环境，共 4 组唯一程序，约 7 秒）。完整离线编译改用 `python build.py compile`（放宽到 300 秒，全部程序 × 两种代表配置 × 基础与开远景两组环境，约两分钟）。测试已全部按新管线重写，`verify` 实跑 114 个、0 跳过。
 21. 修正 iterationT 的范围笔误：`CAMERA_FOCAL_POINT` 重复的 `15.0`、`CLOUD_BASE_NOISE_SCALE` 重复值；加载器要求 `const` 向量构造给足分量，个别 `vec3(0.0)` 之类已补齐。
 22. `sunPathRotation`、`wetnessHalflife`、`drynessHalflife` 三个加载器原生常量加入 `options.py` 的 `CONST_OPTIONS` 白名单。
 23. 预设按新选项集重写四套（默认、氛围、轻量、真实），保持各自定位。

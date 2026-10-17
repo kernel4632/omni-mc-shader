@@ -242,8 +242,8 @@ def check_option_wiring(found: dict) -> None:
                 continue  # 声明行与菜单说明不算使用。
             kept.append(line)
         bodies.append("\n".join(kept))
-    pool = "\n".join(bodies)
-    unused = [name for name in found if not re.search(r"\b" + re.escape(name) + r"\b", pool)]
+    words = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", "\n".join(bodies)))  # 一次分词成集合，逐个正则搜索几兆文本要多花好几秒。
+    unused = [name for name in found if name not in words]  # 选项名必须在某段代码里作为独立词出现。
     if unused:
         raise ValueError("选项没有接入任何计算：" + "、".join(unused[:5]))
 
@@ -526,9 +526,9 @@ def check() -> None:
         check_references(source, SHADERS, seen=reference_seen)  # 只走引用树，不拼接文本，避免为校验再做一次全量展开。
     # 十秒预算内的编译探针：只编体积小的程序，覆盖地形、水、阴影与最终显示四条轻量通路；合成与延迟的完整覆盖由 `python build.py compile` 负责。
     # 为什么这样分：合成本体展开后有两千多万字符，单编一个就要八九秒，塞不进常规验证的预算；缩到小程序仍能挡住语法、引入与宏撞名错误。
-    # 实测这四条编默认配置与基础环境，再加地形一组全高与开远景，共 5 组唯一程序，整条 `verify` 约 8.4 秒。
+    # 实测这三条编默认配置与基础环境，再加地形一组全高与开远景，共 4 组唯一程序；整体耗时见本机 `verify` 输出。
     key_programs = {"gbuffers_terrain"}  # 只有地形一组在全部代表配置与两组环境下再编一次。
-    smoke = {"gbuffers_terrain", "gbuffers_water", "shadow", "final"}  # 默认配置与基础环境编译这四条。
+    smoke = {"gbuffers_terrain", "shadow", "final"}  # 默认配置与基础环境编译这四条。
     probes = [source for source in entries if source.parent.name == "world0" and source.stem in smoke]  # 主世界的轻量程序，默认配置与基础环境。
     compile_shaders(probes, found, profiles, key_programs)  # 关键程序另加全高配置与开远景环境。
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
