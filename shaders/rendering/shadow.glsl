@@ -47,6 +47,8 @@ vec3 shadowVector; // 视空间阳光方向。
 #include "/effects/shadow/shadow.glsl"
 // 光传播体积：提供体素编号映射与写体素图的函数，选项关闭或缺能力时整段不编译。
 #include "/effects/lighting/lpv.glsl"
+// 体素反射：提供把方块底色写进体素颜色图的函数，选项关闭或缺能力时整段不编译；它复用上面的体积坐标。
+#include "/effects/reflection/voxel.glsl"
 #ifdef OMNI_FRAGMENT
 	// 远景阴影淡入要用的 `DHShadowChunkFading`；它用到片元专用的 `discard` 与蓝噪声，所以只在片元阶段引入。
 	#include "/effects/world/world.glsl"
@@ -62,6 +64,10 @@ out float tilted; // 是否是倾斜面，用来判断背面丢弃。
 #ifdef OMNI_DH_SHADOW_PASS
 	out vec3 viewPos; // 远景阴影要带视空间位置做剔除。
 #endif
+#if defined(OMNI_VOXEL_REFLECTION) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+	flat out ivec3 omniVoxelColorCoord; // 这个顶点所属体素格的坐标，交给片元写颜色缓冲。
+	flat out float omniVoxelColorWrite; // 是否要写颜色缓冲；非地形与远景阴影保持零，片元据此跳过。
+#endif
 
 #ifndef OMNI_DH_SHADOW_PASS
 	// 方块实体编号：判定水、冰与植物。
@@ -70,8 +76,8 @@ out float tilted; // 是否是倾斜面，用来判断背面丢弃。
 		// 方块纹理坐标中点：判断植物哪一半顶点会摆。
 		attribute vec4 mc_midTexCoord;
 	#endif
-	#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
-		// 方块中心相对顶点的偏移：把火把、花这类小模型对齐到正确的整格，体素才填得准。
+	#if (defined OMNI_LPV_ENABLED || defined OMNI_VOXEL_REFLECTION) && defined IRIS_FEATURE_CUSTOM_IMAGES
+		// 方块中心相对顶点的偏移：把火把、花这类小模型对齐到正确的整格，体素才填得准；体积光与体素反射都要它。
 		attribute vec3 at_midBlock;
 	#endif
 #endif
@@ -90,12 +96,21 @@ void main(){
 
 	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到阴影相机视空间。
 
-	#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
+	#if defined(OMNI_VOXEL_REFLECTION) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+		omniVoxelColorCoord = ivec3(0); // 默认不写颜色；远景阴影与末地没有体素反射，保持零即可。
+		omniVoxelColorWrite = 0.0; // 默认关闭颜色写入，只有地形才打开。
+	#endif
+
+	#if (defined OMNI_LPV_ENABLED || defined OMNI_VOXEL_REFLECTION) && defined IRIS_FEATURE_CUSTOM_IMAGES
 	#if !defined OMNI_DH_SHADOW_PASS && !defined OMNI_END
 		// 光传播体积：地形写体素；顶点代表方块的一个角，加上方块中心偏移后落到该方块所属的整格，整块六个面写到同一格。
 		if (entityId == 0){
 			vec3 voxelPos = (shadowModelViewInverse * v_viewPos).xyz + at_midBlock / 64.0; // 相机相对世界位置加中心偏移。
 			omniVoxelStore(omniVoxelIndex(voxelPos), omniVoxelBlockId(mc_Entity.x)); // 写进体素图，越界自动丢弃。
+			#if defined(OMNI_VOXEL_REFLECTION)
+				omniVoxelColorCoord = omniVoxelIndex(voxelPos); // 记下体素坐标，片元用采样到的贴图色写这一格。
+				omniVoxelColorWrite = 1.0; // 标记这一格要写颜色。
+			#endif
 		}
 		#ifdef OMNI_LPV_ENTITY_LIGHTS
 		else {
@@ -193,6 +208,11 @@ in vec3 normal; // 视空间法线。
 in vec2 blockLight; // 方块光与天光。
 in float tilted; // 是否是倾斜面。
 
+#if defined(OMNI_VOXEL_REFLECTION) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+	flat in ivec3 omniVoxelColorCoord; // 顶点算出的体素坐标，用来定位要写颜色的那一格。
+	flat in float omniVoxelColorWrite; // 顶点标记是否要写颜色，非地形为零。
+#endif
+
 #ifdef OMNI_DH_SHADOW_PASS
 	uniform mat4 shadowProjectionInverse; // 阴影投影的逆矩阵，把像素解回视空间。
 
@@ -255,6 +275,10 @@ void main(){
 	if (!gl_FrontFacing && tilted == 0.0) texel.rgb = vec3(0.0); // 背面且不是倾斜面时不算阴影色，避免背面漏色。
 
 	vec3 shadowNormal = normal.xyz; // 阴影法线。
+
+	#if defined(OMNI_VOXEL_REFLECTION) && !defined(OMNI_DH_SHADOW_PASS) && !defined(OMNI_END) && !defined(OMNI_NETHER) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+		if (omniVoxelColorWrite > 0.5) omniVoxelColorStore(omniVoxelColorCoord, texel.rgb, blockLight); // 把这一格的底色与光照写进体素颜色图。
+	#endif
 
 	gl_FragData[0] = texel; // 零号阴影颜色。
 	gl_FragData[1] = vec4(shadowNormal.xyz * 0.5 + 0.5, blockLight.y); // 一号阴影法线与天光。

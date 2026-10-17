@@ -1,5 +1,19 @@
 # 更新记录
 
+## 0.0.0-dev.143
+
+把 Eclipse 的世界空间体素反射整套搬进 Omni，并新建一张存方块颜色的体素图像。
+
+- 体素颜色缓冲（`shaders/rendering/pipeline.properties`、`shaders/effects/reflection/voxel.glsl`）：新增自定义三维图像 `omniVoxelColor`，每格存一份方块底色（贴图色乘顶点染色）与打包光照（高四位方块光、低四位天光）。对比 Eclipse 原程序把每格六份方块颜色存进一张 SSBO（`lib/specular.glsl` 的 `voxelSSBO`，原程序已整体注释），本项目只存一份，显存占用低得多。体素编号图（`omniLpvVoxel`）原来只在开启体积光时分配，现改为体积光或体素反射任一开启就分配，并给它加了采样器名 `omniLpvVoxelTex` 供合成阶段读取。
+- 体素写入（`shaders/rendering/shadow.glsl`）：阴影顶点阶段算出体素坐标并用 flat 变量传给片元，片元用采到的方块贴图色与光照调用 `omniVoxelColorStore` 写进颜色图；与编号图同一套下标，只在主世界近景地形写。
+- 体素反射（`shaders/effects/reflection/voxel.glsl`）：沿反射方向在世界空间逐格步进（撞到实心方块就停），命中方块用它存下的底色与光照着色。水、冰、玻璃按半透明处理，只给后面的画面染色后继续走；植物不挡光直接穿过。来源 Eclipse `lib/specular.glsl:616` 的 `voxelReflection`（`VOXEL_REFLECTIONS_SOLID`/`VOXEL_REFLECTIONS_TRANSLUCENT`），改用本项目自己的体素图，不依赖任何模组。
+- 接线（`shaders/effects/reflection/reflection.glsl`）：主世界合成二号里，屏幕空间反射没命中的像素再用体素反射补一次；命中就当作实心几何，不再取天空回退。
+- 新选项：`OMNI_VOXEL_REFLECTION`（默认关）、`OMNI_VOXEL_REFLECTION_DISTANCE`（32/48/64/96，默认 64）、`OMNI_VOXEL_REFLECTION_STRENGTH`（默认 1.0），页面「反射」的子页「体素反射」。
+- 近似与边界：直射光只按体素面朝太阳的余弦算，不查阴影图，阴影里的方块反射会偏亮；体素反射不叠加反射雾；缺计算能力或自定义图像能力时整段不编译，默认关闭时画面与原来完全一致。
+- 差异说明（记入 `docs/eclipse-parity.md` 的「体素反射与模组支持」行）：Eclipse 的体素反射依赖 Photonics 模组的 `trace_wsr`，本项目按「不为特定模组编写专用适配」重做成自成一体的实现，能力等价但不含模组专用的彩色水与半透明叠加。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.142
 
 补全 Eclipse 体积光（LPV）的四个细分项：彩色蜡烛、实体光源、雾照明与手持光阴影强度和质量。

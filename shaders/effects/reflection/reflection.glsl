@@ -51,6 +51,8 @@
 #include "/effects/fog/fog.glsl"
 
 #if !defined OMNI_NETHER && !defined OMNI_END // 主世界才用天空盒回退；下界用 `NetherFog`，末地用末地天空。
+// 体素反射：屏幕空间没命中时改在体素图上追踪，提供选项、体素颜色图取样与 `omniVoxelReflection`。
+#include "/effects/reflection/voxel.glsl"
 // 如果屏幕追踪没命中，就用上半屏的天空盒图当反射：把反射方向投到天空盒坐标再取色。
 // 为什么单列一个函数：屏幕内没有内容时天空是唯一的反射源，缺了它反射处会变成黑洞。
 // 调用前提：`colortex2`、`worldMoonVector`、`colorMoonlight`、`isEyeInWater` 已由合成主程序声明。
@@ -383,10 +385,23 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 		}
 	}
 
-	#ifdef OMNI_MOON_TEXTURE // 用月亮贴图时高光偏月光，否则偏当前直射光。
+	#if defined OMNI_MOON_TEXTURE // 用月亮贴图时高光偏月光，否则偏当前直射光。
 		reflection += colorSunlight * highlightGGX; // 叠加太阳高光。
 	#else
 		reflection += colorShadowlight * highlightGGX; // 叠加直射高光。
+	#endif
+
+	#if defined OMNI_VOXEL_REFLECTION && defined IRIS_FEATURE_CUSTOM_IMAGES // 屏幕空间没命中时再用体素反射补一次。
+		if(!hit && !totalInternalReflection && isEyeInWater == 0){ // 空中且屏幕空间没命中才追踪体素。
+			vec4 voxelHit = omniVoxelReflection(worldPos, rayWorldDir, normal); // 世界空间追踪体素图。
+			if(voxelHit.a >= 0.0){ // `a` 不为负就是命中。
+				reflection = voxelHit.rgb; // 用体素里存下的方块颜色作为反射。
+				hit = true; // 当作命中几何，后面的雾按命中处理。
+				isSky = false; // 命中的不是天空。
+				hitDist = voxelHit.a; // 归一化命中距离，供反射滤波使用。
+				screenPos = vec3(texCoord, gbufferdepth); // 雾段按当前像素算距离，等效于不给体素反射补反射雾。
+			}
+		}
 	#endif
 
 

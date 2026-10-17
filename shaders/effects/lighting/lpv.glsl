@@ -162,7 +162,8 @@ vec3 omniLpvApply(vec3 blockLight, vec3 playerPos, vec3 worldNormal){
 
 // ========================= 顶点写体素：阴影顶点阶段把方块编号写进体素图 =========================
 // 只在阴影顶点阶段编译；远景阴影不写，因为它的几何和近景阴影不同源。
-#if !defined(OMNI_COMPUTE) && defined(OMNI_VERTEX) && defined(OMNI_SHADOW_PASS) && !defined(OMNI_DH_SHADOW_PASS) && defined(OMNI_LPV_ENABLED) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+// 为什么同时接受体积光与体素反射两个开关：编号图是两者共用的，谁打开都要有这张图，缺一就补不了。
+#if !defined(OMNI_COMPUTE) && defined(OMNI_VERTEX) && defined(OMNI_SHADOW_PASS) && !defined(OMNI_DH_SHADOW_PASS) && (defined(OMNI_LPV_ENABLED) || defined(OMNI_VOXEL_REFLECTION)) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
 layout(r16ui) uniform restrict uimage3D omniLpvVoxel; // 体素编号图，阴影顶点写、计算只读。
 // 把方块编号写进对应体素格，越界丢弃；照 Eclipse `SetVoxelBlock`。
 void omniVoxelStore(ivec3 coord, uint blockId){
