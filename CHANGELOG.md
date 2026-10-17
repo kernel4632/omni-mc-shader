@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.0.0-dev.156
+
+程序化草照 Eclipse 补齐「仅矮草」档、两套高度与邻接压低三项，默认画面不变。
+
+- 替换原版矮草 `OMNI_REPLACE_SHORT_GRASS` 由「否/是」两档扩为「否/是/仅矮草」三档（`shaders/effects/ground/grass.glsl`）：仅矮草档只把原版矮草换成程序化草、草方块顶面不长草；生长来源改由 `effects/ground/grass_geometry.glsl` 按矮草方块编号 12 判断。
+- 两套高度：`OMNI_GRASS_BASE_HEIGHT`（普通草高度）与 `OMNI_GRASS_SHORT_HEIGHT`（被替换矮草处的草高度），对应 Eclipse `BASE_GRASS_HEIGHT`/`SHORT_GRASS_HEIGHT`；原 `OMNI_GRASS_HEIGHT` 由 `config.py` 迁移为普通草高度（旧的 1.5、2.0 收到上限 1.0，不再报错）。
+- 邻接压低：`OMNI_GRASS_DETECT_FALLOFF`（临台阶的一侧压低草叶）与 `OMNI_GRASS_DETECT_INV_FALLOFF`（旁边是草或矮草时抬高），对应 Eclipse `GRASS_DETECT_FALLOFF`/`GRASS_DETECT_INV_FALLOFF`，都默认开；高度公式照 Eclipse `all_solid.gsh:276` 的 `totalHeightMult`。
+- 近似：本项目几何阶段没有体素缓冲，仅矮草档改成直接按矮草方块自己的三角形生长，同一方块会被几个三角形各长一次、叠加在同一处；邻接检测仍走上一帧九号画面，无法区分空气与未记录。
+- 差异说明记入 `docs/eclipse-parity.md` 的「程序化草」行：三项由未搬改为已合并。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.155
 
 补齐雾内泛光的水下分支：照 Eclipse `UNDERWATER_BLOOMY_FOG` 让水下浑水也有柔光。

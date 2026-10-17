@@ -583,10 +583,17 @@ class EffectTests(unittest.TestCase):
         """程序化草默认关闭且只在主世界编译；地形写九号方块编号缓冲，草阶段按世界坐标查询。"""
         found, _, _ = support.configuration()  # 真实选项。
         self.assertEqual(found["OMNI_SHADER_GRASS"].default, "false")  # 默认关闭，默认画面不变。
+        self.assertEqual(found["OMNI_REPLACE_SHORT_GRASS"].values, ("0", "1", "2"))  # 替换矮草有否/是/仅矮草三档。
+        for name in ("OMNI_GRASS_BASE_HEIGHT", "OMNI_GRASS_SHORT_HEIGHT", "OMNI_GRASS_DETECT_FALLOFF", "OMNI_GRASS_DETECT_INV_FALLOFF"):
+            self.assertIn(name, found)  # 两套高度与邻接检测都来自草效果源码。
         grass = support.text("effects/ground/grass.glsl")  # 草效果主体。
         self.assertIn("omniGrassWindOffset", grass)  # 摆动独立成函数。
         self.assertIn("omniGrassBlockAt", grass)  # 方块编号查询独立成函数。
         self.assertIn("//#define OMNI_SHADER_GRASS", grass)  # 关闭是唯一默认。
+        geometry = support.text("effects/ground/grass_geometry.glsl")  # 草几何主体。
+        self.assertIn("OMNI_GRASS_DETECT_FALLOFF", geometry)  # 底部检测参与高度。
+        self.assertIn("OMNI_GRASS_DETECT_INV_FALLOFF", geometry)  # 侧向检测参与高度。
+        self.assertIn("OMNI_SHORT_GRASS_BLOCK_ID", geometry)  # 仅矮草档按矮草方块生长。
         terrain = support.text("rendering/terrain.glsl")  # 地形主体。
         self.assertIn('/effects/ground/grass.glsl"', terrain)  # 地形引入草效果。
         self.assertIn("#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD", terrain)  # 只在主世界且开启时编译。

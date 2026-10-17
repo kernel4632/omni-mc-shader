@@ -16,6 +16,9 @@
   所以矮草编号取 Eclipse 同款的 12，而不是植物用的 7000 以上编号段。
   草叶只在主世界编译，且只在 `OMNI_SHADER_GRASS` 打开时参与；关闭时本文件不产生任何代码与采样。
   隔壁方块查询走九号画面（上一帧内容）：几何阶段拿不到邻接关系，只能按世界坐标投影到屏幕再取记录。
+  照 Eclipse 补齐三处：替换原版矮草的「仅矮草」第三档（只把矮草换成草，草方块顶面不长）、
+  两套高度 `OMNI_GRASS_BASE_HEIGHT`/`OMNI_GRASS_SHORT_HEIGHT`（普通草与矮草处分开调），
+  以及邻接压低 `OMNI_GRASS_DETECT_FALLOFF`/`OMNI_GRASS_DETECT_INV_FALLOFF`（临台阶压低、旁边有草抬高）。
 */
 
 #ifndef OMNI_GRASS_INCLUDED // 只引入一次，避免选项与函数重复定义。
@@ -29,16 +32,22 @@
 #define OMNI_GRASS_DENSITY 1 // [0 1 2 3]
 // @option {"label":{"zh_cn":"草丛范围","en_us":"Grass range"},"slider":true,"description":{"zh_cn":"草丛在玩家周围多大范围内出现，越大越耗性能。","en_us":"How far around the player blades appear; larger costs more."}}
 #define OMNI_GRASS_RANGE 12.0 // [6.0 8.0 10.0 12.0 16.0 24.0]
-// @option {"label":{"zh_cn":"草丛高度","en_us":"Grass height"},"slider":true,"description":{"zh_cn":"草叶长多高，一为默认高度。","en_us":"How tall the blades grow; one is the default."}}
-#define OMNI_GRASS_HEIGHT 1.0 // [0.5 0.75 1.0 1.5 2.0]
+// @option {"label":{"zh_cn":"普通草高度","en_us":"Grass base height"},"slider":true,"description":{"zh_cn":"长在草方块上的草丛高度，一为默认；草场中央会被抬高、临台阶的一侧会压低，见下面的邻接检测。来源 Eclipse `BASE_GRASS_HEIGHT`。","en_us":"Height of grass on grass blocks; one is default. Blades get taller in the middle of a field and shorter by steps, see the neighbour detection below. From Eclipse `BASE_GRASS_HEIGHT`."}}
+#define OMNI_GRASS_BASE_HEIGHT 1.0 // [0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95 1.0]
+// @option {"label":{"zh_cn":"矮草高度","en_us":"Short grass height"},"slider":true,"description":{"zh_cn":"被替换的原版矮草处长出的草丛高度，一为默认。来源 Eclipse `SHORT_GRASS_HEIGHT`。","en_us":"Height of the grass that stands in for the replaced vanilla short grass; one is default. From Eclipse `SHORT_GRASS_HEIGHT`."}}
+#define OMNI_GRASS_SHORT_HEIGHT 1.0 // [0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95 1.0]
 // @option {"label":{"zh_cn":"草丛摆动速度","en_us":"Grass sway speed"},"slider":true,"description":{"zh_cn":"风把草丛吹得多快。","en_us":"How fast the wind moves the blades."}}
 #define OMNI_GRASS_WAVY_SPEED 1.0 // [0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"草丛摆动幅度","en_us":"Grass sway amount"},"slider":true,"description":{"zh_cn":"草叶被风吹弯多少，零为完全不动。","en_us":"How far the blades bend in the wind; zero is still."}}
 #define OMNI_GRASS_WAVY_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
 // @option {"label":{"zh_cn":"草丛随机弯曲","en_us":"Grass randomness"},"slider":true,"description":{"zh_cn":"每片草叶各自弯折的幅度，越大越杂乱，零为整齐笔直；旧版内部常数为零点二二，这里取最近的零点二。","en_us":"How much each blade bends on its own; larger is messier, zero is straight."}}
 #define OMNI_GRASS_RANDOMNESS 0.2 // [0.0 0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95 1.0]
-// @option {"label":{"zh_cn":"替换原版矮草","en_us":"Replace vanilla short grass"},"description":{"zh_cn":"隐藏范围内的原版矮草，改用上面的程序化草代替；关时原版矮草不变。","en_us":"Hides vanilla short grass within range and lets the blades above stand in; off keeps vanilla short grass."},"values":{"0":{"zh_cn":"否","en_us":"Off"},"1":{"zh_cn":"是","en_us":"On"}}}
-#define OMNI_REPLACE_SHORT_GRASS 0 // [0 1]
+// @option {"label":{"zh_cn":"替换原版矮草","en_us":"Replace vanilla short grass"},"description":{"zh_cn":"否：原版矮草照旧；是：隐藏范围内的原版矮草，草方块顶面照常长草；仅矮草：只把原版矮草换成程序化草，草方块顶面不长。","en_us":"Off keeps vanilla short grass; On hides it within range and grows grass on grass blocks; Short grass only replaces just the vanilla short grass with blades and leaves grass blocks bare."},"values":{"0":{"zh_cn":"否","en_us":"Off"},"1":{"zh_cn":"是","en_us":"On"},"2":{"zh_cn":"仅矮草","en_us":"Short grass only"}}}
+#define OMNI_REPLACE_SHORT_GRASS 0 // [0 1 2]
+// @option {"label":{"zh_cn":"草底部检测","en_us":"Grass edge detection"},"description":{"zh_cn":"草丛紧挨台阶或落差的一侧会压低草叶，避免越过隔壁地面；关时四周一样高。来源 Eclipse `GRASS_DETECT_FALLOFF`。","en_us":"Lowers blades on the side of a step or drop-off so they do not spill over the edge; off keeps all sides equal. From Eclipse `GRASS_DETECT_FALLOFF`."}}
+#define OMNI_GRASS_DETECT_FALLOFF
+// @option {"label":{"zh_cn":"草侧向检测","en_us":"Grass side detection"},"description":{"zh_cn":"草丛旁边也是草或矮草时把草叶抬高，草场中央因此更高；关时只保留底部检测的压低。来源 Eclipse `GRASS_DETECT_INV_FALLOFF`。","en_us":"Raises blades when a neighbour is grass or short grass, so the middle of a field is taller; off keeps only the edge lowering. From Eclipse `GRASS_DETECT_INV_FALLOFF`."}}
+#define OMNI_GRASS_DETECT_INV_FALLOFF
 // 草方块编号：本项目的 `block.properties` 把草方块编号定为八十五，与 Eclipse 一致。
 // 为什么用八十五：Eclipse 的草方块就是八十五，沿用同一个数字便于和参考对照。
 #define OMNI_GRASS_BLOCK_ID 85.0 // 草方块编号，几何阶段按它挑出草方块顶面。

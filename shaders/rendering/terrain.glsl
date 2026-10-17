@@ -161,7 +161,8 @@ void main(){
 	#endif
 
 	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD && OMNI_REPLACE_SHORT_GRASS
-		// 替换原版矮草：范围内的矮草三个顶点塌到同一点，退化三角形不产生片元，等于隐藏原版模型。
+		// 替换原版矮草（「是」与「仅矮草」两档都走这里）：范围内的矮草三个顶点塌到同一点，
+		// 退化三角形不产生片元，等于隐藏原版模型；仅矮草档随后在几何阶段用同一方块的 `v_blockCenter` 长出新草。
 		if (mc_Entity.x == OMNI_SHORT_GRASS_BLOCK_ID && length(worldPos.xyz) < OMNI_GRASS_RANGE){
 			gl_Position = vec4(0.0, 0.0, 0.0, 1.0); // 三个顶点落到同一处，三角形退化被剔除。
 		}

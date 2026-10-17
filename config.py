@@ -74,6 +74,7 @@ OPTION_RENAMES = {  # 保留历史名称对照；旧配置按新名迁移，移�
     "OMNI_PC_NOISE_SCALE": "OMNI_PLANAR_NOISE_SCALE",  # 旧名迁移到新名：同上。
     "OMNI_PC_ALTITUDE": "OMNI_PLANAR_ALTITUDE",  # 旧名迁移到新名：同上。
     "OMNI_FTC_OFFSET": "OMNI_CLOUD_TIME_OFFSET",  # 旧名迁移到新名：把自造缩写 `FTC` 换成普通词 `CLOUD_TIME`。
+    "OMNI_GRASS_HEIGHT": "OMNI_GRASS_BASE_HEIGHT",  # 单一草丛高度拆成普通草与矮草两套，旧名并入普通草高度。
 }
 
 
@@ -181,6 +182,7 @@ def shared(source: Path, found: dict[str, "options.Option"], shader_version: str
 
 VALUE_RENAMES = {  # 选项从开关改成多档时，旧配置里的真假值要换成对应档位，否则导入会当作非法取值被拒。
     "OMNI_CLOUD_CUMULONIMBUS": {"true": "1", "false": "0"},  # 积雨云由开关改成关/中/强三档：开着对应中档，关着仍是关。
+    "OMNI_GRASS_BASE_HEIGHT": {"1.5": "1.0", "2.0": "1.0"},  # 草丛高度改按 Eclipse 的普通草高度取 0.5–1.0，旧的超高取值收到上限而不是报错。
 }
 REMOVED_OPTIONS = {  # 被新算法整体替换、已无对应计算的选项：导入时忽略并提示，不让旧配置直接报未知选项。
     "OMNI_LPV_STEPS": "简易体积光的步数被 Eclipse 的彩色光传播体积整体替换（见 CHANGELOG 的 dev.141）。",

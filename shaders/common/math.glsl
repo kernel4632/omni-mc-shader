@@ -37,7 +37,7 @@
 #define goldenAngle  2.39996322973 // 黄金角，螺旋采样用。
 
 // --- 常用小工具宏 ---
-#define min3(a, b, c)                   min(a, min(b, c)) // 三个数取最小。
+// 原程序还有 `min3`，本项目没有一处调用，按“不留无人使用的代码”删掉，其余保持原名原样。
 #define max3(a, b, c)                   max(a, max(b, c)) // 三个数取最大。
 #define min4(a, b, c, d)                min(min(a, b), min(c, d)) // 四个数取最小。
 #define max4(a, b, c, d)                max(max(a, b), max(c, d)) // 四个数取最大。
