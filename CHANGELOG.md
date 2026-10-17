@@ -1,5 +1,14 @@
 # 更新记录
 
+## 0.0.0-dev.157
+
+水洼照 Eclipse 补齐法线压平，与已有的粗糙度改写、反照率压暗凑齐 `applyPuddles` 三步，默认画面不变。
+
+- 法线压平（`shaders/effects/water/puddle.glsl`、`shaders/effects/lighting/composite_surface.glsl`）：`OmniPuddleSurface` 增加 `worldNormal` 参数，照 Eclipse `dimensions/composite1.fsh:926` 的 `normals = mix(normals, flatNormals, wetnessStages * clamp(flatNormals.y,0,1))` 把水洼处法线拉平，只在「仅水洼」（`OMNI_PUDDLE_MODE == 2`）里执行，默认模式一不跑、画面不变。
+- 为什么拉向世界上方：合成阶段读回的是压平后的表面法线，没有单独的几何法线，而 Eclipse 的权重只让朝上的面被压平，此时几何法线接近世界上方，属这一情形下的等价近似，差异记入文件头与 `docs/eclipse-parity.md`。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.156
 
 程序化草照 Eclipse 补齐「仅矮草」档、两套高度与邻接压低三项，默认画面不变。

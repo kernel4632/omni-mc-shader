@@ -71,7 +71,7 @@ void CompositeSurfaceLighting(){
 			// 手、玩家与各种实体不做水洼，照 Eclipse 的 `!hand && !entities`；水与冰在半透明层，不在这个分支里。
 			bool isPuddleBlocked = materialMaskSolid.hand + materialMaskSolid.entityPlayer + materialMaskSolid.entitiesLitHigh + materialMaskSolid.entitiesLitMedium + materialMaskSolid.entitiesLitLow + materialMaskSolid.entitiesSnow > 0.5; // 是否是要排除的实体面。
 			if (!isPuddleBlocked)
-				OmniPuddleSurface(gbuffer.albedo, gbuffer.material.roughness, gbuffer.material.f0, gbuffer.lightmapL.g, worldPos); // 用 `OMNI_PUDDLE_SIZE` 决定的水洼覆盖改写水洼表面的粗糙度与底色。
+				OmniPuddleSurface(worldNormal, gbuffer.albedo, gbuffer.material.roughness, gbuffer.material.f0, gbuffer.lightmapL.g, worldPos); // 用 `OMNI_PUDDLE_SIZE` 决定的水洼覆盖改写水洼表面的法线、粗糙度与底色。
 		#endif // 默认模式一不执行，画面与原来一致。
 
 		#ifdef DISTANT_HORIZONS
