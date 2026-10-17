@@ -150,7 +150,8 @@ void CompositeSceneColor(){
 			TorchSpecularHighlight(color, viewPos, viewDir, waterDist, gbuffer.albedo, gbuffer.normalW, gbuffer.material); // 手持光高光。
 	#endif
 
-	color += EndFog(waterDist, worldDir); // 末地整条视线的雾。
+	vec4 endFog = EndFogWithTransmittance(waterDist, worldDir); // 末地整条视线的雾散射色与剩余透射率。
+	color = color * endFog.a + endFog.rgb; // 先按透射率把被雾挡住的背景压暗，再叠雾散射；涡旋雾关闭时透射率为一，画面不变。
 
 	VanillaFog(color, waterDist); // 原版雾、失明、黑暗、岩浆雪盲。
 

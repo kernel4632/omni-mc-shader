@@ -2,14 +2,18 @@
 末地雾：按视线方向与行星相位算出一层很淡的定向雾，并可叠一层体积涡旋雾。
 来源：解析雾照 iterationT `Lib/IndividualFounctions/EndSky.glsl` 的 `EndFog`；体积涡旋雾照 Eclipse
   `lib/end_fog.glsl`（`docs/eclipse-parity.md` 第 39 行列出的未合并项「体积末地雾（涡旋）」）。
-职责：`EndVortex*` 生成一团绕主岛旋转的浓雾、光柱与雾霭，`EndFog` 把解析雾与体积雾之和交回调用方。
-调用位置：由 `effects/world/end.glsl` 引入；合成零号、合成二号与合成五号经 `EndFog` 或 `RefractSampleOnceEnd` 调用。
-可复制示例：`color += EndFog(waterDist, worldDir);`
+职责：`EndVortex*` 生成一团绕主岛旋转的浓雾、光柱与雾霭；
+  `EndFogWithTransmittance` 把散射色与剩余透射率一起交回合成阶段，`EndFog` 只交回散射色给反射与折射。
+调用位置：由 `effects/world/end.glsl` 引入；合成五号经 `EndFogWithTransmittance` 调用，
+  末地反射与末地折射经 `EndFog` 调用。
+可复制示例：
+  `vec4 endFog = EndFogWithTransmittance(waterDist, worldDir); color = color * endFog.a + endFog.rgb;`
+  `color += EndFog(waterDist, worldDir);`
 调用前提：由 `effects/world/end.glsl` 在声明 `timeFactor`、`planetShadow` 之后引入；体积涡旋雾默认关闭，
   关闭时整段不编译，连采样都不生成。
-关键设计原因与取舍：原程序把雾烘进一张按方向采样的低分辨率雾图，本项目只在整条视线上调 `EndFog`，
-  所以这里沿视线步进并把发光颜色交给 `EndFog` 叠加；吸收率无法穿过只能加色的调用点，所以只保留发光，
-  远处的雾不会压暗背景，见函数段顶部与「存疑」说明。
+关键设计原因与取舍：原程序把雾烘进一张按方向采样的低分辨率雾图，本项目只在整条视线上调雾函数，
+  所以这里沿视线步进并把雾交回调用方；体积涡旋雾会挡住背景，需要把剩余透射率带回合成阶段，
+  而反射与折射的调用点只能加色，所以同一段雾用两个函数名区分，见末尾两个函数的说明。
 */
 #ifndef OMNI_END_FOG_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_END_FOG_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -17,13 +21,13 @@
 // --- 末地体积涡旋雾：一团绕主岛旋转的浓雾，以及雾中的光柱与雾霭 ---
 // 出处：Eclipse `lib/end_fog.glsl` 的 `densityAtPosFog`、`SwirlAroundOrigin`、`VolumeBounds`、`fogShape`、
 //   `endFogPhase`、`LightSourceLighting`、`GetVolumetricFog`；算法、常数与步进分布逐行照原程序。
-// 为什么放在这里：原程序把雾烘进一张按方向采样的低分辨率雾图；本项目只在整条视线上调 `EndFog`，
-//   所以这里从相机沿世界视线方向步进，把累加到的发光颜色交给 `EndFog` 叠到画面上。
+// 为什么放在这里：原程序把雾烘进一张按方向采样的低分辨率雾图；本项目只在整条视线上调雾函数，
+//   所以这里从相机沿世界视线方向步进，把累加到的散射色与剩余透射率交回调用方。
 // 与 Eclipse 的两处取舍：
 //   一、原程序从一张不清除的随机缓冲 `colortex4` 读雾中闪电的随机位置，并另有一处闪电强度；
 //   本项目没有这块缓冲，且原程序在不开 `END_LIGHTNING` 时整段退化为「纯涡旋」锚点，所以这里直接取纯涡旋锚点。
-//   二、原程序把雾的吸收率交回上层乘在场景上；本项目的调用点是 `color += EndFog(...)`，只能加色，
-//   所以这里只返回发光颜色，吸收只用于内部按透过率加权，远处的雾不会压暗背景（见文件头与「存疑」说明）。
+//   二、原程序把雾的吸收率交回上层乘在场景上；本项目把吸收率随返回值带回，
+//   只叠散射的调用点只用散射色，合成阶段按 `color = color * 透射率 + 散射色` 让被雾挡住的背景真正变暗。
 #ifdef OMNI_END_VORTEX_FOG // 开关关闭时整段不编译，默认画面与采样都省掉。
 
 // 读一张贴着世界坐标的三维噪声：水平切格后，用噪声贴图的上下两层按高度插值，得到雾团的颗粒。
@@ -91,9 +95,10 @@ vec3 EndVortexLighting(vec3 startPos, vec3 lightPos, float density, vec3 lightCo
 	return lighting; // 交回可直接叠加的雾内发光。
 }
 
-// 沿一条视线步进体积涡旋雾，返回叠加到画面上的发光颜色。
+// 沿一条视线步进体积涡旋雾，返回散射色与剩余透射率。
+// `rgb` 是叠加到画面上的散射色，`a` 是透过雾后剩余的透射率，供合成阶段压暗背景。
 // `worldDir` 是世界空间视线方向，`viewDist` 是这条视线到几何或远裁剪面的距离。
-vec3 EndVortexFog(vec3 worldDir, float viewDist){
+vec4 EndVortexFog(vec3 worldDir, float viewDist){
 	vec3 rayWorld = worldDir * viewDist; // 相机到视线终点的世界向量。
 	float verticalFactor = pow(abs(worldDir.y), 2.0); // 视线的竖直程度，越水平就用越远的步进距离；`worldDir` 已归一化，与原程序对射线单位向量取纵轴分量等价。
 	float rayLength = max(length(rayWorld), 1e-4); // 视线总长，下限防零长度相除。
@@ -138,13 +143,15 @@ vec3 EndVortexFog(vec3 worldDir, float viewDist){
 		vec3 hazeLighting = vec3(0.37, 0.32, 0.75) * skyPhase * 0.5; // 雾霭的冷紫散光。
 		color += (hazeLighting - hazeLighting * exp(-hazeDensity * dd * dL)) * absorbance; // 雾霭不改变透过率，只按当前透过率叠上。
 	}
-	return color * 1e-3 * OMNI_SUNLIGHT_INTENSITY; // 换算到 `EndFog` 使用的管线单位并乘阳光强度，系数为量级对齐，游戏内未校准。
+	return vec4(color * 1e-3 * OMNI_SUNLIGHT_INTENSITY, absorbance); // 散射色换算到管线单位并乘阳光强度、剩余透射率一并交回；系数为量级对齐，游戏内未校准。
 }
 #endif // 体积涡旋雾结束。
 
 // --- 末地雾：按视线方向与行星相位算出一层很淡的定向雾 ---
 // 为什么用行星相位而不是距离：末地的雾来自背景行星的散射，方向与相位决定它的浓淡。
-vec3 EndFog(float dist, vec3 worldDir){
+// 为什么返回 `vec4`：解析雾只加色不遮挡，但体积涡旋雾会挡住背景，需要把剩余透射率一起带回；
+//   所以前三分量是散射色、第四分量是剩余透射率，两种调用点各取所需。
+vec4 EndFogLayers(float dist, vec3 worldDir){
 	float VdotL = dot(worldShadowVector, worldDir); // 视线与光方向夹角余弦。
 
 	float angleX = -1.57079633 + (0.2 * sin(timeFactor + 3.0) - 0.1) - 0.008 * sin(timeFactor + 4.7); // 俯仰角，比行星多一项。
@@ -170,10 +177,25 @@ vec3 EndFog(float dist, vec3 worldDir){
 
 	vec3 fog = vec3(density * 1e-5 * OMNI_SUNLIGHT_INTENSITY); // 解析雾的贡献，换算到管线单位并乘阳光强度。
 
-	#ifdef OMNI_END_VORTEX_FOG // 打开涡旋体积雾时再沿视线叠一层发光，关闭时这一行不生成。
-		fog += EndVortexFog(worldDir, dist); // 叠加体积涡旋雾的发光颜色。
+	float transmittance = 1.0; // 解析雾只加色不遮挡，默认全透；只有体积涡旋雾会把它压下来。
+	#ifdef OMNI_END_VORTEX_FOG // 打开涡旋体积雾时再沿视线叠一层，关闭时这一行不生成，透射率保持为一。
+		vec4 vortex = EndVortexFog(worldDir, dist); // 体积涡旋雾的散射色与剩余透射率。
+		fog += vortex.rgb; // 散射色照旧叠加。
+		transmittance = vortex.a; // 交回体积雾的透射率，供合成阶段压暗背景。
 	#endif
 
-	return fog; // 交回解析雾与体积雾之和。
+	return vec4(fog, transmittance); // rgb 是散射色、a 是剩余透射率。
+}
+
+// 只叠散射的入口：末地反射与末地折射调用它，调用点是 `color += EndFog(...)`，只需要散射色。
+// 为什么保留这个形状：反射文件与末地折射文件的调用点本次不改，它们只能加色、不能乘透射率。
+vec3 EndFog(float dist, vec3 worldDir){
+	return EndFogLayers(dist, worldDir).rgb; // 丢掉透射率，只交回散射色；涡旋雾关闭时与旧行为逐位一致。
+}
+
+// 散射加透射率的入口：合成五号调用它，按 `color = color * a + rgb` 先把背景压暗再叠散射。
+// 为什么单独用一个名字：末地三个调用点同是 `(float, vec3)`，无法靠重载区分，只能各用不同函数名。
+vec4 EndFogWithTransmittance(float dist, vec3 worldDir){
+	return EndFogLayers(dist, worldDir); // 转交公共计算，散射色与透射率一并带回。
 }
 #endif // OMNI_END_FOG_INCLUDED 结束。

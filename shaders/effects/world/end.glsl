@@ -11,12 +11,12 @@
 调用位置：
   `rendering/composite.glsl` 的合成零号在末地天空像素上调用 `BlackHole_AccretionDisc_Stars` 与 `PlanetEnd2`；
   合成零号在有几何的像素上、开启 `OMNI_END_ISLAND_LIGHT` 时调用 `EndIslandLighting` 叠主岛光源；
-  合成二号在末地反射回退里调用 `BlackHole_AccretionDisc_Reflection`、`PlanetEnd2` 与 `EndFog`；
-  合成五号在末地水雾里调用 `EndFog`。
+  合成二号在末地反射回退里调用 `BlackHole_AccretionDisc_Reflection`、`PlanetEnd2` 与只叠散射的 `EndFog`；
+  合成五号在末地水雾里调用返回散射色加剩余透射率的 `EndFogWithTransmittance`。
 可复制示例：
   `BlackHole_AccretionDisc_Stars(finalComposite, worldDir, worldShadowVector);`
   `PlanetEnd2(finalComposite, vec3(0.0), worldDir, worldSunVector);`
-  `color += EndFog(waterDist, worldDir);`
+  `vec4 endFog = EndFogWithTransmittance(waterDist, worldDir); color = color * endFog.a + endFog.rgb;`
 调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明或先引入）：
   `worldSunVector`、`worldShadowVector` 是绘制主体声明的光方向全局量（合成程序里是顶点阶段传入的 `in`）；
   `frameTimeCounter`、`noisetex`、`cameraPosition` 由 `common/uniforms.glsl` 提供，`MiePhaseFunction`、`Blackbody`、
