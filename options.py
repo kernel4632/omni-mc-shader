@@ -61,6 +61,13 @@ OPTION_RENAMES = {  # 保留历史名称对照；旧配置按新名迁移，移�
     "OMNI_AUTO_EXPOSURE": "OMNI_MANUAL_EXPOSURE",  # 旧名迁移到新名。
     "OMNI_TONEMAP_MODE": "OMNI_TONEMAP_OPERATOR",  # 旧名迁移到新名。
     "OMNI_UPSCALE": "OMNI_FSR",  # 旧名迁移到新名。
+    # iterationT 自带拼写错误的选项名，导入 iterationT 配置时按这里对照迁移到正确拼写。
+    "OMNI_SEREEN_RATIO": "OMNI_SCREEN_RATIO",  # 旧名把屏幕一词拼错，按正确写法迁移。
+    "OMNI_DOF_DEPTH_SMMOOTH_HALFLIFE": "OMNI_DOF_DEPTH_SMOOTH_HALFLIFE",  # 旧名把平滑一词多写了一个字母，按正确写法迁移。
+    "OMNI_CLOUD_CLEAR_COVERY": "OMNI_CLOUD_CLEAR_COVERAGE",  # 旧名少写覆盖度一词的末尾字母，按正确写法迁移。
+    "OMNI_CLOUD_RAIN_COVERY": "OMNI_CLOUD_RAIN_COVERAGE",  # 旧名少写覆盖度一词的末尾字母，按正确写法迁移。
+    "OMNI_MOTION_BLUR_SUTTER_ANGLE": "OMNI_MOTION_BLUR_SHUTTER_ANGLE",  # 旧名把快门一词漏了一个字母，按正确写法迁移。
+    "OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGTITUDE": "OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE",  # 旧名把经度一词拼错，按正确写法迁移。
     "OMNI_UPSCALE_STRENGTH": "OMNI_FSR_SHARPNESS",  # 旧名迁移到新名。
     "OMNI_CLOUD_COVERAGE": "OMNI_CLOUD_CLEAR_COVERAGE",  # 旧名迁移到新名。
     "OMNI_CLOUD_HEIGHT": "OMNI_CLOUD_CLEAR_ALTITUDE",  # 旧名迁移到新名。

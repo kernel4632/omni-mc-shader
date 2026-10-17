@@ -60,6 +60,10 @@ const vec4 colortex0ClearColor = vec4(0.0, 0.0, 0.0, 1.0); // 黑色、不透明
 // 每帧清除：一号、二号、七号带跨帧数据，不能清。
 const bool colortex0Clear = true; // 贴图色每帧重写。
 const bool colortex1Clear = false; // 场景颜色在各阶段之间接力，并作为下一帧部分输入。
+// 一号画面必须生成多级纹理：自动曝光的 `GetExposureTiles` 用第六级多级纹理做分块统计
+// （`effects/color/color.glsl:136`、`:145` 的 `texelFetch(..., 6)`），没有多级纹理时这些采样读不到内容，
+// 整幅自动亮度会偏离 iterationT。来源 iterationT `Lib/IndividualFounctions/MotionBlur.glsl:11` 的同名声明。
+const bool colortex1MipmapEnabled = true; // 请求加载器每帧为它生成多级纹理。
 const bool colortex2Clear = false; // 全局光历史、云影和统计像素要跨帧保留。
 const bool colortex3Clear = true; // 法线光照图每帧重写。
 const bool colortex4Clear = true; // 半透明法线光照图每帧重写。

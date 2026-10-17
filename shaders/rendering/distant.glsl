@@ -200,9 +200,7 @@ flat in float materialIDs; // 材质编号。
 
 // 片元主函数：先剔除近处远景，再对贴图加噪声、算湿润，最后写三张画面。
 void main(){
-	#ifdef OMNI_DH_TERRAIN_CULLING // 远景地形剔除：丢掉和正常区块重叠的近处远景块。
-		if (length(viewPos) < far * 0.7) discard; // 距离小于远景距离的七成就丢掉。
-	#endif
+	DHTerrainCulling(viewPos); // 远景地形剔除：丢掉和正常区块重叠的近处远景块，关闭该选项时函数内不做剔除。
 
 	DHChunkFading(length(viewPos)); // 远景区块淡入：靠近交界时按距离随机淡出，减少远景与近景的硬边。
 	omniDHTerrainOverdrawPrevention(length(viewPos)); // 远景过绘防护：丢弃已被近景覆盖的近距离远景。

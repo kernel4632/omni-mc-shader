@@ -12,7 +12,7 @@
 可复制示例（`halfWet`、`puddleNoise`、`wetnessStages` 由调用方按现有湿润流程准备）：
   `float puddles = OmniPuddleCoverage(halfWet, puddleNoise);`
   `float wetnessStages = max(puddles, fullWet) * lightmap;`
-  `roughness = OmniPuddleRoughness(roughness, 0.5 * (1.0 + snowR), wetnessStages);`
+  `roughness = OmniPuddleRoughness(roughness, 0.5, wet);`  本项目没有雪面粗糙度，湿表面粗糙度固定取零点五
 与现有选项的关系：`effects/water/water.glsl` 的 `OMNI_PUDDLE_MODE` 决定雨点涟漪铺满整片湿面还是只出现在低洼处；
   本文件两项是在它之上细化水洼形状与湿面反射，属于并列增强，不替换它，也不依赖它。
 默认中性：`OMNI_PUDDLE_SIZE` 默认 1.0，是 Eclipse 的参考值；`OMNI_PUDDLE_REFLECTION_SHARPNESS` 默认 0.0，

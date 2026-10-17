@@ -344,6 +344,14 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 43. 玩家交互水面用近似：`effects/water/playerwater.glsl` 的 `PlayerWaterRipple`（`:32`）用相机位置与时间相位近似入水位置与时刻，得到持续外扩涟漪，不是 Eclipse 的网格模拟（`lib/oceans.glsl` 的 `physics_waveHeight`）；默认关。
 44. Eclipse 合并批次的额外功能默认中性：色彩分级、镜头形变、胶片颗粒、洞穴雾、边界雾、下界三段体积雾、末地涡旋雾、时段雾、每群系环境、雪暴沙暴、受伤与低血量、区块淡入、水洼尺寸、材质 AO 与法线倍率、太阳色与辐照、远景过绘防护与噪声衰减都默认关闭或取不改变画面的值，默认画面与 iterationT 一致；逐项落点见 `docs/eclipse-parity.md`。
 
+45. 一号画面补上多级纹理声明：iterationT 在 `Lib/IndividualFounctions/MotionBlur.glsl:11` 声明 `colortex1MipmapEnabled = true`，
+    本项目此前漏了这条，自动曝光的 `GetExposureTiles`（`effects/color/color.glsl:136`、`:145`）读第六级多级纹理时会读不到内容，
+    整幅自动亮度因此偏离 iterationT。现已在 `rendering/buffers.glsl` 补上同名声明，默认画面回到一致（2026-10-17 审查发现并修复）。
+46. 删除 iterationT 侧同样没有调用点的残留代码：`AgXConfigurable` 一族（`effects/color/color.glsl`）、
+    `CalculateSunlightColors`（`effects/lighting/sunlight.glsl`，本项目已内联进 `rendering/lights.glsl`）、
+    `PrintFloat`/`PrintUintBinary`/`SevenSegment`/`DecimalPoint`（`effects/dev/debug.glsl`）。这些在 iterationT 的 `main` 里也没有被调用，
+    按项目规范「不留死代码」删除，默认画面不受影响；`DHTerrainCulling` 属另一情况，已改由 `rendering/distant.glsl` 调用，不再内联重复。
+
 ### 已裁决：旧选项的处置（2026-10-16）
 
 规则：iterationT 的选项全部保留（加 `OMNI_` 前缀）；与 iterationT 含义相同只是改了名的旧选项按下表改名，

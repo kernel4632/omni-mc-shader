@@ -1,10 +1,8 @@
 /*
-光照颜色与天光：算出太阳、月亮、天空、火把四种光色，并按表面朝向给表面加上天光照明。
-调用位置：合成顶点阶段算好四种光色后传给片元，用 `CalculateSunlightColors`；
-    延迟三号与合成主体在主循环开头内联算出日月高度因子 `timeNoon`、`timeMidnight`（见 `rendering/lights.glsl`），本文件不提供；
-    合成主体给不透明表面算天光与天光云影时用 `SkyLighting`。
+光照颜色与天光：算出天光照明需要的四种光色口径，并按表面朝向给表面加上天光照明。
+调用位置：四种光色的实际计算内联在 `rendering/lights.glsl:141-153`（那里还要用 `timeNoon` 控制太阳可见度、
+  并乘月相亮度，所以没有抽成函数）；本文件只保留 `SkyLighting`，供合成主体给不透明表面算天光与天光云影。
 可复制示例：
-    `CalculateSunlightColors(camera, worldSunVector, -worldSunVector, colorSunlight, colorMoonlight, colorSunSkylight, colorMoonSkylight, colorShadowlight, colorSkylight, colorTorchlight);`
     `vec3 skylight = SkyLighting(worldNormal, gbuffer.lightmapL.g, cloudShadow);`
 设计原因与取舍：
     四种光色都从预计算大气查表得到，光照强度与天光强度用各自的选项分开控制，互不影响。
@@ -34,24 +32,9 @@
 #include "/effects/cloud/cloud.glsl"
 #include "/effects/lighting/ambient.glsl"
 #include "/effects/lighting/blocklight.glsl"
-// 算四种光色：太阳与月亮各出直射与环境两项，再加它们之和与火把光色。
-// 调用前提：`camera` 是米制相机位置，`worldSunVector`、`worldMoonVector` 是单位世界方向。
-void CalculateSunlightColors(vec3 camera, vec3 worldSunVector, vec3 worldMoonVector,
-	out vec3 colorSunlight, out vec3 colorMoonlight,
-	out vec3 colorSunSkylight, out vec3 colorMoonSkylight,
-	out vec3 colorShadowlight, out vec3 colorSkylight, out vec3 colorTorchlight){
-	float SdotU = dot(vec3(0.0, 1.0, 0.0), worldSunVector); // 太阳方向相对天顶的余弦。
-	float MdotU = dot(vec3(0.0, 1.0, 0.0), worldMoonVector); // 月亮方向相对天顶的余弦。
-	colorSunlight = GetSunAndSkyIrradiance(camera, worldSunVector, worldMoonVector, colorMoonlight, colorSunSkylight, colorMoonSkylight); // 查太阳直射与环境、月亮直射与环境。
-	colorSunlight *= 1.0 - curve(saturate((1.0 - saturate(SdotU)) * 30.0 - 29.0)); // 太阳很贴地时把直射收掉，避免出现长条亮带。
-	colorMoonlight *= 1.0 - curve(saturate((1.0 - saturate(MdotU)) * 5.0 - 4.0)); // 月亮很贴地时同样收掉。
-	#ifdef OMNI_COLD_MOONLIGHT // 打开冷色月光时做夜视色偏。
-		DoNightEye(colorMoonlight); // 把月光混向偏蓝的亮度。
-	#endif
-	colorShadowlight = colorSunlight + colorMoonlight; // 直射总和，供阴影与云影使用。
-	colorSkylight = colorSunSkylight + colorMoonSkylight; // 环境总和，供云与环境光使用。
-	colorTorchlight = Blackbody(OMNI_TORCHLIGHT_COLOR_TEMPERATURE); // 火把光色由黑体色温算出。
-}
+// 说明：原程序里抽出的 `CalculateSunlightColors` 在本项目被内联进 `rendering/lights.glsl`，
+// 因为它要配合那里先算好的 `timeNoon`、`timeMidnight` 与月相亮度；留下的重复函数属于死代码，
+// 按规范删除，行为与原来一致，记录见 `docs/parity.md` 的偏离清单。
 // 天光照明：按表面法线朝向与天光等级，把太阳与月亮的环境光和直射光分配到表面上。
 // 调用前提：`colorSunSkylight`、`colorMoonSkylight`、`colorShadowlight`、`worldShadowVector`、`wetness`、
 //     `isEyeInWater` 已由绘制主体声明；`cloudShadow` 是云影透过率。

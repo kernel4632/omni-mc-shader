@@ -1,5 +1,19 @@
 # 更新记录
 
+## 0.0.0-dev.134
+
+终审（HOP、iterationT 复核、Eclipse 复核）指出的问题修正；其中一项会改变默认画面，已拉回与 iterationT 一致。
+
+- 一号画面多级纹理：补上 colortex1MipmapEnabled。之前缺这条声明，自动曝光读第六级多级纹理时读不到内容，整幅自动亮度会偏离 iterationT。
+- 清理死代码：删除 AgXConfigurable 一族、CalculateSunlightColors（已内联进 
+endering/lights.glsl）与七段数码管一族（PrintFloat 等）；DHTerrainCulling 改为由 
+endering/distant.glsl 调用，不再内联重复。
+- 材质倍率与遮蔽：实体视差路径也补上，与地形路径一致。
+- 选项迁移：追加 iterationT 自带拼写错误的六个旧名映射，导入 iterationT 配置时不丢设置。
+- 文档：docs/parity.md 追加两条偏离记录（多级纹理声明、死代码删除）。
+
+只做过离线编译、审计与单元测试；游戏内画面、性能与兼容性仍未验证。
+
 ## 0.0.0-dev.133
 
 按独立审查指出的“选项存在但没真生效”修正接线，并同步对照文档。

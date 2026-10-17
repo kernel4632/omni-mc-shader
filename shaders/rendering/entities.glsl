@@ -333,6 +333,9 @@ void SampleEntitySurface(vec2 texCoord, vec2 duv1, vec2 duv2, mat3 tbnMat, vec3 
 		#endif
 
 		normalTex = normalOut; // 交回视差写回的法线。
+		// 与地形视差路径一致：视差函数只解出交点法线，这里补上法线倍率与材质遮蔽，两个选项在实体视差下同样生效。
+		normalTex = omniMaterialNormalScale(normalTex); // 按选项缩放起伏。
+		materialAO = omniMaterialAO(texelFetch(normals, parallaxTexel, 0).rgb); // 取交点处的材质遮蔽，未开时为一。
 
 	#else // 未开视差时按屏幕导数采贴图。
 
