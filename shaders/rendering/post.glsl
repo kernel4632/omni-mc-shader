@@ -503,6 +503,8 @@
 
 			color *= GetExposureValue(); // 乘这一帧的曝光。
 
+			color = WhiteBalance(color); // 白平衡：按色温给曝光后的线性颜色染色，默认中性时不做任何改动。
+
 			#if OMNI_TONEMAP_OPERATOR == 1 // 序号一取 `ACES`。
 				color = ACES(color); // 影院标准压缩曲线。
 			#elif OMNI_TONEMAP_OPERATOR == 2 // 序号二取无压缩。

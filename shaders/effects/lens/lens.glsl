@@ -1,6 +1,8 @@
 /*
 镜头成像：景深、弥散范围统计、镜头眩光与光斑、相机动态模糊、暗角，合成成一套相机成像效果。
 来源：景深照 iterationT `Lib/IndividualFounctions/DOF.glsl` 一比一移植；
+  景深的散景变形与色散照 Eclipse `lib/settings.glsl:720-721` 的 `DOF_ANAMORPHIC_RATIO`、`DOF_DISPERSION_MULT`
+  与 `dimensions/composite11.fsh:251-258` 的采样方式移植，两项默认值一表示不变形、不色散，默认画面不变；
   眩光与光斑照 iterationT `Lib/IndividualFounctions/LensGlareFlare.glsl` 一比一移植；
   相机速度与动态模糊照 iterationT `Lib/IndividualFounctions/MotionBlur.glsl` 的模糊部分一比一移植；
   暗角照 iterationT `Lib/Programs/Final.glsl` 的 `Vignette` 一比一移植。
@@ -38,6 +40,10 @@
 #define OMNI_DOF_COCSPREAD_QUALITY 10 // [5 7 10 15 20 30 50 70 100]
 // @option {"label": {"zh_cn": "最大弥散半径", "en_us": "Max CoC Radius"}, "slider": true, "description": {"zh_cn": "单个像素最多模糊多少，限制景深开销。", "en_us": "Largest blur radius per pixel, capping the cost."}}
 #define OMNI_DOF_MAX_COC 0.02 // [0.001 0.0015 0.002 0.003 0.005 0.007 0.01 0.015 0.02 0.03 0.05 0.07 0.1 0.15 0.2 0.3 0.5]
+// @option {"label": {"zh_cn": "散景变形比", "en_us": "Anamorphic Ratio"}, "slider": true, "description": {"zh_cn": "横向拉伸失焦的光斑，模拟宽银幕变形镜头；默认一为正圆，不改画面。来源 Eclipse `lib/settings.glsl:720` 的 `DOF_ANAMORPHIC_RATIO`。", "en_us": "Stretches out-of-focus bokeh horizontally, like an anamorphic lens; the default 1 is a round bokeh and changes nothing. From Eclipse `lib/settings.glsl:720` `DOF_ANAMORPHIC_RATIO`."}}
+#define OMNI_DOF_ANAMORPHIC_RATIO 1.0 // [0.3 0.6 1.0]
+// @option {"label": {"zh_cn": "散景色散", "en_us": "Bokeh Dispersion"}, "slider": true, "description": {"zh_cn": "让失焦处的红蓝通道错开，产生彩色边缘；默认一为无色散，不改画面。来源 Eclipse `lib/settings.glsl:721` 的 `DOF_DISPERSION_MULT`。", "en_us": "Offsets the red and blue channels in out-of-focus areas for a colour fringe; the default 1 is neutral and changes nothing. From Eclipse `lib/settings.glsl:721` `DOF_DISPERSION_MULT`."}}
+#define OMNI_DOF_DISPERSION_MULT 1.0 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99 1.0 1.01 1.02 1.03 1.04 1.05 1.06 1.07 1.08 1.09 1.1 1.11 1.12 1.13 1.14 1.15 1.16 1.17 1.18 1.19 1.2 1.21 1.22 1.23 1.24 1.25 1.26 1.27 1.28 1.29 1.3 1.31 1.32 1.33 1.34 1.35 1.36 1.37 1.38 1.39 1.4 1.41 1.42 1.43 1.44 1.45 1.46 1.47 1.48 1.49 1.5 1.51 1.52 1.53 1.54 1.55 1.56 1.57 1.58 1.59 1.6 1.61 1.62 1.63 1.64 1.65 1.66 1.67 1.68 1.69 1.7 1.71 1.72 1.73 1.74 1.75 1.76 1.77 1.78 1.79 1.8 1.81 1.82 1.83 1.84 1.85 1.86 1.87 1.88 1.89 1.9 1.91 1.92 1.93 1.94 1.95 1.96 1.97 1.98 1.99 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 3.1 3.2 3.3 3.4 3.5 3.6 3.7 3.8 3.9 4.0 4.1 4.2 4.3 4.4 4.5 4.6 4.7 4.8 4.9 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0]
 // @option {"label": {"zh_cn": "猫眼效应", "en_us": "Cat Eye"}, "description": {"zh_cn": "模拟镜头口径造成的画面边缘椭圆散景。", "en_us": "Edge-of-frame oval bokeh caused by the lens aperture."}}
 //#define OMNI_DOF_CATSEYE
 // @option {"label": {"zh_cn": "猫眼强度", "en_us": "Strength"}, "slider": true, "description": {"zh_cn": "猫眼裁剪的强度。", "en_us": "Strength of the cat-eye clipping."}}
@@ -206,12 +212,22 @@ vec4 DepthOfField(){
 		#ifdef OMNI_DOF_CATSEYE // 猫眼裁剪：偏移超出裁剪半径就跳过。
 			if (distance(catsEyeOffset, sampleCoordOffset) > spreadCoc) continue; // 超出就不采。
 		#endif
-		sampleCoordOffset.x *= rAspectRatio; // 按宽高比修正。
+		sampleCoordOffset.x *= rAspectRatio * OMNI_DOF_ANAMORPHIC_RATIO; // 按宽高比修正后再按变形比横向拉伸；变形比为一表示不变形。
 		vec2 sampleCoord = texCoord + sampleCoordOffset; // 样本坐标。
 		float sampleDepth =  GetLinearDepth(sampleCoord); // 样本深度。
 		float sampleCoC = CalculateCoCRadius(focus, sampleDepth, cocRadiusfactor); // 样本弥散。
 		sampleCoC = clamp(sampleCoC, minCoc, maxCoc); // 夹到范围。
-		vec3 sampleColor = CurveToLinear(textureLod(colortex1, sampleCoord, 0.0).rgb); // 样本线性颜色。
+		vec3 sampleColor; // 样本线性颜色，下面按是否做色散分两条路取。
+		if (OMNI_DOF_DISPERSION_MULT != 1.0){ // 色散开启时：红蓝通道沿到画面中心的方向错开，绿通道不动。
+			// 为什么减一：让默认值一表示「不错开」，与原程序默认一致，保证默认画面不变；
+			// 偏移量随样本半径与到中心的距离增大，越靠边、越失焦的像素色边越明显。
+			vec2 dispersionOffset = (texCoord - 0.5) * sampleRadius * (OMNI_DOF_DISPERSION_MULT - 1.0);
+			sampleColor.r = CurveToLinear(textureLod(colortex1, sampleCoord + dispersionOffset, 0.0).r); // 红通道向外错开。
+			sampleColor.g = CurveToLinear(textureLod(colortex1, sampleCoord, 0.0).g); // 绿通道不动。
+			sampleColor.b = CurveToLinear(textureLod(colortex1, sampleCoord - dispersionOffset, 0.0).b); // 蓝通道向内错开。
+		}else{ // 默认无色散：只取一次样本，与未加色散前完全一致。
+			sampleColor = CurveToLinear(textureLod(colortex1, sampleCoord, 0.0).rgb); // 样本线性颜色。
+		}
 		#ifdef OMNI_NETHER // 下界分支额外累积深度。
 			if (currCoc >= sampleRadius && sampleDepth >= currDepth){ // 当前点比样本更近，样本属于当前点自己。
 				selfColor += sampleColor; // 记为自贡献。

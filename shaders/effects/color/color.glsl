@@ -3,10 +3,11 @@
 来源：三条强光压缩曲线与曝光值、黑边照 iterationT `Lib/Programs/Final.glsl` 一比一移植；
   自动曝光统计照 iterationT `Lib/IndividualFounctions/MotionBlur.glsl` 的 `GetExposureTiles` 一比一移植；
   可配置的宽色域压缩照 iterationT `Lib/IndividualFounctions/AgX.glsl` 一比一移植；
-  浦肯野效应照 iterationT `composite5.fsh` 的 `PurkinjeEffect` 一比一移植。
+  浦肯野效应照 iterationT `composite5.fsh` 的 `PurkinjeEffect` 一比一移植；
+  白平衡色温照 Eclipse `lib/settings.glsl:748` 的 `WHITE_BALANCE` 与 `composite11.fsh:318-320` 的乘法移植（默认中性）。
 调用位置：
   合成八号片元在顶行统计像素处调用 `GetExposureTiles` 并把结果写进二号画面，供后续帧与最终阶段读取；
-  合成十四号片元调用 `GetExposureValue` 取曝光，再按 `TONEMAP_OPERATOR` 做色调映射与高级调色；
+  合成十四号片元调用 `GetExposureValue` 取曝光、`WhiteBalance` 做白平衡，再按 `TONEMAP_OPERATOR` 做色调映射与高级调色；
   final 片元调用 `BlackBar` 画黑边；合成五号片元调用 `PurkinjeEffect` 做暗处色偏。
 可复制示例：
   `float exposure = GetExposureValue();`
@@ -41,6 +42,8 @@
 #define OMNI_SATURATION 1.0 // [0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5]
 // @option {"label": {"zh_cn": "白光裁剪", "en_us": "White Clip"}, "slider": true, "description": {"zh_cn": "高级调色里多大的亮度算纯白，越大越容易保留高光细节。", "en_us": "Brightness treated as pure white in advanced color; higher keeps more highlight detail."}}
 #define OMNI_WHITE_CLIP 0.0 // [0.0 0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5]
+// @option {"label": {"zh_cn": "白平衡", "en_us": "White Balance"}, "slider": true, "description": {"zh_cn": "按色温给画面染色，值低偏暖、值高偏冷；默认六千五百为中性，完全不改画面。来源 Eclipse `lib/settings.glsl:748` 的 `WHITE_BALANCE`。", "en_us": "Tints the image by colour temperature; lower leans warm, higher leans cool. The default 6500 is neutral and changes nothing. From Eclipse `lib/settings.glsl:748` `WHITE_BALANCE`."}}
+#define OMNI_WHITE_BALANCE 6500 // [1000 1100 1200 1300 1400 1500 1600 1700 1800 1900 2000 2100 2200 2300 2400 2500 2600 2700 2800 2900 3000 3100 3200 3300 3400 3500 3600 3700 3800 3900 4000 4100 4200 4300 4400 4500 4600 4700 4800 4900 5000 5100 5200 5300 5400 5500 5600 5700 5800 5900 6000 6100 6200 6300 6400 6500 6600 6700 6800 6900 7000 7100 7200 7300 7400 7500 7600 7700 7800 7900 8000 8100 8200 8300 8400 8500 8600 8700 8800 8900 9000 9100 9200 9300 9400 9500 9600 9700 9800 9900 10000 15000 20000 25000 50000]
 // @option {"label": {"zh_cn": "手动曝光", "en_us": "Manual Exposure"}, "description": {"zh_cn": "关掉自动曝光，改用下面的固定曝光值。", "en_us": "Turns off auto exposure and uses the fixed EV value below."}}
 //#define OMNI_MANUAL_EXPOSURE
 // @option {"label": {"zh_cn": "固定曝光值", "en_us": "Exact EV value"}, "slider": true, "description": {"zh_cn": "手动曝光所用的曝光值。", "en_us": "Exposure value used by manual exposure."}}
@@ -244,6 +247,17 @@ float BlackBar(float newRatio){
 void PurkinjeEffect(inout vec3 color){
 	float luminance = Luminance(color); // 当前颜色亮度。
 	color = mix(color, luminance * vec3(0.7777, 1.0004, 1.6190), saturate((OMNI_PURKINJE_EFFECT_THRESHOLD - luminance) * OMNI_PURKINJE_EFFECT_STRENGTH / OMNI_PURKINJE_EFFECT_THRESHOLD)); // 越暗混入越多。
+}
+
+// --- 白平衡：按色温给线性颜色染色 ---
+// 来源 Eclipse `composite11.fsh:318-320`，那里在色调映射之前对线性颜色乘 `blackbody(WHITE_BALANCE)`。
+// 为什么默认六千五百开尔文视为中性：日光下的白点约六千五百开尔文，此时判定为中性、不改动颜色，
+//   与原程序的 `#if WHITE_BALANCE != 6500` 等价，保证默认画面不变。
+// 为什么放在色调映射之前：白平衡是相机白点校正，要在曝光后的线性颜色上做；
+//   压缩曲线之后再改会破坏已经压好的高光，也与真实相机的处理顺序不符。
+vec3 WhiteBalance(vec3 color){
+	if (OMNI_WHITE_BALANCE != 6500.0) color *= Blackbody(OMNI_WHITE_BALANCE); // 非中性时才按黑体色温染色，低值偏暖、高值偏冷。
+	return color; // 返回染色后的线性颜色。
 }
 
 // --- 高级调色：白光裁剪、亮度伽马与饱和度，从十四号主体里单独拆出 ---

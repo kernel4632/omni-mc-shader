@@ -28,6 +28,10 @@ class PipelineTests(unittest.TestCase):
                 self.assertTrue(text.startswith("#version 330 compatibility"))  # 兼容版本必须第一行。
             self.assertIn('#include "/rendering/',text)  # 不依赖加载器猜回退。
             self.assertEqual(text,path.read_text(encoding="utf-8"))  # 实际入口没有遗漏维度宏。
+        dimensions = json.loads((build.SHADERS / "rendering/programs.json").read_text(encoding="utf-8"))["dimensions"]  # 维度到声明文件的映射是唯一来源。
+        for path,text in files.items():  # 每个入口在引入主体前都要引入本维度的中间画面与常量声明。
+            declaration = dimensions[path.parent.name]["buffers"] + ".glsl"  # 这个维度登记的那份声明文件。
+            self.assertIn(f'#include "/rendering/{declaration}"',text)  # 声明必须真的进入被编译的程序，加载器才会读取它。
         for folder in ("world0", "world-1", "world1"):
             self.assertIn(build.SHADERS / folder / "setup.csh", files)  # 每个维度都登记计算入口。
         self.assertIn(build.SHADERS / "world0/composite1.fsh", files)  # 主世界有水后雾阶段。

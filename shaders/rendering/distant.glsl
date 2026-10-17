@@ -193,6 +193,8 @@ void main(){
 		if (length(viewPos) < far * 0.7) discard; // 距离小于远景距离的七成就丢掉。
 	#endif
 
+	DHChunkFading(length(viewPos)); // 远景区块淡入：靠近交界时按距离随机淡出，减少远景与近景的硬边。
+
 	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz; // 还原相机相对世界位置。
 
 // 底色：顶点色，开启噪声时叠逐块噪声。
@@ -253,6 +255,8 @@ flat in float materialIDs; // 材质编号。
 // 片元主函数：被近景挡住的远景水丢弃，再算波法线与打包颜色。
 void main(){
 	if (texelFetch(depthtex0, ivec2(gl_FragCoord.xy), 0).x < 1.0) discard; // 已有近景几何遮住时丢弃该远景水像素。
+
+	DHChunkFading(length(viewPos)); // 远景区块淡入：远景水同样在交界处按距离随机淡出。
 
 	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz; // 还原相机相对世界位置。
 

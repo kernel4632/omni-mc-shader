@@ -1,7 +1,8 @@
 /*
 水面：把 iterationT 的波浪、海洋物理波、雨点涟漪、水下雾、折射与彩色玻璃吸收集中到一个文件。
 职责分成四块：
-  一、选项：`OMNI_WAVE_SCALE`、`OMNI_WAVE_HEIGHT`、`OMNI_WATER_PARALLAX`、`OMNI_UNDERWATER_FOG`、`OMNI_WATERFOG_DENSITY`、`OMNI_CAUSTICS`，全项目只在这里定义一次；
+  一、选项：`OMNI_WAVE_SCALE`、`OMNI_WAVE_HEIGHT`、`OMNI_WATER_PARALLAX`、`OMNI_UNDERWATER_FOG`、`OMNI_WATERFOG_DENSITY`、`OMNI_CAUSTICS`、
+    以及雨点涟漪范围 `OMNI_PUDDLE_MODE`（照 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`，默认与原来一致），全项目只在这里定义一次；
   二、波浪：`GetWaves`、`GetWavesNormal`、`GetWaterParallaxCoord` 用噪声贴图叠多层正弦，算出波高、波法线与视差坐标；
   三、物理海浪：`physics_*` 一组函数按迭代正弦合成海面，供海洋物理扩展使用；
   四、屏幕合成：`WaterFog` 水下与水面雾、`WaterRefractionLite` 折射、`TransparentAbsorption` 彩色玻璃吸收，以及雨点涟漪 `GetRainNormal`。
@@ -39,6 +40,8 @@
 #define OMNI_WATERFOG_DENSITY 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label":{"zh_cn":"水面焦散","en_us":"Water caustics"},"description":{"zh_cn":"阳光透过波动水面在水底汇聚出的亮纹。","en_us":"Bright patterns where sunlight focuses through the rippling water onto the bottom."}}
 #define OMNI_CAUSTICS
+// @option {"label":{"zh_cn":"水洼与涟漪范围","en_us":"Puddles & ripples"},"description":{"zh_cn":"雨点涟漪出现的位置：整个湿表面均匀铺满，还是只在低洼积水处出现。默认与原来一致。来源 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`。","en_us":"Where rain ripples appear: evenly over the whole wet surface, or only in low-lying puddles. Default matches the previous behaviour. From Eclipse `lib/settings.glsl:359` `PUDDLE_MODE`."},"values":{"0":{"zh_cn":"无雨点","en_us":"Off"},"1":{"zh_cn":"水洼与全湿润","en_us":"Puddles + fully wet"},"2":{"zh_cn":"仅水洼","en_us":"Only puddles"},"3":{"zh_cn":"仅全湿润","en_us":"Only fully wet"}}}
+#define OMNI_PUDDLE_MODE 1 // [0 1 2 3]
 
 // 波法线解码与颜色曲线来自共用计算，屏幕还原与投影来自坐标换算，`MaterialMask` 由材质文件提供。
 #include "/common/math.glsl"
@@ -398,6 +401,10 @@ vec2 GetRainNormal(vec3 pos, float strength, inout float wet){
 		strength *= rainStrength * (1.0 - eyeSnowySmooth) * (1.0 - eyeNoPrecipitationSmooth); // 雪天或干燥群系雨点减弱。
 	#endif
 
+	#if OMNI_PUDDLE_MODE == 0 // 模式零：不出雨点，强度直接归零。
+		strength = 0.0; // 后面乘出零向量，等于关闭涟漪。
+	#endif
+
 	float frame = fract(floor(frameTimeCounter * 60.0) / 60.0); // 当前动画帧，按每秒六十帧取整。
 	vec2 coord = vec2(pos.x, fract(pos.z / 60.0) - frame); // 动画沿一个轴滑动。
 
@@ -411,6 +418,9 @@ vec2 GetRainNormal(vec3 pos, float strength, inout float wet){
 	pos.x -= frameTimeCounter * 0.5; // 沿一个轴漂移，落点缓慢移动。
 	float downfall = textureLod(noisetex, pos.xz * 0.0025, 0.0).w; // 读噪声得到落点密度。
 	downfall = saturate(downfall - 0.25); // 留一个阈值，稀疏区域没有雨点。
+	#if OMNI_PUDDLE_MODE == 3 // 模式三「仅全湿润」：整片湿表面均匀铺满，不做稀疏判断。
+		downfall = 1.0; // 三层动画全部出现，涟漪覆盖整个表面。
+	#endif
 
 	vec2 n = n1; // 第一层总是有。
 	n += n2 * saturate(downfall * 2.0); // 密度中等时叠第二层。
@@ -420,6 +430,10 @@ vec2 GetRainNormal(vec3 pos, float strength, inout float wet){
 
 	n /= lod * 5.0 + 1.0; // 越远越平，避免远处闪烁。
 	n *= strength; // 乘降雨强度。
+	#if OMNI_PUDDLE_MODE == 2 // 模式二「仅水洼」：只在低洼处出现。
+		float puddleNoise = textureLod(noisetex, pos.xz * 0.02, 0.0).b; // 水洼形状噪声，值越低表示地势越低。
+		n *= saturate(wet - puddleNoise); // 湿润度高于噪声阈值的地方才积水，只在低洼处出水洼。
+	#endif
 
 	wet = saturate(mix(downfall, wet, 1.0 - 0.4 * saturate(strength))); // 湿润度向落点密度靠拢，降雨越强越明显。
 

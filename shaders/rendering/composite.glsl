@@ -327,6 +327,11 @@ void main(){
 		finalComposite *= 1.0 - gbuffer.material.metalness * 0.75; // 非金属整体压一点。
 
 		finalComposite += specularHighlight; // 叠高光。
+
+		#ifdef OMNI_END_ISLAND_LIGHT
+			// 末地主岛光源：按到 (0,190,0) 的距离与夹角额外照亮附近表面并给高光；默认关闭时整段不编译，画面与原来一致。
+			finalComposite += EndIslandLighting(worldPos, worldNormal, worldDir, gbuffer.albedo, gbuffer.material.roughness, gbuffer.material.f0, gbuffer.material.metalness); // 叠主岛光源。
+		#endif
 	}
 
 	worldDir = (isEyeInWater == 1 && materialMask.water > 0.5) ? refract(worldDir, normalize((gbufferModelViewInverse * vec4(gbuffer.normalW, 0.0)).xyz), WATER_REFRACT_IOR) : worldDir; // 水下看水面时折射世界方向。

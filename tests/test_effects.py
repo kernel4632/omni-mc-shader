@@ -616,15 +616,31 @@ class EffectTests(unittest.TestCase):
 
     def test_buffer_format_directives_are_bare_and_defined(self):
         """格式指令必须放在块注释里、每行只写指令本身：行尾带说明会让加载器读不到，自己定义格式名又会让它读到数字。"""
-        text = (build.SHADERS/"rendering/buffers.glsl").read_text(encoding="utf-8")
-        commented = re.sub(r"/\*.*?\*/", "", text, flags=re.S)  # 去掉块注释后，源码里不应再有格式指令。
-        self.assertNotIn("Format", commented)  # 指令只在块注释里出现。
-        for line in re.findall(r"^const int colortex\d+Format = [A-Z0-9_]+;$", text, re.M):
-            self.assertRegex(line, r"^const int colortex\d+Format = [A-Z0-9_]+;$")  # 每行只写指令本身。
-        self.assertRegex(text, r"const int colortex0Format = RGBA8;")  # 主世界零号八位。
-        self.assertRegex(text, r"const int colortex1Format = RGBA16;")  # 一号十六位。
-        self.assertRegex(text, r"const int colortex8Format = RGBA8;")  # 八号八位。`
-        self.assertNotRegex(text, r"#define RGBA\d+F")  # 格式名交由加载器提供，包内不重复定义。
+        files = {name: (build.SHADERS/"rendering"/(name+".glsl")).read_text(encoding="utf-8") for name in ("buffers","buffers_main","buffers_nether","buffers_end")}  # 共享声明与三个维度声明都遵守同一格式规则。
+        for name, text in files.items():
+            with self.subTest(file=name):
+                commented = re.sub(r"/\*.*?\*/", "", text, flags=re.S)  # 去掉块注释后，源码里不应再有格式指令。
+                self.assertNotIn("Format", commented)  # 指令只在块注释里出现。
+                for line in re.findall(r"^const int colortex\d+Format = [A-Z0-9_]+;$", text, re.M):
+                    self.assertRegex(line, r"^const int colortex\d+Format = [A-Z0-9_]+;$")  # 每行只写指令本身。
+                self.assertNotRegex(text, r"#define RGBA\d+F")  # 格式名交由加载器提供，包内不重复定义。
+        self.assertRegex(files["buffers"], r"const int colortex0Format = RGBA8;")  # 三维度共用的零号八位。
+        self.assertRegex(files["buffers"], r"const int colortex1Format = RGBA16;")  # 三维度共用的一号十六位。
+        self.assertRegex(files["buffers_main"], r"const int colortex8Format = RGBA8;")  # 主世界八号放大输出八位。
+        self.assertRegex(files["buffers_nether"], r"const int colortex7Format = RGBA32F;")  # 下界时间抗锯齿历史必须三十二位浮点。
+        self.assertRegex(files["buffers_nether"], r"const int colortex8Format = RGB16;")  # 下界八号十六位。
+        self.assertRegex(files["buffers_end"], r"const int colortex8Format = RGB16;")  # 末地八号十六位。
+
+    def test_per_dimension_buffer_constants_follow_reference(self):
+        """逐维度常量必须写在各自声明文件里、每个维度只写一次：值照 iterationT 三份 composite 文件头。"""
+        files = {name: (build.SHADERS/"rendering"/(name+".glsl")).read_text(encoding="utf-8") for name in ("buffers","buffers_main","buffers_nether","buffers_end")}
+        combined = "\n".join(files.values())  # 同一常量在整组声明里只应出现一次，重复会让加载器取错值。
+        for name in ("shadowDistanceRenderMul","shadowHardwareFiltering1","shadowtex0Mipmap","ambientOcclusionLevel"):
+            self.assertEqual(combined.count(f" {name} = "), 3, name)  # 三个维度各写一次，共享文件不写这四项。
+        self.assertRegex(files["buffers_nether"], r"const float shadowDistanceRenderMul = 0\.007;")  # 下界阴影绘制距离缩到近乎零。
+        self.assertRegex(files["buffers_nether"], r"const float ambientOcclusionLevel = 0\.0;")  # 下界关闭原版遮蔽。
+        self.assertRegex(files["buffers_end"], r"const float ambientOcclusionLevel = 0\.0;")  # 末地关闭原版遮蔽。
+        self.assertRegex(files["buffers_main"], r"const float ambientOcclusionLevel = 1\.0;")  # 主世界保持满值遮蔽。
 
     @unittest.skip(PORT_REPLACED)
     def test_custom_images_feature_is_declared(self):

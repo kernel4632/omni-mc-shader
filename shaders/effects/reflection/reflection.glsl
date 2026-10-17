@@ -2,7 +2,7 @@
 屏幕空间反射：照 iterationT `Lib/IndividualFounctions/Reflections/SSR.glsl`、
 `Reflections/ReflectionFilter.glsl` 与 `composite2.fsh`、`composite5.fsh` 的反射段一比一移植。
 职责分成四块：
-  一、内部常数：光线步进质量、细化步数与深度差阈值，全项目只在这里定义一次；
+  一、玩家选项：光线步进质量、细化步数与深度差阈值，照 iterationT `Settings.glsl` 带取值范围的菜单项，全项目只在这里定义一次；
   二、屏幕空间追踪：`ScreenSpaceTracer` 沿反射方向在屏幕里找被反射到的几何，`sampleGGXVNDF` 给粗糙面抽样方向；
   三、反射合成：`CalculateSpecularReflections` 有重载两份，一份写三号画面（`composite2`），一份就地合并进场景色（`composite5`）；
   四、反射滤波：`AtrousWaveletFilter` 对三号画面做小波滤波，供 `composite3`、`composite4` 两次半径调用。
@@ -27,10 +27,14 @@
 #ifndef OMNI_REFLECTION_INCLUDED // 只引入一次，避免常数与函数重复定义。
 #define OMNI_REFLECTION_INCLUDED // 置上标记，后续再次引用直接跳过。
 
-// --- 内部常数：光线步进质量，原 `Settings.glsl` 里不进菜单的取值 ---
-#define RAYTRACE_QUALITY 16 // 一次反射最多走多少步，越大越不容易漏掉远处几何也越慢。
-#define RAYTRACE_REFINEMENT_STEPS 5 // 命中后二分细化的次数，越大交点越准。
-#define RAYTRACE_ZDIFF_THRESHOLD 0.2 // 命中判定的相对深度差阈值，越小越严格。
+// --- 玩家选项：光线步进质量、细化步数与深度差阈值，照 iterationT `Lib/Settings.glsl` 带取值范围的菜单项 ---
+// @effect {"label":{"zh_cn":"反射","en_us":"Reflections"}}
+// @option {"label":{"zh_cn":"光线步进质量","en_us":"Ray steps"},"description":{"zh_cn":"一次反射最多走多少步，越大越不容易漏掉远处几何，也更慢。","en_us":"Maximum steps per reflection ray; higher misses less distant geometry but is slower."},"slider":true}
+#define OMNI_RAYTRACE_QUALITY 16 //[8 12 16 24 32 64 128 256 512]
+// @option {"label":{"zh_cn":"细化步数","en_us":"Refinement steps"},"description":{"zh_cn":"命中后二分细化的次数，越大交点越准。原程序的范围注释缺右括号，这里补全。","en_us":"Bisection steps after a hit; higher is more accurate. The original range comment was missing its closing bracket, fixed here."},"slider":true}
+#define OMNI_RAYTRACE_REFINEMENT_STEPS 5 //[2 3 4 5 6 7 8 9 10 12 14 16 18 20 22 24 26 28 30 32]
+// @option {"label":{"zh_cn":"深度差阈值","en_us":"Depth difference"},"description":{"zh_cn":"命中判定的相对深度差阈值，越小越严格。","en_us":"Relative depth-difference threshold for a hit; smaller is stricter."},"slider":true}
+#define OMNI_RAYTRACE_ZDIFF_THRESHOLD 0.2 //[0.05 0.1 0.15 0.2 0.3 0.4 0.5]
 // 数学提供光照模型与颜色曲线，坐标换算提供屏幕与视空间互转，两份都供三个通道共用。
 #include "/common/math.glsl"
 #include "/common/coordinates.glsl"
@@ -92,7 +96,7 @@ vec3 sampleGGXVNDF(vec3 viewVector, float roughness, vec2 noise) {
 // 为什么命中后要二分细化：粗步长会跨过薄几何，细化几次把交点收窄到表面附近，反射边界才不抖。
 // 为什么经过 `screenPos.z` 与深度的相对差判定：只看深度大小会把掠射面判成命中，用相对差更稳。
 bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float noise, float minLength, bool isHand, inout vec3 screenPos){
-	const float rSteps = 1.0 / RAYTRACE_QUALITY; // 步数的倒数，用作归一化步长。
+	const float rSteps = 1.0 / OMNI_RAYTRACE_QUALITY; // 步数的倒数，用作归一化步长。
 
 	float viewRayLength = (-near - viewRayOri.z) / viewRayDir.z + step(viewRayDir.z, 0.0) * 1e20; // 射线到近裁剪面的长度，背向时给一个极远值。
 	vec3 rayDir = normalize(ScreenPos_From_ViewPos_Raw(viewRayOri + viewRayDir * viewRayLength) - screenPos); // 屏幕坐标下的射线方向，用不去抖动的投影。
@@ -115,7 +119,7 @@ bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float nois
 		float maxDepth = ScreenDepth_From_LinearDepth(LinearDepth_From_ScreenDepth_DH(1.0)); // 远景最远距离对应的近景深度，作为步进上限。
 	#endif
 
-	for(int i = 0; i < RAYTRACE_QUALITY + 3; i++){ // 最多走质量加三次，多出的几次用于边界收尾。
+	for(int i = 0; i < OMNI_RAYTRACE_QUALITY + 3; i++){ // 最多走质量加三次，多出的几次用于边界收尾。
 
 		if (saturate(screenPos.xy) != screenPos.xy) break; // 出了屏幕就停止，屏幕外没有可靠深度。
 
@@ -136,7 +140,7 @@ bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float nois
 
 			vec3 refineDir = rayDir * stepLength * 0.5; // 细化步长，从半步开始逐次减半。
 
-			for (int j = 0; j < RAYTRACE_REFINEMENT_STEPS; j++, refineDir *= 0.5) { // 二分细化交点。
+			for (int j = 0; j < OMNI_RAYTRACE_REFINEMENT_STEPS; j++, refineDir *= 0.5) { // 二分细化交点。
 
 				screenPos += refineDir * (step(screenPos.z, depth) * 2.0 - 1.0); // 越过就回退半步，没越过就前进半步。
 
@@ -171,12 +175,12 @@ bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float nois
 			float distDiff = abs(sampleDist - stepDist) / stepDist; // 两点的相对深度差。
 
 			#ifdef DISTANT_HORIZONS
-				if (distDiff < RAYTRACE_ZDIFF_THRESHOLD && screenPos.z > 0.0 && screenPos.z < maxDepth){ // 差足够小且深度在有效范围内才算命中。
+				if (distDiff < OMNI_RAYTRACE_ZDIFF_THRESHOLD && screenPos.z > 0.0 && screenPos.z < maxDepth){ // 差足够小且深度在有效范围内才算命中。
 					hit = true;
 					break;
 				}
 			#else
-				if (distDiff < RAYTRACE_ZDIFF_THRESHOLD && screenPos.z > 0.0 && screenPos.z < 1.0){ // 差足够小且深度在有效范围内才算命中。
+				if (distDiff < OMNI_RAYTRACE_ZDIFF_THRESHOLD && screenPos.z > 0.0 && screenPos.z < 1.0){ // 差足够小且深度在有效范围内才算命中。
 					hit = true;
 					break;
 				}

@@ -1,26 +1,32 @@
 /*
-末地天空：画出末地特有的星空、行星、吸积盘光环与大气雾，全部按时间因子旋转。
-来源：iterationT `Lib/IndividualFounctions/EndSky.glsl` 一比一移植，全部函数、内部常数与分支照原程序，
+末地天空：画出末地特有的星空、行星、吸积盘光环与大气雾，全部按时间因子旋转；另含末地主岛光源与雾密度选项。
+来源：主体照 iterationT `Lib/IndividualFounctions/EndSky.glsl` 一比一移植，全部函数、内部常数与分支照原程序，
   只有同名冲突函数按移植合同九点五节加 `End` 前缀（`CalculateStars`、`Calculate3DNoise`），函数体不变。
+  主岛光源与末地雾的两个密度选项来自 Eclipse（`lib/settings.glsl:419-421`、`:911-912`、`dimensions/composite.fsh:509`），
+  按 `docs/eclipse-parity.md` 第 37、39 行合并，默认关闭或取中性值，不改变原有画面。
 调用位置：
   `rendering/composite.glsl` 的合成零号在末地天空像素上调用 `BlackHole_AccretionDisc_Stars` 与 `PlanetEnd2`；
+  合成零号在有几何的像素上、开启 `OMNI_END_ISLAND_LIGHT` 时调用 `EndIslandLighting` 叠主岛光源；
   `rendering/composite.glsl` 的合成二号在末地反射回退里调用 `BlackHole_AccretionDisc_Reflection`、`PlanetEnd2` 与 `EndFog`；
   `rendering/composite.glsl` 的合成五号在末地水雾里调用 `EndFog`。
 可复制示例：
   `BlackHole_AccretionDisc_Stars(finalComposite, worldDir, worldShadowVector);`
   `PlanetEnd2(finalComposite, vec3(0.0), worldDir, worldSunVector);`
   `color += EndFog(waterDist, worldDir);`
+  `finalComposite += EndIslandLighting(worldPos, worldNormal, worldDir, gbuffer.albedo, gbuffer.material.roughness, gbuffer.material.f0, gbuffer.material.metalness);`
 调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明或先引入）：
   `worldSunVector`、`worldShadowVector` 是绘制主体声明的光方向全局量（合成程序里是顶点阶段传入的 `in`）；
-  `frameTimeCounter`、`noisetex` 由 `common/uniforms.glsl` 提供，`MiePhaseFunction`、`Blackbody`、
-  `RaySphereIntersection`、`RayPlaneIntersection`、`remapSaturate`、`curve`、`saturate`、`InterleavedGradientNoise`
-  由 `common/math.glsl` 提供，`BlueNoiseTemporal` 由 `common/noise.glsl` 提供；
+  `frameTimeCounter`、`noisetex`、`cameraPosition` 由 `common/uniforms.glsl` 提供，`MiePhaseFunction`、`Blackbody`、
+  `RaySphereIntersection`、`RayPlaneIntersection`、`remapSaturate`、`curve`、`saturate`、`InterleavedGradientNoise`、
+  `Fd_Burley`、`SpecularGGX` 由 `common/math.glsl` 提供，`BlueNoiseTemporal` 由 `common/noise.glsl` 提供；
   `OMNI_SUNLIGHT_INTENSITY` 由 `effects/lighting/sunlight.glsl` 提供，`OMNI_STAR_TYPE` 由 `effects/sky/sky.glsl` 提供，
   `OMNI_TAA` 由 `effects/clarity/antialiasing.glsl` 提供；这些都必须在引入本文件之前引入。
 关键设计原因与取舍：
   原程序在文件顶部用 `frameTimeCounter` 与旋转周期算出 `timeFactor` 与 `planetShadow` 两个全局量，本文件照搬，
   所以这些全局量与 `frameTimeCounter` 挂钩，同一帧内多次调用不会重复计算；
   吸积盘与行星都是屏幕空间的解析积分，不改写几何，末地天空整幅由这里画出，不走预计算大气。
+  主岛光源没有照搬 Eclipse 的阴影相机（需要计算着色器与附加缓冲），而是在合成零号按点光源解析照亮，
+  距离与视野角取自 Eclipse，衰减形状是本项目的近似，见 `docs/eclipse-parity.md` 第 37 行的说明。
 */
 #ifndef OMNI_END_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_END_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -35,6 +41,18 @@
 //#define OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE
 // @option {"label":{"zh_cn":"吸积盘多普勒效应","en_us":"Accretion Disc Doppler Effect"},"description":{"zh_cn":"模拟黑洞吸积盘旋转的多普勒效应，一边更亮、一边更暗。","en_us":"Simulates the doppler shift of the rotating accretion disc, brightening one side."}}
 #define OMNI_ACCRETIONDISC_DOPPLER_EFFECT
+// @option {"label":{"zh_cn":"末地主岛光源","en_us":"End Island Light"},"description":{"zh_cn":"在末地主岛上方（世界坐标零点、高度一百九十）放一盏灯，按到灯的距离和入射角照亮附近表面并产生高光。默认关闭，画面与不加这项时一致。","en_us":"Places a light above the End main island at world (0, 190, 0) that lights nearby surfaces by distance and angle and adds specular. Off by default."}}
+//#define OMNI_END_ISLAND_LIGHT
+// @option {"label":{"zh_cn":"主岛光源视野角","en_us":"Island Light FOV"},"description":{"zh_cn":"主岛光源的照射范围角度，单位度；超出这个角度的表面收不到这份光。取自 Eclipse 的七十七度。","en_us":"Cone angle of the island light in degrees; surfaces outside it get no light. Eclipse uses 77."},"slider":true}
+#define OMNI_END_LIGHT_FOV 77.0 // [30.0 40.0 50.0 60.0 70.0 77.0 90.0 110.0 130.0 150.0]
+// @option {"label":{"zh_cn":"主岛光源亮度","en_us":"Island Light Brightness"},"description":{"zh_cn":"主岛光源的整体亮度，一为基准值，零等于关灯。默认一不改变已有的光照尺度。","en_us":"Overall brightness of the island light; 1 is the reference and 0 is off. Default 1 keeps the existing light scale."},"slider":true}
+#define OMNI_END_LIGHT_BRIGHTNESS 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0 4.0]
+// @option {"label":{"zh_cn":"末地风暴密度","en_us":"End Storm Density"},"description":{"zh_cn":"末地雾里带方向性的风暴部分浓度，一为现在的强度，零去掉这一层。取自 Eclipse 的同名密度。","en_us":"Density of the directional storm part of the End fog; 1 is the current strength, 0 removes it. Matches Eclipse's storm density."},"slider":true}
+#define OMNI_END_FOG_STORM_DENSITY 1.0 // [0.0 0.1 0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0 5.0]
+// @option {"label":{"zh_cn":"末地雾霭密度","en_us":"End Haze Density"},"description":{"zh_cn":"末地雾里不带方向性的雾霭部分浓度，一为现在的强度，零去掉这一层。取自 Eclipse 的同名密度。","en_us":"Density of the direction-less haze part of the End fog; 1 is the current strength, 0 removes it. Matches Eclipse's haze density."},"slider":true}
+#define OMNI_END_FOG_HAZE_DENSITY 1.0 // [0.0 0.1 0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0 5.0]
+// 主岛光源的位置：Eclipse `lib/settings.glsl:419` 的世界坐标，内部常数照原程序保留原名，不进菜单。
+#define END_LIGHT_POS vec3(0.0, 190.0, 0.0)
 
 // --- 时间因子：整颗末地天空按它旋转 ---
 // 手动相位时取固定角度，否则按累计时间除以公转周期循环。零点二八二是原程序的起始相位。
@@ -564,12 +582,48 @@ vec3 EndFog(float dist, vec3 worldDir){
 
 	dist = min(dist, 512.0); // 距离封顶，远处不再变浓。
 	float h = abs(worldDir.z) * dist * 0.03; // 沿视线方向的等效高度。
-	float density = (1.0 - exp(-h)) / h * dist; // 密度沿距离的积分闭式解。
+	float fogDepth = (1.0 - exp(-h)) / h * dist; // 密度沿距离的积分闭式解。
 
-	density *= MiePhaseFunction(0.3, VdotL) * 10.0 * planetShadow + 0.25; // 乘米氏相位与行星阴影。
+	float storm = MiePhaseFunction(0.3, VdotL) * 10.0 * planetShadow; // 带方向的风暴部分：米氏相位乘行星相位。
+	float haze = 0.25; // 不带方向的雾霭基准部分。
+	// 两个密度选项来自 Eclipse `lib/settings.glsl:911-912`（`END_STORM_DENSTIY`、`END_HAZE_DENSTIY`）；
+	// 默认都为一，缩放后相加与原来的单一密度逐位等价，画面不变。
+	float density = fogDepth * (storm * OMNI_END_FOG_STORM_DENSITY + haze * OMNI_END_FOG_HAZE_DENSITY); // 两层分别缩放后相加。
+
 	density *= planetShadow * 0.93 + 0.07; // 行星阴影压低密度。
 
 	return vec3(density * 1e-5 * OMNI_SUNLIGHT_INTENSITY); // 换算到管线单位并乘阳光强度。
+}
+
+// --- 末地主岛光源：把 END_LIGHT_POS 当成悬在主岛上方的点光源，按距离与夹角照亮表面并给高光 ---
+// 出处：位置 `lib/settings.glsl:419`、视野角 `:420`、开关 `:421`；Eclipse 在 `dimensions/composite.fsh:509` 按
+//   像素到光源重算光方向（`normalize(END_LIGHT_POS-(feetPlayerPos+cameraPosition))`），近处表面受光方向各不相同。
+// 与 Eclipse 的取舍：Eclipse 另建一盏阴影相机（`dimensions/begin.csh:100-111`，近十五远二百五十六、视野角七十七），
+//   需要计算着色器与附加缓冲；这里在合成零号按点光源解析照亮，距离窗与视野角照 Eclipse，衰减形状是本项目的近似。
+// 调用前提：`cameraPosition`、`END_LIGHT_POS` 已可用，`Blackbody`、`Fd_Burley`、`SpecularGGX` 已由 `common/math.glsl` 提供。
+vec3 EndIslandLighting(vec3 worldPos, vec3 normal, vec3 viewDir, vec3 albedo, float roughness, float f0, float metalness){
+	vec3 lightVec = END_LIGHT_POS - (worldPos + cameraPosition); // 表面指向光源的向量，`worldPos` 是相机相对世界坐标。
+	float lightDist = length(lightVec); // 到光源的距离。
+	vec3 lightDir = lightVec / max(lightDist, 1e-4); // 单位光方向，防除零。
+
+	// 距离窗：近十五远二百五十六照 Eclipse 的灯（`begin.csh:100-101`），两端各淡出一段，避免出现硬边。
+	float distFade = smoothstep(15.0, 40.0, lightDist) * (1.0 - smoothstep(200.0, 256.0, lightDist)); // 距离窗。
+	// 锥形窗：光轴竖直向下，方向与轴夹角超过 `OMNI_END_LIGHT_FOV` 一半就淡出；Eclipse 用这个角度构造透视灯。
+	float cosAxis = dot(normalize((worldPos + cameraPosition) - END_LIGHT_POS), normalize(-END_LIGHT_POS)); // 表面相对光轴的余弦。
+	float cosFov = cos(radians(OMNI_END_LIGHT_FOV * 0.5)); // 视野角一半的余弦，就是锥边的阈值。
+	float cone = smoothstep(cosFov, min(cosFov * 1.05 + 0.01, 0.999), cosAxis); // 锥内为一，锥外为零。
+	// 距离衰减：Eclipse 用阴影图而不是解析衰减，这里用平方反比近似，参考距离取灯的悬挂高度，让主岛附近接近一。
+	float falloff = distFade * cone * OMNI_END_LIGHT_BRIGHTNESS / (1.0 + lightDist * lightDist / 36000.0); // 总衰减。
+
+	vec3 lightColor = Blackbody(6000.0) * 0.3; // 与末地太阳同色温、同强度尺度（合成里用 `Blackbody(6000)` 与系数零点三）。
+	vec3 result = albedo * lightColor * falloff * Fd_Burley(normal, -viewDir, lightDir, roughness); // 漫反射乘底色。
+
+	float highlightGGX = SpecularGGX(normal, -viewDir, lightDir, clamp(roughness, 0.0015, 0.9), f0); // 与阳光同一套 GGX 高光。
+	highlightGGX *= saturate(4.0 - roughness * 3.5); // 光滑面高光更强。
+	highlightGGX *= 0.07; // 与阳光高光同一强度尺度。
+	result += mix(vec3(1.0), albedo, vec3(metalness)) * lightColor * falloff * highlightGGX; // 金属面高光带底色。
+
+	return result; // 交回可直接叠加到线性光照的颜色。
 }
 
 // --- 末地假天空反射：屏幕反射没命中时用末地天空兜底 ---

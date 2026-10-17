@@ -43,6 +43,10 @@ vec3 shadowVector; // 视空间阳光方向。
 #endif
 // 阴影：提供全部阴影选项、`shadowDistance`、`shadowMapResolution` 与末地阴影相机矩阵。
 #include "/effects/shadow/shadow.glsl"
+#ifdef OMNI_FRAGMENT
+	// 远景阴影淡入要用的 `DHShadowChunkFading`；它用到片元专用的 `discard` 与蓝噪声，所以只在片元阶段引入。
+	#include "/effects/world/world.glsl"
+#endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：阴影顶点着色器。
 // 传给片元的插值量。
@@ -185,6 +189,12 @@ void main(){
 			#ifdef OMNI_DH_SHADOW_FIX
 				if (normal.z <= 0.0) discard; // 只按朝向剔除背光面。
 			#endif
+		#endif
+
+		// 远景阴影淡入：远景阴影靠近阴影距离边界时按随机阈值淡出，避免阴影图边缘出现硬边。
+		// 距离取阴影视空间的长度，是到阴影相机（近似到玩家）的距离，属按距离的近似；二档才生效。
+		#if OMNI_DH_CHUNK_FADING > 1
+			DHShadowChunkFading(length(viewPos), min(shadowDistance, far)); // 按距离与阴影距离边界随机淡出。
 		#endif
 
 		#ifdef OMNI_DH_SHADOW_FIX
