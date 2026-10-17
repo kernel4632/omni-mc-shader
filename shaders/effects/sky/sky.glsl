@@ -15,6 +15,8 @@
     调用前提（iterationT 原样保留）：调用方必须先声明 `texelCoord`、`worldSunVector`、`worldMoonVector` 等全局量；
     这些量由绘制主体在引入本文件前给出，本文件不重复声明。
     本文件还承载原程序写在 `deferred3`、`CompositeVS`、`SSR` 里的天空相关小函数，见移植合同第九点五节的去重约定。
+    天空散射系数（Eclipse 的 `Sky_Brightness` 与瑞利/米氏系数）放在 `effects/sky/skyscatter.glsl`：
+    这里只把 `omniSkyRayleighTint()`、`omniSkyMieTint()` 与 `OMNI_SKY_BRIGHTNESS` 乘进查表结果，默认全一、画面不变。
     月亮轨道、月食与月相来自 Eclipse：自定义轨道在顶点阶段由世界时间闭式算出，日月解耦后才可能月食；
     真实月亮模式需要的月亮贴图与法线贴图是 Eclipse 自带文件，本项目没有，缺少时退回程序圆盘，见 `RenderMoonDisc`。
 */
@@ -109,6 +111,8 @@ const float sunPathRotation = -30.0; // [-90.0 -89.0 -88.0 -87.0 -86.0 -85.0 -84
 #include "/common/math.glsl"
 // 太阳色与辐照：提供 `omniSunTint()`，给太阳直射与太阳圆盘做相对染色；默认取值下返回全一、不改画面。
 #include "/effects/sky/suncolor.glsl"
+// 天空散射系数：提供 `omniSkyRayleighTint()` 与 `omniSkyMieTint()`，给瑞利与米氏散射做逐通道倍率；默认全一、不改画面。
+#include "/effects/sky/skyscatter.glsl"
 // 把半径夹进大气层范围内，越界时按最近的边界算。
 float ClampRadius(float r){
 	return clamp(r, atmosphereModel_bottom_radius, atmosphereModel_top_radius); // 下不低于地面、上不超过层顶。
@@ -485,12 +489,14 @@ vec3 GetSkyRadiance(
 			groundDiffuse = mix(sky_irradiance * 0.1, sun_irradiance * 0.008, wetness * 0.6) * surface_transmittance; // 地面反弹按干湿在环境与直射之间插值。
 		}
 		#endif
-		vec3 rayleigh = sun_scattering * RayleighPhaseFunction(sun_nu) // 太阳侧瑞利散射乘瑞利相位。
-					 + moon_scattering * RayleighPhaseFunction(moon_nu) * OMNI_NIGHT_BRIGHTNESS; // 月亮侧同理并按夜间亮度缩放。
-		vec3 mie = sun_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, sun_nu) // 太阳侧米氏散射乘米氏相位。
-				+ moon_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, moon_nu) * OMNI_NIGHT_BRIGHTNESS; // 月亮侧同理。
+		vec3 rayleigh = (sun_scattering * RayleighPhaseFunction(sun_nu) // 太阳侧瑞利散射乘瑞利相位。
+					 + moon_scattering * RayleighPhaseFunction(moon_nu) * OMNI_NIGHT_BRIGHTNESS) // 月亮侧同理并按夜间亮度缩放。
+					 * omniSkyRayleighTint(); // 再按散射系数选项逐通道缩放瑞利散射，默认全一不改画面。
+		vec3 mie = (sun_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, sun_nu) // 太阳侧米氏散射乘米氏相位。
+				+ moon_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, moon_nu) * OMNI_NIGHT_BRIGHTNESS) // 月亮侧同理。
+				* omniSkyMieTint(); // 再按散射系数选项逐通道缩放米氏散射，默认全一不改画面。
 		rayleigh = mix(rayleigh, vec3(Luminance(rayleigh)) * atmosphereModel_solar_irradiance, wetness * 0.5); // 雨天把瑞利散射去色并按太阳谱重新染色。
-		return (rayleigh + mie + groundDiffuse) * (1.0 - wetness * 0.4) * LMS; // 合成后按雨天压暗并转色适应空间。
+		return (rayleigh + mie + groundDiffuse) * (1.0 - wetness * 0.4) * LMS * OMNI_SKY_BRIGHTNESS; // 合成后按雨天压暗、转色适应空间，再乘天空亮度选项。
 }
 // 算相机到某个世界点之间的天空辐射亮度，体积云与平面云算空气透视时用。
 vec3 GetSkyRadianceToPoint(
@@ -539,12 +545,14 @@ vec3 GetSkyRadianceToPoint(
 		moon_single_mie_scattering = moon_single_mie_scattering - transmittance * moon_single_mie_scattering_p; // 月亮侧米氏同样相减。
 		sun_single_mie_scattering = sun_single_mie_scattering * smoothstep(0.0, 0.01, sun_mu_s); // 太阳很贴地时淡出米氏散射，避免出现断带。
 		moon_single_mie_scattering = moon_single_mie_scattering * smoothstep(0.0, 0.01, moon_mu_s); // 月亮同样处理。
-		vec3 rayleigh = sun_scattering * RayleighPhaseFunction(sun_nu) // 太阳侧瑞利散射。
-					 + moon_scattering * RayleighPhaseFunction(moon_nu) * OMNI_NIGHT_BRIGHTNESS; // 月亮侧瑞利散射。
-		vec3 mie = sun_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, sun_nu) // 太阳侧米氏散射。
-				+ moon_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, moon_nu) * OMNI_NIGHT_BRIGHTNESS; // 月亮侧米氏散射。
+		vec3 rayleigh = (sun_scattering * RayleighPhaseFunction(sun_nu) // 太阳侧瑞利散射。
+					 + moon_scattering * RayleighPhaseFunction(moon_nu) * OMNI_NIGHT_BRIGHTNESS) // 月亮侧瑞利散射。
+					 * omniSkyRayleighTint(); // 按散射系数选项逐通道缩放，默认全一不改画面。
+		vec3 mie = (sun_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, sun_nu) // 太阳侧米氏散射。
+				+ moon_single_mie_scattering * MiePhaseFunction(atmosphereModel_mie_phase_function_g, moon_nu) * OMNI_NIGHT_BRIGHTNESS) // 月亮侧米氏散射。
+				* omniSkyMieTint(); // 按散射系数选项逐通道缩放，默认全一不改画面。
 		rayleigh = mix(rayleigh, vec3(Luminance(rayleigh)) * atmosphereModel_solar_irradiance, wetness * 0.5); // 雨天把瑞利散射去色重染。
-		return (rayleigh + mie) * (1.0 - wetness * 0.4) * LMS; // 合成后按雨天压暗并转色适应空间。
+		return (rayleigh + mie) * (1.0 - wetness * 0.4) * LMS * OMNI_SKY_BRIGHTNESS; // 合成后按雨天压暗并转色适应空间，再乘天空亮度选项。
 }
 // 校次把球面方向绕太阳轴旋转，让星点跟着天体倾斜，再按方向切格撒星。
 // 太阳方向作为参数传入：天空效果会被多个程序引入，直接在函数里读全局量会让不需要光色的程序编译失败。

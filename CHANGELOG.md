@@ -1,5 +1,15 @@
 # 更新记录
 
+## 0.0.0-dev.137
+
+把 Eclipse 的天空散射系数引进预计算大气：新增天空亮度与瑞利/米氏散射系数倍率，默认全一、画面不变。
+
+- 新文件 `effects/sky/skyscatter.glsl`：`OMNI_SKY_BRIGHTNESS`（Eclipse `Sky_Brightness`）与 `OMNI_SKY_RAYLEIGH_R/G/B`、`OMNI_SKY_MIE_R/G/B`（Eclipse `sky_coefficientRayleigh/Mie R/G/B`）。
+- 接线在 `effects/sky/sky.glsl` 的 `GetSkyRadiance` 与 `GetSkyRadianceToPoint`：瑞利项乘 `omniSkyRayleighTint()`、米氏项乘 `omniSkyMieTint()`、整个天空辐射乘 `OMNI_SKY_BRIGHTNESS`。
+- 近似说明：Omni 用预计算大气贴图，系数已烘进数据里，无法按新系数重算整条光路；这里缩放的是散射结果（放大瑞利更蓝更亮、放大米氏太阳白晕更强），严格的消光与多次散射不随之改变。表面天空环境光（`GetSunAndSkyIrradiance`）不受影响，与 Eclipse 一致。
+
+只做过离线编译、审计与单元测试；游戏内画面、性能与兼容性仍未验证。
+
 ## 0.0.0-dev.136
 
 末地体积雾补上透射率：合成阶段改为“场景乘透射率加散射”，远处雾会压暗背景。

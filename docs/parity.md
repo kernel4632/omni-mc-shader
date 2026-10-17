@@ -342,7 +342,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 41. 行星曲率只接在顶点阶段的一部分：`effects/world/planet.glsl` 的 `omniPlanetCurvatureDrop`（`:37`）与 `omniPlanetCurvatureView`（`:49`/`:55`）已接地形、实体、水面、阴影、远景、粒子、覆盖层与雨雪，但水下手持未接；默认关。
 42. 每日天气表放在 GLSL 常量数组而非约一百项菜单选项：`effects/weather/dailyweather.glsl` 的 `OMNI_WEATHER_COVERAGE/DENSITY/FOG`（`:60/73/87`），玩家只有总开关、随机与周期三项；默认关。
 43. 玩家交互水面用近似：`effects/water/playerwater.glsl` 的 `PlayerWaterRipple`（`:32`）用相机位置与时间相位近似入水位置与时刻，得到持续外扩涟漪，不是 Eclipse 的网格模拟（`lib/oceans.glsl` 的 `physics_waveHeight`）；默认关。
-44. Eclipse 合并批次的额外功能默认中性：色彩分级、镜头形变、胶片颗粒、洞穴雾、边界雾、下界三段体积雾、末地涡旋雾、时段雾、每群系环境、雪暴沙暴、受伤与低血量、区块淡入、水洼尺寸、材质 AO 与法线倍率、太阳色与辐照、远景过绘防护与噪声衰减都默认关闭或取不改变画面的值，默认画面与 iterationT 一致；逐项落点见 `docs/eclipse-parity.md`。
+44. Eclipse 合并批次的额外功能默认中性：色彩分级、镜头形变、胶片颗粒、洞穴雾、边界雾、下界三段体积雾、末地涡旋雾、时段雾、每群系环境、雪暴沙暴、受伤与低血量、区块淡入、水洼尺寸、材质 AO 与法线倍率、太阳色与辐照、天空散射系数（`OMNI_SKY_BRIGHTNESS` 与 `OMNI_SKY_RAYLEIGH/MIE_R/G/B`，`skyscatter.glsl`，近似）、远景过绘防护与噪声衰减都默认关闭或取不改变画面的值，默认画面与 iterationT 一致；逐项落点见 `docs/eclipse-parity.md`。
 
 45. 一号画面补上多级纹理声明：iterationT 在 `Lib/IndividualFounctions/MotionBlur.glsl:11` 声明 `colortex1MipmapEnabled = true`，
     本项目此前漏了这条，自动曝光的 `GetExposureTiles`（`effects/color/color.glsl:136`、`:145`）读第六级多级纹理时会读不到内容，
