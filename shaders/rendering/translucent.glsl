@@ -56,6 +56,8 @@
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
+// 行星曲率：顶点阶段按相机相对水平距离把远处顶点下沉，选项与算法都在该文件。
+#include "/effects/world/planet.glsl"
 
 #ifdef OMNI_VERTEX // 顶点阶段：水面与手持水分开写。
 #if defined OMNI_WATER_PASS // 水面顶点着色器。
@@ -87,6 +89,9 @@ void main(){
 		vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 常规顶点变换。
 	#endif
 
+	vec3 planetViewPos = v_viewPos.xyz; // 复制水面视空间位置给行星曲率改写。
+	omniPlanetCurvatureView(planetViewPos); // 行星曲率：远处水面顶点沿纵向下沉，模拟星球弯曲；关闭时为原样。
+	v_viewPos.xyz = planetViewPos; // 写回改写后的视空间位置。
 	viewPos = v_viewPos.xyz; // 传给片元。
 
 	gl_Position = gl_ProjectionMatrix * v_viewPos; // 投影到裁剪空间。

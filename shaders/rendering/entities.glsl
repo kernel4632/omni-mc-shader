@@ -52,6 +52,8 @@ vec3 colorSkylight; // 天光颜色。
 #include "/effects/entity/entity.glsl"
 // Omni 额外功能：积雪覆盖（来源 Eclipse），默认关闭；与地形共用同一份雪覆盖算法。
 #include "/effects/weather/snow.glsl"
+// 行星曲率：顶点阶段按相机相对水平距离把远处顶点下沉，选项与算法都在该文件。
+#include "/effects/world/planet.glsl"
 // 自发光模式选项归属方块光文件，只在有高光贴图时按需引入。
 #if defined OMNI_FRAGMENT && defined MC_SPECULAR_MAP
 	// 方块光文件读取火把光色，按它的调用前提给一个空全局。
@@ -101,6 +103,9 @@ out vec2 blockLight; // 方块光与天光。
 // 顶点主函数：按程序宏选手持物视场角，再算摆动与切线基。
 void main(){
 	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
+	vec3 planetViewPos = v_viewPos.xyz; // 复制视空间位置给行星曲率改写。
+	omniPlanetCurvatureView(planetViewPos); // 行星曲率：远处实体顶点沿纵向下沉，模拟星球弯曲；关闭时为原样。
+	v_viewPos.xyz = planetViewPos; // 写回改写后的视空间位置。
 	viewPos = v_viewPos.xyz; // 传给片元。
 	#ifdef OMNI_HAND_PASS // 手持物按模式改写视场角与深度，算法只保留在效果文件里一份。
 		gl_Position = HandFovProjection(gbufferProjection, aspectRatio) * v_viewPos; // 调用效果文件统一实现的投影改写。

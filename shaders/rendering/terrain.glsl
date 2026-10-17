@@ -53,6 +53,8 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 #include "/effects/weather/season.glsl"
 // Omni 额外功能：积雪覆盖（来源 Eclipse），默认关闭；与季节同属天气相关的地表效果。
 #include "/effects/weather/snow.glsl"
+// 行星曲率：顶点阶段按相机相对水平距离把远处顶点下沉，选项与算法都在该文件。
+#include "/effects/world/planet.glsl"
 // 自发光模式选项归属方块光文件，只在有高光贴图时按需引入。
 #if defined OMNI_FRAGMENT && defined MC_SPECULAR_MAP
 	// 方块光文件读取火把光色，按它的调用前提给一个空全局。
@@ -147,6 +149,7 @@ void main(){
 
 	worldPos.xyz -= cameraPosition.xyz; // 减回相机相对世界坐标。
 	worldPos.xyz = omniChunkFadeSlide(worldPos.xyz, v_chunkFade, eyeBrightnessZeroSmooth, far); // 滑动档把远处未淡入的块从下方移入；关闭或不在滑动档时原样返回。
+	worldPos.y -= omniPlanetCurvatureDrop(worldPos.xz); // 行星曲率：远处地形沿纵向下沉，模拟星球弯曲；关闭时为零。
 	gl_Position = gl_ProjectionMatrix * gbufferModelView * worldPos; // 投影到裁剪空间。
 
 	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。

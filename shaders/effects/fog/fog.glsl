@@ -7,7 +7,8 @@
   三、水下体积雾：`UnderwaterVolumetricFog` 在水下沿视线步进阴影可见性并叠焦散，画出蓝色光柱；
   四、地面大气散射与原版雾：`LandAtmosphericScattering` 补地表方向的空气散射，`VanillaFog` 处理失明、黑暗与岩浆雪盲；
   五、洞穴雾与边界雾：`CaveFog`、`BorderFog` 来自 Eclipse，默认关闭，开启后在 `VanillaFog` 里补洞内雾与渲染距离附近的雾墙；
-  六、时段雾：`FogDensityScale` 按主世界一天时间与雾类型给出体积雾密度，来自 Eclipse，默认关闭。
+  六、时段雾：`FogDensityScale` 按主世界一天时间与雾类型给出体积雾密度，来自 Eclipse，默认关闭；
+  七、雪暴与沙暴：`effects/weather/storm.glsl` 提供暴风强度、额外浓雾与雾色，`VolumetricFog` 步进时叠这层浓雾并染色，默认关闭。
 调用位置：
   `rendering/composite.glsl` 的 `composite2` 程序在反射里补体积雾与地表散射；
   `rendering/composite.glsl` 的 `composite5` 程序对整幅画面补体积雾、水下体积雾、地表散射与原版雾。
@@ -21,10 +22,12 @@
   `screenSize`、`pixelSize`、`colortex7`、`shadowtex0`、`shadowtex1` 由合成主程序声明；
   `OMNI_SKYLIGHT_INTENSITY`、`OMNI_SUNLIGHT_INTENSITY`、`OMNI_CAVE_MODE` 由 `effects/lighting/sunlight.glsl` 提供，绘制主体需在本文件之前引入它；
   `OMNI_UNDERWATER_FOG`、`OMNI_WATERFOG_DENSITY` 由 `effects/water/water.glsl` 提供，本文件已在函数定义之后引入它。
+  雪暴与沙暴读 `rainStrength`、`thunderStrength` 与两份群系标记，见 `effects/weather/storm.glsl` 的文件头；默认关闭时不读这些量。
 关键设计原因与取舍：
   `VFOG_LQ` 由 `composite2` 程序自己打开，体积雾在那一步只用三步，省下反射通道的开销，本文件保留原宏名；
   `GetWavesNormalFromTex` 与 `CalculateWaterCaustics` 已由 `effects/shadow/shadow.glsl` 提供，本文件不重复定义；水下体积雾需要的那份焦散与阴影文件不同名，按合同改名为 `CalculateUnderwaterCaustics` 并记入偏离记录；
-  原版雾的失明与黑暗只在加载器给出对应状态时才生效，默认关闭，画面与 iterationT 一致。
+  原版雾的失明与黑暗只在加载器给出对应状态时才生效，默认关闭，画面与 iterationT 一致；
+  群系特色环境来自 `effects/world/biome.glsl`，按玩家所在群系给体积雾换雾色与密度，总开关默认关闭，关闭时本文件不引用它。
 */
 #ifndef OMNI_FOG_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_FOG_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -141,12 +144,17 @@
 // 洞穴雾与边界雾要从像素坐标还原视线方向，用这里的 `ViewPos_From_ScreenPos_Raw`；文件自带守卫，重复引入无副作用。
 #include "/common/coordinates.glsl"
 #include "/common/noise.glsl"
+// 群系特色环境：按玩家所在群系给体积雾换雾色与密度，由主助手在 `rendering/pipeline.properties` 登记群系权重；
+// 总开关关闭时它不产生任何代码，默认画面与原来一致。
+#include "/effects/world/biome.glsl"
 #include "/effects/shadow/shadow.glsl"
 #include "/effects/sky/sky.glsl"
 #include "/effects/cloud/cloud.glsl"
 #include "/effects/lighting/sunlight.glsl"
 // 原版雾用失明与黑暗的调试开关 `OMNI_DISABLE_BLINDNESS_DARKNESS`，它的归属文件是颜色效果，这里引入才拿到定义。
 #include "/effects/color/color.glsl"
+// 雪暴与沙暴提供暴风强度、额外浓雾与雾色，供体积雾主体调用；默认关闭时整段不增加代码。
+#include "/effects/weather/storm.glsl"
 
 // --- 体积雾：相位、噪声与密度 ---
 // 粉末效应：光穿过一层薄雾时，正对光源方向更亮，背光方向的雾壁反而更暗，模拟粒子间的多次散射。
@@ -310,6 +318,16 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 
 	float fogDensityScale = FogDensityScale(); // 密度标度：时段雾关闭时为固定密度选项，开启后随一天时间变化。
 
+	#ifdef OMNI_PER_BIOME_ENV // 群系权重每像素算一次，供下面的雾密度与雾色共用。
+		vec4 biomeWeights = omniBiomeWeights(); // 四个群系的权重，来自加载器平滑量。
+	#endif
+
+	#if defined(OMNI_SNOW_STORM) || defined(OMNI_SAND_STORM) // 只有开启至少一种暴风时才计算强度，默认零开销。
+		float stormSnow = OmniSnowStorm(); // 雪暴强度，零到一。
+		float stormSand = OmniSandStorm(); // 沙暴强度，零到一。
+		float stormStrength = clamp(stormSnow + stormSand, 0.0, 1.0); // 两种暴风的总强度，即使都没刮也保持零。
+	#endif
+
 	#ifdef OMNI_VFOG_VOLUMETRIC_LIGHTING // 打开体积光照时用多级相位，否则用单一相位。
 		float phases[4]; // 四级散射相位。
 		MultiScatteringPhases(VdotL, phases); // 一次算好四级相位。
@@ -343,14 +361,32 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		vec3 fogPos = start + stepLength * rayVector; // 这一步的雾采样位置。
 		vec3 shadowPos = shadowStart + stepLength * shadowRayVector; // 这一步的阴影图坐标。
 
+		#ifdef OMNI_PER_BIOME_ENV // 群系内按离相机的距离替换雾密度，远处退回原值。
+			float biomeDistance = length((stepLength * rayVector).xz); // 这一步相对起点的水平距离，与 Eclipse 的口径一致。
+			float biomeEnvelope = min(max(1.0 - biomeDistance / 256.0, 0.0) * 2.0, 1.0); // 二百五十六米内替换最明显，与 Eclipse 同一包络。
+			float biomeUniformScale = fogDensityScale; // 高度衰减雾用的密度标度，先用原值再被混合。
+			float biomeCloudyScale = fogDensityScale; // 团雾用的密度标度，先用原值再被混合。
+			omniBiomeFogDensity(biomeWeights, biomeUniformScale, biomeCloudyScale, biomeEnvelope); // 把两套标度朝本群系密度混合。
+			#if OMNI_VFOG_NOISE_TYPE == 0 // 当前是仅高度衰减雾，取高度衰减那一套。
+				float densityScale = biomeUniformScale; // 群系混合后的密度标度。
+			#else // 当前是团雾，取多云那一套。
+				float densityScale = biomeCloudyScale; // 群系混合后的密度标度。
+			#endif
+		#else // 未启用群系环境时直接用原密度标度，画面与原来完全一致。
+			float densityScale = fogDensityScale; // 原密度标度。
+		#endif
+
 		float density = FogDensity(fogPos, wind); // 算这一点的雾密度，仅高度衰减模式忽略风。
-		density = (density * fogDensityScale + baseDensity) * fogTimeFactor; // 噪声密度乘密度标度再加基础密度，再乘时间因子。
+		density = (density * densityScale + baseDensity) * fogTimeFactor; // 噪声密度乘密度标度再加基础密度，再乘时间因子。
+		#if defined(OMNI_SNOW_STORM) || defined(OMNI_SAND_STORM) // 暴风时在这条射线上再叠一层浓雾。
+			density += OmniStormFog(fogPos, stormSnow) * stormStrength * OMNI_STORM_DENSITY; // 暴风噪声密度乘总强度与浓度选项。
+		#endif
 		float absorption = exp2(-density * stepDensity); // 这一步吸收掉的光。
 
 		#ifdef OMNI_VFOG_VOLUMETRIC_LIGHTING // 体积光照：沿阳光方向估吸收。
 			float lightingDensity = FogLightMarch(fogPos, wind); // 沿光方向累计密度，并就地推进 `fogPos`。
 
-			lightingDensity = (lightingDensity * OMNI_VFOG_SUNLIGHT_ABSORPTION * fogDensityScale + baseDensity) * fogTimeFactor; // 乘吸收率与密度标度再算总密度。
+			lightingDensity = (lightingDensity * OMNI_VFOG_SUNLIGHT_ABSORPTION * densityScale + baseDensity) * fogTimeFactor; // 乘吸收率与群系混合后的密度标度再算总密度。
 			float lightingAbsorption = exp2(-lightingDensity * stepDensity); // 光方向上的吸收。
 
 			float stepRayDensity = 0.0; // 这一步的阳光散射量。
@@ -434,6 +470,21 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 
 	vec3 fogColor = skylight         * fogDensity; // 环境雾色。
 	vec3 rayColor = colorShadowlight * rayDensity; // 阳光散射色。
+
+	#if defined(OMNI_SNOW_STORM) || defined(OMNI_SAND_STORM) // 暴风时把雾色与散射色染成雪白或沙黄。
+		vec3 stormTint = mix(vec3(1.0), OmniStormColor(stormSnow, stormSand), stormStrength); // 没刮风时为单位色，不改变画面。
+		fogColor *= stormTint; // 环境雾按暴风颜色染色。
+		rayColor *= stormTint; // 阳光散射同样染色，与 Eclipse 染色两组光色一致。
+	#endif
+
+	#ifdef OMNI_PER_BIOME_ENV // 群系配色给雾的环境色与直射散射染色，与 Eclipse 的 `BiomeVLFogColors` 同一处作用。
+		vec3 biomeFogColor; // 本群系合成的雾色。
+		float biomeCoverage; // 落在任一已启用群系内的程度。
+		omniBiomeFogColor(biomeWeights, biomeFogColor, biomeCoverage); // 取本群系雾色与覆盖程度。
+		vec3 biomeTint = mix(vec3(1.0), biomeFogColor, biomeCoverage); // 不在群系内时保持原色，不改变画面。
+		fogColor *= biomeTint; // 环境雾染成群系色。
+		rayColor *= biomeTint; // 阳光散射同样染色。
+	#endif
 
 	#ifdef MC_GL_VENDOR_NVIDIA
 		#ifdef OMNI_VFOG_STAINED

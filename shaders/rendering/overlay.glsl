@@ -35,6 +35,8 @@
 #include "/effects/ground/material.glsl"
 // 选择框：提供 `SelectionBoxColor` 与线条图像输出函数。
 #include "/effects/ground/selection.glsl"
+// 行星曲率：粒子、线条等覆盖层要与地形实体做同一次下沉，否则远处会浮空，选项与算法都在该文件。
+#include "/effects/world/planet.glsl"
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 
@@ -64,7 +66,11 @@ const mat4 VIEW_SCALE = mat4( // 视空间收缩矩阵。
 // 顶点主函数：基础走普通变换，线条把法线当作端点方向撑粗。
 void main(){
 	#if defined OMNI_BASIC_PASS // 基础几何：常规变换。
-		gl_Position = ftransform(); // 用加载器的矩阵直接变换顶点。
+		vec4 basicViewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
+		vec3 basicPlanetPos = basicViewPos.xyz; // 复制视空间位置给行星曲率改写。
+		omniPlanetCurvatureView(basicPlanetPos); // 行星曲率：基础覆盖层与地形实体同一次下沉，关闭时为零。
+		basicViewPos.xyz = basicPlanetPos; // 写回下沉后的视空间位置。
+		gl_Position = gl_ProjectionMatrix * basicViewPos; // 投影到裁剪空间，等同原来的 `ftransform`。
 
 		#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
 			gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加抖动。
@@ -80,8 +86,17 @@ void main(){
 	#else // 线条几何：把线撑到固定像素宽。
 		color = gl_Color; // 顶点色。
 
-		vec4 linePosStart = gl_ProjectionMatrix * VIEW_SCALE * gl_ModelViewMatrix * vec4(gl_Vertex.xyz, 1.0); // 起点投影。
-		vec4 linePosEnd = gl_ProjectionMatrix * VIEW_SCALE * gl_ModelViewMatrix * vec4(gl_Vertex.xyz + gl_Normal, 1.0); // 沿法线取终点。
+		vec4 lineViewStart = gl_ModelViewMatrix * vec4(gl_Vertex.xyz, 1.0); // 起点转到视空间。
+		vec4 lineViewEnd = gl_ModelViewMatrix * vec4(gl_Vertex.xyz + gl_Normal, 1.0); // 沿法线取终点的视空间位置。
+		vec3 lineStartPlanet = lineViewStart.xyz; // 复制起点视空间位置给行星曲率改写。
+		vec3 lineEndPlanet = lineViewEnd.xyz; // 复制终点视空间位置给行星曲率改写。
+		omniPlanetCurvatureView(lineStartPlanet); // 行星曲率：线条与它框住的方块一起下沉，否则远处会浮在方块上方。
+		omniPlanetCurvatureView(lineEndPlanet); // 终点同样下沉，保持线段方向一致。
+		lineViewStart.xyz = lineStartPlanet; // 写回下沉后的起点位置。
+		lineViewEnd.xyz = lineEndPlanet; // 写回下沉后的终点位置。
+
+		vec4 linePosStart = gl_ProjectionMatrix * VIEW_SCALE * lineViewStart; // 起点投影。
+		vec4 linePosEnd = gl_ProjectionMatrix * VIEW_SCALE * lineViewEnd; // 终点同样投影。
 
 		vec3 ndc1 = linePosStart.xyz / linePosStart.w; // 起点转到标准设备坐标。
 		vec3 ndc2 = linePosEnd.xyz / linePosEnd.w; // 终点同样转换。
@@ -111,7 +126,11 @@ out vec2 blockLight; // 方块光与天光，只有贴图程序用到。
 
 // 顶点主函数：常规变换。
 void main(){
-	gl_Position = ftransform(); // 用加载器的矩阵直接变换顶点。
+	vec4 texturedViewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
+	vec3 texturedPlanetPos = texturedViewPos.xyz; // 复制视空间位置给行星曲率改写。
+	omniPlanetCurvatureView(texturedPlanetPos); // 行星曲率：粒子、破坏与附魔光与地形实体同一次下沉，关闭时为零。
+	texturedViewPos.xyz = texturedPlanetPos; // 写回下沉后的视空间位置。
+	gl_Position = gl_ProjectionMatrix * texturedViewPos; // 投影到裁剪空间，等同原来的 `ftransform`。
 
 	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
 		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加抖动。
@@ -131,7 +150,10 @@ out vec2 blockLight; // 方块光与天光。
 // 顶点主函数：先转到视空间再投影。
 void main(){
 	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
-	viewPos = v_viewPos.xyz; // 传给片元。
+	vec3 beamPlanetPos = v_viewPos.xyz; // 复制视空间位置给行星曲率改写。
+	omniPlanetCurvatureView(beamPlanetPos); // 行星曲率：光束与地形同一次下沉，远处不会浮空。
+	v_viewPos.xyz = beamPlanetPos; // 写回下沉后的视空间位置。
+	viewPos = v_viewPos.xyz; // 传给片元，用下沉后的位置。
 	gl_Position = gl_ProjectionMatrix * v_viewPos; // 投影到裁剪空间。
 
 	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
@@ -158,6 +180,8 @@ void main(){
 
 	vec2 offset = RainWindOffset(worldPos.xyz); // 取雨雪水平偏移，只有露天才推斜。
 	worldPos.xz += offset; // 把偏移加到世界坐标横纵轴。
+
+	worldPos.y -= omniPlanetCurvatureDrop(worldPos.xz); // 行星曲率：雨雪与地形同一次下沉，远处才不会悬在半空；关闭时为零。
 
 	gl_Position = gl_ProjectionMatrix * gbufferModelView * worldPos; // 投影到裁剪空间。
 

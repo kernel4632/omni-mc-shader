@@ -48,6 +48,8 @@
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*` 与物理光照选项。
 #include "/effects/ground/material.glsl"
+// 行星曲率：远景顶点要与近景地形做同一次下沉，否则交界处会错位，选项与算法都在该文件。
+#include "/effects/world/planet.glsl"
 // 远景噪声与剔除、水面波法线都只在片元引入。
 #ifdef OMNI_FRAGMENT
 	// 天气选项与雨函数：远景地形的湿润要读 `OMNI_SURFACE_WETNESS`。
@@ -80,7 +82,10 @@ flat out float materialIDs; // 材质编号。
 // 顶点主函数：远景投影，按远景材质编号挑类别。
 void main(){
 	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
-	viewPos = v_viewPos.xyz; // 传给片元。
+	vec3 planetViewPos = v_viewPos.xyz; // 复制视空间位置给行星曲率改写。
+	omniPlanetCurvatureView(planetViewPos); // 行星曲率：远景地形与近景地形同一次下沉，交界处才接得上。
+	v_viewPos.xyz = planetViewPos; // 写回下沉后的视空间位置。
+	viewPos = v_viewPos.xyz; // 传给片元，用下沉后的位置重建世界坐标。
 	gl_Position = dhProjection * v_viewPos; // 用远景投影。
 
 	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
@@ -126,7 +131,10 @@ flat out float materialIDs; // 材质编号。
 // 顶点主函数：按面法线构造切线基，按远景材质编号挑水或普通表面。
 void main(){
 	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
-	viewPos = v_viewPos.xyz; // 传给片元。
+	vec3 planetViewPos = v_viewPos.xyz; // 复制视空间位置给行星曲率改写。
+	omniPlanetCurvatureView(planetViewPos); // 行星曲率：远景水与近景水面同一次下沉，交界处才接得上。
+	v_viewPos.xyz = planetViewPos; // 写回下沉后的视空间位置。
+	viewPos = v_viewPos.xyz; // 传给片元，用下沉后的位置重建世界坐标。
 	gl_Position = dhProjection * v_viewPos; // 用远景投影。
 
 	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。

@@ -30,6 +30,8 @@
 #include "/effects/ground/material.glsl"
 // 植物摆动：提供 `WavingPlants` 与阴影摆动开关。
 #include "/effects/ground/vegetation.glsl"
+// 行星曲率：阴影顶点要与画面做同一次下沉，选项与算法都在该文件。
+#include "/effects/world/planet.glsl"
 // `effects/shadow/shadow.glsl` 的采样函数读取这两个方向，本节不调用采样函数，按调用前提给空全局。
 vec3 worldShadowVector; // 世界空间阳光方向。
 vec3 shadowVector; // 视空间阳光方向。
@@ -97,6 +99,13 @@ void main(){
 		v_viewPos = shadowModelView * worldPos; // 再投回阴影相机视空间。
 	#endif
 	#endif
+
+	// 行星曲率：阴影顶点必须与画面里的地形实体做同一次下沉，否则阴影会留在原来的高度而与几何错位。
+	// 阴影相机视空间与相机视空间原点相同、朝向不同，所以按阴影相机矩阵转回相机相对世界坐标再下沉；
+	// 与地形实体共用同一份公式，摆放顺序也一致（先摆动、再下沉），保证阴影下的形状和本体完全对齐。
+	vec3 curvedShadowViewPos = v_viewPos.xyz; // 复制阴影相机视空间位置。
+	omniPlanetCurvatureView(curvedShadowViewPos, mat3(shadowModelViewInverse), mat3(shadowModelView)); // 用阴影相机矩阵做同一次下沉。
+	v_viewPos.xyz = curvedShadowViewPos; // 写回下沉后的位置。
 
 	#ifdef OMNI_END // 末地用末地版阴影相机再转一次。
 		v_viewPos = shadowModelViewEnd * shadowModelViewInverse * v_viewPos; // 世界坐标重投到末地阴影相机。
