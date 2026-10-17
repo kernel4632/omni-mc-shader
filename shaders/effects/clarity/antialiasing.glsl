@@ -3,7 +3,7 @@
 来源：时间重投影、邻域裁剪、颜色空间转换与深度取样照 iterationT `Lib/BasicFounctions/TAA.glsl` 一比一移植；
   最终的边缘抗锯齿 `Fxaa` 照 iterationT `Lib/Programs/Final.glsl` 一比一移植。
 调用位置：
-  合成七号片元读取材质编号、算相机速度后调用 `TemporalReprojection`，写回七号画面作为下一帧历史；
+  合成七号片元调用 `WriteTaaHistory`（本文件末尾，按 `OMNI_COMPOSITE7_PASS` 隔开），把重投影后的颜色写回七号画面作为下一帧历史；
   final 片元在关闭手或玩家抗锯齿时对被排除的像素调用 `Fxaa` 补一次边缘抗锯齿。
 本文件的相机速度函数叫 `TaaCameraVelocity`：它同时回填重投影要用的深度，并区分玻璃与冰。
   同名用途在 `effects/lighting/ambient.glsl` 是 `GiCameraVelocity`、在 `effects/lens/lens.glsl` 是
@@ -11,6 +11,7 @@
 可复制示例：
   `vec4 taa = TemporalReprojection(taaTexCoord, TaaCameraVelocity(depth, materialIDs), depth);`
   `color = Fxaa(color, taaTexCoord);`
+  `compositeOutput7 = WriteTaaHistory();`  合成七号把历史写成七号画面的内容。
 调用前提（iterationT 原样保留）：
   坐标换算函数按 `OMNI_TAA` 决定是否撤销本帧抖动，所以任何用到坐标换算的主体都必须先引入本文件；
   时间重投影依赖调用方先声明 `taaTexelCoord`、`taaTexCoord`，并让材质编号 `MATID_*` 可见；
@@ -19,7 +20,8 @@
   只有相机重投影，没有实体速度缓冲，动态物体会靠邻域裁剪与深度比较把过时历史挡掉；
   历史可信度由混合权重、运动量和深度差共同决定，任一项对不上就少用或不用历史，避免拖影。
   下界的时间抗锯齿与主世界不同（参考深度打包进七号画面透明度通道），按 `OMNI_NETHER` 分支在本文件内提供另一套取样、邻域统计与重投影；
-  调用方（`rendering/post.glsl` 的合成七号）在下界用四参数版 `TemporalReprojection` 并自行打包写回七号画面。
+  合成七号的主体 `WriteTaaHistory` 与算法合在本文件：它只做选项分派与写出，拆成另一个文件没有额外好处；
+  按 `OMNI_COMPOSITE7_PASS` 隔开，因为本文件还被地形、阴影、延迟等程序引入，它们没有合成七号的输入。
 */
 #ifndef OMNI_ANTIALIASING_INCLUDED // 只引入一次，避免宏与函数重复定义。
 #define OMNI_ANTIALIASING_INCLUDED // 置上标记。
@@ -501,5 +503,53 @@ vec3 Fxaa(vec3 rgbM, vec2 coord){
 		return rgbB; // 用外侧结果。
 	}
 }
+
+// --- 合成七号主体：时间抗锯齿历史，逐行照 iterationT `composite7.fsh` ---
+// 按选项排除手与玩家、算相机速度、做邻域裁剪重投影；下界额外把参考深度与当前深度打包进透明度通道。
+// 为什么按程序宏隔开：只有合成七号需要它，本文件还被地形、阴影、延迟等程序引入，它们没有材质编号与七号输出。
+// 为什么返回而不是直接写 `compositeOutput7`：本文件在被引入的程序声明输出之前就展开，返回让程序自己赋值。
+#if defined OMNI_COMPOSITE7_PASS
+vec4 WriteTaaHistory(){
+	#ifdef OMNI_TAA // 开启时间抗锯齿才做重投影。
+		float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读当前像素的材质编号。
+		float depth = 1.0; // 供相机速度函数回填的代表深度。
+		vec3 velocity = TaaCameraVelocity(depth, materialIDs); // 算当前像素相对上一帧的屏幕位移，并回填深度。
+		vec4 taa = vec4(0.0); // 重投影结果。
+		#ifdef OMNI_NETHER // 下界重投影额外回填参考深度，写回历史时要一起打包。
+			float referenceDepth = 0.0; // 重投影后的参考深度。
+		#endif
+
+		// 先算出这个像素要不要用历史：三条宏分支各把要排除的材质标记为假，其余像素保持为真。
+		bool reproject = true; // 默认走重投影。
+		#if defined OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都排除。
+			if (materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER) reproject = false; // 这两类像素不用历史。
+		#elif defined OMNI_DISABLE_HAND_TAA // 只排除手。
+			if (materialIDs == MATID_HAND) reproject = false; // 手不用历史。
+		#elif defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只排除玩家。
+			if (materialIDs == MATID_ENTITIES_PLAYER) reproject = false; // 玩家不用历史。
+		#endif
+		if (!reproject){ // 被排除的像素直接用当前帧颜色。
+			taa = texelFetch(colortex1, texelCoord, 0); // 当前帧颜色。
+		}else{ // 其余像素走时间重投影。
+			#ifdef OMNI_NETHER // 下界用带参考深度的重投影。
+				taa = TemporalReprojection(texCoord, velocity, depth, referenceDepth); // 邻域裁剪后把历史混进当前帧，并回填参考深度。
+			#else // 其余维度用主世界版重投影。
+				taa = TemporalReprojection(texCoord, velocity, depth); // 邻域裁剪后把历史混进当前帧。
+			#endif
+		}
+	#else // 关闭时间抗锯齿时原样复制当前帧。
+		vec4 taa = texelFetch(colortex1, texelCoord, 0); // 当前帧颜色与深度。
+		#ifdef OMNI_NETHER // 下界直接沿用当前帧的深度当作参考深度。
+			float referenceDepth = taa.a; // 当前帧深度就是参考深度。
+		#endif
+	#endif
+
+	#ifdef OMNI_NETHER // 下界把参考深度与当前深度打包进七号画面透明度通道。
+		return vec4(saturate(taa.rgb), Pack2x16(saturate(vec2(referenceDepth, taa.a)))); // 颜色加两个深度的打包值。
+	#else // 其余维度直接交回。
+		return taa; // 交回七号，作为下一帧的历史。
+	#endif
+}
+#endif // 合成七号主体结束。
 #endif // 片元阶段结束。
 #endif // 文件守卫结束。

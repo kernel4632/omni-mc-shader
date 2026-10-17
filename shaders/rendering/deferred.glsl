@@ -17,7 +17,7 @@
 关键设计原因与取舍：
     延迟三号、四号、五号与低分辨率云七号把四号六号画面当三维云噪声读，所以文件顶部按这些程序打开 `COLORTEX_CLOUDNOISE`，采样器类型才由 `common/uniforms.glsl` 选对；其余程序保持二维画面。
     原程序一个程序一个文件，本文件把它们合成一个主体，按程序宏分派；算法体已经搬进对应效果文件：
-        焦散法线 `effects/water/caustics.glsl` 的 `RenderCaustics`（延迟零号主世界、延迟一号末地）；全局光空间滤波 `effects/lighting/globalillumination.glsl` 的 `RenderGISpatialFilter`（延迟二号主世界、延迟四号末地）。
+        焦散法线 `effects/water/caustics.glsl` 的 `RenderCaustics`（延迟零号主世界、延迟一号末地）；全局光空间滤波 `effects/lighting/ambient.glsl` 的 `RenderGISpatialFilter`（延迟二号主世界、延迟四号末地）。
         天空、云、日月星与天空盒 `effects/sky/skyrender.glsl` 的 `RenderDeferredSky`（延迟三号，主天空与天空盒共用一段累积）。
     本文件只按绘制顺序安排每个程序的输入输出与调用，不复制算法；全屏复制、时间滤波与云影模糊就是一两次现成函数调用，留在原处；延迟顶点里只有三号要算光色（走 `rendering/lights.glsl`），四号五号要算云影贴图坐标，其余只需铺满屏幕。
 */
@@ -279,8 +279,7 @@
 	#include "/common/noise.glsl"
 	// 提供阳光泄漏修正选项，并带入环境光与阴影文件。
 	#include "/effects/lighting/sunlight.glsl"
-	// 全局光空间滤波的算法在效果文件里，这里只取深度并写一号。
-	#include "/effects/lighting/globalillumination.glsl"
+		// 全局光空间滤波的算法在 `effects/lighting/ambient.glsl`（上面经 `effects/lighting/sunlight.glsl` 引入），这里只取深度并写一号。
 	void main(){
 		deferredOutput1 = RenderGISpatialFilter(texelFetch(depthtex1, texelCoord, 0).x); // 用不含半透明的深度做遮蔽与空间滤波。
 	}
@@ -364,8 +363,7 @@
 		#include "/common/noise.glsl"
 		// 提供阳光泄漏修正选项，并带入环境光与阴影文件（末地版阴影相机由 `OMNI_END` 选择）。
 		#include "/effects/lighting/sunlight.glsl"
-		// 全局光空间滤波的算法在效果文件里，这里只取深度并写一号。
-		#include "/effects/lighting/globalillumination.glsl"
+	// 全局光空间滤波的算法在 `effects/lighting/ambient.glsl`（上面经 `effects/lighting/sunlight.glsl` 引入），这里只取深度并写一号。
 		void main(){
 			deferredOutput1 = RenderGISpatialFilter(texelFetch(depthtex0, texelCoord, 0).x); // 末地用含半透明的深度做遮蔽与空间滤波。
 		}

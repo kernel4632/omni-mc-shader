@@ -304,7 +304,7 @@ class EffectTests(unittest.TestCase):
         ambient = support.text("effects/lighting/ambient.glsl")  # 全局光主体。
         self.assertIn("RSM(", ambient)  # 反射阴影图独立成函数。
         self.assertIn("GI_TemporalFilter", ambient)  # 时间滤波独立成函数。
-        self.assertIn("#ifdef OMNI_GI_RSM", support.text("effects/lighting/globalillumination.glsl"), )  # 延迟阶段按选项执行时间滤波。
+        self.assertIn("#ifdef OMNI_GI_RSM", support.text("effects/lighting/ambient.glsl"))  # 延迟阶段按选项执行空间滤波与时间滤波。
 
     def test_shadow_penumbra_and_bias(self):
         """可变半影阴影可开关、质量与展开可调，阴影偏置参与投影压缩。"""
@@ -526,7 +526,7 @@ class EffectTests(unittest.TestCase):
         antialiasing = support.text("effects/clarity/antialiasing.glsl")  # 抗锯齿主体。
         self.assertIn("TemporalReprojection", antialiasing)  # 重投影独立成函数。
         self.assertIn("OMNI_TAA_BLENDWEIGHT", antialiasing)  # 混合权重参与累积。
-        self.assertIn("#ifdef OMNI_TAA", support.text("effects/clarity/post_taa.glsl"))  # 后期时间抗锯齿效果文件按选项执行。
+        self.assertIn("#ifdef OMNI_TAA", support.text("effects/clarity/antialiasing.glsl"))  # 后期时间抗锯齿主体按选项执行。
 
     def test_fsr_and_cas(self):
         """`FSR` 放大可开关、锐化与去噪可调，`CAS` 锐化强度独立可调。"""

@@ -12,8 +12,8 @@
     `composite15` 写一号（`CAS` 锐化）；`composite16` 写八号（放大输出）。
 关键设计原因与取舍：
     原程序一个程序一个文件，本文件按程序宏分派；本文件只排绘制顺序、声明每个程序的输入输出与 `DRAWBUFFERS`，
-    片元算法体全部搬到效果页：时间抗锯齿历史在 `effects/clarity/post_taa.glsl`，运动模糊在 `effects/lens/post_motionblur.glsl`，
-    标题标志在 `effects/lens/title.glsl`，统计像素在 `effects/color/post_stats.glsl`，泛光链在 `effects/color/post_bloom.glsl`，色调映射在 `effects/color/post_tonemap.glsl`。
+    片元算法体全部搬到效果页：时间抗锯齿历史在 `effects/clarity/antialiasing.glsl`，运动模糊在 `effects/lens/post_motionblur.glsl`，
+    标题标志在 `effects/lens/title.glsl`，统计像素在 `effects/color/post_stats.glsl`，泛光链在 `effects/color/bloom.glsl`，色调映射在 `effects/color/post_tonemap.glsl`。
     景深与锐化、放大各自只需一句效果函数调用，作为程序的输入输出留在本文件，不再另开文件。
     十一个程序共用的 `texelCoord`、`texCoord`、光色全局量与采样器只声明一次，见 `effects/clarity/post_shared.glsl`。
     泛光五级与放大程序各自缩放整屏四边形，所以顶点阶段也按程序宏分出不同 `main()`，缩放公式照原程序。
@@ -95,10 +95,8 @@
 
 	/* DRAWBUFFERS:7 */
 	layout(location = 0) out vec4 compositeOutput7; // 七号时间抗锯齿历史画面。
-	// 时间抗锯齿历史的算法体；写在输出声明之后，算法体才能写 `compositeOutput7`。
-	#include "/effects/clarity/post_taa.glsl"
 
-	void main(){ WriteTaaHistory(); } // 重投影历史并写回七号。
+	void main(){ compositeOutput7 = WriteTaaHistory(); } // 重投影历史并把结果写回七号。
 
 #endif // 合成七号结束。
 
@@ -170,19 +168,18 @@
 	#elif defined OMNI_COMPOSITE9_PASS || defined OMNI_COMPOSITE10_PASS || defined OMNI_COMPOSITE11_PASS || defined OMNI_COMPOSITE12_PASS || defined OMNI_COMPOSITE13_PASS
 		/* DRAWBUFFERS:5 */
 		layout(location = 0) out vec4 compositeOutput5; // 五号泛光链。
-		// 泛光五级链的算法体。
-		#include "/effects/color/post_bloom.glsl"
+		// 泛光五级链的算法体随 `effects/color/bloom.glsl` 一起引入（上面的共用效果文件已包含）。
 
 		#if defined OMNI_COMPOSITE9_PASS // 第一级：从一号画面降采样。
-			void main(){ BloomDownSampleScene(); } // 半分辨率降采样并写五号。
+			void main(){ compositeOutput5 = BloomDownSampleScene(); } // 半分辨率降采样并写五号。
 		#elif defined OMNI_COMPOSITE10_PASS // 第二级：从五号画面继续降采样。
-			void main(){ BloomDownSampleChain(); } // 继续降采样并写五号。
+			void main(){ compositeOutput5 = BloomDownSampleChain(); } // 继续降采样并写五号。
 		#elif defined OMNI_COMPOSITE11_PASS // 第三级：横向轴向高斯，链上各级排成一行。
-			void main(){ BloomBlurHorizontal(); } // 横向模糊并写五号。
+			void main(){ compositeOutput5 = BloomBlurHorizontal(); } // 横向模糊并写五号。
 		#elif defined OMNI_COMPOSITE12_PASS // 第四级：纵向轴向高斯，坐标回拧。
-			void main(){ BloomBlurVertical(); } // 纵向模糊并写五号。
+			void main(){ compositeOutput5 = BloomBlurVertical(); } // 纵向模糊并写五号。
 		#elif defined OMNI_COMPOSITE13_PASS // 第五级：把各级三次模糊后叠成一张光晕。
-			void main(){ BloomCombine(); } // 叠加各级并写五号。
+			void main(){ compositeOutput5 = BloomCombine(); } // 叠加各级并写五号。
 		#endif
 
 	// --- 合成十四号：合并泛光、暗角、曝光、色调映射与高级调色 ---

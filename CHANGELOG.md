@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.0.0-dev.160
+
+把三处拆成「效果文件 + 程序体文件」的效果合回一个文件，不改任何画面、选项与算法，只减少文件数量。
+
+- 泛光（`shaders/effects/color/bloom.glsl`）：五级链 `BloomDownSampleScene` 到 `BloomCombine` 从 `post_bloom.glsl` 并入；改成返回颜色、由合成九号到十三号自己写五号画面，并按 `OMNI_COMPOSITE9_PASS` 到 `OMNI_COMPOSITE13_PASS` 隔开。
+- 时间抗锯齿（`shaders/effects/clarity/antialiasing.glsl`）：合成七号主体 `WriteTaaHistory` 从 `post_taa.glsl` 并入，按 `OMNI_COMPOSITE7_PASS` 隔开。
+- 全局光（`shaders/effects/lighting/ambient.glsl`）：延迟二号与延迟四号主体 `RenderGISpatialFilter` 从 `globalillumination.glsl` 并入，沿用原先的程序宏隔开。
+- `shaders/rendering/post.glsl` 与 `shaders/rendering/deferred.glsl` 去掉对应的单独引入，改为在这些效果文件里调用；测试与对照文档同步更新引用路径。
+- 未改任何算法、常数、选项名与缓冲编号；删除 `effects/color/post_bloom.glsl`、`effects/clarity/post_taa.glsl`、`effects/lighting/globalillumination.glsl` 三个只剩转手的文件。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.159
 
 闪电照明补上体积云与体积雾：打开「闪电照明」时，雷暴闪电也会照亮天上的体积云与空气里的体积雾，默认关闭、画面不变。
