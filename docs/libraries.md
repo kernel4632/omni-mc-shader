@@ -15,7 +15,7 @@
 
 | 库 | 提供什么 | 许可 | 接入方式 |
 | --- | --- | --- | --- |
-| Ashima 三维单纯形噪声 | 噪声 | MIT | 已采用，随包许可 |
+| Ashima 三维单纯形噪声 | 噪声 | MIT | 未采用；云改用 iterationT 预计算噪声贴图 |
 | SMAA（iryoku/smaa） | 形态学抗锯齿 | MIT | 引入 GLSL，另带 AreaTex/SearchTex 查找表纹理 |
 | XeGTAO（GameTechDev） | 环境光遮蔽 | MIT（Intel） | 以着色器方式接入，需适配 Iris |
 | glsl-atmosphere（wwwtyro） | 瑞利/米氏天空散射 | 公有领域（Unlicense） | 单函数，直接 `#include` |
@@ -68,7 +68,6 @@
 
 ```
 shaders/libraries/
-  ashima/          噪声（已采用）
   smaa/            抗锯齿（+ 查找表纹理）
   xegtao/          环境光遮蔽
   atmosphere/      解析大气（wwwtyro）

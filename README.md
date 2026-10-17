@@ -70,7 +70,7 @@ uv pip sync requirements-dev.lock
 
 - [Iris 开发文档](https://shaders.properties/)
 - [Iris 调试说明](https://github.com/IrisShaders/docs/blob/main/src/content/docs/current/Reference/Miscellaneous/debugging_shaders.mdx)
-- [第三方来源与许可](THIRD_PARTY.md)：云密度直接采用固定版本的 Ashima 噪声，保留 MIT 原文；参考包原件未复制。
+- [第三方来源与许可](THIRD_PARTY.md)：当前没有随包的第三方库，云密度用 iterationT 的预计算噪声贴图；参考包原件未复制。
 - [RenderDoc](https://renderdoc.org/) 与 [GFX-Debuggers](https://modrinth.com/mod/gfx-debuggers)
 
 Minecraft 本体由玩家通过自己的启动器合法安装。调试整合包只记录模组下载信息。

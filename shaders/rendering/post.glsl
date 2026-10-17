@@ -111,26 +111,24 @@
 				float referenceDepth = 0.0; // 重投影后的参考深度。
 			#endif
 
+			// 先算出这个像素要不要用历史：三条宏分支各把要排除的材质标记为假，其余像素保持为真。
+			bool reproject = true; // 默认走重投影。
 			#if defined OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都排除。
-				if (materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER){ // 这两类像素不用历史。
-					taa = texelFetch(colortex1, texelCoord, 0); // 直接用当前帧颜色。
-				}else // 其余像素走重投影。
+				if (materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER) reproject = false; // 这两类像素不用历史。
 			#elif defined OMNI_DISABLE_HAND_TAA // 只排除手。
-				if (materialIDs == MATID_HAND){ // 手不用历史。
-					taa = texelFetch(colortex1, texelCoord, 0); // 当前帧颜色。
-				}else // 其余像素走重投影。
+				if (materialIDs == MATID_HAND) reproject = false; // 手不用历史。
 			#elif defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只排除玩家。
-				if (materialIDs == MATID_ENTITIES_PLAYER){ // 玩家不用历史。
-					taa = texelFetch(colortex1, texelCoord, 0); // 当前帧颜色。
-				}else // 其余像素走重投影。
+				if (materialIDs == MATID_ENTITIES_PLAYER) reproject = false; // 玩家不用历史。
 			#endif
-				{
-					#ifdef OMNI_NETHER // 下界用带参考深度的重投影。
-						taa = TemporalReprojection(texCoord, velocity, depth, referenceDepth); // 邻域裁剪后把历史混进当前帧，并回填参考深度。
-					#else // 其余维度用主世界版重投影。
-						taa = TemporalReprojection(texCoord, velocity, depth); // 邻域裁剪后把历史混进当前帧。
-					#endif
-				}
+			if (!reproject){ // 被排除的像素直接用当前帧颜色。
+				taa = texelFetch(colortex1, texelCoord, 0); // 当前帧颜色。
+			}else{ // 其余像素走时间重投影。
+				#ifdef OMNI_NETHER // 下界用带参考深度的重投影。
+					taa = TemporalReprojection(texCoord, velocity, depth, referenceDepth); // 邻域裁剪后把历史混进当前帧，并回填参考深度。
+				#else // 其余维度用主世界版重投影。
+					taa = TemporalReprojection(texCoord, velocity, depth); // 邻域裁剪后把历史混进当前帧。
+				#endif
+			}
 		#else // 关闭时间抗锯齿时原样复制当前帧。
 			vec4 taa = texelFetch(colortex1, texelCoord, 0); // 当前帧颜色与深度。
 			#ifdef OMNI_NETHER // 下界直接沿用当前帧的深度当作参考深度。

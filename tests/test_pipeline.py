@@ -163,6 +163,24 @@ class PipelineTests(unittest.TestCase):
                 (shaders/"libraries/unlisted.glsl").write_text("float x;",encoding="utf-8")
                 with self.assertRaises(ValueError): build.dependencies()  # 白名单不能漏掉新代码。
 
+    def test_every_runtime_dependency_is_referenced(self):
+        """登记的第三方库必须至少被一个光影文件引用，避免再次留下死依赖。"""
+        text = "\n".join(  # 自有光影文件的全部引用文本，库自身不算对自己的引用。
+            path.read_text(encoding="utf-8") for path in build.SHADERS.rglob("*")
+            if path.is_file() and "libraries" not in path.relative_to(build.SHADERS).parts and path.suffix in {".glsl", ".vsh", ".fsh", ".gsh", ".csh", ".properties"}
+        )
+        def assert_referenced(libraries):
+            """逐个检查登记的库文件都被引用；许可原文随包但不参与引用。"""
+            for item in libraries:  # 每个已登记的库都要真的接入。
+                for reference in item["files"]:
+                    if any(tag in reference.lower() for tag in ("license", "copying")):  # 许可原文跳过。
+                        continue
+                    name = reference.rsplit("/", 1)[-1]  # 完整路径匹配 `#include`，文件名匹配 `pipeline.properties` 里的资源引用。
+                    self.assertTrue(reference in text or name in text, f"{reference} 未被任何光影文件引用，属于死依赖")
+        data = json.loads((build.ROOT/"dependencies.json").read_text(encoding="utf-8"))  # 运行库唯一清单。
+        assert_referenced(data["libraries"])  # 当前清单必须全部接入。
+        with self.assertRaises(AssertionError): assert_referenced([{"files": {"libraries/dead/omni_library_name_guard.glsl": "0"*64}}])  # 未引用的库必须被这条检查挡住，证明它不是空跑。
+
     def test_pack_contents_are_reproducible_and_complete(self):
         """真实打包包含各维度入口和完整预设，不包含参考、开发配置或过期流程源。"""
         found,profiles,_ = build.configuration()  # 所有预设从当前源码补齐。

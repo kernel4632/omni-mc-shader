@@ -384,23 +384,15 @@ void ApplyMaterial(inout Material material, in MaterialMask materialMask, inout 
 #include "/common/noise.glsl"
 // 双线性采样式高度：在图块内跨格子读四角高度并插值，越界处用一层薄壳把空隙补平。
 // 参数 `tilesBaseTexel` 是图块左上角在图集里的像素坐标，`iTextureResolution` 是图块边长的按位掩码。
-float BilinearHeightSample(vec2 coord, ivec2 tilesBaseTexel, float textureResolution, int iTextureResolution
-#ifndef OMNI_TERRAIN_PASS
-, bool isBlock // 实体阶段要判断这张图是不是方块图集。
-#endif
-){
+// 参数 `isBlock` 表示是否按方块图集回绕：地形阶段恒为真，实体阶段由调用方判断。
+float BilinearHeightSample(vec2 coord, ivec2 tilesBaseTexel, float textureResolution, int iTextureResolution, bool isBlock){
 	ivec2 texelX = ivec2(floor(coord)); // 左下角像素。
 	ivec2 texelW = texelX + 1; // 右上角像素。
 	vec2 f = coord - vec2(texelX); // 到左下角的小数偏移。
-	#ifndef OMNI_TERRAIN_PASS
-		if (isBlock){ // 实体用到方块图集时也要按图块回绕。
-			texelX = tilesBaseTexel + (texelX & iTextureResolution); // 左下角回绕到本图块内。
-			texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角同理。
-		}
-	#else
-		texelX = tilesBaseTexel + (texelX & iTextureResolution); // 地形一律按图块回绕。
+	if (isBlock){ // 方块图集（地形恒为真，实体用到方块图集时）按图块回绕。
+		texelX = tilesBaseTexel + (texelX & iTextureResolution); // 左下角回绕到本图块内。
 		texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角同理。
-	#endif
+	}
 	vec4 sh = vec4(texelFetch(normals, texelX, 0).a, // 左下角高度。
 				   texelFetch(normals, ivec2(texelW.x, texelX.y), 0).a, // 右下角高度。
 				   texelFetch(normals, ivec2(texelX.x, texelW.y), 0).a, // 左上角高度。
@@ -411,24 +403,16 @@ float BilinearHeightSample(vec2 coord, ivec2 tilesBaseTexel, float textureResolu
 			   f.y); // 最后沿纵轴插值得到高度。
 }
 // 用高度差直接生成法线：平滑模式可以只用高度场求梯度，得到与视差一致的法线。
-vec3 HeightBasedNormal(vec2 coord, ivec2 tilesBaseTexel, float textureResolution, int iTextureResolution
-#ifndef OMNI_TERRAIN_PASS
-, bool isBlock // 实体阶段要判断是不是方块图集。
-#endif
-){
+// 参数 `isBlock` 表示是否按方块图集回绕：地形阶段恒为真，实体阶段由调用方判断。
+vec3 HeightBasedNormal(vec2 coord, ivec2 tilesBaseTexel, float textureResolution, int iTextureResolution, bool isBlock){
 	coord -= 0.5; // 把坐标移到像素中心。
 	ivec2 texelX = ivec2(floor(coord)); // 左下角像素。
 	ivec2 texelW = texelX + 1; // 右上角像素。
 	vec2 f = coord - vec2(texelX); // 小数偏移。
-	#ifndef OMNI_TERRAIN_PASS
-		if (isBlock){ // 实体用到方块图集时回绕。
-			texelX = tilesBaseTexel + (texelX & iTextureResolution); // 左下角回绕。
-			texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角回绕。
-		}
-	#else
-		texelX = tilesBaseTexel + (texelX & iTextureResolution); // 地形一律回绕。
-		texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角同理。
-	#endif
+	if (isBlock){ // 方块图集（地形恒为真，实体用到方块图集时）按图块回绕。
+		texelX = tilesBaseTexel + (texelX & iTextureResolution); // 左下角回绕。
+		texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角回绕。
+	}
 	vec4 sh = vec4(texelFetch(normals, texelX, 0).a, // 四角高度，含义同上一函数。
 				   texelFetch(normals, ivec2(texelW.x, texelX.y), 0).a,
 				   texelFetch(normals, ivec2(texelX.x, texelW.y), 0).a,
@@ -447,10 +431,11 @@ vec3 HeightBasedNormal(vec2 coord, ivec2 tilesBaseTexel, float textureResolution
 // 平滑视差：从当前坐标沿视线步进求交，再做若干次二分细化，最后可选算阴影与法线。
 // 参数 `tbnMat` 是切线基，`shadowVector` 是视空间阳光方向，`duv1`、`duv2` 是纹理坐标的屏幕导数。
 ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 duv1, vec2 duv2, inout vec3 normalTex, inout float parallaxShadow){
+	bool isBlock = true; // 是否按方块图集回绕；地形阶段恒为真。
 	#ifndef OMNI_TERRAIN_PASS
 		const float textureResolution = OMNI_ENTITIES_TEXTURE_RESOLUTION; // 实体用整数分辨率。
 		ivec2 atlasSize = textureSize(tex, 0); // 实体图集大小由采样器读出。
-		bool isBlock = textureSize(gaux4, 0) == atlasSize; // 图集大小与方块图集一致就按方块处理。
+		isBlock = textureSize(gaux4, 0) == atlasSize; // 实体阶段：图集大小与方块图集一致才回绕。
 	#endif
 	vec2 atlasTiles = vec2(atlasSize) / textureResolution; // 图集里横纵各有多少个图块。
 	#ifdef OMNI_PARALLAX_FADE // 需要淡出时先算这一处的淡出因子。
@@ -461,11 +446,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 	ivec2 tilesBaseTexel = ivec2(tilesBaseCoord * textureResolution); // 该图块左上角的像素坐标。
 	int iTextureResolution = int(textureResolution) - 1; // 图块边长减一，用作回绕掩码。
 	vec3 parallaxTexelCoord = vec3(coord * atlasSize, 1.0); // 换成图集像素坐标并把深度放到一。
-	float sampleHeight = BilinearHeightSample(parallaxTexelCoord.xy - 0.5, tilesBaseTexel, textureResolution, iTextureResolution // 先读起始高度。
-	#ifndef OMNI_TERRAIN_PASS
-	, isBlock // 实体阶段传入是否方块。
-	#endif
-	);
+	float sampleHeight = BilinearHeightSample(parallaxTexelCoord.xy - 0.5, tilesBaseTexel, textureResolution, iTextureResolution, isBlock); // 先读起始高度。
 	if (sampleHeight > 0.0 && sampleHeight < 1.0){ // 只有处在表面内部的像素才需要偏移。
 		parallaxTexelCoord.xy -= 0.5; // 坐标移到像素中心。
 		vec3 viewVector = normalize(viewPos) * tbnMat; // 视线方向转到切线空间。
@@ -475,11 +456,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 		float stepLength = 2.0 / OMNI_PARALLAX_QUALITY; // 逐步加深的初始步长。
 		for (int i = 0; i < OMNI_PARALLAX_QUALITY; i++, stepLength += 2.0 / OMNI_PARALLAX_QUALITY){ // 线性步进找交点。
 			parallaxTexelCoord += stepDir * stepLength; // 前进一小步。
-			sampleHeight = BilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution // 读这一步的高度。
-			#ifndef OMNI_TERRAIN_PASS
-			, isBlock // 实体阶段传入是否方块。
-			#endif
-			);
+			sampleHeight = BilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock); // 读这一步的高度。
 			if (sampleHeight > parallaxTexelCoord.z) break; // 表面高度超过步进深度就找到了交点。
 		}
 		for (int i = 0; i < OMNI_PARALLAX_MAX_REFINEMENTS; i++){ // 二分细化交点。
@@ -488,11 +465,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 				stepLength *= 0.5; // 步长减半。
 			}
 			parallaxTexelCoord += stepDir * stepLength; // 再前进一个更小的步。
-			sampleHeight = BilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution // 读高度。
-			#ifndef OMNI_TERRAIN_PASS
-			, isBlock // 实体阶段传入是否方块。
-			#endif
-			);
+			sampleHeight = BilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock); // 读高度。
 		}
 		if (sampleHeight <= parallaxTexelCoord.z) parallaxTexelCoord += stepDir * stepLength * 2.0; // 最后仍未越界就多走两步，避免停在表面下。
 		#ifdef OMNI_PARALLAX_SHADOW // 需要视差自阴影时。
@@ -509,11 +482,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 				#endif
 				for (int i = 0; i < OMNI_PARALLAX_SHADOW_QUALITY; i++, shadowTexelCoord += stepSize){ // 沿光方向步进找遮挡。
 					if (shadowTexelCoord.z > 1.0) break; // 超出表面顶部就不再遮挡。
-					sampleHeight = BilinearHeightSample(shadowTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution // 读遮挡候选的高度。
-					#ifndef OMNI_TERRAIN_PASS
-					, isBlock // 实体阶段传入是否方块。
-					#endif
-					);
+					sampleHeight = BilinearHeightSample(shadowTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock); // 读遮挡候选的高度。
 					float diff = shadowTexelCoord.z - sampleHeight; // 光线高度减去表面高度，负得越多遮挡越强。
 					parallaxShadow *= saturate(diff * 40.0 + 1.0); // 逐步累积遮蔽。
 					if (parallaxShadow < 0.003) break; // 已经足够黑就提前结束。
@@ -525,11 +494,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 		#endif
 		parallaxTexelCoord.xy += 0.5; // 坐标移回像素角。
 		#if OMNI_PARALLAX_BASED_NORMAL == 2 // 全部用视差生成法线时。
-			normalTex = HeightBasedNormal(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution // 由高度场求法线。
-			#ifndef OMNI_TERRAIN_PASS
-			, isBlock // 实体阶段传入是否方块。
-			#endif
-			);
+			normalTex = HeightBasedNormal(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock); // 由高度场求法线。
 		#endif
 		parallaxTexelCoord.xy = (fract(parallaxTexelCoord.xy / textureResolution) + tilesBaseCoord) * textureResolution; // 把偏移后的坐标折回原本的图块。
 	}

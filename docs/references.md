@@ -18,7 +18,7 @@
 
 | 效果 / 主题 | 参考实现 | 语言 | 许可 | 处理方式 |
 | --- | --- | --- | --- | --- |
-| 噪声（单纯形/值/沃利） | Ashima、Stefan Gustavson、FastNoiseLite、stb_perlin | GLSL/C | MIT / 公有领域 | 已用 Ashima；其余只补缺的噪声类型 |
+| 噪声（单纯形/值/沃利） | Ashima、Stefan Gustavson、FastNoiseLite、stb_perlin | GLSL/C | MIT / 公有领域 | 未采用第三方库；云用 iterationT 预计算噪声贴图，其余只补缺的噪声类型 |
 | 蓝噪声采样 | Christoph Peters blue noise | 多语言 | MIT | 按原理重写 |
 | 抗锯齿（形态学） | SMAA（iryoku/smaa） | HLSL/GLSL | MIT | 直接采用，自带查找表纹理 |
 | 抗锯齿（时间） | Filament TAA、Godot TAA、three.js TAARenderPass、Karis 重投影 | GLSL | Apache-2.0 / MIT | 按原理重写 |

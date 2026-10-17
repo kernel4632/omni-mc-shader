@@ -51,7 +51,7 @@
 先做影响大、依赖少的，再做要动公共管线或细分着色器的。
 
 1. **月亮与月食**：只依赖太阳月亮向量（`ROBOBO_sky.glsl:131`），接一处即见效，辨识度高。
-2. **星空亮度与数量**：`stars.glsl` 的选项对照 `CalculateStars`（`sky.glsl:438`），只加选项，改动小。
+2. **星空亮度与数量**：`stars.glsl` 的选项对照 `CalculateStars`（`sky.glsl:553`），只加选项，改动小。
 3. **积雪覆盖**：`ShaderSnow`（`settings.glsl:363`）画质明显，依赖 iterationT 材质流程，属中等。
 
 工作量特别大的项（放后面，或只作可选开关）：**卷云/积雨云**、**程序化草地**（要细分着色器）、**模组支持 Photonics/Colorwheel/Caelum**、**末地雾**、**末地主岛光照**、**LPV 互通**。

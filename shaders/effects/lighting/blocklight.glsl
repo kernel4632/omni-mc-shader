@@ -292,19 +292,19 @@ vec3 HeldLighting(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3
 			}
 
 			if (heldBlockLightValue2 > 0.0){ // 左手灯源，逻辑与右手同。
-				vec3 spotPosL = viewPos - vec3(OMNI_FLASHLIGHT_POS_L_X, OMNI_FLASHLIGHT_POS_L_Y, 0.0);
-				float spotDistL = length(spotPosL);
-				vec3 shadowDirL = spotPosL / spotDistL;
+				vec3 spotPosL = viewPos - vec3(OMNI_FLASHLIGHT_POS_L_X, OMNI_FLASHLIGHT_POS_L_Y, 0.0); // 灯源到表面的矢量。
+				float spotDistL = length(spotPosL); // 灯源到表面的距离。
+				vec3 shadowDirL = spotPosL / spotDistL; // 灯源指向表面的方向。
 
-				float spotL = pow(max(spotDistL, 0.6), -OMNI_FLASHLIGHT_HELDLIGHT_FALLOFF);
-				spotL *= spotShape(dot(shadowDirL, aimDir));
+				float spotL = pow(max(spotDistL, 0.6), -OMNI_FLASHLIGHT_HELDLIGHT_FALLOFF); // 按距离衰减，最近不少于零点六米。
+				spotL *= spotShape(dot(shadowDirL, aimDir)); // 乘光斑形状，只有落在光束里才亮。
 
 				#ifdef OMNI_HELDLIGHT_SHADOW
-					spotL *= TorchScreenSpaceShadow(viewPos, viewDir, normal, -shadowDirL);
+					spotL *= TorchScreenSpaceShadow(viewPos, viewDir, normal, -shadowDirL); // 光源朝表面的反方向投射线。
 				#endif
-				spotL *= Fd_Burley(normal, -viewDir, -shadowDirL, roughness) * 1.7 + 0.05;
+				spotL *= Fd_Burley(normal, -viewDir, -shadowDirL, roughness) * 1.7 + 0.05; // 乘漫反射，读图更自然。
 
-				heldLightFalloff += heldBlockLightValue2 * spotL;
+				heldLightFalloff += heldBlockLightValue2 * spotL; // 按发光等级累加。
 			}
 		}
 
@@ -336,17 +336,17 @@ vec3 HeldLighting(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3
 				}
 
 				if (heldBlockLightValue2 > 0.0){ // 左手灯源，逻辑与右手同。
-					vec3 torchPosL = viewPos - vec3(OMNI_FLASHLIGHT_POS_L_X, OMNI_FLASHLIGHT_POS_L_Y, 0.0);
-					float torchDistL = length(torchPosL);
-					torchDistL += 4.0 / (torchDistL + 2.0);
+					vec3 torchPosL = viewPos - vec3(OMNI_FLASHLIGHT_POS_L_X, OMNI_FLASHLIGHT_POS_L_Y, 0.0); // 灯源到表面的矢量。
+					float torchDistL = length(torchPosL); // 灯源到表面的距离。
+					torchDistL += 4.0 / (torchDistL + 2.0); // 近距离补一点距离，衰减曲线更圆润。
 
-					float torchL = pow(torchDistL, -OMNI_HELDLIGHT_FALLOFF);
+					float torchL = pow(torchDistL, -OMNI_HELDLIGHT_FALLOFF); // 按距离衰减。
 
-					vec3 shadowDirL = -normalize(viewPos - vec3(OMNI_FLASHLIGHT_POS_L_X, OMNI_FLASHLIGHT_POS_L_Y, 0.0));
-					torchL *= TorchScreenSpaceShadow(viewPos, viewDir, normal, shadowDirL);
-					torchL *= Fd_Burley(normal, -viewDir, shadowDirL, roughness) * 1.7 + 0.05;
+					vec3 shadowDirL = -normalize(viewPos - vec3(OMNI_FLASHLIGHT_POS_L_X, OMNI_FLASHLIGHT_POS_L_Y, 0.0)); // 光源方向指向灯源。
+					torchL *= TorchScreenSpaceShadow(viewPos, viewDir, normal, shadowDirL); // 投屏幕空间阴影。
+					torchL *= Fd_Burley(normal, -viewDir, shadowDirL, roughness) * 1.7 + 0.05; // 乘漫反射。
 
-					heldLightFalloff += heldBlockLightValue2 * torchL;
+					heldLightFalloff += heldBlockLightValue2 * torchL; // 按发光等级累加。
 				}
 
 			#else // 不投阴影时两支灯源合成一支居中光源，省两次屏幕步进。
@@ -407,16 +407,16 @@ void TorchSpecularHighlight(inout vec3 color, vec3 viewPos, vec3 viewDir, float 
 		}
 
 		if (heldBlockLightValue2 > 0.0){ // 左手灯源，逻辑与右手同。
-			vec3 spotPosL = viewPos - vec3(OMNI_FLASHLIGHT_POS_L_X, OMNI_FLASHLIGHT_POS_L_Y, 0.0);
-			float spotDistL = length(spotPosL);
-			vec3 shadowDirL = spotPosL / spotDistL;
+			vec3 spotPosL = viewPos - vec3(OMNI_FLASHLIGHT_POS_L_X, OMNI_FLASHLIGHT_POS_L_Y, 0.0); // 灯源到表面的矢量。
+			float spotDistL = length(spotPosL); // 灯源到表面的距离。
+			vec3 shadowDirL = spotPosL / spotDistL; // 灯源指向表面的方向。
 
-			float spotL = pow(max(spotDistL, 0.6), -OMNI_FLASHLIGHT_HELDLIGHT_FALLOFF);
-			spotL *= spotShape(dot(shadowDirL, aimDir));
+			float spotL = pow(max(spotDistL, 0.6), -OMNI_FLASHLIGHT_HELDLIGHT_FALLOFF); // 按距离衰减。
+			spotL *= spotShape(dot(shadowDirL, aimDir)); // 只有落在光束里才亮。
 
-			spotL *= SpecularGGX(normal, -viewDir, -shadowDirL, material.roughness, material.f0);
+			spotL *= SpecularGGX(normal, -viewDir, -shadowDirL, material.roughness, material.f0); // 乘 GGX 高光。
 
-			heldHighlight += heldBlockLightValue2 * spotL;
+			heldHighlight += heldBlockLightValue2 * spotL; // 按发光等级累加。
 		}
 
 		if (heldHighlight > 0.001){ // 高光太小就不改颜色，省一次加法。
