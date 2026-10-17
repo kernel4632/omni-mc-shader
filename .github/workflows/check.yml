@@ -36,7 +36,7 @@ jobs:
       - name: 十秒检查并打包
         run: python build.py verify # 工具测试与关键编译并行，总预算十秒；超时失败。
       - name: 上传检查产物
-        uses: actions/upload-artifact@v4 # 只保留离线产物，不声称游戏验证。
+        uses: actions/upload-artifact@v7 # 只保留离线产物，不声称游戏验证。
         with:
           name: Omni # 一份实际构建产物即可供下载，不重复打包。
           path: dist/
