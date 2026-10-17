@@ -8,7 +8,8 @@
 输出约定：远景地形写零号、三号、五号，对应 `DRAWBUFFERS:035`；远景水写四号、六号，对应 `DRAWBUFFERS:46`。
 设计原因与取舍：
   远景由加载器按远景模组的投影矩阵绘制，顶点用远景投影，片元只处理贴图噪声、剔除与简单的湿润；
-  远景地形的逐块噪声与剔除在 `effects/world/world.glsl`，远景水的波法线在 `effects/water/water.glsl`。
+  远景地形的逐块噪声与剔除在 `effects/world/world.glsl`，远景水的波法线在 `effects/water/water.glsl`，
+  过绘防护与噪声远距衰减在 `effects/world/distant.glsl`，两者默认关闭，不改变现有画面。
   顶点阶段不引入含 `discard` 与导数函数的效果文件；`effects/world/world.glsl`、`effects/water/water.glsl` 都只用力的片元。
   注意：`effects/water/water.glsl` 合并了水波与雨点，雨点函数依赖 `gaux1` 到 `gaux3` 与 `rainStrength`，而 iterationT 的
   远景水只引入水波；`effects/weather/weather.glsl` 的雨函数依赖 `colorShadowlight` 与 `colorSkylight`，这里按需声明。
@@ -67,6 +68,8 @@
 	#include "/effects/water/water.glsl"
 	// 远景噪声与剔除。
 	#include "/effects/world/world.glsl"
+	// 远景附加能力：过绘防护与噪声远距衰减。
+	#include "/effects/world/distant.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：远景地形与远景水分开写。
@@ -202,13 +205,16 @@ void main(){
 	#endif
 
 	DHChunkFading(length(viewPos)); // 远景区块淡入：靠近交界时按距离随机淡出，减少远景与近景的硬边。
+	omniDHTerrainOverdrawPrevention(length(viewPos)); // 远景过绘防护：丢弃已被近景覆盖的近距离远景。
 
 	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz; // 还原相机相对世界位置。
 
 // 底色：顶点色，开启噪声时叠逐块噪声。
 	vec3 albedo = color; // 底色取顶点色。
 	#ifdef OMNI_DH_TEXTURE_NOISE
+		vec3 albedoClean = albedo; // 记下未加噪声的底色，供远距衰减混回。
 		if (fract(materialIDs) != 0.1) DH_noise(albedo, worldPos + cameraPosition + mat3(gbufferModelView) * viewNormal * 0.001, materialIDs); // 雪不叠噪声，其余按世界位置叠逐块噪声。界位置叠噪声。
+		albedo = omniDHNoiseDropoff(albedo, albedoClean, length(viewPos)); // 远景噪声按距离变淡。
 	#endif
 
 	#ifdef OMNI_WHITE_DEBUG_WORLD
@@ -265,13 +271,16 @@ void main(){
 	if (texelFetch(depthtex0, ivec2(gl_FragCoord.xy), 0).x < 1.0) discard; // 已有近景几何遮住时丢弃该远景水像素。
 
 	DHChunkFading(length(viewPos)); // 远景区块淡入：远景水同样在交界处按距离随机淡出。
+	omniDHWaterOverdrawPrevention(length(viewPos)); // 远景水过绘防护：丢弃已被近景覆盖的近距离远景水。
 
 	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz; // 还原相机相对世界位置。
 
 	
 // 底色：顶点色，开启噪声时叠逐块噪声。
 	#ifdef OMNI_DH_TEXTURE_NOISE
+		vec4 texClean = color; // 记下未加噪声的水色，供远距衰减混回。
 		vec4 tex = DH_noise(color, worldPos + cameraPosition + mat3(gbufferModelView) * tbn[2] * 0.001); // 按水表位置叠噪声。
+		tex = omniDHNoiseDropoff(tex, texClean, length(viewPos)); // 远景水噪声按距离变淡。
 	#else
 		vec4 tex = color; // 直接用顶点色。
 	#endif

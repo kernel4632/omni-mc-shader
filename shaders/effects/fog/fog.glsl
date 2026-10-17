@@ -7,7 +7,8 @@
   三、水下体积雾：`UnderwaterVolumetricFog` 在水下沿视线步进阴影可见性并叠焦散，画出蓝色光柱；
   四、地面大气散射与原版雾：`LandAtmosphericScattering` 补地表方向的空气散射，`VanillaFog` 处理失明、黑暗与岩浆雪盲；
   五、洞穴雾与边界雾：`CaveFog`、`BorderFog` 来自 Eclipse，默认关闭，开启后在 `VanillaFog` 里补洞内雾与渲染距离附近的雾墙；
-  六、时段雾：`FogDensityScale` 按主世界一天时间与雾类型给出体积雾密度，来自 Eclipse，默认关闭；
+  六、雾密度标度：`FogDensityScale` 按主世界一天时间与雾类型给出体积雾密度（时段雾），并叠加每日天气的当天雾密度，两者都来自 Eclipse；
+     时段雾与每日天气的总开关都默认关闭，关闭时该函数只返回固定密度选项，画面与原来一致；
   七、雪暴与沙暴：`effects/weather/storm.glsl` 提供暴风强度、额外浓雾与雾色，`VolumetricFog` 步进时叠这层浓雾并染色，默认关闭。
 调用位置：
   `rendering/composite.glsl` 的 `composite2` 程序在反射里补体积雾与地表散射；
@@ -242,13 +243,32 @@ float FogLightMarch(inout vec3 fogPos, vec3 wind){
 	return lightingDensity; // 返回原始累计密度，供调用方乘吸收率与选项。
 }
 
-// --- 时段雾：密度随一天时间变化 ---
-// 时段雾密度标度：来源 Eclipse `lib/climate_settings.glsl:172-201` 的 `FogDensities`。
-// 一天按 `worldTime` 切成晨、午、晚、夜四段并各给一段权重；两套系数分别给“均匀雾”（仅高度衰减）
-// 与“多云雾”（团雾），按当前雾类型取其中一套。返回体积雾的密度标度：
-// 总开关关闭或非主世界时返回固定密度选项，画面与原来完全一致。
-float FogDensityScale(){
-	#ifdef OMNI_TOD_FOG // 总开关默认关闭，打开后密度才随一天变化。
+// --- 雾密度标度：时段雾与每日天气 ---
+// 雾密度标度：来源 Eclipse `lib/climate_settings.glsl:172-201` 的 `FogDensities`。
+// 它同时服务两件来源：时段雾按 `worldTime` 把一天切成晨、午、晚、夜四段；
+// 每日天气按游戏日取当天的匀雾与云雾密度。两者都用同一个标度乘到体积雾的噪声密度上：
+// 匀雾（`x`）乘给“仅高度衰减”雾，云雾（`y`）乘给团雾，对应 Eclipse 的均匀、多云两套密度系数。
+// 传入 `stormStrength` 是为了与暴风通道分工：暴风时雾由 `OmniStormFog` 负责，这里退回固定密度，
+// 避免同一个每日雾值既被当作标度、又被暴风通道当作加性密度叠两次。
+float FogDensityScale(float stormStrength){
+	#ifdef OMNI_DAILY_WEATHER // 每日天气开启时用当天雾密度；默认关闭时不产生这段代码。
+		#ifdef OMNI_OVERWORLD // 每日天气只属于主世界；下界与末地没有正常昼夜与季节轮换。
+			#if OMNI_VFOG_NOISE_TYPE == 0 // 仅高度衰减模式取匀雾那一项。
+				float dailyScale = omniWeatherFog().x; // 当天匀雾密度。
+			#else // 团雾模式取云雾那一项。
+				float dailyScale = omniWeatherFog().y; // 当天云雾密度。
+			#endif
+		#else
+			float dailyScale = OMNI_VFOG_DENSITY; // 非主世界退回固定密度选项。
+		#endif
+		if (stormStrength > 0.0){ // 正在刮暴风时，这层雾交给 `OmniStormFog`，这里不再叠每日雾。
+			dailyScale = OMNI_VFOG_DENSITY; // 退回固定密度，避免两项同时生效。
+		}
+	#else // 每日天气关闭时退回固定密度选项，行为与原来一致。
+		float dailyScale = OMNI_VFOG_DENSITY; // 固定密度选项原值。
+	#endif
+
+	#ifdef OMNI_TOD_FOG // 时段雾总开关默认关闭，打开后密度才随一天变化。
 		#ifdef OMNI_OVERWORLD // 时段雾只属于主世界；下界与末地没有正常昼夜循环。
 			float todTime = mod(float(worldTime), 24000.0); // 当天时刻，取一天内的循环。
 
@@ -265,10 +285,15 @@ float FogDensityScale(){
 				                 + todEvening * OMNI_TOD_FOG_EVENING_CLOUDY + todNight * OMNI_TOD_FOG_NIGHT_CLOUDY; // 同上，换成多云一套。
 			#endif
 
-			return todDensity * OMNI_TOD_FOG_MULT; // 乘总倍率，对应 Eclipse 的 `TOD_Fog_mult`。
+			float todScale = todDensity * OMNI_TOD_FOG_MULT; // 乘总倍率，对应 Eclipse 的 `TOD_Fog_mult`。
+			#ifdef OMNI_DAILY_WEATHER // 时段雾与每日天气同时开启：照 Eclipse 的 `max` 取较大者，不叠加。
+				return max(dailyScale, todScale); // 两个来源取大值。
+			#else
+				return todScale; // 只有时段雾时直接返回时段值。
+			#endif
 		#endif
 	#endif
-	return OMNI_VFOG_DENSITY; // 总开关关闭或非主世界，返回固定密度选项，画面不变。
+	return dailyScale; // 时段雾关闭或非主世界，返回固定密度或当天雾密度，画面与原来一致。
 }
 
 // 体积雾主体：沿视线一步步在雾里前进，同时沿光方向估遮挡，累加雾色与阳光散射。
@@ -316,16 +341,18 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		baseDensity *= eyeBrightnessSmoothCurved; // 乘天空光曲线平滑值。
 	#endif
 
-	float fogDensityScale = FogDensityScale(); // 密度标度：时段雾关闭时为固定密度选项，开启后随一天时间变化。
-
-	#ifdef OMNI_PER_BIOME_ENV // 群系权重每像素算一次，供下面的雾密度与雾色共用。
-		vec4 biomeWeights = omniBiomeWeights(); // 四个群系的权重，来自加载器平滑量。
-	#endif
-
 	#if defined(OMNI_SNOW_STORM) || defined(OMNI_SAND_STORM) // 只有开启至少一种暴风时才计算强度，默认零开销。
 		float stormSnow = OmniSnowStorm(); // 雪暴强度，零到一。
 		float stormSand = OmniSandStorm(); // 沙暴强度，零到一。
 		float stormStrength = clamp(stormSnow + stormSand, 0.0, 1.0); // 两种暴风的总强度，即使都没刮也保持零。
+	#else
+		float stormStrength = 0.0; // 没开暴风时总强度恒为零，供密度标度判断是否把雾交给暴风通道。
+	#endif
+
+	float fogDensityScale = FogDensityScale(stormStrength); // 密度标度：时段雾与每日天气按当前雾类型给出，暴风时退回固定密度避免与暴风通道叠加。
+
+	#ifdef OMNI_PER_BIOME_ENV // 群系权重每像素算一次，供下面的雾密度与雾色共用。
+		vec4 biomeWeights = omniBiomeWeights(); // 四个群系的权重，来自加载器平滑量。
 	#endif
 
 	#ifdef OMNI_VFOG_VOLUMETRIC_LIGHTING // 打开体积光照时用多级相位，否则用单一相位。

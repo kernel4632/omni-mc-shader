@@ -7,8 +7,9 @@
   二、天气表：十天为一行，每天四层云的覆盖度与密度，加两项雾密度，数值照 Eclipse 默认；
   三、选取：按 `worldDay` 取当天那一行，或按哈希在十天里随机取一行。
 调用位置：本文件对外只暴露一组取值函数，由绘制主体按需调用；
-  目前 `effects/weather/storm.glsl` 引入它，把当天匀雾叠进暴风雾通道；
-  云量部分应由主助手在 `effects/cloud/cloud.glsl` 里读取 `omniWeatherCoverage` 与 `omniWeatherDensity`。
+  云量：`effects/cloud/cloud.glsl` 在基础云与各附加层里读 `omniWeatherCoverage` 与 `omniWeatherDensity`，用当天值替换默认云量；
+  雾：`effects/fog/fog.glsl` 的 `FogDensityScale` 读 `omniWeatherFog`，把当天匀雾与云雾密度接进体积雾密度标度；
+  `effects/weather/storm.glsl` 也引入它，只用当天匀雾补暴风雾；暴风时段体积雾密度标度会让位，避免同一项叠加两次。
 可复制示例：
   `OmniWeatherDay day = omniWeatherDay();`     一次取齐当天的覆盖度、密度与雾；
   `vec4 cover = omniWeatherCoverage();`        只取四层覆盖度，顺序是 `l0` 到 `l3`；
@@ -22,7 +23,7 @@
      这里每个游戏日直接取当天一行，只在换日那一刻瞬间切换，其余时间稳定。
 与同文件夹其它效果的衔接：
   季节 `effects/weather/season.glsl` 管一年尺度的植被换色，本文件管一天尺度的云与雾，两者都按 `worldDay` 走但不互相覆盖；
-  雪暴与沙暴 `effects/weather/storm.glsl` 是单独的开关型天气，本文件只额外提供当天的匀雾密度；
+  雪暴与沙暴 `effects/weather/storm.glsl` 是单独的开关型天气，本文件为它提供当天的匀雾密度，也为云与体积雾提供当天数值；
   雨雪 `effects/weather/weather.glsl` 读加载器给出的降雨强度，本文件不改降雨强度，只给云量与雾密度。
 */
 #ifndef OMNI_DAILY_WEATHER_INCLUDED // 只引入一次，避免选项与数组重复定义。
