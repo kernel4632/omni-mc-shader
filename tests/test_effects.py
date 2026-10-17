@@ -347,7 +347,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniAurora", atmosphere)  # 极光独立成函数。
         self.assertIn("omniRainbow", atmosphere)  # 彩虹独立成函数。
         self.assertIn("omniLightning", atmosphere)  # 闪电独立成函数。
+        self.assertIn("omniLightningVolume", atmosphere)  # 闪电对体积云与体积雾的照明也在这里定义。
         self.assertIn("*OMNI_AURORA_STRENGTH", atmosphere)  # 极光强度参与着色。
+        cloud = support.text("effects/cloud/cloud.glsl")  # 体积云主体。
+        self.assertIn("omniLightningVolume", cloud)  # 体积云接到闪电照明。
+        self.assertIn("marchingPos - cameraPosition", cloud)  # 云采样点换成相机相对坐标后再比闪电距离。
+        fog = support.text("effects/fog/volumetric.glsl")  # 体积雾主体。
+        self.assertIn("omniLightningVolume", fog)  # 体积雾接到闪电照明。
+        self.assertIn("lightningFogLight", fog)  # 闪电点亮的空气按每步吸收量累加。
 
     def test_cloud_styles_selectable(self):
         """云提供平面与体积两种做法，切换后延迟阶段绘制不同分支，两者共用同一套天气与颜色来源。"""

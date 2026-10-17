@@ -251,6 +251,9 @@ vec3 CloudLighting(vec3 marchingPos, vec2 cloudAltitude, float planetRadius, flo
 		float ambientScattering = 1.0 - cloudDensity.x; // 云越薄环境光透得越多。
 		ambientScattering *= fsqrt(cloudPos.w); // 高处环境光更多。
 		cloudColor += colorSkylight * (ambientScattering * lightingStrength.y * 0.35); // 乘天光色与强度。
+	// Omni 额外功能：真实闪电事件照亮这一段云，按云采样点到闪电光柱的距离叠冷色闪光。
+	// 四百格范围与较弱的指数衰减照 Eclipse `Iris_Lightningflash_VLcloud`；采样点是世界坐标，先换相机相对再比距离。
+		cloudColor += omniLightningVolume(marchingPos - cameraPosition, 400.0, -10.0); // 没有闪电输入时返回零，不改变画面。
 	return cloudColor; // 返回云的颜色。
 }
 // 体积云步进核心：沿视线在云层里步进，累加颜色与透过率，最后按空气透视与天空混合。

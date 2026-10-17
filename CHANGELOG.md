@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.0.0-dev.159
+
+闪电照明补上体积云与体积雾：打开「闪电照明」时，雷暴闪电也会照亮天上的体积云与空气里的体积雾，默认关闭、画面不变。
+
+- 照明函数（`shaders/effects/sky/atmosphere.glsl` 的 `omniLightningVolume`）：把闪电当成一根从闪电高度向上延伸一百一十六格的竖直光柱，介质采样点离柱越近越亮；照明范围与指数衰减照 Eclipse `lib/lightning_stuff.glsl` 的 `Iris_Lightningflash_VLcloud`（云，四百格）与 `Iris_Lightningflash_VLfog`（雾，一百五十格）。
+- 体积云（`shaders/effects/cloud/cloud.glsl` 的 `CloudLighting`）：在云的体积光照里叠加闪电冷色光，基础云与附加层共用；云越厚、离闪电越近被照亮越明显。
+- 体积雾（`shaders/effects/fog/volumetric.glsl` 的 `VolumetricFog`）：按每一步的吸收量逐段累加闪电点亮的空气，并随天空光衰减，洞穴里看不到。
+- 复用既有选项 `OMNI_LIGHTNING` 与 `OMNI_LIGHTNING_STRENGTH`，不新增开关；默认关闭，关闭时与 iterationT 画面一致。
+- 差异说明记入 `docs/eclipse-parity.md` 的「闪电」行：体积云与体积雾照明由「未合并」改为「近似」。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.158
 
 受伤照 Eclipse 补上「重击整屏红」：受击闪红不再只用 `is_hurt` 一档，改成按一次掉落量区分小伤与重击，默认画面不变。
