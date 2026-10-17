@@ -12,6 +12,9 @@
   合成六号片元调用 `DepthOfField` 做景深；
   合成八号片元调用 `MotionBlur` 做相机动态模糊；
   合成十四号片元调用 `Vignette` 画暗角。
+本文件的相机速度函数叫 `MotionBlurCameraVelocity`：它只按相机位移算屏幕位移，不回填深度。
+  同名用途在 `effects/clarity/antialiasing.glsl` 是 `TaaCameraVelocity`、在 `effects/lighting/ambient.glsl` 是
+  `GiCameraVelocity`，三份实现不同，按 iterationT 原程序各留一份，名字体现用途以区分。
 可复制示例：
   `compositeOutput1 = DepthOfField();`
   `float spread = CoCSpread();`
@@ -363,7 +366,7 @@ vec4 DepthOfField(){
 // 用上一帧相机把当前表面重投影回屏幕，沿两帧之间的屏幕位移取几个历史位置做平均，模拟快门时间内相机的移动。
 // 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理相机移动造成的整屏位移。
 // 无效情况（手、覆盖层、传送、越界）都提前返回，让这些像素保持清晰。
-vec2 CalculateCameraVelocity(vec2 coord, float depth){
+vec2 MotionBlurCameraVelocity(vec2 coord, float depth){
 	vec3 projection = vec3(coord, depth) * 2.0 - 1.0; // 转负一到一。
 	projection = (vec3(vec2(gbufferProjectionInverse[0].x, gbufferProjectionInverse[1].y) * projection.xy, 0.0) + gbufferProjectionInverse[3].xyz) / (gbufferProjectionInverse[2].w * projection.z + gbufferProjectionInverse[3].w); // 逆投影到视空间。
 	if (depth < 0.7){ // 手按固定深度偏移补偿相机位移。
@@ -393,7 +396,7 @@ vec3 MotionBlur(){
 	#else // 默认只排除手和末地传送门。
 		if (depth > 0.7 && materialIDs != MATID_END_PORTAL) // 近处左手以外的世界表面参与。
 	#endif
-		velocity = CalculateCameraVelocity(texCoord, depth); // 算屏幕位移。
+		velocity = MotionBlurCameraVelocity(texCoord, depth); // 算屏幕位移。
 	vec3 color = vec3(0.0); // 输出颜色。
 	if (length(velocity) < 5e-7){ // 位移极小说明相机没动，直接用历史颜色。
 		color = CurveToLinear(texelFetch(colortex7, texelCoord, 0).rgb); // 读七号画面当前颜色。

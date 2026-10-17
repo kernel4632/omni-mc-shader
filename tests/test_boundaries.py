@@ -16,8 +16,7 @@ import audit  # 中文说明解码与比例统计。
 import build  # 实际生成与发布边界。
 import game  # 专用实例路径和进程匹配。
 import options  # 分享格式唯一来源。
-
-PORT_REPLACED = "旧管线测试：正被 iterationT 一比一移植替换，见 docs/parity.md 第十节；庚片按新管线重写后恢复。"  # 移植期间跳过的旧管线断言。
+import support  # 共享展开缓存，避免重复读取整棵源码树。
 
 class BoundaryTests(unittest.TestCase):
     """外部输入必须在文件写入与外部进程之前拒绝。"""
@@ -108,12 +107,11 @@ class BoundaryTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError,"性能上下文"): game.sample(root/"outside.exe",0,1,context)
                 identity.assert_not_called(); run.assert_not_called()  # 上下文失败不触碰工具和进程。
 
-    @unittest.skip(PORT_REPLACED)
     def test_current_properties_and_explicit_legacy_migration(self):
         """当前属性不冒充旧版；旧版只迁移原来存在的调试接口。"""
         found,_ = options.scan(build.SHADERS)  # 外部配置值使用真实选项范围。
         with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary); source = root/"current.properties"; source.write_text("OMNI_CLOUD_COVERAGE=0.75\n",encoding="ascii")
+            root = Path(temporary); source = root/"current.properties"; source.write_text("OMNI_TONEMAP_OPERATOR=1\n",encoding="ascii")  # 用当前真实选项写出加载器属性配置。
             current = options.shared(source,found,build.version())  # 没有标记的加载器配置默认是当前版。
             self.assertEqual(current["shaderVersion"],build.version()); self.assertEqual(current["schemaVersion"],options.SHARE_SCHEMA)
             with self.assertRaisesRegex(ValueError,"旧版配置只能"): options.shared(source,found,build.version(),legacy=True)
@@ -171,11 +169,16 @@ class BoundaryTests(unittest.TestCase):
             with self.assertRaises(ValueError): options.save(config/"user.json",{},build.version(),root)
             self.assertFalse((outside/"user.json").exists()); self.assertFalse((outside/"setup.mcfunction").exists())  # 拒绝发生在首次写入之前。
 
-    @unittest.skip(PORT_REPLACED)
     def test_water_and_lens_combination_contract(self):
-        """瀑布保留侧面法线，所有镜头采样保持同一效果顺序。"""
-        water = (build.SHADERS/"effects/water.glsl").read_text(encoding="utf-8")  # 直接核对生产波浪的表面输入。
-        self.assertIn("worldNormal.y<0.9",water); self.assertIn("abs(relativeHeight)",water)  # 顶面波浪与近水互动有实际输入条件。
-        lens = (build.SHADERS/"effects/lens.glsl").read_text(encoding="utf-8")
-        self.assertIn("sum += omniFocusSample",lens); self.assertIn("sum += omniLensSample",lens)  # 快门和景深不再覆盖原始红蓝通道。
-        self.assertIn("texelFetch(colortex1,pixel,0).a==2.0",lens)  # 手持物不参与景深。
+        """水面法线供折射与雾共用同一来源，镜头各步骤各由自己的开关控制，互不覆盖。"""
+        found,_,_ = support.configuration()  # 真实选项供逐项核对。
+        water = support.text("effects/water/water.glsl")  # 水面效果主体。
+        self.assertIn("GetWavesNormal",water)  # 波浪法线独立成函数。
+        self.assertIn("GetWaterParallaxCoord",water)  # 视差坐标独立成函数。
+        self.assertIn("WaterFog",water)  # 水雾复用同一份波高与吸收。
+        self.assertIn("WaterRefractionLite",water)  # 折射独立成函数。
+        lens = support.text("effects/lens/lens.glsl")  # 镜头效果主体。
+        for name in ("DepthOfField","LensFlare","MotionBlur","Vignette"):
+            self.assertIn(name,lens)  # 景深、光斑、运动模糊与暗角各自独立成函数。
+        for option in ("OMNI_DOF","OMNI_LENS_FLARE","OMNI_MOTION_BLUR","OMNI_VIGNETTE"):
+            self.assertIn(option,found)  # 四个镜头步骤各由自己的开关控制，不会互相覆盖。

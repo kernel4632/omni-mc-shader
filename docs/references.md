@@ -72,4 +72,4 @@
 
 1. 逐个核对标「需核实」的许可（FidelityFX、Sebastian Lague、若干 shadertoy）。
 2. 先落地四个主力来源里最适合直接用的：SMAA、XeGTAO、glsl-atmosphere、Bruneton。
-3. 其余按 `parameters.md` 的「缺失」列，读论文重写。
+3. 其余按 `docs/eclipse-parity.md` 的合并建议与 `docs/parity.md` 的偏离记录，读论文重写。

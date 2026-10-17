@@ -355,6 +355,81 @@ vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, i
 	return vec4(albedoSample.rgb * weights, textureLod(tex, coord, 0.0).a); // 颜色归一化，透明度取原始值。
 }
 
+// 表面采样：按开关走视差、各向异性过滤或屏幕导数采样，得到底色、高光与法线，并可能丢弃透明像素。
+void SampleTerrainSurface(mat3 tbn, vec2 coord, vec2 duv1, vec2 duv2, vec3 shadowVector, inout float parallaxShadow, out vec4 albedoTex, out vec4 specularTex, out vec3 normalTex){
+	#if OMNI_PARALLAX_MODE > 0 && defined MC_NORMAL_MAP // 开启视差且有法线贴图时走视差路径。
+
+		normalTex = vec3(0.0, 0.0, 1.0); // 视差函数会写回法线。
+		ivec2 parallaxTexel = ParallaxOcclusionMapping(coord, tbn, shadowVector, duv1, duv2, normalTex, parallaxShadow); // 找到可见交点。
+		albedoTex = texelFetch(tex, parallaxTexel, 0); // 精确取交点底色。
+
+		#if MC_VERSION >= 11605 && !defined IS_IRIS // 新版区分实体方块与透明方块，丢弃阈值不同。
+			float alphaRef = renderStage == MC_RENDER_STAGE_TERRAIN_SOLID ? 0.004 : 0.1; // 实体方块用更小阈值。
+		#else
+			float alphaRef = 0.1; // 旧版与 Iris 统一用零点一。
+		#endif
+		if (albedoTex.a < alphaRef) discard; // 透明像素丢弃。
+
+		#ifdef MC_SPECULAR_MAP
+			specularTex = texelFetch(specular, parallaxTexel, 0); // 精确取交点高光。
+		#else
+			specularTex = vec4(0.0); // 没有高光贴图时全零。
+		#endif
+
+	#else // 未开视差时按各向异性过滤或普通采样取贴图。
+
+		#if OMNI_ANISOTROPIC_FILTERING_QUALITY > 0 // 开启各向异性过滤。
+
+			normalTex = vec3(0.0, 0.0, 1.0); // 过滤函数会写回法线。
+			specularTex = vec4(0.0); // 过滤函数会写回高光。
+			albedoTex = SampleAnisotropic(coord, duv1, duv2, normalTex, specularTex); // 各向异性取底色与表面。
+
+			#if MC_VERSION >= 11605 && !defined IS_IRIS
+				float alphaRef = renderStage == MC_RENDER_STAGE_TERRAIN_SOLID ? 0.004 : 0.1; // 丢弃阈值同视差路径。
+			#else
+				float alphaRef = 0.1; // 旧版与 Iris 统一。
+			#endif
+			if (albedoTex.a < alphaRef) discard; // 透明像素丢弃。
+
+		#else // 不开过滤时按屏幕导数采一次。
+
+			albedoTex = textureGrad(tex, coord, duv1, duv2); // 按屏幕导数采底色。
+
+			#if MC_VERSION >= 11605 && !defined IS_IRIS
+				float alphaRef = renderStage == MC_RENDER_STAGE_TERRAIN_SOLID ? 0.004 : 0.1; // 丢弃阈值同上。
+			#else
+				float alphaRef = 0.1; // 旧版与 Iris 统一。
+			#endif
+			if (albedoTex.a < alphaRef) discard; // 透明像素丢弃。
+
+			#ifdef MC_NORMAL_MAP
+				normalTex = DecodeNormalTex(textureGrad(normals, coord, duv1, duv2).rgb); // 采法线并解码。
+			#else
+				normalTex = vec3(0.0, 0.0, 1.0); // 没有法线贴图时朝外。
+			#endif
+
+			#ifdef MC_SPECULAR_MAP
+				#if OMNI_TEXTURE_EMISSIVENESS_MODE == 0
+					specularTex = textureGrad(specular, coord, duv1, duv2); // 仅硬编码模式按屏幕导数采高光。
+				#else
+					specularTex = textureLod(specular, coord, 0.0); // 其余模式只取一次。
+				#endif
+			#else
+				specularTex = vec4(0.0); // 没有高光贴图时全零。
+			#endif
+			
+		#endif
+
+	#endif
+}
+
+// 输出写入：把底色、法线光照与高光材质写进零、三、五号画面。
+void WriteTerrainGbuffer(vec3 albedo, vec2 normalEnc, float blockLightDirectional, vec2 blockLight, vec4 specularTex, float materialIDs, float wet, float parallaxShadow){
+	gbufferOutput0 = vec4(albedo, 1.0); // 零号写不透明底色。
+	gbufferOutput3 = vec4(normalEnc, blockLightDirectional, blockLight.y); // 三号写法线与方块光。
+	gbufferOutput5 = vec4(Pack2x8(specularTex.rg), Pack2x8(specularTex.ba), (materialIDs + 0.1) / 255.0, Pack2x8(vec2(wet, parallaxShadow))); // 五号打包高光、材质编号、湿润与视差阴影。
+}
+
 // 片元主函数：按原程序顺序算切线基、视差、遮挡、湿润、法线与高光。
 void main(){
 // 切线基：顶点没给时用屏幕导数推出来。
@@ -390,76 +465,10 @@ void main(){
 	float parallaxShadow = saturate(dot(tbn[2], shadowVector) * 200.0); // 面朝阳光程度，作为视差自阴影初值。
 
 
-	#if OMNI_PARALLAX_MODE > 0 && defined MC_NORMAL_MAP // 开启视差且有法线贴图时走视差路径。
-
-		vec3 normalTex = vec3(0.0, 0.0, 1.0); // 视差函数会写回法线。
-		ivec2 parallaxTexel = ParallaxOcclusionMapping(texCoord, tbn, shadowVector, duv1, duv2, normalTex, parallaxShadow); // 找到可见交点。
-
-		vec4 albedoTex = texelFetch(tex, parallaxTexel, 0); // 精确取交点底色。
-
-		#if MC_VERSION >= 11605 && !defined IS_IRIS // 新版区分实体方块与透明方块，丢弃阈值不同。
-			float alphaRef = renderStage == MC_RENDER_STAGE_TERRAIN_SOLID ? 0.004 : 0.1; // 实体方块用更小阈值。
-		#else
-			float alphaRef = 0.1; // 旧版与 Iris 统一用零点一。
-		#endif
-		if (albedoTex.a < alphaRef) discard; // 透明像素丢弃。
-
-
-		#ifdef MC_SPECULAR_MAP
-			vec4 specularTex = texelFetch(specular, parallaxTexel, 0); // 精确取交点高光。
-		#else
-			vec4 specularTex = vec4(0.0); // 没有高光贴图时全零。
-		#endif
-
-	#else // 未开视差时按各向异性过滤或普通采样取贴图。
-
-		#if OMNI_ANISOTROPIC_FILTERING_QUALITY > 0 // 开启各向异性过滤。
-
-			vec3 normalTex = vec3(0.0, 0.0, 1.0); // 过滤函数会写回法线。
-			vec4 specularTex = vec4(0.0); // 过滤函数会写回高光。
-
-			vec4 albedoTex = SampleAnisotropic(texCoord, duv1, duv2, normalTex, specularTex); // 各向异性取底色与表面。
-
-			#if MC_VERSION >= 11605 && !defined IS_IRIS
-				float alphaRef = renderStage == MC_RENDER_STAGE_TERRAIN_SOLID ? 0.004 : 0.1; // 丢弃阈值同视差路径。
-			#else
-				float alphaRef = 0.1; // 旧版与 Iris 统一。
-			#endif
-
-			if (albedoTex.a < alphaRef) discard; // 透明像素丢弃。
-
-
-		#else // 不开过滤时按屏幕导数采一次。
-
-			vec4 albedoTex = textureGrad(tex, texCoord, duv1, duv2); // 按屏幕导数采底色。
-
-			#if MC_VERSION >= 11605 && !defined IS_IRIS
-				float alphaRef = renderStage == MC_RENDER_STAGE_TERRAIN_SOLID ? 0.004 : 0.1; // 丢弃阈值同上。
-			#else
-				float alphaRef = 0.1; // 旧版与 Iris 统一。
-			#endif
-			if (albedoTex.a < alphaRef) discard; // 透明像素丢弃。
-
-			#ifdef MC_NORMAL_MAP
-				vec3 normalTex = DecodeNormalTex(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采法线并解码。
-			#else
-				vec3 normalTex = vec3(0.0, 0.0, 1.0); // 没有法线贴图时朝外。
-			#endif
-
-
-			#ifdef MC_SPECULAR_MAP
-				#if OMNI_TEXTURE_EMISSIVENESS_MODE == 0
-					vec4 specularTex = textureGrad(specular, texCoord, duv1, duv2); // 仅硬编码模式按屏幕导数采高光。
-				#else
-					vec4 specularTex = textureLod(specular, texCoord, 0.0); // 其余模式只取一次。
-				#endif
-			#else
-				vec4 specularTex = vec4(0.0); // 没有高光贴图时全零。
-			#endif
-			
-		#endif
-
-	#endif
+	vec4 albedoTex = vec4(0.0); // 采样得到的底色。
+	vec4 specularTex = vec4(0.0); // 采样得到的高光。
+	vec3 normalTex = vec3(0.0, 0.0, 1.0); // 采样得到的法线。
+	SampleTerrainSurface(tbn, texCoord, duv1, duv2, shadowVector, parallaxShadow, albedoTex, specularTex, normalTex); // 按开关统一采样表面贴图。
 
 
 // 方块光：默认取原版方块光，指向性开启时再按表面朝向倾斜。
@@ -580,9 +589,7 @@ void main(){
 	#endif
 
 
-	gbufferOutput0 = vec4(albedo, 1.0); // 零号写不透明底色。
-	gbufferOutput3 = vec4(normalEnc, blockLightDirectional, blockLight.y); // 三号写法线与方块光。
-	gbufferOutput5 = vec4(Pack2x8(specularTex.rg), Pack2x8(specularTex.ba), (materialIDs + 0.1) / 255.0, Pack2x8(vec2(wet, parallaxShadow))); // 五号打包高光、材质编号、湿润与视差阴影。
+	WriteTerrainGbuffer(albedo, normalEnc, blockLightDirectional, blockLight, specularTex, materialIDs, wet, parallaxShadow); // 统一写出零、三、五号画面。
 }
 #endif // 片元阶段结束。
 #endif // 文件守卫结束。

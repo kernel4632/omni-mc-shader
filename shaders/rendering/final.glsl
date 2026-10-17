@@ -54,39 +54,39 @@
 	void main(){
 		vec3 color = vec3(0.0); // 最终要写的屏幕颜色。
 
-		if (MC_RENDER_QUALITY == 1.0){ // 内部渲染比例为一：画面就是一比一，直接读一号画面并就地锐化。
-			color = texelFetch(colortex1, texelCoord, 0).rgb; // 读一号画面的当前像素。
+		// 是否需要给手或玩家这类没有时间积累的像素补一次边缘抗锯齿；由排除选项决定，先算成一个布尔量。
+		bool useEdgeAA = false;
+		#if defined OMNI_DISABLE_HAND_TAA || defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只有相关排除选项开启时才读材质编号。
+			float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读材质编号，判断像素是不是手或玩家。
+		#endif
+		#if defined OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都关了时间抗锯齿。
+			useEdgeAA = materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER; // 这两类像素没有时间积累。
+		#elif defined OMNI_DISABLE_HAND_TAA // 只关了手的时间抗锯齿。
+			useEdgeAA = materialIDs == MATID_HAND; // 手没有时间积累。
+		#elif defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只关了玩家的时间抗锯齿与动态模糊。
+			useEdgeAA = materialIDs == MATID_ENTITIES_PLAYER; // 玩家没有时间积累。
+		#endif
 
-			#if defined OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都关了时间抗锯齿。
-				float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读材质编号。
-				if (materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER){ // 这两类像素没有时间积累。
-					color = Fxaa(color, texCoord); // 改用边缘抗锯齿补一次。
-				}else // 其余像素走下面的锐化。
-			#elif defined OMNI_DISABLE_HAND_TAA // 只关了手的时间抗锯齿。
-				float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读材质编号。
-				if (materialIDs == MATID_HAND){ // 手没有时间积累。
-					color = Fxaa(color, texCoord); // 改用边缘抗锯齿。
-				}else // 其余像素走下面的锐化。
-			#elif defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只关了玩家的时间抗锯齿与动态模糊。
-				float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读材质编号。
-				if (materialIDs == MATID_ENTITIES_PLAYER){ // 玩家没有时间积累。
-					color = Fxaa(color, texCoord); // 改用边缘抗锯齿。
-				}else // 其余像素走下面的锐化。
-			#endif
-				{
-					#if OMNI_CAS_SHARPNESS > 0 && defined OMNI_TAA && (!defined OMNI_FSR || MC_VERSION < 11801) // 开了锐化、开着时间抗锯齿，且没有独立的放大程序时。
-						color = FidelityFX_CAS(color, texelCoord); // 按十字邻域对比度自适应锐化。
-					#endif
-				}
-
+		// 内部渲染比例低于一且开着放大程序时，画面来自放大输出；同样先算成布尔量，让后面的判断是一整条 if。
+		bool fsrUpscaled = false;
 		#if MC_VERSION >= 11801 // 放大功能只在一点一八点一以后可用。
-			#ifdef OMNI_FSR // 开着放大程序时，内部比例低于一就改用放大输出。
-				}else if (MC_RENDER_QUALITY < 1.0){ // 内部渲染比例低于一：画面放大过。
-					color = FidelityFX_FSR1(texelCoord); // 从八号画面读放大结果并锐化。
+			#ifdef OMNI_FSR // 开着放大程序。
+				fsrUpscaled = MC_RENDER_QUALITY < 1.0; // 内部比例低于一才走放大输出。
 			#endif
 		#endif
 
-		}else{ // 内部渲染比例不是一也不是低于一的合法放大情形：按连续坐标读一号画面。
+		if (MC_RENDER_QUALITY == 1.0){ // 内部渲染比例为一：画面就是一比一，直接读一号画面并就地锐化。
+			color = texelFetch(colortex1, texelCoord, 0).rgb; // 读一号画面的当前像素。
+			if (useEdgeAA){ // 手或玩家没有时间积累。
+				color = Fxaa(color, texCoord); // 改用边缘抗锯齿补一次。
+			}else{ // 其余像素就地锐化。
+				#if OMNI_CAS_SHARPNESS > 0 && defined OMNI_TAA && (!defined OMNI_FSR || MC_VERSION < 11801) // 开了锐化、开着时间抗锯齿，且没有独立的放大程序时。
+					color = FidelityFX_CAS(color, texelCoord); // 按十字邻域对比度自适应锐化。
+				#endif
+			}
+		}else if (fsrUpscaled){ // 内部渲染比例低于一：画面已经过放大。
+			color = FidelityFX_FSR1(texelCoord); // 从八号画面读放大结果并锐化。
+		}else{ // 其它情况：按连续坐标读一号画面。
 			color = textureLod(colortex1, texCoord, 0.0).rgb; // 双线性读一号画面。
 		}
 

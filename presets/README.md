@@ -3,6 +3,7 @@
 每套配置是一个 `.properties` 文件。新增文件会自动登记到游戏的预设菜单。
 文件名使用小写英文、数字和下划线。配置中的值只能来自效果的选项定义。
 省略的选项由构建工具补成默认值，切换预设时不继承上一套的残留值。
+当前四套预设：`default`（默认画面）、`atmospheric`（氛围画面）、`lightweight`（轻量画面）、`realistic`（真实画面）。
 
 ```properties
 # @preset {"label":{"zh_cn":"默认画面","en_us":"Default"}}

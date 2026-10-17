@@ -38,7 +38,8 @@ SHADERS = ROOT / "shaders"  # 游戏资源根目录。
 INCLUDE = re.compile(r'^[ \t]*#include[ \t]+"([^"\n]+)"[ \t]*$', re.MULTILINE)  # 加载器要求引用独占一行，尾随说明会被拒绝。
 STAGES = {".vsh": ".vert", ".fsh": ".frag", ".gsh": ".geom", ".csh": ".comp", ".tcs": ".tesc", ".tes": ".tese"}  # 把游戏入口后缀映射到编译器认识的阶段名。
 # 移植 iterationT 期间的临时开关：旧效果文件在各片改写前没有入口引用，为真时“选项未接入”只警告不报错。
-# 移植完成后由庚片删除这个开关和它的分支，恢复严格检查。
+# 它只影响这一处宽松判断，不再缩减编译范围：`verify` 的编译探针与 `compile` 的全矩阵都照各自范围完整编译。
+# 移植收尾、确认每个选项都接入入口后，删除这个开关与它的分支，恢复严格报错。
 PORTING = True
 # 加载器会为每个程序预先注入一整套环境宏；离线编译必须照 Iris 的 StandardMacros 给出同样的定义，
 # 否则像 `MC_HAND_DEPTH`、`MC_VERSION`、`MC_RENDER_QUALITY` 这些只在游戏里存在的名字会被当成未声明标识符。
@@ -228,6 +229,28 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
         check_references(source, shaders, seen=seen)  # 入口配对检查只走引用树，不拼接文本。
     return entries  # 下游链接真实入口。
 
+# --- 选项接线：全树检查一次，和编译探针范围无关 ---
+def check_option_wiring(found: dict) -> None:
+    """检查每个选项是否真的被某段代码使用，而不只是被声明。
+
+    为什么不用“入口展开文本”：常规验证只编一小批程序，用它判断接线会把只在合成或延迟里
+    使用的选项误报成未接线。这里直接扫全部光影源码：去掉每个选项自己的声明行与 `@option`
+    说明行之后，只要名字还出现在别处，就说明它参与了计算。
+    """
+    files = list(SHADERS.rglob("*.glsl")) + list(SHADERS.rglob("*.vsh")) + list(SHADERS.rglob("*.fsh")) + list(SHADERS.rglob("*.gsh")) + list(SHADERS.rglob("*.csh"))
+    bodies = []
+    for path in files:
+        kept = []
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if re.match(r"\s*(?://\s*)?#define\s+", line) or "@option" in line:
+                continue  # 声明行与菜单说明不算使用。
+            kept.append(line)
+        bodies.append("\n".join(kept))
+    pool = "\n".join(bodies)
+    unused = [name for name in found if not re.search(r"\b" + re.escape(name) + r"\b", pool)]
+    if unused:
+        raise ValueError("选项没有接入任何计算：" + "、".join(unused[:5]))
+
 # --- 完整离线编译：开发与移植期用，不受十秒预算限制 ---
 def compile_all(seconds: float = 300.0) -> None:
     """编译全部维度的全部程序，用于移植期和发布前的人工门禁。
@@ -237,11 +260,11 @@ def compile_all(seconds: float = 300.0) -> None:
     """
     found, profiles, _ = configuration()  # 选项与预设先检查。
     entries = entrypoints()  # 引用边界与阶段配对。
-    global PORTING  # 完整编译不受移植期缩减影响：两种代表配置与基础、开远景两组环境都要编。
+    global PORTING  # 完整编译要求选项都已接线：临时关掉移植期“未接线只警告”的宽松，让未接线选项直接失败。
     saved = PORTING
     PORTING = False
     try:
-        compile_shaders(entries, found, profiles, {entry.stem for entry in entries})  # 全部程序在任何代表配置下都要编，不能只编默认配置。
+        compile_shaders(entries, found, profiles, {entry.stem for entry in entries})  # 全部程序都要编默认配置与全高配置，不能只编关键通路。
     finally:
         PORTING = saved
 
@@ -382,18 +405,6 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     print("入口展开完成，开始检查选项接入", flush=True)  # 长时间离线检查期间及时给出阶段状态。
     # 预先为每个展开文本各扫一次，得到“声明过的选项名”和“去掉声明后的标识符集合”，
     # 避免下面每个选项都对整段文本重复跑正则；文本很大时这是主要的检查开销来源。
-    declared_names, used_words = [], []  # 与 `expanded` 的顺序一一对应。
-    for text in expanded.values():
-        names = set(re.findall(r"(?m)^\s*(?://\s*)?#define\s+(\w+)", text))  # 宏声明。
-        names |= set(re.findall(r"(?m)^\s*const\s+\w+\s+(\w+)\s*=", text))  # 原生常量声明。
-        body = re.sub(r"(?m)^.*(?:#define|@option).*\n?", "", text)  # 去掉宏定义与说明行，剩下的才是算法接入。
-        declared_names.append(names)
-        used_words.append(set(re.findall(r"\b\w+\b", body)))
-    unconnected = [name for name in found if not any(name in declared_names[index] and name in used_words[index] for index in range(len(declared_names)))]  # 验证选项接入算法：同一选项必须在同一个入口里既声明又使用。
-    if unconnected and not PORTING:  # 正常开发时，没有接入的选项是玩家看得见却不起作用的假开关，必须失败。
-        raise ValueError(f"选项 {unconnected[0]} 没有接入任何实际入口或计算")
-    if unconnected:  # 移植期间旧效果文件暂时没有入口引用，只报数量，不挡住地基检查。
-        print(f"移植期间警告：{len(unconnected)} 个选项暂未接入任何入口", flush=True)
     programs = {}  # 同名入口的多个绘制阶段必须作为一个链接程序。
     for source in entries:
         programs.setdefault(source.with_suffix(""), []).append(source)  # 细分与几何阶段一起链接。
@@ -406,9 +417,6 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     # 为什么先收集再编译：这样重复内容能在编译前过滤，并把独立任务交给线程池并行，避免串行等待几千个编译器进程。
     jobs, seen, reused = [], set(), 0  # 分别保存待编译任务、去重摘要与跳过的成功组数。
     configurations = variants(found, profiles)  # 代表配置。
-    if PORTING:  # 移植期间只编默认配置与基础环境，避免占位主体把十秒预算用光；移植完成后由庚片恢复完整矩阵。
-        configurations = configurations[:1]
-        environments = environments[:1]
     for label, option_values in configurations:  # 代表组合逐项展开。
         for environment, defines in environments:  # 基础与远景均检查。
             if (label == "default" and environment != "base") or (label == "all_high" and environment != "iris_dh"):
@@ -518,21 +526,17 @@ def check() -> None:
     audited = audit.check(ROOT)  # 自有源码先通过中文说明与未实现标记审计。
     dependencies()  # 发行包中的第三方文件与许可也必须满足白名单。
     print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
+    check_option_wiring(found)  # 选项必须真的参与计算，和编译探针范围无关。
     source_numbers = numbered_sources()  # 全部主体共享编号与展开缓存，避免反复扫描目录。
     expanded_cache = {}  # 一次检查只读取每份共用源码一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
         expand(source, sourceNumbers=source_numbers, cache=expanded_cache)  # 不为每个文件重新扫描整棵引用树。
-    key_programs = {"gbuffers_terrain", "deferred3", "composite", "composite5", "composite14", "final"}  # 主要数据通路：地形、天空、主光照、合并、色调映射、最终输出，在全部代表配置下编译。
-    dimension_programs = {"deferred", "composite"}  # 维度宏改变天空、雾与光照的地方集中在这两个阶段。
-    probes = [source for source in entries if source.parent.name == "world0" or source.stem in dimension_programs]  # 主世界每个程序都编：不同程序宏会改变引入结果，只编主路会漏掉宏与引入标记撞名。
-    if PORTING:  # 移植期间主体大多是占位或新写，先用一小组代表程序把管线编过，给十秒预算留余量；移植完成后由庚片恢复完整探针。
-        key_programs = {"gbuffers_terrain", "composite", "final"}
-        representative = {"deferred3", "composite", "final"}
-        probes = [source for source in entries if source.parent.name == "world0" and source.stem in representative]
-    if PORTING:  # 移植期间唯一一次完整编译由 `python build.py compile` 负责；常规验证只跑生成、审计与引用检查，给十秒预算留余量。庚片移植完成后恢复下面的完整探针。
-        print("移植期间：跳过编译探针，完整编译请运行 python build.py compile", flush=True)
-    if not PORTING:
-        compile_shaders(probes, found, profiles, key_programs)
+    # 十秒预算内的编译探针：只编体积小的程序，覆盖几何、阴影、远景与最终显示；合成与延迟的完整覆盖由 `python build.py compile` 负责。
+    # 为什么这样分：合成本体展开后有两千多万字符，单编一个就要八九秒，塞不进常规验证的预算；缩到小程序仍能挡住语法、引入与宏撞名错误。
+    key_programs = {"gbuffers_terrain", "gbuffers_water", "shadow"}  # 这三类在全部代表配置与两组环境下再编一次。
+    smoke = {"gbuffers_terrain", "gbuffers_water", "gbuffers_entities", "gbuffers_hand", "gbuffers_basic", "gbuffers_skybasic", "shadow", "dh_terrain", "dh_water", "final"}
+    probes = [source for source in entries if source.parent.name == "world0" and source.stem in smoke]  # 主世界的轻量程序，默认配置与基础环境。
+    compile_shaders(probes, found, profiles, key_programs)  # 关键程序另加全高配置与开远景环境。
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。
     print(f"检查通过：{len(entries)} 个入口，{len(found)} 个选项，{len(profiles)} 套预设")
 

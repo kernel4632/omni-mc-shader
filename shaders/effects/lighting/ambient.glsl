@@ -3,6 +3,9 @@
 调用位置：延迟一号主体算全局光时间滤波时调用 `GI_TemporalFilter`；
     延迟二号主体算空间滤波与遮蔽时调用 `GI_SpatialFilter`、`GroundTruthBasedAmbientOcclusion`；
     合成主体把遮蔽乘到最终颜色上并做多弹射补偿时调用 `GTAOMultiBounce`。
+本文件的相机速度函数叫 `GiCameraVelocity`：它按选项把手与玩家排除出全局光历史重投影。
+  同名用途在 `effects/clarity/antialiasing.glsl` 是 `TaaCameraVelocity`、在 `effects/lens/lens.glsl` 是
+  `MotionBlurCameraVelocity`，三份实现不同，按 iterationT 原程序各留一份，名字体现用途以区分。
 可复制示例：
     `vec3 gi = GI_SpatialFilter(dist, normal, viewDir);`
     `float ao = GroundTruthBasedAmbientOcclusion(viewPos, -viewDir, normal);`
@@ -129,7 +132,7 @@ vec3 RSM(vec3 viewPos, vec3 normal){
 }
 #ifdef DISTANT_HORIZONS // 有远景模组时相机速度要区分远景。
 // 算这个像素相对上一帧的屏幕位移；远景像素用远景矩阵，近景像素用普通矩阵。
-vec2 CalculateCameraVelocity(vec2 coord, float depth, bool isDH){
+vec2 GiCameraVelocity(vec2 coord, float depth, bool isDH){
 	vec3 screenPos = vec3(coord, depth); // 屏幕坐标加深度。
 	vec3 projection = vec3(screenPos * 2.0 - 1.0); // 换到负一到一。
 	if (isDH){ // 远景像素。
@@ -178,7 +181,7 @@ vec2 CalculateCameraVelocity(vec2 coord, float depth, bool isDH){
 }
 #else // 没有远景模组时的简化版。
 // 算这个像素相对上一帧的屏幕位移，不需要区分远景。
-vec2 CalculateCameraVelocity(vec2 coord, float depth){
+vec2 GiCameraVelocity(vec2 coord, float depth){
 	vec3 projection = vec3(coord, depth) * 2.0 - 1.0; // 屏幕坐标换到负一到一。
 	projection = (vec3(vec2(gbufferProjectionInverse[0].x, gbufferProjectionInverse[1].y) * projection.xy, 0.0) + gbufferProjectionInverse[3].xyz) / (gbufferProjectionInverse[2].w * projection.z + gbufferProjectionInverse[3].w); // 逆投影到视空间。
 	#if defined OMNI_DISABLE_HAND_GI_VELOCITY && defined OMNI_DISABLE_PLAYER_GI_VELOCITY // 手和玩家都不参与。
@@ -240,23 +243,25 @@ vec4 GI_TemporalFilter(){
 				if (isDH) currViewPos = ViewPos_From_ScreenPos_Raw_DH(coord, currDepth); // 远景还原。
 			#endif
 			vec3 gi = vec3(0.0); // 本帧反弹。
+			// 先把“这一点是否要做反弹”算成一个布尔量，再把反弹放在一整条 if 里，避免条件被预处理指令切成分开的几段。
 			#if MC_VERSION >= 11605 // 新版本按天光标记决定是否反弹。
 				#if defined OMNI_SUNLIGHT_LEAK_FIX && !defined OMNI_END // 主世界做泄漏修正。
-					if (data3.w > 0.0 || isEyeInWater == 1) // 只有接到天光或在水里。
+					bool applyRSM = data3.w > 0.0 || isEyeInWater == 1; // 只有接到天光或在水里才反弹。
+				#else // 末地或关闭修正。
+					bool applyRSM = true; // 没有额外条件，总是反弹。
 				#endif
-					gi = RSM(currViewPos, currNormal); // 算一次反弹。
 			#else // 旧版本还要求像素足够远。
 				#if defined OMNI_SUNLIGHT_LEAK_FIX && !defined OMNI_END // 主世界做泄漏修正。
-					if (currDepth > 0.7 && (data3.w > 0.0 || isEyeInWater == 1)) // 较远且接到天光。
+					bool applyRSM = currDepth > 0.7 && (data3.w > 0.0 || isEyeInWater == 1); // 较远且接到天光。
 				#else // 末地或关闭修正。
-					if (currDepth > 0.7) // 只要求较远。
+					bool applyRSM = currDepth > 0.7; // 只要求较远。
 				#endif
-					gi = RSM(currViewPos, currNormal); // 算一次反弹。
 			#endif
+			if (applyRSM) gi = RSM(currViewPos, currNormal); // 满足条件才算一次反弹。
 			#ifdef DISTANT_HORIZONS // 手机上算屏幕位移。
-				vec2 velocity = CalculateCameraVelocity(coord, currDepth, isDH); // 远景版位移。
+				vec2 velocity = GiCameraVelocity(coord, currDepth, isDH); // 远景版位移。
 			#else // 近景版位移。
-				vec2 velocity = CalculateCameraVelocity(coord, currDepth); // 近景版位移。
+				vec2 velocity = GiCameraVelocity(coord, currDepth); // 近景版位移。
 			#endif
 			vec2 pcoord = coord - velocity; // 映射到上一帧坐标。
 			vec2 prevCoord = clamp(pcoord, vec2(0.0), vec2(1.0) - pixelSize * 2.0); // 夹到画面内。

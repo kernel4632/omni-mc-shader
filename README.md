@@ -50,19 +50,18 @@ uv pip sync requirements-dev.lock
 | 改开发工具安装 | `dev.py` 和 `dev-tools.lock.json` |
 | 改独立游戏启动 | `game.py` |
 | 改版本号 | `VERSION` |
-| 查实际能力与限制 | `docs/capabilities.md` |
+| 查实际能力与限制 | `docs/parity.md` 与 `docs/eclipse-parity.md` |
 | 检查中文注释与未实现标记 | `audit.py` |
 | 导入、导出、对比、重置配置 | `options.py` 命令入口 |
 
 ## 文档
 
 - [开发、调试与发布](docs/development.md)
+- [移植合同与分片状态](docs/parity.md)
+- [Eclipse 效果对照](docs/eclipse-parity.md)
 - [绘制流程](docs/rendering.md)
 - [兼容性与验证状态](docs/compatibility.md)
 - [性能测量方法](docs/performance.md)
-- [代码能力与验证边界](docs/capabilities.md)
-- [菜单设计](docs/menu.md)
-- [参数总表](docs/parameters.md)
 - [可复用库与框架](docs/libraries.md)
 - [算法参考与可复用实现](docs/references.md)
 - [项目开发约定](AGENTS.md)

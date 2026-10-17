@@ -5,8 +5,11 @@
 调用位置：
   合成七号片元读取材质编号、算相机速度后调用 `TemporalReprojection`，写回七号画面作为下一帧历史；
   final 片元在关闭手或玩家抗锯齿时对被排除的像素调用 `Fxaa` 补一次边缘抗锯齿。
+本文件的相机速度函数叫 `TaaCameraVelocity`：它同时回填重投影要用的深度，并区分玻璃与冰。
+  同名用途在 `effects/lighting/ambient.glsl` 是 `GiCameraVelocity`、在 `effects/lens/lens.glsl` 是
+  `MotionBlurCameraVelocity`，三份实现不同，按 iterationT 原程序各留一份，名字体现用途以区分。
 可复制示例：
-  `vec4 taa = TemporalReprojection(taaTexCoord, CalculateCameraVelocity(depth, materialIDs), depth);`
+  `vec4 taa = TemporalReprojection(taaTexCoord, TaaCameraVelocity(depth, materialIDs), depth);`
   `color = Fxaa(color, taaTexCoord);`
 调用前提（iterationT 原样保留）：
   坐标换算函数按 `OMNI_TAA` 决定是否撤销本帧抖动，所以任何用到坐标换算的主体都必须先引入本文件；
@@ -386,7 +389,7 @@ float SampleCurrDepthDHFetchClosest3x3(ivec2 coord){
 
 	return min9(depth0, depth1, depth2, depth3, depth4, depth5, depth6, depth7, depth8); // 取九个里的最近。
 }
-vec3 CalculateCameraVelocity(out float depth, float materialIDs){
+vec3 TaaCameraVelocity(out float depth, float materialIDs){
 	if (materialIDs == MATID_STAINEDGLASS || materialIDs == MATID_ICE){ // 玻璃和冰用不含半透明的深度。
 		depth = texelFetch(depthtex1, taaTexelCoord, 0).x; // 读一号深度。
 	}else{ // 其他表面按选项取最近邻或单点深度。
@@ -433,7 +436,7 @@ vec3 CalculateCameraVelocity(out float depth, float materialIDs){
 }
 // 没有远景模组时与上面同理，但不处理远景分支。
 #else
-vec3 CalculateCameraVelocity(out float depth, float materialIDs){
+vec3 TaaCameraVelocity(out float depth, float materialIDs){
 	if (materialIDs == MATID_STAINEDGLASS || materialIDs == MATID_ICE){ // 玻璃和冰用不含半透明的深度。
 		depth = texelFetch(depthtex1, taaTexelCoord, 0).x; // 读一号深度。
 	}else{ // 其他表面按选项取最近邻或单点深度。

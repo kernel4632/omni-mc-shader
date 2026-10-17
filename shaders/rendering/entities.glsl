@@ -102,22 +102,8 @@ out vec2 blockLight; // 方块光与天光。
 void main(){
 	vec4 v_viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
 	viewPos = v_viewPos.xyz; // 传给片元。
-	#ifdef OMNI_HAND_PASS // 手持物可以改视场角与深度。
-		#if OMNI_HAND_FOV_MODE == 1 // 跟随游戏设置时只缩放深度项。
-			mat4 handProjection = gbufferProjection; // 复制投影矩阵。
-			handProjection[2][2] *= MC_HAND_DEPTH; // 按游戏的手部深度缩放。
-			
-			gl_Position = handProjection * v_viewPos; // 用改写后的投影。
-		#elif OMNI_HAND_FOV_MODE == 2 // 跟随光影设置时改写焦距。
-			mat4 handProjection = gbufferProjection; // 复制投影矩阵。
-			handProjection[1][1] = 1.0 / tan(OMNI_HAND_FOV * (PI / 360.0)); // 由视场角反推纵向焦距。
-			handProjection[0][0] = handProjection[1][1] / aspectRatio; // 横向按屏幕宽高比缩放。
-			handProjection[2][2] *= MC_HAND_DEPTH; // 按游戏的手部深度缩放。
-			
-			gl_Position = handProjection * v_viewPos; // 用改写后的投影。
-		#else // 默认模式。
-			gl_Position = gl_ProjectionMatrix * v_viewPos; // 用加载器给的投影。
-		#endif
+	#ifdef OMNI_HAND_PASS // 手持物按模式改写视场角与深度，算法只保留在效果文件里一份。
+		gl_Position = HandFovProjection(gbufferProjection, aspectRatio) * v_viewPos; // 调用效果文件统一实现的投影改写。
 	#else // 非手持物直接用加载器投影。
 		gl_Position = gl_ProjectionMatrix * v_viewPos; // 常规投影。
 	#endif
@@ -234,10 +220,9 @@ in vec2 blockLight; // 方块光。
 #endif
 
 
-// 片元主函数：先按程序定材质编号，再算切线基、视差、湿润、法线与高光。
-void main(){
-// 材质编号：四类程序各有一套判定。
-	#ifdef OMNI_ENTITIES_PASS
+// 材质编号解码：四类程序各有一套判定，集中成一个能一句话说清的动作。
+vec2 DecodeEntityMaterial(){
+	#if defined OMNI_ENTITIES_PASS
 		float materialIDs = MATID_LAND; // 默认普通表面。
 		float noDiscard = 0.0; // 允许不丢弃的标记，闪电与部分实体用。
 
@@ -276,25 +261,21 @@ void main(){
 			case 41: // 另一类受光实体。
 				noDiscard = 1.0; // 不丢弃透明像素。
 		}
-	#endif
-
-	#ifdef OMNI_SPIDEREYES_PASS
+	#elif defined OMNI_SPIDEREYES_PASS
 		float materialIDs = MATID_ENTITIES_LIT_LOW; // 蜘蛛眼按低亮自发光处理。
-	#endif
-
-	#ifdef OMNI_BLOCK_PASS
+		float noDiscard = 0.0; // 不保留透明像素。
+	#elif defined OMNI_BLOCK_PASS
 		float materialIDs = blockEntityId == 119 ? MATID_END_PORTAL : MATID_LAND; // 传送门方块实体用传送门材质。
-	#endif
-
-	#ifdef OMNI_HAND_PASS
+		float noDiscard = 0.0; // 不保留透明像素。
+	#elif defined OMNI_HAND_PASS
 		float materialIDs = MATID_HAND; // 手持物统一材质。
+		float noDiscard = 0.0; // 不保留透明像素。
 	#endif
+	return vec2(materialIDs, noDiscard); // 材质编号与不丢弃标记一起交回。
+}
 
-
-// 切线基：顶点没给时用屏幕导数推出来。
-	vec2 duv1 = dFdx(texCoord); // 纹理坐标横向屏幕变化。
-	vec2 duv2 = dFdy(texCoord); // 纹理坐标纵向屏幕变化。
-
+// 切线基：顶点给了就用顶点的，否则用屏幕导数推出来。
+mat3 BuildEntityTangentBasis(vec2 duv1, vec2 duv2){
 	#if (!defined OMNI_ENTITIES_VS_TBN || (!defined OMNI_ENTITIES_PASS && !defined OMNI_SPIDEREYES_PASS) || (MC_VERSION >= 11500 && MC_VERSION <= 11604)) && (!defined OMNI_HAND_PASS || MC_VERSION >= 11300)
 		vec3 dp1 = dFdx(viewPos); // 视空间位置横向变化。
 		vec3 dp2 = dFdy(viewPos); // 视空间位置纵向变化。
@@ -305,28 +286,22 @@ void main(){
 		vec3 T = normalize(dp2perp * duv1.x + dp1perp * duv2.x); // 解出切线。
 		vec3 B = normalize(dp2perp * duv1.y + dp1perp * duv2.y); // 解出副切线。
 		float invmax = inversesqrt(max(dot(T, T), dot(B, B))); // 归一化因子。
-		mat3 tbnMat = mat3(T * invmax, B * invmax, N); // 组装切线基。
+		return mat3(T * invmax, B * invmax, N); // 组装切线基。
 	#else
 		mat3 tbnMat = tbn; // 用顶点传来的切线基。
 		if(!gl_FrontFacing) tbnMat[2] = -tbnMat[2]; // 背面翻转法线。
+		return tbnMat;
 	#endif
+}
 
-
-// 视差：算出阳光方向与自阴影初值，按开关走视差或普通采样。
-	#ifdef OMNI_END // 末地用末地版阴影相机方向。
-		vec3 shadowVector = mat3(gbufferModelView) * shadowModelViewInverseEnd[2].xyz; // 阳光方向转到视空间。
-	#else // 主世界与下界用加载器给的阴影相机方向。
-		vec3 shadowVector = mat3(gbufferModelView) * shadowModelViewInverse[2].xyz; // 阳光方向转到视空间。
-	#endif
-
-	float parallaxShadow = saturate(dot(tbnMat[2], shadowVector) * 200.0); // 面朝阳光程度，作为视差自阴影初值。
-
+// 表面采样：按开关走视差或普通采样，得到底色、高光与法线，并可能丢弃透明像素。
+void SampleEntitySurface(vec2 texCoord, vec2 duv1, vec2 duv2, mat3 tbnMat, vec3 shadowVector, float materialIDs, float noDiscard, out vec4 albedoTex, out vec4 specularTex, out vec3 normalTex, inout float parallaxShadow){
 	#if defined OMNI_ENTITIES_PARALLAX && OMNI_PARALLAX_MODE > 0 && defined MC_NORMAL_MAP // 实体视差开启且有法线贴图。
 
-		vec3 normalTex = vec3(0.0, 0.0, 1.0); // 视差函数会写回法线。
-		ivec2 parallaxTexel = ParallaxOcclusionMapping(texCoord, tbnMat, shadowVector, duv1, duv2, normalTex, parallaxShadow); // 找到可见交点。
+		vec3 normalOut = vec3(0.0, 0.0, 1.0); // 视差函数会写回法线。
+		ivec2 parallaxTexel = ParallaxOcclusionMapping(texCoord, tbnMat, shadowVector, duv1, duv2, normalOut, parallaxShadow); // 找到可见交点。
 
-		vec4 albedoTex = texelFetch(tex, parallaxTexel, 0); // 精确取交点底色。
+		albedoTex = texelFetch(tex, parallaxTexel, 0); // 精确取交点底色。
 
 		#if defined OMNI_ENTITIES_PASS // 普通实体：按透明度丢弃。
 			#ifdef IS_IRIS
@@ -335,20 +310,22 @@ void main(){
 				if (albedoTex.a + noDiscard <= 0.004) discard; // 其它情况按透明度丢弃。
 			#endif
 		#elif defined OMNI_SPIDEREYES_PASS // 蜘蛛眼用更高的阈值。
-			if (albedoTex.a < 0.1) discard; 
+			if (albedoTex.a < 0.1) discard;
 		#else // 方块与手持物按更小阈值丢弃。
 			if (albedoTex.a < 0.004) discard;
 		#endif
 
 		#ifdef MC_SPECULAR_MAP
-			vec4 specularTex = texelFetch(specular, parallaxTexel, 0); // 精确取交点高光。
+			specularTex = texelFetch(specular, parallaxTexel, 0); // 精确取交点高光。
 		#else
-			vec4 specularTex = vec4(0.0); // 没有高光贴图时全零。
+			specularTex = vec4(0.0); // 没有高光贴图时全零。
 		#endif
+
+		normalTex = normalOut; // 交回视差写回的法线。
 
 	#else // 未开视差时按屏幕导数采贴图。
 
-		vec4 albedoTex = textureGrad(tex, texCoord, duv1, duv2); // 按屏幕导数采底色。
+		albedoTex = textureGrad(tex, texCoord, duv1, duv2); // 按屏幕导数采底色。
 
 		#if defined OMNI_ENTITIES_PASS // 普通实体丢弃规则同上。
 			#ifdef IS_IRIS
@@ -363,22 +340,61 @@ void main(){
 		#endif
 
 		#ifdef MC_NORMAL_MAP
-			vec3 normalTex = DecodeNormalTex(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采法线并解码。
+			normalTex = DecodeNormalTex(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采法线并解码。
 		#else
-			vec3 normalTex = vec3(0.0, 0.0, 1.0); // 没有法线贴图时朝外。
+			normalTex = vec3(0.0, 0.0, 1.0); // 没有法线贴图时朝外。
 		#endif
 
 		#ifdef MC_SPECULAR_MAP
 			#if OMNI_TEXTURE_EMISSIVENESS_MODE == 0
-				vec4 specularTex = textureGrad(specular, texCoord, duv1, duv2); // 仅硬编码模式按屏幕导数采高光。
+				specularTex = textureGrad(specular, texCoord, duv1, duv2); // 仅硬编码模式按屏幕导数采高光。
 			#else
-				vec4 specularTex = textureLod(specular, texCoord, 0.0); // 其余模式只取一次。
+				specularTex = textureLod(specular, texCoord, 0.0); // 其余模式只取一次。
 			#endif
 		#else
-			vec4 specularTex = vec4(0.0); // 没有高光贴图时全零。
+			specularTex = vec4(0.0); // 没有高光贴图时全零。
 		#endif
 			
 	#endif
+}
+
+// 输出写入：按程序类别把底色、法线光照与高光材质写进零、三、五号画面。
+void WriteEntityGbuffer(vec4 albedo, vec3 viewNormal, vec2 blockLight, vec4 specularTex, float materialIDs, float wet, float parallaxShadow){
+	#if defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS
+		gbufferOutput0 = albedo; // 实体保留透明度，混合到场景。
+	#else
+		gbufferOutput0 = vec4(albedo.rgb, 1.0); // 方块与手持物写不透明底色。
+	#endif
+	gbufferOutput3 = vec4(EncodeNormal(viewNormal), blockLight); // 三号写法线与方块光。
+	gbufferOutput5 = vec4(Pack2x8(specularTex.rg), Pack2x8(specularTex.ba), (materialIDs + 0.1) / 255.0, Pack2x8(vec2(wet, parallaxShadow))); // 五号打包高光、材质编号、湿润与视差阴影。
+}
+
+// 片元主函数：先按程序定材质编号，再算切线基、视差、湿润、法线与高光。
+void main(){
+// 材质编号：四类程序各有一套判定。
+	vec2 entityMaterial = DecodeEntityMaterial(); // 解码材质编号与不丢弃标记。
+	float materialIDs = entityMaterial.x; // 材质编号，写进五号画面。
+	float noDiscard = entityMaterial.y; // 不丢弃透明像素的标记。
+
+// 切线基：顶点没给时用屏幕导数推出来。
+	vec2 duv1 = dFdx(texCoord); // 纹理坐标横向屏幕变化。
+	vec2 duv2 = dFdy(texCoord); // 纹理坐标纵向屏幕变化。
+	mat3 tbnMat = BuildEntityTangentBasis(duv1, duv2); // 用效果文件统一实现的切线基。
+
+
+// 视差：算出阳光方向与自阴影初值，按开关走视差或普通采样。
+	#ifdef OMNI_END // 末地用末地版阴影相机方向。
+		vec3 shadowVector = mat3(gbufferModelView) * shadowModelViewInverseEnd[2].xyz; // 阳光方向转到视空间。
+	#else // 主世界与下界用加载器给的阴影相机方向。
+		vec3 shadowVector = mat3(gbufferModelView) * shadowModelViewInverse[2].xyz; // 阳光方向转到视空间。
+	#endif
+
+	float parallaxShadow = saturate(dot(tbnMat[2], shadowVector) * 200.0); // 面朝阳光程度，作为视差自阴影初值。
+
+	vec4 albedoTex = vec4(0.0); // 采样得到的底色。
+	vec4 specularTex = vec4(0.0); // 采样得到的高光。
+	vec3 normalTex = vec3(0.0, 0.0, 1.0); // 采样得到的法线。
+	SampleEntitySurface(texCoord, duv1, duv2, tbnMat, shadowVector, materialIDs, noDiscard, albedoTex, specularTex, normalTex, parallaxShadow); // 按开关统一采样表面贴图。
 
 
 // 底色：贴图色乘顶点色，并叠受伤颜色。
@@ -552,13 +568,7 @@ void main(){
 		}
 	#endif
 
-	#if defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS
-		gbufferOutput0 = albedo; // 实体保留透明度，混合到场景。
-	#else
-		gbufferOutput0 = vec4(albedo.rgb, 1.0); // 方块与手持物写不透明底色。
-	#endif
-	gbufferOutput3 = vec4(EncodeNormal(viewNormal), blockLight); // 三号写法线与方块光。
-	gbufferOutput5 = vec4(Pack2x8(specularTex.rg), Pack2x8(specularTex.ba), (materialIDs + 0.1) / 255.0, Pack2x8(vec2(wet, parallaxShadow))); // 五号打包高光、材质编号、湿润与视差阴影。
+	WriteEntityGbuffer(albedo, viewNormal, blockLight, specularTex, materialIDs, wet, parallaxShadow); // 统一写出零、三、五号画面。
 }
 #endif // 片元阶段结束。
 #endif // 文件守卫结束。

@@ -132,25 +132,6 @@ MAIN_PAGES: list[tuple[str, dict[str, str]]] = [
     ("dev", {"zh_cn": "开发者", "en_us": "Development"}),
 ]  # 封面分类只在一处定义，菜单与翻译都从这里取。
 
-# 效果文件位置到主页面：一个页面可以合并多个效果文件；单个选项可用 `@option` 的 `page` 覆盖。
-PAGE_OF_GROUP: dict[str, str] = {
-    "sky": "sky", "atmosphere": "sky",
-    "cloud": "cloud",
-    "fog": "fog",
-    "water": "water",
-    "material": "ground", "vegetation": "ground", "selection": "ground",
-    "sunlight": "lighting", "lpv": "lighting", "ambient": "lighting", "blocklight": "lighting",
-    "shadow": "shadow",
-    "reflection": "reflection",
-    "color": "color", "bloom": "color",
-    "lens": "lens",
-    "antialiasing": "clarity", "upscale": "clarity",
-    "season": "weather", "weather": "weather",
-    "entity": "entity",
-    "world": "world", "nether": "world", "end": "world",
-    "debug": "dev",
-}  # 归属只在这里维护一份，效果文件新增后在此登记。
-
 
 @dataclass(frozen=True)
 class Preset:
@@ -400,7 +381,7 @@ def page_of(option: Option) -> str:
     """返回选项所属的主页面名称。
 
     优先用 `@option` 声明的 `page`；否则用效果文件所在的文件夹名（文件夹按主页面命名）。
-    `PAGE_OF_GROUP` 只为文件夹名与页面名不一致的少数效果保留映射。都没有时直接报错，
+    文件夹名就是页面的唯一来源，没有第二张映射表；都不匹配时直接报错，
     避免选项悄悄消失或落到错误分类里。
     """
     if option.page:
@@ -408,8 +389,6 @@ def page_of(option: Option) -> str:
     folder = option.group.split("/")[0]  # 效果分组是“文件夹/文件”，文件夹就是主页面名。
     if folder in {pid for pid, _ in MAIN_PAGES}:
         return folder  # 文件夹名直接就是页面，不用再登记。
-    if option.group in PAGE_OF_GROUP:
-        return PAGE_OF_GROUP[option.group]  # 少数特例在中央表里登记。
     raise ValueError(f"{option.source}：效果 {option.group} 没有登记主页面")
 
 

@@ -105,7 +105,7 @@
 		#ifdef OMNI_TAA // 开启时间抗锯齿才做重投影。
 			float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读当前像素的材质编号。
 			float depth = 1.0; // 供相机速度函数回填的代表深度。
-			vec3 velocity = CalculateCameraVelocity(depth, materialIDs); // 算当前像素相对上一帧的屏幕位移，并回填深度。
+			vec3 velocity = TaaCameraVelocity(depth, materialIDs); // 算当前像素相对上一帧的屏幕位移，并回填深度。
 			vec4 taa = vec4(0.0); // 重投影结果。
 			#ifdef OMNI_NETHER // 下界重投影额外回填参考深度，写回历史时要一起打包。
 				float referenceDepth = 0.0; // 重投影后的参考深度。

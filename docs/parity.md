@@ -79,8 +79,8 @@ Iris 的执行顺序：阴影 → 不透明几何 → deferred 0–6 → 半透�
 
 ## 六、下界与末地
 
-- `world-1`：gbuffers 同主世界（天空贴图没有几何着色器），`shadow`、`dh_terrain`、`dh_water`、`deferred`、`composite`–`composite16`、`final`；没有 `deferred1`–`deferred6` 与 `dh_shadow`。
-- `world1`：gbuffers 同上，`shadow`、`dh_shadow`、`dh_terrain`、`dh_water`、`deferred`、`deferred1`、`deferred2`、`deferred4`、`composite`–`composite16`、`final`。
+- `world-1`：gbuffers 同主世界（天空贴图没有几何着色器），`shadow`、`dh_terrain`、`dh_water`、`deferred`、`composite`、`composite2`–`composite16`、`final`；没有 `dh_shadow`、`composite1` 与 `deferred1`–`deferred6`。
+- `world1`：gbuffers 同上，`shadow`、`dh_shadow`、`dh_terrain`、`dh_water`、`deferred`、`deferred1`、`deferred2`、`deferred4`、`composite`、`composite2`–`composite16`、`final`；没有 `composite1`、`deferred3`、`deferred5`、`deferred6`。
 - 两个维度的程序内容与主世界不同（下界时间抗锯齿、下界配色、末地天空等），由第五片单独移植。
 
 ## 七、文件对照
@@ -91,30 +91,30 @@ Iris 的执行顺序：阴影 → 不透明几何 → deferred 0–6 → 半透�
 | `Lib/UniformDeclare.glsl` | `common/uniforms.glsl` |
 | `Lib/Uniform/GbufferTransforms.glsl` | `common/coordinates.glsl` |
 | `Lib/BasicFounctions/TemporalNoise.glsl` | `common/noise.glsl` |
-| `Lib/GbufferData.glsl`、`Settings.glsl` 的材质编号 | `effects/material.glsl` |
-| `Lib/IndividualFounctions/Parallax.glsl` | `effects/material.glsl` |
-| `Lib/Uniform/Shadow*.glsl`、`Lib/BasicFounctions/Sunlight_Shadow.glsl` | `effects/shadow.glsl` |
-| `Lib/BasicFounctions/PrecomputedAtmosphere.glsl`、`deferred3` 的星星与天空盒投影 | `effects/sky.glsl` |
-| `NUBIS.glsl`、`PlanarClouds.glsl`、`CloudShadow.glsl` | `effects/cloud.glsl` |
-| `GlobalIllumination.glsl`、`GTAO.glsl` | `effects/ambient.glsl` |
-| `Lib/BasicFounctions/Blocklight.glsl` | `effects/blocklight.glsl` |
-| `composite.fsh` 的 `SkyLighting` 与 `CompositeVS.glsl` 的光色计算 | `effects/sunlight.glsl` |
-| `WaterWaves.glsl`、`PhysicsOceans.glsl`、`Ripple.glsl`、`composite1` 水雾、`composite5` 折射与吸收 | `effects/water.glsl` |
-| `SSR.glsl`、`ReflectionFilter.glsl`、`composite2` 与 `composite5` 的反射函数 | `effects/reflection.glsl` |
-| `VolumetricFog.glsl`、`UnderwaterVolumetricFog.glsl`、`VanillaComposite.glsl` 的雾 | `effects/fog.glsl` |
-| `VanillaComposite.glsl` 的选择框、`gbuffers_line` 图像输出 | `effects/selection.glsl` |
-| 植物摆动（`Terrain_VS`、`Shadow_VS` 内） | `effects/vegetation.glsl` |
-| 雨（`composite5` 的 `Rain`）与天气程序的计算 | `effects/weather.glsl` |
-| 实体状态色、发光眼、手部视野 | `effects/entity.glsl` |
-| 远景地形噪声与剔除 | `effects/world.glsl` |
-| `DOF.glsl`、`LensGlareFlare.glsl`、`MotionBlur.glsl` 的模糊部分、暗角 | `effects/lens.glsl` |
-| `TAA.glsl`、`TAA_Nether.glsl`、`Final.glsl` 的 `FXAA` | `effects/antialiasing.glsl` |
-| `Bloom.glsl`、`Final.glsl` 的 `MergeBloom` | `effects/bloom.glsl` |
-| `Final.glsl` 的色调映射、曝光、调色、黑边，`AgX.glsl`，`MotionBlur.glsl` 的曝光统计，浦肯野效应 | `effects/color.glsl` |
-| `FsrEASU.glsl`、`Final.glsl` 的 `CAS` 与 `FSR` 锐化 | `effects/upscale.glsl` |
-| `PrintFloat.glsl` | `effects/debug.glsl` |
-| `NetherColor.glsl` | `effects/nether.glsl` |
-| `EndSky.glsl` | `effects/end.glsl` |
+| `Lib/GbufferData.glsl`、`Settings.glsl` 的材质编号 | `effects/ground/material.glsl` |
+| `Lib/IndividualFounctions/Parallax.glsl` | `effects/ground/material.glsl` |
+| `Lib/Uniform/Shadow*.glsl`、`Lib/BasicFounctions/Sunlight_Shadow.glsl` | `effects/shadow/shadow.glsl` |
+| `Lib/BasicFounctions/PrecomputedAtmosphere.glsl`、`deferred3` 的星星与天空盒投影 | `effects/sky/sky.glsl` |
+| `NUBIS.glsl`、`PlanarClouds.glsl`、`CloudShadow.glsl` | `effects/cloud/cloud.glsl` |
+| `GlobalIllumination.glsl`、`GTAO.glsl` | `effects/lighting/ambient.glsl` |
+| `Lib/BasicFounctions/Blocklight.glsl` | `effects/lighting/blocklight.glsl` |
+| `composite.fsh` 的 `SkyLighting` 与 `CompositeVS.glsl` 的光色计算 | `effects/lighting/sunlight.glsl` |
+| `WaterWaves.glsl`、`PhysicsOceans.glsl`、`Ripple.glsl`、`composite1` 水雾、`composite5` 折射与吸收 | `effects/water/water.glsl` |
+| `SSR.glsl`、`ReflectionFilter.glsl`、`composite2` 与 `composite5` 的反射函数 | `effects/reflection/reflection.glsl` |
+| `VolumetricFog.glsl`、`UnderwaterVolumetricFog.glsl`、`VanillaComposite.glsl` 的雾 | `effects/fog/fog.glsl` |
+| `VanillaComposite.glsl` 的选择框、`gbuffers_line` 图像输出 | `effects/ground/selection.glsl` |
+| 植物摆动（`Terrain_VS`、`Shadow_VS` 内） | `effects/ground/vegetation.glsl` |
+| 雨（`composite5` 的 `Rain`）与天气程序的计算 | `effects/weather/weather.glsl` |
+| 实体状态色、发光眼、手部视野 | `effects/entity/entity.glsl` |
+| 远景地形噪声与剔除 | `effects/world/world.glsl` |
+| `DOF.glsl`、`LensGlareFlare.glsl`、`MotionBlur.glsl` 的模糊部分、暗角 | `effects/lens/lens.glsl` |
+| `TAA.glsl`、`TAA_Nether.glsl`、`Final.glsl` 的 `FXAA` | `effects/clarity/antialiasing.glsl` |
+| `Bloom.glsl`、`Final.glsl` 的 `MergeBloom` | `effects/color/bloom.glsl` |
+| `Final.glsl` 的色调映射、曝光、调色、黑边，`AgX.glsl`，`MotionBlur.glsl` 的曝光统计，浦肯野效应 | `effects/color/color.glsl` |
+| `FsrEASU.glsl`、`Final.glsl` 的 `CAS` 与 `FSR` 锐化 | `effects/clarity/upscale.glsl` |
+| `PrintFloat.glsl` | `effects/dev/debug.glsl` |
+| `NetherColor.glsl` | `effects/world/nether.glsl` |
+| `EndSky.glsl` | `effects/world/end.glsl` |
 
 绘制主体（`rendering/`）与程序宏：
 
@@ -153,7 +153,7 @@ common/uniforms.glsl → common/math.glsl →（定义本程序所需选项的�
 → common/coordinates.glsl → common/noise.glsl →（其他效果文件）→ 本程序的全局量与 main()
 ```
 
-效果文件之间可以互相引入（各自带 `_INCLUDED` 守卫）；`common/coordinates.glsl` 里的函数用 `OMNI_TAA` 决定是否撤销抖动，所以任何用到坐标换算的地方都要先引入 `effects/antialiasing.glsl`。
+效果文件之间可以互相引入（各自带 `_INCLUDED` 守卫）；`common/coordinates.glsl` 里的函数用 `OMNI_TAA` 决定是否撤销抖动，所以任何用到坐标换算的地方都要先引入 `effects/clarity/antialiasing.glsl`。
 
 ## 八、命名与写法规则
 
@@ -180,39 +180,39 @@ common/uniforms.glsl → common/math.glsl →（定义本程序所需选项的�
 
 选项归属（括号内为数量，名字为 iterationT 原名）：
 
-- `effects/ambient.glsl`（21）：`DISABLE_HAND_GI`、`DISABLE_HAND_GI_VELOCITY`、`DISABLE_PLAYER_GI`、`DISABLE_PLAYER_GI_VELOCITY`、`GI_BRIGHTNESS`、`GI_FALLOFF`、`GI_QUALITY`、`GI_RADIUS`、`GI_RENDER_RESOLUTION`、`GI_RSM`、`GI_SKYLIGHT_FALLOFF`、`GTAO`、`GTAO_FALLOFF_START`、`GTAO_MAX_RADIUS`、`GTAO_MULTIBOUNCE`、`GTAO_QUALITY`、`GTAO_RADIUS_MODE`、`GTAO_SCREEN_RADIUS`、`GTAO_SLICE_QUALITY`、`GTAO_STRENGTH`、`GTAO_WORLD_RADIUS`
-- `effects/antialiasing.glsl`（5）：`DISABLE_HAND_TAA`、`DISABLE_PLAYER_TAA_MOTION_BLUR`、`TAA`、`TAA_AGGRESSION`、`TAA_BLENDWEIGHT`
-- `effects/blocklight.glsl`（23）：`DIRECTIONAL_BLOCKLIGHT`、`DIRECTIONAL_BLOCKLIGHT_STRENGTH`、`EMISSIVENESS_BRIGHTNESS`、`FLASHLIGHT_CAMERA_SMOOTH`、`FLASHLIGHT_CAMERA_SMOOTH_TIME`、`FLASHLIGHT_COLOR_B`、`FLASHLIGHT_COLOR_G`、`FLASHLIGHT_COLOR_R`、`FLASHLIGHT_FOV`、`FLASHLIGHT_HELDLIGHT_FALLOFF`、`FLASHLIGHT_POS_L_X`、`FLASHLIGHT_POS_L_Y`、`FLASHLIGHT_POS_R_X`、`FLASHLIGHT_POS_R_Y`、`HELDLIGHT_BRIGHTNESS`、`HELDLIGHT_FALLOFF`、`HELDLIGHT_MODE`、`HELDLIGHT_SHADOW`、`SPECULAR_HELDLIGHT`、`TEXTURE_BRIGHTNESS`、`TEXTURE_EMISSIVENESS_MODE`、`TORCHLIGHT_BRIGHTNESS`、`TORCHLIGHT_COLOR_TEMPERATURE`
-- `effects/bloom.glsl`（4）：`BLOOM`、`BLOOM_AMOUNT`、`NETHER_END_BLOOM_BOOST`、`VFOG_BLOOM`
-- `effects/cloud.glsl`（33）：`CLOUD_BASE_NOISE_SCALE`、`CLOUD_BOTTOM_BRIGHTNESS`、`CLOUD_CLEAR_ALTITUDE`、`CLOUD_CLEAR_COVERY`、`CLOUD_CLEAR_DENSITY`、`CLOUD_CLEAR_SCALE`、`CLOUD_CLEAR_SKYLIGHTING`、`CLOUD_CLEAR_SUNLIGHTING`、`CLOUD_CLEAR_THICKNESS`、`CLOUD_COVERAGE_NOISE_OFFSET`、`CLOUD_DETAILED_NOISE_SCALE`、`CLOUD_DETAILED_NOISE_STRENGTH`、`CLOUD_FADE`、`CLOUD_OUTSCATTER_FACTOR`、`CLOUD_QUALITY`、`CLOUD_RAIN_ALTITUDE`、`CLOUD_RAIN_COVERY`、`CLOUD_RAIN_DENSITY`、`CLOUD_RAIN_SCALE`、`CLOUD_RAIN_SKYLIGHTING`、`CLOUD_RAIN_SUNLIGHTING`、`CLOUD_RAIN_THICKNESS`、`CLOUD_SHADOW`、`CLOUD_SHADOWTEX_SIZE`、`CLOUD_SHADOW_FADE`、`CLOUD_SHADOW_RANGE`、`CLOUD_SPEED`、`PC_ALTITUDE`、`PC_COVERAGE`、`PC_NOISE_SCALE`、`PLANAR_CLOUDS`、`RAIN_SHADOW`、`VOLUMETRIC_CLOUDS`
-- `effects/color.glsl`（21）：`ABNEY_EFFECT_CORRECTION`、`ADVANCED_COLOR`、`AE_CURVE`、`AE_MODE`、`AE_OFFSET`、`AGX_EV`、`EV_VALUE`、`EXPOSURE_TIME`、`GAMMA`、`LUMA_GAMMA`、`LUMINANCE_WEIGHT_MODE`、`LUMINANCE_WEIGHT_STRENGTH`、`MANUAL_EXPOSURE`、`PURKINJE_EFFECT`、`PURKINJE_EFFECT_STRENGTH`、`PURKINJE_EFFECT_THRESHOLD`、`SATURATION`、`SEREEN_RATIO`、`SMOOTH_EXPOSURE`、`TONEMAP_OPERATOR`、`WHITE_CLIP`
-- `effects/end.glsl`（5）：`ACCRETIONDISC_DETAIL_ALONG_LONGTITUDE`、`ACCRETIONDISC_DOPPLER_EFFECT`、`END_MANUAL_PLANET_ANGLE`、`END_MANUAL_PLANET_CYCLE`、`END_PLANET_CYCLE`
-- `effects/entity.glsl`（4）：`ENTITIES_STATUS_COLOR`、`EYES_LIGHTING`、`HAND_FOV`、`HAND_FOV_MODE`
-- `effects/fog.glsl`（28）：`DH_LIMIT_VFOG_DIST`、`INDOOR_FOG`、`LANDSCATTERING`、`LANDSCATTERING_REFLECTION`、`LANDSCATTERING_REFRACTION`、`LANDSCATTERING_SHADOW`、`LANDSCATTERING_SHADOW_QUALITY`、`LANDSCATTERING_STRENGTH`、`NETHERFOG_DENSITY`、`UNDERWATER_VFOG`、`UNDERWATER_VFOG_DENSITY`、`VFOG`、`VFOG_CLOUD_SHADOW`、`VFOG_DENSITY`、`VFOG_DENSITY_BASE`、`VFOG_FALLOFF`、`VFOG_FOG_DENSITY`、`VFOG_HEIGHT`、`VFOG_HEIGHT_2`、`VFOG_IGNORE_WORLDTIME`、`VFOG_NOISE_TYPE`、`VFOG_QUALITY`、`VFOG_REFLECTION`、`VFOG_REFRACTION`、`VFOG_STAINED`、`VFOG_SUNLIGHT_ABSORPTION`、`VFOG_SUNLIGHT_DENSITY`、`VFOG_VOLUMETRIC_LIGHTING`
-- `effects/lens.glsl`（25）：`CAMERA_FOCAL_POINT`、`CAMERA_FOCUS_MODE`、`DOF`、`DOF_BLUR`、`DOF_CATSEYE`、`DOF_CATSEYE_MIDPOINT`、`DOF_CATSEYE_STRENGTH`、`DOF_COCSPREAD_QUALITY`、`DOF_DEPTH_SMMOOTH_HALFLIFE`、`DOF_FOCUS_IGNORE_HAND_PARTICLE`、`DOF_MAX_COC`、`DOF_QUALITY`、`FLARE_BRIGHTNESS`、`GLARE_BRIGHTNESS`、`GLARE_FLARE_SHADOWBASED`、`LENS_FLARE`、`LENS_GLARE`、`MOTION_BLUR`、`MOTION_BLUR_DITHER`、`MOTION_BLUR_QUALITY`、`MOTION_BLUR_SUTTER_ANGLE`、`SNEAKING_VIGNETTE`、`VIGNETTE`、`VIGNETTE_FALLOFF`、`VIGNETTE_ROUNDNESS`
-- `effects/material.glsl`（29）：`ANISOTROPIC_FILTERING_NORMAL_SPECULAR`、`ANISOTROPIC_FILTERING_QUALITY`、`DISABLE_HAND_SPECULAR`、`DISABLE_PLAYER_SPECULAR`、`EMISSIVENESS_GAMMA`、`ENABLE_PBR`、`ENTITIES_NORMAL_CLAMP`、`ENTITIES_PARALLAX`、`ENTITIES_TEXTURE_RESOLUTION`、`ENTITIES_VS_TBN`、`GENERAL_GRASS_FIX`、`HAND_NORMAL_CLAMP`、`PARALLAX_BASED_NORMAL`、`PARALLAX_DEPTH`、`PARALLAX_FADE`、`PARALLAX_MODE`、`PARALLAX_QUALITY`、`PARALLAX_SHADOW`、`PARALLAX_SHADOW_QUALITY`、`POROSITY_ABSORPTION`、`ROUGHNESS_CLAMP`、`SSS_STRENGTH`、`SSS_STRENGTH_OFFSET`、`TERRAIN_NORMAL_CLAMP`、`TERRAIN_VS_TBN`、`TEXTURE_DEFAULT_POROSITY`、`TEXTURE_PBR_FORMAT`、`TEXTURE_PBR_POROSITY`、`TEXTURE_RESOLUTION`
-- `effects/nether.glsl`（1）：`NETHER_BRIGHTNESS`
-- `effects/reflection.glsl`（3）：`RAYTRACE_QUALITY`、`RAYTRACE_REFINEMENT_STEPS`、`RAYTRACE_ZDIFF_THRESHOLD`
-- `effects/selection.glsl`（4）：`LINE_IMAGE_OUTPUT`、`SELECTION_BOX_COLOR_B`、`SELECTION_BOX_COLOR_G`、`SELECTION_BOX_COLOR_R`
-- `effects/shadow.glsl`（16）：`COLORED_SHADOWS`、`DH_SHADOW`、`DH_SHADOW_CULLING`、`DH_SHADOW_FIX`、`DISABLE_PLAYER_SCREEN_SPACE_SHADOWS`、`SCREEN_SPACE_SHADOWS`、`SHADOW_BASIC_BLUR`、`SHADOW_MAP_BIAS`、`SSS_BRIGHTNESS`、`SSS_NORMAL`、`SSS_QUALITY`、`VARIABLE_PENUMBRA_SHADOWS`、`VPS_QUALITY`、`VPS_SPREAD`、`shadowDistance`、`shadowMapResolution`
-- `effects/sky.glsl`（11）：`ATMO_HORIZON`、`ATMO_REFLECTION_HORIZON`、`BILINEAR_MOON_TEXTURE`、`BILINEAR_SKYBOX_TEXTURE`、`MOON_TEXTURE`、`NIGHT_BRIGHTNESS`、`SKYBOX_TEXTURE`、`SKY_IMAGE_RESOLUTION`、`SKY_TEXTURE_BRIGHTNESS`、`STAR_TYPE`、`sunPathRotation`
-- `effects/sunlight.glsl`（6）：`CAVE_MODE`、`COLD_MOONLIGHT`、`NOLIGHT_BRIGHTNESS`、`SKYLIGHT_INTENSITY`、`SUNLIGHT_INTENSITY`、`SUNLIGHT_LEAK_FIX`
-- `effects/upscale.glsl`（5）：`CAS_DENOISE`、`CAS_SHARPNESS`、`FSR`、`FSR_DENOISE`、`FSR_SHARPNESS`
-- `effects/vegetation.glsl`（2）：`SHADOW_WAVING_PLANTS`、`WAVING_PLANTS`
-- `effects/water.glsl`（6）：`CAUSTICS`、`UNDERWATER_FOG`、`WATERFOG_DENSITY`、`WATER_PARALLAX`、`WAVE_HEIGHT`、`WAVE_SCALE`
-- `effects/weather.glsl`（9）：`DISABLE_LOCAL_PRECIPITATION`、`RAIN_DISTURBANCE`、`RAIN_SPLASH_EFFECT`、`RAIN_VISIBILITY`、`RAIN_WIND_X`、`RAIN_WIND_Z`、`SURFACE_WETNESS`、`drynessHalflife`、`wetnessHalflife`
-- `effects/world.glsl`（4）：`DH_TERRAIN_CULLING`、`DH_TEXTURE_NOISE`、`DH_TEXTURE_NOISE_STEPS`、`DH_TEXTURE_NOISE_STRENGTH`
+- `effects/lighting/ambient.glsl`（21）：`DISABLE_HAND_GI`、`DISABLE_HAND_GI_VELOCITY`、`DISABLE_PLAYER_GI`、`DISABLE_PLAYER_GI_VELOCITY`、`GI_BRIGHTNESS`、`GI_FALLOFF`、`GI_QUALITY`、`GI_RADIUS`、`GI_RENDER_RESOLUTION`、`GI_RSM`、`GI_SKYLIGHT_FALLOFF`、`GTAO`、`GTAO_FALLOFF_START`、`GTAO_MAX_RADIUS`、`GTAO_MULTIBOUNCE`、`GTAO_QUALITY`、`GTAO_RADIUS_MODE`、`GTAO_SCREEN_RADIUS`、`GTAO_SLICE_QUALITY`、`GTAO_STRENGTH`、`GTAO_WORLD_RADIUS`
+- `effects/clarity/antialiasing.glsl`（5）：`DISABLE_HAND_TAA`、`DISABLE_PLAYER_TAA_MOTION_BLUR`、`TAA`、`TAA_AGGRESSION`、`TAA_BLENDWEIGHT`
+- `effects/lighting/blocklight.glsl`（23）：`DIRECTIONAL_BLOCKLIGHT`、`DIRECTIONAL_BLOCKLIGHT_STRENGTH`、`EMISSIVENESS_BRIGHTNESS`、`FLASHLIGHT_CAMERA_SMOOTH`、`FLASHLIGHT_CAMERA_SMOOTH_TIME`、`FLASHLIGHT_COLOR_B`、`FLASHLIGHT_COLOR_G`、`FLASHLIGHT_COLOR_R`、`FLASHLIGHT_FOV`、`FLASHLIGHT_HELDLIGHT_FALLOFF`、`FLASHLIGHT_POS_L_X`、`FLASHLIGHT_POS_L_Y`、`FLASHLIGHT_POS_R_X`、`FLASHLIGHT_POS_R_Y`、`HELDLIGHT_BRIGHTNESS`、`HELDLIGHT_FALLOFF`、`HELDLIGHT_MODE`、`HELDLIGHT_SHADOW`、`SPECULAR_HELDLIGHT`、`TEXTURE_BRIGHTNESS`、`TEXTURE_EMISSIVENESS_MODE`、`TORCHLIGHT_BRIGHTNESS`、`TORCHLIGHT_COLOR_TEMPERATURE`
+- `effects/color/bloom.glsl`（4）：`BLOOM`、`BLOOM_AMOUNT`、`NETHER_END_BLOOM_BOOST`、`VFOG_BLOOM`
+- `effects/cloud/cloud.glsl`（33）：`CLOUD_BASE_NOISE_SCALE`、`CLOUD_BOTTOM_BRIGHTNESS`、`CLOUD_CLEAR_ALTITUDE`、`CLOUD_CLEAR_COVERY`、`CLOUD_CLEAR_DENSITY`、`CLOUD_CLEAR_SCALE`、`CLOUD_CLEAR_SKYLIGHTING`、`CLOUD_CLEAR_SUNLIGHTING`、`CLOUD_CLEAR_THICKNESS`、`CLOUD_COVERAGE_NOISE_OFFSET`、`CLOUD_DETAILED_NOISE_SCALE`、`CLOUD_DETAILED_NOISE_STRENGTH`、`CLOUD_FADE`、`CLOUD_OUTSCATTER_FACTOR`、`CLOUD_QUALITY`、`CLOUD_RAIN_ALTITUDE`、`CLOUD_RAIN_COVERY`、`CLOUD_RAIN_DENSITY`、`CLOUD_RAIN_SCALE`、`CLOUD_RAIN_SKYLIGHTING`、`CLOUD_RAIN_SUNLIGHTING`、`CLOUD_RAIN_THICKNESS`、`CLOUD_SHADOW`、`CLOUD_SHADOWTEX_SIZE`、`CLOUD_SHADOW_FADE`、`CLOUD_SHADOW_RANGE`、`CLOUD_SPEED`、`PC_ALTITUDE`、`PC_COVERAGE`、`PC_NOISE_SCALE`、`PLANAR_CLOUDS`、`RAIN_SHADOW`、`VOLUMETRIC_CLOUDS`
+- `effects/color/color.glsl`（21）：`ABNEY_EFFECT_CORRECTION`、`ADVANCED_COLOR`、`AE_CURVE`、`AE_MODE`、`AE_OFFSET`、`AGX_EV`、`EV_VALUE`、`EXPOSURE_TIME`、`GAMMA`、`LUMA_GAMMA`、`LUMINANCE_WEIGHT_MODE`、`LUMINANCE_WEIGHT_STRENGTH`、`MANUAL_EXPOSURE`、`PURKINJE_EFFECT`、`PURKINJE_EFFECT_STRENGTH`、`PURKINJE_EFFECT_THRESHOLD`、`SATURATION`、`SEREEN_RATIO`、`SMOOTH_EXPOSURE`、`TONEMAP_OPERATOR`、`WHITE_CLIP`
+- `effects/world/end.glsl`（5）：`ACCRETIONDISC_DETAIL_ALONG_LONGTITUDE`、`ACCRETIONDISC_DOPPLER_EFFECT`、`END_MANUAL_PLANET_ANGLE`、`END_MANUAL_PLANET_CYCLE`、`END_PLANET_CYCLE`
+- `effects/entity/entity.glsl`（4）：`ENTITIES_STATUS_COLOR`、`EYES_LIGHTING`、`HAND_FOV`、`HAND_FOV_MODE`
+- `effects/fog/fog.glsl`（28）：`DH_LIMIT_VFOG_DIST`、`INDOOR_FOG`、`LANDSCATTERING`、`LANDSCATTERING_REFLECTION`、`LANDSCATTERING_REFRACTION`、`LANDSCATTERING_SHADOW`、`LANDSCATTERING_SHADOW_QUALITY`、`LANDSCATTERING_STRENGTH`、`NETHERFOG_DENSITY`、`UNDERWATER_VFOG`、`UNDERWATER_VFOG_DENSITY`、`VFOG`、`VFOG_CLOUD_SHADOW`、`VFOG_DENSITY`、`VFOG_DENSITY_BASE`、`VFOG_FALLOFF`、`VFOG_FOG_DENSITY`、`VFOG_HEIGHT`、`VFOG_HEIGHT_2`、`VFOG_IGNORE_WORLDTIME`、`VFOG_NOISE_TYPE`、`VFOG_QUALITY`、`VFOG_REFLECTION`、`VFOG_REFRACTION`、`VFOG_STAINED`、`VFOG_SUNLIGHT_ABSORPTION`、`VFOG_SUNLIGHT_DENSITY`、`VFOG_VOLUMETRIC_LIGHTING`
+- `effects/lens/lens.glsl`（25）：`CAMERA_FOCAL_POINT`、`CAMERA_FOCUS_MODE`、`DOF`、`DOF_BLUR`、`DOF_CATSEYE`、`DOF_CATSEYE_MIDPOINT`、`DOF_CATSEYE_STRENGTH`、`DOF_COCSPREAD_QUALITY`、`DOF_DEPTH_SMMOOTH_HALFLIFE`、`DOF_FOCUS_IGNORE_HAND_PARTICLE`、`DOF_MAX_COC`、`DOF_QUALITY`、`FLARE_BRIGHTNESS`、`GLARE_BRIGHTNESS`、`GLARE_FLARE_SHADOWBASED`、`LENS_FLARE`、`LENS_GLARE`、`MOTION_BLUR`、`MOTION_BLUR_DITHER`、`MOTION_BLUR_QUALITY`、`MOTION_BLUR_SUTTER_ANGLE`、`SNEAKING_VIGNETTE`、`VIGNETTE`、`VIGNETTE_FALLOFF`、`VIGNETTE_ROUNDNESS`
+- `effects/ground/material.glsl`（29）：`ANISOTROPIC_FILTERING_NORMAL_SPECULAR`、`ANISOTROPIC_FILTERING_QUALITY`、`DISABLE_HAND_SPECULAR`、`DISABLE_PLAYER_SPECULAR`、`EMISSIVENESS_GAMMA`、`ENABLE_PBR`、`ENTITIES_NORMAL_CLAMP`、`ENTITIES_PARALLAX`、`ENTITIES_TEXTURE_RESOLUTION`、`ENTITIES_VS_TBN`、`GENERAL_GRASS_FIX`、`HAND_NORMAL_CLAMP`、`PARALLAX_BASED_NORMAL`、`PARALLAX_DEPTH`、`PARALLAX_FADE`、`PARALLAX_MODE`、`PARALLAX_QUALITY`、`PARALLAX_SHADOW`、`PARALLAX_SHADOW_QUALITY`、`POROSITY_ABSORPTION`、`ROUGHNESS_CLAMP`、`SSS_STRENGTH`、`SSS_STRENGTH_OFFSET`、`TERRAIN_NORMAL_CLAMP`、`TERRAIN_VS_TBN`、`TEXTURE_DEFAULT_POROSITY`、`TEXTURE_PBR_FORMAT`、`TEXTURE_PBR_POROSITY`、`TEXTURE_RESOLUTION`
+- `effects/world/nether.glsl`（1）：`NETHER_BRIGHTNESS`
+- `effects/reflection/reflection.glsl`（3）：`RAYTRACE_QUALITY`、`RAYTRACE_REFINEMENT_STEPS`、`RAYTRACE_ZDIFF_THRESHOLD`
+- `effects/ground/selection.glsl`（4）：`LINE_IMAGE_OUTPUT`、`SELECTION_BOX_COLOR_B`、`SELECTION_BOX_COLOR_G`、`SELECTION_BOX_COLOR_R`
+- `effects/shadow/shadow.glsl`（16）：`COLORED_SHADOWS`、`DH_SHADOW`、`DH_SHADOW_CULLING`、`DH_SHADOW_FIX`、`DISABLE_PLAYER_SCREEN_SPACE_SHADOWS`、`SCREEN_SPACE_SHADOWS`、`SHADOW_BASIC_BLUR`、`SHADOW_MAP_BIAS`、`SSS_BRIGHTNESS`、`SSS_NORMAL`、`SSS_QUALITY`、`VARIABLE_PENUMBRA_SHADOWS`、`VPS_QUALITY`、`VPS_SPREAD`、`shadowDistance`、`shadowMapResolution`
+- `effects/sky/sky.glsl`（11）：`ATMO_HORIZON`、`ATMO_REFLECTION_HORIZON`、`BILINEAR_MOON_TEXTURE`、`BILINEAR_SKYBOX_TEXTURE`、`MOON_TEXTURE`、`NIGHT_BRIGHTNESS`、`SKYBOX_TEXTURE`、`SKY_IMAGE_RESOLUTION`、`SKY_TEXTURE_BRIGHTNESS`、`STAR_TYPE`、`sunPathRotation`
+- `effects/lighting/sunlight.glsl`（6）：`CAVE_MODE`、`COLD_MOONLIGHT`、`NOLIGHT_BRIGHTNESS`、`SKYLIGHT_INTENSITY`、`SUNLIGHT_INTENSITY`、`SUNLIGHT_LEAK_FIX`
+- `effects/clarity/upscale.glsl`（5）：`CAS_DENOISE`、`CAS_SHARPNESS`、`FSR`、`FSR_DENOISE`、`FSR_SHARPNESS`
+- `effects/ground/vegetation.glsl`（2）：`SHADOW_WAVING_PLANTS`、`WAVING_PLANTS`
+- `effects/water/water.glsl`（6）：`CAUSTICS`、`UNDERWATER_FOG`、`WATERFOG_DENSITY`、`WATER_PARALLAX`、`WAVE_HEIGHT`、`WAVE_SCALE`
+- `effects/weather/weather.glsl`（9）：`DISABLE_LOCAL_PRECIPITATION`、`RAIN_DISTURBANCE`、`RAIN_SPLASH_EFFECT`、`RAIN_VISIBILITY`、`RAIN_WIND_X`、`RAIN_WIND_Z`、`SURFACE_WETNESS`、`drynessHalflife`、`wetnessHalflife`
+- `effects/world/world.glsl`（4）：`DH_TERRAIN_CULLING`、`DH_TEXTURE_NOISE`、`DH_TEXTURE_NOISE_STEPS`、`DH_TEXTURE_NOISE_STRENGTH`
 
 ## 九点二、内部常数归属
 
 `Settings.glsl` 里不进菜单的常数也只定义一次，名字保持原名：
 
 - `common/math.glsl`：`MAIN_OUTPUT_FACTOR`、`EXPOSURE_OUTPUT_FACTOR`、`FTC_OFFSET`、`ANIMATION_SPEED`、`WATER_REFRACT_IOR`、`CAUSTICS_TEX_RESOLUTION`。
-- `effects/material.glsl`：全部 `MATID_*`、`PARALLAX_MAX_REFINEMENTS`、`CORRECT_PARTICLE_NORMAL`。
-- `effects/sky.glsl`：`ATMO_MIN_ALTITUDE`、`ATMO_SKYBOX_MIN_ALTITUDE`。
-- `effects/fog.glsl`：`VFOG_SUNLIGHT_STEPS`、`VFOG_SUNLIGHT_STEPLENGTH`。
-- `effects/antialiasing.glsl`：`TAA_BICUBIC_PREVIOUS`、`TAA_DEPTH_COMPARE`、`TAA_MICRO_BLUR`、`TAA_DEPTH_COMPARE_THRESHOLD`。
-- `effects/color.glsl`：`AE_CLAMP`。
+- `effects/ground/material.glsl`：全部 `MATID_*`、`PARALLAX_MAX_REFINEMENTS`、`CORRECT_PARTICLE_NORMAL`。
+- `effects/sky/sky.glsl`：`ATMO_MIN_ALTITUDE`、`ATMO_SKYBOX_MIN_ALTITUDE`。
+- `effects/fog/fog.glsl`：`VFOG_SUNLIGHT_STEPS`、`VFOG_SUNLIGHT_STEPLENGTH`。
+- `effects/clarity/antialiasing.glsl`：`TAA_BICUBIC_PREVIOUS`、`TAA_DEPTH_COMPARE`、`TAA_MICRO_BLUR`、`TAA_DEPTH_COMPARE_THRESHOLD`。
+- `effects/color/color.glsl`：`AE_CLAMP`。
 
 效果文件用到别的文件的选项或常数时，不重复定义；由绘制主体先引入归属文件。
 
@@ -220,12 +220,12 @@ common/uniforms.glsl → common/math.glsl →（定义本程序所需选项的�
 iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程序可能同时引入两份，必须先处理：
 
 - `BicubicBlurTexture`（泛光、云影、阴影顶点、地形顶点）、`BicubicTexture`（两种时间抗锯齿）：内容相同则放进 `common/math.glsl` 一份；不同则各自留在归属效果文件并加后缀区分。由甲片比对并决定，结果写进下面偏离记录。
-- `ShadowScreenPos_From_WorldPos*`、`DistortShadowScreenPos`：主世界版与末地版（`ShadowTransformsEnd.glsl`）都放 `effects/shadow.glsl`，末地版用 `#ifdef OMNI_END` 选择。
-- 植物摆动常数 `heavy*`、`light*`、`speed*`：只在 `effects/vegetation.glsl` 定义一次，地形与阴影顶点共用。
-- 时间抗锯齿辅助函数（`clipAABB`、`RGB_To_YCoCg`、`SampleDepthFetch` 等）：主世界与下界版放 `effects/antialiasing.glsl`，用 `#ifdef OMNI_NETHER` 选择不同的部分。
+- `ShadowScreenPos_From_WorldPos*`、`DistortShadowScreenPos`：主世界版与末地版（`ShadowTransformsEnd.glsl`）都放 `effects/shadow/shadow.glsl`，末地版用 `#ifdef OMNI_END` 选择。
+- 植物摆动常数 `heavy*`、`light*`、`speed*`：只在 `effects/ground/vegetation.glsl` 定义一次，地形与阴影顶点共用。
+- 时间抗锯齿辅助函数（`clipAABB`、`RGB_To_YCoCg`、`SampleDepthFetch` 等）：主世界与下界版放 `effects/clarity/antialiasing.glsl`，用 `#ifdef OMNI_NETHER` 选择不同的部分。
 - `CalculateCameraVelocity`：放 `common/coordinates.glsl` 一份；各处实现不同时加后缀。
-- `AxialGaussianBlur`：泛光版留在 `effects/bloom.glsl`，云影模糊版改名 `CloudShadowAxialBlur` 放 `effects/cloud.glsl`。
-- `Calculate3DNoise`、`CalculateStars`：末地版留在 `effects/end.glsl` 并加 `End` 前缀，主世界版分别在 `effects/fog.glsl`、`effects/sky.glsl`。
+- `AxialGaussianBlur`：泛光版留在 `effects/color/bloom.glsl`，云影模糊版改名 `CloudShadowAxialBlur` 放 `effects/cloud/cloud.glsl`。
+- `Calculate3DNoise`、`CalculateStars`：末地版留在 `effects/world/end.glsl` 并加 `End` 前缀，主世界版分别在 `effects/fog/fog.glsl`、`effects/sky/sky.glsl`。
 - `NetherFog`、`ComputeFakeSkyReflection`、`WaterRefractionLite`、`TransparentAbsorption`：维度各自实现不同时，下界与末地版加 `Nether`、`End` 后缀，由己片负责。
 
 ## 十、分片与状态
@@ -235,11 +235,11 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 | 分片 | 负责文件 | 状态 |
 | --- | --- | --- |
 | 甲 地基 | `build.py`、`options.py`、`rendering/programs.json`、`rendering/pipeline.properties`、`rendering/buffers.glsl`、`common/*`、`shaders/texture/`、`*.properties`、工具测试 | 完成（占位主体可编译，`python build.py verify` 通过） |
-| 乙 几何阶段 | `rendering/terrain`、`entities`、`translucent`、`overlay`、`celestial`、`shadow`、`distant`；`effects/material`、`shadow`、`water`、`vegetation`、`weather`、`entity`、`world`、`selection`、`season` | 完成（离线编译通过；待实机核对） |
-| 丙 延迟阶段 | `rendering/deferred`、`lights`；`effects/sky`、`atmosphere`、`cloud`、`ambient`、`sunlight` | 完成（离线编译通过；待实机核对） |
-| 丁 合成阶段 | `rendering/composite`；`effects/blocklight`、`reflection`、`fog`、`lpv` 与 `rendering/lpv` | 完成（离线编译通过；待实机核对） |
-| 戊 后期 | `rendering/post`、`final`；`effects/lens`、`antialiasing`、`bloom`、`color`、`upscale`、`debug` | 完成（离线编译通过；待实机核对） |
-| 己 下界与末地 | 维度程序、`effects/world/nether`、`effects/world/end`、下界时间抗锯齿 | 完成（离线编译通过；待实机核对） |
+| 乙 几何阶段 | `rendering/terrain.glsl`、`rendering/entities.glsl`、`rendering/translucent.glsl`、`rendering/overlay.glsl`、`rendering/celestial.glsl`、`rendering/shadow.glsl`、`rendering/distant.glsl`；`effects/ground/material.glsl`、`effects/shadow/shadow.glsl`、`effects/water/water.glsl`、`effects/ground/vegetation.glsl`、`effects/weather/weather.glsl`、`effects/entity/entity.glsl`、`effects/world/world.glsl`、`effects/ground/selection.glsl`、`effects/weather/season.glsl` | 完成（离线编译通过；待实机核对） |
+| 丙 延迟阶段 | `rendering/deferred.glsl`、`rendering/lights.glsl`；`effects/sky/sky.glsl`、`effects/sky/atmosphere.glsl`、`effects/cloud/cloud.glsl`、`effects/lighting/ambient.glsl`、`effects/lighting/sunlight.glsl` | 完成（离线编译通过；待实机核对） |
+| 丁 合成阶段 | `rendering/composite.glsl`；`effects/lighting/blocklight.glsl`、`effects/reflection/reflection.glsl`、`effects/fog/fog.glsl`、`effects/lighting/lpv.glsl` 与 `rendering/lpv.glsl` | 完成（离线编译通过；待实机核对） |
+| 戊 后期 | `rendering/post.glsl`、`rendering/final.glsl`；`effects/lens/lens.glsl`、`effects/clarity/antialiasing.glsl`、`effects/color/bloom.glsl`、`effects/color/color.glsl`、`effects/clarity/upscale.glsl`、`effects/dev/debug.glsl` | 完成（离线编译通过；待实机核对） |
+| 己 下界与末地 | 维度程序、`effects/world/nether.glsl`、`effects/world/end.glsl`、下界时间抗锯齿 | 完成（离线编译通过；待实机核对） |
 | 庚 集成 | 选项改名登记、预设、测试、文档、离线检查、游戏内对照截图 | 待前面完成 |
 
 
@@ -251,7 +251,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 - 函数体：按函数名配对后做词序列比对；GLSL 的 `#if` 分支会出现“一支开括号、另一支闭括号”，自动比对会把函数体读超，所以相似度低的函数逐个手工比对。
 
 核对结果：
-- 选项：iterationT 有效选项 262 个全部保留；项目当前 283 个选项（含项目自己的额外功能）。没有“定义了却没有接入任何入口”的选项。
+- 选项：iterationT 有效选项 262 个全部保留；项目当前 338 个选项（含项目自己的额外功能）。没有“定义了却没有接入任何入口”的选项。
 - 函数：iterationT 侧 248 个具名函数，项目侧 288 个；缺失只有 `MotionBlur.glsl` 的 `title`（纯菜单标题计数，HOP 不做无计算的装饰开关）；`BlueNoiseTemproal`、`BayerTemproal` 按合同改名。
 - 函数体：手工核对的可疑项均一致——`ScreenSpaceTracer` 与 iterationT 逐词相同（665 词）；4 个 `ShadowScreenPos_*`/`DistortShadowScreenPos` 与 `BloomDownSample`/`AxialGaussianBlur`/`FidelityFX_FSR1` 只差已登记的重名改名与选项前缀；`BlueNoise` 只差 `OMNI_PIXEL` 宏（见第十二节第 14 条）。
 - 结构：`shaders/effects/` 按菜单页面分文件夹（`sky/`、`cloud/`、`fog/`、`water/`、`ground/`、`lighting/`、`shadow/`、`reflection/`、`color/`、`lens/`、`clarity/`、`weather/`、`entity/`、`world/`、`dev/`）；`rendering/` 只安排绘制顺序；`effects/`、`rendering/`、`common/` 每个文件都有中文文件头；`python build.py audit` 通过。
@@ -288,13 +288,13 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 8. 旧管线测试跳过：`tests/` 里断言旧管线算法与缓冲的 32 个测试用 `@unittest.skip(PORT_REPLACED)` 标记，理由写入测试文件；庚片按新管线重写后恢复。
 9. 旧算法专用选项的处置（由主助手统一裁决，分片只登记不擅自删除）：iterationT 用预计算大气贴图，旧 Omni 那种“实时积分步数/散射倍率”参数在新算法里没有对应含义。这类选项一律登记到本节清单，由主助手在庚片决定“并入同名迭代T选项 / 保留为中性额外功能 / 作为接口变更移除并写迁移说明”，不在分片里悄悄删除。
 10. 强光压缩选项表示（戊片）：iterationT `TONEMAP_OPERATOR` 是函数名取值的宏（`AgX`/`ACES`/`None`），而 `options.py` 只接受数字取值，所以 Omni 把它定义为序号 `0`/`1`/`2`，档位名称映射回 `AgX`/`ACES`/无，绘制主体用 `#if OMNI_TONEMAP_OPERATOR == 1` 分派。行为和默认值（`AgX`）与原程序一致，只改表示形式。
-11. `CalculateWaterCaustics` 同名不同实现（丁片）：iterationT 有两份同名函数，`Lib/BasicFounctions/Sunlight_Shadow.glsl` 的一份按九次采样算焦散遮罩，`Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 的一份只返回 `dist * 2.8 + 0.2`，两者内容不同。前者已在 `effects/shadow.glsl`，按第九点五节的处理方式把后者改名 `CalculateUnderwaterCaustics` 留在 `effects/fog.glsl`，函数体不变；水下体积雾同时复用 `effects/shadow.glsl` 里内容相同的 `GetWavesNormalFromTex`，不重复定义。
-12. `LANDSCATTERING_DISTANCE` 选项补记（丁片）：第九节 `effects/fog.glsl` 的选项清单漏了这个名字，但 iterationT `Settings.glsl` 它有菜单范围且被 `LandAtmosphericScattering` 使用，所以按 `OMNI_LANDSCATTERING_DISTANCE` 正式登记，默认值与可选范围照 iterationT。
+11. `CalculateWaterCaustics` 同名不同实现（丁片）：iterationT 有两份同名函数，`Lib/BasicFounctions/Sunlight_Shadow.glsl` 的一份按九次采样算焦散遮罩，`Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 的一份只返回 `dist * 2.8 + 0.2`，两者内容不同。前者已在 `effects/shadow/shadow.glsl`，按第九点五节的处理方式把后者改名 `CalculateUnderwaterCaustics` 留在 `effects/fog/fog.glsl`，函数体不变；水下体积雾同时复用 `effects/shadow/shadow.glsl` 里内容相同的 `GetWavesNormalFromTex`，不重复定义。
+12. `LANDSCATTERING_DISTANCE` 选项补记（丁片）：第九节 `effects/fog/fog.glsl` 的选项清单漏了这个名字，但 iterationT `Settings.glsl` 它有菜单范围且被 `LandAtmosphericScattering` 使用，所以按 `OMNI_LANDSCATTERING_DISTANCE` 正式登记，默认值与可选范围照 iterationT。
 13. 效果文件被多个程序共同引入，靠“只有某个程序引入它”区分阶段的做法不再成立。凡是依赖程序全局量（光色、光方向、像素坐标）的函数，改成参数传入或就地计算：`CalculateStars(+sunVector)`、`CloudShadowFromTex(+shadowLightVector)`、`WaterFog(+shadowVector, +colorShadowlight, +colorSkylight)`、`Rain(+colorShadowlight, +colorSkylight)`、`WaterRefractionLite(+screenCoordInput)`、`GetWavesNormalFromTex`/`CalculateWaterCaustics(+shadowLightVector)`、`ScreenSpaceShadow(+shadowVector)`、`DH_noise(+materialID)`。这样任何程序在任意阶段引入都能编译，行为不变。
 14. `common/noise.glsl` 用 `OMNI_PIXEL` 宏取像素坐标：片元阶段是 `gl_FragCoord.xy`，顶点、几何与计算阶段取零。三个噪声函数因此在各阶段都能编译；顶点阶段本来不调用它们，输出不变。
-15. `effects/antialiasing.glsl` 自带 `taaTexelCoord`/`taaTexCoord`，并把整份实现放进 `#ifdef OMNI_FRAGMENT`，不再依赖调用程序声明的同名全局量。
+15. `effects/clarity/antialiasing.glsl` 自带 `taaTexelCoord`/`taaTexCoord`，并把整份实现放进 `#ifdef OMNI_FRAGMENT`，不再依赖调用程序声明的同名全局量。
 16. `BicubicBlurTexture` 在三处实现不同，必须改名：`common/math.glsl` 保留原名（噪声贴图十六像素三次模糊），泛光版改名 `BloomBicubicBlurTexture`，云影版改名 `CloudBicubicBlurTexture`，平面云内部另有 `BicubicBlurNoise`。GLSL 不允许同名函数只靠返回类型区分。
-17. `effects/shadow.glsl` 的可变半影阴影段用 `OMNI_SHADOW_COMPARE` 隔开：只有合成零号把 `shadowtex1` 声明为 `sampler2DShadow` 并定义该宏，其它程序把 `shadowtex1` 当普通深度贴图用。
+17. `effects/shadow/shadow.glsl` 的可变半影阴影段用 `OMNI_SHADOW_COMPARE` 隔开：只有合成零号把 `shadowtex1` 声明为 `sampler2DShadow` 并定义该宏，其它程序把 `shadowtex1` 当普通深度贴图用。
 18. `rendering/lights.glsl` 只声明 `shadowtex0`，不声明 `shadowtex1` 与 `shadowcolor0`：顶点与片元对同名采样器要求类型一致，合成零号片元用的是比较采样器。
 19. 加载器标准环境宏在 `build.py` 里按 Iris `StandardMacros` 注入（`MC_VERSION`、`MC_HAND_DEPTH = 0.125`、`MC_RENDER_QUALITY`、厂商与系统宏、远景方块编号照 Iris 取值）。离线编译没有这些宏会把只在游戏里存在的名字当成未声明标识符。
 20. `verify` 的十秒预算装不下整包编译（展开引用树与编译数百程序需要一两分钟）。移植期 `verify` 只跑生成、审计与引用检查，并新增 `python build.py compile`（放宽到 300 秒）做完整离线编译；庚片在实机核对后决定如何把编译探针放回预算内。旧管线测试共 56 个用 `@unittest.skip(PORT_REPLACED)` 标记，理由写在测试文件里。
@@ -303,7 +303,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 23. 预设按新选项集重写四套（默认、氛围、轻量、真实），保持各自定位。
 24. 下界与末地绘制主体已按 iterationT 的 `world-1/`、`world1/` 目录补齐（己片）：
     - 新文件 `effects/world/nether.glsl`（对应 `Lib/BasicFounctions/NetherColor.glsl`）与 `effects/world/end.glsl`（对应 `Lib/IndividualFounctions/EndSky.glsl`）。
-      第七节对照表里写的是 `effects/nether.glsl`、`effects/end.glsl`，实际按菜单页面归进 `effects/world/` 子目录，功能与归属不变。
+      第七节对照表按实际子目录写成 `effects/world/nether.glsl`、`effects/world/end.glsl`（菜单页面 `world`），功能与归属不变。
     - 末地同名函数按第九点五节加 `End` 前缀：`CalculateStars` → `EndCalculateStars`、`Calculate3DNoise` → `EndCalculate3DNoise`；
       `ComputeFakeSkyReflection` 末地版为 `ComputeFakeSkyReflectionEnd`，下界/末地的 `WaterRefractionLite`、`TransparentAbsorption` 分别加 `Nether`、`End` 后缀，
       下界 `NetherFog` 有 `vec2`（合成二号）与 `float`（合成五号）两个重载。末地 `CalculateStars` 的第二参数与主世界版不同，靠 `End` 前缀与主世界版共存。
@@ -382,8 +382,10 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 - 世界与远景：`OMNI_DH_ENABLED`、`OMNI_DH_FOG_BLEND`、`OMNI_PLANET_CURVATURE`
 - 反射：`OMNI_SSR`、`OMNI_SKY_REFLECTION`、`OMNI_REFLECTION_STRENGTH`、`OMNI_SSR_STEPS`、`OMNI_REFLECTION_DENOISE`、`OMNI_REFLECTION_BLUR`
 - 雾与空气：`OMNI_FOG_ENABLED`、`OMNI_FOG_DENSITY`、`OMNI_FOG_TINT`、`OMNI_HEIGHT_FOG_ENABLED`、`OMNI_HEIGHT_FOG`、`OMNI_FOG_HEIGHT`、`OMNI_FOG_SCALE`、`OMNI_VOLUMETRIC_LIGHT`、`OMNI_VOLUMETRIC_STRENGTH`、`OMNI_UNDERWATER_STRENGTH`、`OMNI_UNDERWATER_TINT`、`OMNI_END_FOG`、`OMNI_END_FOG_DENSITY`
-- 后期：`OMNI_AA_STRENGTH`、`OMNI_TEMPORAL_DENOISE`、`OMNI_CHROMATIC`、`OMNI_BOKEH_SHAPE`、`OMNI_DOF_STRENGTH`、`OMNI_MOTION_BLUR_STRENGTH`、`OMNI_FLARE_STRENGTH`、`OMNI_BLOOM_THRESHOLD`、`OMNI_BLOOM_RADIUS`、`OMNI_EXPOSURE`、`OMNI_EXPOSURE_TARGET`、`OMNI_EXPOSURE_SPEED`、`OMNI_BRIGHTNESS`、`OMNI_CONTRAST`、`OMNI_WHITE_BALANCE`、`OMNI_TONEMAP_STRENGTH`、`OMNI_DITHER`、`OMNI_RENDER_SCALE`
+- 后期：`OMNI_AA_STRENGTH`、`OMNI_TEMPORAL_DENOISE`、`OMNI_CHROMATIC`、`OMNI_BOKEH_SHAPE`、`OMNI_DOF_STRENGTH`、`OMNI_MOTION_BLUR_STRENGTH`、`OMNI_FLARE_STRENGTH`、`OMNI_BLOOM_THRESHOLD`、`OMNI_BLOOM_RADIUS`、`OMNI_EXPOSURE`、`OMNI_EXPOSURE_TARGET`、`OMNI_EXPOSURE_SPEED`、`OMNI_BRIGHTNESS`、`OMNI_CONTRAST`、`OMNI_TONEMAP_STRENGTH`、`OMNI_DITHER`、`OMNI_RENDER_SCALE`
 
 保留并已接线的额外功能：`OMNI_AURORA*`、`OMNI_RAINBOW*`、`OMNI_LIGHTNING*`（天空叠加与闪电照明）、`OMNI_SEASONS`/`OMNI_SEASON_TINT`（地形植被季节色）、`OMNI_LPV_*`（光传播体积）、`OMNI_DEBUG_VIEW`、`OMNI_PROFILER`。
+
+并入（Eclipse 合并，属接口变更）：`OMNI_WHITE_BALANCE`（`effects/color/color.glsl`）。旧 Omni 的 -1–1 染色取值不再合法；现为 1000–50000 的黑体色温，默认 6500 中性。旧配置里的 `OMNI_WHITE_BALANCE=0.2` 之类小数会被判非法，需要迁移到色温取值。
 
 保留为内部常数、不开放菜单（iterationT 本身就不把它当玩家选项）：`MAIN_OUTPUT_FACTOR`、`EXPOSURE_OUTPUT_FACTOR`、`MATID_*`、`ATMO_MIN_ALTITUDE`、`ATMO_SKYBOX_MIN_ALTITUDE`、`VFOG_SUNLIGHT_STEPS`、`VFOG_SUNLIGHT_STEPLENGTH`、`TAA_*`、`AE_CLAMP`、`WATER_REFRACT_IOR`、`CAUSTICS_TEX_RESOLUTION`、`ANIMATION_SPEED`。

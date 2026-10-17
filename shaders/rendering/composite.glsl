@@ -288,19 +288,16 @@ void main(){
 
 		if (any(greaterThan(sunlight * shadow, vec3(0.0)))){ // 还有阳光的像素才继续。
 			#ifdef OMNI_SCREEN_SPACE_SHADOWS
+				// 先把“这个像素是否参与屏幕空间阴影”算成一个布尔量，避免判断条件被预处理指令切成分开的几段。
+				float screenSpaceOccluders = materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow; // 不参与屏幕空间阴影的薄片与手。
 				#ifdef OMNI_DISABLE_PLAYER_SCREEN_SPACE_SHADOWS
-					#if OMNI_PARALLAX_MODE > 0
-						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow + materialMaskSoild.entityPlayer < 1.0)
-					#else
-						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow + materialMaskSoild.entityPlayer < 1.0 && gbuffer.parallaxShadow > 0.0)
-					#endif
-				#else
-					#if OMNI_PARALLAX_MODE > 0
-						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow < 1.0)
-					#else
-						if (materialMaskSoild.leaves + materialMaskSoild.hand + materialMaskSoild.entitiesSnow < 1.0 && gbuffer.parallaxShadow > 0.0)
-					#endif
+					screenSpaceOccluders += materialMaskSoild.entityPlayer; // 玩家也排除时一起计入。
 				#endif
+				bool applyScreenSpaceShadow = screenSpaceOccluders < 1.0; // 这些薄片占比不满才算屏幕空间阴影。
+				#if OMNI_PARALLAX_MODE == 0
+					applyScreenSpaceShadow = applyScreenSpaceShadow && gbuffer.parallaxShadow > 0.0; // 没开视差时还要看视差自阴影。
+				#endif
+				if (applyScreenSpaceShadow)
 					shadow *= mix(ScreenSpaceShadow(viewPos, viewDir, gbuffer.normalL, materialMaskSoild, shadowVector), 1.0, saturate(materialMaskSoild.leaves * 1.67 - 0.67)); // 屏幕空间阴影，叶片按比例削弱；方向传视空间的 shadowVector，与原程序一致。
 			#endif
 
@@ -407,6 +404,31 @@ uniform float rainStrength; // 降雨强度，雨点涟漪用。
 	uniform sampler3D omniLpvTex; // 计算阶段写入的体积间接光，片元这里三线性采样。
 	#endif
 #endif
+// 无光底光与环境光：先给一点随法线朝向的无光底光，再叠天光照明与水体染色。
+vec3 CompositeAmbientLight(vec3 worldNormal, float skylight, float cloudShadow, vec3 waterTint){
+	#ifdef OMNI_CAVE_MODE // 洞穴模式：极暗底光，避免洞穴里被补到不该有的亮。
+		vec3 ambient = vec3(0.83, 0.87, 1.0) * ((worldNormal.y * 0.25 + 0.75) * max(OMNI_NOLIGHT_BRIGHTNESS, 0.00003)); // 洞穴极暗底光。
+	#else
+		vec3 ambient = vec3(0.86, 0.94, 1.19) * ((worldNormal.y * 0.3 + 0.8) * OMNI_NOLIGHT_BRIGHTNESS); // 常规无光亮度。
+	#endif
+	return ambient + SkyLighting(worldNormal, skylight, cloudShadow) * waterTint; // 叠天光照明并按水色染色。
+}
+// 输出写入：把底色、金属掩码、高光与额外自发光叠好后编码写进一号画面。
+void WriteOverworldSurface(vec3 albedo, float metalnessMask, vec3 specularHighlight, float lightning, vec3 worldPos, float skylight, inout vec3 finalComposite){
+	finalComposite *= albedo; // 乘底色。
+	finalComposite *= metalnessMask; // 乘非金属掩码。
+	finalComposite += specularHighlight; // 叠高光。
+	finalComposite += vec3(1.0) * lightning; // 闪电自发光。
+	finalComposite = omniLightning(finalComposite, worldPos, skylight); // Omni 额外功能：真实闪电事件照亮附近表面。
+	#ifdef OMNI_LPV_ENABLED // Omni 额外功能：光传播体积给空气补间接光；缺少自定义图像能力时整段不编译。
+		#ifdef IRIS_FEATURE_CUSTOM_IMAGES
+		finalComposite += omniLpvSample(omniLpvTex, worldPos) * OMNI_LPV_STRENGTH; // 三线性采样体积间接光。
+		#endif
+	#endif
+	finalComposite /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
+	finalComposite = LinearToCurve(finalComposite); // 四次方根编码。
+	compositeOutput1 = vec4(finalComposite, 0.0); // 写回一号画面。
+}
 void main(){
 	GbufferData gbuffer = GetGbufferData(); // 读回本像素的完整表面数据。
 	MaterialMask materialMask = CalculateMasks(gbuffer.materialIDW); // 半透明层材质掩码。
@@ -480,12 +502,7 @@ void main(){
 
 		worldNormal = normalize(mix(worldNormal, vec3(0.0, 1.0, 0.0), materialMaskSolid.grass * 0.49)); // 草的法线朝上拉，减少杂乱。
 
-		#ifdef OMNI_CAVE_MODE
-			vec3 finalComposite = vec3(0.83, 0.87, 1.0) * ((worldNormal.y * 0.25 + 0.75) * max(OMNI_NOLIGHT_BRIGHTNESS, 0.00003)); // 洞穴极暗底光。
-		#else
-			vec3 finalComposite = vec3(0.86, 0.94, 1.19) * ((worldNormal.y * 0.3 + 0.8) * OMNI_NOLIGHT_BRIGHTNESS); // 常规无光亮度。
-		#endif
-		finalComposite += SkyLighting(worldNormal, gbuffer.lightmapL.g, cloudShadow) * waterTint; // 叠天光照明。
+		vec3 finalComposite = CompositeAmbientLight(worldNormal, gbuffer.lightmapL.g, cloudShadow, waterTint); // 无光底光加天光照明。
 
 		vec4 gi = compositeOutput1; // 一号画面里存着延迟阶段算好的全局光与遮蔽。
 		gi = mix(gi, vec4(0.0, 0.0, 0.0, 1.0), materialMask.particle); // 粒子不接收全局光。
@@ -562,19 +579,16 @@ void main(){
 
 		if (any(greaterThan(sunlight * shadow, vec3(0.0)))){ // 还有阳光的像素才继续。
 			#ifdef OMNI_SCREEN_SPACE_SHADOWS
+				// 先把“这个像素是否参与屏幕空间阴影”算成一个布尔量，避免判断条件被预处理指令切成分开的几段。
+				float screenSpaceOccluders = materialMaskSolid.leaves + materialMaskSolid.hand + materialMaskSolid.entitiesSnow; // 不参与屏幕空间阴影的薄片与手。
 				#ifdef OMNI_DISABLE_PLAYER_SCREEN_SPACE_SHADOWS
-					#if OMNI_PARALLAX_MODE > 0
-						if (materialMaskSolid.leaves + materialMaskSolid.hand + materialMaskSolid.entitiesSnow + materialMaskSolid.entityPlayer < 1.0)
-					#else
-						if (materialMaskSolid.leaves + materialMaskSolid.hand + materialMaskSolid.entitiesSnow + materialMaskSolid.entityPlayer < 1.0 && gbuffer.parallaxShadow > 0.0)
-					#endif
-				#else
-					#if OMNI_PARALLAX_MODE > 0
-						if (materialMaskSolid.leaves + materialMaskSolid.hand + materialMaskSolid.entitiesSnow < 1.0)
-					#else
-						if (materialMaskSolid.leaves + materialMaskSolid.hand + materialMaskSolid.entitiesSnow < 1.0 && gbuffer.parallaxShadow > 0.0)
-					#endif
+					screenSpaceOccluders += materialMaskSolid.entityPlayer; // 玩家也排除时一起计入。
 				#endif
+				bool applyScreenSpaceShadow = screenSpaceOccluders < 1.0; // 这些薄片占比不满才算屏幕空间阴影。
+				#if OMNI_PARALLAX_MODE == 0
+					applyScreenSpaceShadow = applyScreenSpaceShadow && gbuffer.parallaxShadow > 0.0; // 没开视差时还要看视差自阴影。
+				#endif
+				if (applyScreenSpaceShadow)
 					shadow *= mix(ScreenSpaceShadow(viewPos, viewDir, gbuffer.normalL, materialMaskSolid, shadowVector), 1.0, saturate(materialMaskSolid.leaves * 1.67 - 0.67)); // 屏幕空间阴影，叶片按比例削弱。
 			#endif
 
@@ -595,25 +609,7 @@ void main(){
 			}
 		}
 
-		finalComposite *= gbuffer.albedo; // 乘底色。
-
-		finalComposite *= metalnessMask; // 乘非金属掩码。
-
-		finalComposite += specularHighlight; // 叠高光。
-
-		finalComposite += vec3(1.0) * materialMaskSolid.lightning; // 闪电自发光。
-
-		finalComposite = omniLightning(finalComposite, worldPos, gbuffer.lightmapL.g); // Omni 额外功能：真实闪电事件照亮附近表面。
-
-		#ifdef OMNI_LPV_ENABLED // Omni 额外功能：光传播体积给空气补间接光；缺少自定义图像能力时整段不编译。
-			#ifdef IRIS_FEATURE_CUSTOM_IMAGES
-			finalComposite += omniLpvSample(omniLpvTex, worldPos) * OMNI_LPV_STRENGTH; // 三线性采样体积间接光。
-			#endif
-		#endif
-
-		finalComposite /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
-		finalComposite = LinearToCurve(finalComposite); // 四次方根编码。
-		compositeOutput1 = vec4(finalComposite, 0.0); // 写回一号画面。
+		WriteOverworldSurface(gbuffer.albedo, metalnessMask, specularHighlight, materialMaskSolid.lightning, worldPos, gbuffer.lightmapL.g, finalComposite); // 统一写出零号画面。
 	}
 }
 #endif // 维度分支结束。

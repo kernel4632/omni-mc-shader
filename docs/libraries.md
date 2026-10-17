@@ -95,4 +95,4 @@ shaders/libraries/
 1. 你确认此清单后，我逐个核实「待核实」库的许可。
 2. 按确认结果把库放进 `shaders/libraries/`，登记 `dependencies.json` 与 `THIRD_PARTY.md`。
 3. 用库替换现有自写实现：先换噪声与抗锯齿，再换 AO 与大气。
-4. 按 `parameters.md` 的「缺失」列，用库+公开论文逐个补效果。
+4. 按 `docs/eclipse-parity.md` 的合并建议与 `docs/parity.md` 的偏离记录，用库与公开论文逐个补效果。

@@ -11,7 +11,8 @@
     原程序用 `TAA` 宏判断是否抖动，这里换成 Omni 选项名 `OMNI_TAA`；调用方必须先引入定义它的效果文件，
     否则这里看不到选项，会悄悄按“不抖动”计算，画面和历史对不上。
     远景版本只在加载远景模组时存在，函数名加 `_DH` 后缀，与原程序一致。
-    `CalculateCameraVelocity` 在原程序四处各写一份且内容不同，按移植合同留在各自效果文件，见偏离记录。
+    相机速度在原程序四处各写一份且内容不同，按移植合同留在各自效果文件并改成用途名：
+    `TaaCameraVelocity`、`GiCameraVelocity`、`MotionBlurCameraVelocity`，见偏离记录。
 */
 #ifndef OMNI_COORDINATES_INCLUDED // 只引入一次，避免函数重复定义。
 #define OMNI_COORDINATES_INCLUDED // 置上标记。
