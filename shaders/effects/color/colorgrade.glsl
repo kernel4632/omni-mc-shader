@@ -12,6 +12,8 @@
     `1.7320508076` 是根号三：目标色三通道都取一时，归一化后的目标再乘它正好还原为一，默认取值才不会偏色。
     原程序把三个目标色写成文件级 `const`，这里改成函数内局部量；因为 GLSL 的 `const` 初始化不允许调用 `normalize`。
     与 `OMNI_WHITE_BALANCE` 不重复：白平衡在色调映射之前做相机白点校正，本文件在色调映射之后做创作染色，阶段不同。
+    串色 `OMNI_CROSSTALK` 来自 Eclipse `composite12.fsh:134` 的 `saturationAndCrosstalk`，默认零、不做处理；
+    Eclipse 把饱和度与串色写在同一行，本项目饱和度在 `effects/color/color.glsl` 的高级调色里，这里只补串色这一项。
 */
 #ifndef OMNI_COLORGRADE_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_COLORGRADE_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -49,6 +51,8 @@
 #define OMNI_LUMINANCE_CURVE_LOWER 0.0 // [-2.0 -1.9 -1.8 -1.7 -1.6 -1.5 -1.4 -1.3 -1.2 -1.1 -1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label": {"zh_cn": "亮部曲线", "en_us": "Upper Curve"}, "slider": true, "description": {"zh_cn": "正值抬高亮部，负值压暗亮部，零为不变。", "en_us": "Positive lifts highlights, negative darkens them, zero is unchanged."}}
 #define OMNI_LUMINANCE_CURVE_UPPER 0.0 // [-2.0 -1.9 -1.8 -1.7 -1.6 -1.5 -1.4 -1.3 -1.2 -1.1 -1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// @option {"label": {"zh_cn": "串色", "en_us": "Crosstalk"}, "slider": true, "description": {"zh_cn": "让亮度影响饱和度：正值亮处更靠拢、暗处更分离，负值相反；零为不变。来源 Eclipse `settings.glsl:746` 的 `CROSSTALK`。", "en_us": "Lets luminance drive saturation: positive pulls bright colours together and parts dark ones, negative does the opposite; zero is unchanged. From Eclipse `settings.glsl:746` `CROSSTALK`."}}
+#define OMNI_CROSSTALK 0.0 // [-1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 
 // 共用数学：提供 `saturate` 等基础函数，本文件的分段染色与曲线都用到它。
 #include "/common/math.glsl"
@@ -97,6 +101,7 @@ vec3 OmniSegmentGrade(vec3 color){
 
 // --- 对外入口：按两个开关决定是否做亮度曲线与分段染色 ---
 // 顺序照 Eclipse：先做亮度曲线，再做分段染色。两个开关默认关闭，都关时原样返回颜色。
+// 串色（`OMNI_CROSSTALK`）独立于两个开关，默认零时不做任何处理、画面不变。
 vec3 OmniColorGrade(vec3 color){
 	#ifdef OMNI_LUMINANCE_CURVE // 开着亮度曲线时先调明暗两端。
 		color = OmniLuminanceCurve(color); // 按通道做暗部与亮部修正。
@@ -104,6 +109,10 @@ vec3 OmniColorGrade(vec3 color){
 	#ifdef OMNI_COLOR_GRADING // 开着色彩分级时再做三段染色。
 		color = OmniSegmentGrade(color); // 按亮度分段染色并叠加。
 	#endif
+	if (OMNI_CROSSTALK != 0.0){ // 串色：让亮度拉近或推开颜色的饱和程度，默认零跳过。
+		float crosstalkLuma = dot(color, vec3(1.0 / 3.0)); // 三通道平均亮度，与 Eclipse `composite12.fsh:130` 的 `luma` 一致。
+		color += (color - crosstalkLuma) * (-crosstalkLuma * OMNI_CROSSTALK); // 与 Eclipse 串色项 `lumaColDiff*(-luminance*CROSSTALK)` 相同。
+	}
 	return color; // 返回最终显示域颜色。
 }
 #endif // 文件守卫结束。

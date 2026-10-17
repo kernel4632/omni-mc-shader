@@ -19,6 +19,8 @@
     这里只把 `omniSkyRayleighTint()`、`omniSkyMieTint()` 与 `OMNI_SKY_BRIGHTNESS` 乘进查表结果，默认全一、画面不变。
     月亮轨道、月食与月相来自 Eclipse：自定义轨道在顶点阶段由世界时间闭式算出，日月解耦后才可能月食；
     真实月亮模式需要的月亮贴图与法线贴图是 Eclipse 自带文件，本项目没有，缺少时退回程序圆盘，见 `RenderMoonDisc`。
+    月亮颜色的三通道倍率（`OMNI_MOON_COLOR_R/G/B`）来自 Eclipse `lib/settings.glsl:402-404` 的 `moonColorR/G/B`：
+    Eclipse 把这三个值直接当月亮色，本项目已有色温路径，这里改成乘在基础月亮色上的倍率，默认全一、画面不变。
 */
 #ifndef OMNI_SKY_INCLUDED
 #define OMNI_SKY_INCLUDED
@@ -75,6 +77,12 @@ const float sunPathRotation = -30.0; // [-90.0 -89.0 -88.0 -87.0 -86.0 -85.0 -84
 #define OMNI_ECLIPSE
 // @option {"label":{"zh_cn":"月食变暗强度","en_us":"Eclipse Strength"},"description":{"zh_cn":"日月对齐时压暗的程度，零为不压暗；只在月食变暗开启时生效。","en_us":"How much the sky darkens on alignment; zero disables it; only used when Eclipse Darkening is on."},"slider":true}
 #define OMNI_ECLIPSE_DARKENING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
+// @option {"label":{"zh_cn":"月亮颜色-红","en_us":"Moon colour - R"},"description":{"zh_cn":"月亮圆盘颜色的红色倍率，一为不变；补上 Eclipse 的 moonColorR/G/B，默认全一不改画面。","en_us":"Red multiplier of the moon disc colour; one is unchanged. Ports Eclipse moonColorR/G/B; defaults keep the current look."},"slider":true}
+#define OMNI_MOON_COLOR_R 1.0 // [0.0 0.2 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.8 2.0]
+// @option {"label":{"zh_cn":"月亮颜色-绿","en_us":"Moon colour - G"},"description":{"zh_cn":"月亮圆盘颜色的绿色倍率，一为不变；补上 Eclipse 的 moonColorR/G/B，默认全一不改画面。","en_us":"Green multiplier of the moon disc colour; one is unchanged. Ports Eclipse moonColorR/G/B; defaults keep the current look."},"slider":true}
+#define OMNI_MOON_COLOR_G 1.0 // [0.0 0.2 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.8 2.0]
+// @option {"label":{"zh_cn":"月亮颜色-蓝","en_us":"Moon colour - B"},"description":{"zh_cn":"月亮圆盘颜色的蓝色倍率，一为不变；补上 Eclipse 的 moonColorR/G/B，默认全一不改画面。","en_us":"Blue multiplier of the moon disc colour; one is unchanged. Ports Eclipse moonColorR/G/B; defaults keep the current look."},"slider":true}
+#define OMNI_MOON_COLOR_B 1.0 // [0.0 0.2 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.8 2.0]
 // --- 内部常数：原 `Settings.glsl` 里不进菜单的取值，名字保持原名 ---
 #define ATMO_MIN_ALTITUDE 500.0 // 相机大气高度下限，低于它按这个高度算，避免贴地时大气几何退化。
 #define ATMO_SKYBOX_MIN_ALTITUDE 500.0 - wetness * 300.0 // 反射天空盒的相机高度下限，雨天云更厚所以再压低一点。
@@ -218,12 +226,15 @@ float CalculateEclipseDarkening(vec3 worldDir, vec3 worldSunVector, vec3 worldMo
 	#endif
 }
 // 月亮圆盘颜色：真实月亮模式按色温与亮度基准，否则用现有的偏暖白。
+// 最后再乘 Eclipse `moonColorR/G/B` 的三通道倍率，默认全一、不改变基础色。
 vec3 CalculateMoonDiscColor(){
+	vec3 moonColor; // 月亮圆盘的基础颜色。
 	#ifdef OMNI_REALMOON
-		return Blackbody(OMNI_MOON_TEMP) * (OMNI_MOON_ILLUMINANCE / 600.0); // 黑体颜色亮度已归一，再按亮度基准相对默认值缩放。
+		moonColor = Blackbody(OMNI_MOON_TEMP) * (OMNI_MOON_ILLUMINANCE / 600.0); // 黑体颜色亮度已归一，再按亮度基准相对默认值缩放。
 	#else
-		return vec3(0.8886, 1.0019, 1.3095); // 现有的偏暖白月亮圆盘。
+		moonColor = vec3(0.8886, 1.0019, 1.3095); // 现有的偏暖白月亮圆盘。
 	#endif
+	return moonColor * vec3(OMNI_MOON_COLOR_R, OMNI_MOON_COLOR_G, OMNI_MOON_COLOR_B); // 补上 Eclipse 的三通道倍率，默认全一。
 }
 // 视线到大气层顶的距离，解视线与顶球面的方程取远根。
 float DistanceToTopAtmosphereBoundary(

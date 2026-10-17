@@ -1,5 +1,16 @@
 # 更新记录
 
+## 0.0.0-dev.140
+
+补上 Eclipse 三处尚未实现的独立小选项，全部默认中性、默认画面不变。
+
+- OMNI_MOON_COLOR_R/G/B（effects/sky/sky.glsl）：月亮圆盘颜色的三通道倍率，来源 Eclipse lib/settings.glsl:402-404 的 moonColorR/G/B；Eclipse 直接当月亮色，本项目改成乘在基础月亮色上的倍率，默认全一，接在 CalculateMoonDiscColor。
+- OMNI_CROSSTALK（effects/color/colorgrade.glsl）：让亮度影响饱和度，来源 Eclipse settings.glsl:746 的 CROSSTALK 与 composite12.fsh:134 的串色项；Eclipse 饱和度与串色同一行，本项目饱和度在 color.glsl 的高级调色里，这里只补串色，默认零。
+- OMNI_WATER_CAUSTICS_BRIGHTNESS / OMNI_WATER_CAUSTICS_POWER（effects/shadow/shadow.glsl）：水面焦散花纹的亮度倍率与对比指数，来源 Eclipse settings.glsl:999-1000，接在 CalculateWaterCaustics 返回值上，默认一比一。
+- 差异说明：三项都是 Eclipse 独有参数，Omni 原有效果来自 iterationT，这里只补参数面、不改算法来源，逐条记进 docs/eclipse-parity.md 的「月亮与月食」「水雾与焦散」「后处理滤镜」三行。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.139
 
 Eclipse 波浪模拟。

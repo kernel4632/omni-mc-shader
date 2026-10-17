@@ -44,6 +44,10 @@
 #define OMNI_SSS_QUALITY 6 // [2 3 4 6 8 12 16 24 32]
 // @option {"label":{"zh_cn":"透光亮度","en_us":"Translucency brightness"},"description":{"zh_cn":"阳光透过叶片、草时漏出的亮度；调大透光更明显。","en_us":"How bright sunlight glows through leaves and grass; larger makes the translucency stronger."},"slider":true}
 #define OMNI_SSS_BRIGHTNESS 1.0 // [0.0 0.1 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
+// @option {"label":{"zh_cn":"焦散亮度","en_us":"Caustics brightness"},"description":{"zh_cn":"水面焦散花纹的整体亮度倍率，一为不变；来源 Eclipse `settings.glsl:999` 的 `WATER_CAUSTICS_BRIGHTNESS`。","en_us":"Overall brightness multiplier of the water caustics pattern; one is unchanged. From Eclipse `settings.glsl:999` `WATER_CAUSTICS_BRIGHTNESS`."},"slider":true}
+#define OMNI_WATER_CAUSTICS_BRIGHTNESS 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0]
+// @option {"label":{"zh_cn":"焦散对比","en_us":"Caustics power"},"description":{"zh_cn":"水面焦散花纹的对比指数，越大亮纹越集中、暗处越暗；一为不变。来源 Eclipse `settings.glsl:1000` 的 `WATER_CAUSTICS_POWER`。","en_us":"Contrast exponent of the water caustics pattern; larger concentrates the bright veins and darkens the rest; one is unchanged. From Eclipse `settings.glsl:1000` `WATER_CAUSTICS_POWER`."},"slider":true}
+#define OMNI_WATER_CAUSTICS_POWER 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95 1.0 1.05 1.1 1.15 1.2 1.25 1.3 1.35 1.4 1.45 1.5 1.55 1.6 1.65 1.7 1.75 1.8 1.85 1.9 1.95 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 3.2 3.4 3.6 3.8 4.0 4.5 5.0 6.0 7.0 8.0 9.0 10.0]
 // @option {"label":{"zh_cn":"透光朝向","en_us":"Directional translucency"},"description":{"zh_cn":"让透过的光随观察角度变化，逆光看叶片时更亮。","en_us":"Makes the light through leaves vary with view angle, brighter when backlit."}}
 //#define OMNI_SSS_NORMAL
 // @option {"label":{"zh_cn":"远景透光（次表面散射）","en_us":"Distant SSS"},"description":{"zh_cn":"让远景地形的叶片与雪像近景一样透光；关闭后远景叶片与雪不透光，影子更硬。默认开启，与原来一致。来源 Eclipse 的 DH_SUBSURFACE_SCATTERING。","en_us":"Lets distant leaves and snow pass light like nearby ones; when off they stop being translucent and shadows get harder. On by default. Ports Eclipse's DH_SUBSURFACE_SCATTERING."}}
@@ -452,6 +456,7 @@ float CalculateWaterCaustics(vec3 worldPos, vec3 shadowLightVector){
 		}
 	}
 
-	return mix(caustics * 0.16 + 0.2, 1.0, 0.3 - 0.3 * float(isEyeInWater)); // 拼成焦散亮度，水下再往全亮靠一点。
+	float causticsFinal = mix(caustics * 0.16 + 0.2, 1.0, 0.3 - 0.3 * float(isEyeInWater)); // 拼成焦散亮度，水下再往全亮靠一点。
+	return pow(causticsFinal * OMNI_WATER_CAUSTICS_BRIGHTNESS, OMNI_WATER_CAUSTICS_POWER); // 按 Eclipse `settings.glsl:999-1000` 的亮度倍率与对比指数重整，默认全一、画面不变。
 }
 #endif // 文件守卫结束。
