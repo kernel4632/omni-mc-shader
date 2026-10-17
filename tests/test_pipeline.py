@@ -93,6 +93,25 @@ class PipelineTests(unittest.TestCase):
             text = loadable.read_text(encoding="ascii")
             self.assertIn(f"# @shaderVersion {build.version()}",text); self.assertEqual(options.shared(loadable,found,build.version()),migrated)  # properties能再次导入且版本来自当前源码。
 
+    def test_option_rename_migrates_old_names(self):
+        """旧选项名按对照表迁移到当前名，新旧名同时出现时拒绝导入。"""
+        self.assertGreater(len(options.OPTION_RENAMES), 0)  # 对照表为空时这条测试没有意义。
+        old, new = next(iter(options.OPTION_RENAMES.items()))  # 取任意一条真实对照做验证。
+        self.assertEqual(options.rename({old: "1"}), {new: "1"})  # 旧名落到当前名下。
+        self.assertEqual(options.rename({"OMNI_KEEP_ME": "1"}), {"OMNI_KEEP_ME": "1"})  # 未登记的名字原样保留，交给选项边界报错。
+        with self.assertRaisesRegex(ValueError, "同时给了旧名与新名"):
+            options.rename({old: "1", new: "1"})  # 两个来源冲突时不能替玩家猜。
+        found, _ = options.scan(build.SHADERS)  # 真实源码取范围。
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); source = root/"legacy.json"  # 不修改真实共享配置。
+            if new not in found:
+                return  # 该对照只是安装器旧名（当前源码没有同名选项）时无需继续验证导入。
+            data = {"schemaVersion": options.SHARE_SCHEMA, "shaderVersion": build.version(),
+                    "values": {old: found[new].default}}  # 用旧名给一个当前选项。
+            source.write_text(json.dumps(data), encoding="utf-8")
+            migrated = options.shared(source, found, build.version())  # 走真实导入路径。
+            self.assertEqual(migrated["values"][new], found[new].default)  # 旧名确实被迁移到新名上。
+
     def test_comment_audit_ignores_normal_strings(self):
         """只有注释和接口文档算中文，字符串不能凑比例。"""
         with tempfile.TemporaryDirectory() as temporary:

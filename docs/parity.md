@@ -190,7 +190,7 @@ common/uniforms.glsl → common/math.glsl →（定义本程序所需选项的�
 - `effects/color/color.glsl`（21）：`ABNEY_EFFECT_CORRECTION`、`ADVANCED_COLOR`、`AE_CURVE`、`AE_MODE`、`AE_OFFSET`、`AGX_EV`、`EV_VALUE`、`EXPOSURE_TIME`、`GAMMA`、`LUMA_GAMMA`、`LUMINANCE_WEIGHT_MODE`、`LUMINANCE_WEIGHT_STRENGTH`、`MANUAL_EXPOSURE`、`PURKINJE_EFFECT`、`PURKINJE_EFFECT_STRENGTH`、`PURKINJE_EFFECT_THRESHOLD`、`SATURATION`、`SEREEN_RATIO`、`SMOOTH_EXPOSURE`、`TONEMAP_OPERATOR`、`WHITE_CLIP`
 - `effects/world/end.glsl`（5）：`ACCRETIONDISC_DETAIL_ALONG_LONGTITUDE`、`ACCRETIONDISC_DOPPLER_EFFECT`、`END_MANUAL_PLANET_ANGLE`、`END_MANUAL_PLANET_CYCLE`、`END_PLANET_CYCLE`
 - `effects/entity/entity.glsl`（4）：`ENTITIES_STATUS_COLOR`、`EYES_LIGHTING`、`HAND_FOV`、`HAND_FOV_MODE`
-- `effects/fog/fog.glsl`（28）：`DH_LIMIT_VFOG_DIST`、`INDOOR_FOG`、`LANDSCATTERING`、`LANDSCATTERING_REFLECTION`、`LANDSCATTERING_REFRACTION`、`LANDSCATTERING_SHADOW`、`LANDSCATTERING_SHADOW_QUALITY`、`LANDSCATTERING_STRENGTH`、`NETHERFOG_DENSITY`、`UNDERWATER_VFOG`、`UNDERWATER_VFOG_DENSITY`、`VFOG`、`VFOG_CLOUD_SHADOW`、`VFOG_DENSITY`、`VFOG_DENSITY_BASE`、`VFOG_FALLOFF`、`VFOG_FOG_DENSITY`、`VFOG_HEIGHT`、`VFOG_HEIGHT_2`、`VFOG_IGNORE_WORLDTIME`、`VFOG_NOISE_TYPE`、`VFOG_QUALITY`、`VFOG_REFLECTION`、`VFOG_REFRACTION`、`VFOG_STAINED`、`VFOG_SUNLIGHT_ABSORPTION`、`VFOG_SUNLIGHT_DENSITY`、`VFOG_VOLUMETRIC_LIGHTING`
+- `effects/fog/fog.glsl`（28）：`DH_LIMIT_VFOG_DIST`、`INDOOR_FOG`、`LANDSCATTERING`、`LANDSCATTERING_REFLECTION`、`LANDSCATTERING_REFRACTION`、`LANDSCATTERING_SHADOW`、`LANDSCATTERING_SHADOW_QUALITY`、`LANDSCATTERING_STRENGTH`、`NETHER_FOG_DENSITY`、`UNDERWATER_VFOG`、`UNDERWATER_VFOG_DENSITY`、`VFOG`、`VFOG_CLOUD_SHADOW`、`VFOG_DENSITY`、`VFOG_DENSITY_BASE`、`VFOG_FALLOFF`、`VFOG_FOG_DENSITY`、`VFOG_HEIGHT`、`VFOG_HEIGHT_2`、`VFOG_IGNORE_WORLDTIME`、`VFOG_NOISE_TYPE`、`VFOG_QUALITY`、`VFOG_REFLECTION`、`VFOG_REFRACTION`、`VFOG_STAINED`、`VFOG_SUNLIGHT_ABSORPTION`、`VFOG_SUNLIGHT_DENSITY`、`VFOG_VOLUMETRIC_LIGHTING`
 - `effects/lens/lens.glsl`（25）：`CAMERA_FOCAL_POINT`、`CAMERA_FOCUS_MODE`、`DOF`、`DOF_BLUR`、`DOF_CATSEYE`、`DOF_CATSEYE_MIDPOINT`、`DOF_CATSEYE_STRENGTH`、`DOF_COCSPREAD_QUALITY`、`DOF_DEPTH_SMMOOTH_HALFLIFE`、`DOF_FOCUS_IGNORE_HAND_PARTICLE`、`DOF_MAX_COC`、`DOF_QUALITY`、`FLARE_BRIGHTNESS`、`GLARE_BRIGHTNESS`、`GLARE_FLARE_SHADOWBASED`、`LENS_FLARE`、`LENS_GLARE`、`MOTION_BLUR`、`MOTION_BLUR_DITHER`、`MOTION_BLUR_QUALITY`、`MOTION_BLUR_SUTTER_ANGLE`、`SNEAKING_VIGNETTE`、`VIGNETTE`、`VIGNETTE_FALLOFF`、`VIGNETTE_ROUNDNESS`
 - `effects/ground/material.glsl`（29）：`ANISOTROPIC_FILTERING_NORMAL_SPECULAR`、`ANISOTROPIC_FILTERING_QUALITY`、`DISABLE_HAND_SPECULAR`、`DISABLE_PLAYER_SPECULAR`、`EMISSIVENESS_GAMMA`、`ENABLE_PBR`、`ENTITIES_NORMAL_CLAMP`、`ENTITIES_PARALLAX`、`ENTITIES_TEXTURE_RESOLUTION`、`ENTITIES_VS_TBN`、`GENERAL_GRASS_FIX`、`HAND_NORMAL_CLAMP`、`PARALLAX_BASED_NORMAL`、`PARALLAX_DEPTH`、`PARALLAX_FADE`、`PARALLAX_MODE`、`PARALLAX_QUALITY`、`PARALLAX_SHADOW`、`PARALLAX_SHADOW_QUALITY`、`POROSITY_ABSORPTION`、`ROUGHNESS_CLAMP`、`SSS_STRENGTH`、`SSS_STRENGTH_OFFSET`、`TERRAIN_NORMAL_CLAMP`、`TERRAIN_VS_TBN`、`TEXTURE_DEFAULT_POROSITY`、`TEXTURE_PBR_FORMAT`、`TEXTURE_PBR_POROSITY`、`TEXTURE_RESOLUTION`
 - `effects/world/nether.glsl`（1）：`NETHER_BRIGHTNESS`
@@ -201,7 +201,7 @@ common/uniforms.glsl → common/math.glsl →（定义本程序所需选项的�
 - `effects/lighting/sunlight.glsl`（6）：`CAVE_MODE`、`COLD_MOONLIGHT`、`NOLIGHT_BRIGHTNESS`、`SKYLIGHT_INTENSITY`、`SUNLIGHT_INTENSITY`、`SUNLIGHT_LEAK_FIX`
 - `effects/clarity/upscale.glsl`（5）：`CAS_DENOISE`、`CAS_SHARPNESS`、`FSR`、`FSR_DENOISE`、`FSR_SHARPNESS`
 - `effects/ground/vegetation.glsl`（2）：`SHADOW_WAVING_PLANTS`、`WAVING_PLANTS`
-- `effects/water/water.glsl`（6）：`CAUSTICS`、`UNDERWATER_FOG`、`WATERFOG_DENSITY`、`WATER_PARALLAX`、`WAVE_HEIGHT`、`WAVE_SCALE`
+- `effects/water/water.glsl`（6）：`CAUSTICS`、`UNDERWATER_FOG`、`WATER_FOG_DENSITY`、`WATER_PARALLAX`、`WAVE_HEIGHT`、`WAVE_SCALE`
 - `effects/weather/weather.glsl`（9）：`DISABLE_LOCAL_PRECIPITATION`、`RAIN_DISTURBANCE`、`RAIN_SPLASH_EFFECT`、`RAIN_VISIBILITY`、`RAIN_WIND_X`、`RAIN_WIND_Z`、`SURFACE_WETNESS`、`drynessHalflife`、`wetnessHalflife`
 - `effects/world/world.glsl`（4）：`DH_TERRAIN_CULLING`、`DH_TEXTURE_NOISE`、`DH_TEXTURE_NOISE_STEPS`、`DH_TEXTURE_NOISE_STRENGTH`
 
@@ -227,7 +227,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 - 时间抗锯齿辅助函数（`clipAABB`、`RGB_To_YCoCg`、`SampleDepthFetch` 等）：主世界与下界版放 `effects/clarity/antialiasing.glsl`，用 `#ifdef OMNI_NETHER` 选择不同的部分。
 - `CalculateCameraVelocity`：放 `common/coordinates.glsl` 一份；各处实现不同时加后缀。
 - `AxialGaussianBlur`：泛光版留在 `effects/color/bloom.glsl`，云影模糊版改名 `CloudShadowAxialBlur` 放 `effects/cloud/cloud.glsl`。
-- `Calculate3DNoise`、`CalculateStars`：末地版留在 `effects/world/end.glsl` 并加 `End` 前缀，主世界版分别在 `effects/fog/fog.glsl`、`effects/sky/sky.glsl`。
+- `Calculate3DNoise`、`CalculateStars`：末地版加 `End` 前缀并拆到 `effects/world/end_disc.glsl`、`effects/world/end_sky.glsl`；主世界版分别在 `effects/fog/volumetric.glsl`、`effects/sky/sky.glsl`。
 - `NetherFog`、`ComputeFakeSkyReflection`、`RefractSampleOnce`、`TransparentAbsorption`：维度各自实现不同时，下界与末地版加 `Nether`、`End` 后缀，由己片负责。
 
 ## 十、分片与状态
@@ -292,7 +292,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 8. 旧管线测试跳过（已解决）：早期 `tests/` 里断言旧管线算法与缓冲的测试曾用 `@unittest.skip(PORT_REPLACED)` 标记；现已按新管线全部重写，`verify` 实跑 115 个测试、0 跳过。
 9. 旧算法专用选项的处置（由主助手统一裁决，分片只登记不擅自删除）：iterationT 用预计算大气贴图，旧 Omni 那种“实时积分步数/散射倍率”参数在新算法里没有对应含义。这类选项一律登记到本节清单，由主助手在庚片决定“并入同名迭代T选项 / 保留为中性额外功能 / 作为接口变更移除并写迁移说明”，不在分片里悄悄删除。
 10. 强光压缩选项表示（戊片）：iterationT `TONEMAP_OPERATOR` 是函数名取值的宏（`AgX`/`ACES`/`None`），而 `options.py` 只接受数字取值，所以 Omni 把它定义为序号 `0`/`1`/`2`，档位名称映射回 `AgX`/`ACES`/无，绘制主体用 `#if OMNI_TONEMAP_OPERATOR == 1` 分派。行为和默认值（`AgX`）与原程序一致，只改表示形式。
-11. `CalculateWaterCaustics` 同名不同实现（丁片）：iterationT 有两份同名函数，`Lib/BasicFounctions/Sunlight_Shadow.glsl` 的一份按九次采样算焦散遮罩，`Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 的一份只返回 `dist * 2.8 + 0.2`，两者内容不同。前者已在 `effects/shadow/shadow.glsl`，按第九点五节的处理方式把后者改名 `CalculateUnderwaterCaustics` 留在 `effects/fog/fog.glsl`，函数体不变；水下体积雾同时复用 `effects/shadow/shadow.glsl` 里内容相同的 `GetWavesNormalFromTex`，不重复定义。
+11. `CalculateWaterCaustics` 同名不同实现（丁片）：iterationT 有两份同名函数，`Lib/BasicFounctions/Sunlight_Shadow.glsl` 的一份按九次采样算焦散遮罩，`Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 的一份只返回 `dist * 2.8 + 0.2`，两者内容不同。前者已在 `effects/shadow/shadow.glsl`，按第九点五节的处理方式把后者改名 `CalculateUnderwaterCaustics` 留在 `effects/fog/underwater_fog.glsl`，函数体不变；水下体积雾同时复用 `effects/shadow/shadow.glsl` 里内容相同的 `GetWavesNormalFromTex`，不重复定义。
 12. `LANDSCATTERING_DISTANCE` 选项补记（丁片）：第九节 `effects/fog/fog.glsl` 的选项清单漏了这个名字，但 iterationT `Settings.glsl` 它有菜单范围且被 `LandAtmosphericScattering` 使用，所以按 `OMNI_LANDSCATTERING_DISTANCE` 正式登记，默认值与可选范围照 iterationT。
 13. 效果文件被多个程序共同引入，靠“只有某个程序引入它”区分阶段的做法不再成立。凡是依赖程序全局量（光色、光方向、像素坐标）的函数，改成参数传入或就地计算：`CalculateStars(+sunVector)`、`CloudShadowFromTex(+shadowLightVector)`、`WaterFog(+shadowVector, +colorShadowlight, +colorSkylight)`、`Rain(+colorShadowlight, +colorSkylight)`、`RefractSampleOnce(+screenCoordInput)`、`GetWavesNormalFromTex`/`CalculateWaterCaustics(+shadowLightVector)`、`ScreenSpaceShadow(+shadowVector)`、`DH_noise(+materialID)`。这样任何程序在任意阶段引入都能编译，行为不变。
 14. `common/noise.glsl` 用 `OMNI_PIXEL` 宏取像素坐标：片元阶段是 `gl_FragCoord.xy`，顶点、几何与计算阶段取零。三个噪声函数因此在各阶段都能编译；顶点阶段本来不调用它们，输出不变。
@@ -336,9 +336,9 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
     未验证：图标的位置、大小与淡出节奏只按原程序一比一移植，游戏内画面尚未实机确认。
     2026-10-17 确认：`effects/lens/title.glsl` 现有 `TitleExposure`（:35）、`TitleCounter`（:42）、`TitleCard`（:49）、`TitleLogo`（:87）、`UpdateTitleCounter`（:101）五个函数；选项 `OMNI_TITLE`（:25）默认开；在 `rendering/post.glsl` 合成八号调用（`TitleLogo` 写 `bloomGuide`、`UpdateTitleCounter` 累加 `(20,H-1)` 计数像素），贴图绑定在 `rendering/pipeline.properties` 的 `texture.composite.omniTitleTex`。行为与 iterationT 默认画面一致。
 
-38. 九号画面新增为方块编号与生物群系缓冲（Eclipse 程序化草需要）：iterationT 只用零到八号画面，Omni 为程序化草新增九号 `RGBA8`、不清除，登记在 `rendering/buffers.glsl:54` 与 `:69`。只有主世界地形片元写（`rendering/terrain.glsl:756`）、草几何阶段读（`terrain.glsl:331-334`）；`OMNI_SHADER_GRASS` 默认关时整条通路不编译，画面与 iterationT 一致。这是为 Eclipse 额外功能扩展的缓冲协议，第四节表格已同步补记。
+38. 九号画面新增为方块编号与生物群系缓冲（Eclipse 程序化草需要）：iterationT 只用零到八号画面，Omni 为程序化草新增九号 `RGBA8`、不清除，登记在 `rendering/buffers.glsl:54` 与 `:69`。只有主世界地形片元写（`effects/ground/terrain_surface.glsl` 的九号写出）、草几何阶段读（`effects/ground/grass_geometry.glsl` 的隔壁查询）；`OMNI_SHADER_GRASS` 默认关时整条通路不编译，画面与 iterationT 一致。这是为 Eclipse 额外功能扩展的缓冲协议，第四节表格已同步补记。
 39. 程序化草没有细分着色器：Eclipse 的草用 `.tcs`/`.tes` 细分阶段（`dimensions/all_solid.tcs`、`.tes`），Omni 的入口生成器不产出细分阶段，草叶改在几何阶段直接生成、数量精简（`effects/ground/grass.glsl:11-13`）。默认关，不影响 iterationT 默认画面。
-40. 末地涡旋雾未搬吸收率与 `colortex4` 随机缓冲驱动的雾中闪电：`effects/world/end.glsl` 的 `EndVortexFog`（`:653`）用 `OMNI_SUNLIGHT_INTENSITY` 与量级对齐系数（`:698`）代替 Eclipse `lib/end_fog.glsl` 的吸收链路，游戏内未校准；默认关。
+40. 末地涡旋雾未搬吸收率与 `colortex4` 随机缓冲驱动的雾中闪电：`effects/world/end_fog.glsl` 的 `EndVortexFog`（`:96`）用 `OMNI_SUNLIGHT_INTENSITY` 与量级对齐系数（`:141`）代替 Eclipse `lib/end_fog.glsl` 的吸收链路，游戏内未校准；默认关。
 41. 行星曲率只接在顶点阶段的一部分：`effects/world/planet.glsl` 的 `omniPlanetCurvatureDrop`（`:37`）与 `omniPlanetCurvatureView`（`:49`/`:55`）已接地形、实体、水面、阴影、远景、粒子、覆盖层与雨雪，但水下手持未接；默认关。
 42. 每日天气表放在 GLSL 常量数组而非约一百项菜单选项：`effects/weather/dailyweather.glsl` 的 `OMNI_WEATHER_COVERAGE/DENSITY/FOG`（`:60/73/87`），玩家只有总开关、随机与周期三项；默认关。
 43. 玩家交互水面用近似：`effects/water/playerwater.glsl` 的 `PlayerWaterRipple`（`:32`）用相机位置与时间相位近似入水位置与时刻，得到持续外扩涟漪，不是 Eclipse 的网格模拟（`lib/oceans.glsl` 的 `physics_waveHeight`）；默认关。
@@ -351,6 +351,11 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
     `CalculateSunlightColors`（`effects/lighting/sunlight.glsl`，本项目已内联进 `rendering/lights.glsl`）、
     `PrintFloat`/`PrintUintBinary`/`SevenSegment`/`DecimalPoint`（`effects/dev/debug.glsl`）。这些在 iterationT 的 `main` 里也没有被调用，
     按项目规范「不留死代码」删除，默认画面不受影响；`DHTerrainCulling` 属另一情况，已改由 `rendering/distant.glsl` 调用，不再内联重复。
+47. 长文件按效果拆分（内部结构，不改画面）：`effects/fog/fog.glsl`（原 796 行）拆成入口 `fog.glsl` 加 `tod_fog.glsl`、`volumetric.glsl`、
+    `landscattering.glsl`、`cave_border_fog.glsl`、`vanilla_fog.glsl`、`underwater_fog.glsl`；`effects/world/end.glsl`（原 831 行）拆成入口
+    加 `end_sky.glsl`、`end_disc.glsl`、`end_fog.glsl`、`end_island_light.glsl`、`end_reflection.glsl`；`rendering/terrain.glsl`（原 767 行）只留
+    顶点、几何、片元三个阶段的入口结构与输入输出，算法体搬到 `effects/ground/terrain_surface.glsl` 与 `effects/ground/grass_geometry.glsl`。
+    入口集中定义本效果的选项与内部常数，分文件按来源用同一顺序引入，`#include` 语义与拆分前逐段一致，默认画面与算法不变。
 
 ### 已裁决：旧选项的处置（2026-10-16）
 
@@ -369,8 +374,9 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 | `OMNI_MATERIAL_DETAIL` | `OMNI_ENABLE_PBR` |
 | `OMNI_VEGETATION_WIND` | `OMNI_WAVING_PLANTS` |
 | `OMNI_RAIN_WIND` | `OMNI_RAIN_WIND_X`（并新增 `OMNI_RAIN_WIND_Z`） |
-| `OMNI_NETHER_FOG_DENSITY` | `OMNI_NETHERFOG_DENSITY` |
-| `OMNI_UNDERWATER_DENSITY` | `OMNI_WATERFOG_DENSITY` |
+| `OMNI_NETHERFOG_DENSITY` | `OMNI_NETHER_FOG_DENSITY`（补全单词分隔，与 `VFOG` 一系写法统一） |
+| `OMNI_WATERFOG_DENSITY` | `OMNI_WATER_FOG_DENSITY`（同上） |
+| `OMNI_UNDERWATER_DENSITY` | `OMNI_WATER_FOG_DENSITY` |
 | `OMNI_VFOG_STEPS` | `OMNI_VFOG_QUALITY` |
 | `OMNI_AA_ENABLED` | `OMNI_TAA` |
 | `OMNI_TAA_WEIGHT` | `OMNI_TAA_BLENDWEIGHT` |

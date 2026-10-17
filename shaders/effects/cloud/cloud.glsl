@@ -335,6 +335,7 @@ void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 wind
 #if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS
 void NubisExtraLayers(inout vec3 color, vec3 worldDir, vec3 windDirection, vec3 camera, vec2 noise, bool intersectsGround, inout float cloudTransmittance){
 	#ifdef OMNI_CLOUD_CUMULONIMBUS // 积雨云：高耸的雷暴云，最先叠在基础云之上。
+		// 为什么不受每日天气影响：Eclipse 的积雨云由雷暴强度与固定密度驱动，每日天气表没有它，所以这里只取积雨云自己的选项。
 		vec2 cumulonimbusAltitude = vec2(OMNI_CLOUD_CUMULONIMBUS_ALTITUDE); // 底部高度。
 		cumulonimbusAltitude.y += OMNI_CLOUD_CUMULONIMBUS_THICKNESS; // 顶部高度。
 		if ((cameraPosition.y > cumulonimbusAltitude.x || !intersectsGround) && (cameraPosition.y < cumulonimbusAltitude.y || worldDir.y < 0.0)){ // 与基础体积云同一可见判据。
@@ -481,6 +482,7 @@ float GetPlanarCloudsLightingDensity(vec2 position, vec2 windDirection){
 }
 // 平面云：视线与云平面求一次交点，再沿光方向叠几层光照密度估遮挡。
 // 调用前提：`color` 已算好天空颜色（会被就地修改），`cloudTransmittance` 是体积云留下的透过率。
+// 为什么不受每日天气影响：平面云是 iterationT 独有的层，Eclipse 的每日天气表没有它，所以这里只读 `OMNI_PLANAR_*`。
 void PlanarClouds(inout vec3 color, vec3 worldDir, vec3 camera, float dither, float cloudTransmittance){
 	float planetRadius = atmosphereModel_bottom_radius * 1e3; // 行星半径从大气常数换成米。
 	vec3 rayStartPos = vec3(0.0, planetRadius + cameraPosition.y, 0.0); // 相机在行星球上的位置。

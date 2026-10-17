@@ -32,7 +32,7 @@
 #include "/common/math.glsl"
 #include "/effects/clarity/antialiasing.glsl"
 #include "/common/coordinates.glsl"
-// 合并泛光要读水雾密度 `OMNI_WATERFOG_DENSITY`（定义在 `effects/water/water.glsl`），这里引入它的归属文件。
+// 合并泛光要读水雾密度 `OMNI_WATER_FOG_DENSITY`（定义在 `effects/water/water.glsl`），这里引入它的归属文件。
 #include "/effects/water/water.glsl"
 // 合并泛光用失明与黑暗的调试开关 `OMNI_DISABLE_BLINDNESS_DARKNESS`，它的归属文件是颜色效果，这里引入才拿到定义。
 #include "/effects/color/color.glsl"
@@ -146,7 +146,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 	biomeOffset +=		 BiomeWarpedForestSmooth * 0.25; // 诡异森林群系系数。
 	biomeOffset +=		 BiomeBasaltDeltasSmooth * 0.5; // 玄武岩三角洲群系系数。
 	biomeOffset = biomeOffset * OMNI_NETHER_END_BLOOM_BOOST + 1.0; // 乘增强选项。
-	float fogDensity = 0.008 * biomeOffset * OMNI_NETHER_END_BLOOM_BOOST * OMNI_NETHERFOG_DENSITY; // 雾越浓光晕越强。
+	float fogDensity = 0.008 * biomeOffset * OMNI_NETHER_END_BLOOM_BOOST * OMNI_NETHER_FOG_DENSITY; // 雾越浓光晕越强。
 	if (isEyeInWater > 1) fogDensity = 0.7; // 在岩浆或细雪里雾最浓。
 	float visibility = 1.0 / exp2(linearDepth * fogDensity); // 距离越远可见度越低。
 	float fogFactor = 1.1 - visibility; // 把可见度翻成雾的占比。
@@ -155,7 +155,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 #else // 主世界与末地按水和雨的雾调整。
 	float fogDensity = float(isEyeInWater > 1) * 0.7; // 岩浆或细雪里雾浓。
 	#ifdef OMNI_UNDERWATER_FOG // 开水下雾时水里也加光晕。
-		fogDensity = float(isEyeInWater == 1) * 0.07 * OMNI_WATERFOG_DENSITY; // 水下雾的浓度由选项控制。
+		fogDensity = float(isEyeInWater == 1) * 0.07 * OMNI_WATER_FOG_DENSITY; // 水下雾的浓度由选项控制。
 	#endif
 	float visibility = 1.0 / exp2(linearDepth * fogDensity); // 距离越远可见度越低。
 	float fogFactor = 1.1 - visibility; // 把可见度翻成雾的占比。

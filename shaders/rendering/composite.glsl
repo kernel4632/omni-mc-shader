@@ -49,7 +49,7 @@
 layout(location = 0) out vec4 compositeOutput1; // 一号画面：场景曲线编码颜色。
 #if defined OMNI_NETHER // 下界：没有太阳，光照来自 `NetherLighting` 与雾色（来自 `world-1/composite.fsh`）。
 uniform sampler2D shadowtex1; // 阴影实心图，下界当普通深度贴图。
-// 雾文件带入水面、阴影、天空、云与光照，并提供 `OMNI_NETHERFOG_DENSITY`。
+// 雾文件带入水面、阴影、天空、云与光照，并提供 `OMNI_NETHER_FOG_DENSITY`。
 #include "/effects/fog/fog.glsl"
 // 下界配色与光照 `NetherLighting`、`NetherFogColor`。
 #include "/effects/world/nether.glsl"
@@ -108,7 +108,7 @@ in float shadowHighlightStrength; // 顶点阶段算出的高光提示强度，�
 uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴图读取。
 // 维度决定反射里的天空回退与雾由谁提供，效果文件按分支引入后再引入反射文件。
 #if defined OMNI_NETHER // 下界。
-	// 雾文件提供 `OMNI_NETHERFOG_DENSITY`，下界文件提供 `NetherFog` 与 `NetherFogColor`。
+	// 雾文件提供 `OMNI_NETHER_FOG_DENSITY`，下界文件提供 `NetherFog` 与 `NetherFogColor`。
 	#include "/effects/fog/fog.glsl"
 	#include "/effects/world/nether.glsl"
 #elif defined OMNI_END // 末地。

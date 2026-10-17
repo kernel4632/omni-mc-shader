@@ -7,7 +7,9 @@
   二、天气表：十天为一行，每天四层云的覆盖度与密度，加两项雾密度，数值照 Eclipse 默认；
   三、选取：按 `worldDay` 取当天那一行，或按哈希在十天里随机取一行。
 调用位置：本文件对外只暴露一组取值函数，由绘制主体按需调用；
-  云量：`effects/cloud/cloud.glsl` 在基础云与各附加层里读 `omniWeatherCoverage` 与 `omniWeatherDensity`，用当天值替换默认云量；
+  云量：`effects/cloud/cloud.glsl` 的基础体积云读 `l0`/`l1`、高层云读 `l2`、卷云读 `l3`，用当天值替换默认云量；
+  平面云与积雨云不受本表影响：Eclipse 的每日天气表只有四层体积云，平面云是 iterationT 独有的层，
+  积雨云在 Eclipse 里由雷暴强度 `thunderStrength` 与固定密度驱动，两处都没有接每日天气的来源；
   雾：`effects/fog/fog.glsl` 的 `FogDensityScale` 读 `omniWeatherFog`，把当天匀雾与云雾密度接进体积雾密度标度；
   `effects/weather/storm.glsl` 也引入它，只用当天匀雾补暴风雾；暴风时段体积雾密度标度会让位，避免同一项叠加两次。
 可复制示例：
@@ -21,6 +23,9 @@
      这里改成十天各一行的常量数组，只留三个开关型选项，数值仍照搬 Eclipse 默认，便于维护与逐行对照。
   三、不跨帧平滑。Eclipse 把选出的值存进场景控制器缓冲并逐帧插值；本项目没有这套缓冲，
      这里每个游戏日直接取当天一行，只在换日那一刻瞬间切换，其余时间稳定。
+  四、覆盖范围与 Eclipse 一致。Eclipse 的每日天气表只驱动四层体积云（小积云、大积云、高层云、卷云），
+     本项目据此只接进基础体积云、高层云与卷云；平面云是 iterationT 独有的层，积雨云在 Eclipse 里由雷暴驱动，
+     两者都不接每日天气，避免在没有对照来源的情况下凭空编一层。
 与同文件夹其它效果的衔接：
   季节 `effects/weather/season.glsl` 管一年尺度的植被换色，本文件管一天尺度的云与雾，两者都按 `worldDay` 走但不互相覆盖；
   雪暴与沙暴 `effects/weather/storm.glsl` 是单独的开关型天气，本文件为它提供当天的匀雾密度，也为云与体积雾提供当天数值；

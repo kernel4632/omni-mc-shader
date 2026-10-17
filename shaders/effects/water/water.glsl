@@ -1,7 +1,7 @@
 /*
 水面：把 iterationT 的波浪、海洋物理波、雨点涟漪、水下雾、折射与彩色玻璃吸收集中到一个文件。
 职责分成四块：
-  一、选项：`OMNI_WAVE_SCALE`、`OMNI_WAVE_HEIGHT`、`OMNI_WATER_PARALLAX`、`OMNI_UNDERWATER_FOG`、`OMNI_WATERFOG_DENSITY`、`OMNI_CAUSTICS`、
+  一、选项：`OMNI_WAVE_SCALE`、`OMNI_WAVE_HEIGHT`、`OMNI_WATER_PARALLAX`、`OMNI_UNDERWATER_FOG`、`OMNI_WATER_FOG_DENSITY`、`OMNI_CAUSTICS`、
     雨点涟漪范围 `OMNI_PUDDLE_MODE`（照 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`，默认与原来一致），
     以及玩家交互水面 `OMNI_PLAYER_WATER` 与其强度 `OMNI_PLAYER_WATER_STRENGTH`，全项目只在这里定义一次；
   二、波浪：`GetWaves`、`GetWavesNormal`、`GetWaterParallaxCoord` 用噪声贴图叠多层正弦，算出波高、波法线与视差坐标；
@@ -41,10 +41,10 @@
 // @option {"label":{"zh_cn":"水下雾","en_us":"Underwater fog"},"description":{"zh_cn":"在水下或隔着水看远处时叠加雾；关闭后水更通透。","en_us":"Adds fog when underwater or looking through water; off makes the water clearer."}}
 #define OMNI_UNDERWATER_FOG
 // @option {"label":{"zh_cn":"水雾密度","en_us":"Water fog density"},"description":{"zh_cn":"水下与水后雾的浓度；调大看得更近。","en_us":"Density of underwater and through-water fog; larger reduces visibility."},"slider":true}
-#define OMNI_WATERFOG_DENSITY 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+#define OMNI_WATER_FOG_DENSITY 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label":{"zh_cn":"水面焦散","en_us":"Water caustics"},"description":{"zh_cn":"阳光透过波动水面在水底汇聚出的亮纹。","en_us":"Bright patterns where sunlight focuses through the rippling water onto the bottom."}}
 #define OMNI_CAUSTICS
-// @option {"label":{"zh_cn":"水洼与涟漪范围","en_us":"Puddles & ripples"},"description":{"zh_cn":"雨点涟漪出现的位置：整个湿表面均匀铺满，还是只在低洼积水处出现。默认与原来一致。来源 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`。","en_us":"Where rain ripples appear: evenly over the whole wet surface, or only in low-lying puddles. Default matches the previous behaviour. From Eclipse `lib/settings.glsl:359` `PUDDLE_MODE`."},"values":{"0":{"zh_cn":"无雨点","en_us":"Off"},"1":{"zh_cn":"水洼与全湿润","en_us":"Puddles + fully wet"},"2":{"zh_cn":"仅水洼","en_us":"Only puddles"},"3":{"zh_cn":"仅全湿润","en_us":"Only fully wet"}}}
+// @option {"label":{"zh_cn":"水洼与涟漪范围","en_us":"Puddles & ripples"},"description":{"zh_cn":"雨点涟漪出现的位置：整个湿表面均匀铺满，还是只在低洼积水处出现。「仅水洼」还会按「水洼尺寸」决定水洼范围，并让水洼表面更光滑更暗（照 Eclipse 的 `applyPuddles`）。默认与原来一致。来源 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`。","en_us":"Where rain ripples appear: evenly over the whole wet surface, or only in low-lying puddles. \"Only puddles\" also uses \"Puddle size\" to shape the puddles and makes their surface smoother and darker (Eclipse's applyPuddles). Default matches the previous behaviour. From Eclipse `lib/settings.glsl:359` `PUDDLE_MODE`."},"values":{"0":{"zh_cn":"无雨点","en_us":"Off"},"1":{"zh_cn":"水洼与全湿润","en_us":"Puddles + fully wet"},"2":{"zh_cn":"仅水洼","en_us":"Only puddles"},"3":{"zh_cn":"仅全湿润","en_us":"Only fully wet"}}}
 #define OMNI_PUDDLE_MODE 1 // [0 1 2 3]
 // @option {"label":{"zh_cn":"玩家交互水面","en_us":"Player water interaction"},"description":{"zh_cn":"玩家在水里移动时，水面从玩家处向外推出一圈圈涟漪。默认关闭；Eclipse 默认用波浪模拟，本项目未移植那套计算着色器方案。来源 Eclipse `dimensions/all_translucent.fsh` 的 `WATER_INTERACTION == 1`。","en_us":"Ripples spread out from the player across the water surface while moving in water. Off by default; Eclipse defaults to its wave-simulation mode, whose compute-shader pipeline is not ported here. From Eclipse `dimensions/all_translucent.fsh` `WATER_INTERACTION == 1`."},"values":{"0":{"zh_cn":"关闭","en_us":"Off"},"1":{"zh_cn":"简单涟漪","en_us":"Simple ripples"}}}
 #define OMNI_PLAYER_WATER 0 // [0 1]
@@ -59,7 +59,7 @@
 #include "/effects/weather/weather.glsl"
 // 玩家交互水面：玩家在水里移动时带起的一圈圈涟漪，独立成文件让水面文件保持聚焦。
 #include "/effects/water/playerwater.glsl"
-// 水洼尺寸：提供 `OmniPuddleCoverage`，雨点涟漪在「仅水洼」模式按它算水洼覆盖；默认取值不额外改画面。
+// 水洼：提供 `OmniPuddleCoverage`（雨点涟漪与合成阶段的水洼覆盖）、`OmniPuddleRoughness` 与 `OmniPuddleSurface`；默认取值不额外改画面。
 #include "/effects/water/puddle.glsl"
 
 // --- 波浪：多层噪声正弦叠成起伏 ---
@@ -466,13 +466,13 @@ void WaterFog(inout vec3 color, vec3 viewDir, float opaqueDist, float waterDist,
 	}
 
 	float fogDensity = isEyeInWater == 0 ? 0.29 : mask.ice * 0.96 + 0.04; // 基础雾密度，冰下更浓。
-	float visibility = exp2(-waterDist * fogDensity * OMNI_WATERFOG_DENSITY); // 按密度指数衰减得到可见度。
+	float visibility = exp2(-waterDist * fogDensity * OMNI_WATER_FOG_DENSITY); // 按密度指数衰减得到可见度。
 
 	visibility = clamp(visibility, 0.35 * mask.ice, 1.0); // 冰下留一个最低可见度。
 	visibility = mix(visibility, 0.7, mask.hand); // 手持物只受七成雾影响，避免手被糊掉。
 
 	vec3 attenuationColor = isEyeInWater == 0 ? vec3(0.2, 0.5, 0.7) : vec3(0.1, 0.6, 1.0); // 分波段衰减色，水下偏蓝。
-	color *= pow(attenuationColor * 0.99, vec3(waterDist * (0.21 * float(isEyeInWater == 0) + 0.04) * OMNI_WATERFOG_DENSITY)); // 红衰减最快，蓝最慢。
+	color *= pow(attenuationColor * 0.99, vec3(waterDist * (0.21 * float(isEyeInWater == 0) + 0.04) * OMNI_WATER_FOG_DENSITY)); // 红衰减最快，蓝最慢。
 
 	color = mix(waterFogColor, color, visibility); // 用可见度在雾色与场景色之间混合。
 }

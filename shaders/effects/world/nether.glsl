@@ -12,20 +12,22 @@
 可复制示例：
   `finalComposite += NetherLighting() * (worldNormal.y * 0.25 + 1.0);`
   `finalComposite *= mix(vec3(1.0), NetherFogColor().rgb, gbuffer.material.metalness * 0.7);`
-  `color += NetherFog(waterDist);`
+  `vec4 netherFog = NetherFog(waterDist); color = color * netherFog.a + netherFog.rgb;`  取回的 `a` 是透射率，先压暗背景再叠散射
 调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明或先引入）：
   五个群系平滑量 `BiomeNetherWastesSmooth`、`BiomeSoulSandValleySmooth`、`BiomeCrimsonForestSmooth`、
   `BiomeWarpedForestSmooth`、`BiomeBasaltDeltasSmooth` 由本文件声明，加载器按 `rendering/pipeline.properties` 每帧填好；
-  `OMNI_NETHERFOG_DENSITY` 由 `effects/fog/fog.glsl` 提供，绘制主体必须先引入它，本文件不重复定义；
+  `OMNI_NETHER_FOG_DENSITY` 由 `effects/fog/fog.glsl` 提供，绘制主体必须先引入它，本文件不重复定义；
   体积雾需要 `texCoord`、`gbufferModelViewInverse`、`cameraPosition`、`far`、`frameTimeCounter`、`noisetex`
   与 `ViewPos_From_ScreenPos`，它们来自合成共享声明 `rendering/composite_shared.glsl` 与共用数学，只有片元阶段存在；
   打开时间抗锯齿时体积雾还会用到 `BlueNoiseTemporal`，由 `common/noise.glsl` 提供。
 关键设计原因与取舍：
   原程序把下界光照与雾色写成两个函数，都返回「当前群系混合后的颜色」，本文件保持同样的形状；
   `NetherFogColor` 的第四分量是雾密度，`NetherFog` 用它把远处压成雾色，所以它返回 `vec4` 而不是 `vec3`；
-  体积雾默认关闭，`NetherFog` 原有的解析雾公式在关闭时逐字不变，所以默认画面与原来完全一致；
-  Eclipse 的体积雾结果带透射率，要把场景乘暗，但它写在独立缓冲里由管线合成；Omni 下界雾是「加到颜色上」的通道，
-  在这里拿不到场景颜色，因此只取散射色叠加，透射率留给后续在合成阶段接入，见 `NetherVolumetricFog` 的说明。
+  体积雾默认关闭，`NetherFog(float)` 原有的解析雾公式在关闭时逐字不变，透射率记为一，所以默认画面与原来完全一致；
+  Eclipse 的体积雾结果带透射率，要把被雾挡住的背景乘暗；本项目没有它那张独立雾缓冲，改为把透射率沿函数返回值带回，
+  `NetherFog(float)` 因此返回 `vec4`：`rgb` 是散射色、`a` 是剩余透射率，调用方按 `color = color * a + rgb` 合成；
+  `NetherFog(vec2)` 取的是反射射线的一段，唯一调用点在 `effects/reflection/reflection.glsl`（不在本次改动范围），
+  所以它仍返回 `vec3` 只叠加散射，透射率未接，见两个重载各自的说明。
 */
 #ifndef OMNI_NETHER_INCLUDED // 只引入一次，避免选项与群系量重复定义。
 #define OMNI_NETHER_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -69,7 +71,7 @@ vec4 NetherFogColor(){
 	fog +=		 vec4(0.200, 0.020, 0.000, 0.010) * BiomeCrimsonForestSmooth; // 绯红森林暗红。
 	fog +=		 vec4(0.030, 0.100, 0.130, 0.007) * BiomeWarpedForestSmooth; // 诡异森林暗青。
 	fog +=		 vec4(0.400, 0.400, 0.400, 0.014) * BiomeBasaltDeltasSmooth; // 玄武岩三角洲灰色、最浓。
-	return fog * vec4(vec3(OMNI_NETHER_BRIGHTNESS), OMNI_NETHERFOG_DENSITY); // 颜色乘亮度、密度乘雾浓度选项。
+	return fog * vec4(vec3(OMNI_NETHER_BRIGHTNESS), OMNI_NETHER_FOG_DENSITY); // 颜色乘亮度、密度乘雾浓度选项。
 }
 
 // --- 下界三段体积雾：Eclipse `lib/nether_fog.glsl` 的搬运，默认关闭 ---
@@ -190,6 +192,8 @@ vec4 NetherVolumetricFog(float startDist, float endDist, float ditherA, float di
 // --- 下界雾：两种调用形状 ---
 // 为什么两个重载：合成二号只关心反射射线的一段（起点到命中点），传两个距离；合成五号要整条视线的雾，传一个距离。
 // 名称保持原程序，两个文件里各有一份，这里按合同集中到一个文件，两处调用点都能用。
+// 为什么返回类型不同：`float` 重载要交回体积雾透射率给合成五号乘暗背景，所以返回 `vec4`；
+// `vec2` 重载的调用方在反射文件里只做 `reflection += ...`，本次不改那个文件，所以它保持 `vec3` 只叠加散射。
 vec3 NetherFog(vec2 dist){
 	dist = min(dist, vec2(far * 1.2)); // 距离封顶，远处不再变浓。
 
@@ -203,27 +207,30 @@ vec3 NetherFog(vec2 dist){
 
 	#ifdef OMNI_NETHER_VOLUMETRIC_FOG // 打开体积雾时，叠上这一段的三段体积雾散射。
 		float fogDither = NetherFogDither(); // 这一次的步进抖动。
-		fog += NetherVolumetricFog(dist.x, dist.y, fogDither, fogDither).rgb; // 只取散射色叠加，透射率留待合成阶段接入。
+		fog += NetherVolumetricFog(dist.x, dist.y, fogDither, fogDither).rgb; // 反射通道只叠加散射色，透射率由整条视线的重载接回，见文件头。
 	#endif
 
 	return fog; // 解析雾加可选体积雾。
 }
 
-vec3 NetherFog(float dist){
+vec4 NetherFog(float dist){
 	float fogDensity = NetherFogColor().w; // 雾密度来自下界雾色。
 	float fogFactor = 1.0 - exp2(-dist * fogDensity); // 视线距离的衰减。
 	fogFactor *= fogFactor; // 平方增强。
 
 	vec3 fogColor = NetherFogColor().xyz * 0.0125; // 雾色缩到合理量级。
 
-	vec3 fog = fogFactor * fogColor; // 整条视线的解析雾。
+	vec3 fog = fogFactor * fogColor; // 整条视线的解析雾，只加色不遮挡背景。
+	float transmittance = 1.0; // 剩余透射率，解析雾不遮挡，所以默认是一。
 
-	#ifdef OMNI_NETHER_VOLUMETRIC_FOG // 打开体积雾时，叠上整条视线的三段体积雾散射。
+	#ifdef OMNI_NETHER_VOLUMETRIC_FOG // 打开体积雾时，叠上整条视线的三段体积雾，并取回它的透射率。
 		float fogDither = NetherFogDither(); // 这一次的步进抖动。
-		fog += NetherVolumetricFog(0.0, dist, fogDither, fogDither).rgb; // 只取散射色叠加，透射率留待合成阶段接入。
+		vec4 volumetric = NetherVolumetricFog(0.0, dist, fogDither, fogDither); // 三段体积雾的散射色与剩余透射率。
+		fog += volumetric.rgb; // 散射色照旧叠加。
+		transmittance = volumetric.a; // 透射率交回合成阶段，让被雾挡住的远处背景真正变暗。
 	#endif
 
-	return fog; // 解析雾加可选体积雾。
+	return vec4(fog, transmittance); // rgb 是散射色、a 是剩余透射率，调用方按 `color * a + rgb` 使用。
 }
 
 // --- 下界水面折射：与主世界 `RefractSampleOnce` 形状不同，加 `Nether` 后缀区分 ---
@@ -266,7 +273,8 @@ void RefractSampleOnceNether(inout vec3 color, MaterialMask mask, vec3 normal, v
 
 	float rDist = max(length(ViewPos_From_ScreenPos(refractCoord, textureLod(depthtex1, refractCoord, 0.0).x)) - waterDist, 0.0); // 折射点到相机距离减去水面距离。
 
-	color += NetherFog(rDist) / MAIN_OUTPUT_FACTOR; // 补一段下界雾。
+	vec4 refractFog = NetherFog(rDist); // 折射点到相机之间那一段的下界雾散射与透射率。
+	color = color * refractFog.a + refractFog.rgb / MAIN_OUTPUT_FACTOR; // 先按透射率压暗折射背景，再叠雾散射，量级照旧换算。
 }
 
 // --- 下界彩色玻璃吸收：与主世界同名函数多一个参数不同，加 `Nether` 后缀区分 ---

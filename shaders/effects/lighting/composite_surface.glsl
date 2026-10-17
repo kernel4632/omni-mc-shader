@@ -72,6 +72,13 @@ void CompositeSurfaceLighting(){
 		vec3 worldDir = normalize(worldPos); // 世界方向。
 		vec3 worldNormal = mat3(gbufferModelViewInverse) * gbuffer.normalL; // 法线转到世界空间。
 
+		#if defined OMNI_ENABLE_PBR && OMNI_PUDDLE_MODE == 2 // 仅水洼模式：把 Eclipse `applyPuddles` 的水洼表面接到已解出的材质上。
+			// 手、玩家与各种实体不做水洼，照 Eclipse 的 `!hand && !entities`；水与冰在半透明层，不在这个分支里。
+			bool isPuddleBlocked = materialMaskSolid.hand + materialMaskSolid.entityPlayer + materialMaskSolid.entitiesLitHigh + materialMaskSolid.entitiesLitMedium + materialMaskSolid.entitiesLitLow + materialMaskSolid.entitiesSnow > 0.5; // 是否是要排除的实体面。
+			if (!isPuddleBlocked)
+				OmniPuddleSurface(gbuffer.albedo, gbuffer.material.roughness, gbuffer.material.f0, gbuffer.lightmapL.g, worldPos); // 用 `OMNI_PUDDLE_SIZE` 决定的水洼覆盖改写水洼表面的粗糙度与底色。
+		#endif // 默认模式一不执行，画面与原来一致。
+
 		#ifdef DISTANT_HORIZONS
 			float farDist = max(dhFarPlane, 1024.0); // 有远景时用远景远裁剪面。
 		#else
@@ -98,7 +105,7 @@ void CompositeSurfaceLighting(){
 		vec3 waterTint = vec3(1.0); // 水体染色，默认不染。
 
 		#ifdef OMNI_UNDERWATER_FOG
-			if (isEyeInWater == 1) waterTint = vec3(0.55, 0.75, 1.0) / max(3.0, opaqueDist * 0.1 * OMNI_WATERFOG_DENSITY); // 水下按距离与水雾密度染偏蓝。
+			if (isEyeInWater == 1) waterTint = vec3(0.55, 0.75, 1.0) / max(3.0, opaqueDist * 0.1 * OMNI_WATER_FOG_DENSITY); // 水下按距离与水雾密度染偏蓝。
 			sunlightMult *= waterTint; // 直射光同步染色。
 		#endif
 

@@ -14,14 +14,14 @@
   三、时间平滑的替代。Eclipse 用 Iris 自定义量 `smooth()` 对低血量与受击做时间平滑；本项目这一小步
     不能改 `rendering/pipeline.properties`，所以低血量改成对血量做平滑阶跃，受击没有血量历史，
     直接用 `is_hurt` 触发，且不再区分大伤小伤。这是已知的近似，过渡会比 Eclipse 稍硬。
-  四、仍近似与未移植的部分。着火热浪用 `is_burning` 直接触发，没有跨帧平滑，火焰跳动靠每像素噪声；
-    溺水按“在水下且血量低于低血量阈值”近似，因为 Iris 不提供氧气量；同一段原程序里的镜头发水
-    依赖 Eclipse 平滑过的入水与离水自定义量，本步不移植，留给后续单独小步。
+  四、仍近似的部分。着火热浪用 `is_burning` 直接触发，没有跨帧平滑，火焰跳动靠每像素噪声；
+    溺水按“在水下且血量低于低血量阈值”近似，因为 Iris 不提供氧气量；镜头发水单独成一个选项
+    `OMNI_WATER_ON_CAMERA`（默认关闭），用降雨湿润度、相机速度与是否在水下估算，原因见 `omniWaterOnCamera`。
 */
 #ifndef OMNI_HURT_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_HURT_INCLUDED // 置上标记，后续再次引用直接跳过。
 
-// @effect {"label":{"zh_cn":"受伤与低血量","en_us":"Hurt & low health"}}
+// @effect {"label":{"zh_cn":"受伤、血量与镜头发水","en_us":"Hurt, health & water on camera"}}
 // @option {"label":{"zh_cn":"受伤与低血量效果","en_us":"Hurt & low health effect"},"description":{"zh_cn":"受击闪红边、低血量染红心跳、死亡整屏暗红；默认关闭，关闭时画面与现在完全一致。来源 Eclipse `lib/gameplay_effects.glsl`。","en_us":"Red flash on hit, low-health red heartbeat and a dark red on death; off by default so the default look is unchanged. From Eclipse `lib/gameplay_effects.glsl`."}}
 //#define OMNI_HURT_EFFECT
 // @option {"label":{"zh_cn":"低血量红屏","en_us":"Low health red screen"},"description":{"zh_cn":"血量低时画面边缘染红并随心跳脉冲；默认开启，只有打开上面的总开关才生效。来源 Eclipse `LOW_HEALTH_EFFECT`。","en_us":"Red screen edges with a heartbeat pulse when health is low; on by default, only active when the master effect is enabled. From Eclipse `LOW_HEALTH_EFFECT`."}}
@@ -39,6 +39,11 @@
 // @option {"label":{"zh_cn":"溺水压暗","en_us":"Drowning darkening"},"description":{"zh_cn":"在水下且血量偏低时整屏偏蓝压暗；默认开启，只有打开总开关才生效。本项目拿不到氧气量，用“在水下且血量低于低血量阈值”近似，来源 Eclipse `DROWNING_EFFECT`。","en_us":"Bluish darkening while underwater at low health; on by default, only active when the master effect is enabled. Air level is unavailable here, so underwater plus low health is used as an approximation. From Eclipse `DROWNING_EFFECT`."}}
 #define OMNI_HURT_DROWNING
 
+// @option {"label":{"zh_cn":"镜头发水","en_us":"Water on camera"},"description":{"zh_cn":"下雨、快速移动或在水下时在镜头上挂水珠，水珠把画面轻微抖动并糊开；默认关闭。这是近似：Eclipse 的原始效果依赖跨帧平滑的入水与离水自定义量，本项目拿不到，改用降雨湿润度、相机速度与是否在水下估算。","en_us":"Droplets on the lens that wobble and blur the view when it rains, while moving fast or while the eye is in water; off by default. Approximation: Eclipse drives this from cross-frame smoothed enter and exit water amounts, unavailable here, so wetness, camera speed and the underwater state are combined instead."}}
+//#define OMNI_WATER_ON_CAMERA
+// @option {"label":{"zh_cn":"镜头发水强度","en_us":"Water on camera strength"},"slider":true,"description":{"zh_cn":"水珠折射与糊开的强度；默认一点零，只在上面的镜头发水开启时生效。","en_us":"Strength of the droplet refraction and blur; default 1.0, only used when water on camera is on."}}
+#define OMNI_WATER_ON_CAMERA_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0 3.0]
+
 // 加载器输入声明；调用方通常已先引入，这里再引入一次由守卫去重，保证单独引用也能编译。
 #include "/common/uniforms.glsl"
 // 共用数学：提供 `InterleavedGradientNoise`。
@@ -52,10 +57,36 @@ uniform bool is_hurt; // 玩家受击后短暂为真，对应原版的受击闪�
 uniform bool is_burning; // 玩家着火时为真；本文件是唯一的声明处，别处要用需自行引入。
 #endif
 
+// --- 镜头发水（近似） ---
+// 参数 `color` 是当前画面色、`texcoord` 是零到一的屏幕坐标；返回叠加水珠扰动后的画面色。
+// 为什么是近似：Eclipse 用跨帧平滑的入水 `enterWater` 与离水 `exitWater` 决定水珠的出现与消散，
+//   本项目这一步不能改绘制设置，拿不到这两个平滑量，改用降雨湿润度、相机速度与是否在水下估算。
+vec3 omniWaterOnCamera(vec3 color, vec2 texcoord){
+	#ifdef OMNI_WATER_ON_CAMERA // 只在开启镜头发水时展开，默认关闭时本函数原样返回画面。
+		float underWater = float(isEyeInWater == 1); // 眼睛在水下为一，用来给镜头挂一层水膜。
+		float speed = length(cameraPosition - previousCameraPosition) / max(frameTime, 1e-4); // 相机移动速度，单位米每秒；帧时为零时用极小值兜底，避免除零。
+		float motion = saturate(speed * 0.06); // 速度换算成零到一的晃动权重，约十六米每秒到顶；动得越快水珠抖得越厉害。
+		float wet = saturate(max(wetness, underWater * 0.7)); // 镜头湿度：下雨取湿润度，在水下再补一份，两者取较大。
+		vec2 dropUV = texcoord * vec2(aspectRatio, 1.0); // 水珠采样坐标先按宽高比校正，水珠才会是圆的而不是被横向拉长。
+		dropUV.y -= frameTimeCounter * (0.03 + 0.05 * motion); // 随时间向下滑动，移动越快滑得越快，模拟水珠在镜头上往下流。
+		float drops = texture(noisetex, dropUV).r; // 读共享蓝噪声当作水珠分布，复用现成贴图不新增资源。
+		drops = saturate(drops - (1.0 - wet) * 0.7) * wet; // 只有湿度够、噪声又超过阈值的地方才形成水珠，湿度越低水珠越少。
+		float mask = saturate(drops * OMNI_WATER_ON_CAMERA_STRENGTH) * (0.4 + 0.6 * motion); // 水珠折射强度：湿度决定有没有，速度决定抖多厉害。
+		float film = underWater * 0.15; // 水下水膜：眼睛在水下时额外给一层固定的轻微折射，代表镜头与眼睛之间的水。
+		vec2 zoomUV = 0.5 + (texcoord - 0.5) * (1.0 - (mask + film) * 0.5); // 以画面中心为轴把坐标向内收，水珠与水膜处产生折射抖动。
+		vec3 refracted = texture(colortex1, zoomUV).rgb; // 取折射后的画面色。
+		vec3 blurred = (refracted + texture(colortex1, zoomUV + vec2(pixelSize.x, 0.0)).rgb + texture(colortex1, zoomUV + vec2(0.0, pixelSize.y)).rgb) / 3.0; // 取三处相邻色做平均，近似水膜把画面糊开。
+		color = mix(color, mix(refracted, blurred, 0.5), saturate(mask * 3.0 + film)); // 水珠与水膜越强越偏向模糊折射，其余地方保持清晰。
+	#endif // 镜头发水开关结束。
+	return color; // 返回处理后的画面色。
+}
+
 // --- 受伤与低血量 ---
 // 参数 `color` 是当前最终画面色，`texcoord` 是零到一的屏幕坐标。
 // 返回处理后的画面色；效果关闭时原样返回，默认画面不变。
 vec3 omniHurtEffect(vec3 color, vec2 texcoord){
+	// 镜头发水先叠加：由独立选项 `OMNI_WATER_ON_CAMERA` 控制，不受受伤总开关影响。
+	color = omniWaterOnCamera(color, texcoord);
 #if defined OMNI_HURT_EFFECT && defined IS_IRIS // 开启效果且是 Iris 才展开，否则直接返回。
 	float absHealth = currentPlayerHealth * maxPlayerHealth; // 绝对血量，单位半颗心。
 	bool alive = currentPlayerHealth > -1.0; // 负一是创造或旁观，不是有效生存态。

@@ -12,7 +12,7 @@ import build  # 读取真实流程表、原生选项与编译器位置。
 import options  # 核对菜单分类与流程设置解析。
 import support  # 共享扫描、展开与效果原文缓存。
 
-DESCENDING_EDGES = {"end.glsl": "末地行星阴影与大气米散射用下降遮罩，照 iterationT 原样保留"}  # 允许反序阈值的文件，值写明原因。
+DESCENDING_EDGES = {"end.glsl": "末地行星阴影与大气米散射用下降遮罩，照 iterationT 原样保留", "end_sky.glsl": "末地大气米散射的下降遮罩随算法体拆到该文件，照 iterationT 原样保留"}  # 允许反序阈值的文件，值写明原因。
 
 
 class EffectTests(unittest.TestCase):
@@ -386,7 +386,7 @@ class EffectTests(unittest.TestCase):
         self.assertEqual(found["OMNI_VFOG"].values, ("false", "true"))  # 体积雾可开关。
         for name in ("OMNI_VFOG_QUALITY", "OMNI_VFOG_NOISE_TYPE", "OMNI_VFOG_DENSITY", "OMNI_VFOG_HEIGHT", "OMNI_VFOG_FALLOFF"):
             self.assertIn(name, found)  # 每个体积雾参数由雾源码定义。
-        fog = support.text("effects/fog/fog.glsl")  # 雾主体。
+        fog = support.text("effects/fog/volumetric.glsl")  # 体积雾主体。
         self.assertIn("VolumetricFog", fog)  # 体积雾独立成函数。
         self.assertIn("const float steps = OMNI_VFOG_QUALITY", fog)  # 步数来自选项。
         self.assertIn("OMNI_VFOG_FALLOFF", fog)  # 衰减参与高度密度。
@@ -396,7 +396,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         self.assertEqual(found["OMNI_UNDERWATER_VFOG"].values, ("false", "true"))  # 水下体积雾可开关。
         self.assertIn("OMNI_UNDERWATER_VFOG_DENSITY", found)  # 浓度可调。
-        fog = support.text("effects/fog/fog.glsl")  # 雾主体。
+        fog = support.text("effects/fog/underwater_fog.glsl")  # 水下体积雾主体。
         self.assertIn("UnderwaterVolumetricFog", fog)  # 水下体积雾独立成函数。
         self.assertIn("OMNI_UNDERWATER_VFOG_DENSITY", fog)  # 浓度参与散射。
         self.assertIn("#ifdef OMNI_UNDERWATER_VFOG", support.text("effects/reflection/reflection.glsl"))  # 反射路径按选项叠加水下光柱。
@@ -406,7 +406,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_LANDSCATTERING", "OMNI_LANDSCATTERING_STRENGTH", "OMNI_LANDSCATTERING_DISTANCE", "OMNI_INDOOR_FOG"):
             self.assertIn(name, found)  # 每个雾参数由雾源码定义。
-        fog = support.text("effects/fog/fog.glsl")  # 雾主体。
+        fog = support.text("effects/fog/landscattering.glsl")  # 地面大气散射主体。
         self.assertIn("LandAtmosphericScattering", fog)  # 地表散射独立成函数。
         self.assertIn("OMNI_LANDSCATTERING_DISTANCE", fog)  # 距离参与散射。
 
@@ -424,7 +424,7 @@ class EffectTests(unittest.TestCase):
     def test_water_optics_and_caustics(self):
         """水体吸收、透射与焦散都可调，水下雾复用同一份水体吸收。"""
         found, _, _ = support.configuration()  # 真实选项。
-        for name in ("OMNI_UNDERWATER_FOG", "OMNI_WATERFOG_DENSITY", "OMNI_CAUSTICS", "OMNI_PUDDLE_MODE"):
+        for name in ("OMNI_UNDERWATER_FOG", "OMNI_WATER_FOG_DENSITY", "OMNI_CAUSTICS", "OMNI_PUDDLE_MODE"):
             self.assertIn(name, found)  # 每个水参数由水源码定义。
         water = support.text("effects/water/water.glsl")  # 水主体。
         self.assertIn("WaterFog", water)  # 水下水雾独立成函数。
@@ -607,7 +607,7 @@ class EffectTests(unittest.TestCase):
         snow = support.text("effects/weather/snow.glsl")  # 积雪主体。
         self.assertIn("omniSnowOverlay", snow)  # 积雪独立成函数。
         self.assertIn("#ifdef OMNI_SNOW_OVERLAY", snow)  # 关闭时不增加代码。
-        self.assertIn("#ifdef OMNI_SNOW_OVERLAY", support.text("rendering/terrain.glsl"))  # 地形按开关调用。
+        self.assertIn("#ifdef OMNI_SNOW_OVERLAY", support.text("effects/ground/terrain_surface.glsl"))  # 地形片元主函数体按开关调用。
 
     def test_entity_status_and_hand_fov(self):
         """实体状态色与眼部光照可开关，手持物视野模式与角度可调。"""
@@ -643,10 +643,10 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_END_PLANET_CYCLE", "OMNI_END_MANUAL_PLANET_ANGLE", "OMNI_END_ISLAND_LIGHT", "OMNI_END_FOG_STORM_DENSITY", "OMNI_END_FOG_HAZE_DENSITY"):
             self.assertIn(name, found)  # 每个末地参数由末地源码定义。
-        end = support.text("effects/world/end.glsl")  # 末地主体。
-        self.assertIn("PlanetEnd2", end)  # 末地行星独立成函数。
-        self.assertIn("EndFog", end)  # 末地雾独立成函数。
-        self.assertIn("EndCalculateStars", end)  # 末地星空使用带 `End` 前缀的函数名。
+        end_sky = support.text("effects/world/end_sky.glsl")  # 末地星空与行星主体。
+        self.assertIn("PlanetEnd2", end_sky)  # 末地行星独立成函数。
+        self.assertIn("EndCalculateStars", end_sky)  # 末地星空使用带 `End` 前缀的函数名。
+        self.assertIn("EndFog", support.text("effects/world/end_fog.glsl"))  # 末地雾独立成函数。
         self.assertIn("PlanetEnd2", support.text("effects/lighting/composite_surface_end.glsl"))  # 合成零号的末地变体调用末地行星。
 
     def test_debug_view_and_profiler(self):

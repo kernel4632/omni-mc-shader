@@ -51,8 +51,9 @@ OPTION_RENAMES = {  # 保留历史名称对照；旧配置按新名迁移，移�
     "OMNI_MATERIAL_DETAIL": "OMNI_ENABLE_PBR",  # 旧名迁移到新名。
     "OMNI_VEGETATION_WIND": "OMNI_WAVING_PLANTS",  # 旧名迁移到新名。
     "OMNI_RAIN_WIND": "OMNI_RAIN_WIND_X",  # 旧名迁移到新名。
-    "OMNI_NETHER_FOG_DENSITY": "OMNI_NETHERFOG_DENSITY",  # 旧名迁移到新名。
-    "OMNI_UNDERWATER_DENSITY": "OMNI_WATERFOG_DENSITY",  # 旧名迁移到新名。
+    "OMNI_NETHERFOG_DENSITY": "OMNI_NETHER_FOG_DENSITY",  # 旧名迁移到新名：补全单词分隔，与 `VFOG` 一系写法统一。
+    "OMNI_WATERFOG_DENSITY": "OMNI_WATER_FOG_DENSITY",  # 旧名迁移到新名：同上。
+    "OMNI_UNDERWATER_DENSITY": "OMNI_WATER_FOG_DENSITY",  # 旧名迁移到新名。
     "OMNI_VFOG_STEPS": "OMNI_VFOG_QUALITY",  # 旧名迁移到新名。
     "OMNI_AA_ENABLED": "OMNI_TAA",  # 旧名迁移到新名。
     "OMNI_TAA_WEIGHT": "OMNI_TAA_BLENDWEIGHT",  # 旧名迁移到新名。
@@ -539,11 +540,29 @@ def shared(source: Path, found: dict[str, Option], shader_version: str, legacy: 
     changes = data["values"]  # 分享数据进入已检查的选项边界。
     if data["schemaVersion"] == 1 and any(name != "OMNI_DEBUG_VIEW" or value not in ("0", "1", "2") for name, value in changes.items()):
         raise ValueError("旧版配置只能包含原有调试视图；当前选项请按当前格式导入")  # 不把当前水云等选项伪装成旧接口。
+    changes = rename(changes)  # 旧名先按对照表迁移，玩家改过名的设置不丢，改过名又写错才在这里报错。
     for name, value in changes.items():  # 逐项报告未知名称与非法取值，不把拼写错误当成缺省值。
         if name not in found or not isinstance(value, str) or value not in found[name].values:
             raise ValueError(f"未知选项或无效取值：{name}={value}")  # 静默忽略会让分享者误以为配置已完整生效。
     values = {name: changes.get(name, option.default) for name, option in found.items()}  # 缺少的当前选项补源码默认值，导入总是完整替换。
     return {"schemaVersion": SHARE_SCHEMA, "shaderVersion": shader_version, "values": values}  # 旧格式只升级结构，不臆测或重命名未知字段。
+
+
+def rename(values: dict[str, str]) -> dict[str, str]:
+    """把旧选项名按 `OPTION_RENAMES` 迁移到当前名，返回新字典。
+
+    输入边界：`values` 是外部配置里的键值，必须先检查是字典才能进来。
+    为什么单独成函数：导入路径与预设读取都要用同一份对照表，写两遍迟早会不一致。
+    行为：旧名出现就换名；新旧名同时出现直接报错，避免同一项出现两个互相矛盾的取值。
+    未知名字原样保留，交给后面的选项边界统一报错，不在这里静默丢弃。
+    """
+    result = {}  # 迁移后的键值。
+    for name, value in values.items():
+        current = OPTION_RENAMES.get(name, name)  # 没有登记的名字保持原样。
+        if current in result or (current != name and current in values):
+            raise ValueError(f"配置里同时给了旧名与新名：{name}、{current}")  # 两个来源冲突时不能替玩家猜哪个优先。
+        result[current] = value  # 旧名落到当前名下。
+    return result
 
 
 def _properties_share(source: Path, shader_version: str, legacy: bool) -> dict:

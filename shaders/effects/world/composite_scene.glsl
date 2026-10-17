@@ -72,7 +72,8 @@ void CompositeSceneColor(){
 			TorchSpecularHighlight(color, viewPos, viewDir, waterDist, gbuffer.albedo, gbuffer.normalW, gbuffer.material); // 手持光高光。
 	#endif
 
-	color += NetherFog(waterDist); // 下界整条视线的雾。
+	vec4 netherFog = NetherFog(waterDist); // 下界整条视线的雾散射与剩余透射率。
+	color = color * netherFog.a + netherFog.rgb; // 先按透射率把被雾挡住的背景压暗，再叠雾散射；体积雾关闭时透射率为一，画面不变。
 
 	VanillaFog(color, waterDist); // 原版雾、失明、黑暗、岩浆雪盲。
 
@@ -218,7 +219,7 @@ void CompositeSceneColor(){
 		RefractSampleOnce(color, materialMask, gbuffer.normalW, worldPos, viewPos, waterDist, opaqueDist, fogTimeFactor, globalCloudShadow, texCoord, texelCoord); // 水玻璃冰做折射。
 
 	float waterAbsorption = 1.0; // 水的吸收系数。
-	if (isEyeInWater == 1) waterAbsorption = saturate(exp2(-waterDist * 0.06 * OMNI_WATERFOG_DENSITY)); // 水下按距离算吸收。
+	if (isEyeInWater == 1) waterAbsorption = saturate(exp2(-waterDist * 0.06 * OMNI_WATER_FOG_DENSITY)); // 水下按距离算吸收。
 
 	if (materialMask.stainedGlass > 0.5)
 		TransparentAbsorption(color, gbuffer.albedoW, waterAbsorption); // 彩色玻璃吸收。

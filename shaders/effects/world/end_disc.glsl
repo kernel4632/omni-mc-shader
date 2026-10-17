@@ -1,0 +1,291 @@
+/*
+末地吸积盘：沿视线在黑洞附近步进，累加盘的颜色，附空间扭曲、云状分形噪声与旋转矩阵。
+来源：iterationT `Lib/IndividualFounctions/EndSky.glsl` 一比一移植，原程序在此处标注了出处网址
+  `www.shadertoy.com/view/lstSRS`，按合同保留来源注释与写法。
+职责：`RotateMatrix`、`WarpSpace`、`EndCalculate3DNoise`、`CalculateCloudFBM`、`pcurve` 是辅助计算，
+  `BlackHole_AccretionDisc_Stars` 画天空版吸积盘并叠星空，`BlackHole_AccretionDisc_Reflection` 是步数更少的反射版。
+调用位置：由 `effects/world/end.glsl` 引入；合成零号调用天空版，`ComputeFakeSkyReflectionEnd` 调用反射版。
+可复制示例：`BlackHole_AccretionDisc_Stars(finalComposite, worldDir, worldShadowVector);`
+调用前提：由 `effects/world/end.glsl` 引入，且已先引入 `effects/world/end_sky.glsl`（提供 `EndCalculateStars`）；
+  `noisetex`、`frameTimeCounter`、`Blackbody`、`BlueNoiseTemporal`、`InterleavedGradientNoise`、`OMNI_TAA`、
+  `OMNI_STAR_TYPE` 由绘制主体与共享文件提供。
+关键设计原因与取舍：`EndCalculate3DNoise` 加 `End` 前缀与主世界 `effects/fog/fog.glsl` 的同名函数区分；
+  吸积盘是屏幕空间积分，不改写几何。
+*/
+#ifndef OMNI_END_DISC_INCLUDED // 只引入一次，避免选项与函数重复定义。
+#define OMNI_END_DISC_INCLUDED // 置上标记，后续再次引用直接跳过。
+
+// 来源：原程序在此处标注了出处网址 `www.shadertoy.com/view/lstSRS`，按合同保留来源注释与写法。
+
+// --- 旋转矩阵：依次绕三个轴旋转后合成 ---
+mat3 RotateMatrix(float x, float y, float z){
+	mat3 matx = mat3(1.0, 0.0, 0.0,
+					 0.0, cos(x), sin(x),
+					 0.0, -sin(x), cos(x)); // 绕横轴。
+
+	mat3 maty = mat3(cos(y), 0.0, -sin(y),
+					 0.0, 1.0, 0.0,
+					 sin(y), 0.0, cos(y)); // 绕纵轴。
+
+	mat3 matz = mat3(cos(z), sin(z), 0.0,
+					 -sin(z), cos(z), 0.0,
+					 0.0, 0.0, 1.0); // 绕前后轴。
+
+	return maty * matx * matz; // 三个旋转合成。
+}
+
+// --- 空间扭曲：越靠近黑洞中心，光线被拉得越厉害 ---
+void WarpSpace(inout vec3 eyevec, inout vec3 raypos){
+	vec3 origin = vec3(0.0, 0.0, 0.0); // 黑洞中心。
+
+	float singularityDist = distance(raypos, origin); // 到中心的距离。
+	float warpFactor = 1.0 / (singularityDist * singularityDist + 0.000001); // 距离平方倒数，中心处极大。
+
+	vec3 singularityVector = normalize(origin - raypos); // 指向中心的方向。
+
+	float warpAmount = 0.06; // 扭曲强度。
+
+	eyevec = normalize(eyevec + singularityVector * warpFactor * warpAmount); // 光线方向被拉向中心。
+}
+
+// --- 三维噪声：和主世界那份同源，按合同加 `End` 前缀以区分同名 ---
+float EndCalculate3DNoise(vec3 position){
+	vec3 p = floor(position); // 整数格。
+	vec3 b = curve(fract(position)); // 格内偏移并平滑。
+
+	vec2 uv = 17.0 * p.z + p.xy + b.xy; // 三维到二维的坐标分配。
+	vec2 rg = textureLod(noisetex, (uv + 0.5) / 64.0, 0.0).zx; // 读噪声两个通道。
+
+	return mix(rg.x, rg.y, b.z); // 按高度插值。
+}
+
+// --- 云状分形噪声：四层不同频率叠加，供吸积盘细节使用 ---
+float CalculateCloudFBM(vec3 position, vec3 shift){
+	const int octaves = 4; // 层数。
+	const float octAlpha = 0.87; // 每层权重衰减。
+	const float octScale = 2.5; // 每层频率放大。
+	const float octShift = (octAlpha / octScale) / octaves; // 层间偏移。
+
+	float accum = 0.0; // 累积噪声。
+	float alpha = 0.5; // 当前层权重。
+
+	for (int i = 0; i < octaves; i++) { // 逐层叠加。
+		accum += alpha * EndCalculate3DNoise(position); // 加这一层。
+		position = (position + shift) * octScale; // 抬高频率并加位移。
+		alpha *= octAlpha; // 权重衰减。
+	}
+
+	return accum + octShift; // 返回归一化后的噪声。
+}
+
+float pcurve(float x){
+	float x2 = x * x; // 平方。
+	return 12.207 * x2 * x2 * (1.0 - x); // 四次方乘线性衰减，得到环带的径向轮廓。
+}
+
+// --- 吸积盘（天空版）：沿视线在黑洞附近步进，累加盘的颜色，再叠星空 ---
+void BlackHole_AccretionDisc_Stars(inout vec3 color, in vec3 rayDir, in vec3 lightDir){
+	const float steps = 50.0; // 步进次数。
+	const float rSteps = 1.0 / steps; // 步数倒数。
+	const float stepLength = 0.2; // 每步长度。
+
+	const float discRadius = 2.25; // 吸积盘半径。
+	const float discWidth = 3.5; // 吸积盘宽度。
+	const float discInner = discRadius - discWidth * 0.5; // 内半径。
+	const float discOuter = discRadius + discWidth * 0.5; // 外半径。
+
+	#ifdef OMNI_TAA // 开时间抗锯齿时用逐帧噪声，抖动被时间平均掉。
+		float noise = BlueNoiseTemporal().x; // 每帧变化的噪声。
+	#else // 否则用屏幕空间的固定噪声。
+		float noise = InterleavedGradientNoise(gl_FragCoord.xy); // 交错梯度噪声。
+	#endif
+
+	vec3 eye = -lightDir * 8.0; // 视线起点。
+	vec3 rayPos = eye + rayDir * 3.0; // 起始步进位置。
+
+	mat3 rotation = RotateMatrix(0.1, 0.0, -0.35); // 吸积盘的固定倾角。
+
+	vec3 result = vec3(0.0); // 累积的盘颜色。
+	float transmittance = 1.0; // 透过率。
+
+	rayPos += rayDir * stepLength * noise; // 起点按噪声抖动，减少步进条纹。
+
+	for(int i = 0; i < steps; i++){ // 逐步前进。
+		if(transmittance < 0.0001) break; // 已被遮满就停止。
+
+		WarpSpace(rayDir, rayPos); // 靠近黑洞时光线被拉弯。
+		rayPos += rayDir * stepLength; // 前进一步。
+
+		{
+			vec3 discPos = rotation * rayPos; // 转到吸积盘坐标系。
+
+			float r = length(discPos); // 到盘中心的半径。
+			float p = atan2(-discPos.zx); // 盘面上的方位角。
+			float h = discPos.y; // 离盘面的高度。
+
+			float radialGradient = 1.0 - saturate((r - discInner) / discWidth * 0.5); // 径向衰减。
+			float dist = abs(h); // 到盘面的距离。
+
+			float discThickness = 0.1 * radialGradient; // 盘的厚度随半径变化。
+
+			float fr = abs(r - discInner) + 0.4; // 到内边缘的距离。
+			fr = fr * fr; // 平方。
+			float fade = fr * fr * 0.04; // 亮度衰减。
+			float bloomFactor = 1.0 / (h * h * 40.0 + fade + 0.00002); // 靠近盘面的辉光。
+			bloomFactor *= saturate(2.0 - abs(dist) / discThickness); // 只在盘厚范围内。
+			bloomFactor = bloomFactor * bloomFactor; // 平方增强。
+
+			float dr = pcurve(radialGradient); // 径向轮廓。
+			float density = dr; // 当前密度。
+
+			density *= saturate(1.0 - abs(dist) / discThickness); // 按离盘面距离衰减。
+			density = saturate(density * 0.7); // 整体缩放。
+			density = saturate(density + bloomFactor * 0.1); // 叠上辉光。
+
+			if (density > 0.0001){ // 有密度才算这一步的颜色。
+				#ifdef OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE // 细节沿纬度分布时用方位角。
+					vec3 discCoord = vec3(r, p * (1.0 - radialGradient * 0.5), h * 0.1) * 3.5; // 盘坐标带方位角。
+					float fbm = CalculateCloudFBM(discCoord, frameTimeCounter * vec3(0.1, 0.07, 0.0)); // 高质量云噪声。
+				#else // 默认细节只沿半径与高度分布。
+					vec3 discCoord = vec3(r, 0.0, h * 0.1) * 3.5; // 盘坐标不带方位角。
+					float fbm = CalculateCloudFBM(discCoord, frameTimeCounter * vec3(0.03, 0.05, 0.0)); // 高质量云噪声。
+				#endif
+				fbm = fbm * fbm; // 平方。
+				fbm = fbm * fbm; // 再平方，拉开明暗。
+
+				density *= fbm * dr; // 噪声乘回径向轮廓。
+
+				float gr = 1.0 - radialGradient; // 反径向。
+				gr = gr * gr; // 平方。
+				float glowStrength = 1.0 / (gr * gr * 400.0 + 0.002); // 越靠内越亮的辉光。
+				vec3 glow = Blackbody(2700.0 + glowStrength * 50.0) * glowStrength; // 按辉光强度取黑体色。
+
+				#ifdef OMNI_ACCRETIONDISC_DOPPLER_EFFECT // 多普勒效应：一侧更亮。
+					glow *= sin(p - 1.07) * 0.75 + 1.0; // 按方位角调制。
+				#endif
+
+				float stepTransmittance = exp2(-density * 7.0); // 这一步的透过率。
+				float integral = 1.0 - stepTransmittance; // 这一步吸收掉的量。
+				transmittance *= stepTransmittance; // 累积透过率。
+
+				result += integral * transmittance * glow; // 按透过率累加颜色。
+			}
+
+			vec2 t = vec2(1.0, 0.01); // 圆环截面参数。
+			float torusDist = length(length(discPos + vec3(0.0, -0.05, 0.0)) - t); // 到圆环的距离。
+			float bloomDisc = 1.0 / (pow(torusDist, 3.5) + 0.001); // 圆环辉光。
+			vec3 col = Blackbody(12000.0); // 高色温的冷白。
+			bloomDisc *= step(0.5, r); // 只在盘外缘以外。
+
+			result += col * bloomDisc * 0.1 * transmittance; // 叠上圆环辉光。
+		}
+	}
+	result *= rSteps; // 步数平均。
+
+	#if OMNI_STAR_TYPE > 0 // 打开星空才画星星。
+		color += EndCalculateStars(rayDir); // 叠星空。
+	#endif
+
+	color *= transmittance; // 前面的天光被吸积盘吃掉。
+	color += result; // 叠上吸积盘颜色。
+}
+
+// --- 吸积盘（反射版）：步进更少，供屏幕反射的假天空回退使用 ---
+void BlackHole_AccretionDisc_Reflection(inout vec3 color, in vec3 rayDir, in vec3 lightDir){
+	const float steps = 30.0; // 步进次数，比天空版少。
+	const float rSteps = 1.0 / steps; // 步数倒数。
+	const float stepLength = 0.2; // 每步长度。
+
+	const float discRadius = 2.25; // 吸积盘半径。
+	const float discWidth = 3.5; // 吸积盘宽度。
+	const float discInner = discRadius - discWidth * 0.5; // 内半径。
+	const float discOuter = discRadius + discWidth * 0.5; // 外半径。
+
+	float noise = BlueNoiseTemporal().x; // 每帧变化的噪声。
+
+	vec3 eye = -lightDir * 8.0; // 视线起点。
+	vec3 rayPos = eye + rayDir * 4.0; // 起始步进位置，比天空版远一点。
+
+	mat3 rotation = RotateMatrix(0.1, 0.0, -0.35); // 吸积盘固定倾角。
+
+	vec3 result = vec3(0.0); // 累积的盘颜色。
+	float transmittance = 1.0; // 透过率。
+
+	rayPos += rayDir * stepLength * noise; // 起点抖动。
+
+	for(int i = 0; i < steps; i++){ // 逐步前进。
+		if(transmittance < 0.0001) break; // 遮满即停。
+
+		WarpSpace(rayDir, rayPos); // 空间扭曲。
+		rayPos += rayDir * stepLength; // 前进一步。
+
+		{
+			vec3 discPos = rotation * rayPos; // 转到吸积盘坐标系。
+
+			float r = length(discPos); // 到盘心半径。
+			float p = atan2(-discPos.zx); // 方位角。
+			float h = discPos.y; // 离盘面高度。
+
+			float radialGradient = 1.0 - saturate((r - discInner) / discWidth * 0.5); // 径向衰减。
+			float dist = abs(h); // 到盘面距离。
+
+			float discThickness = 0.1 * radialGradient; // 盘厚。
+
+			float fr = abs(r - discInner) + 0.4; // 到内边缘距离。
+			fr = fr * fr; // 平方。
+			float fade = fr * fr * 0.04; // 亮度衰减。
+			float bloomFactor = 1.0 / (h * h * 40.0 + fade + 0.00002); // 靠近盘面的辉光。
+			bloomFactor *= saturate(2.0 - abs(dist) / discThickness); // 只在盘厚内。
+			bloomFactor = bloomFactor * bloomFactor; // 平方增强。
+
+			float dr = pcurve(radialGradient); // 径向轮廓。
+			float density = dr; // 当前密度。
+
+			density *= saturate(1.0 - abs(dist) / discThickness); // 按离盘面距离衰减。
+			density = saturate(density * 0.7); // 整体缩放。
+			density = saturate(density + bloomFactor * 0.1); // 叠上辉光。
+
+			if (density > 0.0001){ // 有密度才算颜色。
+				#ifdef OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE // 细节沿纬度分布。
+					vec3 discCoord = vec3(r, p * (1.0 - radialGradient * 0.5), h * 0.1) * 3.5; // 带方位角的盘坐标。
+					float fbm = CalculateCloudFBM(discCoord, frameTimeCounter * vec3(0.1, 0.07, 0.0)); // 高质量云噪声。
+				#else // 默认不带方位角。
+					vec3 discCoord = vec3(r, 0.0, h * 0.1) * 3.5; // 盘坐标。
+					float fbm = CalculateCloudFBM(discCoord, frameTimeCounter * vec3(0.03, 0.05, 0.0)); // 高质量云噪声。
+				#endif
+
+				float fbm2 = fbm * fbm; // 平方。
+				density *= fbm2 * fbm2 * fbm; // 噪声五次方乘回密度。
+				density *= dr; // 再乘径向轮廓。
+
+				float gr = 1.0 - radialGradient; // 反径向。
+				gr = gr * gr; // 平方。
+				float glowStrength = 1.0 / (gr * gr * 400.0 + 0.002); // 越靠内越亮。
+				vec3 glow = Blackbody(2700.0 + glowStrength * 50.0) * glowStrength; // 按辉光强度取黑体色。
+
+				#ifdef OMNI_ACCRETIONDISC_DOPPLER_EFFECT // 多普勒效应。
+					glow *= sin(p - 1.07) * 0.75 + 1.0; // 按方位角调制。
+				#endif
+
+				float stepTransmittance = exp2(-density * 7.0); // 这一步透过率。
+				float integral = 1.0 - stepTransmittance; // 吸收量。
+				transmittance *= stepTransmittance; // 累积透过率。
+
+				result += integral * transmittance * glow; // 累加颜色。
+			}
+
+			vec2 t = vec2(1.0, 0.01); // 圆环截面参数。
+			float torusDist = length(length(discPos + vec3(0.0, -0.05, 0.0)) - t); // 到圆环距离。
+			float bloomDisc = 1.0 / (pow(torusDist, 3.5) + 0.001); // 圆环辉光。
+			vec3 col = Blackbody(12000.0); // 冷白。
+			bloomDisc *= step(0.5, r); // 只在盘外缘以外。
+
+			result += col * bloomDisc * 0.1 * transmittance; // 叠圆环辉光。
+		}
+	}
+	result *= rSteps; // 步数平均。
+
+	color *= transmittance; // 前面天光被吃掉。
+	color += result; // 叠吸积盘颜色。
+}
+#endif // OMNI_END_DISC_INCLUDED 结束。
