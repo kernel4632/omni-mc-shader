@@ -102,6 +102,10 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(config.rename({"OMNI_KEEP_ME": "1"}), {"OMNI_KEEP_ME": "1"})  # 未登记的名字原样保留，交给选项边界报错。
         with self.assertRaisesRegex(ValueError, "同时给了旧名与新名"):
             config.rename({old: "1", new: "1"})  # 两个来源冲突时不能替玩家猜。
+        self.assertGreater(len(config.VALUE_RENAMES), 0)  # 开关改成多档的取值迁移也要有人用。
+        option, values = next(iter(config.VALUE_RENAMES.items()))  # 取任意一条取值对照。
+        for oldValue, newValue in values.items():
+            self.assertEqual(config.rename({option: oldValue}), {option: newValue})  # 旧真假值换成新档位。
         found, _ = options.scan(build.SHADERS)  # 真实源码取范围。
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary); source = root/"legacy.json"  # 不修改真实共享配置。
@@ -112,6 +116,12 @@ class PipelineTests(unittest.TestCase):
             source.write_text(json.dumps(data), encoding="utf-8")
             migrated = config.shared(source, found, build.version())  # 走真实导入路径。
             self.assertEqual(migrated["values"][new], found[new].default)  # 旧名确实被迁移到新名上。
+            self.assertGreater(len(config.REMOVED_OPTIONS), 0)  # 被替换掉的选项清单也要有人用。
+            removed = next(iter(config.REMOVED_OPTIONS))
+            data["values"] = {removed: "16"}  # 旧配置里残留的已移除选项。
+            source.write_text(json.dumps(data), encoding="utf-8")
+            migrated = config.shared(source, found, build.version())  # 导入应当通过并被忽略，而不是报未知选项。
+            self.assertNotIn(removed, migrated["values"])  # 已移除的项不再出现在结果里。
 
     def test_comment_audit_ignores_normal_strings(self):
         """只有注释和接口文档算中文，字符串不能凑比例。"""

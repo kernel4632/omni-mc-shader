@@ -167,6 +167,11 @@ def shared(source: Path, found: dict[str, "options.Option"], shader_version: str
     if data["schemaVersion"] == 1 and any(name != "OMNI_DEBUG_VIEW" or value not in ("0", "1", "2") for name, value in changes.items()):
         raise ValueError("旧版配置只能包含原有调试视图；当前选项请按当前格式导入")  # 不把当前水云等选项伪装成旧接口。
     changes = rename(changes)  # 旧名先按对照表迁移，玩家改过名的设置不丢，改过名又写错才在这里报错。
+    dropped = sorted(name for name in changes if name in REMOVED_OPTIONS)  # 已被算法整体替换掉的选项：导入时忽略，但要报出来。
+    for name in dropped:
+        del changes[name]  # 这些选项当前源码里没有对应计算，留着只会让人以为生效了。
+    if dropped:
+        print("提示：以下选项在当前版本已被整体替换，导入时忽略：" + "、".join(dropped))  # 明确告知，不是静默丢弃。
     for name, value in changes.items():  # 逐项报告未知名称与非法取值，不把拼写错误当成缺省值。
         if name not in found or not isinstance(value, str) or value not in found[name].values:
             raise ValueError(f"未知选项或无效取值：{name}={value}")  # 静默忽略会让分享者误以为配置已完整生效。
@@ -174,12 +179,21 @@ def shared(source: Path, found: dict[str, "options.Option"], shader_version: str
     return {"schemaVersion": SHARE_SCHEMA, "shaderVersion": shader_version, "values": values}  # 旧格式只升级结构，不臆测或重命名未知字段。
 
 
+VALUE_RENAMES = {  # 选项从开关改成多档时，旧配置里的真假值要换成对应档位，否则导入会当作非法取值被拒。
+    "OMNI_CLOUD_CUMULONIMBUS": {"true": "1", "false": "0"},  # 积雨云由开关改成关/中/强三档：开着对应中档，关着仍是关。
+}
+REMOVED_OPTIONS = {  # 被新算法整体替换、已无对应计算的选项：导入时忽略并提示，不让旧配置直接报未知选项。
+    "OMNI_LPV_STEPS": "简易体积光的步数被 Eclipse 的彩色光传播体积整体替换（见 CHANGELOG 的 dev.141）。",
+}
+
+
 def rename(values: dict[str, str]) -> dict[str, str]:
-    """把旧选项名按 `OPTION_RENAMES` 迁移到当前名，返回新字典。
+    """把旧选项名按 `OPTION_RENAMES` 迁移到当前名，旧真假值按 `VALUE_RENAMES` 迁移到新档位。
 
     输入边界：`values` 是外部配置里的键值，必须先检查是字典才能进来。
     为什么单独成函数：导入路径与预设读取都要用同一份对照表，写两遍迟早会不一致。
-    行为：旧名出现就换名；新旧名同时出现直接报错，避免同一项出现两个互相矛盾的取值。
+    行为：旧名出现就换名；新旧名同时出现直接报错，避免同一项出现两个互相矛盾的取值；
+    名字迁移后再看取值，只替换登记过的旧值，其余取值原样交给选项边界报错。
     未知名字原样保留，交给后面的选项边界统一报错，不在这里静默丢弃。
     """
     result = {}  # 迁移后的键值。
@@ -187,7 +201,7 @@ def rename(values: dict[str, str]) -> dict[str, str]:
         current = OPTION_RENAMES.get(name, name)  # 没有登记的名字保持原样。
         if current in result or (current != name and current in values):
             raise ValueError(f"配置里同时给了旧名与新名：{name}、{current}")  # 两个来源冲突时不能替玩家猜哪个优先。
-        result[current] = value  # 旧名落到当前名下。
+        result[current] = VALUE_RENAMES.get(current, {}).get(value, value)  # 旧真假值换成新档位，未登记的取值不动。
     return result
 
 
