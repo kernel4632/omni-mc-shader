@@ -2,10 +2,12 @@
 水面：把 iterationT 的波浪、海洋物理波、雨点涟漪、水下雾、折射与彩色玻璃吸收集中到一个文件。
 职责分成四块：
   一、选项：`OMNI_WAVE_SCALE`、`OMNI_WAVE_HEIGHT`、`OMNI_WATER_PARALLAX`、`OMNI_UNDERWATER_FOG`、`OMNI_WATERFOG_DENSITY`、`OMNI_CAUSTICS`、
-    以及雨点涟漪范围 `OMNI_PUDDLE_MODE`（照 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`，默认与原来一致），全项目只在这里定义一次；
+    雨点涟漪范围 `OMNI_PUDDLE_MODE`（照 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`，默认与原来一致），
+    以及玩家交互水面 `OMNI_PLAYER_WATER` 与其强度 `OMNI_PLAYER_WATER_STRENGTH`，全项目只在这里定义一次；
   二、波浪：`GetWaves`、`GetWavesNormal`、`GetWaterParallaxCoord` 用噪声贴图叠多层正弦，算出波高、波法线与视差坐标；
   三、物理海浪：`physics_*` 一组函数按迭代正弦合成海面，供海洋物理扩展使用；
-  四、屏幕合成：`WaterFog` 水下与水面雾、`RefractSampleOnce` 折射、`TransparentAbsorption` 彩色玻璃吸收，以及雨点涟漪 `GetRainNormal`。
+  四、屏幕合成：`WaterFog` 水下与水面雾、`RefractSampleOnce` 折射、`TransparentAbsorption` 彩色玻璃吸收，以及雨点涟漪 `GetRainNormal`；
+  五、玩家交互水面：玩家在水里移动时的一圈圈涟漪，算法在同目录 `playerwater.glsl`，`GetWavesNormal` 把它叠到波法线上。
 调用位置：
   `rendering/translucent.glsl` 顶点阶段用 `GetWaterParallaxCoord`、`GetWavesNormal` 抬升水面并造波；
   `rendering/composite.glsl` 屏幕合成阶段用 `WaterFog`、`RefractSampleOnce`、`TransparentAbsorption`；
@@ -44,6 +46,10 @@
 #define OMNI_CAUSTICS
 // @option {"label":{"zh_cn":"水洼与涟漪范围","en_us":"Puddles & ripples"},"description":{"zh_cn":"雨点涟漪出现的位置：整个湿表面均匀铺满，还是只在低洼积水处出现。默认与原来一致。来源 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`。","en_us":"Where rain ripples appear: evenly over the whole wet surface, or only in low-lying puddles. Default matches the previous behaviour. From Eclipse `lib/settings.glsl:359` `PUDDLE_MODE`."},"values":{"0":{"zh_cn":"无雨点","en_us":"Off"},"1":{"zh_cn":"水洼与全湿润","en_us":"Puddles + fully wet"},"2":{"zh_cn":"仅水洼","en_us":"Only puddles"},"3":{"zh_cn":"仅全湿润","en_us":"Only fully wet"}}}
 #define OMNI_PUDDLE_MODE 1 // [0 1 2 3]
+// @option {"label":{"zh_cn":"玩家交互水面","en_us":"Player water interaction"},"description":{"zh_cn":"玩家在水里移动时，水面从玩家处向外推出一圈圈涟漪。默认关闭；Eclipse 默认用波浪模拟，本项目未移植那套计算着色器方案。来源 Eclipse `dimensions/all_translucent.fsh` 的 `WATER_INTERACTION == 1`。","en_us":"Ripples spread out from the player across the water surface while moving in water. Off by default; Eclipse defaults to its wave-simulation mode, whose compute-shader pipeline is not ported here. From Eclipse `dimensions/all_translucent.fsh` `WATER_INTERACTION == 1`."},"values":{"0":{"zh_cn":"关闭","en_us":"Off"},"1":{"zh_cn":"简单涟漪","en_us":"Simple ripples"}}}
+#define OMNI_PLAYER_WATER 0 // [0 1]
+// @option {"label":{"zh_cn":"玩家涟漪强度","en_us":"Player ripple strength"},"description":{"zh_cn":"玩家水波涟漪的高低；调大涟漪更明显。上一个选项关闭时不生效。","en_us":"Height of the player water ripples; larger makes them more visible. Has no effect while the option above is off."},"slider":true}
+#define OMNI_PLAYER_WATER_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0 3.0]
 
 // 波法线解码与颜色曲线来自共用计算，屏幕还原与投影来自坐标换算，`MaterialMask` 由材质文件提供。
 #include "/common/math.glsl"
@@ -51,6 +57,10 @@
 #include "/effects/ground/material.glsl"
 // 局部降水开关决定雨点涟漪是否跟随降雨，归属天气文件。
 #include "/effects/weather/weather.glsl"
+// 玩家交互水面：玩家在水里移动时带起的一圈圈涟漪，独立成文件让水面文件保持聚焦。
+#include "/effects/water/playerwater.glsl"
+// 水洼尺寸：提供 `OmniPuddleCoverage`，雨点涟漪在「仅水洼」模式按它算水洼覆盖；默认取值不额外改画面。
+#include "/effects/water/puddle.glsl"
 
 // --- 波浪：多层噪声正弦叠成起伏 ---
 // 先用三次曲线把噪声采样平滑化，再逐层缩小频率、加快速度，得到自然且可重复的波浪。
@@ -146,6 +156,10 @@ vec3 GetWavesNormal(vec3 position, const float waveHeight){
 	vec3 wavesNormal = vec3(wavesCenter - wavesLeft, wavesCenter - wavesUp, 1.0); // 用两个方向的高度差构成法线，竖直分量为一。
 
 	wavesNormal.xy *= waveHeight * (OMNI_WAVE_HEIGHT / sampleDistance); // 按波高选项与采样距离缩放坡度。
+
+	#if OMNI_PLAYER_WATER > 0 // 玩家交互水面：把玩家带起的涟漪叠到波法线的纵向分量上。
+		wavesNormal.y = mix(wavesNormal.y, 1.0, PlayerWaterRipple(position)); // 涟漪越高越把法线朝上推，形成一圈凸起。
+	#endif
 
 	return normalize(wavesNormal); // 归一化成单位法线。
 }
@@ -404,7 +418,7 @@ vec2 GetRainNormal(vec3 pos, float strength, inout float wet){
 	n *= strength; // 乘降雨强度。
 	#if OMNI_PUDDLE_MODE == 2 // 模式二「仅水洼」：只在低洼处出现。
 		float puddleNoise = textureLod(noisetex, pos.xz * 0.02, 0.0).b; // 水洼形状噪声，值越低表示地势越低。
-		n *= saturate(wet - puddleNoise); // 湿润度高于噪声阈值的地方才积水，只在低洼处出水洼。
+		n *= OmniPuddleCoverage(wet, puddleNoise); // 用统一的水洼覆盖公式，`OMNI_PUDDLE_SIZE` 越大水洼越大越连片，只在低洼处出水洼。
 	#endif
 
 	wet = saturate(mix(downfall, wet, 1.0 - 0.4 * saturate(strength))); // 湿润度向落点密度靠拢，降雨越强越明显。

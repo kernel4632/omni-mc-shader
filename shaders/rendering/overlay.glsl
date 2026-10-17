@@ -389,7 +389,9 @@ void main(){
 
 // 法线：原程序把法线强制朝外。
 	#ifdef MC_NORMAL_MAP
-		vec3 normalTex = DecodeNormalTex(textureLod(normals, texCoord, 0.0).rgb); // 采法线并解码。
+		vec4 materialNormal = omniMaterialNormal(textureLod(normals, texCoord, 0.0).rgb); // 采法线，按选项缩放起伏并解出材质遮蔽。
+		vec3 normalTex = materialNormal.xyz; // 缩放后的切线空间法线。
+		albedo.rgb *= materialNormal.w; // 材质遮蔽压到底色，未开时为一、不改变画面。
 	#else
 		vec3 normalTex = vec3(0.0, 0.0, 1.0); // 没有法线贴图时朝外。
 	#endif

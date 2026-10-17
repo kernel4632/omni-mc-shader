@@ -54,6 +54,8 @@
 	#include "/effects/dev/debug.glsl"
 	// 屏幕空间镜头形变：色差、鱼眼与像素化，默认全关时原样返回画面。
 	#include "/effects/lens/distortion.glsl"
+	// 受伤与低血量画面表现：受击闪红、低血量红边心跳与死亡暗红，默认关闭时原样返回画面。
+	#include "/effects/lens/hurt.glsl"
 
 	void main(){
 		vec3 color = vec3(0.0); // 最终要写的屏幕颜色。
@@ -96,6 +98,9 @@
 
 		// 镜头形变：按选项对最终画面做色差、鱼眼或像素化重采样；三项默认全关时原样返回，画面不变。
 		color = LensDistortion(color, texCoord);
+
+		// 受伤、低血量与死亡的画面表现；效果关闭时原样返回，画面不变。
+		color = omniHurtEffect(color, texCoord);
 
 		color += InterleavedGradientNoise(gl_FragCoord.xy) * (1.0 / 255.0); // 叠加一点抖动，减小色带。
 

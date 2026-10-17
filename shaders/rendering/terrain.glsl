@@ -41,6 +41,10 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与材质相关选项。
 #include "/effects/ground/material.glsl"
+// 区块淡入：`omniChunkFade*` 一组纯计算，顶点取进度、几何转发、片元按进度抖动丢弃。
+#include "/effects/clarity/chunkfade.glsl"
+// 时间噪声：片元抖动丢弃要读蓝噪声，顶点与几何阶段只编译不调用。
+#include "/common/noise.glsl"
 // 植物摆动：提供 `WavingPlants`，顶点阶段的地形与阴影共用同一份摆法。
 #include "/effects/ground/vegetation.glsl"
 // Omni 额外功能：植被季节色，默认关闭。
@@ -88,6 +92,7 @@ out vec3 v_viewPos; // 视空间位置，片元做切线基与视差要用。
 #endif
 out vec2 v_blockLight; // 方块光与天光，零到一，已按原程序曲线重整。
 flat out float v_materialIDs; // 材质编号，平面插值避免边界混值。
+out float v_chunkFade; // 区块淡入进度，几何阶段转发给片元；关闭或加载器不支持时恒为一。
 
 // 顶点主函数：把原程序的判定与摆动按顺序执行一遍。
 void main(){
@@ -112,6 +117,11 @@ void main(){
 
 	vec4 viewPos = gl_ModelViewMatrix * gl_Vertex; // 顶点转到视空间。
 	v_viewPos = viewPos.xyz; // 传给片元。
+	float chunkFadeRaw = 1.0; // 加载器不提供淡入进度时保持一，等于区块一直完全显现。
+	#ifdef IRIS_FEATURE_FADE_VARIABLE // 请求加载器特性后 `mc_chunkFade` 属性才存在。
+		chunkFadeRaw = mc_chunkFade; // 读取原版区块淡入进度：未淡入时为负，淡入完成时为一。
+	#endif
+	v_chunkFade = omniChunkFadeValue(chunkFadeRaw); // 取正并夹到零到一，选项关闭时返回一。
 	vec4 worldPos = gbufferModelViewInverse * viewPos; // 视空间回到相机相对世界坐标。
 	worldPos.xyz += cameraPosition.xyz; // 加上相机绝对位置，得到世界坐标。
 
@@ -119,6 +129,7 @@ void main(){
 	WavingPlants(worldPos.xyz, mc_Entity.x, v_blockLight.y, gl_MultiTexCoord0.y, mc_midTexCoord.y);
 
 	worldPos.xyz -= cameraPosition.xyz; // 减回相机相对世界坐标。
+	worldPos.xyz = omniChunkFadeSlide(worldPos.xyz, v_chunkFade, eyeBrightnessZeroSmooth, far); // 滑动档把远处未淡入的块从下方移入；关闭或不在滑动档时原样返回。
 	gl_Position = gl_ProjectionMatrix * gbufferModelView * worldPos; // 投影到裁剪空间。
 
 	#ifdef OMNI_TAA // 开启时间抗锯齿时给顶点加本帧抖动。
@@ -204,6 +215,7 @@ in vec3 v_viewPos[]; // 视空间位置数组。
 #endif
 in vec2 v_blockLight[]; // 方块光数组。
 flat in float v_materialIDs[]; // 材质编号数组。
+in float v_chunkFade[]; // 区块淡入进度数组。
 
 // 转发给片元的插值量。
 out vec3 color; // 顶点色。
@@ -215,6 +227,7 @@ out vec3 viewPos; // 视空间位置。
 out vec2 blockLight; // 方块光。
 flat out float materialIDs; // 材质编号。
 flat out float textureResolution; // 该三角形所属方块的纹理分辨率，平面插值。
+out float chunkFade; // 区块淡入进度，片元按它抖动丢弃。
 
 // 几何主函数：先估分辨率，再逐顶点转发。
 void main(){
@@ -240,6 +253,7 @@ void main(){
 		#endif
 		blockLight = v_blockLight[i]; // 转发方块光。
 		materialIDs = v_materialIDs[i]; // 转发材质编号。
+		chunkFade = v_chunkFade[i]; // 转发区块淡入进度。
 
 		EmitVertex(); // 发出顶点。
 	}
@@ -262,10 +276,12 @@ in vec2 texCoord; // 纹理坐标。
 #endif
 in vec2 blockLight; // 方块光。
 flat in float materialIDs; // 材质编号。
+in float chunkFade; // 区块淡入进度，按它抖动丢弃新加载区块的像素。
 // `flat in float textureResolution;` 已在文件顶部、引入视差函数之前声明。
 
 // 各向异性过滤：沿屏幕上的纹理压缩方向多采几步，换回更清晰的远处方块。
-vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, inout vec4 specularTex){
+vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, inout vec4 specularTex, out float materialAO){
+	materialAO = 1.0; // 材质遮蔽系数默认一：没有法线贴图或没开遮蔽时都不压暗底色。
 	vec2 atlasTiles = vec2(atlasSize) / textureResolution; // 图集里横纵各有多少图块。
 	vec2 tilesCoord = coord * atlasTiles; // 坐标换到图块单位。
 
@@ -325,7 +341,9 @@ vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, i
 	#ifdef OMNI_ANISOTROPIC_FILTERING_NORMAL_SPECULAR
 
 		#ifdef MC_NORMAL_MAP
-			normalTex = DecodeNormalTex(normalSample * weights); // 归一化后解码法线。
+			vec4 materialNormal = omniMaterialNormal(normalSample * weights); // 归一化后解码法线，并按选项缩放起伏、取出材质遮蔽。
+			normalTex = materialNormal.xyz; // 缩放后的切线空间法线。
+			materialAO = materialNormal.w; // 材质遮蔽系数，未开材质遮蔽时为一。
 		#endif
 
 		#ifdef MC_SPECULAR_MAP
@@ -339,7 +357,9 @@ vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, i
 	#else
 
 		#ifdef MC_NORMAL_MAP
-			normalTex = DecodeNormalTex(textureGrad(normals, coord, duv1, duv2).rgb); // 按屏幕导数采法线。
+			vec4 materialNormal = omniMaterialNormal(textureGrad(normals, coord, duv1, duv2).rgb); // 按屏幕导数采法线，并按选项缩放起伏、取出材质遮蔽。
+			normalTex = materialNormal.xyz; // 缩放后的切线空间法线。
+			materialAO = materialNormal.w; // 材质遮蔽系数，未开材质遮蔽时为一。
 		#endif
 
 		#ifdef MC_SPECULAR_MAP
@@ -356,7 +376,9 @@ vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, i
 }
 
 // 表面采样：按开关走视差、各向异性过滤或屏幕导数采样，得到底色、高光与法线，并可能丢弃透明像素。
-void SampleTerrainSurface(mat3 tbn, vec2 coord, vec2 duv1, vec2 duv2, vec3 shadowVector, inout float parallaxShadow, out vec4 albedoTex, out vec4 specularTex, out vec3 normalTex){
+// `materialAO` 是资源包法线蓝通道给出的材质遮蔽，未开该功能时恒为一，调用方把它乘到底色。
+void SampleTerrainSurface(mat3 tbn, vec2 coord, vec2 duv1, vec2 duv2, vec3 shadowVector, inout float parallaxShadow, out vec4 albedoTex, out vec4 specularTex, out vec3 normalTex, out float materialAO){
+	materialAO = 1.0; // 默认不压暗：视差路径与没有法线的情形都保持一。
 	#if OMNI_PARALLAX_MODE > 0 && defined MC_NORMAL_MAP // 开启视差且有法线贴图时走视差路径。
 
 		normalTex = vec3(0.0, 0.0, 1.0); // 视差函数会写回法线。
@@ -382,7 +404,7 @@ void SampleTerrainSurface(mat3 tbn, vec2 coord, vec2 duv1, vec2 duv2, vec3 shado
 
 			normalTex = vec3(0.0, 0.0, 1.0); // 过滤函数会写回法线。
 			specularTex = vec4(0.0); // 过滤函数会写回高光。
-			albedoTex = SampleAnisotropic(coord, duv1, duv2, normalTex, specularTex); // 各向异性取底色与表面。
+			albedoTex = SampleAnisotropic(coord, duv1, duv2, normalTex, specularTex, materialAO); // 各向异性取底色、表面与材质遮蔽。
 
 			#if MC_VERSION >= 11605 && !defined IS_IRIS
 				float alphaRef = renderStage == MC_RENDER_STAGE_TERRAIN_SOLID ? 0.004 : 0.1; // 丢弃阈值同视差路径。
@@ -403,7 +425,9 @@ void SampleTerrainSurface(mat3 tbn, vec2 coord, vec2 duv1, vec2 duv2, vec3 shado
 			if (albedoTex.a < alphaRef) discard; // 透明像素丢弃。
 
 			#ifdef MC_NORMAL_MAP
-				normalTex = DecodeNormalTex(textureGrad(normals, coord, duv1, duv2).rgb); // 采法线并解码。
+				vec4 materialNormal = omniMaterialNormal(textureGrad(normals, coord, duv1, duv2).rgb); // 采法线并解出材质遮蔽。
+				normalTex = materialNormal.xyz; // 缩放后的切线空间法线。
+				materialAO = materialNormal.w; // 材质遮蔽系数，未开材质遮蔽时为一。
 			#else
 				normalTex = vec3(0.0, 0.0, 1.0); // 没有法线贴图时朝外。
 			#endif
@@ -468,7 +492,18 @@ void main(){
 	vec4 albedoTex = vec4(0.0); // 采样得到的底色。
 	vec4 specularTex = vec4(0.0); // 采样得到的高光。
 	vec3 normalTex = vec3(0.0, 0.0, 1.0); // 采样得到的法线。
-	SampleTerrainSurface(tbn, texCoord, duv1, duv2, shadowVector, parallaxShadow, albedoTex, specularTex, normalTex); // 按开关统一采样表面贴图。
+	float materialAO = 1.0; // 采样得到的材质遮蔽，未开该功能时为一。
+	SampleTerrainSurface(tbn, texCoord, duv1, duv2, shadowVector, parallaxShadow, albedoTex, specularTex, normalTex, materialAO); // 按开关统一采样表面贴图。
+
+// 区块淡入：按进度抖动丢弃像素，新加载的区块逐渐显现；选项关闭时从不丢弃。
+	#if OMNI_CHUNK_FADE > 0 // 只有开启才准备抖动并判断。
+		#ifdef OMNI_TAA // 开时间抗锯齿用蓝噪声，抖动模式会随时间被平均掉。
+			float chunkFadeDither = BlueNoiseTemporal().x; // 每帧变化的蓝噪声。
+		#else // 否则用交错梯度噪声，不额外采样噪声贴图。
+			float chunkFadeDither = InterleavedGradientNoise(gl_FragCoord.xy); // 每像素固定图案。
+		#endif
+		if (omniChunkFadeDiscard(chunkFade, chunkFadeDither)) discard; // 进度越小丢弃的像素越多。
+	#endif
 
 
 // 方块光：默认取原版方块光，指向性开启时再按表面朝向倾斜。
@@ -486,6 +521,7 @@ void main(){
 
 // 底色：贴图色乘顶点色。
 	vec3 albedo = albedoTex.rgb * color; // 合成底色。
+	albedo *= materialAO; // 资源包法线蓝通道的材质遮蔽压到底色，未开时为一、不改变画面。
 
 	albedo = omniSeason(albedo, color); // Omni 额外功能：按游戏天数给植被上季节色，默认关闭。
 

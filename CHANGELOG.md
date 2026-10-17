@@ -1,5 +1,19 @@
 # 更新记录
 
+## 0.0.0-dev.129
+
+Eclipse 缺失能力第三批：交互与细节。补上玩家交互水面、受伤与低血量、区块淡入、水洼尺寸、材质 AO 与法线倍率、太阳色与辐照，全部默认关闭或中性。
+
+- 玩家交互水面（`effects/water/playerwater.glsl`）：照 Eclipse 简单模式的涟漪，叠在现有波法线上；入水位置与时刻改用相机位置与时间相位近似（加载器不给跨帧冻结量），所以是持续外扩涟漪而非一次性水花。
+- 受伤与低血量（`effects/lens/hurt.glsl`）：用 Iris 的 `currentPlayerHealth`/`is_hurt` 做红边、心跳脉冲与死亡红屏；镜头发水与着火需要跨帧平滑量，未做。
+- 区块淡入（`effects/clarity/chunkfade.glsl`）：用 Iris 的 `FADE_VARIABLE` 与 `mc_chunkFade` 属性，地形与水的新区块渐显；水面顶点未接滑动档。
+- 水洼尺寸（`effects/water/puddle.glsl`）：覆盖形状照 Eclipse `applyPuddles`；反射锐度因粗糙度在合成阶段解出、超出本次改动范围，暂未接线。
+- 材质 AO 与法线倍率（`effects/ground/material.glsl`）：地形、实体、半透明与 overlay 的法线解码统一走 `omniMaterialNormal()`，可缩放切线法线并把遮蔽乘进底色。
+- 太阳色与辐照（`effects/sky/suncolor.glsl`）：黑体色温与 RGB 两路，接在太阳圆盘与日月辐照上，默认取 1.0 中性。
+- 资源包天空经核对不可行：Iris 没有天空专用自定义采样器，Eclipse 是跨程序写 `colortex9` 再合成的方案，涉及缓冲与多处流程，本轮未实现，原因记录在对照文档。
+
+只做过离线编译、审计与单元测试；游戏内画面、性能与兼容性仍未验证。
+
 ## 0.0.0-dev.128
 
 Eclipse 缺失能力第二批：体积雾体系。补上洞穴雾、边界雾、下界三段体积雾、末地涡旋体积雾与主世界时段雾，默认全部关闭，默认画面不变。

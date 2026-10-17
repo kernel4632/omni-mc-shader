@@ -62,6 +62,12 @@
 #define OMNI_HAND_NORMAL_CLAMP
 // @option {"label":{"zh_cn":"限制实体法线强度","en_us":"Entity Normal Clamp"},"description":{"zh_cn":"压住实体的极端法线，减少噪点。","en_us":"Limits extreme entity normals to reduce noise."}}
 #define OMNI_ENTITIES_NORMAL_CLAMP
+// --- 资源包法线的整体强度与材质遮蔽：来源 Eclipse `lib/settings.glsl:371-376`、`dimensions/all_solid.fsh:743-752` ---
+// 这一组默认不改变画面：材质遮蔽默认关闭，法线倍率默认一倍与资源包期望一致。
+// @option {"label":{"zh_cn":"材质环境光遮蔽","en_us":"Material Ambient Occlusion"},"description":{"zh_cn":"用资源包法线贴图的蓝通道当作遮蔽，压暗凹陷处的底色；默认关闭，关闭时画面不变。","en_us":"Uses the resource pack normal map's blue channel as occlusion to darken cavities; off by default so the current look is unchanged."}}
+//#define OMNI_MATERIAL_AO
+// @option {"label":{"zh_cn":"法线贴图强度","en_us":"Normal Map Strength"},"description":{"zh_cn":"资源包法线贴图的整体起伏倍率，一倍为资源包期望的原始强度；默认一倍，画面不变。","en_us":"Overall relief multiplier for resource pack normal maps; 1 is the value packs expect; default 1 leaves the current look unchanged."},"slider":true}
+#define OMNI_NORMAL_MAP_MULT 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0]
 // @option {"label":{"zh_cn":"次表面散射强度","en_us":"SSS Strength"},"description":{"zh_cn":"光照穿透表面的深度倍率，与偏移一起为零时关闭次表面散射。","en_us":"Depth multiplier of light through the surface; with the offset at zero it disables SSS."},"slider":true}
 #define OMNI_SSS_STRENGTH 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 3.0 5.0 7.0 10.0]
 // @option {"label":{"zh_cn":"次表面散射偏移","en_us":"SSS Strength Offset"},"description":{"zh_cn":"给穿透深度一个最小值；与倍率一起为零时关闭次表面散射。","en_us":"Minimum value for the light depth; with the multiplier at zero it disables SSS."},"slider":true}
@@ -374,6 +380,21 @@ void ApplyMaterial(inout Material material, in MaterialMask materialMask, inout 
 		material = material_ice; // 换成冰材质。
 		isSmooth = true; // 标记为光滑。
 	}
+}
+// 资源包材质处理：把法线贴图的原始颜色解成切线空间法线，并按选项缩放起伏、导出材质遮蔽。
+// 对应 Eclipse `dimensions/all_solid.fsh:204-210`（`applyBump` 里的 `NORMAL_MAP_MULT`）与 `:743-745`（`MATERIAL_AO`）。
+// 为什么单独成一个函数：几何阶段（地形、实体、方块、手）都要在同一处对法线做这两步，
+//   合并成一个纯函数，每个调用点只把现有 `DecodeNormalTex` 换成它，避免各写一份倍率与遮蔽。
+// 为什么仍复用 `common/math.glsl` 的 `DecodeNormalTex`：那是全项目唯一的法线解码口径，另起一份会与别处不一致。
+// 返回值：`xyz` 是单位切线空间法线；`w` 是可乘到底色上的遮蔽系数，未开材质遮蔽时恒为一。
+vec4 omniMaterialNormal(vec3 normalTexRGB){
+	float materialAO = 1.0; // 默认不遮蔽。
+	#ifdef OMNI_MATERIAL_AO // 打开才拿蓝通道当遮蔽。
+		materialAO = normalTexRGB.b * 0.5 + 0.5; // 蓝通道零到一映射到零点五到一，来源 Eclipse 同一行。
+	#endif
+	vec3 normal = DecodeNormalTex(normalTexRGB); // 复用共用法线解码，无效贴图会退回朝外法线。
+	normal = normal * OMNI_NORMAL_MAP_MULT + vec3(0.0, 0.0, 1.0 - OMNI_NORMAL_MAP_MULT); // 围绕朝外方向缩放起伏，z 补齐，与 Eclipse `applyBump` 数学等价。
+	return vec4(normalize(normal), materialAO); // 重新单位化，遮蔽随法线一起交回。
 }
 // 视差算法（`ParallaxOcclusionMapping`）在 ground/parallax.glsl：它只服务地表材质，且只在地形、实体等几何片元阶段编译。
 // 为什么放在这里引入：任何引入本文件的阶段都靠这一行拿到视差算法，原有调用点（地形、实体）一个都不用改。

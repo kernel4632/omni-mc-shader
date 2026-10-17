@@ -107,6 +107,8 @@ const float sunPathRotation = -30.0; // [-90.0 -89.0 -88.0 -87.0 -86.0 -85.0 -84
 // 共用数学与加载器输入，显式引入而不依赖调用顺序。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
+// 太阳色与辐照：提供 `omniSunTint()`，给太阳直射与太阳圆盘做相对染色；默认取值下返回全一、不改画面。
+#include "/effects/sky/suncolor.glsl"
 // 把半径夹进大气层范围内，越界时按最近的边界算。
 float ClampRadius(float r){
 	return clamp(r, atmosphereModel_bottom_radius, atmosphereModel_top_radius); // 下不低于地面、上不超过层顶。
@@ -122,7 +124,7 @@ vec3 RenderSunDisc(vec3 worldDir, vec3 sunDir){
 	float hardness = 4e4; // 边缘硬度，越大边缘越陡。
 	float disc = curve(saturate((d - (1.0 - size)) * hardness)); // 从中心到边缘的平滑遮罩。
 	disc *= disc; // 平方让边缘更收。
-	return vec3(1.1114, 0.9756, 0.9133) * disc; // 太阳偏暖的白色。
+	return vec3(1.1114, 0.9756, 0.9133) * disc * omniSunTint(); // 太阳偏暖的白底再乘太阳色与辐照倍率，默认全一不改画面。
 }
 // 月亮圆盘：形状同太阳，但边缘更硬、亮度单独交给选项。
 // 真实月亮模式改用 Eclipse 的尺寸档位：角半径由 `OMNI_MOON_SIZE_SETTING` 换算，来源 `composite1.fsh:1785-1786`。
@@ -431,7 +433,7 @@ vec3 GetSunAndSkyIrradiance(
 		vec3 sun_irradiance = atmosphereModel_solar_irradiance; // 太阳直射从标准辐照度出发。
 		moon_irradiance = sun_irradiance * GetTransmittanceToSun(r, moon_mu_s) * OMNI_NIGHT_BRIGHTNESS * LMS; // 月亮直射等于太阳辐照度乘月光透过率，再按夜间亮度缩放。
 		sun_irradiance *= GetTransmittanceToSun(r, sun_mu_s); // 太阳直射乘它自己的透过率。
-		return sun_irradiance * LMS; // 太阳直射乘色适应矩阵后返回。
+		return sun_irradiance * LMS * omniSunTint(); // 只染太阳直射：月亮直射有独立的 `OMNI_MOON_TEMP`，若在上一行染色会把月亮一起带偏。
 }
 // 算某个视线方向的天空辐射亮度：日月散射、可选的地面反弹，再乘天气修正。
 vec3 GetSkyRadiance(

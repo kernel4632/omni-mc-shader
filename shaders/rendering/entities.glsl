@@ -299,7 +299,9 @@ mat3 BuildEntityTangentBasis(vec2 duv1, vec2 duv2){
 }
 
 // 表面采样：按开关走视差或普通采样，得到底色、高光与法线，并可能丢弃透明像素。
-void SampleEntitySurface(vec2 texCoord, vec2 duv1, vec2 duv2, mat3 tbnMat, vec3 shadowVector, float materialIDs, float noDiscard, out vec4 albedoTex, out vec4 specularTex, out vec3 normalTex, inout float parallaxShadow){
+// `materialAO` 是资源包法线蓝通道给出的材质遮蔽，未开该功能时恒为一，调用方把它乘到底色。
+void SampleEntitySurface(vec2 texCoord, vec2 duv1, vec2 duv2, mat3 tbnMat, vec3 shadowVector, float materialIDs, float noDiscard, out vec4 albedoTex, out vec4 specularTex, out vec3 normalTex, inout float parallaxShadow, out float materialAO){
+	materialAO = 1.0; // 默认不压暗：视差路径与没有法线的情形都保持一。
 	#if defined OMNI_ENTITIES_PARALLAX && OMNI_PARALLAX_MODE > 0 && defined MC_NORMAL_MAP // 实体视差开启且有法线贴图。
 
 		vec3 normalOut = vec3(0.0, 0.0, 1.0); // 视差函数会写回法线。
@@ -344,7 +346,9 @@ void SampleEntitySurface(vec2 texCoord, vec2 duv1, vec2 duv2, mat3 tbnMat, vec3 
 		#endif
 
 		#ifdef MC_NORMAL_MAP
-			normalTex = DecodeNormalTex(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采法线并解码。
+			vec4 materialNormal = omniMaterialNormal(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采法线，按选项缩放起伏并解出材质遮蔽。
+			normalTex = materialNormal.xyz; // 缩放后的切线空间法线。
+			materialAO = materialNormal.w; // 材质遮蔽系数，未开材质遮蔽时为一。
 		#else
 			normalTex = vec3(0.0, 0.0, 1.0); // 没有法线贴图时朝外。
 		#endif
@@ -398,11 +402,13 @@ void main(){
 	vec4 albedoTex = vec4(0.0); // 采样得到的底色。
 	vec4 specularTex = vec4(0.0); // 采样得到的高光。
 	vec3 normalTex = vec3(0.0, 0.0, 1.0); // 采样得到的法线。
-	SampleEntitySurface(texCoord, duv1, duv2, tbnMat, shadowVector, materialIDs, noDiscard, albedoTex, specularTex, normalTex, parallaxShadow); // 按开关统一采样表面贴图。
+	float materialAO = 1.0; // 采样得到的材质遮蔽，未开该功能时为一。
+	SampleEntitySurface(texCoord, duv1, duv2, tbnMat, shadowVector, materialIDs, noDiscard, albedoTex, specularTex, normalTex, parallaxShadow, materialAO); // 按开关统一采样表面贴图。
 
 
 // 底色：贴图色乘顶点色，并叠受伤颜色。
 	vec4 albedo = vec4(albedoTex.rgb * color.rgb, albedoTex.a); // 合成底色与透明度。
+	albedo.rgb *= materialAO; // 资源包法线蓝通道的材质遮蔽压到底色，未开时为一、不改变画面。
 	#ifdef OMNI_ENTITIES_PASS
 		albedo.rgb = EntityStatusColor(albedo.rgb, entityColor); // 叠上实体状态色。
 	#endif

@@ -25,6 +25,10 @@
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*` 与材质选项。
 #include "/effects/ground/material.glsl"
+// 区块淡入：`omniChunkFade*` 一组纯计算，水面顶点取进度、片元按进度压透明度并丢弃。
+#include "/effects/clarity/chunkfade.glsl"
+// 时间噪声：片元抖动丢弃要读蓝噪声，顶点阶段只编译不调用。
+#include "/common/noise.glsl"
 // 水面与水雾：片元算波浪、视差与雨点，只在片元引入。
 #ifdef OMNI_FRAGMENT
 	// --- 水文件会读的加载器输入：必须先于水文件声明 ---
@@ -69,6 +73,7 @@ out vec3 viewPos; // 视空间位置。
 #endif
 out vec2 blockLight; // 方块光与天光。
 flat out float materialIDs; // 材质编号。
+out float chunkFade; // 区块淡入进度，传给片元按进度压透明度并丢弃。
 
 
 // 水面顶点主函数：海洋物理扩展存在时抬升水面，否则直接用原顶点。
@@ -102,6 +107,12 @@ void main(){
 
 	vec2 lmcoord = (gl_TextureMatrix[1] * gl_MultiTexCoord1).xy; // 原版光照图坐标。
 	blockLight = saturate(lmcoord * 1.103449 - 0.0689656); // 重整到零到一。
+
+	float chunkFadeRaw = 1.0; // 加载器不提供淡入进度时保持一，等于水面一直完全显现。
+	#ifdef IRIS_FEATURE_FADE_VARIABLE // 请求加载器特性后 `mc_chunkFade` 属性才存在。
+		chunkFadeRaw = mc_chunkFade; // 读取原版区块淡入进度：未淡入时为负，淡入完成时为一。
+	#endif
+	chunkFade = omniChunkFadeValue(chunkFadeRaw); // 取正并夹到零到一，选项关闭时返回一。
 
 	materialIDs = MATID_STAINEDGLASS; // 默认按染色玻璃处理，透明表面多是这样。
 
@@ -166,6 +177,7 @@ in vec3 viewPos; // 视空间位置。
 #endif
 in vec2 blockLight; // 方块光。
 flat in float materialIDs; // 材质编号。
+in float chunkFade; // 区块淡入进度，按它压水面的透明度并丢弃未淡入的水像素。
 
 
 // 水面片元主函数：算切线基、湿润、波浪法线，最后写半透明层。
@@ -191,6 +203,7 @@ void main(){
 // 底色：贴图色乘顶点色。
 	vec4 tex = textureGrad(tex, texCoord, duv1, duv2); // 按屏幕导数采贴图。
 	tex.rgb *= color; // 乘顶点色。
+	float materialAO = 1.0; // 材质遮蔽系数默认一：水面不读法线贴图，未开该功能时也不压暗。
 
 	#ifdef OMNI_WHITE_DEBUG_WORLD
 		tex.rgb = vec3(1.0); // 调试白光时全白。
@@ -252,7 +265,9 @@ void main(){
 				waterNormal = mat3(gbufferModelView) * wave.normal; // 波法线转到视空间。
 		}else{
 			#ifdef MC_NORMAL_MAP
-				waterNormal = DecodeNormalTex(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采贴图法线。
+				vec4 materialNormal = omniMaterialNormal(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采贴图法线，按选项缩放起伏并解出材质遮蔽。
+				waterNormal = materialNormal.xyz; // 缩放后的切线空间法线。
+				materialAO = materialNormal.w; // 材质遮蔽系数，未开材质遮蔽时为一。
 			#endif
 
 			waterNormal = tbn * waterNormal; // 转到视空间。
@@ -273,7 +288,9 @@ void main(){
 
 		}else{
 			#ifdef MC_NORMAL_MAP
-				waterNormal = DecodeNormalTex(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采贴图法线。
+				vec4 materialNormal = omniMaterialNormal(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采贴图法线，按选项缩放起伏并解出材质遮蔽。
+				waterNormal = materialNormal.xyz; // 缩放后的切线空间法线。
+				materialAO = materialNormal.w; // 材质遮蔽系数，未开材质遮蔽时为一。
 				#ifdef OMNI_ENABLE_PBR
 					waterNormal = mix(waterNormal, vec3(0.0, 0.0, 1.0), saturate(wet * 1.5)); // 越湿越接近平整水面。
 				#endif
@@ -301,6 +318,18 @@ void main(){
 
 	vec2 normalEnc = EncodeNormal(waterNormal); // 八面体编码法线。
 
+
+// 区块淡入：按进度压水的透明度并丢弃未淡入的水像素；选项关闭时原样保留。
+	#if OMNI_CHUNK_FADE > 0 // 只有开启才准备抖动并判断。
+		#ifdef OMNI_TAA // 开时间抗锯齿用蓝噪声，抖动模式会随时间被平均掉。
+			float chunkFadeDither = BlueNoiseTemporal().x; // 每帧变化的蓝噪声。
+		#else // 否则用交错梯度噪声，不额外采样噪声贴图。
+			float chunkFadeDither = InterleavedGradientNoise(gl_FragCoord.xy); // 每像素固定图案。
+		#endif
+		if (iswater && omniChunkFadeDiscard(chunkFade, chunkFadeDither)) discard; // 只丢弃水，冰与染色玻璃留着。
+	#endif
+	tex = omniChunkFadeWaterColor(tex, chunkFade); // 半透明层按进度压透明度，关闭时原样返回。
+	tex.rgb *= materialAO; // 资源包法线蓝通道的材质遮蔽压到底色，未开时为一、不改变画面。
 
 
 	gbufferOutput4 = vec4(normalEnc, blockLight); // 四号写法线与方块光。
@@ -368,7 +397,9 @@ void main(){
 
 // 法线：按贴图法线，湿润拉平，并按开关压住极端法线。
 	#ifdef MC_NORMAL_MAP
-		vec3 normalTex = DecodeNormalTex(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采法线并解码。
+		vec4 materialNormal = omniMaterialNormal(textureGrad(normals, texCoord, duv1, duv2).rgb); // 采法线，按选项缩放起伏并解出材质遮蔽。
+		vec3 normalTex = materialNormal.xyz; // 缩放后的切线空间法线。
+		albedo.rgb *= materialNormal.w; // 材质遮蔽压到底色，未开时为一、不改变画面。
 		#ifdef OMNI_ENABLE_PBR 
 			normalTex = mix(normalTex, vec3(0.0, 0.0, 1.0), saturate(wet * 1.5)); // 越湿越接近平整水面。
 		#endif

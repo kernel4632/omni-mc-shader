@@ -31,6 +31,9 @@
 // 归一化与噪声来自共用数学，天体方向来自加载器输入，显式引入而不依赖调用顺序。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
+// 太阳色与氛围同属天空光照的补充：由本文件引入后，凡引入氛围的天空与合成程序都直接拿到 `omniSunTint()`，
+// 太阳圆盘与直射光的接线点因此不必再各自引入；`suncolor.glsl` 自身带守卫，重复引入无副作用。
+#include "/effects/sky/suncolor.glsl"
 #ifdef IS_IRIS // Iris 提供闪电的世界位置与强度。
 uniform vec4 lightningBoltPosition; // 闪电的相机相对世界位置与强度。
 #endif
