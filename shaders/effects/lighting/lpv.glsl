@@ -21,7 +21,10 @@
      阴影阶段本来就按阴影距离画一遍近处方块，正好用来给体素格填编号。
   四、方块光表把每个编号映射到“光色、光强、透光率、可透方向掩码”，只在计算阶段生成，片元只读。
   五、默认关闭、缺自定义图像能力时整段退回屏幕空间间接光，画面与原来完全一致。
-  六、未合并：彩色蜡烛、彩色灯、实体光、雾照明、手持阴影这些 Eclipse 细项，逐条记在 docs/eclipse-parity.md。
+  六、已合并的 Eclipse 细项：彩色蜡烛（`OMNI_LPV_COLORED_CANDLES`）、实体光源（`OMNI_LPV_ENTITY_LIGHTS`）、
+     雾照明（`OMNI_LPV_VL_FOG_ILLUMINATION`）；手持光阴影对应本项目的 `OMNI_HELDLIGHT_SHADOW`（见
+     `effects/lighting/blocklight.glsl`），对照记在 docs/eclipse-parity.md 的「LPV/间接光」行。
+     彩色灯（Eclipse 的独立灯具分类）与方块实体光未接入，逐条见该文档。
 */
 #ifndef OMNI_LPV // 只引入一次，重复引用会让选项与函数重复定义。
 #define OMNI_LPV // 置上标记。
@@ -41,6 +44,19 @@
 #define OMNI_LPV_REDSTONE_LIGHTS
 // @option {"label":{"zh_cn":"体积光强度","en_us":"LPV strength"},"slider":true,"description":{"zh_cn":"体积光混回表面的比例，一为原样。","en_us":"How much of the volume light is blended into surfaces; one is neutral."}}
 #define OMNI_LPV_STRENGTH 1.0 // [0.25 0.5 0.75 1.0 1.5 2.0 3.0]
+// @option {"label":{"zh_cn":"彩色蜡烛","en_us":"Colored candles"},"description":{"zh_cn":"让点亮的彩色蜡烛按自身颜色在体积光里发光；默认关闭，打开后蜡烛周围会带上对应颜色。","en_us":"Lets lit colored candles emit light in their own colour into the volume; off by default."}}
+//#define OMNI_LPV_COLORED_CANDLES
+// @option {"label":{"zh_cn":"实体光源","en_us":"Entity lights"},"description":{"zh_cn":"让烈焰人、发光鱿鱼、岩浆怪、点燃的炸药、末地水晶与光灵箭在体积光里发光；只在体积光开启时生效，默认开、等于 Eclipse。","en_us":"Lets blazes, glow squid, magma cubes, primed TNT, end crystals and spectral arrows add light to the volume; only used when the volume is on; on by default to match Eclipse."}}
+#define OMNI_LPV_ENTITY_LIGHTS
+// @option {"label":{"zh_cn":"雾照明","en_us":"Fog illumination"},"description":{"zh_cn":"让体积里的彩色光照亮周围的空气，洞穴里能看到带颜色的光晕；默认关闭，开启后雾会带上颜色。","en_us":"Lets the volume's colored light illuminate the surrounding air so caves show colored glow; off by default."}}
+//#define OMNI_LPV_VL_FOG_ILLUMINATION
+// @option {"label":{"zh_cn":"雾照明亮度","en_us":"Fog illumination brightness"},"description":{"zh_cn":"被照亮的雾的亮度，一百为基准；只在雾照明开启时生效。","en_us":"Brightness of the lit fog, 100 is the baseline; only used when Fog illumination is on."},"slider":true}
+#define OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS 50 // [0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 110 120 130 140 150 160 180 200 250 300]
+
+// 雾照明是否具备条件：要同时开启雾照明与体积光，并具备自定义图像能力，三者齐备才让雾去采样体积图；缺少任一项就整段退回原样。
+#if defined OMNI_LPV_VL_FOG_ILLUMINATION && defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
+	#define OMNI_LPV_FOG_LIGHT // 置上标记，供雾的算法体判断是否可以采样体积图。
+#endif
 
 // 相机位置、帧计数、屏幕尺寸等加载器输入先声明。
 #include "/common/uniforms.glsl"
@@ -89,6 +105,25 @@ uint omniVoxelBlockId(float entityId){
 	uint voxelId = uint(entityId + 0.5); // 转成无符号整数编号。
 	if (voxelId == 0u) voxelId = 1u; // 没编号的固体按不透光处理。
 	return voxelId; // 交回可写进体素图的编号。
+}
+
+// --- 实体光源编号：与 `shaders/entity.properties` 给这些实体分配的编号一一对应，照 Eclipse `lib/entities.glsl` 的实体光源清单 ---
+// 为什么在这里再写一遍数字：GLSL 读不到 properties 文件，阴影顶点要靠同一组常数判断“这是不是发光实体”；
+// 改 `entity.properties` 的编号时必须同步改这里，否则实体光会丢失或写到错误的格子上。
+const int omniLpvEntityBlaze = 7300; // 烈焰人。
+const int omniLpvEntityGlowSquid = 7301; // 发光鱿鱼。
+const int omniLpvEntityMagmaCube = 7302; // 岩浆怪。
+const int omniLpvEntityTnt = 7303; // 点燃的炸药。
+const int omniLpvEntityFireball = 7304; // 小火球。
+const int omniLpvEntityEndCrystal = 200; // 末地水晶，沿用本项目已有编号。
+const int omniLpvEntitySpectralArrow = 24; // 光灵箭，沿用本项目已有编号。
+// 把一个实体编号映射成写进体素图的编号；不是发光实体就返回零，阴影顶点据此跳过写图。
+uint omniLpvEntityVoxelId(int entity){
+	if (entity == omniLpvEntityBlaze || entity == omniLpvEntityGlowSquid
+		|| entity == omniLpvEntityMagmaCube || entity == omniLpvEntityTnt
+		|| entity == omniLpvEntityFireball || entity == omniLpvEntityEndCrystal
+		|| entity == omniLpvEntitySpectralArrow) return uint(entity); // 是发光实体就交回自身编号。
+	return 0u; // 其它实体不发光，不写体素。
 }
 
 // ========================= 片元取样：读体积图并混回表面 =========================
@@ -159,6 +194,29 @@ mat4 omniLpvSaturationMatrix(float saturation){
 		vec4(0.0, 0.0, 0.0, 1.0));
 }
 
+// --- 蜡烛颜色：照 Eclipse `dimensions/setup.csh:12-33` 的 `LightColor_Candles_*` ---
+// 为什么按下标查颜色：蜡烛共十七种颜色，方块编号在光表里按颜色连续排布，减去起始编号再除以四就是颜色下标。
+vec3 omniLpvCandleColor(uint index){
+	if (index == 0u)  return vec3(1.000, 0.400, 0.100); // 普通蜡烛。
+	if (index == 1u)  return vec3(0.200); // 黑色。
+	if (index == 2u)  return vec3(0.000, 0.259, 1.000); // 蓝色。
+	if (index == 3u)  return vec3(0.459, 0.263, 0.149); // 棕色。
+	if (index == 4u)  return vec3(0.000, 0.839, 0.839); // 青色。
+	if (index == 5u)  return vec3(0.329, 0.357, 0.388); // 灰色。
+	if (index == 6u)  return vec3(0.263, 0.451, 0.000); // 绿色。
+	if (index == 7u)  return vec3(0.153, 0.686, 1.000); // 淡蓝色。
+	if (index == 8u)  return vec3(0.631, 0.627, 0.624); // 淡灰色。
+	if (index == 9u)  return vec3(0.439, 0.890, 0.000); // 黄绿色。
+	if (index == 10u) return vec3(0.757, 0.098, 0.812); // 品红色。
+	if (index == 11u) return vec3(1.000, 0.459, 0.000); // 橙色。
+	if (index == 12u) return vec3(1.000, 0.553, 0.718); // 粉色。
+	if (index == 13u) return vec3(0.569, 0.000, 1.000); // 紫色。
+	if (index == 14u) return vec3(0.859, 0.000, 0.000); // 红色。
+	if (index == 15u) return vec3(1.000); // 白色。
+	if (index == 16u) return vec3(1.000, 0.878, 0.000); // 黄色。
+	return vec3(1.000, 0.400, 0.100); // 表外编号退回普通蜡烛色，正常不会走到。
+}
+
 // --- 方块光表：编号到光色、光强、透光率与可透方向，来源 Eclipse `dimensions/setup.csh:73-1220` ---
 // 本表用本项目 `block.properties` 的编号；Eclipse 用另一套编号，这里逐类对照其颜色与光强搬过来。
 uvec2 omniLpvBlockData(uint id){
@@ -190,6 +248,28 @@ uvec2 omniLpvBlockData(uint id){
 	#ifdef OMNI_LPV_REDSTONE_LIGHTS
 	if (id == 55u) { lightColor = vec3(0.939, 0.305, 0.164); lightRange = 7.0; mixWeight = 1.0; } // 红石线（`setup.csh:662-736` 取最高档）。
 	if (id == 76u) { lightColor = vec3(0.939, 0.305, 0.164); lightRange = 7.0; mixWeight = 0.9; } // 红石火把（`setup.csh:654`）。
+	#endif
+
+	// --- 彩色蜡烛：颜色照 Eclipse `setup.csh:136-446`，光强按蜡烛数量一支三格、四支十二格；编号见 `block.properties` ---
+	// 为什么按下标算颜色与数量：七十二个编号按颜色四连排，减起始编号后除以四得颜色下标、取余得数量。
+	#ifdef OMNI_LPV_COLORED_CANDLES
+	if (id >= 7200u && id <= 7267u){
+		uint candleIndex = (id - 7200u) / 4u; // 颜色下标，零到十六。
+		uint candleCount = (id - 7200u) % 4u; // 蜡烛数量，零到三对应一至四支。
+		lightColor = omniLpvCandleColor(candleIndex); // 取该颜色。
+		lightRange = 3.0 * float(candleCount + 1u); // 一支三格、四支十二格。
+	}
+	#endif
+
+	// --- 实体光源：颜色与光强照 Eclipse `setup.csh:1161-1197`，编号来自 `entity.properties` ---
+	#ifdef OMNI_LPV_ENTITY_LIGHTS
+	if (id == uint(omniLpvEntityBlaze)) { lightColor = vec3(1.000, 0.592, 0.000); lightRange = 8.0; } // 烈焰人。
+	if (id == uint(omniLpvEntityGlowSquid)) { lightColor = vec3(0.180, 0.675, 0.761); lightRange = 6.0; mixWeight = 0.5; } // 发光鱿鱼。
+	if (id == uint(omniLpvEntityMagmaCube)) { lightColor = vec3(0.747, 0.323, 0.110); lightRange = 9.0; } // 岩浆怪。
+	if (id == uint(omniLpvEntityTnt)) { lightColor = vec3(1.0); lightRange = 8.0; } // 点燃的炸药。
+	if (id == uint(omniLpvEntityFireball)) { lightColor = vec3(0.000, 1.000, 0.000); lightRange = 8.0; mixWeight = 1.0; } // 小火球。
+	if (id == uint(omniLpvEntityEndCrystal)) { lightColor = vec3(1.0, 0.0, 1.0); lightRange = 10.0; } // 末地水晶。
+	if (id == uint(omniLpvEntitySpectralArrow)) { lightColor = vec3(0.839, 0.541, 0.2); lightRange = 8.0; mixWeight = 1.0; } // 光灵箭。
 	#endif
 
 	// --- 打包：光色与光强打进低字，染色与掩码打进高字，照 Eclipse `setup.csh:1216` ---

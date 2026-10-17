@@ -154,6 +154,11 @@
 // 雪暴与沙暴提供暴风强度、额外浓雾与雾色，供体积雾主体调用；默认关闭时整段不增加代码。
 #include "/effects/weather/storm.glsl"
 
+// 雾照明要用体积光的取样函数与选项；只在雾照明开启时引入，默认关闭时整段不出现，不影响原来引用。
+#if defined OMNI_LPV_VL_FOG_ILLUMINATION
+	#include "/effects/lighting/lpv.glsl"
+#endif
+
 // 雾的几个算法体按来源拆到同目录文件，这里按原程序的引用顺序引入。
 #include "/effects/fog/tod_fog.glsl"
 #include "/effects/fog/volumetric.glsl"

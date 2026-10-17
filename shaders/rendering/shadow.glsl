@@ -92,12 +92,21 @@ void main(){
 
 	#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
 	#if !defined OMNI_DH_SHADOW_PASS && !defined OMNI_END
-		// 光传播体积：只给地形与方块实体写体素，实体与玩家不挡光（照 Eclipse 排除实体的做法）；
-		// 顶点代表方块的一个角，加上方块中心偏移后落到该方块所属的整格，整块六个面写到同一格。
+		// 光传播体积：地形写体素；顶点代表方块的一个角，加上方块中心偏移后落到该方块所属的整格，整块六个面写到同一格。
 		if (entityId == 0){
 			vec3 voxelPos = (shadowModelViewInverse * v_viewPos).xyz + at_midBlock / 64.0; // 相机相对世界位置加中心偏移。
 			omniVoxelStore(omniVoxelIndex(voxelPos), omniVoxelBlockId(mc_Entity.x)); // 写进体素图，越界自动丢弃。
 		}
+		#ifdef OMNI_LPV_ENTITY_LIGHTS
+		else {
+			// 实体光源：只给发光实体写体素，让烈焰人、末地水晶等实体也点亮体积光；不发光实体不写，光会正常穿过它们。
+			uint entityVoxel = omniLpvEntityVoxelId(entityId); // 把实体编号映射成体素编号，非发光实体得到零。
+			if (entityVoxel > 0u){
+				vec3 voxelPos = (shadowModelViewInverse * v_viewPos).xyz; // 实体顶点直接换成相机相对世界坐标，不加方块中心偏移。
+				omniVoxelStore(omniVoxelIndex(voxelPos), entityVoxel); // 写进体素图；同一实体的多个顶点会重复写同一格，结果一致。
+			}
+		}
+		#endif
 	#endif
 	#endif
 

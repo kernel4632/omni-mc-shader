@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.0.0-dev.142
+
+补全 Eclipse 体积光（LPV）的四个细分项：彩色蜡烛、实体光源、雾照明与手持光阴影强度和质量。
+
+- 彩色蜡烛 `OMNI_LPV_COLORED_CANDLES`（默认关，`shaders/block.properties`、`shaders/effects/lighting/lpv.glsl`）：点亮十七种颜色的蜡烛各自按自身颜色发彩色光，颜色与数量分列编号，颜色照 Eclipse `dimensions/setup.csh:12-33`、光强按一支三格到四支十二格照 `setup.csh:136-446`。默认关闭时这些方块编号不注册，画面与原来完全一致。
+- 实体光源 `OMNI_LPV_ENTITY_LIGHTS`（默认开，等于 Eclipse；但体积光默认关，所以默认画面不变）：`shaders/entity.properties` 为烈焰人、发光鱿鱼、岩浆怪、点燃的TNT、小火球分配编号，光色与光强照 Eclipse `setup.csh:1161-1197`；`shaders/rendering/shadow.glsl` 的阴影顶点阶段在写地形体素之外，给这些发光实体写体素（来源 Eclipse `lib/voxel_write.glsl:129-168`）。不发光实体不写，光正常穿过。
+- 雾照明 `OMNI_LPV_VL_FOG_ILLUMINATION`（默认关）与 `OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS`：体积彩色光照亮周围空气，洞穴里能看到带颜色的光晕；照 Eclipse `dimensions/composite3.fsh:235-262` 在体积雾步进里逐段累加，接在 `shaders/effects/fog/volumetric.glsl`，`shaders/effects/fog/fog.glsl` 只在开启时引入体积光取样。默认关闭时整段不产生代码。
+- 手持光阴影强度与质量 `OMNI_HELDLIGHT_SHADOW_STRENGTH`、`OMNI_HELDLIGHT_SHADOW_QUALITY`（`shaders/effects/lighting/blocklight.glsl`）：对应 Eclipse `LPV_HANDHELD_SHADOWS_STRENGTH/_QUALITY`；强度默认零点八五、质量默认低，与升级前的手持光屏幕阴影逐位一致。本项目的手持光与阴影来自 iterationT（`OMNI_HELDLIGHT_SHADOW`），这里只补 Eclipse 的参数面。
+- 差异说明：方块实体光（如附魔台、酿造台）与 Eclipse 的彩色灯具分类未接入；实体光源不含掉落的物品实体，逐条记进 `docs/eclipse-parity.md` 的「LPV/间接光」行。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.141
 
 把 Eclipse 的 floodfill 彩色光传播体积（LPV）整体搬进 Omni，替换原来八格立方的简易体积光，并按需要补上体素化。

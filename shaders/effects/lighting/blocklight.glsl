@@ -47,6 +47,10 @@
 #define OMNI_HELDLIGHT_FALLOFF 1.8 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0]
 // @option {"label":{"zh_cn":"手持光投阴影","en_us":"Held light shadow"},"description":{"zh_cn":"让手持光源投射屏幕空间阴影，可能出现轻微的错误遮挡。","en_us":"Lets the held light cast screen-space shadows; may show slight wrong occlusion."}}
 #define OMNI_HELDLIGHT_SHADOW
+// @option {"label":{"zh_cn":"手持光阴影强度","en_us":"Held light shadow strength"},"description":{"zh_cn":"手持光源投下阴影的最大变暗程度，一为全黑、零不压暗；零点八五与原来一致，对应 Eclipse 的 LPV_HANDHELD_SHADOWS_STRENGTH。","en_us":"Maximum darkening of the held light's shadow; 1 is fully dark, 0 does not darken; 0.85 matches the old look; matches Eclipse's LPV_HANDHELD_SHADOWS_STRENGTH."},"slider":true}
+#define OMNI_HELDLIGHT_SHADOW_STRENGTH 0.85 // [0.0 0.25 0.5 0.6 0.7 0.75 0.8 0.825 0.85 0.875 0.9 0.925 0.95 0.975 1.0]
+// @option {"label":{"zh_cn":"手持光阴影质量","en_us":"Held light shadow quality"},"description":{"zh_cn":"手持光屏幕阴影的步数，高更精细也更慢；对应 Eclipse 的 LPV_HANDHELD_SHADOWS_QUALITY。","en_us":"Steps of the held light's screen shadow; high is finer and slower; matches Eclipse's LPV_HANDHELD_SHADOWS_QUALITY."},"values":{"0":{"zh_cn":"低","en_us":"Low"},"1":{"zh_cn":"高","en_us":"High"}}}
+#define OMNI_HELDLIGHT_SHADOW_QUALITY 0 // [0 1]
 // @option {"label":{"zh_cn":"手持光影响高光","en_us":"Held light specular"},"description":{"zh_cn":"把手持光源映到表面高光上；需要支持高光贴图的资源包并开启 PBR。","en_us":"Maps the held light into surface specular; needs a specular-map pack with PBR on."}}
 #define OMNI_SPECULAR_HELDLIGHT
 // @option {"label":{"zh_cn":"手电筒光束角度","en_us":"Flashlight FOV"},"description":{"zh_cn":"手电筒照亮范围的大小。","en_us":"Size of the flashlight's lit cone."},"slider":true}
@@ -175,6 +179,12 @@ float spotShape(float r){
 // 为什么起点要沿法线抬一点：手持光源离表面很近，不抬会刚出发就打到自己，整片出现自阴影。
 // 为什么用蓝噪声抖动采样：固定采样会在光斑边缘留下规则条纹，抖动后配合时间抗锯齿消除。
 float TorchScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowDir){
+	#if OMNI_HELDLIGHT_SHADOW_QUALITY > 0 // 高质量用两倍步数，阴影更连续、远处也压得住。
+		const int omniHeldShadowSteps = 16;
+	#else
+		const int omniHeldShadowSteps = 8; // 低质量步数与原来一致。
+	#endif
+
 	shadowDir.z = max(shadowDir.z, 1e-5); // 深度分量保证不太小，避免下列除法把射线推到无穷远。
 
 	float rayLength = -0.04 * viewPos.z / shadowDir.z; // 一步射线的长度，按当前深度与光源方向缩放。
@@ -213,7 +223,7 @@ float TorchScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shado
 	float shadow = 1.0; // 可见度，初值全亮。
 	float stepLength = 1.0; // 步长，逐步增大。
 
-	for (int i = 0; i < 8; i++, start += screenRayDir * stepLength, stepLength += 0.3){ // 最多八步，步长递增覆盖更远。
+	for (int i = 0; i < omniHeldShadowSteps; i++, start += screenRayDir * stepLength, stepLength += 0.3){ // 按质量取八或十六步，步长递增覆盖更远。
 		vec3 samplePos = start + screenRayDir * noise * stepLength; // 加抖动的采样位置。
 
 		if (samplePos.z < minDist) break; // 已经走到相机很近的地方，后面没有可靠深度。
@@ -245,7 +255,7 @@ float TorchScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shado
 		}
 	}
 
-	return shadow * 0.85 + 0.15; // 留一点底光，避免手持光阴影处全黑。
+	return max(shadow, 1.0 - OMNI_HELDLIGHT_SHADOW_STRENGTH); // 按强度给阴影压到下限，强度零点八五时与原来的零点一五底光完全一致。
 }
 
 // --- 手持光源：火把球形光与手电筒一束光 ---

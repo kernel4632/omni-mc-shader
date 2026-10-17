@@ -10,6 +10,8 @@
   并声明相机与阴影相关全局量；本文件不重复引入。
 关键设计原因与取舍：`FogDensityScale` 按合同拆到同目录 `tod.glsl` 并先于本文件引入；`VFOG_LQ` 由合成二号打开，
   反射通道只用三步；群系与暴风两层按开关折叠，默认关闭时整段不产生代码。
+  雾照明按 Eclipse `composite3.fsh` 把体积彩色光逐段加进雾里：要同时开启体积光与雾照明（`OMNI_LPV_FOG_LIGHT`），
+  并已由 `effects/fog/fog.glsl` 引入 `effects/lighting/lpv.glsl` 提供取样函数，默认关闭时整段不产生代码。
 */
 #ifndef OMNI_VOLUMETRIC_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_VOLUMETRIC_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -177,6 +179,9 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 	transmittance = 1.0; // 透射率从全透开始。
 	float fogDensity = 0.0; // 环境雾累计量。
 	float rayDensity = 0.0; // 阳光散射累计量。
+	#ifdef OMNI_LPV_FOG_LIGHT // 雾照明要同时开启体积光与雾照明、并具备自定义图像能力才累计。
+		vec3 lpvFogLight = vec3(0.0); // 体积彩色光照亮空气的累计量，与天空光衰减无关，洞穴暗处也要可见。
+	#endif
 
 	#ifdef MC_GL_VENDOR_NVIDIA // 只有部分显卡支持给半透明玻璃染色。
 		#ifdef OMNI_VFOG_STAINED
@@ -290,6 +295,16 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		
 		
 		transmittance *= absorption; // 透射率逐步衰减。
+
+		#ifdef OMNI_LPV_FOG_LIGHT // 雾照明：把这一步所在空气的体积彩色光按本步吸收量累加进来。
+			vec3 lpvPos = omniLpvPosition(fogPos - cameraPosition); // 体积坐标；雾采样点是绝对世界坐标，要先减相机位置。
+			float lpvFade = omniLpvRangeFalloff(lpvPos); // 体积边缘淡出，避免体积边界出现硬边。
+			if (lpvFade < 0.01) break; // 走出体积就不再步进，与 Eclipse `composite3.fsh:241` 一致。
+			vec3 lpvColor = omniLpvSample(lpvPos).rgb; // 读这一点被照亮的空气颜色，零到一。
+			float lpvLuma = dot(lpvColor, vec3(0.2126, 0.7152, 0.0722)); // 亮度，用来按 Eclipse 抑制暗色光。
+			vec3 lpvLighting = lpvColor * (OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS * 0.25) * exp(-5.0 * (1.0 - lpvLuma)); // 照 Eclipse `composite3.fsh:247`，亮度基准按一百换算。
+			lpvFogLight += lpvLighting * integral * lpvFade; // 按这一步吸收量与边缘淡出累积。
+		#endif
 	}
 
 
@@ -339,5 +354,8 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 
 	color = transmittance * color; // 场景色先被雾吸收。
 	color += fogColor + rayColor; // 再叠上雾色与散射。
+	#ifdef OMNI_LPV_FOG_LIGHT // 雾照明：叠上被体积彩色光照亮的空气，不随天空光衰减，暗处彩色光晕也能看见。
+		color += lpvFogLight; // 直接把累计的被照亮空气加到画面上。
+	#endif
 }
 #endif // OMNI_VOLUMETRIC_INCLUDED 结束。
