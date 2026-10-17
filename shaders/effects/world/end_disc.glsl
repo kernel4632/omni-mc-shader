@@ -6,7 +6,8 @@
   `BlackHole_AccretionDisc_Stars` 画天空版吸积盘并叠星空，`BlackHole_AccretionDisc_Reflection` 是步数更少的反射版。
 调用位置：由 `effects/world/end.glsl` 引入；合成零号调用天空版，`ComputeFakeSkyReflectionEnd` 调用反射版。
 可复制示例：`BlackHole_AccretionDisc_Stars(finalComposite, worldDir, worldShadowVector);`
-调用前提：由 `effects/world/end.glsl` 引入，且已先引入 `effects/world/end_sky.glsl`（提供 `EndCalculateStars`）；
+调用前提：由 `effects/world/end.glsl` 引入，且已先引入 `effects/world/end_sky.glsl`（提供 `EndCalculateStars`，
+  它内部复用 `effects/sky/sky.glsl` 的 `CalculateStars`，所以两者都要先就位）；
   `noisetex`、`frameTimeCounter`、`Blackbody`、`BlueNoiseTemporal`、`InterleavedGradientNoise`、`OMNI_TAA`、
   `OMNI_STAR_TYPE` 由绘制主体与共享文件提供。
 关键设计原因与取舍：`EndCalculate3DNoise` 加 `End` 前缀与主世界 `effects/fog/fog.glsl` 的同名函数区分；

@@ -227,7 +227,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 - 时间抗锯齿辅助函数（`clipAABB`、`RGB_To_YCoCg`、`SampleDepthFetch` 等）：主世界与下界版放 `effects/clarity/antialiasing.glsl`，用 `#ifdef OMNI_NETHER` 选择不同的部分。
 - `CalculateCameraVelocity`：放 `common/coordinates.glsl` 一份；各处实现不同时加后缀。
 - `AxialGaussianBlur`：泛光版留在 `effects/color/bloom.glsl`，云影模糊版改名 `CloudShadowAxialBlur` 放 `effects/cloud/cloud.glsl`。
-- `Calculate3DNoise`、`CalculateStars`：末地版加 `End` 前缀并拆到 `effects/world/end_disc.glsl`、`effects/world/end_sky.glsl`；主世界版分别在 `effects/fog/volumetric.glsl`、`effects/sky/sky.glsl`。
+- `Calculate3DNoise`、`CalculateStars`：末地版加 `End` 前缀并拆到 `effects/world/end_disc.glsl`、`effects/world/end_sky.glsl`；主世界版分别在 `effects/fog/volumetric.glsl`、`effects/sky/sky.glsl`。（2026-10-18：末地星空改用 Eclipse 星场，`EndCalculateStars` 只转发主世界 `CalculateStars`，见偏离记录 49；`Calculate3DNoise` 仍按下述加 `End` 前缀。）
 - `NetherFog`、`ComputeFakeSkyReflection`、`RefractSampleOnce`、`TransparentAbsorption`：维度各自实现不同时，下界与末地版加 `Nether`、`End` 后缀，由己片负责。
 
 ## 十、分片与状态
@@ -311,6 +311,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
     - 末地同名函数按第九点五节加 `End` 前缀：`CalculateStars` → `EndCalculateStars`、`Calculate3DNoise` → `EndCalculate3DNoise`；
       `ComputeFakeSkyReflection` 末地版为 `ComputeFakeSkyReflectionEnd`，下界/末地的 `RefractSampleOnce`、`TransparentAbsorption` 分别加 `Nether`、`End` 后缀，
       下界 `NetherFog` 有 `vec2`（合成二号）与 `float`（合成五号）两个重载。末地 `CalculateStars` 的第二参数与主世界版不同，靠 `End` 前缀与主世界版共存。
+      （2026-10-18 小步更新：末地星空改用 Eclipse 星场，`EndCalculateStars` 只转发主世界 `CalculateStars`，不再自带第二参数，见偏离记录 49。）
     - 下界时间抗锯齿照 `TAA_Nether.glsl` 移进 `effects/clarity/antialiasing.glsl` 的 `OMNI_NETHER` 分支（参考深度打包进七号画面透明度通道），
       `rendering/post.glsl` 的合成七号在下界改用四参数版 `TemporalReprojection` 并自行打包写回。
     - 延迟程序按维度重排：下界与末地的延迟零号是复制程序（`world-1/deferred.fsh`、`world1/deferred.fsh`），
@@ -357,6 +358,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
     顶点、几何、片元三个阶段的入口结构与输入输出，算法体搬到 `effects/ground/terrain_surface.glsl` 与 `effects/ground/grass_geometry.glsl`。
     入口集中定义本效果的选项与内部常数，分文件按来源用同一顺序引入，`#include` 语义与拆分前逐段一致，默认画面与算法不变。
 48. 远景参与开关默认开，与 iterationT 默认画面一致：Eclipse 的三项远景开关 `DH_AMBIENT_OCCLUSION`、`DH_SUBSURFACE_SCATTERING`、`DH_SCREENSPACE_REFLECTIONS`（`lib/settings.glsl:1095-1097`）合为 `OMNI_DH_AO`（`effects/lighting/ambient.glsl:69`）、`OMNI_DH_SSS`（`effects/shadow/shadow.glsl:50`）、`OMNI_DH_SSR`（`effects/reflection/reflection.glsl:39`）。Omni 的远景参与本来就走 iterationT 路径读 `dhDepthTex0/1` 与材质编号，这三项只是加独立开关、默认开等于现状（关闭时才让远景像素按天空处理或不透光），所以默认画面与 iterationT 一致；与其余 Eclipse 合并项「默认中性」的差别与近似说明见 `docs/eclipse-parity.md` 的「远景（DH）」行。
+49. 末地星空改用 Eclipse 星场（2026-10-18，按用户要求）：`effects/world/end_sky.glsl` 的 `EndCalculateStars`（`:28`）不再自带 iterationT 的三维格子星空，改为直接转发主世界 `effects/sky/sky.glsl` 的 `CalculateStars(worldDir, worldSunVector)`，与主世界共用同一份 Eclipse `lib/stars.glsl` 星场（白色稳定星场默认、彩色星盒由 `OMNI_STARS_COLORED` 开启）。签名不变（仍只吃世界方向），调用点 `effects/world/end_disc.glsl:186` 的 `EndCalculateStars(rayDir)` 不变。与旧 iterationT 末地星空的差别：星点形状与疏密随 Eclipse 星场改变；朝向改用主世界 `CalculateStars` 的「绕日轴对齐天球」，不再按时间绕竖直轴旋转；原先独立的三维格子哈希、`coverage`/`maxLuminance` 与按格取样代码整体删除。默认 `OMNI_STAR_TYPE=1`，末地天空像素会因此换星点外观（属本次要求的效果改动，不属默认中性项）；`OMNI_STAR_TYPE=0`（关星）或 `=2`（原版贴图）时与原来一致。差异说明见 `docs/eclipse-parity.md` 的「星空」行。仅离线编译与检查通过，游戏内画面未验证。
 
 ### 已裁决：旧选项的处置（2026-10-16）
 

@@ -1,5 +1,26 @@
 # 更新记录
 
+## 0.0.0-dev.148
+
+给远景补上 TAA 抖动开关，并把远景进阴影图对照 Eclipse 记录清楚。
+
+- 远景抖动开关 `OMNI_DH_TAA_JITTER`（`shaders/effects/clarity/antialiasing.glsl`，默认开）：控制远景地形与水是否随近景一起做逐帧时间抗锯齿抖动，来源 Eclipse `lib/settings.glsl:1098` 的 `DH_TAA_JITTER`。远景顶点在 `shaders/rendering/distant.glsl` 按它决定是否叠加本帧抖动，`shaders/common/coordinates.glsl` 的远景撤销抖动 `ViewPos_From_ScreenPos_DH` 用同一开关，两端口径一致；关闭后远景不抖、更稳，交界可能与近景错半像素。默认开，画面与原来完全一致。
+- 远景进阴影图开关：确认为已有能力 `OMNI_DH_SHADOW`（`shaders/effects/shadow/shadow.glsl:56`，默认关），即 Eclipse `lib/settings.glsl:1081` 的 `DISTANT_HORIZONS_SHADOWMAP`，属换来源（Omni 用 iterationT 的 `DH_SHADOW`）。它在 `shaders/rendering/pipeline.properties` 开关 `dhShadow`，并在 `shaders/effects/lighting/composite_surface*.glsl` 判定远景叶片透光。本次未改代码，只对齐记录。
+- 差异说明记入 `docs/eclipse-parity.md` 的「远景（DH）」行：`DH_TAA_JITTER` 由「未合并」改为已合并（新选项 `OMNI_DH_TAA_JITTER`），`DISTANT_HORIZONS_SHADOWMAP` 由「未合并」改为换来源（沿用 `OMNI_DH_SHADOW`）；`DISTANT_HORIZONS_SHADOWMAP` 关闭阴影失真的做法与 `DH_SHADOWPROJECTIONTWEAK` 仍无对应。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
+## 0.0.0-dev.147
+
+把末地星空也换成 Eclipse 的实现，与主世界共用同一份 Eclipse 星场。
+
+- 末地星空（`shaders/effects/world/end_sky.glsl`）：`EndCalculateStars` 不再自带 iterationT 的三维格子星空，改为直接调用主世界 `effects/sky/sky.glsl` 的 `CalculateStars(worldDir, worldSunVector)`，与主世界共用同一份 Eclipse `lib/stars.glsl` 星场。签名不变（仍只吃世界方向），调用点 `effects/world/end_disc.glsl` 的 `EndCalculateStars(rayDir)` 不用改。
+- 与旧 iterationT 末地星空的差别：星点形状与疏密随 Eclipse 星场改变；朝向改用主世界 `CalculateStars` 的「绕日轴对齐天球」，不再按时间绕竖直轴旋转；原先独立的三维格子哈希、`coverage`/`maxLuminance` 与按格取样代码整体删除。`OMNI_STARS_COLORED` 同时作用于末地，开启后末地也是带星温的彩色星盒。
+- 默认 `OMNI_STAR_TYPE=1`，末地天空像素会因此换星点外观（属本次要求的效果改动）；`OMNI_STAR_TYPE=0`（关星）或 `=2`（原版贴图）时与原来一致。
+- 文件头与依赖同步（`end_sky.glsl`、`end.glsl`、`end_disc.glsl`）：星空改为依赖 `effects/sky/sky.glsl`，`remapSaturate`、`Blackbody` 不再由本文件使用。
+- 差异说明记入 `docs/eclipse-parity.md` 的「星空」行与 `docs/parity.md` 偏离记录 49。
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.146
 
 给体积云加渲染分辨率选项：可让基础体积云在更低的分辨率上步进，再放大贴回天空。

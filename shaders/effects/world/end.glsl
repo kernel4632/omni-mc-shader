@@ -1,7 +1,8 @@
 /*
 末地天空与雾：画出末地特有的星空、行星、吸积盘光环、大气雾与主岛光源，全部按时间因子旋转。
-来源：主体照 iterationT `Lib/IndividualFounctions/EndSky.glsl` 一比一移植，只有同名冲突函数按移植合同九点五节
-  加 `End` 前缀（`CalculateStars`、`Calculate3DNoise`），函数体不变；
+来源：行星、吸积盘与雾照 iterationT `Lib/IndividualFounctions/EndSky.glsl` 一比一移植，同名冲突函数按移植合同九点五节
+  加 `End` 前缀（`Calculate3DNoise`）；星空按用户要求换成 Eclipse `lib/stars.glsl`，复用主世界
+  `effects/sky/sky.glsl` 的 `CalculateStars`，`EndCalculateStars` 只做转发，差异记入 `docs/parity.md` 偏离记录；
   主岛光源与末地雾的两个密度选项来自 Eclipse（`lib/settings.glsl:419-421`、`:911-912`、`dimensions/composite.fsh:509`），
   按 `docs/eclipse-parity.md` 第 37、39 行合并，默认关闭或取中性值；体积涡旋雾来自 Eclipse `lib/end_fog.glsl`，默认关闭。
 职责：本文件是末地效果入口，集中定义全部末地选项与内部常数，声明 `timeFactor`、`planetShadow` 两个全局量，
@@ -22,7 +23,7 @@
   `frameTimeCounter`、`noisetex`、`cameraPosition` 由 `common/uniforms.glsl` 提供，`MiePhaseFunction`、`Blackbody`、
   `RaySphereIntersection`、`RayPlaneIntersection`、`remapSaturate`、`curve`、`saturate`、`InterleavedGradientNoise`、
   `Fd_Burley`、`SpecularGGX` 由 `common/math.glsl` 提供，`BlueNoiseTemporal` 由 `common/noise.glsl` 提供；
-  `OMNI_SUNLIGHT_INTENSITY` 由 `effects/lighting/sunlight.glsl` 提供，`OMNI_STAR_TYPE` 由 `effects/sky/sky.glsl` 提供，
+  `OMNI_SUNLIGHT_INTENSITY` 由 `effects/lighting/sunlight.glsl` 提供，`OMNI_STAR_TYPE` 与星场 `CalculateStars` 由 `effects/sky/sky.glsl` 提供，
   `OMNI_TAA` 由 `effects/clarity/antialiasing.glsl` 提供；这些都必须在引入本文件之前引入。
 关键设计原因与取舍：
   原程序在文件顶部用 `frameTimeCounter` 与旋转周期算出 `timeFactor` 与 `planetShadow` 两个全局量，本文件照搬，
