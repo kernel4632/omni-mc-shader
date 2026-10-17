@@ -524,7 +524,7 @@ def check() -> None:
     reference_seen = set()  # 全树引用校验共享已访问集合，每个文件只走一次。
     for source in SHADERS.rglob("*.glsl"):  # 主体即使未接入入口，也检查引用边界。
         check_references(source, SHADERS, seen=reference_seen)  # 只走引用树，不拼接文本，避免为校验再做一次全量展开。
-    # 十秒预算内的编译探针：只编体积小的程序，覆盖地形、水、阴影与最终显示四条轻量通路；合成与延迟的完整覆盖由 `python build.py compile` 负责。
+    # 十秒预算内的编译探针：只编体积小的程序，覆盖地形、阴影与最终显示三条轻量通路；合成与延迟的完整覆盖由 `python build.py compile` 负责。
     # 为什么这样分：合成本体展开后有两千多万字符，单编一个就要八九秒，塞不进常规验证的预算；缩到小程序仍能挡住语法、引入与宏撞名错误。
     # 实测这三条编默认配置与基础环境，再加地形一组全高与开远景，共 4 组唯一程序；整体耗时见本机 `verify` 输出。
     key_programs = {"gbuffers_terrain"}  # 只有地形一组在全部代表配置与两组环境下再编一次。
