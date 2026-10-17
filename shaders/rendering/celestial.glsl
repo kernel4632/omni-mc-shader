@@ -12,6 +12,8 @@
   天空基础画原版天空渐变，天空贴图画日月与天空盒贴图，两者都靠叠加混合进零号画面。
   日月与天空盒的开关选项归属 `effects/sky/sky.glsl`，只在片元引入它；顶点与几何阶段只用时间抗锯齿选项。
   `effects/sky/sky.glsl` 的星点函数读取世界太阳方向，引入前要给它一个空全局，几何阶段不引入它所以不需要。
+  资源包天空（`OMNI_RESOURCEPACK_SKY`，只主世界）打开时天空基础与天空贴图照画全部原版绘制阶段，
+  让资源包的自定义天空层、日月与星空原样叠进零号画面，供延迟三号当天空底色读；关闭或非主世界时维持原来的丢弃规则。
 */
 #ifndef OMNI_CELESTIAL_BODY_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_CELESTIAL_BODY_INCLUDED // 置上标记。
@@ -100,10 +102,12 @@ layout(location = 0) out vec4 gbufferOutput0; // 零号天体颜色。
 
 in vec4 color; // 顶点色。
 
-// 片元主函数：星点类型为关时丢弃，其余把顶点色叠进零号。
+// 片元主函数：星点类型为关且没开资源包天空时丢弃，其余把顶点色叠进零号。
 void main(){
-	#if OMNI_STAR_TYPE < 2 // 星点关或点状时天空基础不画。
-		discard; // 直接丢弃。
+	#if OMNI_STAR_TYPE < 2 // 星点关或点状时天空基础一般不用。
+		#if !(defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空要原版天空底色与星空，这时照画。
+			discard; // 直接丢弃。
+		#endif
 	#endif
 	gbufferOutput0 = color; // 写原版天空渐变颜色。
 }
@@ -153,7 +157,7 @@ vec4 BilinearTextureSkybox(sampler2D texSampler, vec2 coord, vec2 texSize){
 			   f.y); // 纵向插值。
 }
 
-// 片元主函数：月亮与天空盒各有开关，关闭时丢弃。
+// 片元主函数：月亮与天空盒各有开关，关闭时丢弃；资源包天空打开时全部原样叠加。
 void main(){
 	vec4 albedo = vec4(0.0); // 待填充的颜色。
 
@@ -161,7 +165,9 @@ void main(){
 		#ifdef OMNI_MOON_TEXTURE // 开启月亮贴图时按是否在水下决定要不要画。
 			if (isEyeInWater != 0) discard; // 水下不画月亮。
 		#else
-			discard; // 关闭月亮贴图时丢弃。
+			#if !(defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空也要资源包的月亮，这时照画。
+				discard; // 关闭月亮贴图时丢弃。
+			#endif
 		#endif
 
 		#ifdef OMNI_BILINEAR_MOON_TEXTURE // 月亮贴图按开关选双线性或普通采样。
@@ -169,9 +175,11 @@ void main(){
 		#else
 			albedo = textureLod(tex, texCoord, 0.0); // 普通采样。
 		#endif	
-	}else{ // 天空盒图块。
+	}else{ // 天空盒图块，资源包天空时这里还包括太阳与自定义天空层。
 		#ifndef OMNI_SKYBOX_TEXTURE // 关闭天空盒贴图时丢弃。
-			discard; // 丢弃。
+			#if !(defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空要资源包的天空层与太阳，这时照画。
+				discard; // 丢弃。
+			#endif
 		#endif
 
 		#ifdef OMNI_BILINEAR_SKYBOX_TEXTURE // 天空盒按开关选双线性或普通采样。

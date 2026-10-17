@@ -525,7 +525,7 @@
 			if (cameraPosition.y < OMNI_PLANAR_ALTITUDE && !intersectsGround)
 				PlanarClouds(color, worldDir, camera, noise.y, cloudImage.a); // 平面云，传入体积云留下的透过率。
 		#endif
-		#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层同样在全分辨率上叠加。
+		#if OMNI_CLOUD_CUMULONIMBUS > 0 || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层同样在全分辨率上叠加。
 			float cloudTransmittance = cloudImage.a; // 从体积云留下的透过率接着算。
 			NubisExtraLayers(color, worldDir, windDirection, camera, noise, intersectsGround, cloudTransmittance); // 卷云、高层云与积雨云。
 		#endif

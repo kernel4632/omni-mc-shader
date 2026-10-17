@@ -11,7 +11,8 @@
 关键设计原因与取舍：`FogDensityScale` 按合同拆到同目录 `tod.glsl` 并先于本文件引入；`VFOG_LQ` 由合成二号打开，
   反射通道只用三步；群系与暴风两层按开关折叠，默认关闭时整段不产生代码。
   雾照明按 Eclipse `composite3.fsh` 把体积彩色光逐段加进雾里：要同时开启体积光与雾照明（`OMNI_LPV_FOG_LIGHT`），
-  并已由 `effects/fog/fog.glsl` 引入 `effects/lighting/lpv.glsl` 提供取样函数，默认关闭时整段不产生代码。
+  并已由 `effects/fog/fog.glsl` 引入 `effects/lighting/lpv.glsl` 提供取样函数，默认关闭时整段不产生代码；
+  同一处还按 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD` 叠上手持光源（火把等）在空气里的光晕，默认关闭。
 */
 #ifndef OMNI_VOLUMETRIC_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_VOLUMETRIC_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -304,6 +305,11 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 			float lpvLuma = dot(lpvColor, vec3(0.2126, 0.7152, 0.0722)); // 亮度，用来按 Eclipse 抑制暗色光。
 			vec3 lpvLighting = lpvColor * (OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS * 0.25) * exp(-5.0 * (1.0 - lpvLuma)); // 照 Eclipse `composite3.fsh:247`，亮度基准按一百换算。
 			lpvFogLight += lpvLighting * integral * lpvFade; // 按这一步吸收量与边缘淡出累积。
+			#ifdef OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD // 雾照明-手持光：手里的火把等也照亮这一步的空气。
+				// 取两只手持光源在该点留下的光，按 Eclipse `composite3.fsh:258` 的系数（零点零四，再按本项目百分之一定标缩到零点零零零四）累加。
+				vec3 handLight = omniLpvHandLight(heldItemId, fogPos - cameraPosition) + omniLpvHandLight(heldItemId2, fogPos - cameraPosition); // 两手光源的光色乘距离衰减。
+				lpvFogLight += handLight * (OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS * 0.0004) * integral * lpvFade; // 与体积光同一处累积，得到暖色的手持光晕。
+			#endif
 		#endif
 	}
 

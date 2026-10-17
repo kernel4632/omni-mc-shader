@@ -21,6 +21,8 @@
     真实月亮模式需要的月亮贴图与法线贴图是 Eclipse 自带文件，本项目没有，缺少时退回程序圆盘，见 `RenderMoonDisc`。
     月亮颜色的三通道倍率（`OMNI_MOON_COLOR_R/G/B`）来自 Eclipse `lib/settings.glsl:402-404` 的 `moonColorR/G/B`：
     Eclipse 把这三个值直接当月亮色，本项目已有色温路径，这里改成乘在基础月亮色上的倍率，默认全一、画面不变。
+    资源包天空（`OMNI_RESOURCEPACK_SKY`）与其它天文量不同：它不靠查表，而是让原版与资源包把天空几何画进零号画面再读回来，
+    所以本文件只放选项；天空几何的分流在 `rendering/celestial.glsl`，底色读取与合成在 `effects/sky/skyrender.glsl`。
 */
 #ifndef OMNI_SKY_INCLUDED
 #define OMNI_SKY_INCLUDED
@@ -39,6 +41,10 @@
 #define OMNI_NIGHT_BRIGHTNESS 0.0003 // [0.0 0.0001 0.00015 0.0002 0.0003 0.0005 0.0007 0.001 0.0015 0.002 0.003 0.005 0.007 0.01 1.0]
 // @option {"label":{"zh_cn":"天空盒纹理","en_us":"Skybox Texture"},"description":{"zh_cn":"用资源包的天空盒贴图叠在天空上。","en_us":"Overlays the resource pack skybox texture on the sky."}}
 //#define OMNI_SKYBOX_TEXTURE
+// @option {"label":{"zh_cn":"资源包天空","en_us":"Resource Pack Sky"},"description":{"zh_cn":"用资源包画好的整片天空（自定义天空层、日月与星空）当天空底色，替换光影的程序化大气；只作用在主视图的天空，水面反射的天空盒仍用程序化大气。默认关闭，关闭时画面与从前一致。","en_us":"Uses the resource pack's painted sky (custom sky layers, sun, moon and stars) as the sky base instead of the procedural atmosphere; only the main view is affected, reflections keep the procedural skybox. Off by default."}}
+//#define OMNI_RESOURCEPACK_SKY
+// @option {"label":{"zh_cn":"资源包天空亮度","en_us":"Resource Pack Sky Brightness"},"description":{"zh_cn":"资源包天空底色的亮度倍率，用来和光影本身的大气亮度对齐；只在开启资源包天空时生效，具体数值要在游戏里对照调整。","en_us":"Brightness multiplier for the resource pack sky base, to match the shader's own atmosphere; only used with Resource Pack Sky. The exact value needs in-game tuning."},"slider":true}
+#define OMNI_RESOURCEPACK_SKY_BRIGHTNESS 1.0 // [0.0 0.05 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0]
 // @option {"label":{"zh_cn":"反射天空盒分辨率","en_us":"Skybox Resolution"},"description":{"zh_cn":"反射里天空贴图的边长，越高越清晰也越费性能。","en_us":"Side length of the reflected sky image; higher is sharper and costlier."},"values":{"32.0":{"zh_cn":"极低","en_us":"Lowest"},"64.0":{"zh_cn":"低","en_us":"Low"},"128.0":{"zh_cn":"中","en_us":"Medium"},"256.0":{"zh_cn":"高","en_us":"High"},"512.0":{"zh_cn":"极高","en_us":"Very high"}}}
 #define OMNI_SKY_IMAGE_RESOLUTION 64.0 // [32.0 48.0 64.0 96.0 128.0 192.0 256.0 384.0 512.0]
 // @option {"label":{"zh_cn":"纹理亮度","en_us":"Texture Brightness"},"description":{"zh_cn":"原版星星、月亮贴图和天空盒的亮度倍率。","en_us":"Brightness multiplier for vanilla stars, the moon texture and the skybox."},"slider":true}

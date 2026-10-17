@@ -8,7 +8,9 @@
 调用前提：由 `effects/fog/fog.glsl` 在引入 `effects/water/water.glsl` 之后引入，所以水下雾选项
   `OMNI_UNDERWATER_FOG` 与水雾密度选项可用；波法线来自 `effects/shadow/shadow.glsl`。
 关键设计原因与取舍：原 `UnderwaterVolumetricFog.glsl` 里的 `CalculateWaterCaustics` 与
-  `effects/shadow/shadow.glsl` 的同名函数内容不同，按移植合同改名 `CalculateUnderwaterCaustics`，函数体不变。
+  `effects/shadow/shadow.glsl` 的同名函数内容不同，按移植合同改名 `CalculateUnderwaterCaustics`，函数体不变；
+  另外按 Eclipse `composite3.fsh` 补上 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER`：手持光源也照亮水体，
+  颜色与范围取自手持物品（`effects/lighting/lpv.glsl` 的 `omniLpvHandLight`），按水的分波段吸收衰减。
 */
 #ifndef OMNI_UNDERWATER_FOG_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_UNDERWATER_FOG_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -52,6 +54,11 @@ vec3 UnderwaterVolumetricFog(vec3 startPos, vec3 endPos, vec3 worldDir, float gl
 	float noise = BlueNoiseTemporal().y; // 每帧变化的抖动。
 
 	vec3 result = vec3(0.0); // 累加的光柱颜色。
+	#ifdef OMNI_LPV_FOG_LIGHT
+		#ifdef OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER // 雾照明-水下手持光：手里的火把等也照亮水体。
+			vec3 handFog = vec3(0.0); // 累加的手持光颜色。
+		#endif
+	#endif
 
 	for (float i = 0.0; i < steps; i++){ // 沿视线逐步前进。
 		float rayLength = (i + noise) * stepLength; // 当前位置，起点加抖动量。
@@ -76,6 +83,15 @@ vec3 UnderwaterVolumetricFog(vec3 startPos, vec3 endPos, vec3 worldDir, float gl
 		#endif
 
 		result += shadow; // 累加。
+
+		#ifdef OMNI_LPV_FOG_LIGHT
+			#ifdef OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER
+				// 手持光源在该点留下的光，颜色与范围取自手持物品，离玩家越远越弱。
+				vec3 handLight = omniLpvHandLight(heldItemId, rayPos) + omniLpvHandLight(heldItemId2, rayPos); // 两手光源的光色乘距离衰减。
+				handLight *= pow(vec3(0.1, 0.6, 1.0) * 0.99, vec3(rayLength * 0.04 * OMNI_WATER_FOG_DENSITY)); // 与光柱同一套分波段吸收，近处暖、远处青蓝。
+				handFog += handLight; // 累加。
+			#endif
+		#endif
 	}
 	result *= range / steps; // 取平均。
 
@@ -90,6 +106,14 @@ vec3 UnderwaterVolumetricFog(vec3 startPos, vec3 endPos, vec3 worldDir, float gl
 	#endif
 
 	result *= globalCloudShadow; // 按全局云影压暗。
+
+	#ifdef OMNI_LPV_FOG_LIGHT
+		#ifdef OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER
+			// 手持光不随阳光相位与云影变化，所以加在那些系数之后；亮度按 Eclipse `composite3.fsh:478` 的系数
+			// （零点二乘百分之一定标缩到零点零零零四），再平均到整个范围，得到靠近火把的一圈暖光。
+			result += handFog * (range / steps) * (OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS * 0.0004);
+		#endif
+	#endif
 
 	return result; // 返回光柱颜色。
 }

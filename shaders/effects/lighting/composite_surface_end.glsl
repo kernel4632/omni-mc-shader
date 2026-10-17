@@ -106,7 +106,9 @@ void CompositeSurfaceLighting(){
 		vec3 sss = vec3(0.0); // 次表面散射，初值零。
 
 		if (sunlight + gbuffer.material.scattering > 0.0) // 有阳光或透光才算阴影。
+		#ifndef OMNI_END_ISLAND_LIGHT // 开启主岛光源后阴影图改由主岛相机渲染，太阳光照不再采样它，避免出现方向不符的错误阴影。
 			shadow *= VariablePenumbraShadow(worldPos, worldNormal, sunlight, gbuffer.albedo, gbuffer.material.scattering, materialMaskSoild, sss); // 可变半影阴影并带回透光。
+		#endif
 
 		#if OMNI_PARALLAX_MODE > 0
 			shadow *= gbuffer.parallaxShadow; // 视差自阴影也压阳光。

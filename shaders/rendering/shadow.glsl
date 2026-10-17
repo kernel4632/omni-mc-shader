@@ -45,6 +45,8 @@ vec3 shadowVector; // 视空间阳光方向。
 #endif
 // 阴影：提供全部阴影选项、`shadowDistance`、`shadowMapResolution` 与末地阴影相机矩阵。
 #include "/effects/shadow/shadow.glsl"
+// 末地主岛光源：提供选项与主岛阴影相机矩阵，末地阴影顶点在开启它时改用这套竖直向下的相机投几何。
+#include "/effects/world/end_island_light.glsl"
 // 光传播体积：提供体素编号映射与写体素图的函数，选项关闭或缺能力时整段不编译。
 #include "/effects/lighting/lpv.glsl"
 // 体素反射：提供把方块底色写进体素颜色图的函数，选项关闭或缺能力时整段不编译；它复用上面的体积坐标。
@@ -167,13 +169,19 @@ void main(){
 	omniPlanetCurvatureView(curvedShadowViewPos, mat3(shadowModelViewInverse), mat3(shadowModelView)); // 用阴影相机矩阵做同一次下沉。
 	v_viewPos.xyz = curvedShadowViewPos; // 写回下沉后的位置。
 
-	#ifdef OMNI_END // 末地用末地版阴影相机再转一次。
-		v_viewPos = shadowModelViewEnd * shadowModelViewInverse * v_viewPos; // 世界坐标重投到末地阴影相机。
-	#endif	
-
-	gl_Position = v_viewPos; // 顶点位置放到阴影相机视空间。
-
-	gl_Position.xyz *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按阴影投影缩放，深度取半。
+	#ifdef OMNI_END // 末地的阴影图不用加载器给的阴影相机，单独投一次。
+		#ifdef OMNI_END_ISLAND_LIGHT // 开启主岛光源时改用竖直向下的主岛阴影相机（照 Eclipse），这样光照与阴影方向一致。
+			vec3 endLightWorldPos = (shadowModelViewInverse * v_viewPos).xyz; // 视空间换回相机相对世界坐标。
+			gl_Position = endLightShadowProjection * endLightShadowModelView * vec4(endLightWorldPos, 1.0); // 直接给裁剪坐标，透视除法交给硬件。
+		#else // 关闭时保持原来的末地太阳阴影相机。
+			v_viewPos = shadowModelViewEnd * shadowModelViewInverse * v_viewPos; // 世界坐标重投到末地阴影相机。
+			gl_Position = v_viewPos; // 顶点位置放到阴影相机视空间。
+			gl_Position.xyz *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按阴影投影缩放，深度取半。
+		#endif
+	#else // 主世界与下界用加载器给的阴影相机。
+		gl_Position = v_viewPos; // 顶点位置放到阴影相机视空间。
+		gl_Position.xyz *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按阴影投影缩放，深度取半。
+	#endif
 
 
 	vec3 an = abs(gl_Normal); // 法线绝对值。
@@ -198,21 +206,32 @@ void main(){
 	#endif
 
 
-	#ifdef OMNI_END // 末地用末地阴影相机旋转法线。
-		normal = normalize(mat3(shadowModelViewEnd) * normal); // 转到末地阴影相机空间。
+	#ifdef OMNI_END // 末地的法线跟着阴影相机走。
+		#ifdef OMNI_END_ISLAND_LIGHT // 主岛阴影相机是常量旋转，取它的旋转部分即可。
+			normal = normalize(mat3(endLightShadowModelView) * normal); // 转到主岛阴影相机空间。
+		#else
+			normal = normalize(mat3(shadowModelViewEnd) * normal); // 转到末地阴影相机空间。
+		#endif
 	#else
 		normal = normalize(gl_NormalMatrix * normal); // 转到阴影相机视空间。
 	#endif
 
-	float dist = length(gl_Position.xy); // 到阴影图中心的距离。
-	float distortFactor = (1.0 - OMNI_SHADOW_MAP_BIAS) + dist * OMNI_SHADOW_MAP_BIAS; // 边缘压缩系数，中心为一。
-	gl_Position.xy *= 0.95 / distortFactor; // 向内压缩，边缘分辨率更高。
-	
+	#if defined OMNI_END && defined OMNI_END_ISLAND_LIGHT // 主岛阴影相机是透视投影，不做正交的边缘压缩。
+		#ifdef OMNI_DH_SHADOW_PASS
+			if (dhMaterialId == DH_BLOCK_WATER) gl_Position.z = gl_Position.w; // 远景水不投阴影，推到远裁剪面。
+		#else
+			if (mc_Entity.x == 8.0 || mc_Entity.x == 79.0) gl_Position.z = gl_Position.w; // 水与冰不投阴影，推到远裁剪面。
+		#endif
+	#else // 其余相机都是正交投影，按原程序做边缘压缩与深度处理。
+		float dist = length(gl_Position.xy); // 到阴影图中心的距离。
+		float distortFactor = (1.0 - OMNI_SHADOW_MAP_BIAS) + dist * OMNI_SHADOW_MAP_BIAS; // 边缘压缩系数，中心为一。
+		gl_Position.xy *= 0.95 / distortFactor; // 向内压缩，边缘分辨率更高。
 
-	#ifdef OMNI_DH_SHADOW_PASS
-		if (dhMaterialId == DH_BLOCK_WATER) gl_Position.z = 2.0; // 远景水不投阴影，推到最远。
-	#else
-		if (mc_Entity.x == 8.0 || mc_Entity.x == 79.0) gl_Position.z = 2.0; // 水与冰不投阴影。
+		#ifdef OMNI_DH_SHADOW_PASS
+			if (dhMaterialId == DH_BLOCK_WATER) gl_Position.z = 2.0; // 远景水不投阴影，推到最远。
+		#else
+			if (mc_Entity.x == 8.0 || mc_Entity.x == 79.0) gl_Position.z = 2.0; // 水与冰不投阴影。
+		#endif
 	#endif
 }
 #endif // 顶点阶段结束。

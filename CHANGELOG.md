@@ -1,5 +1,23 @@
 # 更新记录
 
+## 0.0.0-dev.153
+
+给雾照明补上手持光与水下两张，照 Eclipse `composite3.fsh` 把 `LPV_VL_FOG_ILLUMINATION_HANDHELD(_WATER)` 合并进来。
+
+- 手持灯光的取光函数（`shaders/effects/lighting/lpv.glsl`）：新增 `omniLpvHandLight`，按手持物品编号读方块光表拿到光色与光照范围，再按离玩家的距离三次方衰减，照 Eclipse `lib/diffuse_lighting.glsl:74` 的 `GetHandLight`。为此给光表加了整数采样器名 `omniLpvBlocksTex`（`shaders/rendering/pipeline.properties`），合成阶段按采样器读、计算阶段仍用图像 `omniLpvBlocks` 读写，两者指向同一张纹理。
+- 雾照明-手持光 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD`（默认关，等于 Eclipse）：在 `shaders/effects/fog/volumetric.glsl` 的体积雾步进里，把手里火把等的光晕逐段累加进空气，与色彩体积光同一套吸收与亮度。
+- 雾照明-水下手持光 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER`（默认开，等于 Eclipse）：在 `shaders/effects/fog/underwater_fog.glsl` 的水下体积雾里叠加手持光，按水的分波段吸收衰减，靠近火把的水先亮暖色、远处只剩青蓝。
+- 两项都只在「雾照明」`OMNI_LPV_VL_FOG_ILLUMINATION` 开启时才参与，而该总开关默认关闭，所以默认画面与原来完全一致。亮度系数照 Eclipse（空气项零点零四、水下项零点二）按本项目百分之一定标缩小，游戏内未校准。
+- 差异说明记入 `docs/eclipse-parity.md` 的「LPV/间接光」行：手持光与水下雾照明由「未合并」改为已合并。
+
+本批次还包含三项照 Eclipse 补齐的能力：
+
+- 积雨云三档 `OMNI_CLOUD_CUMULONIMBUS`（`shaders/effects/cloud/cloud.glsl`，默认 0）：由开关改为「关 / 雷暴时或之后 / 始终」三档，中档由雷暴强度驱动出现与消退；层高与厚度沿用 Eclipse 的值（600 到 4600），附加层判断同步由「是否定义」改为「档位是否大于零」。
+- 末地主岛光照的阴影相机（`shaders/effects/world/end_island_light.glsl`、`shaders/rendering/shadow.glsl`、`composite_surface_end.glsl`）：开启后末地阴影顶点改投竖直向下的主岛相机，主岛光源从阴影图取真实遮挡；末地太阳光照不再采样这张图，避免方向不符。
+- 资源包天空 `OMNI_RESOURCEPACK_SKY`（`shaders/effects/sky/sky.glsl`、`rendering/celestial.glsl`、`skyrender.glsl`，默认关）：旧结论「不可行」的前提不成立——加载器会把资源包天空几何按天空阶段画进光影自己的画面，所以直接读零号画面当底色即可，不必新增天空专用采样器；开启时程序化大气退到只给云算透过率。仅主视图生效，水面反射天空盒仍是程序化大气。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.152
 
 体素反射补三项细节，并补上雾内泛光选项，默认画面不变。

@@ -53,6 +53,10 @@
 //#define OMNI_LPV_VL_FOG_ILLUMINATION
 // @option {"label":{"zh_cn":"雾照明亮度","en_us":"Fog illumination brightness"},"description":{"zh_cn":"被照亮的雾的亮度，一百为基准；只在雾照明开启时生效。","en_us":"Brightness of the lit fog, 100 is the baseline; only used when Fog illumination is on."},"slider":true}
 #define OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS 50 // [0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 110 120 130 140 150 160 180 200 250 300]
+// @option {"label":{"zh_cn":"雾照明-手持光","en_us":"Fog illumination - handheld"},"description":{"zh_cn":"让手里的火把、荧石等手持光源也照亮空气，光色取自手持物品；只在雾照明开启时生效，默认关闭、等于 Eclipse。","en_us":"Lets held light sources such as a torch or glowstone also light up the air, using the held item's own colour; only used when Fog illumination is on; off by default to match Eclipse."}}
+//#define OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD
+// @option {"label":{"zh_cn":"雾照明-水下手持光","en_us":"Fog illumination - water handheld"},"description":{"zh_cn":"在水下让手持光源照亮水体，靠近火把的水先亮暖色、远处只剩青蓝；只在雾照明开启时生效，默认开、等于 Eclipse。","en_us":"Underwater, lets held light sources light up the water, warm near the torch and blue-green farther out; only used when Fog illumination is on; on by default to match Eclipse."}}
+#define OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER
 
 // 雾照明是否具备条件：要同时开启雾照明与体积光，并具备自定义图像能力，三者齐备才让雾去采样体积图；缺少任一项就整段退回原样。
 #if defined OMNI_LPV_VL_FOG_ILLUMINATION && defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
@@ -69,6 +73,9 @@ const uint omniLpvSide = uint(exp2(float(OMNI_LPV_SIZE))); // 每边单元数，
 const vec3 omniLpvHalf = vec3(float(omniLpvSide)) * 0.5; // 半边长度，用来把相机放到体积中心。
 const vec2 omniLpvBlockSkyRange = vec2(15.0, 24.0); // 方块光与天光的对数编码范围，照 Eclipse `lpv_common.glsl:2`。
 const float omniLpvFadeLength = 10.0; // 体积边缘的淡出长度（米），照 Eclipse `diffuse_lighting.glsl:131`。
+// 方块光表容量：本项目方块编号最大到七千一百零二，取八千一百九十二足够放下，比 Eclipse 的两千零四十八大。
+// 放在公共区，计算阶段填表与合成阶段按编号取手持光都要用它判越界。
+const uint omniLpvBlockTableSize = 8192u;
 
 // --- 颜色编码：HSV 与线性化，照 Eclipse `lib/hsv.glsl` 与 `util.glsl` ---
 // `omniRgbToHsv` 已移到 `common/math.glsl`（自发光矿石/纹饰也要用），本文件在上面已引入它。
@@ -188,6 +195,30 @@ vec3 omniLpvApply(vec3 blockLight, vec3 playerPos, vec3 worldNormal){
 	float falloff = omniLpvRangeFalloff(lpvPos); // 体积边缘淡出。
 	return mix(blockLight, sample.rgb, saturate(falloff * OMNI_LPV_STRENGTH)); // 用淡出把原版方块光换成体积光。
 }
+
+// --- 手持灯光：把手中光源的颜色与范围从光表取出来，照亮空气与水下雾 ---
+// 只在雾照明与对应手持选项同时开启时才定义，避免默认配置里出现无人调用的函数。
+// 为什么不用体积图：手持光源跟着玩家走、也不会被阴影阶段写进体素，而光表里本来就存着每个物品的光色与范围，
+// 直接按手持物品编号读表最省，也与 Eclipse `diffuse_lighting.glsl:74` 的 `GetHandLight` 同一套做法。
+#if defined OMNI_LPV_FOG_LIGHT && (defined OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD || defined OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER)
+uniform usampler1D omniLpvBlocksTex; // 方块光表按整数采样器读，与计算阶段写的图像 `omniLpvBlocks` 是同一张纹理。
+// 把打包在低字里的光色与范围拆出来：按字节顺序还原四个零到一分量，避免依赖打包扩展。
+vec4 omniLpvUnpackColorRange(uint packed){
+	return vec4(float(packed & 0xFFu), float((packed >> 8u) & 0xFFu), float((packed >> 16u) & 0xFFu), float(packed >> 24u)) / 255.0;
+}
+// 求一个手持物品在某点留下的光：读光表得到颜色与范围，再按离玩家的距离三次方衰减，返回零到一的颜色。
+// 为什么按距离三次方：照 Eclipse，光源范围外直接归零，越靠近玩家越亮。
+vec3 omniLpvHandLight(int itemId, vec3 playerPos){
+	if (itemId <= 0) return vec3(0.0); // 手上没有物品就不发光。
+	uvec2 row = (uint(itemId) >= omniLpvBlockTableSize) ? uvec2(0u) : texelFetch(omniLpvBlocksTex, itemId, 0).rg; // 越界按零光处理，否则精确取表项。
+	vec4 colorRange = omniLpvUnpackColorRange(row.x); // 低字：光色三相与光照范围。
+	float lightRange = colorRange.a * 255.0; // 范围还原成格数。
+	if (lightRange <= 0.0) return vec3(0.0); // 不发光物品直接返回。
+	float lightDist = length(playerPos); // 采样点到玩家的距离，相机就是玩家。
+	float falloff = pow(max(1.0 - lightDist / lightRange, 0.0), 3.0); // 线性衰减再取三次方，范围外为零。
+	return omniSrgbToLinear(colorRange.rgb) * falloff; // 颜色转线性乘衰减，得到零到一的持光。
+}
+#endif // 手持灯光结束。
 #endif // 片元取样结束。
 
 // ========================= 顶点写体素：阴影顶点阶段把方块编号写进体素图 =========================
@@ -209,9 +240,6 @@ layout(rgba8) uniform restrict image3D omniLpv1; // 传播缓冲之一（偶数�
 layout(rgba8) uniform restrict image3D omniLpv2; // 另一个缓冲（奇数帧写）。
 layout(r16ui) uniform restrict uimage3D omniLpvVoxel; // 体素编号，阴影顶点阶段写入。
 layout(rg32ui) uniform uimage1D omniLpvBlocks; // 方块光表，`setup` 阶段一次填好，传播阶段只读。
-
-// 方块光表容量：本项目方块编号最大到七千一百零二，取八千一百九十二足够放下，比 Eclipse 的两千零四十八大。
-const uint omniLpvBlockTableSize = 8192u;
 
 // --- 饱和度矩阵：让光色按玩家设置变鲜艳或变灰，照 Eclipse `setup.csh:39` ---
 mat4 omniLpvSaturationMatrix(float saturation){

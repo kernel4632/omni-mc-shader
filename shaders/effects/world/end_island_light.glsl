@@ -1,23 +1,80 @@
 /*
-末地主岛光源：把悬在主岛上方的点光源按距离与视野角解析照亮附近表面并给高光。
-来源：位置与视野角取 Eclipse `lib/settings.glsl:419-421`，按 `docs/eclipse-parity.md` 第 37 行合并，默认关闭。
-职责：只提供 `EndIslandLighting`。
-调用位置：由 `effects/world/end.glsl` 引入；合成零号在末地有几何的像素上、开启 `OMNI_END_ISLAND_LIGHT` 时调用。
+末地主岛光源：把悬在主岛上方的点光源按距离、视野角与主岛阴影相机照亮附近表面并给高光。
+来源：光源位置、视野角与开关取 Eclipse `lib/settings.glsl:419-421`；主岛阴影相机取 Eclipse `dimensions/begin.csh:98-113`、
+  `world1/shadow.vsh:90-92` 与 `lib/projections.glsl:52-66`，按 `docs/eclipse-parity.md` 合并，默认关闭。
+职责：定义主岛光源的全部选项与内部常数，构造主岛阴影相机（视图与透视矩阵），
+  提供把世界位置投到该相机的 `EndLightShadowScreenPos`、求遮挡的 `EndIslandShadow` 与叠加光照的 `EndIslandLighting`。
+调用位置：
+  `effects/world/end.glsl` 引入本文件；`rendering/shadow.glsl` 也引入本文件，末地阴影顶点在开启主岛光源时用这套相机渲染；
+  合成零号在末地有几何的像素上、开启 `OMNI_END_ISLAND_LIGHT` 时调用 `EndIslandLighting`。
 可复制示例：
+  `gl_Position = endLightShadowProjection * endLightShadowModelView * vec4(endLightWorldPos, 1.0);`
   `finalComposite += EndIslandLighting(worldPos, worldNormal, worldDir, gbuffer.albedo, gbuffer.material.roughness, gbuffer.material.f0, gbuffer.material.metalness);`
-调用前提：由 `effects/world/end.glsl` 引入；`cameraPosition`、内部常数 `END_LIGHT_POS` 与 `Blackbody`、`Fd_Burley`、
-  `SpecularGGX` 由绘制主体、本效果入口与 `common/math.glsl` 提供。
-关键设计原因与取舍：Eclipse 另建一盏阴影相机（近十五远二百五十六、视野角七十七），需要计算着色器与附加缓冲；
-  这里在合成零号按点光源解析照亮，距离窗与视野角照 Eclipse，衰减形状是本项目的近似。
+调用前提：`cameraPosition` 由 `common/uniforms.glsl` 提供；`Blackbody`、`Fd_Burley`、`SpecularGGX` 由 `common/math.glsl` 提供；
+  光照与遮挡函数还要求调用方声明 `shadowtex0` 并打开 `OMNI_SHADOW_COMPARE`（合成零号），阴影顶点阶段不编译这两段。
+关键设计原因与取舍：
+  Eclipse 另建一盏竖直向下的阴影相机（近十五远二百五十六、视野角七十七），在计算着色器里每帧算好矩阵存进 SSBO；
+  这里改为在 GLSL 里用常量与 `cameraPosition` 就地构造，省掉计算着色器与附加缓冲——矩阵只依赖相机与光源位置这两个现成输入。
+  主岛光源只在末地有意义，矩阵与函数都用 `OMNI_END` 守卫，主世界与下界不编译这段；默认关闭时整段不参与，画面与原来一致。
 */
 #ifndef OMNI_END_ISLAND_LIGHT_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_END_ISLAND_LIGHT_INCLUDED // 置上标记，后续再次引用直接跳过。
 
+// @effect {"label":{"zh_cn":"末地主岛光源","en_us":"End Island Light"}}
+// @option {"label":{"zh_cn":"末地主岛光源","en_us":"End Island Light"},"description":{"zh_cn":"在末地主岛上方（世界坐标零点、高度一百九十）放一盏竖直向下的灯，按到灯的距离和入射角照亮附近表面、投出阴影并产生高光。默认关闭，画面与不加这项时一致。","en_us":"Places a downward light above the End main island at world (0, 190, 0) that lights nearby surfaces by distance and angle, casts shadows and adds specular. Off by default."}}
+//#define OMNI_END_ISLAND_LIGHT
+// @option {"label":{"zh_cn":"主岛光源视野角","en_us":"Island Light FOV"},"description":{"zh_cn":"主岛光源的照射范围角度，单位度；超出这个角度的表面收不到这份光，阴影相机也用这个角度。取自 Eclipse 的七十七度。","en_us":"Cone angle of the island light in degrees; surfaces outside it get no light, and the shadow camera uses the same angle. Eclipse uses 77."},"slider":true}
+#define OMNI_END_LIGHT_FOV 77.0 // [30.0 40.0 50.0 60.0 70.0 77.0 90.0 110.0 130.0 150.0]
+// @option {"label":{"zh_cn":"主岛光源亮度","en_us":"Island Light Brightness"},"description":{"zh_cn":"主岛光源的整体亮度，一为基准值，零等于关灯。默认一不改变已有的光照尺度。","en_us":"Overall brightness of the island light; 1 is the reference and 0 is off. Default 1 keeps the existing light scale."},"slider":true}
+#define OMNI_END_LIGHT_BRIGHTNESS 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0 4.0]
+
+// 光源位置与阴影相机范围：照 Eclipse `lib/settings.glsl:419` 与 `dimensions/begin.csh:100-101`，内部常数不进菜单。
+#define END_LIGHT_POS vec3(0.0, 190.0, 0.0) // 光源在世界原点正上方一百九十格。
+const float END_LIGHT_SHADOW_NEAR = 15.0; // 阴影相机近裁剪面，正好在光源下方十五格。
+const float END_LIGHT_SHADOW_FAR = 256.0; // 阴影相机远裁剪面，向下覆盖到主岛以下。
+
+#ifdef OMNI_END // 主岛光源只在末地使用，其它维度不编译下面的矩阵与函数。
+// --- 主岛阴影相机：光轴竖直向下，原点抬到光源高度，按相机位置每帧平移 ---
+// Eclipse 用 `BuildShadowViewMatrix(normalize(END_LIGHT_POS))` 现算一组基：光轴朝下时横轴取世界 Z、
+// 纵轴取世界 X、深度轴取世界 Y；这里把结果直接写成常量矩阵，省掉通用构造函数，只留随相机变化的平移项。
+vec3 endLightShadowOrigin = cameraPosition - END_LIGHT_POS; // 光源相对相机的世界偏移，作用在相机相对坐标上正好把光源放到原点。
+mat4 endLightShadowModelView = mat4(vec4(0.0, 1.0, 0.0, 0.0), // 相机相对世界的 Z 分量进阴影图横轴。
+                                    vec4(0.0, 0.0, 1.0, 0.0), // X 分量进阴影图纵轴。
+                                    vec4(1.0, 0.0, 0.0, 0.0), // Y 分量进阴影图深度轴，光轴竖直向下。
+                                    vec4(endLightShadowOrigin.z, endLightShadowOrigin.x, endLightShadowOrigin.y, 1.0)); // 平移项。
+// 透视投影：视野角来自选项，近远取 Eclipse 的十五与二百五十六，写成标准透视矩阵。
+float endLightShadowYScale = 1.0 / tan(radians(OMNI_END_LIGHT_FOV) * 0.5); // 视野角换算成投影缩放。
+mat4 endLightShadowProjection = mat4(vec4(endLightShadowYScale, 0.0, 0.0, 0.0), // 横轴缩放。
+                                     vec4(0.0, endLightShadowYScale, 0.0, 0.0), // 纵轴缩放。
+                                     vec4(0.0, 0.0, (END_LIGHT_SHADOW_FAR + END_LIGHT_SHADOW_NEAR) / (END_LIGHT_SHADOW_NEAR - END_LIGHT_SHADOW_FAR), -1.0), // 深度缩放与透视用的 w。
+                                     vec4(0.0, 0.0, 2.0 * END_LIGHT_SHADOW_FAR * END_LIGHT_SHADOW_NEAR / (END_LIGHT_SHADOW_NEAR - END_LIGHT_SHADOW_FAR), 1.0)); // 深度平移。
+
+// 把相机相对世界位置投到主岛阴影图：返回零到一的横纵坐标与深度。
+// `worldPos` 是相机相对坐标，矩阵里的平移已含相机位置，两者相加正好得到以光源为原点的世界坐标。
+vec3 EndLightShadowScreenPos(vec3 worldPos){
+	vec4 clip = endLightShadowProjection * endLightShadowModelView * vec4(worldPos, 1.0); // 投到主岛相机裁剪空间，w 就是到光源的深度。
+	if (clip.w <= 0.0) return vec3(2.0); // 落在相机后方或透视退化，返回图纸以外的坐标交给调用方当没遮挡。
+	return clip.xyz / clip.w * 0.5 + 0.5; // 透视除法后从负一到一转成零到一。
+}
+
+#if defined OMNI_SHADOW_COMPARE // 遮挡查询要读 `shadowtex0`，只有声明它的合成零号编译这段。
+// --- 主岛遮挡：把表面投到主岛阴影图，比较深度得到可见度 ---
+// 图纸以外当作没有被遮挡：主岛相机没覆盖到的地方硬读边界会压出一条黑边。
+float EndIslandShadow(vec3 worldPos){
+	vec3 shadowPos = EndLightShadowScreenPos(worldPos); // 表面在主岛阴影图里的位置与深度。
+	if (any(lessThan(shadowPos.xy, vec2(0.0))) || any(greaterThan(shadowPos.xy, vec2(1.0))) || shadowPos.z > 1.0) return 1.0; // 图外全亮。
+
+	float sampleDepth = textureLod(shadowtex0, shadowPos.xy, 0.0).x; // 阴影图里该点最近的遮挡深度。
+	return step(shadowPos.z - 0.0025, sampleDepth); // 表面比遮挡物更近才算可见；偏移减轻表面自身投出的条纹。
+}
+#endif // OMNI_SHADOW_COMPARE
+#endif // OMNI_END
+
+#if defined OMNI_END && defined OMNI_SHADOW_COMPARE // 光照与遮挡只在末地合成零号参与编译。
 // --- 末地主岛光源：把 END_LIGHT_POS 当成悬在主岛上方的点光源，按距离与夹角照亮表面并给高光 ---
 // 出处：位置 `lib/settings.glsl:419`、视野角 `:420`、开关 `:421`；Eclipse 在 `dimensions/composite.fsh:509` 按
 //   像素到光源重算光方向（`normalize(END_LIGHT_POS-(feetPlayerPos+cameraPosition))`），近处表面受光方向各不相同。
-// 与 Eclipse 的取舍：Eclipse 另建一盏阴影相机（`dimensions/begin.csh:100-111`，近十五远二百五十六、视野角七十七），
-//   需要计算着色器与附加缓冲；这里在合成零号按点光源解析照亮，距离窗与视野角照 Eclipse，衰减形状是本项目的近似。
+//   遮挡来自 Eclipse 的主岛阴影相机（`dimensions/begin.csh:98-113`、`world1/shadow.vsh:90-92`）。
 // 调用前提：`cameraPosition`、`END_LIGHT_POS` 已可用，`Blackbody`、`Fd_Burley`、`SpecularGGX` 已由 `common/math.glsl` 提供。
 vec3 EndIslandLighting(vec3 worldPos, vec3 normal, vec3 viewDir, vec3 albedo, float roughness, float f0, float metalness){
 	vec3 lightVec = END_LIGHT_POS - (worldPos + cameraPosition); // 表面指向光源的向量，`worldPos` 是相机相对世界坐标。
@@ -30,8 +87,9 @@ vec3 EndIslandLighting(vec3 worldPos, vec3 normal, vec3 viewDir, vec3 albedo, fl
 	float cosAxis = dot(normalize((worldPos + cameraPosition) - END_LIGHT_POS), normalize(-END_LIGHT_POS)); // 表面相对光轴的余弦。
 	float cosFov = cos(radians(OMNI_END_LIGHT_FOV * 0.5)); // 视野角一半的余弦，就是锥边的阈值。
 	float cone = smoothstep(cosFov, min(cosFov * 1.05 + 0.01, 0.999), cosAxis); // 锥内为一，锥外为零。
-	// 距离衰减：Eclipse 用阴影图而不是解析衰减，这里用平方反比近似，参考距离取灯的悬挂高度，让主岛附近接近一。
+	// 距离衰减：主岛附近接近一；平方反比只作粗略补足，精确的远近关系交给主岛阴影相机。
 	float falloff = distFade * cone * OMNI_END_LIGHT_BRIGHTNESS / (1.0 + lightDist * lightDist / 36000.0); // 总衰减。
+	falloff *= EndIslandShadow(worldPos); // 乘主岛阴影相机算出的遮挡可见度。
 
 	vec3 lightColor = Blackbody(6000.0) * 0.3; // 与末地太阳同色温、同强度尺度（合成里用 `Blackbody(6000)` 与系数零点三）。
 	vec3 result = albedo * lightColor * falloff * Fd_Burley(normal, -viewDir, lightDir, roughness); // 漫反射乘底色。
@@ -43,4 +101,5 @@ vec3 EndIslandLighting(vec3 worldPos, vec3 normal, vec3 viewDir, vec3 albedo, fl
 
 	return result; // 交回可直接叠加到线性光照的颜色。
 }
+#endif // OMNI_END 与 OMNI_SHADOW_COMPARE
 #endif // OMNI_END_ISLAND_LIGHT_INCLUDED 结束。

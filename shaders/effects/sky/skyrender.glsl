@@ -13,22 +13,36 @@
     两个相机参数的原因：反射天空盒查大气用被压低的高度 `cameraSkyBox`，体积云仍按真实相机 `camera` 步进，
     方向判据两处都用主视线 `worldDir.y`，这些是 iterationT 原样行为，不能顺手“修正”。
     云与星空的函数在 `effects/cloud/cloud.glsl`、`effects/sky/sky.glsl` 里，本文件只负责按顺序调用与合成。
+    资源包天空（`OMNI_RESOURCEPACK_SKY`，只主世界生效）：把零号画面里原版与资源包画好的整片天空当底色，程序化大气退到
+    只算透过率与地面相交判据（`addAtmosphere` 传假），日月与星空也交给资源包；云、极光与彩虹仍由本文件叠在底色上。
+    反射天空盒不受影响，仍用程序化大气。这是项目额外功能，默认关闭；底色亮度用 `OMNI_RESOURCEPACK_SKY_BRIGHTNESS` 调节。
 */
 #ifndef OMNI_SKY_RENDER_INCLUDED // 只引入一次，避免函数重复定义。
 #define OMNI_SKY_RENDER_INCLUDED
+
+// --- 资源包天空底色 ---
+// 读零号画面里原版与资源包画好的天空：天空程序按原版加色混合把各层叠进零号，这里从伽马空间转线性再乘亮度档。
+// 为什么只能读零号画面：资源包的自定义天空层在天空绘制阶段被画成几何，没有暴露成采样器，只能读它画出来的结果。
+// 为什么先转线性：零号存的是贴图色（伽马空间），而天空底色要与程序化大气在同一线性单位里比较与合成。
+#ifdef OMNI_RESOURCEPACK_SKY // 只在开启时生成，默认构建里连这个函数都不编出来。
+vec3 omniResourcePackSky(){
+	return GammaToLinear(texelFetch(colortex0, texelCoord, 0).rgb) * OMNI_RESOURCEPACK_SKY_BRIGHTNESS; // 天空底色。
+}
+#endif
 
 // --- 天空与云的共用累积 ---
 // 把大气辐射与全部云层累积到 `color`，并回填大气透过率、云透过率与月食压暗因子。
 // 主天空与反射天空盒共用这一段：方向、相机、噪声不同，公式相同。
 // `applyClouds` 为假时只叠大气，跳过全部云层；低分辨率模式用它让主天空先不画云，云改到延迟八号贴回。
+// `addAtmosphere` 为假时不再叠程序化大气，改用调用方已铺好的底色（资源包天空）；大气仍照查一次，供云用它回填的透过率与地面相交判据。
 void AccumulateSkyClouds(vec3 dir, vec3 atmosphereCamera, vec3 cloudCamera, vec2 noise, float planarNoise,
-						 bool horizon, bool dirBelowHorizon, vec2 cloudAltitude, vec3 windDirection, bool applyClouds,
+						 bool horizon, bool dirBelowHorizon, vec2 cloudAltitude, vec3 windDirection, bool applyClouds, bool addAtmosphere,
 						 inout vec3 color, out vec3 transmittance, out float cloudTransmittance, out float eclipseDarkening){
 	transmittance = vec3(1.0); // 大气透过率初值，由下面的查表回填。
 	bool ray_r_mu_intersects_ground; // 视线是否打到地面，由大气查表回填。
 	vec3 atmosphere = GetSkyRadiance(atmosphereCamera, dir, worldSunVector, worldMoonVector, horizon, transmittance, ray_r_mu_intersects_ground); // 查预计算大气的天空辐射。
 	eclipseDarkening = CalculateEclipseDarkening(dir, worldSunVector, worldMoonVector); // 月食：日月对齐时把天空压暗，默认轨道下日月相对所以不触发。
-	color += atmosphere * eclipseDarkening; // 先把带月食压暗的大气叠上。
+	if (addAtmosphere) color += atmosphere * eclipseDarkening; // 默认把带月食压暗的大气叠上；资源包天空时底色已给，不再叠。
 
 	cloudTransmittance = 1.0; // 云留下的透过率初值。
 	#ifdef OMNI_VOLUMETRIC_CLOUDS // 打开体积云才步进。
@@ -41,7 +55,7 @@ void AccumulateSkyClouds(vec3 dir, vec3 atmosphereCamera, vec3 cloudCamera, vec2
 			PlanarClouds(color, dir, atmosphereCamera, planarNoise, cloudTransmittance); // 平面云。
 	#endif
 
-	#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
+	#if OMNI_CLOUD_CUMULONIMBUS > 0 || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
 		if (applyClouds) NubisExtraLayers(color, dir, windDirection, cloudCamera, noise, ray_r_mu_intersects_ground, cloudTransmittance); // 卷云、高层云与积雨云。
 	#endif
 }
@@ -107,8 +121,15 @@ void RenderDeferredSky(){
 		#else // 原分辨率：与从前完全一致，天空这一步就把云画好。
 			bool applyClouds = true; // 天空与云一起累积。
 		#endif
-		AccumulateSkyClouds(worldDir, camera, camera, noise_1, noise_1.y, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, applyClouds, finalComposite, transmittance, cloudTransmittance, eclipseDarkening); // 叠大气与全部云层。
+		#if defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD // 资源包天空：先铺资源包画好的整片天空当底色。
+			finalComposite = omniResourcePackSky(); // 资源包天空底色。
+			bool addAtmosphere = false; // 程序化大气不再叠进画面，只用来给云提供透过率与地面相交判据。
+		#else // 默认：底色由程序化大气提供。
+			bool addAtmosphere = true; // 叠预计算大气。
+		#endif
+		AccumulateSkyClouds(worldDir, camera, camera, noise_1, noise_1.y, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, applyClouds, addAtmosphere, finalComposite, transmittance, cloudTransmittance, eclipseDarkening); // 叠底色（大气或资源包天空）与全部云层。
 
+		#if !(defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 默认路径：叠零号画面的日月贴图与程序化星空。
 		vec3 celestial = GammaToLinear(texelFetch(colortex0, texelCoord, 0).rgb) * (OMNI_SKY_TEXTURE_BRIGHTNESS * 0.2); // 零号画面的天体颜色转线性并按选项缩放。
 
 		#if OMNI_STAR_TYPE == 1
@@ -131,6 +152,8 @@ void RenderDeferredSky(){
 		#endif
 
 		finalComposite += celestial * transmittance * 200.0; // 天体带大气透过率叠到天空上。
+		#endif // 默认路径结束；资源包天空时不叠程序化天体，日月星空已由资源包提供。
+
 		finalComposite = omniAtmosphere(finalComposite, worldDir); // Omni 额外功能：叠加极光与彩虹，默认关闭。
 		#ifdef OMNI_CAVE_MODE
 			finalComposite = mix(finalComposite, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00007) * 0.05), saturate(eyeBrightnessZeroSmooth)); // 完全看不到天空时换成极暗配色。
@@ -163,7 +186,7 @@ void RenderDeferredSky(){
 		vec3 transmittance; // 大气透过率，本段不使用，仅满足共用累积的输出。
 		float cloudTransmittance; // 云留下的透过率，写进二号透明通道供顶点阶段读云量。
 		float eclipseDarkening; // 月食压暗因子，本段不使用。
-		AccumulateSkyClouds(viewVector, cameraSkyBox, camera, noise_0, noise_0.x, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, true, skyImage, transmittance, cloudTransmittance, eclipseDarkening); // 与主天空同一流程，只是相机与噪声不同；天空盒始终保持全分辨率。
+		AccumulateSkyClouds(viewVector, cameraSkyBox, camera, noise_0, noise_0.x, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, true, true, skyImage, transmittance, cloudTransmittance, eclipseDarkening); // 与主天空同一流程，只是相机与噪声不同；天空盒始终保持全分辨率，也始终叠程序化大气。
 
 		#ifdef OMNI_CAVE_MODE
 			skyImage = mix(skyImage, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00005) * 0.07), eyeBrightnessZeroSmooth); // 洞穴模式下的极暗天空盒。

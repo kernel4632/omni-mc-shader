@@ -235,11 +235,11 @@ class EffectTests(unittest.TestCase):
     def test_extra_features_default_neutral(self):
         """项目自己的额外功能默认关闭或取中性值，默认画面与 iterationT 一致。"""
         found, _, _ = support.configuration()  # 真实选项与默认值。
-        off = ("OMNI_AURORA", "OMNI_RAINBOW", "OMNI_LIGHTNING", "OMNI_SEASONS", "OMNI_SNOW_OVERLAY", "OMNI_LPV_ENABLED", "OMNI_PROFILER", "OMNI_FSR", "OMNI_DOF", "OMNI_LENS_FLARE", "OMNI_LINE_IMAGE_OUTPUT", "OMNI_CLOUD_CIRRUS", "OMNI_CLOUD_ALTOSTRATUS", "OMNI_CLOUD_CUMULONIMBUS", "OMNI_SHADER_GRASS")
+        off = ("OMNI_AURORA", "OMNI_RAINBOW", "OMNI_LIGHTNING", "OMNI_SEASONS", "OMNI_SNOW_OVERLAY", "OMNI_LPV_ENABLED", "OMNI_PROFILER", "OMNI_FSR", "OMNI_DOF", "OMNI_LENS_FLARE", "OMNI_LINE_IMAGE_OUTPUT", "OMNI_CLOUD_CIRRUS", "OMNI_CLOUD_ALTOSTRATUS", "OMNI_SHADER_GRASS")
         for name in off:
             with self.subTest(option=name):
                 self.assertEqual(found[name].default, "false")  # 额外功能默认关闭。
-        neutral = {"OMNI_DEBUG_VIEW": "0", "OMNI_SURFACE_WETNESS": "0.0", "OMNI_SEASON_TINT": "0.0", "OMNI_AURORA_TINT": "0.0", "OMNI_CLOUD_SPEED": "1.0"}  # 数值型额外功能取中性值。
+        neutral = {"OMNI_DEBUG_VIEW": "0", "OMNI_SURFACE_WETNESS": "0.0", "OMNI_SEASON_TINT": "0.0", "OMNI_AURORA_TINT": "0.0", "OMNI_CLOUD_SPEED": "1.0", "OMNI_CLOUD_CUMULONIMBUS": "0"}  # 数值型额外功能取中性值；积雨云是三档，零档即关闭。
         for name, value in neutral.items():
             with self.subTest(option=name):
                 self.assertEqual(found[name].default, value)  # 默认不改变关键分支。
@@ -379,12 +379,14 @@ class EffectTests(unittest.TestCase):
         self.assertIn("#ifdef OMNI_CLOUD_SHADOW", support.text("effects/lighting/sunlight.glsl"))  # 直射光按云影压低。
 
     def test_cloud_layer_options(self):
-        """卷云、高层云与积雨云作为附加云层可开关，各自的高度、厚度与覆盖可调。"""
+        """卷云、高层云与积雨云作为附加云层可开关，积雨云照 Eclipse 分三档，各自的高度、厚度与覆盖可调。"""
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_CLOUD_CIRRUS", "OMNI_CLOUD_ALTOSTRATUS", "OMNI_CLOUD_CUMULONIMBUS", "OMNI_CLOUD_CIRRUS_ALTITUDE", "OMNI_CLOUD_ALTOSTRATUS_THICKNESS", "OMNI_CLOUD_CUMULONIMBUS_COVERAGE"):
             self.assertIn(name, found)  # 每个附加云层参数由云源码定义。
+        self.assertEqual(found["OMNI_CLOUD_CUMULONIMBUS"].values, ("0", "1", "2"))  # 积雨云照 Eclipse 的 `0/1/2` 分三档。
         cloud = support.text("effects/cloud/cloud.glsl")  # 云主体。
         self.assertIn("NubisExtraLayers", cloud)  # 附加层独立成函数。
+        self.assertIn("#if OMNI_CLOUD_CUMULONIMBUS == 1", cloud)  # 中档按雷暴强度分派。
         self.assertIn("OMNI_CLOUD_FADE", found)  # 云淡出可开关。
         self.assertIn("OMNI_CLOUD_FADE", cloud)  # 淡出参与可见度。
 

@@ -359,6 +359,12 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
     入口集中定义本效果的选项与内部常数，分文件按来源用同一顺序引入，`#include` 语义与拆分前逐段一致，默认画面与算法不变。
 48. 远景参与开关默认开，与 iterationT 默认画面一致：Eclipse 的三项远景开关 `DH_AMBIENT_OCCLUSION`、`DH_SUBSURFACE_SCATTERING`、`DH_SCREENSPACE_REFLECTIONS`（`lib/settings.glsl:1095-1097`）合为 `OMNI_DH_AO`（`effects/lighting/ambient.glsl:69`）、`OMNI_DH_SSS`（`effects/shadow/shadow.glsl:50`）、`OMNI_DH_SSR`（`effects/reflection/reflection.glsl:39`）。Omni 的远景参与本来就走 iterationT 路径读 `dhDepthTex0/1` 与材质编号，这三项只是加独立开关、默认开等于现状（关闭时才让远景像素按天空处理或不透光），所以默认画面与 iterationT 一致；与其余 Eclipse 合并项「默认中性」的差别与近似说明见 `docs/eclipse-parity.md` 的「远景（DH）」行。
 49. 末地星空改用 Eclipse 星场（2026-10-18，按用户要求）：`effects/world/end_sky.glsl` 的 `EndCalculateStars`（`:28`）不再自带 iterationT 的三维格子星空，改为直接转发主世界 `effects/sky/sky.glsl` 的 `CalculateStars(worldDir, worldSunVector)`，与主世界共用同一份 Eclipse `lib/stars.glsl` 星场（白色稳定星场默认、彩色星盒由 `OMNI_STARS_COLORED` 开启）。签名不变（仍只吃世界方向），调用点 `effects/world/end_disc.glsl:186` 的 `EndCalculateStars(rayDir)` 不变。与旧 iterationT 末地星空的差别：星点形状与疏密随 Eclipse 星场改变；朝向改用主世界 `CalculateStars` 的「绕日轴对齐天球」，不再按时间绕竖直轴旋转；原先独立的三维格子哈希、`coverage`/`maxLuminance` 与按格取样代码整体删除。默认 `OMNI_STAR_TYPE=1`，末地天空像素会因此换星点外观（属本次要求的效果改动，不属默认中性项）；`OMNI_STAR_TYPE=0`（关星）或 `=2`（原版贴图）时与原来一致。差异说明见 `docs/eclipse-parity.md` 的「星空」行。仅离线编译与检查通过，游戏内画面未验证。
+50. 雾照明补手持光与水下两张（2026-10-18，按用户要求）：照 Eclipse `dimensions/composite3.fsh` 把 `LPV_VL_FOG_ILLUMINATION_HANDHELD(_WATER)` 合并进雾照明。
+    - 取光函数：`effects/lighting/lpv.glsl` 新增 `omniLpvHandLight`，按手持物品编号读方块光表得到光色与光照范围，再按离玩家的距离三次方衰减，照 Eclipse `lib/diffuse_lighting.glsl:74` 的 `GetHandLight`（去掉 Eclipse 的 `relativeEyePosition`，直接用采样点到玩家的距离，游戏内未验证）。
+      为让合成阶段能读光表，`rendering/pipeline.properties` 给 `image.omniLpvBlocks` 加了整数采样器名 `omniLpvBlocksTex`；计算阶段仍用同名图像 `omniLpvBlocks` 读写，两者指向同一张纹理。
+    - 空气项 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD`（`effects/lighting/lpv.glsl`，默认关、等于 Eclipse）：在 `effects/fog/volumetric.glsl` 的体积雾步进里按本步吸收量累加手持光。
+    - 水下项 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER`（`effects/lighting/lpv.glsl`，默认开、等于 Eclipse）：在 `effects/fog/underwater_fog.glsl` 的水下体积雾里叠加手持光，按水的分波段吸收衰减。
+    - 两项都要求雾照明 `OMNI_LPV_VL_FOG_ILLUMINATION`（默认关），所以默认画面不变。亮度系数照 Eclipse（空气项 `0.04`、水下项 `0.2`）按本项目既有的百分之一定标缩小，未按游戏内观感校准。Eclipse 水下项原本接在解析水雾的间接光上，本项目接在水下体积雾上，属换落点的近似。
 
 ### 已裁决：旧选项的处置（2026-10-16）
 

@@ -133,11 +133,11 @@
 #define OMNI_CLOUD_ALTOSTRATUS_SUNLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label":{"zh_cn":"高层云天光","en_us":"Altostratus Skylighting"},"description":{"zh_cn":"高层云受的环境光强度；同受光一样是补的可调值。","en_us":"Ambient light strength on the altostratus; an added knob."},"slider":true}
 #define OMNI_CLOUD_ALTOSTRATUS_SKYLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
-// @option {"label":{"zh_cn":"积雨云层","en_us":"Cumulonimbus Layer"},"description":{"zh_cn":"加一层高耸的雷暴积雨云；默认关闭，关闭时不产生采样。Eclipse 的三档模式因缺少场景强度输入并入开关。","en_us":"Adds a towering cumulonimbus; off by default. Eclipse's three modes collapse to a toggle because the scene strength input is absent."}}
-//#define OMNI_CLOUD_CUMULONIMBUS
-// @option {"label":{"zh_cn":"积雨云高度","en_us":"Cumulonimbus Altitude"},"description":{"zh_cn":"积雨云底部高度，单位方块，取值照 Eclipse 积雨云底部高度。","en_us":"Base altitude of the cumulonimbus in blocks; value from Eclipse."}}
+// @option {"label":{"zh_cn":"积雨云层","en_us":"Cumulonimbus Layer"},"description":{"zh_cn":"加一层高耸的雷暴积雨云，照 Eclipse 分三档：关为不出现；雷暴时或之后为只在有雷暴时出现、雷暴过去后逐渐消退；始终为全天存在。中档读加载器的雷暴强度，Eclipse 的“雷暴后延迟消退”用同一强度近似，没有跨帧保持量。","en_us":"Adds a towering cumulonimbus, in Eclipse's three modes: Off; During/After a thunderstorm (appears with a storm, fades once it passes); or Always on. The middle mode reads the loader's thunder strength; Eclipse's lingering fade-out is approximated with the same input since there is no cross-frame state."},"values":{"0":{"zh_cn":"关","en_us":"Off"},"1":{"zh_cn":"雷暴时或之后","en_us":"During/After Thunderstorm"},"2":{"zh_cn":"始终","en_us":"Always"}}}
+#define OMNI_CLOUD_CUMULONIMBUS 0 // [0 1 2]
+// @option {"label":{"zh_cn":"积雨云高度","en_us":"Cumulonimbus Altitude"},"description":{"zh_cn":"积雨云底部高度，单位方块；取值照 Eclipse `lib/volumetricClouds.glsl:1158` 的积雨云底部六百格。","en_us":"Base altitude of the cumulonimbus in blocks; Eclipse's base of 600 (`lib/volumetricClouds.glsl:1158`)."}}
 #define OMNI_CLOUD_CUMULONIMBUS_ALTITUDE 600.0 // [300.0 400.0 500.0 600.0 800.0 1000.0 1500.0 2000.0]
-// @option {"label":{"zh_cn":"积雨云厚度","en_us":"Cumulonimbus Thickness"},"description":{"zh_cn":"积雨云层厚度，单位方块，取值照 Eclipse 积雨云高度范围。","en_us":"Thickness of the cumulonimbus in blocks; value from Eclipse."}}
+// @option {"label":{"zh_cn":"积雨云厚度","en_us":"Cumulonimbus Thickness"},"description":{"zh_cn":"积雨云层厚度，单位方块；取值照 Eclipse `lib/volumetricClouds.glsl:1157` 的积雨云高度四千格。","en_us":"Thickness of the cumulonimbus in blocks; Eclipse's cumulonimbus height of 4000 (`lib/volumetricClouds.glsl:1157`)."}}
 #define OMNI_CLOUD_CUMULONIMBUS_THICKNESS 4000.0 // [1000.0 2000.0 3000.0 4000.0 5000.0 6000.0 8000.0]
 // @option {"label":{"zh_cn":"积雨云量","en_us":"Cumulonimbus Coverage"},"description":{"zh_cn":"积雨云铺满天空的程度；Eclipse 没有这一项，这里用与基础云一致的云量下限。","en_us":"How much the cumulonimbus covers the sky; Eclipse has no such option."},"slider":true}
 #define OMNI_CLOUD_CUMULONIMBUS_COVERAGE 0.5 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5]
@@ -166,6 +166,9 @@
 // 否则会把三维噪声贴图当成二维采样。原程序靠“只有延迟三号引入这两个文件”区分，这里用一个显式守卫。
 // 低分辨率云阶段（延迟七号算云、延迟八号贴回天空）也要这一整套密度与光照函数，所以与延迟三号一起放行。
 #if defined COLORTEX_CLOUDNOISE && (defined OMNI_DEFERRED3_PASS || defined OMNI_DEFERRED7_PASS || defined OMNI_DEFERRED8_PASS)
+#if OMNI_CLOUD_CUMULONIMBUS == 1 // 中档积雨云要读雷暴强度；Iris 内建量，本程序里 `storm.glsl` 不参与编译，所以在此声明。
+uniform float thunderStrength; // 雷暴强度，零到一，已由加载器平滑；零表示没有雷暴。
+#endif
 // --- 亨耶-格林斯坦相位函数：云这种大粒子的前向散射，输入夹角余弦与不透明度参数 ---
 float HenyeyGreenstein(float inCosAngle, float inG){
 	float num = 1.0 - inG * inG; // 分子，归一化用。
@@ -345,16 +348,23 @@ void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 wind
 // 附加层：卷云、高层云与积雨云，默认全部关闭；关闭时整段不参与编译，不产生任何额外采样。
 // 打开后各自把海拔、厚度、云量、密度、尺度与受光交给同一套步进核心，按 Eclipse 的分层顺序叠加。
 // 调用前提：`color` 是已叠好天空与基础云的天空颜色，`intersectsGround` 是视线是否打到地面。
-#if defined OMNI_CLOUD_CUMULONIMBUS || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS
+#if OMNI_CLOUD_CUMULONIMBUS > 0 || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS
 void NubisExtraLayers(inout vec3 color, vec3 worldDir, vec3 windDirection, vec3 camera, vec2 noise, bool intersectsGround, inout float cloudTransmittance){
-	#ifdef OMNI_CLOUD_CUMULONIMBUS // 积雨云：高耸的雷暴云，最先叠在基础云之上。
+	#if OMNI_CLOUD_CUMULONIMBUS > 0 // 积雨云：高耸的雷暴云，最先叠在基础云之上。
 		// 为什么不受每日天气影响：Eclipse 的积雨云由雷暴强度与固定密度驱动，每日天气表没有它，所以这里只取积雨云自己的选项。
 		vec2 cumulonimbusAltitude = vec2(OMNI_CLOUD_CUMULONIMBUS_ALTITUDE); // 底部高度。
 		cumulonimbusAltitude.y += OMNI_CLOUD_CUMULONIMBUS_THICKNESS; // 顶部高度。
-		if ((cameraPosition.y > cumulonimbusAltitude.x || !intersectsGround) && (cameraPosition.y < cumulonimbusAltitude.y || worldDir.y < 0.0)){ // 与基础体积云同一可见判据。
+		// 档位强度：强档常开，中档只在雷暴时出现。为何用加载器的雷暴强度：Eclipse 用自定义输入对
+		// 「是否雷暴」做六十秒进、可调时长出的跨帧平滑，本项目没有跨帧保持量，这里用加载器已经平滑好的
+		// 雷暴强度近似，雷暴期间变浓、雷暴过去后随之消退。
+		float cumulonimbusStrength = 1.0; // 强档：始终满强度。
+		#if OMNI_CLOUD_CUMULONIMBUS == 1
+			cumulonimbusStrength = smoothstep(0.0, 0.1, thunderStrength); // 中档：雷暴强度驱动出现与消退。
+		#endif
+		if (cumulonimbusStrength > 1e-4 && (cameraPosition.y > cumulonimbusAltitude.x || !intersectsGround) && (cameraPosition.y < cumulonimbusAltitude.y || worldDir.y < 0.0)){ // 先看档位强度，再与基础体积云同一可见判据。
 			float cumulonimbusTransmittance; // 这一层留下的透过率。
 			NubisCloudLayer(color, worldDir, cumulonimbusAltitude, windDirection, camera, noise, cumulonimbusTransmittance, // 复用基础云的步进核心。
-				vec2(OMNI_CLOUD_CUMULONIMBUS_SUNLIGHTING, OMNI_CLOUD_CUMULONIMBUS_SKYLIGHTING), OMNI_CLOUD_CUMULONIMBUS_SCALE, OMNI_CLOUD_CUMULONIMBUS_DENSITY, OMNI_CLOUD_CUMULONIMBUS_COVERAGE); // 受光、尺度、密度与云量。
+				vec2(OMNI_CLOUD_CUMULONIMBUS_SUNLIGHTING, OMNI_CLOUD_CUMULONIMBUS_SKYLIGHTING), OMNI_CLOUD_CUMULONIMBUS_SCALE, OMNI_CLOUD_CUMULONIMBUS_DENSITY * cumulonimbusStrength, OMNI_CLOUD_CUMULONIMBUS_COVERAGE); // 受光、尺度、云量与档位强度缩放后的密度。
 			#if defined OMNI_CUMULONIMBUS_LIGHTNING && defined OMNI_LIGHTNING && defined IS_IRIS // 只有真实闪电输入可用时才加云内闪电。
 				if (lightningBoltPosition.w > 0.0){ // 没有闪电事件时不加。
 					float boltDistance = length(lightningBoltPosition.xyz); // 闪电到相机的距离，闪电位置是相机相对坐标。
