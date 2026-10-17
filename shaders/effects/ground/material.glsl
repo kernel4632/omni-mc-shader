@@ -509,6 +509,22 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 	return parallaxTexel; // 交回被遮挡后的采样像素。
 }
 #elif OMNI_PARALLAX_MODE == 1 // 锐利模式：逐像素穿越图块，保持像素外观。
+// 命中表面后的法线处理：三种「由视差生成法线」取值各不同，集中在本函数里，
+// 免得预处理指令把外层 `if/else` 的收口切成两半（原写法把 `}else{` 写在 `#if` 分支内）。
+// 参数 `parallaxTexel` 是命中的像素，`hitNormal` 是步进中估计出的法线，`fade` 是远处淡出因子（未开淡出时不会被读）。
+// 返回处理后的法线；与当前模式无关时原样返回。
+vec3 ParallaxHitNormal(ivec2 parallaxTexel, vec3 hitNormal, float fade){
+	#if OMNI_PARALLAX_BASED_NORMAL == 1 // 仅侧面：只有步进里命中侧面时才用视差法线。
+		#ifdef OMNI_PARALLAX_FADE
+			hitNormal = mix(DecodeNormalTex(texelFetch(normals, parallaxTexel, 0).rgb), hitNormal, fade * (1.0 - hitNormal.z)); // 远处淡出到贴图法线。
+		#else
+			if (hitNormal.z == 1.0) hitNormal = DecodeNormalTex(texelFetch(normals, parallaxTexel, 0).rgb); // 没命中侧面时用贴图法线。
+		#endif
+	#elif OMNI_PARALLAX_BASED_NORMAL == 2 && defined OMNI_PARALLAX_FADE // 全部用视差法线且需淡出时。
+		hitNormal = mix(vec3(0.0, 0.0, 1.0), hitNormal, fade); // 远处淡出到朝外法线。
+	#endif
+	return hitNormal; // 交回处理后的法线。
+}
 // 锐利视差：沿视线逐像素穿过高度图，命中后可选算自阴影与法线。
 ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 duv1, vec2 duv2, inout vec3 hitNormal, inout float parallaxShadow){
 	#ifndef OMNI_TERRAIN_PASS
@@ -520,14 +536,16 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 	vec2 pixelCoord = coord * vec2(atlasSize); // 当前坐标换算成图集像素。
 	ivec2 parallaxTexel = ivec2(floor(pixelCoord)); // 起始像素。
 	int iTextureResolution = int(textureResolution) - 1; // 图块边长减一，用作回绕掩码。
+	#ifdef OMNI_PARALLAX_FADE
+		vec2 duvMax = max(abs(duv1), abs(duv2)) * atlasTiles; // 纹理坐标的屏幕变化量换成图块单位。
+		float fade = saturate(pow(max(duvMax.x, duvMax.y), -0.4) * 0.2); // 像素越小越淡出。
+	#else
+		float fade = 1.0; // 没开淡出时给占位值，法线函数在该配置下不会读它。
+	#endif
 	float sampleHeight = texelFetch(normals, parallaxTexel, 0).a; // 起始高度。
 	sampleHeight += saturate(1.0 - sampleHeight * 1e20); // 高度为零时补成完整高度。
 	bool exit = false; // 是否命中了表面。
 	if (sampleHeight > 0.0 && sampleHeight < 1.0){ // 只有处在表面内部才穿越。
-		#ifdef OMNI_PARALLAX_FADE
-			vec2 duvMax = max(abs(duv1), abs(duv2)) * atlasTiles; // 纹理坐标的屏幕变化量换成图块单位。
-			float fade = saturate(pow(max(duvMax.x, duvMax.y), -0.4) * 0.2); // 像素越小越淡出。
-		#endif
 		ivec2 tilesPixelBase = ivec2(floor(coord * atlasTiles) * textureResolution); // 当前图块左上角的像素。
 		vec3 viewVector = normalize(viewPos) * tbnMat; // 视线方向转到切线空间。
 		vec3 stepDir = normalize(vec3(viewVector.xy * OMNI_PARALLAX_DEPTH * textureResolution * 0.25, -viewVector.z)); // 每像素前进方向，横向按深度缩放。
@@ -605,17 +623,11 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 				#endif
 			}
 		#endif
-	#if OMNI_PARALLAX_BASED_NORMAL == 1 // 仅侧面：只有命中侧面时才用视差法线。
-		#ifdef OMNI_PARALLAX_FADE
-			hitNormal = mix(DecodeNormalTex(texelFetch(normals, parallaxTexel, 0).rgb), hitNormal, fade * (1.0 - hitNormal.z)); // 远处淡出到贴图法线。
-		#else
-			if (hitNormal.z == 1.0) hitNormal = DecodeNormalTex(texelFetch(normals, parallaxTexel, 0).rgb); // 没命中侧面时用贴图法线。
-		#endif
-		}else{
+		hitNormal = ParallaxHitNormal(parallaxTexel, hitNormal, fade); // 命中后按当前模式处理法线。
+	}else{
+		#if OMNI_PARALLAX_BASED_NORMAL == 1 // 仅侧面模式：没命中侧面就退回贴图法线。
 			hitNormal = DecodeNormalTex(texelFetch(normals, parallaxTexel, 0).rgb); // 没命中时直接用贴图法线。
-	#elif OMNI_PARALLAX_BASED_NORMAL == 2 && defined OMNI_PARALLAX_FADE
-		hitNormal = mix(vec3(0.0, 0.0, 1.0), hitNormal, fade); // 全部用视差法线时，远处淡出到朝外法线。
-	#endif
+		#endif
 	}
 	#if OMNI_PARALLAX_BASED_NORMAL == 0 // 不用视差法线时一律取贴图法线。
 		hitNormal = DecodeNormalTex(texelFetch(normals, parallaxTexel, 0).rgb); // 解出切线空间法线。

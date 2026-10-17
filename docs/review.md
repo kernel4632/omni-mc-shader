@@ -40,9 +40,9 @@
 | 真实绘制与协议 | `shaders/rendering/terrain.glsl`、`distant.glsl`、`composite.glsl`、`post.glsl`、`buffers.glsl`、`pipeline.properties`、`programs.json` |
 | 当时的效果修正 | `shaders/effects/lens/lens.glsl`、`shaders/effects/reflection/reflection.glsl`、`shaders/effects/water/water.glsl`、`shaders/effects/ground/material.glsl`、`shaders/effects/clarity/antialiasing.glsl`、`shaders/effects/cloud/cloud.glsl`、`shaders/effects/dev/debug.glsl` |
 | 工具与回归 | `audit.py`、`build.py`、`tests/test_pipeline.py`、`tests/test_review.py` |
-| 上游原件与许可 | `shaders/libraries/ashima/noise3D.glsl`、`LICENSE`、`dependencies.json`、`THIRD_PARTY.md` |
+| 上游原件与许可 | `shaders/libraries/ashima/noise3D.glsl`、`LICENSE`（这两项是当时随包文件，后续版本已随 Ashima 噪声库退役而删除）、`dependencies.json`、`THIRD_PARTY.md` |
 
-完整输入输出见 `docs/rendering.md`，能力和限制见 `docs/parity.md` 与 `docs/eclipse-parity.md`。上表文件已按当前目录结构更正，本节版本号是当时的历史值，不代表当前文件结构。版本保持尚未发布的 `0.0.0-dev.4`，修改记录补充到同一章节。
+完整输入输出见 `docs/rendering.md`，能力和限制见 `docs/parity.md` 与 `docs/eclipse-parity.md`。上表是当时（`0.0.0-dev.4`）的文件定位，不代表当前文件结构；其中 `shaders/libraries/ashima/` 与随包 `LICENSE` 已在后续版本随 Ashima 库退役，当前未随包。版本保持尚未发布的 `0.0.0-dev.4`，修改记录补充到同一章节。
 
 ## 本轮验证
 
