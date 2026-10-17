@@ -377,4 +377,14 @@ vec4 BicubicBlurTexture(sampler2D texSampler, vec2 coord){
 // --- Omni 额外函数：原程序没有，保留文件仍在使用 ---
 // 安全归一化：长度为零时普通归一化会得到无穷，光传播体积计算阶段用它算天体方向。
 vec3 omniNormalize(vec3 vector) { return vector * inversesqrt(max(dot(vector, vector), 1e-10)); }
+// 颜色转色相、饱和度、明度：体积光染色与矿石/纹饰自发光都要拆出这三个量，来源 Eclipse `lib/hsv.glsl`。
+// 为什么放共用文件：两处以上效果（体积光、自发光矿石/纹饰）都要用，复制一份会与别处不一致。
+vec3 omniRgbToHsv(vec3 c){
+	const vec4 K = vec4(0.0, -1.0, 2.0, -3.0) / 3.0; // 极值组合的基向量，照 Eclipse。
+	const float e = 1.0e-10; // 防止除零的极小量。
+	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g)); // 按蓝绿大小选中间通道。
+	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r)); // 再按红与最大值选主通道。
+	float d = q.x - min(q.w, q.y); // 最大值与最小值之差就是饱和度分子。
+	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x); // 交回色相、饱和度、明度。
+}
 #endif // 文件守卫结束。

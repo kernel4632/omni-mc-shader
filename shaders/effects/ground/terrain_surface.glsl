@@ -369,6 +369,13 @@ void omniTerrainFragment(){
 		}
 	#endif
 
+	// 自发光矿石：按贴图颜色算出矿物颗粒的发光，写进五号画面的自发光通道（来源 Eclipse `all_solid.fsh:856-863`）。
+	// 为什么与红石一样用 max：这个通道也可能来自资源包自发光，取较大者不会把资源包自发光压暗。
+	// 为什么要求开启物理光照：关闭 PBR 时合成阶段不读取这份自发光，写了也不生效。
+	#if defined OMNI_EMISSIVE_ORES && defined OMNI_ENABLE_PBR
+		if (isOre > 0.5) specularTex.a = max(specularTex.a, OMNI_EMISSIVE_ORES_STRENGTH * omniOreEmission(albedo)); // 合并矿石发光。
+	#endif
+
 
 	WriteTerrainGbuffer(albedo, normalEnc, blockLightDirectional, blockLight, specularTex, materialIDs, wet, parallaxShadow); // 统一写出零、三、五号画面。
 

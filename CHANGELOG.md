@@ -1,5 +1,17 @@
 # 更新记录
 
+## 0.0.0-dev.151
+
+把 Eclipse 的自发光矿石与自发光纹饰合并进来，各做成一个独立开关，照 Eclipse 补齐 `docs/eclipse-parity.md` 记的缺口。
+
+- 新效果文件 `shaders/effects/lighting/emissive.glsl`：提供两个纯函数 `omniOreEmission`（矿石，照 Eclipse `all_solid.fsh:331` 的 `getEmission`：鲜艳又明亮的矿物颗粒才亮）与 `omniTrimEmission`（纹饰，照 `:337` 的 `getTrimEmission`：只看明度）。两项各有一个开关 `OMNI_EMISSIVE_ORES`/`OMNI_EMISSIVE_TRIMS` 与一个亮度 `OMNI_EMISSIVE_ORES_STRENGTH`（默认 0.9）/`OMNI_EMISSIVE_TRIMS_STRENGTH`（默认 0.7），默认都关闭、画面不变。
+- 矿石接线（`shaders/block.properties`、`shaders/rendering/terrain.glsl`、`shaders/effects/ground/terrain_surface.glsl`）：矿物方块登记为新编号 `block.502`；地形顶点按编号给出矿石标记，几何转发到片元，片元按贴图颜色算出发光写进五号画面的自发光通道。
+- 纹饰接线（`shaders/item.properties`、`shaders/rendering/entities.glsl`）：盔甲纹饰登记为 `item.1026`（亮纹饰）与 `item.1027`（暗纹饰）；实体片元读加载器的 `currentRenderedItemId`，命中时按明度算发光写进自发光通道，亮纹饰发光再乘 0.4（照 Eclipse）。
+- 共用改动（`shaders/common/math.glsl`、`shaders/effects/lighting/lpv.glsl`）：颜色转 HSV 的 `omniRgbToHsv` 从体积光文件移到共用数学，体积光与自发光两处共用一份。
+- 差异说明记入 `docs/eclipse-parity.md` 的「自发光矿石与纹饰」行（由「未合并」改为「已合并」）：发光与资源包 labPBR 自发光取较大者合并、没搬 Eclipse 的「覆盖」第三档；未登记模组矿石；需开启物理光照。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.150
 
 程序化草补上细分等级、随机与替换矮草三项，照 Eclipse 补齐缺口。

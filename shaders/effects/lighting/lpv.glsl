@@ -71,14 +71,7 @@ const vec2 omniLpvBlockSkyRange = vec2(15.0, 24.0); // 方块光与天光的对�
 const float omniLpvFadeLength = 10.0; // 体积边缘的淡出长度（米），照 Eclipse `diffuse_lighting.glsl:131`。
 
 // --- 颜色编码：HSV 与线性化，照 Eclipse `lib/hsv.glsl` 与 `util.glsl` ---
-vec3 omniRgbToHsv(vec3 c){ // 颜色转色相、饱和度、明度。
-	const vec4 K = vec4(0.0, -1.0, 2.0, -3.0) / 3.0; // 极值组合的基向量。
-	const float e = 1.0e-10; // 防止除零的极小量。
-	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g)); // 按蓝绿大小选中间通道。
-	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r)); // 再按红与最大值选主通道。
-	float d = q.x - min(q.w, q.y); // 最大值与最小值之差就是饱和度分子。
-	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x); // 交回色相、饱和度、明度。
-}
+// `omniRgbToHsv` 已移到 `common/math.glsl`（自发光矿石/纹饰也要用），本文件在上面已引入它。
 vec3 omniHsvToRgb(vec3 c){ // 色相、饱和度、明度转回颜色。
 	const vec4 K = vec4(3.0, 2.0, 1.0, 9.0) / 3.0; // 六个扇区的折叠常数。
 	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www); // 把色相折成三角波。

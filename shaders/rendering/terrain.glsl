@@ -42,6 +42,8 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与材质相关选项。
 #include "/effects/ground/material.glsl"
+// 自发光矿石：提供矿石自发光选项与 `omniOreEmission`，片元按矿石标记补一份自发光。
+#include "/effects/lighting/emissive.glsl"
 // 区块淡入：`omniChunkFade*` 一组纯计算，顶点取进度、几何转发、片元按进度抖动丢弃。
 #include "/effects/clarity/chunkfade.glsl"
 // 时间噪声：片元抖动丢弃要读蓝噪声，顶点与几何阶段只编译不调用。
@@ -106,6 +108,7 @@ flat out vec3 v_blockCenter; // 方块中心的相机相对世界坐标，草丛
 #endif
 out vec2 v_blockLight; // 方块光与天光，零到一，已按原程序曲线重整。
 flat out float v_materialIDs; // 材质编号，平面插值避免边界混值。
+flat out float v_isOre; // 该顶点是不是矿物方块，片元据此补一份自发光。
 out float v_chunkFade; // 区块淡入进度，几何阶段转发给片元；关闭或加载器不支持时恒为一。
 
 // 顶点主函数：把原程序的判定与摆动按顺序执行一遍。
@@ -172,6 +175,11 @@ void main(){
 	#endif
 
 	v_materialIDs = MATID_LAND; // 默认按普通方块处理。
+	v_isOre = 0.0; // 默认不是矿物方块。
+
+	#ifdef OMNI_EMISSIVE_ORES // 只在开启矿石自发光时判定，关闭时整段不编译。
+		if (mc_Entity.x == 502.0) v_isOre = 1.0; // 编号 502 是矿石，见 block.properties。
+	#endif
 
 	#ifdef OMNI_GENERAL_GRASS_FIX // 未指定方块按植物处理：倾斜的面都当作植物。
 		vec3 an = abs(gl_Normal); // 取法线绝对值。
@@ -255,6 +263,7 @@ uniform sampler2D colortex9;
 #endif
 in vec2 v_blockLight[]; // 方块光数组。
 flat in float v_materialIDs[]; // 材质编号数组。
+flat in float v_isOre[]; // 矿物方块标记数组。
 in float v_chunkFade[]; // 区块淡入进度数组。
 
 // 转发给片元的插值量。
@@ -266,6 +275,7 @@ out vec3 viewPos; // 视空间位置。
 #endif
 out vec2 blockLight; // 方块光。
 flat out float materialIDs; // 材质编号。
+flat out float isOre; // 矿物方块标记，片元据此补自发光。
 flat out float textureResolution; // 该三角形所属方块的纹理分辨率，平面插值。
 out float chunkFade; // 区块淡入进度，片元按它抖动丢弃。
 #if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
@@ -299,6 +309,7 @@ void main(){
 		#endif
 		blockLight = v_blockLight[i]; // 转发方块光。
 		materialIDs = v_materialIDs[i]; // 转发材质编号。
+		isOre = v_isOre[i]; // 转发矿物方块标记。
 		#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 			blockID = v_blockID[i]; // 转发方块编号，片元写九号画面。
 		#endif
@@ -331,6 +342,7 @@ in vec2 texCoord; // 纹理坐标。
 #endif
 in vec2 blockLight; // 方块光。
 flat in float materialIDs; // 材质编号。
+flat in float isOre; // 矿物方块标记，`omniTerrainFragment` 据此补一份自发光。
 in float chunkFade; // 区块淡入进度，按它抖动丢弃新加载区块的像素。
 // `flat in float textureResolution;` 已在文件顶部、引入视差函数之前声明。
 #if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD

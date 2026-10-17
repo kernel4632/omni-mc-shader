@@ -48,6 +48,8 @@ vec3 colorSkylight; // 天光颜色。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与实体材质选项。
 #include "/effects/ground/material.glsl"
+// 自发光纹饰：提供纹饰自发光选项与 `omniTrimEmission`，实体片元按盔甲纹饰编号补一份自发光。
+#include "/effects/lighting/emissive.glsl"
 // 生物与玩家：提供 `EntityStatusColor` 与 `HandFovProjection`。
 #include "/effects/entity/entity.glsl"
 // Omni 额外功能：积雪覆盖（来源 Eclipse），默认关闭；与地形共用同一份雪覆盖算法。
@@ -161,6 +163,7 @@ void main(){
 #ifdef OMNI_ENTITIES_PASS
 	uniform vec4 entityColor; // 实体受伤颜色与强度。
 	uniform int entityId; // 实体编号。
+	uniform int currentRenderedItemId; // 当前渲染物品编号，盔甲纹饰在这里给成 item.properties 的纹饰编号。
 #endif
 
 #ifdef OMNI_BLOCK_PASS
@@ -584,6 +587,17 @@ void main(){
 			}
 			albedo.rgb = portalColor; // 用叠加结果当底色。
 			specularTex.rgb = vec3(1.0, 0.0, 254.0 / 255.0); // 固定高光与一个小自发光。
+		}
+	#endif
+
+	// 自发光纹饰：亮纹饰与暗纹饰按明度发光，写进五号画面的自发光通道（来源 Eclipse `all_solid.fsh:866-870`）。
+	// 为什么亮纹饰要减半：亮纹饰本身就很亮，不减半会过曝，照 Eclipse 的 0.4 系数。
+	// 为什么要求开启物理光照：关闭 PBR 时合成阶段不读取这份自发光，写了也不生效。
+	#if defined OMNI_ENTITIES_PASS && defined OMNI_EMISSIVE_TRIMS && defined OMNI_ENABLE_PBR
+		if (currentRenderedItemId == 1026 || currentRenderedItemId == 1027){ // 两个编号见 item.properties。
+			float trimGlow = OMNI_EMISSIVE_TRIMS_STRENGTH * omniTrimEmission(albedo.rgb); // 按明度算发光。
+			if (currentRenderedItemId == 1026) trimGlow *= 0.4; // 亮纹饰发光减半。
+			specularTex.a = max(specularTex.a, trimGlow); // 取较大者，不覆盖资源包自发光。
 		}
 	#endif
 
