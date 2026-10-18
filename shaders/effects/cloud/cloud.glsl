@@ -30,13 +30,13 @@
 #define OMNI_PLANAR_NOISE_SCALE 0.025 // [0.01 0.015 0.02 0.025 0.03 0.035 0.04 0.045 0.5]
 // @option {"label":{"zh_cn":"平面云高度","en_us":"Planar Cloud Altitude"},"description":{"zh_cn":"平面云挂的高度，单位方块。","en_us":"Altitude of the planar clouds in blocks."}}
 #define OMNI_PLANAR_ALTITUDE 6000.0 // [2000.0 2500.0 3000.0 3500.0 4000.0 5000.0 6000.0 7000.0 8000.0 9000.0 10000.0]
-// @option {"label":{"zh_cn":"体积云","en_us":"Volumetric Clouds"},"description":{"zh_cn":"沿视线在云层里步进得到厚实的云，代价较高。","en_us":"Marches through the cloud layer for thick clouds; costlier."}}
+// @option {"label":{"zh_cn":"云层","en_us":"Volumetric Clouds"},"description":{"zh_cn":"沿视线在云层里步进得到厚实的云，代价较高。","en_us":"Marches through the cloud layer for thick clouds; costlier."}}
 #define OMNI_VOLUMETRIC_CLOUDS
-// @option {"label":{"zh_cn":"云精细度","en_us":"Cloud Quality"},"description":{"zh_cn":"体积云沿视线的步数倍率，越大越细也越慢。","en_us":"Multiplier on the volumetric cloud steps; higher is finer and slower."},"slider":true}
-#define OMNI_CLOUD_QUALITY 1.0 // [0.4 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.5 3.0 5.0 7.0 10.0]
-// @option {"label":{"zh_cn":"体积云采样数","en_us":"Cloud Samples"},"description":{"zh_cn":"体积云沿视线采样的次数上限（朝天看时略少），越大越细也越慢；与上面的精细度倍率相乘。","en_us":"Upper bound on volumetric cloud view samples (slightly fewer looking up); higher is finer and slower; multiplied by the quality factor above."},"slider":true}
+// @option {"label":{"zh_cn":"精细度","en_us":"Cloud Quality"},"description":{"zh_cn":"体积云沿视线的步数倍率，越大越细也越慢。","en_us":"Multiplier on the volumetric cloud steps; higher is finer and slower."},"slider":true}
+#define OMNI_CLOUD_QUALITY 1.2 // [0.4 0.6 0.8 1.0 1.2 1.4 1.6 1.8 2.0 2.5 3.0 5.0 7.0 10.0]
+// @option {"label":{"zh_cn":"云层采样数","en_us":"Cloud Samples"},"description":{"zh_cn":"体积云沿视线采样的次数上限（朝天看时略少），越大越细也越慢；与上面的精细度倍率相乘。","en_us":"Upper bound on volumetric cloud view samples (slightly fewer looking up); higher is finer and slower; multiplied by the quality factor above."},"slider":true}
 #define OMNI_CLOUD_SAMPLES 20 // [8 10 12 16 20 24 28 32 40 48 56 64 80 96 128]
-// @option {"label":{"zh_cn":"体积云渲染分辨率","en_us":"Volumetric Cloud Render Resolution"},"description":{"zh_cn":"体积云单独在更低的分辨率上步进，再放大贴回天空；一为原分辨率（默认，画面与从前一致），二或四更省性能但云边缘更软。","en_us":"Steps the volumetric clouds at a lower resolution, then upsamples onto the sky; one is the original resolution (default, unchanged picture), two or four is cheaper but softer."},"values":{"1":{"zh_cn":"原分辨率","en_us":"Full"},"2":{"zh_cn":"一半","en_us":"Half"},"4":{"zh_cn":"四分之一","en_us":"Quarter"}}}
+// @option {"label":{"zh_cn":"云层渲染分辨率","en_us":"Volumetric Cloud Render Resolution"},"description":{"zh_cn":"体积云单独在更低的分辨率上步进，再放大贴回天空；一为原分辨率（默认，画面与从前一致），二或四更省性能但云边缘更软。","en_us":"Steps the volumetric clouds at a lower resolution, then upsamples onto the sky; one is the original resolution (default, unchanged picture), two or four is cheaper but softer."},"values":{"1":{"zh_cn":"原分辨率","en_us":"Full"},"2":{"zh_cn":"一半","en_us":"Half"},"4":{"zh_cn":"四分之一","en_us":"Quarter"}}}
 #define OMNI_CLOUD_RENDER_SCALE 1 // [1 2 4]
 // 体积云低分辨率模式：渲染分辨率大于一时打开。低分辨率模式把体积云搬到独立阶段，
 // 主天空不再内联计算体积云；原分辨率下整段不生效，默认画面与行为完全不变。
@@ -71,31 +71,31 @@
 #define OMNI_CLOUD_RAIN_SKYLIGHTING 0.8 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.5 3.0 5.0]
 // @option {"label":{"zh_cn":"雨天云块大小","en_us":"Rain Cloud Scale"},"description":{"zh_cn":"雨天云块大小，越大云块越小。","en_us":"Rain cloud block size; larger is smaller."},"slider":true}
 #define OMNI_CLOUD_RAIN_SCALE 1.0 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.5 3.0 5.0]
-// @option {"label":{"zh_cn":"云细节噪声强度","en_us":"Cloud Detailed Noise Strength"},"description":{"zh_cn":"云边缘细节噪声的强度，越大碎边越明显。","en_us":"Strength of the fine noise on cloud edges; higher is more broken."},"slider":true}
+// @option {"label":{"zh_cn":"细节噪声强度","en_us":"Cloud Detailed Noise Strength"},"description":{"zh_cn":"云边缘细节噪声的强度，越大碎边越明显。","en_us":"Strength of the fine noise on cloud edges; higher is more broken."},"slider":true}
 #define OMNI_CLOUD_DETAILED_NOISE_STRENGTH 1.0 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.5 3.0 3.5 4.0]
-// @option {"label":{"zh_cn":"云基础噪声尺度","en_us":"Cloud Base Noise Scale"},"description":{"zh_cn":"云形状基础噪声的空间频率，越大云块越小。","en_us":"Spatial frequency of the base cloud shape; higher is smaller blocks."},"slider":true}
+// @option {"label":{"zh_cn":"基础噪声尺度","en_us":"Cloud Base Noise Scale"},"description":{"zh_cn":"云形状基础噪声的空间频率，越大云块越小。","en_us":"Spatial frequency of the base cloud shape; higher is smaller blocks."},"slider":true}
 #define OMNI_CLOUD_BASE_NOISE_SCALE 0.0007 // [0.0001 0.00015 0.0002 0.00025 0.0003 0.00035 0.0004 0.00045 0.0005 0.00055 0.0006 0.00065 0.0007 0.00075 0.0008 0.00085 0.0009 0.00095 0.001 0.0011 0.0012 0.0014 0.0015 0.0016 0.0017 0.0018 0.0019 0.002]
-// @option {"label":{"zh_cn":"云细节噪声尺度","en_us":"Cloud Detailed Noise Scale"},"description":{"zh_cn":"云边缘细节噪声的空间频率。","en_us":"Spatial frequency of the fine cloud-edge noise."},"slider":true}
+// @option {"label":{"zh_cn":"细节噪声尺度","en_us":"Cloud Detailed Noise Scale"},"description":{"zh_cn":"云边缘细节噪声的空间频率。","en_us":"Spatial frequency of the fine cloud-edge noise."},"slider":true}
 #define OMNI_CLOUD_DETAILED_NOISE_SCALE 0.007 // [0.001 0.002 0.003 0.004 0.005 0.006 0.007 0.008 0.009 0.01 0.011 0.012 0.013 0.014 0.015 0.016 0.017 0.018 0.019 0.02]
-// @option {"label":{"zh_cn":"云底亮度","en_us":"Cloud Bottom Brightness"},"description":{"zh_cn":"云背光面保留的底光，越大背光云越不黑。","en_us":"Base light kept on shaded cloud sides; higher is less black."},"slider":true}
+// @option {"label":{"zh_cn":"底亮度","en_us":"Cloud Bottom Brightness"},"description":{"zh_cn":"云背光面保留的底光，越大背光云越不黑。","en_us":"Base light kept on shaded cloud sides; higher is less black."},"slider":true}
 #define OMNI_CLOUD_BOTTOM_BRIGHTNESS 0.15 // [0.01 0.02 0.03 0.05 0.07 0.1 0.15 0.2 0.3 0.5 0.7 1.0]
-// @option {"label":{"zh_cn":"云外散射指数","en_us":"Cloud Outscatter Factor"},"description":{"zh_cn":"阳光透过云的集中程度，越大越集中在太阳方向。","en_us":"How tightly light spreads through the clouds; higher concentrates it near the sun."},"slider":true}
+// @option {"label":{"zh_cn":"外散射指数","en_us":"Cloud Outscatter Factor"},"description":{"zh_cn":"阳光透过云的集中程度，越大越集中在太阳方向。","en_us":"How tightly light spreads through the clouds; higher concentrates it near the sun."},"slider":true}
 #define OMNI_CLOUD_OUTSCATTER_FACTOR 1.3 // [0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
-// @option {"label":{"zh_cn":"云量噪声偏移","en_us":"Cloud Coverage Noise Offset"},"description":{"zh_cn":"云量在噪声里的偏移，改变云块的整体分布。","en_us":"Offsets the coverage noise, changing the overall cloud layout."},"slider":true}
+// @option {"label":{"zh_cn":"量噪声偏移","en_us":"Cloud Coverage Noise Offset"},"description":{"zh_cn":"云量在噪声里的偏移，改变云块的整体分布。","en_us":"Offsets the coverage noise, changing the overall cloud layout."},"slider":true}
 #define OMNI_CLOUD_COVERAGE_NOISE_OFFSET 0.68 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
-// @option {"label":{"zh_cn":"云远距淡出","en_us":"Cloud Fade"},"description":{"zh_cn":"远处云逐渐融进天空，避免出现硬边。","en_us":"Fades distant clouds into the sky to avoid hard edges."}}
+// @option {"label":{"zh_cn":"远距淡出","en_us":"Cloud Fade"},"description":{"zh_cn":"远处云逐渐融进天空，避免出现硬边。","en_us":"Fades distant clouds into the sky to avoid hard edges."}}
 #define OMNI_CLOUD_FADE 1 // [0 1]
-// @option {"label":{"zh_cn":"云速","en_us":"Cloud Speed"},"description":{"zh_cn":"云飘动的快慢。","en_us":"How fast the clouds drift."},"slider":true}
+// @option {"label":{"zh_cn":"速","en_us":"Cloud Speed"},"description":{"zh_cn":"云飘动的快慢。","en_us":"How fast the clouds drift."},"slider":true}
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0 3.0 4.0 5.0 7.5 10.0 15.0 20.0 30.0 40.0 50.0 75.0 100.0]
-// @option {"label":{"zh_cn":"云时间偏移","en_us":"Cloud Time Offset"},"description":{"zh_cn":"给云和平面云的飘动时间加一个固定偏移，用来错开云的位置；不改变飘动速度。","en_us":"Offsets the cloud drift time by a fixed amount to shift their position; does not change speed."},"slider":true}
+// @option {"label":{"zh_cn":"时间偏移","en_us":"Cloud Time Offset"},"description":{"zh_cn":"给云和平面云的飘动时间加一个固定偏移，用来错开云的位置；不改变飘动速度。","en_us":"Offsets the cloud drift time by a fixed amount to shift their position; does not change speed."},"slider":true}
 #define OMNI_CLOUD_TIME_OFFSET 0 // [0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 105 110 115 120 125 130 135 140 145 150 155 160 165 170 175 180 185 190 195 200 205 210 215 220 225 230 235 240 245 250 255 260 265 270 275 280 285 290 295 300 305 310 315 320 325 330 335 340 345 350 355]
-// @option {"label":{"zh_cn":"云影","en_us":"Cloud Shadow"},"description":{"zh_cn":"云在地上投下阴影。","en_us":"Clouds cast shadows on the ground."}}
+// @option {"label":{"zh_cn":"影","en_us":"Cloud Shadow"},"description":{"zh_cn":"云在地上投下阴影。","en_us":"Clouds cast shadows on the ground."}}
 #define OMNI_CLOUD_SHADOW
-// @option {"label":{"zh_cn":"云影淡出","en_us":"Cloud Shadow Fade"},"description":{"zh_cn":"太阳贴近地平线时让云影变淡，避免阴影拉得过长。","en_us":"Fades cloud shadows as the sun nears the horizon."}}
+// @option {"label":{"zh_cn":"影淡出","en_us":"Cloud Shadow Fade"},"description":{"zh_cn":"太阳贴近地平线时让云影变淡，避免阴影拉得过长。","en_us":"Fades cloud shadows as the sun nears the horizon."}}
 #define OMNI_CLOUD_SHADOW_FADE 1 // [0 1]
-// @option {"label":{"zh_cn":"云影范围","en_us":"Cloud Shadow Range"},"description":{"zh_cn":"云影贴图覆盖的地表范围，单位方块。","en_us":"Ground area covered by the cloud shadow texture, in blocks."}}
+// @option {"label":{"zh_cn":"影范围","en_us":"Cloud Shadow Range"},"description":{"zh_cn":"云影贴图覆盖的地表范围，单位方块。","en_us":"Ground area covered by the cloud shadow texture, in blocks."}}
 #define OMNI_CLOUD_SHADOW_RANGE 4096.0 // [2048.0 3072.0 4096.0 6144.0 8192.0 12288.0 16384.0]
-// @option {"label":{"zh_cn":"云影贴图尺寸","en_us":"Cloud Shadow Texture Size"},"description":{"zh_cn":"云影贴图的边长上限，越大云影越细。","en_us":"Side length cap of the cloud shadow texture; higher is finer."},"slider":true}
+// @option {"label":{"zh_cn":"影贴图尺寸","en_us":"Cloud Shadow Texture Size"},"description":{"zh_cn":"云影贴图的边长上限，越大云影越细。","en_us":"Side length cap of the cloud shadow texture; higher is finer."},"slider":true}
 #define OMNI_CLOUD_SHADOWTEX_SIZE 256.0 // [128.0 192.0 256.0 384.0 512.0 768.0 1024.0]
 // @option {"label":{"zh_cn":"雨天阴影","en_us":"Rain Shadow"},"description":{"zh_cn":"阴雨天直射光被云挡掉多少，越大雨天越暗。","en_us":"How much rain clouds block direct light; higher is darker."},"slider":true}
 #define OMNI_RAIN_SHADOW 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]

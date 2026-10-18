@@ -35,7 +35,7 @@
 #ifndef OMNI_END_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_END_INCLUDED // 置上标记，后续再次引用直接跳过。
 // @effect {"label":{"zh_cn":"末地","en_us":"End"}}
-// @option {"label":{"zh_cn":"末地公转周期","en_us":"End Revolution Period"},"description":{"zh_cn":"行星绕末地转一圈的时间。","en_us":"Time for the planet to orbit once."},"slider":true}
+// @option {"label":{"zh_cn":"公转周期","en_us":"End Revolution Period"},"description":{"zh_cn":"行星绕末地转一圈的时间。","en_us":"Time for the planet to orbit once."},"slider":true}
 #define OMNI_END_PLANET_CYCLE 15.0 // [0.25 0.5 0.75 1.0 1.5 2.0 3.0 5.0 7.5 10.0 15.0 20.0 30.0 60.0]
 // @option {"label":{"zh_cn":"手动相位控制","en_us":"Manual Phase Control"},"description":{"zh_cn":"手动指定末地行星的位置。","en_us":"Manually sets the planet's phase."}}
 //#define OMNI_END_MANUAL_PLANET_CYCLE
@@ -46,11 +46,11 @@
 // @option {"label":{"zh_cn":"吸积盘多普勒效应","en_us":"Accretion Disc Doppler Effect"},"description":{"zh_cn":"模拟黑洞吸积盘旋转的多普勒效应，一边更亮、一边更暗。","en_us":"Simulates the doppler shift of the rotating accretion disc, brightening one side."}}
 #define OMNI_ACCRETIONDISC_DOPPLER_EFFECT 1 // [0 1]
 // 主岛光源的选项、常数与阴影相机都在 `effects/world/end_island_light.glsl`，本文件只负责引入它。
-// @option {"label":{"zh_cn":"末地风暴密度","en_us":"End Storm Density"},"description":{"zh_cn":"末地雾里带方向性的风暴部分浓度，一为现在的强度，零去掉这一层。取自 Eclipse 的同名密度。","en_us":"Density of the directional storm part of the End fog; 1 is the current strength, 0 removes it. Matches Eclipse's storm density."},"slider":true}
+// @option {"label":{"zh_cn":"风暴密度","en_us":"End Storm Density"},"description":{"zh_cn":"末地雾里带方向性的风暴部分浓度，一为现在的强度，零去掉这一层。取自 Eclipse 的同名密度。","en_us":"Density of the directional storm part of the End fog; 1 is the current strength, 0 removes it. Matches Eclipse's storm density."},"slider":true}
 #define OMNI_END_FOG_STORM_DENSITY 1.0 // [0.0 0.1 0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0 5.0]
-// @option {"label":{"zh_cn":"末地雾霭密度","en_us":"End Haze Density"},"description":{"zh_cn":"末地雾里不带方向性的雾霭部分浓度，一为现在的强度，零去掉这一层。取自 Eclipse 的同名密度。","en_us":"Density of the direction-less haze part of the End fog; 1 is the current strength, 0 removes it. Matches Eclipse's haze density."},"slider":true}
+// @option {"label":{"zh_cn":"雾霭密度","en_us":"End Haze Density"},"description":{"zh_cn":"末地雾里不带方向性的雾霭部分浓度，一为现在的强度，零去掉这一层。取自 Eclipse 的同名密度。","en_us":"Density of the direction-less haze part of the End fog; 1 is the current strength, 0 removes it. Matches Eclipse's haze density."},"slider":true}
 #define OMNI_END_FOG_HAZE_DENSITY 1.0 // [0.0 0.1 0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0 5.0]
-// @option {"label":{"zh_cn":"末地涡旋体积雾","en_us":"End Vortex Volumetric Fog"},"description":{"zh_cn":"把末地雾换成一层会旋转的浓雾云：绕主岛上空旋转、越靠中心越亮，雾里还叠出光柱与雾霭。取自 Eclipse 的体积末地雾；默认关闭，关闭时画面与只有解析雾时一致。","en_us":"Turns the End fog into a rotating dense cloud that swirls around above the main island, brightest near its centre, with light columns and haze. Ported from Eclipse; off by default."}}
+// @option {"label":{"zh_cn":"涡旋空气雾","en_us":"End Vortex Volumetric Fog"},"description":{"zh_cn":"把末地雾换成一层会旋转的浓雾云：绕主岛上空旋转、越靠中心越亮，雾里还叠出光柱与雾霭。取自 Eclipse 的体积末地雾；默认关闭，关闭时画面与只有解析雾时一致。","en_us":"Turns the End fog into a rotating dense cloud that swirls around above the main island, brightest near its centre, with light columns and haze. Ported from Eclipse; off by default."}}
 #define OMNI_END_VORTEX_FOG 0 // [0 1]
 // @option {"label":{"zh_cn":"涡旋风暴密度","en_us":"Vortex Storm Density"},"description":{"zh_cn":"涡旋雾里带形状的风暴部分浓度，一为原程序设定值，零去掉这一层。取自 Eclipse 的末地风暴密度，与上面的解析雾密度各自独立。","en_us":"Density of the shaped storm part of the vortex; 1 is Eclipse's value, 0 removes it. Independent from the analytic fog density above."},"slider":true}
 #define OMNI_END_VORTEX_STORM_DENSITY 1.0 // [0.0 0.1 0.25 0.5 0.75 1.0 1.25 1.5 2.0 3.0 5.0 10.0]

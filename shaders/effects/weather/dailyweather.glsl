@@ -35,7 +35,7 @@
 #define OMNI_DAILY_WEATHER_INCLUDED // 置上标记，后续再次引用直接跳过。
 
 // @effect {"label":{"zh_cn":"每日天气","en_us":"Daily weather"}}
-// @option {"label":{"zh_cn":"每日天气表","en_us":"Daily weather table"},"description":{"zh_cn":"按游戏日轮换取当天的云量与雾密度；默认关闭，关闭时画面与原来一致。","en_us":"Rotates cloud coverage and fog density by in-game day; off by default, so the default look is unchanged."}}
+// @option {"label":{"zh_cn":"表","en_us":"Daily weather table"},"description":{"zh_cn":"按游戏日轮换取当天的云量与雾密度；默认关闭，关闭时画面与原来一致。","en_us":"Rotates cloud coverage and fog density by in-game day; off by default, so the default look is unchanged."}}
 #define OMNI_DAILY_WEATHER 0 // [0 1]
 // @option {"label":{"zh_cn":"随机天气","en_us":"Random weather"},"description":{"zh_cn":"每天从十天里随机取一行，而不是按天数顺序取；只在每日天气表开启时生效。","en_us":"Picks a random row of ten each day instead of cycling in order; used only when the table is on."}}
 #define OMNI_DAILY_WEATHER_RANDOM 0 // [0 1]

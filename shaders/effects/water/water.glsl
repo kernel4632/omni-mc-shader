@@ -37,13 +37,13 @@
 #define OMNI_WAVE_SCALE 0.05 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.15 0.2 0.3 0.5 0.7 1.0]
 // @option {"label":{"zh_cn":"波浪高度","en_us":"Wave height"},"description":{"zh_cn":"水面起伏的强度；调大波浪更明显。","en_us":"Strength of the water surface undulation; larger makes waves more visible."},"slider":true}
 #define OMNI_WAVE_HEIGHT 1.2 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 3.0 5.0 7.0 10.0]
-// @option {"label":{"zh_cn":"水面视差","en_us":"Water parallax"},"description":{"zh_cn":"按波浪高度偏移水面采样，让波峰看起来真的凸起；关闭后只用法线造形。","en_us":"Offsets water sampling by wave height so crests look raised; off keeps shape from normals only."}}
+// @option {"label":{"zh_cn":"凹凸","en_us":"Water parallax"},"description":{"zh_cn":"按波浪高度偏移水面采样，让波峰看起来真的凸起；关闭后只用法线造形。","en_us":"Offsets water sampling by wave height so crests look raised; off keeps shape from normals only."}}
 #define OMNI_WATER_PARALLAX 1 // [0 1]
 // @option {"label":{"zh_cn":"水下雾","en_us":"Underwater fog"},"description":{"zh_cn":"在水下或隔着水看远处时叠加雾；关闭后水更通透。","en_us":"Adds fog when underwater or looking through water; off makes the water clearer."}}
 #define OMNI_UNDERWATER_FOG
 // @option {"label":{"zh_cn":"水雾密度","en_us":"Water fog density"},"description":{"zh_cn":"水下与水后雾的浓度；调大看得更近。","en_us":"Density of underwater and through-water fog; larger reduces visibility."},"slider":true}
 #define OMNI_WATER_FOG_DENSITY 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
-// @option {"label":{"zh_cn":"水面焦散","en_us":"Water caustics"},"description":{"zh_cn":"阳光透过波动水面在水底汇聚出的亮纹。","en_us":"Bright patterns where sunlight focuses through the rippling water onto the bottom."}}
+// @option {"label":{"zh_cn":"焦散","en_us":"Water caustics"},"description":{"zh_cn":"阳光透过波动水面在水底汇聚出的亮纹。","en_us":"Bright patterns where sunlight focuses through the rippling water onto the bottom."}}
 #define OMNI_CAUSTICS
 // @option {"label":{"zh_cn":"水洼与涟漪范围","en_us":"Puddles & ripples"},"description":{"zh_cn":"雨点涟漪出现的位置：整个湿表面均匀铺满，还是只在低洼积水处出现。「仅水洼」还会按「水洼尺寸」决定水洼范围，并让水洼表面更光滑更暗（照 Eclipse 的 `applyPuddles`）。默认与原来一致。来源 Eclipse `lib/settings.glsl:359` 的 `PUDDLE_MODE`。","en_us":"Where rain ripples appear: evenly over the whole wet surface, or only in low-lying puddles. \"Only puddles\" also uses \"Puddle size\" to shape the puddles and makes their surface smoother and darker (Eclipse's applyPuddles). Default matches the previous behaviour. From Eclipse `lib/settings.glsl:359` `PUDDLE_MODE`."},"values":{"0":{"zh_cn":"无雨点","en_us":"Off"},"1":{"zh_cn":"水洼与全湿润","en_us":"Puddles + fully wet"},"2":{"zh_cn":"仅水洼","en_us":"Only puddles"},"3":{"zh_cn":"仅全湿润","en_us":"Only fully wet"}}}
 #define OMNI_PUDDLE_MODE 1 // [0 1 2 3]

@@ -70,7 +70,7 @@
 #define OMNI_DOF_FOCUS_IGNORE_HAND_PARTICLE 1 // [0 1]
 // @option {"label": {"zh_cn": "眩光", "en_us": "Lens Glare"}, "description": {"zh_cn": "太阳在画面中时沿光线方向产生细长眩光。", "en_us": "Draws a stretched glare from the sun highlight."}}
 #define OMNI_LENS_GLARE 1 // [0 1]
-// @option {"label": {"zh_cn": "镜头光斑", "en_us": "Lens Flare"}, "description": {"zh_cn": "从太阳亮部生成一串鬼影与光环。", "en_us": "Draws ghosts and a halo from the sun highlight."}}
+// @option {"label":{"zh_cn":"光斑","en_us":"Lens Flare"},"description":{"zh_cn":"从太阳亮部生成一串鬼影与光环。","en_us":"Draws ghosts and a halo from the sun highlight."}}
 #define OMNI_LENS_FLARE 0 // [0 1]
 // @option {"label": {"zh_cn": "眩光亮度", "en_us": "Glare Brightness"}, "slider": true, "description": {"zh_cn": "眩光的强度。", "en_us": "Brightness of the glow glare."}}
 #define OMNI_GLARE_BRIGHTNESS 1.0 // [0.1 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0]

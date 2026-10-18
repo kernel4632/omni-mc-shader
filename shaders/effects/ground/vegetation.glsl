@@ -17,7 +17,7 @@
 #ifndef OMNI_VEGETATION_INCLUDED // 只引入一次。
 #define OMNI_VEGETATION_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"植物","en_us":"Plants"}}
-// @option {"label":{"zh_cn":"植物晃动","en_us":"Waving Plants"},"description":{"zh_cn":"草和树叶会不会随风摆，代价很低。","en_us":"Whether grass and leaves sway in the wind; cheap."}}
+// @option {"label":{"zh_cn":"晃动","en_us":"Waving Plants"},"description":{"zh_cn":"草和树叶会不会随风摆，代价很低。","en_us":"Whether grass and leaves sway in the wind; cheap."}}
 #define OMNI_WAVING_PLANTS 1 // [0 1]
 // @option {"label":{"zh_cn":"阴影贴图植物晃动","en_us":"Waving Plants in ShadowMap"},"description":{"zh_cn":"让影子里的植物也摆；开启后阴影图中植物会闪。","en_us":"Waves plants inside the shadow map; may flicker in the shadow map."}}
 //#define OMNI_SHADOW_WAVING_PLANTS

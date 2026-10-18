@@ -32,23 +32,23 @@
 #define OMNI_ANISOTROPIC_FILTERING_QUALITY 4 // [0 2 4 8 16]
 // @option {"label":{"zh_cn":"法线高光也过滤","en_us":"Filter Normal & Specular"},"description":{"zh_cn":"把各向异性过滤也用在法线与高光贴图上，代价略高但更清晰。","en_us":"Applies anisotropic filtering to the normal and specular maps too."}}
 //#define OMNI_ANISOTROPIC_FILTERING_NORMAL_SPECULAR
-// @option {"label":{"zh_cn":"实体视差","en_us":"Entity Parallax"},"description":{"zh_cn":"给实体也做视差；需要先正确设置实体纹理分辨率。","en_us":"Enables parallax on entities; set the entity texture resolution first."}}
+// @option {"label":{"zh_cn":"实体凹凸","en_us":"Entity Parallax"},"description":{"zh_cn":"给实体也做视差；需要先正确设置实体纹理分辨率。","en_us":"Enables parallax on entities; set the entity texture resolution first."}}
 #define OMNI_ENTITIES_PARALLAX 1 // [0 1]
-// @option {"label":{"zh_cn":"视差模式","en_us":"Parallax Mode"},"description":{"zh_cn":"关、锐利或平滑；锐利保持像素外观，平滑更少锯齿。","en_us":"Off, Sharp or Smooth; Sharp keeps the pixel look, Smooth has fewer artifacts."},"values":{"0":{"zh_cn":"关","en_us":"off"},"1":{"zh_cn":"锐利","en_us":"Sharp"},"2":{"zh_cn":"平滑","en_us":"Smooth"}}}
+// @option {"label":{"zh_cn":"凹凸模式","en_us":"Parallax Mode"},"description":{"zh_cn":"关、锐利或平滑；锐利保持像素外观，平滑更少锯齿。","en_us":"Off, Sharp or Smooth; Sharp keeps the pixel look, Smooth has fewer artifacts."},"values":{"0":{"zh_cn":"关","en_us":"off"},"1":{"zh_cn":"锐利","en_us":"Sharp"},"2":{"zh_cn":"平滑","en_us":"Smooth"}}}
 #define OMNI_PARALLAX_MODE 0 // [0 1 2]
-// @option {"label":{"zh_cn":"视差采样质量","en_us":"Parallax Quality"},"description":{"zh_cn":"锐利模式决定视差范围，平滑模式决定伪影多少，越大越细也越慢。","en_us":"Sharp sets the parallax range, Smooth sets artifact level; higher is finer and slower."},"slider":true}
+// @option {"label":{"zh_cn":"凹凸采样质量","en_us":"Parallax Quality"},"description":{"zh_cn":"锐利模式决定视差范围，平滑模式决定伪影多少，越大越细也越慢。","en_us":"Sharp sets the parallax range, Smooth sets artifact level; higher is finer and slower."},"slider":true}
 #define OMNI_PARALLAX_QUALITY 40 // [10 15 20 30 40 60 80 100 150 200 300 500]
-// @option {"label":{"zh_cn":"视差细化步数","en_us":"Parallax Refinements"},"description":{"zh_cn":"平滑视差找到交点后再二分细化的次数，越大边缘越准也越慢。","en_us":"Bisection steps after the parallax hit in Smooth mode; higher is more accurate and slower."},"slider":true}
+// @option {"label":{"zh_cn":"凹凸细化步数","en_us":"Parallax Refinements"},"description":{"zh_cn":"平滑视差找到交点后再二分细化的次数，越大边缘越准也越慢。","en_us":"Bisection steps after the parallax hit in Smooth mode; higher is more accurate and slower."},"slider":true}
 #define OMNI_PARALLAX_MAX_REFINEMENTS 12 // [0 2 4 6 8 12 16]
-// @option {"label":{"zh_cn":"视差阴影","en_us":"Parallax Self Shadow"},"description":{"zh_cn":"让视差像素自己也投出阳光阴影，代价很低。","en_us":"Lets parallax pixels cast their own sunlight shadow; cheap."}}
+// @option {"label":{"zh_cn":"凹凸阴影","en_us":"Parallax Self Shadow"},"description":{"zh_cn":"让视差像素自己也投出阳光阴影，代价很低。","en_us":"Lets parallax pixels cast their own sunlight shadow; cheap."}}
 #define OMNI_PARALLAX_SHADOW 1 // [0 1]
-// @option {"label":{"zh_cn":"视差阴影质量","en_us":"Self Shadow Quality"},"description":{"zh_cn":"视差阴影的采样数，越大越细也越慢。","en_us":"Sample count for the parallax shadow; higher is finer and slower."},"slider":true}
+// @option {"label":{"zh_cn":"凹凸阴影质量","en_us":"Self Shadow Quality"},"description":{"zh_cn":"视差阴影的采样数，越大越细也越慢。","en_us":"Sample count for the parallax shadow; higher is finer and slower."},"slider":true}
 #define OMNI_PARALLAX_SHADOW_QUALITY 20 // [10 15 20 30 40 60 80 100 150 200 300 500]
-// @option {"label":{"zh_cn":"由视差生成法线","en_us":"Parallax Based Normal"},"description":{"zh_cn":"让法线效果与视差一致；平滑模式只对侧面生效。","en_us":"Keeps normals consistent with parallax; Smooth only affects sides."},"values":{"0":{"zh_cn":"关","en_us":"off"},"1":{"zh_cn":"仅侧面","en_us":"Side Only"},"2":{"zh_cn":"全部","en_us":"All"}}}
+// @option {"label":{"zh_cn":"由凹凸生成法线","en_us":"Parallax Based Normal"},"description":{"zh_cn":"让法线效果与视差一致；平滑模式只对侧面生效。","en_us":"Keeps normals consistent with parallax; Smooth only affects sides."},"values":{"0":{"zh_cn":"关","en_us":"off"},"1":{"zh_cn":"仅侧面","en_us":"Side Only"},"2":{"zh_cn":"全部","en_us":"All"}}}
 #define OMNI_PARALLAX_BASED_NORMAL 1 // [0 1 2]
-// @option {"label":{"zh_cn":"视差深度","en_us":"Parallax Depth"},"description":{"zh_cn":"凹凸看起来多深，单位是方块高度。","en_us":"How deep surfaces appear, in block heights."},"slider":true}
+// @option {"label":{"zh_cn":"凹凸深度","en_us":"Parallax Depth"},"description":{"zh_cn":"凹凸看起来多深，单位是方块高度。","en_us":"How deep surfaces appear, in block heights."},"slider":true}
 #define OMNI_PARALLAX_DEPTH 1.0 // [0.1 0.15 0.2 0.3 0.5 0.75 1.0 1.25 1.5 1.75 2.0 3.0 5.0 7.5 10.0]
-// @option {"label":{"zh_cn":"视差淡出","en_us":"Parallax Fade"},"description":{"zh_cn":"纹理像素很小时淡出视差，避免远处闪烁；不建议关闭。","en_us":"Fades parallax when texels get tiny, avoiding shimmer; better kept on."}}
+// @option {"label":{"zh_cn":"凹凸淡出","en_us":"Parallax Fade"},"description":{"zh_cn":"纹理像素很小时淡出视差，避免远处闪烁；不建议关闭。","en_us":"Fades parallax when texels get tiny, avoiding shimmer; better kept on."}}
 #define OMNI_PARALLAX_FADE
 // @option {"label":{"zh_cn":"启用 PBR","en_us":"Enable PBR"},"description":{"zh_cn":"使用 labPBR 资源包的表面贴图；关闭后下面这些材质效果全部停用。","en_us":"Uses labPBR surface maps; turning it off disables all the material effects below."}}
 #define OMNI_ENABLE_PBR
@@ -64,15 +64,15 @@
 #define OMNI_ENTITIES_NORMAL_CLAMP
 // --- 资源包法线的整体强度与材质遮蔽：来源 Eclipse `lib/settings.glsl:371-376`、`dimensions/all_solid.fsh:743-752` ---
 // 这一组默认不改变画面：材质遮蔽默认关闭，法线倍率默认一倍与资源包期望一致。
-// @option {"label":{"zh_cn":"材质环境光遮蔽","en_us":"Material Ambient Occlusion"},"description":{"zh_cn":"用资源包法线贴图的蓝通道当作遮蔽，压暗凹陷处的底色；默认关闭，关闭时画面不变。","en_us":"Uses the resource pack normal map's blue channel as occlusion to darken cavities; off by default so the current look is unchanged."}}
+// @option {"label":{"zh_cn":"材质缝隙暗部","en_us":"Material Ambient Occlusion"},"description":{"zh_cn":"用资源包法线贴图的蓝通道当作遮蔽，压暗凹陷处的底色；默认关闭，关闭时画面不变。","en_us":"Uses the resource pack normal map's blue channel as occlusion to darken cavities; off by default so the current look is unchanged."}}
 #define OMNI_MATERIAL_AO 0 // [0 1]
-// @option {"label":{"zh_cn":"法线贴图强度","en_us":"Normal Map Strength"},"description":{"zh_cn":"资源包法线贴图的整体起伏倍率，一倍为资源包期望的原始强度；默认一倍，画面不变。","en_us":"Overall relief multiplier for resource pack normal maps; 1 is the value packs expect; default 1 leaves the current look unchanged."},"slider":true}
+// @option {"label":{"zh_cn":"表面纹理强度","en_us":"Normal Map Strength"},"description":{"zh_cn":"资源包法线贴图的整体起伏倍率，一倍为资源包期望的原始强度；默认一倍，画面不变。","en_us":"Overall relief multiplier for resource pack normal maps; 1 is the value packs expect; default 1 leaves the current look unchanged."},"slider":true}
 #define OMNI_NORMAL_MAP_MULT 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0]
-// @option {"label":{"zh_cn":"次表面散射强度","en_us":"SSS Strength"},"description":{"zh_cn":"光照穿透表面的深度倍率，与偏移一起为零时关闭次表面散射。","en_us":"Depth multiplier of light through the surface; with the offset at zero it disables SSS."},"slider":true}
+// @option {"label":{"zh_cn":"透光强度","en_us":"SSS Strength"},"description":{"zh_cn":"光照穿透表面的深度倍率，与偏移一起为零时关闭次表面散射。","en_us":"Depth multiplier of light through the surface; with the offset at zero it disables SSS."},"slider":true}
 #define OMNI_SSS_STRENGTH 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 3.0 5.0 7.0 10.0]
-// @option {"label":{"zh_cn":"次表面散射偏移","en_us":"SSS Strength Offset"},"description":{"zh_cn":"给穿透深度一个最小值；与倍率一起为零时关闭次表面散射。","en_us":"Minimum value for the light depth; with the multiplier at zero it disables SSS."},"slider":true}
+// @option {"label":{"zh_cn":"透光偏移","en_us":"SSS Strength Offset"},"description":{"zh_cn":"给穿透深度一个最小值；与倍率一起为零时关闭次表面散射。","en_us":"Minimum value for the light depth; with the multiplier at zero it disables SSS."},"slider":true}
 #define OMNI_SSS_STRENGTH_OFFSET 0.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 3.0 5.0 7.0 10.0]
-// @option {"label":{"zh_cn":"自发光曲线","en_us":"Emissive Gamma"},"description":{"zh_cn":"PBR 自发光的亮暗对比强度，越大反差越明显。","en_us":"Contrast curve of PBR emissiveness; higher is more contrast."},"slider":true}
+// @option {"label":{"zh_cn":"发光曲线","en_us":"Emissive Gamma"},"description":{"zh_cn":"PBR 自发光的亮暗对比强度，越大反差越明显。","en_us":"Contrast curve of PBR emissiveness; higher is more contrast."},"slider":true}
 #define OMNI_EMISSIVENESS_GAMMA 2.2 // [1.0 1.2 1.4 1.6 1.8 2.0 2.2 2.4 2.6 2.8 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0]
 // @option {"label":{"zh_cn":"labPBR 孔隙率","en_us":"labPBR Porosity"},"description":{"zh_cn":"使用资源包里的孔隙率通道，决定表面多容易积水。","en_us":"Uses the porosity channel so the surface can puddle more or less."}}
 #define OMNI_TEXTURE_PBR_POROSITY 0 // [0 1]

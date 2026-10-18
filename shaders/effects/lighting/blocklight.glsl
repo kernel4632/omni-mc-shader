@@ -34,7 +34,7 @@
 #define OMNI_DIRECTIONAL_BLOCKLIGHT 0 // [0 1]
 // @option {"label":{"zh_cn":"指向性权重","en_us":"Directional strength"},"description":{"zh_cn":"指向性方块光的强度；调大方向感更强，光照衔接错误也更明显。","en_us":"Strength of directional block light; larger is more directional and shows more seams."},"slider":true}
 #define OMNI_DIRECTIONAL_BLOCKLIGHT_STRENGTH 0.5 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
-// @option {"label":{"zh_cn":"自发光贴图模式","en_us":"Emissive mode"},"description":{"zh_cn":"硬编码发光、资源包 PBR 发光，或两者相加。","en_us":"Hardcoded emissive, resource-pack PBR emissive, or both added."},"values":{"0":{"zh_cn":"仅硬编码","en_us":"Hardcoded only"},"1":{"zh_cn":"仅PBR贴图","en_us":"PBR only"},"2":{"zh_cn":"PBR贴图 + 硬编码","en_us":"PBR + hardcoded"}}}
+// @option {"label":{"zh_cn":"发光贴图模式","en_us":"Emissive mode"},"description":{"zh_cn":"硬编码发光、资源包 PBR 发光，或两者相加。","en_us":"Hardcoded emissive, resource-pack PBR emissive, or both added."},"values":{"0":{"zh_cn":"仅硬编码","en_us":"Hardcoded only"},"1":{"zh_cn":"仅PBR贴图","en_us":"PBR only"},"2":{"zh_cn":"PBR贴图 + 硬编码","en_us":"PBR + hardcoded"}}}
 #define OMNI_TEXTURE_EMISSIVENESS_MODE 2 // [0 1 2]
 // @option {"label":{"zh_cn":"硬编码亮度","en_us":"Hardcoded brightness"},"description":{"zh_cn":"按方块类型写死的自发光强度。","en_us":"Emissive strength baked in by block type."},"slider":true}
 #define OMNI_TEXTURE_BRIGHTNESS 1.0 // [0.0 0.1 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]

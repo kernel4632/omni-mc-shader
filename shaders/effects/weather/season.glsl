@@ -14,9 +14,9 @@
 #ifndef OMNI_SEASON_INCLUDED // 只引入一次，避免选项重复定义。
 #define OMNI_SEASON_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"季节","en_us":"Seasons"}}
-// @option {"label":{"zh_cn":"季节开关","en_us":"Seasons"},"description":{"zh_cn":"草地、树叶和藤蔓的颜色随游戏天数缓慢变化；默认关闭，不影响默认画面。","en_us":"Grass, leaf and vine colour shifts with the in-game day count; off by default so the default look is unchanged."}}
+// @option {"label":{"zh_cn":"开关","en_us":"Seasons"},"description":{"zh_cn":"草地、树叶和藤蔓的颜色随游戏天数缓慢变化；默认关闭，不影响默认画面。","en_us":"Grass, leaf and vine colour shifts with the in-game day count; off by default so the default look is unchanged."}}
 #define OMNI_SEASONS 0 // [0 1]
-// @option {"label":{"zh_cn":"季节颜色","en_us":"Season Colour"},"description":{"zh_cn":"正值偏暖偏秋黄，负值偏冷偏绿。","en_us":"Positive leans warm autumn-yellow, negative leans cool green."},"slider":true}
+// @option {"label":{"zh_cn":"颜色","en_us":"Season Colour"},"description":{"zh_cn":"正值偏暖偏秋黄，负值偏冷偏绿。","en_us":"Positive leans warm autumn-yellow, negative leans cool green."},"slider":true}
 #define OMNI_SEASON_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // 世界天数 `worldDay` 由加载器提供，已在 `common/uniforms.glsl` 声明，这里不重复声明。
 #include "/common/uniforms.glsl"

@@ -27,7 +27,7 @@
 // @effect {"label":{"zh_cn":"水洼","en_us":"Puddles"}}
 // 菜单页放在「天气与季节」：积水由降雨产生，Eclipse 也把 `Puddle_Size`、`Puddle_Reflection_Sharpness` 放在天气一页；
 // 放在水一页会让水分类多出一个子页面，且与 Eclipse 的分页不一致。
-// @option {"label":{"zh_cn":"水洼尺寸","en_us":"Puddle size"},"page":"weather","description":{"zh_cn":"低洼处积水范围的大小，调大后水洼更大更连片，调小更零散；来源 Eclipse 的 `Puddle_Size`，默认 1.0 与参考一致。","en_us":"Size of the puddles that form in low spots; larger makes them bigger and better connected. From Eclipse `Puddle_Size`; default 1.0 matches the reference."}}
+// @option {"label":{"zh_cn":"尺寸","en_us":"Puddle size"},"page":"weather","description":{"zh_cn":"低洼处积水范围的大小，调大后水洼更大更连片，调小更零散；来源 Eclipse 的 `Puddle_Size`，默认 1.0 与参考一致。","en_us":"Size of the puddles that form in low spots; larger makes them bigger and better connected. From Eclipse `Puddle_Size`; default 1.0 matches the reference."}}
 #define OMNI_PUDDLE_SIZE 1.0 // [0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5]
 // @option {"label":{"zh_cn":"湿面反射锐度","en_us":"Wet reflection sharpness"},"page":"weather","description":{"zh_cn":"湿表面反射的清晰程度，调大后积水表面更接近镜面；默认 0.0 表示不改动当前粗糙度，Eclipse 默认 0.9。","en_us":"How sharp reflections get on wet ground; larger is more mirror-like. Default 0.0 leaves roughness unchanged; Eclipse default is 0.9."}}
 #define OMNI_PUDDLE_REFLECTION_SHARPNESS 0.0 // [0.0 0.9 0.925 0.95 0.975 1.0]

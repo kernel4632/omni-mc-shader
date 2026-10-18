@@ -31,39 +31,39 @@
 #define OMNI_FOG_INCLUDED // 置上标记，后续再次引用直接跳过。
 
 // @effect {"label":{"zh_cn":"雾与空气","en_us":"Fog & air"}}
-// @option {"label":{"zh_cn":"体积雾","en_us":"Volumetric fog"},"description":{"zh_cn":"沿视线在空气里步进得到的体积雾与光柱。","en_us":"Volumetric fog and light shafts marched along the view."}}
+// @option {"label":{"zh_cn":"空气雾","en_us":"Volumetric fog"},"description":{"zh_cn":"沿视线在空气里步进得到的体积雾与光柱。","en_us":"Volumetric fog and light shafts marched along the view."}}
 #define OMNI_VFOG
-// @option {"label":{"zh_cn":"体积雾噪声类型","en_us":"Volumetric fog noise"},"description":{"zh_cn":"仅高度衰减只有一层随高度变浓的雾，团雾用三维噪声造出雾团。","en_us":"Height-only gives one layer that thickens with altitude; Wispy uses 3D noise for fog banks."},"values":{"0":{"zh_cn":"仅高度衰减","en_us":"Height only"},"1":{"zh_cn":"团雾","en_us":"Wispy"}}}
+// @option {"label":{"zh_cn":"空气雾噪声类型","en_us":"Volumetric fog noise"},"description":{"zh_cn":"仅高度衰减只有一层随高度变浓的雾，团雾用三维噪声造出雾团。","en_us":"Height-only gives one layer that thickens with altitude; Wispy uses 3D noise for fog banks."},"values":{"0":{"zh_cn":"仅高度衰减","en_us":"Height only"},"1":{"zh_cn":"团雾","en_us":"Wispy"}}}
 #define OMNI_VFOG_NOISE_TYPE 0 // [0 1]
-// @option {"label":{"zh_cn":"体积雾采样质量","en_us":"Volumetric fog quality"},"description":{"zh_cn":"体积雾与水下体积雾沿视线的采样次数，越高越干净也越慢。","en_us":"View samples for volumetric fog and underwater fog; higher is cleaner and slower."},"slider":true}
+// @option {"label":{"zh_cn":"空气雾采样质量","en_us":"Volumetric fog quality"},"description":{"zh_cn":"体积雾与水下体积雾沿视线的采样次数，越高越干净也越慢。","en_us":"View samples for volumetric fog and underwater fog; higher is cleaner and slower."},"slider":true}
 #define OMNI_VFOG_QUALITY 6 // [4 6 8 10 12 14 16 18 20 22 24 28 32 48 64 128]
-// @option {"label":{"zh_cn":"体积雾密度","en_us":"Volumetric fog density"},"description":{"zh_cn":"噪声控制的雾团密度，越大雾越浓。","en_us":"Density of the noise-driven fog; larger is thicker."},"slider":true}
+// @option {"label":{"zh_cn":"空气雾密度","en_us":"Volumetric fog density"},"description":{"zh_cn":"噪声控制的雾团密度，越大雾越浓。","en_us":"Density of the noise-driven fog; larger is thicker."},"slider":true}
 #define OMNI_VFOG_DENSITY 0.01 // [0.001 0.0015 0.002 0.003 0.005 0.007 0.01 0.015 0.02 0.03 0.05 0.07 0.1 0.15 0.2 0.3 0.5 0.7 1.0]
-// @option {"label":{"zh_cn":"体积雾基础密度","en_us":"Volumetric fog base density"},"description":{"zh_cn":"不靠噪声的一张基础雾层密度，取零时只有噪声雾。","en_us":"Flat fog layer density independent of noise; zero leaves only the noise fog."},"slider":true}
+// @option {"label":{"zh_cn":"空气雾基础密度","en_us":"Volumetric fog base density"},"description":{"zh_cn":"不靠噪声的一张基础雾层密度，取零时只有噪声雾。","en_us":"Flat fog layer density independent of noise; zero leaves only the noise fog."},"slider":true}
 #define OMNI_VFOG_DENSITY_BASE 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
-// @option {"label":{"zh_cn":"体积雾衰减高度","en_us":"Volumetric fog height"},"description":{"zh_cn":"仅高度衰减模式下两档高度之间最浓，超出后衰减；团雾模式下最高点落在较高的这一档。","en_us":"Height-only keeps peak density between the two heights; Wispy puts the peak at the higher one."},"slider":true}
+// @option {"label":{"zh_cn":"空气雾衰减高度","en_us":"Volumetric fog height"},"description":{"zh_cn":"仅高度衰减模式下两档高度之间最浓，超出后衰减；团雾模式下最高点落在较高的这一档。","en_us":"Height-only keeps peak density between the two heights; Wispy puts the peak at the higher one."},"slider":true}
 #define OMNI_VFOG_HEIGHT 65.0 // [-100.0 -90.0 -80.0 -70.0 -60.0 -50.0 -40.0 -30.0 -20.0 -10.0 0.0 10.0 20.0 30.0 40.0 45.0 50.0 55.0 60.0 65.0 70.0 75.0 80.0 85.0 90.0 95.0 100.0 105.0 110.0 115.0 120.0 125.0 130.0 135.0 140.0 145.0 150.0 155.0 160.0 165.0 170.0 175.0 180.0 185.0 190.0 195.0 200.0 210.0 220.0 230.0 240.0 250.0 260.0 270.0 280.0 290.0 300.0 310.0 320.0 350.0 400.0 450.0 500.0 600.0 700.0 800.0 900.0 1000.0]
-// @option {"label":{"zh_cn":"体积雾衰减高度二","en_us":"Volumetric fog height 2"},"description":{"zh_cn":"与上一档一起决定体积雾最浓的高度区间。","en_us":"With the other height, sets the band where volumetric fog is densest."},"slider":true}
+// @option {"label":{"zh_cn":"空气雾衰减高度二","en_us":"Volumetric fog height 2"},"description":{"zh_cn":"与上一档一起决定体积雾最浓的高度区间。","en_us":"With the other height, sets the band where volumetric fog is densest."},"slider":true}
 #define OMNI_VFOG_HEIGHT_2 50.0 // [-100.0 -90.0 -80.0 -70.0 -60.0 -50.0 -40.0 -30.0 -20.0 -10.0 0.0 10.0 20.0 30.0 40.0 45.0 50.0 55.0 60.0 65.0 70.0 75.0 80.0 85.0 90.0 95.0 100.0 105.0 110.0 115.0 120.0 125.0 130.0 135.0 140.0 145.0 150.0 155.0 160.0 165.0 170.0 175.0 180.0 185.0 190.0 195.0 200.0 210.0 220.0 230.0 240.0 250.0 260.0 270.0 280.0 290.0 300.0 310.0 320.0 350.0 400.0 450.0 500.0 600.0 700.0 800.0 900.0 1000.0]
-// @option {"label":{"zh_cn":"体积雾衰减距离","en_us":"Volumetric fog falloff"},"description":{"zh_cn":"体积雾离开最浓高度后衰减的快慢，越大衰减越慢。","en_us":"How fast fog fades away from its densest height; larger fades slower."},"slider":true}
+// @option {"label":{"zh_cn":"空气雾衰减距离","en_us":"Volumetric fog falloff"},"description":{"zh_cn":"体积雾离开最浓高度后衰减的快慢，越大衰减越慢。","en_us":"How fast fog fades away from its densest height; larger fades slower."},"slider":true}
 #define OMNI_VFOG_FALLOFF 40.0 // [1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 21.0 22.0 23.0 24.0 25.0 26.0 27.0 28.0 29.0 30.0 31.0 32.0 33.0 34.0 35.0 36.0 37.0 38.0 39.0 40.0 41.0 42.0 43.0 44.0 45.0 46.0 47.0 48.0 49.0 50.0 51.0 52.0 53.0 54.0 55.0 56.0 57.0 58.0 59.0 60.0 61.0 62.0 63.0 64.0 65.0 66.0 67.0 68.0 69.0 70.0 71.0 72.0 73.0 74.0 75.0 76.0 77.0 78.0 79.0 80.0 81.0 82.0 83.0 84.0 85.0 86.0 87.0 88.0 89.0 90.0 91.0 92.0 93.0 94.0 95.0 96.0 97.0 98.0 99.0 100.0]
-// @option {"label":{"zh_cn":"体积雾全时段启用","en_us":"Volumetric fog all day"},"description":{"zh_cn":"关闭时白天降低体积雾密度，打开后全天保持。","en_us":"Off thins the fog during the day; on keeps it constant around the clock."}}
+// @option {"label":{"zh_cn":"空气雾全时段启用","en_us":"Volumetric fog all day"},"description":{"zh_cn":"关闭时白天降低体积雾密度，打开后全天保持。","en_us":"Off thins the fog during the day; on keeps it constant around the clock."}}
 //#define OMNI_VFOG_IGNORE_WORLDTIME
-// @option {"label":{"zh_cn":"体积雾半透明染色","en_us":"Volumetric fog stained light"},"description":{"zh_cn":"透过彩色玻璃的阳光会被染色；仅支持部分显卡，可能出现额外开销。","en_us":"Tints sunlight passing through stained glass; supported on some GPUs only."}}
+// @option {"label":{"zh_cn":"空气雾半透明染色","en_us":"Volumetric fog stained light"},"description":{"zh_cn":"透过彩色玻璃的阳光会被染色；仅支持部分显卡，可能出现额外开销。","en_us":"Tints sunlight passing through stained glass; supported on some GPUs only."}}
 //#define OMNI_VFOG_STAINED
-// @option {"label":{"zh_cn":"体积雾云影遮蔽","en_us":"Volumetric fog cloud shadow"},"description":{"zh_cn":"云影也压暗体积雾的受光，让光柱与云影一致。","en_us":"Cloud shadows also darken the lit fog so shafts match the cloud shadow."}}
+// @option {"label":{"zh_cn":"空气雾云影暗部","en_us":"Volumetric fog cloud shadow"},"description":{"zh_cn":"云影也压暗体积雾的受光，让光柱与云影一致。","en_us":"Cloud shadows also darken the lit fog so shafts match the cloud shadow."}}
 //#define OMNI_VFOG_CLOUD_SHADOW
-// @option {"label":{"zh_cn":"体积雾阳光强度","en_us":"Volumetric fog sunlight"},"description":{"zh_cn":"体积雾里阳光散射的强度，决定光柱多亮。","en_us":"Strength of sun scattering in the fog; how bright the shafts are."},"slider":true}
+// @option {"label":{"zh_cn":"空气雾阳光强度","en_us":"Volumetric fog sunlight"},"description":{"zh_cn":"体积雾里阳光散射的强度，决定光柱多亮。","en_us":"Strength of sun scattering in the fog; how bright the shafts are."},"slider":true}
 #define OMNI_VFOG_SUNLIGHT_DENSITY 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
-// @option {"label":{"zh_cn":"体积雾环境光强度","en_us":"Volumetric fog ambient"},"description":{"zh_cn":"体积雾整体环境色的强度，决定雾本身多亮。","en_us":"Strength of the fog's ambient colour; how bright the fog itself is."},"slider":true}
+// @option {"label":{"zh_cn":"空气雾环境光强度","en_us":"Volumetric fog ambient"},"description":{"zh_cn":"体积雾整体环境色的强度，决定雾本身多亮。","en_us":"Strength of the fog's ambient colour; how bright the fog itself is."},"slider":true}
 #define OMNI_VFOG_FOG_DENSITY 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
 // @option {"label":{"zh_cn":"体积光照","en_us":"Volumetric lighting"},"description":{"zh_cn":"体积雾自身对光照的吸收，光柱内部更暗、边缘更亮。","en_us":"Self-absorption of light inside the fog; darkens shaft interiors."}}
 #define OMNI_VFOG_VOLUMETRIC_LIGHTING
 // @option {"label":{"zh_cn":"体积光照吸收率","en_us":"Volumetric absorption"},"description":{"zh_cn":"体积光照的吸光强度，越大吸收越明显。","en_us":"Absorption strength of volumetric lighting; larger is darker."},"slider":true}
 #define OMNI_VFOG_SUNLIGHT_ABSORPTION 1.0 // [0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0]
-// @option {"label":{"zh_cn":"水下体积雾","en_us":"Underwater fog"},"description":{"zh_cn":"水下的蓝色光柱，由阳光穿过水面缝隙汇聚而成。","en_us":"Blue light shafts underwater, focused through gaps in the water surface."}}
+// @option {"label":{"zh_cn":"水下空气雾","en_us":"Underwater fog"},"description":{"zh_cn":"水下的蓝色光柱，由阳光穿过水面缝隙汇聚而成。","en_us":"Blue light shafts underwater, focused through gaps in the water surface."}}
 #define OMNI_UNDERWATER_VFOG
-// @option {"label":{"zh_cn":"水下体积雾密度","en_us":"Underwater fog density"},"description":{"zh_cn":"水下光柱的强度。","en_us":"Strength of the underwater light shafts."},"slider":true}
+// @option {"label":{"zh_cn":"水下空气雾密度","en_us":"Underwater fog density"},"description":{"zh_cn":"水下光柱的强度。","en_us":"Strength of the underwater light shafts."},"slider":true}
 #define OMNI_UNDERWATER_VFOG_DENSITY 1.0 // [0.1 0.15 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
 // @option {"label":{"zh_cn":"地面大气散射","en_us":"Land atmospheric scattering"},"description":{"zh_cn":"地表方向空气对阳光的散射，给远处地形加一层空气感。","en_us":"Scattering of sunlight by the air toward the surface, adding aerial haze to distant land."}}
 #define OMNI_LANDSCATTERING
@@ -71,15 +71,15 @@
 #define OMNI_LANDSCATTERING_STRENGTH 2.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.5 1.7 2.0 2.5 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 100.0]
 // @option {"label":{"zh_cn":"地面大气散射距离","en_us":"Land scattering distance"},"description":{"zh_cn":"地面大气散射沿视线的累积倍率，越大越浓。","en_us":"Multiplier on the optical length for land scattering; larger is hazier."},"slider":true}
 #define OMNI_LANDSCATTERING_DISTANCE 0.003 // [0.001 0.002 0.003 0.005 0.007 0.01 0.15 0.2 0.3 0.5 0.7 1.0]
-// @option {"label":{"zh_cn":"地面大气散射阴影遮蔽","en_us":"Land scattering shadow"},"description":{"zh_cn":"在阴影区降低地面大气散射，避免阴影里也泛白。","en_us":"Reduces land scattering in shadowed areas so they do not wash out."}}
+// @option {"label":{"zh_cn":"地面大气散射阴影暗部","en_us":"Land scattering shadow"},"description":{"zh_cn":"在阴影区降低地面大气散射，避免阴影里也泛白。","en_us":"Reduces land scattering in shadowed areas so they do not wash out."}}
 #define OMNI_LANDSCATTERING_SHADOW 0 // [0 1]
-// @option {"label":{"zh_cn":"阴影遮蔽采样质量","en_us":"Land scattering shadow quality"},"description":{"zh_cn":"地面大气散射阴影的采样次数，越高噪点越少也越慢。","en_us":"Samples for the land scattering shadow; higher is cleaner and slower."},"slider":true}
+// @option {"label":{"zh_cn":"阴影暗部采样质量","en_us":"Land scattering shadow quality"},"description":{"zh_cn":"地面大气散射阴影的采样次数，越高噪点越少也越慢。","en_us":"Samples for the land scattering shadow; higher is cleaner and slower."},"slider":true}
 #define OMNI_LANDSCATTERING_SHADOW_QUALITY 6 // [4 6 8 10 12 14 16 18 20 22 24 28 32 48 64 128]
 // @option {"label":{"zh_cn":"禁用光照衰减","en_us":"Disable fog falloff"},"description":{"zh_cn":"关闭体积雾与地表散射随天空光等级的衰减；关掉后暗处雾气可能过强。","en_us":"Disables the skylight falloff of fog and land scattering; off may be too foggy in the dark."}}
 #define OMNI_INDOOR_FOG 0 // [0 1]
-// @option {"label":{"zh_cn":"反射中渲染体积雾","en_us":"Volumetric fog in reflections"},"description":{"zh_cn":"在屏幕反射里也补体积雾，反射不再是干净的镜面。","en_us":"Adds volumetric fog inside reflections so they are not mirror-clean."}}
+// @option {"label":{"zh_cn":"反射中渲染空气雾","en_us":"Volumetric fog in reflections"},"description":{"zh_cn":"在屏幕反射里也补体积雾，反射不再是干净的镜面。","en_us":"Adds volumetric fog inside reflections so they are not mirror-clean."}}
 #define OMNI_VFOG_REFLECTION
-// @option {"label":{"zh_cn":"折射后渲染体积雾","en_us":"Volumetric fog after refraction"},"description":{"zh_cn":"在彩色玻璃后方的折射画面里补体积雾。","en_us":"Adds volumetric fog to the refracted image behind stained glass."}}
+// @option {"label":{"zh_cn":"折射后渲染空气雾","en_us":"Volumetric fog after refraction"},"description":{"zh_cn":"在彩色玻璃后方的折射画面里补体积雾。","en_us":"Adds volumetric fog to the refracted image behind stained glass."}}
 //#define OMNI_VFOG_REFRACTION
 // @option {"label":{"zh_cn":"反射中渲染地表散射","en_us":"Land scattering in reflections"},"description":{"zh_cn":"在屏幕反射里也补地表大气散射。","en_us":"Adds land atmospheric scattering inside reflections."}}
 //#define OMNI_LANDSCATTERING_REFLECTION
@@ -87,7 +87,7 @@
 //#define OMNI_LANDSCATTERING_REFRACTION
 // @option {"label":{"zh_cn":"下界雾强度","en_us":"Nether fog density"},"description":{"zh_cn":"下界与末地空气的浑浊程度。","en_us":"How murky the Nether and End air is."},"slider":true}
 #define OMNI_NETHER_FOG_DENSITY 1.0 // [0.0 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
-// @option {"label":{"zh_cn":"限制体积雾渲染距离","en_us":"Limit volumetric fog distance"},"description":{"zh_cn":"把体积雾渲染范围限制在一百区块以内，防止远处质量严重下降；可能导致远处体积雾缺失。","en_us":"Limits fog rendering to about 100 chunks to avoid quality collapse; may cut fog in the far distance."}}
+// @option {"label":{"zh_cn":"限制空气雾渲染距离","en_us":"Limit volumetric fog distance"},"description":{"zh_cn":"把体积雾渲染范围限制在一百区块以内，防止远处质量严重下降；可能导致远处体积雾缺失。","en_us":"Limits fog rendering to about 100 chunks to avoid quality collapse; may cut fog in the far distance."}}
 #define OMNI_DH_LIMIT_VFOG_DIST
 
 // --- 洞穴雾与边界雾：来源 Eclipse `lib/settings.glsl:219-233` 与 `dimensions/composite4.fsh:449-533` ---

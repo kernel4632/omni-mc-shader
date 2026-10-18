@@ -29,19 +29,19 @@
 #ifndef OMNI_SKY_INCLUDED
 #define OMNI_SKY_INCLUDED
 // @effect {"label":{"zh_cn":"天空","en_us":"Sky"}}
-// @option {"label":{"zh_cn":"天空地平线","en_us":"Sky Horizon"},"description":{"zh_cn":"打开后地平线方向也算被行星表面挡住的大气，日出时地平线一带更真实。","en_us":"Also shades the horizon band below the eye as ground-lit atmosphere."}}
+// @option {"label":{"zh_cn":"地平线","en_us":"Sky Horizon"},"description":{"zh_cn":"打开后地平线方向也算被行星表面挡住的大气，日出时地平线一带更真实。","en_us":"Also shades the horizon band below the eye as ground-lit atmosphere."}}
 //#define OMNI_ATMO_HORIZON
 // @option {"label":{"zh_cn":"反射天空盒地平线","en_us":"Skybox Horizon"},"description":{"zh_cn":"反射用的天空盒是否同样处理地平线方向。","en_us":"Whether the reflection skybox shades the horizon the same way."}}
 #define OMNI_ATMO_REFLECTION_HORIZON
 // @option {"label":{"zh_cn":"月亮纹理平滑","en_us":"Moon Texture Smoothing"},"description":{"zh_cn":"用双线性过滤读月亮贴图，低分辨率资源包会显得更糊。","en_us":"Reads the moon texture with bilinear filtering; low-resolution packs look softer."}}
 #define OMNI_BILINEAR_MOON_TEXTURE 0 // [0 1]
-// @option {"label":{"zh_cn":"天空盒纹理平滑","en_us":"Skybox Texture Smoothing"},"description":{"zh_cn":"用双线性过滤读天空盒贴图，低分辨率资源包会显得更糊。","en_us":"Reads the skybox texture with bilinear filtering; low-resolution packs look softer."}}
+// @option {"label":{"zh_cn":"盒纹理平滑","en_us":"Skybox Texture Smoothing"},"description":{"zh_cn":"用双线性过滤读天空盒贴图，低分辨率资源包会显得更糊。","en_us":"Reads the skybox texture with bilinear filtering; low-resolution packs look softer."}}
 #define OMNI_BILINEAR_SKYBOX_TEXTURE 0 // [0 1]
 // @option {"label":{"zh_cn":"月亮纹理","en_us":"Moon Texture"},"description":{"zh_cn":"用资源包的月亮贴图代替内置圆盘。","en_us":"Uses the resource pack moon texture instead of the built-in disc."}}
 #define OMNI_MOON_TEXTURE
 // @option {"label":{"zh_cn":"夜间亮度比值","en_us":"Night Brightness"},"description":{"zh_cn":"夜间环境光相对白天环境光的比值，越大夜里越亮。","en_us":"Night ambient light relative to day; larger makes nights brighter."},"slider":true}
 #define OMNI_NIGHT_BRIGHTNESS 0.0003 // [0.0 0.0001 0.00015 0.0002 0.0003 0.0005 0.0007 0.001 0.0015 0.002 0.003 0.005 0.007 0.01 1.0]
-// @option {"label":{"zh_cn":"天空盒纹理","en_us":"Skybox Texture"},"description":{"zh_cn":"用资源包的天空盒贴图叠在天空上。","en_us":"Overlays the resource pack skybox texture on the sky."}}
+// @option {"label":{"zh_cn":"盒纹理","en_us":"Skybox Texture"},"description":{"zh_cn":"用资源包的天空盒贴图叠在天空上。","en_us":"Overlays the resource pack skybox texture on the sky."}}
 #define OMNI_SKYBOX_TEXTURE 0 // [0 1]
 // @option {"label":{"zh_cn":"资源包天空","en_us":"Resource Pack Sky"},"description":{"zh_cn":"用资源包画好的整片天空（自定义天空层、日月与星空）当天空底色，替换光影的程序化大气；只作用在主视图的天空，水面反射的天空盒仍用程序化大气。默认关闭，关闭时画面与从前一致。","en_us":"Uses the resource pack's painted sky (custom sky layers, sun, moon and stars) as the sky base instead of the procedural atmosphere; only the main view is affected, reflections keep the procedural skybox. Off by default."}}
 #define OMNI_RESOURCEPACK_SKY 0 // [0 1]
