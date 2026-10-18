@@ -1,4 +1,9 @@
 /*
+单个程序的绘制主体：只包含 OMNI_COMPOSITE5_PASS 对应的阶段与算法。
+来源：从 `rendering/composite.glsl` 拆分，内容逐行保留，只是去掉了其他程序的分支。
+为什么拆开：每个程序只展开自己用到的效果，重载时编译更快。
+*/
+/*
 合成绘制主体：照 iterationT 根目录 `composite`、`composite1` 到 `composite5` 六个全屏程序一比一移植。
 职责：本文件只安排每个合成程序的输入输出（引入哪个效果文件、声明哪些采样器、写哪号画面），
     算法体全部在效果文件里，这里按程序顺序调用。共享的全局声明在 `rendering/composite_shared.glsl`。
@@ -28,125 +33,28 @@
 // ================================ 顶点阶段 ================================
 #ifdef OMNI_VERTEX // 顶点阶段只做全屏三角形与光色计算，交给 `rendering/lights.glsl`。
 
-	#if defined OMNI_COMPOSITE2_PASS // 合成二号顶点。
-		#define VS_SHADOW_HIGHLIGHT 1 // 打开高光提示强度分支，片元要用它算天空高光。
-	#endif
-	#if defined OMNI_COMPOSITE5_PASS // 合成五号顶点。
 		#define VS_SUN_VISIBILITY 1 // 打开太阳可见度分支，片元要用它画镜头光斑。
-	#endif
 	// 提供 `void main()` 与全部光色输出。
 	#include "/rendering/lights.glsl"
 
-#endif // 顶点阶段结束。
+#endif
 
 // ================================ 片元阶段 ================================
 // 六个合成程序共用的片元全局量只声明一次。
 #include "/rendering/composite_shared.glsl"
 
 // ------------------------------- 合成零号：不透明表面完整光照 -------------------------------
-#if defined OMNI_FRAGMENT && defined OMNI_COMPOSITE0_PASS // 合成零号片元。
-/* DRAWBUFFERS:1 */
-layout(location = 0) out vec4 compositeOutput1; // 一号画面：场景曲线编码颜色。
-#if defined OMNI_NETHER // 下界：没有太阳，光照来自 `NetherLighting` 与雾色（来自 `world-1/composite.fsh`）。
-uniform sampler2D shadowtex1; // 阴影实心图，下界当普通深度贴图。
-// 雾文件带入水面、阴影、天空、云与光照，并提供 `OMNI_NETHER_FOG_DENSITY`。
-#include "/effects/fog/fog.glsl"
-// 下界配色与光照 `NetherLighting`、`NetherFogColor`。
-#include "/effects/world/nether.glsl"
-// Omni 额外功能：真实闪电事件照亮表面，默认开启但缺少事件输入时无影响。
-#include "/effects/sky/atmosphere.glsl"
-#elif defined OMNI_END // 末地：没有太阳贴图，天空像素画吸积盘与行星（来自 `world1/composite.fsh`）。
-#define OMNI_SHADOW_COMPARE 1 // 末地也用可变半影阴影，打开阴影效果里的对应段。
-uniform sampler2DShadow shadowtex1; // 阴影实心图，可变半影阴影按深度比较读取。
-// 光照文件提供 `OMNI_SUNLIGHT_INTENSITY`、方块光、遮蔽与星空类型选项。
-#include "/effects/lighting/sunlight.glsl"
-// 水面文件提供波法线 `GetWavesNormal`，末地折射函数引用它。
-#include "/effects/water/water.glsl"
-// 末地天空 `BlackHole_AccretionDisc_Stars`、`PlanetEnd2` 与 `timeFactor`、`planetShadow`。
-#include "/effects/world/end.glsl"
-#else // 主世界：唯一使用可变半影阴影的合成阶段（来自 `composite.fsh`）。
-#define OMNI_SHADOW_COMPARE 1 // 让 `effects/shadow/shadow.glsl` 编译可变半影阴影函数。
-uniform sampler2DShadow shadowtex1; // 阴影实心图，可变半影阴影按深度比较读取。
-// 天光照明 `SkyLighting`，并带入天空、云、环境光、方块光与阴影。
-#include "/effects/lighting/sunlight.glsl"
-// 水下雾与焦散选项，本程序据它们决定水色。
-#include "/effects/water/water.glsl"
-// Omni 额外功能：真实闪电事件照亮表面。
-#include "/effects/sky/atmosphere.glsl"
-// Omni 额外功能：光传播体积的采样映射、选项与片元取样函数。
-#include "/effects/lighting/lpv.glsl"
-#endif // 合成零号维度分支结束。
-// 不透明表面光照算法在效果文件里。
-#include "/effects/lighting/composite_surface.glsl"
-void main(){ CompositeSurfaceLighting(); } // 算不透明表面光照并写回一号画面。
-#endif // 合成零号结束。
 
 // ------------------------------- 合成一号：水下与水后雾 -------------------------------
-#if defined OMNI_FRAGMENT && defined OMNI_COMPOSITE1_PASS // 合成一号片元。
-/* DRAWBUFFERS:1 */
-layout(location = 0) out vec4 compositeOutput1; // 一号画面：颜色与全反射标记。
-// 先提供 `OMNI_RAIN_SHADOW` 与天空盒投影，供天气与水面引用。
-#include "/effects/cloud/cloud.glsl"
-// `WaterFog` 水下与水后雾。
-#include "/effects/water/water.glsl"
-// 水下与水后雾算法在效果文件里。
-#include "/effects/water/composite_waterfog.glsl"
-void main(){ CompositeWaterFog(); } // 叠水下与水后雾并写回一号画面。
-#endif // 合成一号结束。
 
 // ------------------------------- 合成二号：屏幕空间反射与天空盒回退 -------------------------------
-#if defined OMNI_FRAGMENT && defined OMNI_COMPOSITE2_PASS // 合成二号片元。
-#define VFOG_LQ 1 // 反射里的体积雾只用三步，省反射通道开销，宏名照 iterationT。
-/* DRAWBUFFERS:3 */
-layout(location = 0) out vec4 compositeOutput3; // 三号画面：反射颜色与命中距离。
-in float shadowHighlightStrength; // 顶点阶段算出的高光提示强度，本程序用它压反射。
-uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴图读取。
-// 维度决定反射里的天空回退与雾由谁提供，效果文件按分支引入后再引入反射文件。
-#if defined OMNI_NETHER // 下界。
-	// 雾文件提供 `OMNI_NETHER_FOG_DENSITY`，下界文件提供 `NetherFog` 与 `NetherFogColor`。
-	#include "/effects/fog/fog.glsl"
-	#include "/effects/world/nether.glsl"
-#elif defined OMNI_END // 末地。
-	// 光照文件提供选项与星空类型，末地文件提供 `EndFog` 与 `ComputeFakeSkyReflectionEnd`。
-	#include "/effects/lighting/sunlight.glsl"
-	// 水面文件提供波法线 `GetWavesNormal`，末地折射函数引用它。
-	#include "/effects/water/water.glsl"
-	#include "/effects/world/end.glsl"
-#else // 主世界。
-	// 带入天空、云、环境光、方块光与雾依赖。
-	#include "/effects/lighting/sunlight.glsl"
-#endif // 合成二号维度分支结束。
-// 屏幕空间反射与天空盒回退 `CalculateSpecularReflections`，按维度选择不同的一份。
-#include "/effects/reflection/reflection.glsl"
-// 屏幕空间反射算法在效果文件里。
-#include "/effects/reflection/composite_specular.glsl"
-void main(){ CompositeScreenSpaceReflection(); } // 追踪反射并写回三号画面。
-#endif // 合成二号结束。
 
 // ------------------------------- 合成三号：反射小波滤波，半径四十 -------------------------------
-#if defined OMNI_FRAGMENT && defined OMNI_COMPOSITE3_PASS // 合成三号片元。
-/* DRAWBUFFERS:3 */
-layout(location = 0) out vec4 compositeOutput3; // 三号画面：滤波后的反射数据。
-// 反射小波滤波 `AtrousWaveletFilter`。
-#include "/effects/reflection/reflection.glsl"
-// 反射滤波算法在效果文件里。
-#include "/effects/reflection/composite_filter.glsl"
-void main(){ CompositeReflectionFilter(); } // 做半径四十的小波滤波并写回三号画面。
-#endif // 合成三号结束。
 
 // ------------------------------- 合成四号：反射小波滤波，半径二十 -------------------------------
-#if defined OMNI_FRAGMENT && defined OMNI_COMPOSITE4_PASS // 合成四号片元。
-/* DRAWBUFFERS:3 */
-layout(location = 0) out vec4 compositeOutput3; // 三号画面：滤波后的反射数据。
-// 反射小波滤波 `AtrousWaveletFilter`。
-#include "/effects/reflection/reflection.glsl"
-// 反射滤波算法在效果文件里。
-#include "/effects/reflection/composite_filter.glsl"
-void main(){ CompositeReflectionFilter(); } // 做半径二十的小波滤波并写回三号画面。
-#endif // 合成四号结束。
 
 // ------------------------------- 合成五号：折射、合并反射、雾、雨、选择框与镜头光斑 -------------------------------
-#if defined OMNI_FRAGMENT && defined OMNI_COMPOSITE5_PASS // 合成五号片元。
+#if defined OMNI_FRAGMENT
 /* DRAWBUFFERS:13 */
 layout(location = 0) out vec4 compositeOutput1; // 一号画面：最终合成颜色与景深弥散。
 in vec2 sunCoord; // 太阳屏幕坐标，顶点阶段算出，镜头光斑按它定位。
@@ -168,7 +76,7 @@ uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴�
 	#include "/effects/lighting/sunlight.glsl"
 	// 体积雾、水下体积雾、地面大气散射、原版雾，并带入水面与阴影。
 	#include "/effects/fog/fog.glsl"
-#endif // 合成五号维度分支结束。
+#endif
 // 反射合并 `CalculateSpecularReflections`。
 #include "/effects/reflection/reflection.glsl"
 // 浦肯野效应 `PurkinjeEffect`。
@@ -187,6 +95,6 @@ uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴�
 // 折射、合并反射、雾、雨、选择框与镜头光斑算法在效果文件里。
 #include "/effects/world/composite_scene.glsl"
 void main(){ CompositeSceneColor(); } // 合成整幅场景色并写回一号与三号画面。
-#endif // 合成五号结束。
+#endif
 
-#endif // 文件守卫结束。
+#endif

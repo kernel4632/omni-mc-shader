@@ -404,7 +404,7 @@ def program_files() -> dict[Path, str]:
         if not (geometry | absent) <= set(data["programs"]):  # 清单里的名字必须是真实程序，拼错会让程序悄悄多出或缺失。
             raise ValueError(f"{dimension} 的几何或缺席清单含未登记程序")
         for name, (rendering, *defines) in data["programs"].items():  # 程序显式选择主体。
-            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 流程表不能引用非法名字或不存在的绘制主体。
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z][a-z0-9_]*", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 流程表不能引用非法名字或不存在的绘制主体。
                 raise ValueError(f"程序名或绘制主体无效：{name}")
             if name in absent:  # 维度没有的程序不生成入口，加载器就不会执行它。
                 continue
@@ -414,7 +414,7 @@ def program_files() -> dict[Path, str]:
                     raise ValueError("程序宏必须使用受控名称")
                 result[SHADERS / dimension / (name + suffix)] = _draw_entry(name, rendering, stage, defines, flag, buffers, extensions.get(name, []))  # 组装这一阶段的入口文本。
         for name, (rendering, *defines) in data.get("compute", {}).items():  # 计算程序单独登记，不生成顶点片元。
-            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z]+", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 计算阶段同样只能选已有主体。
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name) or not re.fullmatch(r"[a-z][a-z0-9_]*", rendering) or not (SHADERS / "rendering" / (rendering + ".glsl")).is_file():  # 计算阶段同样只能选已有主体。
                 raise ValueError(f"计算程序名或主体无效：{name}")
             if any(not re.fullmatch(r"OMNI_[A-Z0-9_]+", flag_name) for flag_name in ["OMNI_COMPUTE", *defines, flag]):  # 计算入口宏也使用同一受控名称规则。
                 raise ValueError("计算程序宏必须使用受控名称")

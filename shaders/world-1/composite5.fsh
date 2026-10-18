@@ -9,5 +9,5 @@
 // 先引入本维度的中间画面与常量声明。
 #include "/rendering/buffers_nether.glsl"
 // 显式引入完整绘制主体。
-#include "/rendering/composite.glsl"
+#include "/rendering/composite_pass5.glsl"
 // 输出由主体按统一缓冲协议写入。
