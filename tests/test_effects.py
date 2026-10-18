@@ -290,10 +290,11 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_GTAO", "OMNI_GTAO_QUALITY", "OMNI_GTAO_RADIUS_MODE", "OMNI_GTAO_STRENGTH", "OMNI_GTAO_MULTIBOUNCE"):
             self.assertIn(name, found)  # 每个遮蔽参数由环境光源码定义。
-        ambient = support.text("effects/lighting/ambient.glsl")  # 遮蔽主体。
-        self.assertIn("GroundTruthBasedAmbientOcclusion", ambient)  # 遮蔽独立成函数。
-        self.assertIn("GTAOMultiBounce", ambient)  # 多次反弹独立成函数。
-        self.assertIn("OMNI_GTAO_STRENGTH", ambient)  # 强度参与遮蔽系数。
+        gtao = support.text("effects/lighting/gtao.glsl")  # 遮蔽主体（按算法从入口拆出）。
+        self.assertIn("GroundTruthBasedAmbientOcclusion", gtao)  # 遮蔽独立成函数。
+        self.assertIn("GTAOMultiBounce", gtao)  # 多次反弹独立成函数。
+        self.assertIn("OMNI_GTAO_STRENGTH", gtao)  # 强度参与遮蔽系数。
+        self.assertIn("gtao.glsl", support.text("effects/lighting/ambient.glsl"))  # 入口按引入顺序展开遮蔽文件。
         self.assertIn("GroundTruthBasedAmbientOcclusion", support.text("effects/lighting/composite_surface_nether.glsl"))  # 合成零号的下界变体调用遮蔽。
 
     def test_gi_rsm_controls(self):
@@ -301,10 +302,10 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_GI_RSM", "OMNI_GI_QUALITY", "OMNI_GI_RADIUS", "OMNI_GI_BRIGHTNESS"):
             self.assertIn(name, found)  # 每个全局光参数由环境光源码定义。
-        ambient = support.text("effects/lighting/ambient.glsl")  # 全局光主体。
-        self.assertIn("RSM(", ambient)  # 反射阴影图独立成函数。
-        self.assertIn("GI_TemporalFilter", ambient)  # 时间滤波独立成函数。
-        self.assertIn("#ifdef OMNI_GI_RSM", support.text("effects/lighting/ambient.glsl"))  # 延迟阶段按选项执行空间滤波与时间滤波。
+        gi = support.text("effects/lighting/gi.glsl")  # 全局光主体（按算法从入口拆出）。
+        self.assertIn("RSM(", gi)  # 反射阴影图独立成函数。
+        self.assertIn("GI_TemporalFilter", gi)  # 时间滤波独立成函数。
+        self.assertIn("#ifdef OMNI_GI_RSM", gi)  # 延迟阶段按选项执行空间滤波与时间滤波。
 
     def test_shadow_penumbra_and_bias(self):
         """可变半影阴影可开关、质量与展开可调，阴影偏置参与投影压缩。"""
@@ -321,8 +322,9 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_SCREEN_SPACE_SHADOWS", "OMNI_DISABLE_PLAYER_SCREEN_SPACE_SHADOWS", "OMNI_COLORED_SHADOWS"):
             self.assertIn(name, found)  # 三个阴影开关由阴影源码定义。
-        shadow = support.text("effects/shadow/shadow.glsl")  # 阴影主体。
-        self.assertIn("ScreenSpaceShadow", shadow)  # 屏幕空间阴影独立成函数。
+        shadow = support.text("effects/shadow/shadow.glsl")  # 阴影主体（阴影图坐标与可变半影）。
+        self.assertIn("screen_shadow.glsl", shadow)  # 入口按引入顺序展开屏幕空间阴影文件。
+        self.assertIn("ScreenSpaceShadow", support.text("effects/shadow/screen_shadow.glsl"))  # 屏幕空间阴影独立成函数。
         self.assertIn("OMNI_COLORED_SHADOWS", shadow)  # 彩色阴影参与着色。
 
     def test_sky_moon_texture_and_stars(self):
@@ -428,7 +430,7 @@ class EffectTests(unittest.TestCase):
         fog = support.text("effects/fog/underwater_fog.glsl")  # 水下体积雾主体。
         self.assertIn("UnderwaterVolumetricFog", fog)  # 水下体积雾独立成函数。
         self.assertIn("OMNI_UNDERWATER_VFOG_DENSITY", fog)  # 浓度参与散射。
-        self.assertIn("#ifdef OMNI_UNDERWATER_VFOG", support.text("effects/reflection/reflection.glsl"))  # 反射路径按选项叠加水下光柱。
+        self.assertIn("#ifdef OMNI_UNDERWATER_VFOG", support.text("effects/reflection/screenspace.glsl"))  # 反射路径按选项叠加水下光柱。
 
     def test_land_atmospheric_scattering_and_indoor_fog(self):
         """地表大气散射与室内雾都可开关，浓度与距离可调。"""
@@ -444,21 +446,20 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_WAVE_SCALE", "OMNI_WAVE_HEIGHT", "OMNI_WATER_PARALLAX"):
             self.assertIn(name, found)  # 每个水波参数由水源码定义。
-        water = support.text("effects/water/water.glsl")  # 水主体。
-        self.assertIn("GetWaves", water)  # 波浪高度独立成函数。
-        self.assertIn("GetWavesNormal", water)  # 波浪法线独立成函数。
-        self.assertIn("GetWaterParallaxCoord", water)  # 视差坐标独立成函数。
-        self.assertIn("OMNI_WAVE_HEIGHT", water)  # 波高参与法线梯度。
+        waves = support.text("effects/water/waves.glsl")  # 波浪主体（按算法从入口拆出）。
+        self.assertIn("GetWaves", waves)  # 波浪高度独立成函数。
+        self.assertIn("GetWavesNormal", waves)  # 波浪法线独立成函数。
+        self.assertIn("GetWaterParallaxCoord", waves)  # 视差坐标独立成函数。
+        self.assertIn("OMNI_WAVE_HEIGHT", waves)  # 波高参与法线梯度。
 
     def test_water_optics_and_caustics(self):
         """水体吸收、透射与焦散都可调，水下雾复用同一份水体吸收。"""
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_UNDERWATER_FOG", "OMNI_WATER_FOG_DENSITY", "OMNI_CAUSTICS", "OMNI_PUDDLE_MODE"):
             self.assertIn(name, found)  # 每个水参数由水源码定义。
-        water = support.text("effects/water/water.glsl")  # 水主体。
-        self.assertIn("WaterFog", water)  # 水下水雾独立成函数。
-        self.assertIn("TransparentAbsorption", water)  # 彩色玻璃吸收独立成函数。
-        self.assertIn("CalculateWaterCaustics", support.text("effects/shadow/shadow.glsl"))  # 焦散来自阴影主体。
+        self.assertIn("WaterFog", support.text("effects/water/waterfog.glsl"))  # 水下水雾独立成函数。
+        self.assertIn("TransparentAbsorption", support.text("effects/water/refraction.glsl"))  # 彩色玻璃吸收独立成函数。
+        self.assertIn("CalculateWaterCaustics", support.text("effects/shadow/water_caustics.glsl"))  # 焦散来自阴影文件夹里的焦散算法。
 
     def test_rain_ripple_options(self):
         """雨点涟漪的强度与对比可调，两者都作用在同一个雨点法线上，默认都为一、画面不变。"""
@@ -466,26 +467,28 @@ class EffectTests(unittest.TestCase):
         for name in ("OMNI_RAIN_RIPPLE_STRENGTH", "OMNI_RAIN_RIPPLE_CONTRAST"):
             self.assertIn(name, found)  # 两个选项由水源码定义。
             self.assertEqual(found[name].default, "1.0")  # 默认为一，乘一与取一次幂都是原样。
-        water = support.text("effects/water/water.glsl")  # 水主体。
-        self.assertIn("OMNI_RAIN_RIPPLE_STRENGTH", water)  # 强度乘在雨点法线上。
-        self.assertIn("OMNI_RAIN_RIPPLE_CONTRAST", water)  # 对比指数作用在雨点法线上。
+        rain = support.text("effects/water/rain.glsl")  # 雨点涟漪主体（按算法从入口拆出）。
+        self.assertIn("OMNI_RAIN_RIPPLE_STRENGTH", rain)  # 强度乘在雨点法线上。
+        self.assertIn("OMNI_RAIN_RIPPLE_CONTRAST", rain)  # 对比指数作用在雨点法线上。
 
     def test_reflection_raytrace_options(self):
         """屏幕空间反射可调射线数量、细分步数与深度差阈值，默认画面不变。"""
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_RAYTRACE_QUALITY", "OMNI_RAYTRACE_REFINEMENT_STEPS", "OMNI_RAYTRACE_ZDIFF_THRESHOLD"):
             self.assertIn(name, found)  # 每个反射参数由反射源码定义。
-        reflection = support.text("effects/reflection/reflection.glsl")  # 反射主体。
-        self.assertIn("ScreenSpaceTracer", reflection)  # 屏幕空间追踪独立成函数。
-        self.assertIn("CalculateSpecularReflections", reflection)  # 镜面反射独立成函数。
-        self.assertIn("OMNI_RAYTRACE_QUALITY", reflection)  # 质量参与采样数。
+        reflection = support.text("effects/reflection/reflection.glsl")  # 反射入口（选项在这里）。
+        self.assertIn("screenspace.glsl", reflection)  # 入口按引入顺序展开屏幕空间反射算法。
+        screenspace = support.text("effects/reflection/screenspace.glsl")  # 屏幕空间反射算法（按算法从入口拆出）。
+        self.assertIn("ScreenSpaceTracer", screenspace)  # 屏幕空间追踪独立成函数。
+        self.assertIn("CalculateSpecularReflections", screenspace)  # 镜面反射独立成函数。
+        self.assertIn("OMNI_RAYTRACE_QUALITY", screenspace)  # 质量参与采样数。
 
     def test_reflection_sky_fallback(self):
         """屏幕外反射回退到同一套天空与云，回退函数在反射主体里独立实现。"""
-        reflection = support.text("effects/reflection/reflection.glsl")  # 反射主体。
-        self.assertIn("ComputeFakeSkyReflection", reflection)  # 假天空反射独立成函数。
-        self.assertIn("CalculateSpecularReflections", reflection)  # 反射入口保留。
-        self.assertIn("#include", reflection)  # 反射主体仍按统一引入顺序引用依赖。
+        screenspace = support.text("effects/reflection/screenspace.glsl")  # 屏幕空间反射算法（按算法从入口拆出）。
+        self.assertIn("ComputeFakeSkyReflection", screenspace)  # 假天空反射独立成函数。
+        self.assertIn("CalculateSpecularReflections", screenspace)  # 反射入口保留。
+        self.assertIn("#include", support.text("effects/reflection/reflection.glsl"))  # 反射入口仍按统一引入顺序引用依赖。
 
     def test_material_pbr_parallax(self):
         """物理光照、视差模式与次表面散射都可开关或调速，材质主体按选项分派。"""
@@ -512,9 +515,9 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_HELDLIGHT_MODE", "OMNI_HELDLIGHT_BRIGHTNESS", "OMNI_HELDLIGHT_FALLOFF", "OMNI_FLASHLIGHT_FOV"):
             self.assertIn(name, found)  # 每个手持光参数由方块光源码定义。
-        blocklight = support.text("effects/lighting/blocklight.glsl")  # 方块光主体。
-        self.assertIn("HeldLighting", blocklight)  # 手持光独立成函数。
-        self.assertIn("OMNI_FLASHLIGHT_FOV", blocklight)  # 视野参与聚光形状。
+        held = support.text("effects/lighting/held_light.glsl")  # 手持光源主体（按算法从入口拆出）。
+        self.assertIn("HeldLighting", held)  # 手持光独立成函数。
+        self.assertIn("OMNI_FLASHLIGHT_FOV", held)  # 视野参与聚光形状。
 
     def test_taa_options(self):
         """时间抗锯齿可开关，混合权重与攻击性可调，后期阶段按选项执行重投影。"""
@@ -522,9 +525,10 @@ class EffectTests(unittest.TestCase):
         self.assertEqual(found["OMNI_TAA"].values, ("false", "true"))  # 时间抗锯齿可开关。
         for name in ("OMNI_TAA_BLENDWEIGHT", "OMNI_TAA_AGGRESSION", "OMNI_DISABLE_HAND_TAA"):
             self.assertIn(name, found)  # 每个时间抗锯齿参数由清晰度源码定义。
-        antialiasing = support.text("effects/clarity/antialiasing.glsl")  # 抗锯齿主体。
-        self.assertIn("TemporalReprojection", antialiasing)  # 重投影独立成函数。
-        self.assertIn("OMNI_TAA_BLENDWEIGHT", antialiasing)  # 混合权重参与累积。
+        self.assertIn("taa.glsl", support.text("effects/clarity/antialiasing.glsl"))  # 入口按引入顺序展开 TAA 核心。
+        taa = support.text("effects/clarity/taa.glsl")  # 时间抗锯齿核心（按算法从入口拆出）。
+        self.assertIn("TemporalReprojection", taa)  # 重投影独立成函数。
+        self.assertIn("OMNI_TAA_BLENDWEIGHT", taa)  # 混合权重参与累积。
         self.assertIn("#ifdef OMNI_TAA", support.text("effects/clarity/antialiasing.glsl"))  # 后期时间抗锯齿主体按选项执行。
 
     def test_fsr_and_cas(self):
@@ -559,10 +563,10 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_LENS_GLARE", "OMNI_LENS_FLARE", "OMNI_GLARE_BRIGHTNESS", "OMNI_FLARE_BRIGHTNESS"):
             self.assertIn(name, found)  # 每个镜头光参数由镜头源码定义。
-        lens = support.text("effects/lens/lens.glsl")  # 镜头主体。
-        self.assertIn("LensFlare", lens)  # 光斑独立成函数。
-        self.assertIn("#ifdef OMNI_LENS_FLARE", lens)  # 按选项分出光斑分支。
-        self.assertIn("OMNI_FLARE_BRIGHTNESS", lens)  # 亮度参与叠加。
+        glare = support.text("effects/lens/glare.glsl")  # 眩光与光斑主体（按算法从入口拆出）。
+        self.assertIn("LensFlare", glare)  # 光斑独立成函数。
+        self.assertIn("#ifdef OMNI_LENS_FLARE", glare)  # 按选项分出光斑分支。
+        self.assertIn("OMNI_FLARE_BRIGHTNESS", glare)  # 亮度参与叠加。
 
     def test_dof_controls(self):
         """景深可开关，模糊半径、质量与焦外散景形状都可调。"""
@@ -570,9 +574,9 @@ class EffectTests(unittest.TestCase):
         self.assertEqual(found["OMNI_DOF"].values, ("false", "true"))  # 景深可开关。
         for name in ("OMNI_DOF_BLUR", "OMNI_DOF_QUALITY", "OMNI_DOF_MAX_COC", "OMNI_DOF_CATSEYE"):
             self.assertIn(name, found)  # 每个景深参数由镜头源码定义。
-        lens = support.text("effects/lens/lens.glsl")  # 镜头主体。
-        self.assertIn("DepthOfField", lens)  # 景深独立成函数。
-        self.assertIn("OMNI_DOF_QUALITY", lens)  # 质量参与采样数。
+        dof = support.text("effects/lens/dof.glsl")  # 景深主体（按算法从入口拆出）。
+        self.assertIn("DepthOfField", dof)  # 景深独立成函数。
+        self.assertIn("OMNI_DOF_QUALITY", dof)  # 质量参与采样数。
         self.assertIn("#ifdef OMNI_DOF", support.text("rendering/post.glsl"))  # 后期阶段按选项执行景深。
 
     def test_motion_blur_and_vignette(self):
@@ -580,10 +584,11 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_MOTION_BLUR", "OMNI_MOTION_BLUR_SHUTTER_ANGLE", "OMNI_VIGNETTE", "OMNI_VIGNETTE_FALLOFF"):
             self.assertIn(name, found)  # 每个镜头参数由镜头源码定义。
-        lens = support.text("effects/lens/lens.glsl")  # 镜头主体。
-        self.assertIn("MotionBlur", lens)  # 运动模糊独立成函数。
+        lens = support.text("effects/lens/lens.glsl")  # 镜头入口，暗角留在入口。
         self.assertIn("Vignette", lens)  # 暗角独立成函数。
-        self.assertIn("OMNI_MOTION_BLUR_SHUTTER_ANGLE", lens)  # 快门角参与位移。
+        motion = support.text("effects/lens/motion_blur.glsl")  # 相机动态模糊主体（按算法从入口拆出）。
+        self.assertIn("MotionBlur", motion)  # 运动模糊独立成函数。
+        self.assertIn("OMNI_MOTION_BLUR_SHUTTER_ANGLE", motion)  # 快门角参与位移。
 
     def test_lens_distortion_resamples_current_source(self):
         """镜头形变重采样当前路径的源画面：开放大时用八号放大画面，避免把放大结果丢掉。"""

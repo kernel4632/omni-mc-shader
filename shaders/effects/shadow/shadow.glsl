@@ -19,6 +19,7 @@
   坐标变换与遮挡查询分成两层，写入端只复用变换、不引入深度采样，读取端只关心比较，职责不混；
   主世界与末地用不同的阴影相机矩阵，编译期二选一，运行时不再多一次分支；
   全局量按原程序依赖调用方已声明，本文件不重复声明，避免与主程序重复定义一个输入而导致编译失败。
+    本文件按算法拆到同目录：屏幕空间阴影在 `screen_shadow.glsl`，水下焦散在 `water_caustics.glsl`；阴影图坐标与可变半影留在本文件；引入顺序与拆分前逐字一致。
 */
 #ifndef OMNI_SHADOW_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_SHADOW_INCLUDED // 置上标记，后续再次引用直接跳过。
@@ -317,146 +318,8 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 
 #endif // 可变半影阴影结束，只由声明比较采样器的程序编译。
 
-// --- 屏幕空间阴影：在屏幕里沿阳光方向找遮挡，补阴影图覆盖不到的近处细节 ---
-// 输入是视空间位置、视线方向与视空间法线；沿阳光在屏幕上的投影方向步进，撞到比当前更近的几何就累加遮挡。
-// 为什么叶片先用饱和放大：叶片的材质编号可能带小数，先归一到零或一，后面的取舍才稳定。
-float ScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, MaterialMask mask, vec3 shadowVector){
-	mask.leaves = saturate(mask.leaves * 1e10); // 把叶片标记归一到零或一。
-
-	float fov = mask.grass + mask.leaves > 0.5 ? 95.0 : atan(1.0 / gbufferProjection[1][1]) * 360.0 * rPI; // 草和叶片按较大视野估计，其余由投影反推真实视野。
-
-	vec3 viewRayDir = shadowVector * max(-viewPos.z * 3e-5 * fov, 0.06 * shadowDistance / shadowMapResolution); // 每一步在屏幕上的推进量，随深度与视野缩放并留最小步长。
-
-	vec3 start = viewPos; // 步进起点。
-
-	if (mask.grass + mask.leaves < 0.1){ // 普通表面才做偏移，草和叶片的画面已经足够软。
-		float pixelScale = max(pixelSize.x, pixelSize.y); // 一个像素的最大边长，用来把偏移量折算到屏幕。
-		float NdotL = saturate(dot(shadowVector, normal)); // 阳光与法线的夹角。
-
-		start += viewRayDir * (pixelScale * max(0.04 / max(dot(normal, -viewDir), 0.1), 1e3)); // 沿光线先跳过一段，避免刚出发就打到自己。
-		start += normal * (8e-3 * fov * -viewPos.z * pixelScale / max(NdotL, 0.01)); // 再沿法线抬一点，掠射角抬得更多。
-	}
-
-	vec3 end = start + viewRayDir; // 一步的终点。
-
-	start = vec3(vec2(gbufferProjection[0][0], gbufferProjection[1][1]) * start.xy, -start.z); // 起点投影到裁剪空间。
-	end   = vec3(vec2(gbufferProjection[0][0], gbufferProjection[1][1]) * end.xy,   -end.z); // 终点同样投影。
-
-	vec3 screenRayDir = (end - start); // 这一步在裁剪空间的位移。
-	screenRayDir.xy *= 0.5; // 横纵方向换算到零到一坐标。
-
-	start.xy += gbufferProjection[3].xy; // 补上投影的平移项。
-	start.xy *= 0.5; // 裁剪空间转到零到一。
-
-	start += screenRayDir * mask.grass; // 草的原点再前进一小段，减少草自身投出的错误阴影。
-
-	float absorption = 0.0; // 一次遮挡的吸收量。
-	absorption += 0.7 * mask.grass; // 草的吸收系数。
-	absorption += 0.85 * mask.leaves; // 叶片的吸收更强。
-	absorption = pow(absorption, sqrt(-viewPos.z) * 0.5); // 距离越远吸收越弱，远处几何不再压黑。
-
-	#ifdef OMNI_TAA // 打开时间抗锯齿时用逐帧抖动。
-		float noise = BlueNoiseTemporal().x; // 每帧变化的抖动。
-		#ifdef OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR
-			if (mask.entityPlayer > 0.5) noise = BlueNoise().x; // 玩家像素改用固定噪声。
-		#endif
-		vec2 offsetCoord = 0.5 + taaJitter * 0.5; // 采样坐标补上本帧抖动。
-	#else // 不开时间抗锯齿时固定噪声。
-		float noise = BlueNoise().x; // 固定噪声。
-		vec2 offsetCoord = vec2(0.5); // 不补抖动。
-	#endif
-
-	float shadow = 1.0; // 阴影可见度，初值全亮。
-	float stepLength = 1.0; // 步长，逐步增大。
-	float zThickness = 0.025 + 0.0125 * -viewPos.z; // 遮挡厚度阈值，距离越远越厚，避免远处噪点。
-
-	for (int i = 0; i < 12; i++, start += screenRayDir * stepLength, stepLength += 0.3){ // 最多十二步，步长递增覆盖更远。
-		vec3 samplePos = start + screenRayDir * noise * stepLength; // 加抖动的采样位置。
-		samplePos.xy = samplePos.xy / samplePos.z + offsetCoord; // 透视除法得到屏幕坐标。
-
-		if (saturate(samplePos.xy) != samplePos.xy) break; // 出了屏幕就停止，屏幕外没有可靠深度。
-
-		#ifdef DISTANT_HORIZONS // 有远景时先看近景深度，近景是天空才查远景。
-			float sampleDepth = textureLod(depthtex1, samplePos.xy, 0.0).x; // 近景深度。
-			float sampleDist = 0.0; // 采样点距离。
-
-			if (sampleDepth == 1.0){ // 近景是天空。
-				sampleDepth = textureLod(dhDepthTex1, samplePos.xy, 0.0).x; // 改读远景深度。
-				sampleDist = LinearDepth_From_ScreenDepth_DH(sampleDepth); // 远景深度换成距离。
-			}else{
-				sampleDist = LinearDepth_From_ScreenDepth(sampleDepth); // 近景深度换成距离。
-			}
-		#else
-			float sampleDist = LinearDepth_From_ScreenDepth(textureLod(depthtex1, samplePos.xy, 0.0).x); // 直接把深度换成距离。
-		#endif
-
-		float depthDiff = samplePos.z - sampleDist; // 当前射线深度与几何深度之差，为正说明几何在前面。
-
-		if (depthDiff > 0.0 && depthDiff < zThickness) shadow *= absorption; // 落在厚度阈值内才算遮挡。
-
-		if (shadow < 0.01) break; // 已经足够暗，提前结束。
-	}
-
-	return shadow; // 返回可见度。
-}
-
-// --- 焦散法线：从七号画面的方块里读出波法线 ---
-// 七号画面左下角最多五百像素见方，存的是水面波法线；读取时用折射方向把世界位置投到这个方块里。
-// 为什么先按折射方向移动坐标：光线进入水面会弯折，直接用世界横纵坐标会读到错误的波法线。
-vec3 GetWavesNormalFromTex(vec3 position, vec3 shadowLightVector){
-	const float maxCausticsNormalHeight = CAUSTICS_TEX_RESOLUTION; // 方块边长上限，来自内部常数。
-
-	vec2 coord = position.xz; // 先取水平坐标。
-	vec3 lightVector = refract(shadowLightVector, vec3(0.0, 1.0, 0.0), 1.0 / WATER_REFRACT_IOR); // 阳光按水面折射率弯折得到光线方向。
-	coord.x += position.y * lightVector.x / lightVector.y; // 按高度沿光线横移横坐标。
-	coord.y += position.y * lightVector.z / lightVector.y; // 按高度沿光线横移纵坐标。
-
-	coord *= 0.02; // 缩到波法线图的空间尺度。
-	coord = fract(coord); // 平铺到零到一。
-
-	coord *= pixelSize * min(screenSize.y, maxCausticsNormalHeight); // 折算成方块里的像素坐标。
-
-	vec3 normal; // 解出的波法线。
-	normal.xyz = DecodeNormal(textureLod(colortex7, coord, 0.0).xy); // 从方块里读八面体编码法线。
-
-	return normal; // 返回世界空间波法线。
-}
-
-// --- 水体焦散：按折射后的阳光在波面上找汇聚点，得到明暗花纹 ---
-// 输入是相机相对世界位置；把阳光按水面折射后向水下投，用波面法线判断光线是否汇聚，汇聚处更亮。
-// 为什么用九次采样：三乘三抖动采样已经能把焦散花纹的噪点压到可接受，再多收益不明显。
-float CalculateWaterCaustics(vec3 worldPos, vec3 shadowLightVector){
-	worldPos.xyz += cameraPosition; // 相机相对世界位置补上相机位置，换成绝对坐标。
-
-	vec2 dither = BlueNoiseTemporal(); // 每帧变化的抖动，打散采样花纹。
-
-	vec3 lookupCenter = worldPos + vec3(0.0, 1.0, 0.0); // 从水面上方一米处开始找波面。
-
-	vec3 lightVector = refract(shadowLightVector, vec3(0.0, -1.0, 0.0), 1.0 / 1.2); // 阳光向下穿过水面时弯折。
-	vec3 depthBias = vec3(worldPos.y * lightVector.x, 0.0, worldPos.y * lightVector.z) / lightVector.y; // 按水深沿光线偏移，找到水底对应位置。
-
-	float caustics = 0.0; // 累计焦散强度。
-
-	for (float i = -1.0; i <= 1.0; i++){ // 三乘三抖动采样。
-		for (float j = -1.0; j <= 1.0; j++){
-			vec2 offset = dither + vec2(i, j); // 当前采样偏移。
-
-			vec3 lookupPoint = lookupCenter; // 这一处的波面查询点。
-			lookupPoint.xz += offset * 0.1; // 按偏移横移。
-
-			vec3 wavesNormal = GetWavesNormalFromTex(lookupPoint, shadowLightVector).xzy; // 读取波法线并换到竖直轴朝上的坐标。
-
-			vec3 refractVector = refract(vec3(0.0, 1.0, 0.0), wavesNormal.xyz, 1.0); // 竖直光线被波面折射后的方向。
-			vec3 collisionPoint = lookupPoint - refractVector / refractVector.y; // 光线与水平面的交点。
-			collisionPoint -= worldPos; // 相对当前位置。
-
-			float dist = dot(collisionPoint, collisionPoint) * 7.1; // 交点距离的平方，放大差距。
-
-			caustics += 1.0 - saturate(dist * 7.0); // 交点越近越亮，模拟光线汇聚。
-		}
-	}
-
-	float causticsFinal = mix(caustics * 0.16 + 0.2, 1.0, 0.3 - 0.3 * float(isEyeInWater)); // 拼成焦散亮度，水下再往全亮靠一点。
-	return pow(causticsFinal * OMNI_WATER_CAUSTICS_BRIGHTNESS, OMNI_WATER_CAUSTICS_POWER); // 按 Eclipse `settings.glsl:999-1000` 的亮度倍率与对比指数重整，默认全一、画面不变。
-}
+// 屏幕空间阴影。
+#include "/effects/shadow/screen_shadow.glsl"
+// 水下焦散。
+#include "/effects/shadow/water_caustics.glsl"
 #endif // 文件守卫结束。

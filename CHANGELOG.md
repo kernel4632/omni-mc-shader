@@ -1,5 +1,21 @@
 # 更新记录
 
+## 0.0.0-dev.165
+
+把七个过大的效果文件按算法拆成「入口 + 同目录算法文件」，不改任何画面、选项与算法，只减少单个文件的行数。
+
+- 反射（`shaders/effects/reflection/reflection.glsl`，原 619 行拆成 49 行入口加两个文件）：屏幕空间追踪、GGX 采样、假天空回退与反射着色放到 `screenspace.glsl`，反射小波滤波放到 `denoise.glsl`。
+- 水（`shaders/effects/water/water.glsl`，原 588 行拆成 78 行入口加四个文件）：基础波浪与物理解析波浪放到 `waves.glsl`，雨点涟漪放到 `rain.glsl`，水雾放到 `waterfog.glsl`，水面折射与彩色透光吸收放到 `refraction.glsl`。
+- 时间抗锯齿（`shaders/effects/clarity/antialiasing.glsl`，原 556 行拆成 118 行入口加两个文件）：颜色空间、取样、深度与方差统计、时间重投影与相机速度放到 `taa.glsl`，FXAA 放到 `fxaa.glsl`；合成七号主体 `WriteTaaHistory` 留在入口。
+- 环境光（`shaders/effects/lighting/ambient.glsl`，原 538 行拆成 120 行入口加两个文件）：全局光的反弹、时间滤波与空间滤波放到 `gi.glsl`，地平线遮蔽与多弹射放到 `gtao.glsl`；延迟二号与四号主体 `RenderGISpatialFilter` 留在入口。
+- 阴影（`shaders/effects/shadow/shadow.glsl`，原 463 行拆成 325 行入口加两个文件）：屏幕空间阴影放到 `screen_shadow.glsl`，水下焦散放到 `water_caustics.glsl`；阴影图坐标与可变半影留在入口。
+- 镜头（`shaders/effects/lens/lens.glsl`，原 457 行拆成 118 行入口加三个文件）：景深放到 `dof.glsl`，眩光与光斑放到 `glare.glsl`，相机动态模糊放到 `motion_blur.glsl`；暗角只有几行留在入口。
+- 方块光（`shaders/effects/lighting/blocklight.glsl`，原 457 行拆成 168 行入口加一个文件）：手持光源（光斑形状、屏幕空间阴影、手持光与手持高光）放到 `held_light.glsl`；方块光与纹理自发光留在入口。
+- 入口集中定义本效果的全部选项与内部常数，算法文件按同一顺序引入；算法行原样搬迁，函数、宏、常数与注释均未改名或重排，展开后的编译输入与拆分前逐字一致（离线逐入口展开对比全部相同）。
+- 测试引用路径同步更新（`tests/test_effects.py`、`tests/test_boundaries.py`）。
+
+仅做过离线编译、审计与单元测试；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.164
 
 收紧选项接线硬检查，名字只出现在注释里不再算接入计算，并补上对应回归测试。
