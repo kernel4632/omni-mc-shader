@@ -1,5 +1,15 @@
 # 更新记录
 
+## 0.0.0-dev.166
+
+把 `docs/parity.md` 与 `docs/eclipse-parity.md` 的行号引用刷到 `dev.165` 二次拆分后的当前代码，并补记偏离记录 55。
+
+- `docs/eclipse-parity.md`：反射、水、时间抗锯齿、环境光、阴影、镜头、方块光七处效果文件二次拆分后，受影响的行号引用改指新文件，例如 `water.glsl:103` → `waves.glsl:47`、`ambient.glsl:378` → `gtao.glsl:15`、`shadow.glsl:323` → `screen_shadow.glsl:13`、`antialiasing.glsl:303` → `taa.glsl:249`、`lens.glsl:106` → `dof.glsl:14`、`blocklight.glsl:118` → `:119`；「水雾与焦散」「雨点涟漪与水洼」「阴影」「远景（DH）」等行里随拆分移动的函数文件引用也同步更正。
+- `docs/parity.md`：偏离记录 48 的三项远景开关行号改指新文件，偏离记录 11、15 与第九点五节里随拆分移动的函数所在文件改指 `water_caustics.glsl`、`taa.glsl`、`gi.glsl`；新增偏离记录 55 记录本次二次拆分。
+- 同步 `AGENTS.md` 与 `docs/development.md` 的验证探针与测试计数（9 组唯一程序、129 个测试）。
+
+仅文档修改，未改代码；`python build.py verify` 通过；游戏内画面、性能与兼容性未验证。
+
 ## 0.0.0-dev.165
 
 把七个过大的效果文件按算法拆成「入口 + 同目录算法文件」，不改任何画面、选项与算法，只减少单个文件的行数。

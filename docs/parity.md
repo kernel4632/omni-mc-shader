@@ -227,7 +227,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 - `BicubicBlurTexture`（泛光、云影、阴影顶点、地形顶点）、`BicubicTexture`（两种时间抗锯齿）：内容相同则放进 `common/math.glsl` 一份；不同则各自留在归属效果文件并加后缀区分。由甲片比对并决定，结果写进下面偏离记录。
 - `ShadowScreenPos_From_WorldPos*`、`DistortShadowScreenPos`：主世界版与末地版（`ShadowTransformsEnd.glsl`）都放 `effects/shadow/shadow.glsl`，末地版用 `#ifdef OMNI_END` 选择。
 - 植物摆动常数 `heavy*`、`light*`、`speed*`：只在 `effects/ground/vegetation.glsl` 定义一次，地形与阴影顶点共用。
-- 时间抗锯齿辅助函数（`clipAABB`、`RGB_To_YCoCg`、`SampleDepthFetch` 等）：主世界与下界版放 `effects/clarity/antialiasing.glsl`，用 `#ifdef OMNI_NETHER` 选择不同的部分。
+- 时间抗锯齿辅助函数（`clipAABB`、`RGB_To_YCoCg`、`SampleDepthFetch` 等）：主世界与下界版放 `effects/clarity/taa.glsl`，用 `#ifdef OMNI_NETHER` 选择不同的部分。
 - `CalculateCameraVelocity`：放 `common/coordinates.glsl` 一份；各处实现不同时加后缀。
 - `AxialGaussianBlur`：泛光版留在 `effects/color/bloom.glsl`，云影模糊版改名 `CloudShadowAxialBlur` 放 `effects/cloud/shadow.glsl`。
 - `Calculate3DNoise`、`CalculateStars`：末地版加 `End` 前缀并拆到 `effects/world/end_disc.glsl`、`effects/world/end_sky.glsl`；主世界版分别在 `effects/fog/volumetric.glsl`、`effects/sky/stars.glsl`。（2026-10-18：末地星空改用 Eclipse 星场，`EndCalculateStars` 只转发主世界 `CalculateStars`，见偏离记录 49；`Calculate3DNoise` 仍按下述加 `End` 前缀。）
@@ -245,10 +245,10 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 | 丁 合成阶段 | `rendering/composite.glsl`；`effects/lighting/blocklight.glsl`、`effects/reflection/reflection.glsl`、`effects/fog/fog.glsl`、`effects/lighting/lpv.glsl` 与 `rendering/lpv.glsl` | 完成（离线编译通过；待实机核对） |
 | 戊 后期 | `rendering/post.glsl`、`rendering/final.glsl`；`effects/lens/lens.glsl`、`effects/clarity/antialiasing.glsl`、`effects/color/bloom.glsl`、`effects/color/color.glsl`、`effects/clarity/upscale.glsl`、`effects/dev/debug.glsl` | 完成（离线编译通过；待实机核对） |
 | 己 下界与末地 | 维度程序、`effects/world/nether.glsl`、`effects/world/end.glsl`、下界时间抗锯齿 | 完成（离线编译通过；待实机核对） |
-| 庚 集成 | 选项改名登记、预设、测试、文档、离线检查、游戏内对照截图 | 进行中：文档已按 `main` 实际重写并更新偏离记录（2026-10-17 首次，此后随每个小步同步，最近一次 2026-10-18 对齐 `0.0.0-dev.160`）；游戏内对照截图仍未做 |
+| 庚 集成 | 选项改名登记、预设、测试、文档、离线检查、游戏内对照截图 | 进行中：文档已按 `main` 实际重写并更新偏离记录（2026-10-17 首次，此后随每个小步同步，最近一次 2026-10-18 对齐 `0.0.0-dev.165`）；游戏内对照截图仍未做 |
 
 
-### 覆盖核对（2026-10-16 首次，2026-10-17 更新，2026-10-18 对齐 `dev.160`）
+### 覆盖核对（2026-10-16 首次，2026-10-17 更新，2026-10-18 对齐 `dev.165`）
 
 2026-10-17 更新：选项数、入口数与测试数以 `python build.py verify` 实测为准（该命令不输出函数数，函数数沿用下方首次核对的方法重抽，见对应条目）；合并 Eclipse 能力后新增的文件已按实际登记。
 
@@ -270,19 +270,6 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 2. 游戏内对照：同一位置、同一时间、同一天气，分别加载 iterationT 与 Omni 截图，逐项比较天空、阴影、水、雾、云、曝光与色调。
 3. 偏离 iterationT 的地方必须写进下面的偏离记录，不能当成已复刻。
 
-## 十三、给子任务的工作方式
-
-每个子任务开工前先读：HOP 技能（`C:\Users\17137\.config\opencode\skills\hop\SKILL.md`）、`AGENTS.md`、本文件全文。
-
-- 只改分片表里分给你的文件，别的文件一个字不动。
-- 数学、常数、分支、采样、顺序照 iterationT 原程序逐行对照写；函数名、结构体名、全局量、输入输出变量名保持原名（只修 `Temproal` → `Temporal`、`Soild` → `Solid` 这类拼写）。
-- 每个文件按第八节规则写：文件头讲清职责、调用位置、可复制示例、关键取舍；用 `#ifndef OMNI_<文件名>_INCLUDED` 守卫；选项用 `// @option` 加 `#define OMNI_X`（或合同允许的原生常量）；至少一半非空行有中文说明，英文术语放反引号。
-- 绘制主体按第九节“地基接口”的引入顺序写；效果文件用 `#include "/common/..."` 与 `#include "/effects/..."` 引依赖，不写 `#version`。
-- 每个效果文件的函数调用前要确认依赖它的全局量已由调用方声明（例如 `texelCoord`、`colorShadowlight`），在文件头写清调用前提。
-- 验证只用 `python build.py audit`（检查中文说明比例与格式）。**不要**运行 `python build.py verify`、`check`、`generate`、`build`：其它分片还没写完，编译必然失败，那不是你的错误。
-- 不要 `git commit`、`git add`、`git push`、切分支。
-- 回报只写：改了哪些文件、每个文件对照的 iterationT 来源、用到的选项与内部常数、没做或存疑的地方。不要贴大段代码。
-
 ## 十二、偏离记录
 
 1. 选项名加 `OMNI_` 前缀：iterationT 的选项名统一加前缀（如 `BLOOM` → `OMNI_BLOOM`），少量拼写修正见第九节。这是项目命名约定，值和默认值照 iterationT。
@@ -292,10 +279,10 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 5. 大贴图压缩：`build.py` 打包时对 `.png`、`.bin` 用 `ZIP_STORED` 直接存放，九级压缩几十兆贴图要好几秒且几乎没有收益，会突破十秒检查预算。
 6. `block.properties`、`entity.properties`、`item.properties` 与生成的 `shaders.properties` 加入审计的机器文件豁免：它们是逐行可对照的编号数据，不写中文说明。
 7. 移植期开关（已删除）：移植期 `build.py` 有 `PORTING` 开关，让编译失败一次显示最多 400 条错误；现已删除，固定只报前五条（`build.py:570`）。选项接线始终是全树硬检查 `check_option_wiring`（`build.py:274`）：先去掉源码里的行注释与块注释、再跳过每个选项自己的原生声明行，名字只有作为独立词留在代码或加载器设置（`rendering/pipeline.properties`）里才算接入；加载器原生常量选项（`const`）由运行环境按合同读取，单独放行。发现未接线直接报错。
-8. 旧管线测试跳过（已解决）：早期 `tests/` 里断言旧管线算法与缓冲的测试曾用 `@unittest.skip(PORT_REPLACED)` 标记；现已按新管线全部重写，`verify` 实跑 120 个测试、0 跳过。
+8. 旧管线测试跳过（已解决）：早期 `tests/` 里断言旧管线算法与缓冲的测试曾用 `@unittest.skip(PORT_REPLACED)` 标记；现已按新管线全部重写，`verify` 实跑 129 个测试、0 跳过。
 9. 旧算法专用选项的处置（由主助手统一裁决，分片只登记不擅自删除）：iterationT 用预计算大气贴图，旧 Omni 那种“实时积分步数/散射倍率”参数在新算法里没有对应含义。这类选项一律登记到本节清单，由主助手在庚片决定“并入同名迭代T选项 / 保留为中性额外功能 / 作为接口变更移除并写迁移说明”，不在分片里悄悄删除。
 10. 强光压缩选项表示（戊片）：iterationT `TONEMAP_OPERATOR` 是函数名取值的宏（`AgX`/`ACES`/`None`），而 `options.py` 只接受数字取值，所以 Omni 把它定义为序号 `0`/`1`/`2`，档位名称映射回 `AgX`/`ACES`/无，绘制主体用 `#if OMNI_TONEMAP_OPERATOR == 1` 分派。行为和默认值（`AgX`）与原程序一致，只改表示形式。
-11. `CalculateWaterCaustics` 同名不同实现（丁片）：iterationT 有两份同名函数，`Lib/BasicFounctions/Sunlight_Shadow.glsl` 的一份按九次采样算焦散遮罩，`Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 的一份只返回 `dist * 2.8 + 0.2`，两者内容不同。前者已在 `effects/shadow/shadow.glsl`，按第九点五节的处理方式把后者改名 `CalculateUnderwaterCaustics` 留在 `effects/fog/underwater_fog.glsl`，函数体不变；水下体积雾同时复用 `effects/shadow/shadow.glsl` 里内容相同的 `GetWavesNormalFromTex`，不重复定义。
+11. `CalculateWaterCaustics` 同名不同实现（丁片）：iterationT 有两份同名函数，`Lib/BasicFounctions/Sunlight_Shadow.glsl` 的一份按九次采样算焦散遮罩，`Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 的一份只返回 `dist * 2.8 + 0.2`，两者内容不同。前者已在 `effects/shadow/water_caustics.glsl`，按第九点五节的处理方式把后者改名 `CalculateUnderwaterCaustics` 留在 `effects/fog/underwater_fog.glsl`，函数体不变；水下体积雾同时复用 `effects/shadow/water_caustics.glsl` 里内容相同的 `GetWavesNormalFromTex`，不重复定义。
 12. `LANDSCATTERING_DISTANCE` 选项补记（丁片）：第九节 `effects/fog/fog.glsl` 的选项清单漏了这个名字，但 iterationT `Settings.glsl` 它有菜单范围且被 `LandAtmosphericScattering` 使用，所以按 `OMNI_LANDSCATTERING_DISTANCE` 正式登记，默认值与可选范围照 iterationT。
 13. 效果文件被多个程序共同引入，靠“只有某个程序引入它”区分阶段的做法不再成立。凡是依赖程序全局量（光色、光方向、像素坐标）的函数，改成参数传入或就地计算：`CalculateStars(+sunVector)`、`CloudShadowFromTex(+shadowLightVector)`、`WaterFog(+shadowVector, +colorShadowlight, +colorSkylight)`、`Rain(+colorShadowlight, +colorSkylight)`、`RefractSampleOnce(+screenCoordInput)`、`GetWavesNormalFromTex`/`CalculateWaterCaustics(+shadowLightVector)`、`ScreenSpaceShadow(+shadowVector)`、`DH_noise(+materialID)`。这样任何程序在任意阶段引入都能编译，行为不变。
 14. `common/noise.glsl` 用 `OMNI_PIXEL` 宏取像素坐标：片元阶段是 `gl_FragCoord.xy`，顶点、几何与计算阶段取零。三个噪声函数因此在各阶段都能编译；顶点阶段本来不调用它们，输出不变。
@@ -304,7 +291,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 17. `effects/shadow/shadow.glsl` 的可变半影阴影段用 `OMNI_SHADOW_COMPARE` 隔开：只有合成零号把 `shadowtex1` 声明为 `sampler2DShadow` 并定义该宏，其它程序把 `shadowtex1` 当普通深度贴图用。
 18. `rendering/lights.glsl` 只声明 `shadowtex0`，不声明 `shadowtex1` 与 `shadowcolor0`：顶点与片元对同名采样器要求类型一致，合成零号片元用的是比较采样器。
 19. 加载器标准环境宏在 `build.py` 里按 Iris `StandardMacros` 注入（`MC_VERSION`、`MC_HAND_DEPTH = 0.125`、`MC_RENDER_QUALITY`、厂商与系统宏、远景方块编号照 Iris 取值）。离线的「高效果」环境另补 `IRIS_FEATURE_CUSTOM_IMAGES` 与 `IRIS_FEATURE_COMPUTE_SHADERS`，让光传播体积与波浪模拟那几条只在显卡能力存在时才有的代码路径真的进入编译。离线编译没有这些宏会把只在游戏里存在的名字当成未声明标识符。
-20. `verify` 的十秒预算装不下整包编译（展开引用树与编译数百程序需要一两分钟），所以 `verify` 与 `check` 只编一小组探针（主世界 5 个轻量程序 `gbuffers_terrain`、`shadow`、`final`、`setup`、`shadowcomp` 编默认配置与基础环境，其中 `gbuffers_terrain`、`shadow`、`setup`、`shadowcomp` 另编全高配置与开远景环境，共 9 组唯一程序，约 7 秒）。完整离线编译改用 `python build.py compile`（放宽到 300 秒，全部程序 × 两种代表配置 × 基础与开远景两组环境，约两分钟）。测试已全部按新管线重写，`verify` 实跑 120 个、0 跳过。
+20. `verify` 的十秒预算装不下整包编译（展开引用树与编译数百程序需要一两分钟），所以 `verify` 与 `check` 只编一小组探针（主世界 5 个轻量程序 `gbuffers_terrain`、`shadow`、`final`、`setup`、`shadowcomp` 编默认配置与基础环境，其中 `gbuffers_terrain`、`shadow`、`setup`、`shadowcomp` 另编全高配置与开远景环境，共 9 组唯一程序，约 7 秒）。完整离线编译改用 `python build.py compile`（放宽到 300 秒，全部程序 × 两种代表配置 × 基础与开远景两组环境，约两分钟）。测试已全部按新管线重写，`verify` 实跑 129 个、0 跳过。
 21. 修正 iterationT 的范围笔误：`CAMERA_FOCAL_POINT` 重复的 `15.0`、`CLOUD_BASE_NOISE_SCALE` 重复值；加载器要求 `const` 向量构造给足分量，个别 `vec3(0.0)` 之类已补齐。
 22. `sunPathRotation`、`wetnessHalflife`、`drynessHalflife` 三个加载器原生常量加入 `options.py` 的 `CONST_OPTIONS` 白名单。
 23. 预设按新选项集重写四套（默认、氛围、轻量、真实），保持各自定位。
@@ -319,7 +306,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
       `rendering/post.glsl` 的合成七号在下界改用四参数版 `TemporalReprojection` 并自行打包写回。
     - 延迟程序按维度重排：下界与末地的延迟零号是复制程序（`world-1/deferred.fsh`、`world1/deferred.fsh`），
       末地把全局光时间滤波放在延迟二号、空间滤波放在延迟四号（`world1/deferred2.fsh`、`world1/deferred4.fsh`）。
-      因此 `effects/lighting/ambient.glsl` 的两段编译条件同时认末地对应的程序宏，并在 `OMNI_END` 下不再被延迟一号/二号触发。
+      因此 `effects/lighting/gi.glsl` 的两段编译条件同时认末地对应的程序宏，并在 `OMNI_END` 下不再被延迟一号/二号触发。
     - 下界与末地的合成五号原程序只写一号画面，不画镜头光斑，`rendering/composite.glsl` 的这两个分支因此不声明三号输出。
 25. 主世界缺口补齐（主世界片）：`DEBUG_COUNTER`、`SODIUM_TEMPFIX` 在 iterationT 3.2.0 只在 `Lib/Settings.glsl` 出现且没有任何计算引用（属于菜单装饰），按 HOP “不做不起作用的假开关”不移植。同批把 iterationT 里带范围滑块、此前被误当内部常数的三个量恢复为玩家选项：`FTC_OFFSET`→`OMNI_FTC_OFFSET`（归属从 `common/math.glsl` 移到 `effects/cloud/cloud.glsl`）、`PARALLAX_MAX_REFINEMENTS`→`OMNI_PARALLAX_MAX_REFINEMENTS`、`TAA_DEPTH_COMPARE_THRESHOLD`→`OMNI_TAA_DEPTH_COMPARE_THRESHOLD`；`TAA_CLOSEST_DEPTH` 仍作内部开关保持原名；`WHITE_DEBUG_WORLD`、`DISABLE_NIGHTVISION`、`DISABLE_BLINDNESS_DARKNESS` 移植为 `OMNI_` 前缀的开发者（`dev`）选项。第九节选项清单与九点二内部常数清单需由主助手登记这四处新增/移动。（2026-10-18：`PARALLAX_MAX_REFINEMENTS`、`TAA_DEPTH_COMPARE_THRESHOLD` 已移入第九节选项清单，不再列在九点二内部常数。）（后续小步做命名统一：`OMNI_FTC_OFFSET` 改名为 `OMNI_CLOUD_TIME_OFFSET`，`OMNI_PC_COVERAGE`、`OMNI_PC_NOISE_SCALE`、`OMNI_PC_ALTITUDE` 统一为 `OMNI_PLANAR_*`；旧名到新名的迁移登记在 `config.py` 的 `OPTION_RENAMES`，老配置不丢设置。视差算法同时从 `effects/ground/material.glsl` 拆到 `effects/ground/parallax.glsl`，选项仍留在材质文件。）
 26. 末地屏幕空间阴影方向修正：`rendering/composite.glsl` 合成零号的末地分支原来把**世界空间** `worldShadowVector` 传给 `ScreenSpaceShadow`，与原程序不符。`ScreenSpaceShadow` 内部把传入方向当视空间射线方向并与视空间法线点乘（原程序读全局 `shadowVector`），这是偏离记录第 13 条把依赖全局量的函数改成参数传入时产生的一处调用错误。已改为传视空间 `shadowVector`，与主世界分支及原程序一致。
@@ -360,7 +347,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
     加 `end_sky.glsl`、`end_disc.glsl`、`end_fog.glsl`、`end_island_light.glsl`、`end_reflection.glsl`；`rendering/terrain.glsl`（原 767 行）只留
     顶点、几何、片元三个阶段的入口结构与输入输出，算法体搬到 `effects/ground/terrain_surface.glsl` 与 `effects/ground/grass_geometry.glsl`。
     入口集中定义本效果的选项与内部常数，分文件按来源用同一顺序引入，`#include` 语义与拆分前逐段一致，默认画面与算法不变。
-48. 远景参与开关默认开，与 iterationT 默认画面一致：Eclipse 的三项远景开关 `DH_AMBIENT_OCCLUSION`、`DH_SUBSURFACE_SCATTERING`、`DH_SCREENSPACE_REFLECTIONS`（`lib/settings.glsl:1095-1097`）合为 `OMNI_DH_AO`（`effects/lighting/ambient.glsl:71`）、`OMNI_DH_SSS`（`effects/shadow/shadow.glsl:54`）、`OMNI_DH_SSR`（`effects/reflection/reflection.glsl:39`）。Omni 的远景参与本来就走 iterationT 路径读 `dhDepthTex0/1` 与材质编号，这三项只是加独立开关、默认开等于现状（关闭时才让远景像素按天空处理或不透光），所以默认画面与 iterationT 一致；与其余 Eclipse 合并项「默认中性」的差别与近似说明见 `docs/eclipse-parity.md` 的「远景（DH）」行。
+48. 远景参与开关默认开，与 iterationT 默认画面一致：Eclipse 的三项远景开关 `DH_AMBIENT_OCCLUSION`、`DH_SUBSURFACE_SCATTERING`、`DH_SCREENSPACE_REFLECTIONS`（`lib/settings.glsl:1095-1097`）合为 `OMNI_DH_AO`（`effects/lighting/ambient.glsl:72`）、`OMNI_DH_SSS`（`effects/shadow/shadow.glsl:55`）、`OMNI_DH_SSR`（`effects/reflection/reflection.glsl:40`）。Omni 的远景参与本来就走 iterationT 路径读 `dhDepthTex0/1` 与材质编号，这三项只是加独立开关、默认开等于现状（关闭时才让远景像素按天空处理或不透光），所以默认画面与 iterationT 一致；与其余 Eclipse 合并项「默认中性」的差别与近似说明见 `docs/eclipse-parity.md` 的「远景（DH）」行。
 49. 末地星空改用 Eclipse 星场（2026-10-18，按用户要求）：`effects/world/end_sky.glsl` 的 `EndCalculateStars`（`:28`）不再自带 iterationT 的三维格子星空，改为直接转发主世界 `effects/sky/sky.glsl` 的 `CalculateStars(worldDir, worldSunVector)`，与主世界共用同一份 Eclipse `lib/stars.glsl` 星场（白色稳定星场默认、彩色星盒由 `OMNI_STARS_COLORED` 开启）。签名不变（仍只吃世界方向），调用点 `effects/world/end_disc.glsl:187` 的 `EndCalculateStars(rayDir)` 不变。与旧 iterationT 末地星空的差别：星点形状与疏密随 Eclipse 星场改变；朝向改用主世界 `CalculateStars` 的「绕日轴对齐天球」，不再按时间绕竖直轴旋转；原先独立的三维格子哈希、`coverage`/`maxLuminance` 与按格取样代码整体删除。默认 `OMNI_STAR_TYPE=1`，末地天空像素会因此换星点外观（属本次要求的效果改动，不属默认中性项）；`OMNI_STAR_TYPE=0`（关星）或 `=2`（原版贴图）时与原来一致。差异说明见 `docs/eclipse-parity.md` 的「星空」行。仅离线编译与检查通过，游戏内画面未验证。
 50. 雾照明补手持光与水下两张（2026-10-18，按用户要求）：照 Eclipse `dimensions/composite3.fsh` 把 `LPV_VL_FOG_ILLUMINATION_HANDHELD(_WATER)` 合并进雾照明。
     - 取光函数：`effects/lighting/lpv.glsl` 新增 `omniLpvHandLight`，按手持物品编号读方块光表得到光色与光照范围，再按离玩家的距离三次方衰减，照 Eclipse `lib/diffuse_lighting.glsl:74` 的 `GetHandLight`（去掉 Eclipse 的 `relativeEyePosition`，直接用采样点到玩家的距离，游戏内未验证）。
@@ -368,16 +355,24 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
     - 空气项 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD`（`effects/lighting/lpv.glsl`，默认关、等于 Eclipse）：在 `effects/fog/volumetric.glsl` 的体积雾步进里按本步吸收量累加手持光。
     - 水下项 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER`（`effects/lighting/lpv.glsl`，默认开、等于 Eclipse）：在 `effects/fog/underwater_fog.glsl` 的水下体积雾里叠加手持光，按水的分波段吸收衰减。
     - 两项都要求雾照明 `OMNI_LPV_VL_FOG_ILLUMINATION`（默认关），所以默认画面不变。亮度系数照 Eclipse（空气项 `0.04`、水下项 `0.2`）按本项目既有的百分之一定标缩小，未按游戏内观感校准。Eclipse 水下项原本接在解析水雾的间接光上，本项目接在水下体积雾上，属换落点的近似。
-51. 长文件按效果拆分（内部结构，不改画面）：`effects/sky/sky.glsl`（原 728 行）拆成入口 `sky.glsl` 加 `atmosphere_model.glsl`（预计算大气与天空辐射）、
+51. 十号画面新增为低分辨率体积云缓冲（Eclipse `VL_RENDER_SCALE` 的近似合并，`dev.146`）：iterationT 只用零到八号，Omni 九号已给程序化草；本轮为 `OMNI_CLOUD_RENDER_SCALE` 大于一时新增十号 `RGBA16`、尺寸 0.5 或 0.25、每帧清除，登记在 `rendering/buffers.glsl:57` 与 `:78`。低分辨率基础体积云搬进独立阶段 `deferred7`（写十号）与 `deferred8`（读十号放大回一号），平面云与附加层仍在全分辨率合成；`OMNI_CLOUD_RENDER_SCALE` 默认 1 时不生成这两个阶段，默认画面不变。第四节表格与 `docs/rendering.md` 已同步补记。
+52. 合成五号三个维度分支合并为一个流程（内部结构，不改画面）：`effects/world/composite_scene.glsl` 原按维度写三份 `CompositeSceneColor`（对应 `composite5.fsh`、`world-1/composite5.fsh`、`world1/composite5.fsh`），三份几乎相同。现只保留一份流程，共用的表面读取与输出编码抽成 `SceneReadSurface`、`SceneWriteOutput`，只在折射函数、彩色玻璃吸收、雾函数、水吸收、透明通道与镜头光斑这几处按 `OMNI_NETHER`/`OMNI_END` 分派；各维度原程序里不同的值（远裁剪面系数、按掩码还是按深度判天空、下界输出写半透明深度）逐处照原程序保留，画面与合并前一致。
+53. 泛光、时间抗锯齿与全局光从「效果文件加程序体文件」合回一个文件（`dev.160`，内部结构，不改画面）：`effects/color/bloom.glsl` 并入原 `post_bloom.glsl` 的五级泛光链、`effects/clarity/antialiasing.glsl` 并入原 `post_taa.glsl` 的合成七号主体 `WriteTaaHistory`、`effects/lighting/ambient.glsl` 并入原 `globalillumination.glsl` 的延迟二号与四号主体 `RenderGISpatialFilter`，各自沿用原程序宏隔开；`rendering/post.glsl` 与 `rendering/deferred.glsl` 去掉对应单独引入。算法、常数、选项与缓冲编号不变。
+54. 长文件按效果拆分（内部结构，不改画面）：`effects/sky/sky.glsl`（原 728 行）拆成入口 `sky.glsl` 加 `atmosphere_model.glsl`（预计算大气与天空辐射）、
     `sun_moon.glsl`（日月圆盘）、`moon_orbit.glsl`（月亮轨道、月食与月相）、`stars.glsl`（星场）、`skybox.glsl`（天空盒投影）；
     `effects/cloud/cloud.glsl`（原 638 行）拆成入口 `cloud.glsl` 加 `volumetric.glsl`（体积云、附加层与低分辨率云总图，含 `CloudShadowTex`）、
     `planar.glsl`（平面云）、`shadow.glsl`（云影贴图与模糊）。入口集中定义本效果的全部选项，分文件按同一顺序引入。
     体积云与平面云只在能读三维云噪声的延迟三号、七号、八号参与编译，这个判据收成 `OMNI_CLOUD_DENSITY_PASS` 一处定义、两个文件各自按它开关；
     选项名、默认值与菜单分组不变（生成菜单逐字节一致），`#include` 语义与拆分前逐段一致，默认画面与算法不变。
-
-51. 十号画面新增为低分辨率体积云缓冲（Eclipse `VL_RENDER_SCALE` 的近似合并，`dev.146`）：iterationT 只用零到八号，Omni 九号已给程序化草；本轮为 `OMNI_CLOUD_RENDER_SCALE` 大于一时新增十号 `RGBA16`、尺寸 0.5 或 0.25、每帧清除，登记在 `rendering/buffers.glsl:57` 与 `:78`。低分辨率基础体积云搬进独立阶段 `deferred7`（写十号）与 `deferred8`（读十号放大回一号），平面云与附加层仍在全分辨率合成；`OMNI_CLOUD_RENDER_SCALE` 默认 1 时不生成这两个阶段，默认画面不变。第四节表格与 `docs/rendering.md` 已同步补记。
-52. 合成五号三个维度分支合并为一个流程（内部结构，不改画面）：`effects/world/composite_scene.glsl` 原按维度写三份 `CompositeSceneColor`（对应 `composite5.fsh`、`world-1/composite5.fsh`、`world1/composite5.fsh`），三份几乎相同。现只保留一份流程，共用的表面读取与输出编码抽成 `SceneReadSurface`、`SceneWriteOutput`，只在折射函数、彩色玻璃吸收、雾函数、水吸收、透明通道与镜头光斑这几处按 `OMNI_NETHER`/`OMNI_END` 分派；各维度原程序里不同的值（远裁剪面系数、按掩码还是按深度判天空、下界输出写半透明深度）逐处照原程序保留，画面与合并前一致。
-53. 泛光、时间抗锯齿与全局光从「效果文件加程序体文件」合回一个文件（`dev.160`，内部结构，不改画面）：`effects/color/bloom.glsl` 并入原 `post_bloom.glsl` 的五级泛光链、`effects/clarity/antialiasing.glsl` 并入原 `post_taa.glsl` 的合成七号主体 `WriteTaaHistory`、`effects/lighting/ambient.glsl` 并入原 `globalillumination.glsl` 的延迟二号与四号主体 `RenderGISpatialFilter`，各自沿用原程序宏隔开；`rendering/post.glsl` 与 `rendering/deferred.glsl` 去掉对应单独引入。算法、常数、选项与缓冲编号不变。
+55. 长文件按效果二次拆分（`dev.165`，内部结构，不改画面）：`effects/reflection/reflection.glsl`（原 619 行）拆成入口加 `screenspace.glsl`（屏幕空间追踪、GGX 与反射颜色）、`denoise.glsl`（反射小波滤波）；
+    `effects/water/water.glsl`（原 588 行）拆成入口加 `waves.glsl`（水面波浪）、`rain.glsl`（雨纹）、`waterfog.glsl`（水雾）、`refraction.glsl`（水下折射与彩色透明吸收）；
+    `effects/clarity/antialiasing.glsl`（原 556 行）拆成入口加 `taa.glsl`（时间抗锯齿主体）、`fxaa.glsl`（`FXAA`）；
+    `effects/lighting/ambient.glsl`（原 538 行）拆成入口加 `gi.glsl`（全局光反弹与时空滤波）、`gtao.glsl`（地平线遮蔽与多弹射）；
+    `effects/shadow/shadow.glsl`（原 463 行）拆成入口加 `screen_shadow.glsl`（屏幕空间阴影）、`water_caustics.glsl`（水体焦散与波法线）；
+    `effects/lens/lens.glsl`（原 457 行）拆成入口加 `dof.glsl`（景深）、`glare.glsl`（眩光与镜头光斑）、`motion_blur.glsl`（运动模糊）；
+    `effects/lighting/blocklight.glsl`（原 457 行）拆成入口加 `held_light.glsl`（手持光与投影手电）。
+    入口集中定义本效果的全部选项与内部常数，算法文件按同一顺序引入，函数、宏、常数与注释未改名或重排；`#include` 语义与拆分前逐段一致，展开后可编译代码逐字相同，默认画面与算法不变。
+    本文件与 `docs/eclipse-parity.md` 中受影响的行号引用已按拆分后的文件同步刷新。
 
 ### 已裁决：旧选项的处置（2026-10-16）
 
@@ -442,3 +437,16 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 并入（Eclipse 合并，属接口变更）：`OMNI_WHITE_BALANCE`（`effects/color/color.glsl`）。旧 Omni 的 -1–1 染色取值不再合法；现为 1000–50000 的黑体色温，默认 6500 中性。旧配置里的 `OMNI_WHITE_BALANCE=0.2` 之类小数会被判非法，需要迁移到色温取值。
 
 保留为内部常数、不开放菜单（iterationT 本身就不把它当玩家选项）：`MAIN_OUTPUT_FACTOR`、`EXPOSURE_OUTPUT_FACTOR`、`MATID_*`、`ATMO_MIN_ALTITUDE`、`ATMO_SKYBOX_MIN_ALTITUDE`、`VFOG_SUNLIGHT_STEPS`、`VFOG_SUNLIGHT_STEPLENGTH`、`TAA_*`、`AE_CLAMP`、`WATER_REFRACT_IOR`、`CAUSTICS_TEX_RESOLUTION`、`ANIMATION_SPEED`。
+
+## 十三、给子任务的工作方式
+
+每个子任务开工前先读：HOP 技能（`C:\Users\17137\.config\opencode\skills\hop\SKILL.md`）、`AGENTS.md`、本文件全文。
+
+- 只改分片表里分给你的文件，别的文件一个字不动。
+- 数学、常数、分支、采样、顺序照 iterationT 原程序逐行对照写；函数名、结构体名、全局量、输入输出变量名保持原名（只修 `Temproal` → `Temporal`、`Soild` → `Solid` 这类拼写）。
+- 每个文件按第八节规则写：文件头讲清职责、调用位置、可复制示例、关键取舍；用 `#ifndef OMNI_<文件名>_INCLUDED` 守卫；选项用 `// @option` 加 `#define OMNI_X`（或合同允许的原生常量）；至少一半非空行有中文说明，英文术语放反引号。
+- 绘制主体按第九节“地基接口”的引入顺序写；效果文件用 `#include "/common/..."` 与 `#include "/effects/..."` 引依赖，不写 `#version`。
+- 每个效果文件的函数调用前要确认依赖它的全局量已由调用方声明（例如 `texelCoord`、`colorShadowlight`），在文件头写清调用前提。
+- 验证只用 `python build.py audit`（检查中文说明比例与格式）。**不要**运行 `python build.py verify`、`check`、`generate`、`build`：其它分片还没写完，编译必然失败，那不是你的错误。
+- 不要 `git commit`、`git add`、`git push`、切分支。
+- 回报只写：改了哪些文件、每个文件对照的 iterationT 来源、用到的选项与内部常数、没做或存疑的地方。不要贴大段代码。
