@@ -291,7 +291,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 4. `shaders.properties` 笔误：iterationT 原文 `program.world-1/program.composite9.enabled` 重复写了 `program.`，本移植修正为 `program.world-1/composite9.enabled`。
 5. 大贴图压缩：`build.py` 打包时对 `.png`、`.bin` 用 `ZIP_STORED` 直接存放，九级压缩几十兆贴图要好几秒且几乎没有收益，会突破十秒检查预算。
 6. `block.properties`、`entity.properties`、`item.properties` 与生成的 `shaders.properties` 加入审计的机器文件豁免：它们是逐行可对照的编号数据，不写中文说明。
-7. 移植期开关（已删除）：移植期 `build.py` 有 `PORTING` 开关，让编译失败一次显示最多 400 条错误；现已删除，固定只报前五条（`build.py:549`）。选项接线始终是全树硬检查 `check_option_wiring`（`build.py:259`），发现未接线直接报错。
+7. 移植期开关（已删除）：移植期 `build.py` 有 `PORTING` 开关，让编译失败一次显示最多 400 条错误；现已删除，固定只报前五条（`build.py:570`）。选项接线始终是全树硬检查 `check_option_wiring`（`build.py:274`）：先去掉源码里的行注释与块注释、再跳过每个选项自己的原生声明行，名字只有作为独立词留在代码或加载器设置（`rendering/pipeline.properties`）里才算接入；加载器原生常量选项（`const`）由运行环境按合同读取，单独放行。发现未接线直接报错。
 8. 旧管线测试跳过（已解决）：早期 `tests/` 里断言旧管线算法与缓冲的测试曾用 `@unittest.skip(PORT_REPLACED)` 标记；现已按新管线全部重写，`verify` 实跑 120 个测试、0 跳过。
 9. 旧算法专用选项的处置（由主助手统一裁决，分片只登记不擅自删除）：iterationT 用预计算大气贴图，旧 Omni 那种“实时积分步数/散射倍率”参数在新算法里没有对应含义。这类选项一律登记到本节清单，由主助手在庚片决定“并入同名迭代T选项 / 保留为中性额外功能 / 作为接口变更移除并写迁移说明”，不在分片里悄悄删除。
 10. 强光压缩选项表示（戊片）：iterationT `TONEMAP_OPERATOR` 是函数名取值的宏（`AgX`/`ACES`/`None`），而 `options.py` 只接受数字取值，所以 Omni 把它定义为序号 `0`/`1`/`2`，档位名称映射回 `AgX`/`ACES`/无，绘制主体用 `#if OMNI_TONEMAP_OPERATOR == 1` 分派。行为和默认值（`AgX`）与原程序一致，只改表示形式。

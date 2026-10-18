@@ -256,24 +256,42 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
     return entries  # 下游链接真实入口。
 
 # --- 选项接线：全树检查一次，和编译探针范围无关 ---
+GLSL_COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)  # 块注释与行注释一次匹配，交错时不会互相误吃。
+PROPERTIES_COMMENT = re.compile(r"(?m)^(?![ \t]*#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include)\b)[ \t]*#.*$")  # 加载器设置的注释行；`#if` 等条件指令是真实接线，保留。
+
+def _code_only(text: str, properties: bool = False) -> str:
+    """去掉源码注释只留代码，并用空格占位以维持原行号。
+
+    接线检查要在真正的代码里找选项名，说明文字里出现同名不算使用。
+    为什么用单条正则一次匹配：行注释里可能出现 `/*`，块注释里也可能出现 `//`，
+    分两步删会把另一种注释里的真实代码一起吃掉。加载器设置另有 `#` 注释，用第二条正则单独处理。
+    """
+    text = GLSL_COMMENT.sub(lambda match: re.sub(r"[^\n]", " ", match[0]), text)  # 注释内容换成空白，换行留在原处。
+    if properties:  # 加载器设置的注释以 `#` 开头，条件指令除外。
+        text = PROPERTIES_COMMENT.sub("", text)  # 注释行删空，换行不删以保持行号。
+    return text
+
 def check_option_wiring(found: dict) -> None:
-    """检查每个选项是否真的被某段代码使用，而不只是被声明。
+    """检查每个选项是否真的被某段代码使用，而不只是被声明或在说明里提到。
 
     为什么不用“入口展开文本”：常规验证只编一小批程序，用它判断接线会把只在合成或延迟里
-    使用的选项误报成未接线。这里直接扫全部光影源码：去掉每个选项自己的声明行与 `@option`
-    说明行之后，只要名字还出现在别处，就说明它参与了计算。
+    使用的选项误报成未接线。这里直接扫全部光影源码与加载器设置：先去注释，再跳过每个选项
+    自己的原生声明行；只有名字作为独立词留在真正的代码里，才算接入了计算。
+    为什么放行加载器原生常量：`const` 选项（如 `sunPathRotation`）由运行环境按合同直接读取，
+    不要求在 GLSL 里再出现一次，硬要求会出现假报错。
     """
     files = list(SHADERS.rglob("*.glsl")) + list(SHADERS.rglob("*.vsh")) + list(SHADERS.rglob("*.fsh")) + list(SHADERS.rglob("*.gsh")) + list(SHADERS.rglob("*.csh"))
+    settings = SHADERS / "rendering/pipeline.properties"  # 加载器按选项开关程序，同样是真实接线。
+    declarations: dict[Path, set[int]] = {}  # 每份源码里选项自身声明所在行，逐行跳过。
+    for option in found.values():
+        declarations.setdefault(option.source, set()).add(option.line)  # 声明行只跳自己那行，不影响同名在别处出现。
     bodies = []
-    for path in files:
-        kept = []
-        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-            if re.match(r"\s*(?://\s*)?#define\s+", line) or "@option" in line:
-                continue  # 声明行与菜单说明不算使用。
-            kept.append(line)
-        bodies.append("\n".join(kept))
+    for path in files + [settings]:
+        text = _code_only(path.read_text(encoding="utf-8", errors="replace"), path.suffix == ".properties")  # 说明文字里的名字不参与分词。
+        skip = declarations.get(path, set())  # 加载器设置里没有选项声明，跳过集为空。
+        bodies.append("\n".join(line for number, line in enumerate(text.splitlines(), 1) if number not in skip))  # 声明行本身不算使用。
     words = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", "\n".join(bodies)))  # 一次分词成集合，逐个正则搜索几兆文本要多花好几秒。
-    unused = [name for name in found if name not in words]  # 选项名必须在某段代码里作为独立词出现。
+    unused = [name for name, option in found.items() if option.declaration == "define" and name not in words]  # 只有宏选项必须在代码里作为独立词出现。
     if unused:
         raise ValueError("选项没有接入任何计算：" + "、".join(unused[:5]))
 

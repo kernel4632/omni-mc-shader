@@ -17,6 +17,7 @@ from unittest.mock import patch  # 隔离开发目录，真实编译器仍照常
 import build  # 真实构建主体作为被测对象。
 import dev  # 下载和解压边界直接测试。
 import options  # 原生定义与预设扫描直接测试。
+import support  # 复用真实选项扫描结果，不重复读整棵效果树。
 
 
 class BuildTests(unittest.TestCase):
@@ -250,6 +251,84 @@ class OptionTests(unittest.TestCase):
                     source.write_text(label + content, encoding="utf-8")
                     with self.assertRaises(ValueError):  # 不默默丢弃错误键值。
                         options.presets(presets, found)
+
+
+class OptionWiringTests(unittest.TestCase):
+    """验证选项接线硬检查：只有真正的代码使用才算接入。"""
+
+    def effect(self, folder, definition, body="", settings="# 空设置\n"):
+        """在临时光影目录写一个效果文件与加载器设置，返回扫描到的选项。
+
+        `definition` 是选项的原生声明，`body` 是效果文件里的其余代码与注释，
+        `settings` 是 `rendering/pipeline.properties` 的内容。声明来源与行号直接来自真实扫描。
+        """
+        (folder / "effects").mkdir(parents=True, exist_ok=True)  # 效果文件放在 `effects/` 下。
+        (folder / "rendering").mkdir(parents=True, exist_ok=True)  # 加载器设置放在 `rendering/` 下。
+        (folder / "rendering/pipeline.properties").write_text(settings, encoding="utf-8")  # 加载器设置也参与接线检查。
+        labels = json.dumps({"label": {"zh_cn": "测试", "en_us": "Test"}})  # 两种语言同时提供。
+        (folder / "effects/test.glsl").write_text(
+            f"// @effect {labels}\n// @option {labels}\n{definition}\n{body}\n", encoding="utf-8")
+        found, _ = options.scan(folder)  # 用真实扫描，声明行与来源都来自源码。
+        return found
+
+    def check(self, folder, found):
+        """把检查指向临时目录，不读项目源码。"""
+        with patch.object(build, "SHADERS", folder):  # 被测函数只依赖模块级光影目录。
+            build.check_option_wiring(found)
+
+    def test_comment_mention_is_not_wiring(self):
+        """名字只出现在行注释与块注释里，不算接入任何计算。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)  # 不触碰项目源码。
+            found = self.effect(folder, "#define TEST_LEVEL 1 // [1 2]",
+                                "// 这里提到 TEST_LEVEL 只是说明。\n/* 块注释里的 TEST_LEVEL 同样不算。 */")
+            with self.assertRaisesRegex(ValueError, "没有接入"):  # 收紧后注释不再被当成接线。
+                self.check(folder, found)
+
+    def test_declaration_line_alone_is_not_wiring(self):
+        """只有声明行、没有任何使用，也算未接线。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)  # 声明行必须在计数里被跳掉。
+            found = self.effect(folder, "#define TEST_LEVEL 1 // [1 2]", "")  # 效果文件里没有其它代码。
+            with self.assertRaisesRegex(ValueError, "没有接入"):
+                self.check(folder, found)
+
+    def test_real_code_use_passes(self):
+        """名字在代码里被真正使用就通过。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)  # 唯一区别是使用出现的位置在代码里。
+            found = self.effect(folder, "#define TEST_LEVEL 1 // [1 2]", "float level = float(TEST_LEVEL);")
+            self.check(folder, found)  # 不应抛出。
+
+    def test_loader_setting_counts_as_wiring(self):
+        """加载器按选项开关程序也算接线。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)  # 效果文件里没有使用，接线只在加载器设置里。
+            found = self.effect(folder, "#define TEST_LEVEL 1 // [1 2]", "",
+                                "program.world0/probe.enabled = TEST_LEVEL\n")
+            self.check(folder, found)  # 加载器设置里的名字是真实接线。
+
+    def test_loader_comment_is_not_wiring(self):
+        """加载器设置注释里的名字不算接线。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)  # 只把名字写进加载器设置的说明文字。
+            found = self.effect(folder, "#define TEST_LEVEL 1 // [1 2]", "",
+                                "# 这里提到 TEST_LEVEL 只是说明。\n")
+            with self.assertRaisesRegex(ValueError, "没有接入"):
+                self.check(folder, found)
+
+    def test_loader_native_const_is_exempt(self):
+        """加载器原生常量由运行环境读取，不要求在 GLSL 里出现。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)  # 常量在源码里没有任何使用。
+            found = self.effect(folder, "const float sunPathRotation = -30.0; // [-60.0 -30.0 0.0 30.0]", "",
+                                "# 这里完全没提到该常量。\n")
+            self.check(folder, found)  # 加载器认识的常量选项放行。
+
+    def test_project_options_are_all_wired(self):
+        """项目真实选项全部通过收紧后的检查，防止收紧后误报。"""
+        found, _, _ = support.configuration()  # 复用真实扫描结果。
+        build.check_option_wiring(found)  # 不应抛出。
 
 
 if __name__ == "__main__":
