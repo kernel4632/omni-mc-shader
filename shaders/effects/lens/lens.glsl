@@ -79,7 +79,7 @@
 // @option {"label": {"zh_cn": "按阴影遮挡减弱眩光", "en_us": "Shadow Based Glare"}, "description": {"zh_cn": "太阳被阴影挡住时让眩光一并减弱。", "en_us": "Fades the glare when the sun is shadowed."}}
 //#define OMNI_GLARE_FLARE_SHADOWBASED
 // @option {"label": {"zh_cn": "相机动态模糊", "en_us": "Motion Blur"}, "description": {"zh_cn": "相机移动时画面沿运动方向拖出残影。", "en_us": "Smears the image along camera motion."}}
-#define OMNI_MOTION_BLUR 1 // [0 1]
+#define OMNI_MOTION_BLUR 0 // [0 1]
 // @option {"label": {"zh_cn": "动态模糊抖动", "en_us": "Motion Blur Dither"}, "description": {"zh_cn": "给动态模糊采样加抖动，减少采样不足产生的条纹。", "en_us": "Dithers the motion blur samples to reduce banding."}}
 #define OMNI_MOTION_BLUR_DITHER 1 // [0 1]
 // @option {"label": {"zh_cn": "动态模糊采样数", "en_us": "Motion Blur Quality"}, "slider": true, "description": {"zh_cn": "沿运动方向取多少个样本，越高越顺滑。", "en_us": "Samples along the motion direction; higher is smoother."}}
