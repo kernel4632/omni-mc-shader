@@ -73,7 +73,7 @@ float ScreenDepth_From_LinearDepth(float depth){
 
 	// 远景版的屏幕到视空间，远景裁剪面不同，必须用远景逆投影。
 	vec3 ViewPos_From_ScreenPos_DH(vec2 coord, float depth){
-		#if defined(OMNI_TAA) && defined(OMNI_DH_TAA_JITTER) // 远景顶点抖过才撤销；关掉远景抖动时远景像素本就落在真实位置。
+		#if defined(OMNI_TAA) && OMNI_DH_TAA_JITTER // 远景顶点抖过才撤销；关掉远景抖动时远景像素本就落在真实位置。
 			coord -= taaJitter * 0.5; // 撤销本帧抖动。
 		#endif
 		vec3 ndcPos = vec3(coord, depth) * 2.0 - 1.0; // 零到一转到负一到一。

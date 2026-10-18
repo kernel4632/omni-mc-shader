@@ -210,7 +210,7 @@ class OptionTests(unittest.TestCase):
             self.assertEqual(found["TEST_LEVEL"].default, "2")  # 不能取范围首值代替默认。
             self.write_effect(folder, "//#define TEST_ENABLED")
             found, _ = options.scan(folder)  # 注释开关是原生关闭语义。
-            self.assertEqual(found["TEST_ENABLED"].default, "false")  # 关闭不能生成启用预设。
+            self.assertIn(found["TEST_ENABLED"].default, ("false", "0"))  # 关闭不能生成启用预设。
             self.assertEqual(options.profile_values({"TEST_ENABLED": "false"}, found), "!TEST_ENABLED")  # 关闭语义必须传到加载器。
 
     def test_invalid_options_are_rejected(self):

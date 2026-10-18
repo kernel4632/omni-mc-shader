@@ -11,14 +11,14 @@
 #define OMNI_POST_MOTIONBLUR_INCLUDED // 置上标记，后续再次引用直接跳过。
 
 vec3 MotionBlurSceneColor(){
-	#ifdef OMNI_MOTION_BLUR // 开启动态模糊时按相机位移沿快门方向平均。
+	#if OMNI_MOTION_BLUR // 开启动态模糊时按相机位移沿快门方向平均。
 		vec3 color = MotionBlur(); // 返回模糊后的线性颜色。
 	#else // 关闭时原样取历史画面。
 		vec3 color = CurveToLinear(texelFetch(colortex7, texelCoord, 0).rgb); // 读七号画面线性颜色。
 	#endif
 
 	#ifdef OMNI_OVERWORLD // 主世界把镜头光斑叠回场景。
-		#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE // 只在开了眩光或光斑时。
+		#if OMNI_LENS_GLARE || OMNI_LENS_FLARE // 只在开了眩光或光斑时。
 			color += CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb) * eyeBrightnessSmoothCurved; // 三号画面的光斑按天空光衰减叠加。
 		#endif
 	#endif

@@ -9,7 +9,7 @@
 #define OMNI_LENS_GLARE_INCLUDED // 置上标记，后续再次引用直接跳过。
 // --- 镜头眩光与光斑 ---
 // 只在开启眩光或光斑时编译这一段。
-#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE
+#if OMNI_LENS_GLARE || OMNI_LENS_FLARE
 	#define ORB_FLARE_COUNT	6.0 // 一组鬼影包含几个圆形光斑。
 	#define DISTORTION_BARREL 1.0 // 桶形畸变强度，让鬼影沿弧线排布。
 
@@ -64,7 +64,7 @@
 		coord.x *= aspectRatio; // 按宽高比修正成圆。
 		sunPos.x *= aspectRatio; // 太阳位置同样修正。
 		float fovFactor = max(gbufferProjection[1][1], 2.0); // 由投影矩阵估计视场，给一个下限。
-		#ifdef OMNI_LENS_GLARE // 眩光：沿光线方向拉出细长亮纹。
+		#if OMNI_LENS_GLARE // 眩光：沿光线方向拉出细长亮纹。
 			vec2 v = coord - sunPos; // 当前点到太阳的方向。
 			float dist = length(v); // 距离。
 			float gDist = dist * 13.0 / fovFactor; // 按视场归一化。
@@ -76,7 +76,7 @@
 			gl = min(gl, 200.0); // 设上限避免过亮。
 			lf += vec3(gl * OMNI_GLARE_BRIGHTNESS); // 按眩光亮度累加。
 		#endif
-		#ifdef OMNI_LENS_FLARE // 光斑：一组鬼影、两个光环和若干散点。
+		#if OMNI_LENS_FLARE // 光斑：一组鬼影、两个光环和若干散点。
 			float size = 0.5 * fovFactor; // 光斑整体大小。
 			vec3 fl = vec3(0.0); // 光斑累加。
 			fl += orb(coord, sunPos, 0.0, size * 0.01) * 0.1; // 圆形鬼影。

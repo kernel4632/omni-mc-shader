@@ -232,7 +232,7 @@ void main(){
 	gbufferOutput5 = vec4(0.0, 0.0, (materialIDs + 0.1) / 255.0, Pack2x8(vec2(0.0, 1.0))); // 五号只写材质编号，视差阴影记为一。
 }
 #elif defined OMNI_FRAGMENT && defined OMNI_LINE_PASS // 线条片元着色器。
-#if defined OMNI_LINE_IMAGE_OUTPUT // 图像输出模式：命中像素直接写画面，不写深度。
+#if OMNI_LINE_IMAGE_OUTPUT // 图像输出模式：命中像素直接写画面，不写深度。
 /* DRAWBUFFERS:0 */
 layout(location = 0) out vec4 gbufferOutput0; // 零号，本模式实际不用，只为满足声明。
 

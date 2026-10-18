@@ -23,7 +23,7 @@
 #define OMNI_CLOUD_INCLUDED
 // @effect {"label":{"zh_cn":"云","en_us":"Clouds"}}
 // @option {"label":{"zh_cn":"平面云","en_us":"Planar Clouds"},"description":{"zh_cn":"把云画在一层固定高度的平面上，便宜且连续。","en_us":"Draws the clouds on one fixed-altitude sheet; cheap and continuous."}}
-#define OMNI_PLANAR_CLOUDS
+#define OMNI_PLANAR_CLOUDS 1 // [0 1]
 // @option {"label":{"zh_cn":"平面云量","en_us":"Planar Cloud Coverage"},"description":{"zh_cn":"平面云铺满天空的程度。","en_us":"How much the planar clouds cover the sky."},"slider":true}
 #define OMNI_PLANAR_COVERAGE 0.5 // [0.3 0.32 0.34 0.36 0.38 0.4 0.42 0.44 0.46 0.48 0.5 0.52 0.54 0.56 0.58 0.6 0.62 0.64 0.66 0.68 0.7 0.72 0.74 0.76 0.78 0.8 0.82 0.84 0.86 0.88 0.9]
 // @option {"label":{"zh_cn":"平面云噪声尺度","en_us":"Planar Cloud Noise Scale"},"description":{"zh_cn":"平面云块的大小，越大云块越小越碎。","en_us":"Planar cloud block size; larger is smaller and more broken."},"slider":true}
@@ -84,7 +84,7 @@
 // @option {"label":{"zh_cn":"云量噪声偏移","en_us":"Cloud Coverage Noise Offset"},"description":{"zh_cn":"云量在噪声里的偏移，改变云块的整体分布。","en_us":"Offsets the coverage noise, changing the overall cloud layout."},"slider":true}
 #define OMNI_CLOUD_COVERAGE_NOISE_OFFSET 0.68 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99]
 // @option {"label":{"zh_cn":"云远距淡出","en_us":"Cloud Fade"},"description":{"zh_cn":"远处云逐渐融进天空，避免出现硬边。","en_us":"Fades distant clouds into the sky to avoid hard edges."}}
-#define OMNI_CLOUD_FADE
+#define OMNI_CLOUD_FADE 1 // [0 1]
 // @option {"label":{"zh_cn":"云速","en_us":"Cloud Speed"},"description":{"zh_cn":"云飘动的快慢。","en_us":"How fast the clouds drift."},"slider":true}
 #define OMNI_CLOUD_SPEED 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0 3.0 4.0 5.0 7.5 10.0 15.0 20.0 30.0 40.0 50.0 75.0 100.0]
 // @option {"label":{"zh_cn":"云时间偏移","en_us":"Cloud Time Offset"},"description":{"zh_cn":"给云和平面云的飘动时间加一个固定偏移，用来错开云的位置；不改变飘动速度。","en_us":"Offsets the cloud drift time by a fixed amount to shift their position; does not change speed."},"slider":true}
@@ -92,7 +92,7 @@
 // @option {"label":{"zh_cn":"云影","en_us":"Cloud Shadow"},"description":{"zh_cn":"云在地上投下阴影。","en_us":"Clouds cast shadows on the ground."}}
 #define OMNI_CLOUD_SHADOW
 // @option {"label":{"zh_cn":"云影淡出","en_us":"Cloud Shadow Fade"},"description":{"zh_cn":"太阳贴近地平线时让云影变淡，避免阴影拉得过长。","en_us":"Fades cloud shadows as the sun nears the horizon."}}
-#define OMNI_CLOUD_SHADOW_FADE
+#define OMNI_CLOUD_SHADOW_FADE 1 // [0 1]
 // @option {"label":{"zh_cn":"云影范围","en_us":"Cloud Shadow Range"},"description":{"zh_cn":"云影贴图覆盖的地表范围，单位方块。","en_us":"Ground area covered by the cloud shadow texture, in blocks."}}
 #define OMNI_CLOUD_SHADOW_RANGE 4096.0 // [2048.0 3072.0 4096.0 6144.0 8192.0 12288.0 16384.0]
 // @option {"label":{"zh_cn":"云影贴图尺寸","en_us":"Cloud Shadow Texture Size"},"description":{"zh_cn":"云影贴图的边长上限，越大云影越细。","en_us":"Side length cap of the cloud shadow texture; higher is finer."},"slider":true}
@@ -102,7 +102,7 @@
 // 下面是合并 Eclipse 多层云新增的附加层选项：卷云、高层云与积雨云。附加层默认全部关闭，
 // 关闭时下面的采样与光照整段不参与编译，默认画面与只有基础云时完全一致。
 // @option {"label":{"zh_cn":"卷云层","en_us":"Cirrus Layer"},"description":{"zh_cn":"在最高处加一层薄卷云；附加层默认关闭，关闭时不产生任何采样。","en_us":"Adds a thin cirrus sheet at the top; off by default and adds no sampling when off."}}
-//#define OMNI_CLOUD_CIRRUS
+#define OMNI_CLOUD_CIRRUS 0 // [0 1]
 // @option {"label":{"zh_cn":"卷云高度","en_us":"Cirrus Altitude"},"description":{"zh_cn":"卷云层底部高度，单位方块，取值照 Eclipse 的卷云高度。","en_us":"Base altitude of the cirrus in blocks; value from Eclipse."}}
 #define OMNI_CLOUD_CIRRUS_ALTITUDE 7000.0 // [3000.0 4000.0 5000.0 6000.0 7000.0 8000.0 9000.0 10000.0]
 // @option {"label":{"zh_cn":"卷云厚度","en_us":"Cirrus Thickness"},"description":{"zh_cn":"卷云层厚度，单位方块；Eclipse 把卷云当成薄面，这里体积步进需要一点厚度。","en_us":"Thickness of the cirrus in blocks; Eclipse treats it as a thin sheet, our volumetric march needs some thickness."}}
@@ -118,7 +118,7 @@
 // @option {"label":{"zh_cn":"卷云天光","en_us":"Cirrus Skylighting"},"description":{"zh_cn":"卷云受的环境光强度；同受光一样是补的可调值。","en_us":"Ambient light strength on the cirrus; an added knob like the sunlighting."},"slider":true}
 #define OMNI_CLOUD_CIRRUS_SKYLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label":{"zh_cn":"高层云层","en_us":"Altostratus Layer"},"description":{"zh_cn":"在中等高度加一层较平的高层云；默认关闭，关闭时不产生采样。","en_us":"Adds a flatter altostratus sheet at mid altitude; off by default."}}
-//#define OMNI_CLOUD_ALTOSTRATUS
+#define OMNI_CLOUD_ALTOSTRATUS 0 // [0 1]
 // @option {"label":{"zh_cn":"高层云高度","en_us":"Altostratus Altitude"},"description":{"zh_cn":"高层云层底部高度，单位方块，取值照 Eclipse 的高层云高度。","en_us":"Base altitude of the altostratus in blocks; value from Eclipse."}}
 #define OMNI_CLOUD_ALTOSTRATUS_ALTITUDE 5000.0 // [2000.0 2500.0 3000.0 3500.0 4000.0 4500.0 5000.0 5500.0 6000.0 6500.0 7000.0]
 // @option {"label":{"zh_cn":"高层云厚度","en_us":"Altostratus Thickness"},"description":{"zh_cn":"高层云层厚度，单位方块；Eclipse 把它当成薄面，这里步进需要一点厚度。","en_us":"Thickness of the altostratus in blocks; Eclipse treats it as a thin sheet."}}
@@ -150,7 +150,7 @@
 // @option {"label":{"zh_cn":"积雨云天光","en_us":"Cumulonimbus Skylighting"},"description":{"zh_cn":"积雨云受的环境光强度；同受光一样是补的可调值。","en_us":"Ambient light strength on the cumulonimbus; an added knob."},"slider":true}
 #define OMNI_CLOUD_CUMULONIMBUS_SKYLIGHTING 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label":{"zh_cn":"积雨云内闪电","en_us":"Cumulonimbus Lightning"},"description":{"zh_cn":"积雨云内部被真实闪电照亮；需要同时打开积雨云层与闪电照明，关闭时无任何计算。","en_us":"Lights the cumulonimbus from real lightning; requires both the cumulonimbus layer and lightning illumination."}}
-//#define OMNI_CUMULONIMBUS_LIGHTNING
+#define OMNI_CUMULONIMBUS_LIGHTNING 0 // [0 1]
 // @option {"label":{"zh_cn":"积雨云闪电亮度","en_us":"Cumulonimbus Lightning Brightness"},"description":{"zh_cn":"积雨云内闪电多亮，取值照 Eclipse 的闪电亮度。","en_us":"How bright the cumulonimbus lightning is; value from Eclipse."},"slider":true}
 #define OMNI_CUMULONIMBUS_LIGHTNING_BRIGHTNESS 100.0 // [25.0 50.0 75.0 100.0 125.0 150.0 200.0]
 // 云的算法依赖大气透视与共用数学，显式引入而不依赖调用顺序。

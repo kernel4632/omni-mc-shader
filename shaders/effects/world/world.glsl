@@ -24,7 +24,7 @@
 #define OMNI_WORLD_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"远景","en_us":"Distance"}}
 // @option {"label":{"zh_cn":"远景地形剔除","en_us":"Terrain Culling"},"description":{"zh_cn":"剔除靠近玩家的远景区块，减少和正常区块的混叠；可能让地形出现空缺。","en_us":"Culls distant chunks near the player to reduce overlap with normal chunks; may leave gaps."}}
-#define OMNI_DH_TERRAIN_CULLING
+#define OMNI_DH_TERRAIN_CULLING 1 // [0 1]
 // @option {"label":{"zh_cn":"远景纹理噪声","en_us":"Apply Texture Noise"},"description":{"zh_cn":"给远景表面加逐块噪声，打散纹理感。","en_us":"Adds per-block noise to distant surfaces to break up the texture."}}
 #define OMNI_DH_TEXTURE_NOISE
 // @option {"label":{"zh_cn":"噪声缩放","en_us":"Noise Scale"},"description":{"zh_cn":"噪声网格的密度，越大噪声越细。","en_us":"Density of the noise grid; higher is finer."},"slider":true}
@@ -42,7 +42,7 @@
 // 远景地形剔除：太近的远景区块与正常区块重叠，直接丢弃，避免两层地形互相闪烁。
 // 调用前提：`far` 已由加载器输入声明。
 void DHTerrainCulling(vec3 viewPos){
-	#ifdef OMNI_DH_TERRAIN_CULLING // 关闭时不剔除。
+	#if OMNI_DH_TERRAIN_CULLING // 关闭时不剔除。
 		if (length(viewPos) < far * 0.7) discard; // 距离小于远景距离的七成就丢掉。
 	#endif
 }

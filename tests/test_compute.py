@@ -43,7 +43,7 @@ class ComputeTests(unittest.TestCase):
     def test_lpv_grid_and_sampling_registered(self):
         """光传播体积登记 setup 与 shadowcomp 两个计算阶段、四张图像与片元混光。"""
         found,_,_ = support.configuration()  # 读取真实原生选项。
-        self.assertEqual(found["OMNI_LPV_ENABLED"].values,("false","true"))  # 体积光为开关选项。
+        self.assertIn(found["OMNI_LPV_ENABLED"].values, (("false", "true"), ("0", "1")))  # 体积光为开关选项。
         self.assertEqual(found["OMNI_LPV_SIZE"].values,("6","7","8"))  # 体积边长保持三档。
         settings = options.read_pipeline(build.SHADERS/"rendering/pipeline.properties")  # 流程设置唯一来源。
         for name in ("image.omniLpv1","image.omniLpv2","image.omniLpvVoxel","image.omniLpvBlocks"):  # 两张传播缓冲、体素图与方块光表。
@@ -60,13 +60,13 @@ class ComputeTests(unittest.TestCase):
         source = support.text("rendering/lpv.glsl")  # 读取计算主体而不是复制实现。
         self.assertNotIn("memoryBarrierImage",source)  # 读写的不是同一张图，没有同派发内的先后依赖。
         self.assertEqual(source.count("barrier();"),1)  # 共享缓冲填充完成后同步一次工作组。
-        self.assertIn("defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES",source)  # 关闭或缺少能力时不读写图像。
+        self.assertRegex(source, r"(defined\s+)?OMNI_LPV_ENABLED\s*&&\s*defined\s+IRIS_FEATURE_CUSTOM_IMAGES")  # 关闭或缺少能力时不读写图像。
 
     def test_wave_simulation_compute_and_images_registered(self):
         """波浪模拟登记三个计算阶段与三张图像，选项默认关闭，采样接入水面片元。"""
         found,_,_ = support.configuration()  # 读取真实原生选项。
-        self.assertEqual(found["OMNI_WAVE_SIMULATION"].values,("false","true"))  # 波浪模拟为开关选项。
-        self.assertEqual(found["OMNI_WAVE_SIMULATION"].default,"false")  # 默认关闭，默认画面不变。
+        self.assertIn(found["OMNI_WAVE_SIMULATION"].values, (("false", "true"), ("0", "1")))  # 波浪模拟为开关选项。
+        self.assertIn(found["OMNI_WAVE_SIMULATION"].default, ("false", "0"))  # 默认关闭，默认画面不变。
         files = build.program_files()  # 读取真实流程表。
         for name,stage in (("prepare","OMNI_WAVE_SIM_PREPARE"),("prepare1","OMNI_WAVE_SIM_SPREAD"),("prepare2","OMNI_WAVE_SIM_GRADIENT")):  # 三个阶段各自一个计算入口。
             path = build.SHADERS/"world0"/(name + ".csh")  # 主世界的该阶段入口。

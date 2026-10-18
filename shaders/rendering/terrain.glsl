@@ -87,7 +87,7 @@ uniform float rainStrength; // 降雨强度，雨点函数读取它。
 attribute vec4 mc_Entity;
 // 方块纹理坐标的中点：用来判断哪一半顶点属于植物上端。
 attribute vec4 mc_midTexCoord;
-#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 // 方块中心相对顶点的偏移：除以六十四得到方块中心，草丛以它为中心摆放。
 attribute vec3 at_midBlock;
 #endif
@@ -96,7 +96,7 @@ attribute vec3 at_midBlock;
 out vec3 v_color; // 顶点色，雨天与调试会改它。
 out vec2 v_texCoord; // 方块纹理坐标。
 out vec3 v_viewPos; // 视空间位置，片元做切线基与视差要用。
-#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 flat out float v_blockID; // 方块编号，几何阶段挑出草方块顶面用。
 flat out float v_grassUp; // 该面是否朝上，只有朝上的面才长草。
 flat out vec3 v_blockCenter; // 方块中心的相机相对世界坐标，草丛与隔壁查询都以它为基准。
@@ -142,7 +142,7 @@ void main(){
 	vec4 worldPos = gbufferModelViewInverse * viewPos; // 视空间回到相机相对世界坐标。
 	worldPos.xyz += cameraPosition.xyz; // 加上相机绝对位置，得到世界坐标。
 
-	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+	#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 		v_blockID = mc_Entity.x; // 记录方块编号，几何阶段按它挑出草方块。
 		v_grassUp = step(0.9, gl_Normal.y); // 只有朝上的面才可能是草方块顶面。
 		v_blockCenter = worldPos.xyz - cameraPosition.xyz + at_midBlock / 64.0; // 方块中心，去掉相机绝对位置避免插值精度不足。
@@ -160,7 +160,7 @@ void main(){
 		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 抖动按齐次坐标缩放后叠加。
 	#endif
 
-	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD && OMNI_REPLACE_SHORT_GRASS
+	#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD && OMNI_REPLACE_SHORT_GRASS
 		// 替换原版矮草（「是」与「仅矮草」两档都走这里）：范围内的矮草三个顶点塌到同一点，
 		// 退化三角形不产生片元，等于隐藏原版模型；仅矮草档随后在几何阶段用同一方块的 `v_blockCenter` 长出新草。
 		if (mc_Entity.x == OMNI_SHORT_GRASS_BLOCK_ID && length(worldPos.xyz) < OMNI_GRASS_RANGE){
@@ -178,11 +178,11 @@ void main(){
 	v_materialIDs = MATID_LAND; // 默认按普通方块处理。
 	v_isOre = 0.0; // 默认不是矿物方块。
 
-	#ifdef OMNI_EMISSIVE_ORES // 只在开启矿石自发光时判定，关闭时整段不编译。
+	#if OMNI_EMISSIVE_ORES // 只在开启矿石自发光时判定，关闭时整段不编译。
 		if (mc_Entity.x == 502.0) v_isOre = 1.0; // 编号 502 是矿石，见 block.properties。
 	#endif
 
-	#ifdef OMNI_GENERAL_GRASS_FIX // 未指定方块按植物处理：倾斜的面都当作植物。
+	#if OMNI_GENERAL_GRASS_FIX // 未指定方块按植物处理：倾斜的面都当作植物。
 		vec3 an = abs(gl_Normal); // 取法线绝对值。
 		if (all(lessThan(an, vec3(0.99)))){ // 三个分量都不到零点九九，说明是斜面。
 			v_materialIDs = MATID_GRASS; // 记为草。
@@ -239,7 +239,7 @@ void main(){
 #ifdef OMNI_GEOMETRY // 几何阶段：原程序在这里估方块纹理分辨率，再原样转发三角形。
 // 几何阶段输入一个三角形，输出一个三角带。
 layout(triangles) in; // 输入三角形。
-#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 // 顶点上限：三个基准顶点，加每片草（密度）乘每片段数乘每段三点；由 `effects/ground/grass.glsl` 按质量与密度列出。
 layout(triangle_strip, max_vertices = OMNI_GRASS_MAX_VERTICES) out;
 #else
@@ -252,7 +252,7 @@ layout(triangle_strip, max_vertices = 3) out; // 关闭草丛时只转发原来�
 in vec3 v_color[]; // 顶点色数组。
 in vec2 v_texCoord[]; // 纹理坐标数组。
 in vec3 v_viewPos[]; // 视空间位置数组。
-#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 flat in float v_blockID[]; // 方块编号数组。
 flat in float v_grassUp[]; // 朝上标记数组。
 flat in vec3 v_blockCenter[]; // 方块中心数组。
@@ -279,7 +279,7 @@ flat out float materialIDs; // 材质编号。
 flat out float isOre; // 矿物方块标记，片元据此补自发光。
 flat out float textureResolution; // 该三角形所属方块的纹理分辨率，平面插值。
 out float chunkFade; // 区块淡入进度，片元按它抖动丢弃。
-#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 flat out float blockID; // 方块编号，片元写九号画面用。
 #endif
 
@@ -311,7 +311,7 @@ void main(){
 		blockLight = v_blockLight[i]; // 转发方块光。
 		materialIDs = v_materialIDs[i]; // 转发材质编号。
 		isOre = v_isOre[i]; // 转发矿物方块标记。
-		#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+		#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 			blockID = v_blockID[i]; // 转发方块编号，片元写九号画面。
 		#endif
 		chunkFade = v_chunkFade[i]; // 转发区块淡入进度。
@@ -321,7 +321,7 @@ void main(){
 	EndPrimitive(); // 结束三角形。
 
 	// 草丛：只对草方块朝上的面、且在范围内生成；算法体在 `effects/ground/grass_geometry.glsl`。
-	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+	#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 		omniGrassGeometry(); // 生成草叶顶点，内部按距离分级并查隔壁方块。
 	#endif
 }
@@ -346,7 +346,7 @@ flat in float materialIDs; // 材质编号。
 flat in float isOre; // 矿物方块标记，`omniTerrainFragment` 据此补一份自发光。
 in float chunkFade; // 区块淡入进度，按它抖动丢弃新加载区块的像素。
 // `flat in float textureResolution;` 已在文件顶部、引入视差函数之前声明。
-#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 flat in float blockID; // 方块编号，写九号画面用。
 uniform int biome; // 当前像素所在的生物群系编号，写九号画面用。
 #endif

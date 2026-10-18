@@ -116,7 +116,7 @@ void CompositeSurfaceLighting(){
 			#else
 				materialMaskSolid.leaves *= saturate(3.2 - opaqueDist / min(shadowDistance, far) * 4.0 - float(isDH) * 1e10) * 0.65 + 0.35; // 没有远景阴影时远景叶子不透光。
 			#endif
-			#ifndef OMNI_DH_SSS // 关闭远景透光时，远景叶片与雪的透光比重归零，只影响远景像素。
+			#if !OMNI_DH_SSS // 关闭远景透光时，远景叶片与雪的透光比重归零，只影响远景像素。
 				materialMaskSolid.leaves *= saturate(1.0 - float(isDH));
 			#endif
 		#else
@@ -166,7 +166,7 @@ void CompositeSurfaceLighting(){
 			finalComposite += HeldLighting(viewPos, viewDir, gbuffer.normalL, gbuffer.material.roughness, ao, materialMask.hand > 0.5); // 叠手持光源。
 
 		vec3 blockLighting = BlockLighting(gbuffer.lightmapL.r, ao, materialMaskSolid); // 原版方块光。
-		#ifdef OMNI_LPV_ENABLED // Omni 额外功能：用体积彩色光替换方块光；缺少自定义图像能力时整段不编译。
+		#if OMNI_LPV_ENABLED // Omni 额外功能：用体积彩色光替换方块光；缺少自定义图像能力时整段不编译。
 			#ifdef IRIS_FEATURE_CUSTOM_IMAGES
 			blockLighting = omniLpvApply(blockLighting, worldPos, worldNormal); // 按体积边缘淡出把体积光混进来。
 			#endif

@@ -26,15 +26,15 @@
 
 // @effect {"label":{"zh_cn":"群系环境","en_us":"Biome environment"}}
 // @option {"label":{"zh_cn":"群系特色环境","en_us":"Per-biome environment"},"description":{"zh_cn":"按玩家所在群系给体积雾换雾色与雾密度，来自 Eclipse；默认关闭，打开后沼泽、丛林、黑森林、苍白花园画面会变化。","en_us":"Swaps volumetric fog colour and density by the player's biome, from Eclipse; off by default."}}
-//#define OMNI_PER_BIOME_ENV
+#define OMNI_PER_BIOME_ENV 0 // [0 1]
 // @option {"label":{"zh_cn":"沼泽环境","en_us":"Swamp environment"},"description":{"zh_cn":"只切换沼泽这一类群系的环境；总开关打开后才生效，其他群系环境不受影响。","en_us":"Toggles the environment only for swamp-like biomes; only active once the master switch is on."}}
-#define OMNI_SWAMP_ENV
+#define OMNI_SWAMP_ENV 1 // [0 1]
 // @option {"label":{"zh_cn":"丛林环境","en_us":"Jungle environment"},"description":{"zh_cn":"只切换丛林这一类群系的环境；总开关打开后才生效，其他群系环境不受影响。","en_us":"Toggles the environment only for jungle-like biomes; only active once the master switch is on."}}
-#define OMNI_JUNGLE_ENV
+#define OMNI_JUNGLE_ENV 1 // [0 1]
 // @option {"label":{"zh_cn":"黑森林环境","en_us":"Dark forest environment"},"description":{"zh_cn":"只切换黑森林这一种群系的环境；总开关打开后才生效，其他群系环境不受影响。","en_us":"Toggles the environment only for dark forest; only active once the master switch is on."}}
-#define OMNI_DARKFOREST_ENV
+#define OMNI_DARKFOREST_ENV 1 // [0 1]
 // @option {"label":{"zh_cn":"苍白花园环境","en_us":"Pale garden environment"},"description":{"zh_cn":"只切换苍白花园这一种群系的环境；总开关打开后才生效，其他群系环境不受影响。","en_us":"Toggles the environment only for the pale garden; only active once the master switch is on."}}
-#define OMNI_PALE_GARDEN_ENV
+#define OMNI_PALE_GARDEN_ENV 1 // [0 1]
 // @option {"label":{"zh_cn":"沼泽雾密度","en_us":"Swamp fog density"},"description":{"zh_cn":"沼泽里“仅高度衰减”那层雾的密度标度，只在沼泽环境开启时生效。","en_us":"Density scale of the height-only fog layer in swamps; used only when the swamp environment is on."},"slider":true}
 #define OMNI_SWAMP_FOG_DENSITY 0.3 // [0.0 0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.22 0.25 0.28 0.3 0.35 0.4 0.45 0.5 0.6 0.7 0.8 0.9 1.0]
 // @option {"label":{"zh_cn":"沼泽多云雾密度","en_us":"Swamp wispy fog density"},"description":{"zh_cn":"沼泽里“团雾”那层雾的密度标度，只在沼泽环境开启时生效。","en_us":"Density scale of the wispy fog layer in swamps; used only when the swamp environment is on."},"slider":true}
@@ -76,7 +76,7 @@
 // @option {"label":{"zh_cn":"苍白花园雾色蓝","en_us":"Pale garden fog blue"},"description":{"zh_cn":"苍白花园雾的蓝色分量，与另外两个分量一起决定雾色，只在苍白花园环境开启时生效。","en_us":"Blue component of the pale garden fog colour; used only when the pale garden environment is on."},"slider":true}
 #define OMNI_PALE_GARDEN_FOG_COLOR_B 0.6 // [0.0 0.05 0.1 0.15 0.2 0.25 0.3 0.35 0.4 0.45 0.5 0.6 0.7 0.8 0.9 1.0]
 
-#ifdef OMNI_PER_BIOME_ENV // 总开关关闭时本文件不产生任何代码，默认画面与原来一致。
+#if OMNI_PER_BIOME_ENV // 总开关关闭时本文件不产生任何代码，默认画面与原来一致。
 
 // 四个群系权重：由加载器每帧算好并平滑，本文件只声明同名 `uniform` 再读取。
 // 为什么在 GLSL 里也要声明：加载器只把自定义输入绑到真的声明了该名字的程序上，不声明就取不到值。
@@ -95,16 +95,16 @@ vec4 omniBiomeWeights(){
 	float darkForest = 0.0; // 黑森林权重，默认零。
 	float paleGarden = 0.0; // 苍白花园权重，默认零。
 
-	#ifdef OMNI_SWAMP_ENV // 沼泽开关打开才读取它这一路权重。
+	#if OMNI_SWAMP_ENV // 沼泽开关打开才读取它这一路权重。
 		swamp = BiomeSwampSmooth; // 沼泽权重来自加载器的群系类别判断。
 	#endif
-	#ifdef OMNI_JUNGLE_ENV // 丛林开关打开才读取它这一路权重。
+	#if OMNI_JUNGLE_ENV // 丛林开关打开才读取它这一路权重。
 		jungle = BiomeJungleSmooth; // 丛林权重来自加载器的群系类别判断。
 	#endif
-	#ifdef OMNI_DARKFOREST_ENV // 黑森林开关打开才读取它这一路权重。
+	#if OMNI_DARKFOREST_ENV // 黑森林开关打开才读取它这一路权重。
 		darkForest = BiomeDarkForestSmooth; // 黑森林权重来自加载器的具体群系判断。
 	#endif
-	#ifdef OMNI_PALE_GARDEN_ENV // 苍白花园开关打开才读取它这一路权重。
+	#if OMNI_PALE_GARDEN_ENV // 苍白花园开关打开才读取它这一路权重。
 		paleGarden = BiomePaleGardenSmooth; // 苍白花园权重来自加载器的具体群系判断。
 	#endif
 

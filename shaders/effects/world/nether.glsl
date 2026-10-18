@@ -35,7 +35,7 @@
 // @option {"label":{"zh_cn":"下界环境亮度","en_us":"Nether Ambient Brightness"},"description":{"zh_cn":"下界不等于无光，这里的整体亮度。","en_us":"Overall ambient brightness in the Nether, which is never fully dark."},"slider":true}
 #define OMNI_NETHER_BRIGHTNESS 1.0 // [0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
 // @option {"label":{"zh_cn":"下界体积雾","en_us":"Nether volumetric fog"},"description":{"zh_cn":"在原有解析下界雾之上，叠加 Eclipse 的羽流烟柱、顶部烟与雾霭三段体积雾；关闭时画面与原来完全一致。","en_us":"Adds Eclipse's three volumetric layers (plumes, ceiling smoke, haze) on top of the existing analytic Nether fog; off leaves the original picture unchanged."}}
-//#define OMNI_NETHER_VOLUMETRIC_FOG
+#define OMNI_NETHER_VOLUMETRIC_FOG 0 // [0 1]
 // @option {"label":{"zh_cn":"下界羽流密度","en_us":"Nether plume density"},"description":{"zh_cn":"下界低空发光烟柱的浓淡，越大烟柱越明显。","en_us":"Thickness of the glowing low plumes; larger makes them more visible."},"slider":true}
 #define OMNI_NETHER_PLUME_DENSITY 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.25 1.5 2.0 3.0 5.0 7.0 10.0]
 // @option {"label":{"zh_cn":"下界顶部烟密度","en_us":"Nether ceiling smoke density"},"description":{"zh_cn":"贴近下界天花板出现的灰烟浓淡。","en_us":"Thickness of the grey smoke near the Nether ceiling."},"slider":true}
@@ -205,7 +205,7 @@ vec3 NetherFog(vec2 dist){
 
 	vec3 fog = max(fogFactor.x - fogFactor.y, 0.0) * fogColor; // 两段之差就是反射射线那一段的雾。
 
-	#ifdef OMNI_NETHER_VOLUMETRIC_FOG // 打开体积雾时，叠上这一段的三段体积雾散射。
+	#if OMNI_NETHER_VOLUMETRIC_FOG // 打开体积雾时，叠上这一段的三段体积雾散射。
 		float fogDither = NetherFogDither(); // 这一次的步进抖动。
 		fog += NetherVolumetricFog(dist.x, dist.y, fogDither, fogDither).rgb; // 反射通道只叠加散射色，透射率由整条视线的重载接回，见文件头。
 	#endif
@@ -223,7 +223,7 @@ vec4 NetherFog(float dist){
 	vec3 fog = fogFactor * fogColor; // 整条视线的解析雾，只加色不遮挡背景。
 	float transmittance = 1.0; // 剩余透射率，解析雾不遮挡，所以默认是一。
 
-	#ifdef OMNI_NETHER_VOLUMETRIC_FOG // 打开体积雾时，叠上整条视线的三段体积雾，并取回它的透射率。
+	#if OMNI_NETHER_VOLUMETRIC_FOG // 打开体积雾时，叠上整条视线的三段体积雾，并取回它的透射率。
 		float fogDither = NetherFogDither(); // 这一次的步进抖动。
 		vec4 volumetric = NetherVolumetricFog(0.0, dist, fogDither, fogDither); // 三段体积雾的散射色与剩余透射率。
 		fog += volumetric.rgb; // 散射色照旧叠加。

@@ -11,7 +11,7 @@
 */
 #ifndef OMNI_GI_INCLUDED
 #define OMNI_GI_INCLUDED // 置上标记，后续再次引用直接跳过。
-#ifdef OMNI_GI_RSM // 只有打开全局光才需要下面的函数。
+#if OMNI_GI_RSM // 只有打开全局光才需要下面的函数。
 // --- 反射阴影图反弹与全局光时间滤波：主世界在延迟一号、末地在延迟二号 ---
 #if (defined OMNI_DEFERRED1_PASS && !defined OMNI_END) || (defined OMNI_END && defined OMNI_DEFERRED2_PASS) // 主世界在延迟一号、末地在延迟二号做反射阴影图与时间滤波。
 // 反射阴影图反弹：从阴影图里可见的表面取光照与底色，按法线朝向和距离估计给当前点补一份光。
@@ -80,20 +80,20 @@ vec2 GiCameraVelocity(vec2 coord, float depth, bool isDH){
 		projection = mat3(gbufferPreviousModelView) * projection + gbufferPreviousModelView[3].xyz; // 世界转上一帧视空间。
 	}else{ // 近景像素。
 		projection = (vec3(vec2(gbufferProjectionInverse[0].x, gbufferProjectionInverse[1].y) * projection.xy, 0.0) + gbufferProjectionInverse[3].xyz) / (gbufferProjectionInverse[2].w * projection.z + gbufferProjectionInverse[3].w); // 近景逆投影到视空间。
-		#if defined OMNI_DISABLE_HAND_GI_VELOCITY && defined OMNI_DISABLE_PLAYER_GI_VELOCITY // 手和玩家都不参与重投影。
+		#if OMNI_DISABLE_HAND_GI_VELOCITY && OMNI_DISABLE_PLAYER_GI_VELOCITY // 手和玩家都不参与重投影。
 			float materialIDs = floor(texelFetch(colortex5, ivec2(floor(coord * screenSize)), 0).b * 255.0); // 读材质编号。
 			if (depth >= 0.7 && materialIDs != MATID_ENTITIES_PLAYER){ // 非玩家且较远的像素。
 				projection = mat3(gbufferModelViewInverse) * projection + gbufferModelViewInverse[3].xyz; // 视空间转世界。
 				projection += cameraPosition - previousCameraPosition; // 加相机位移。
 				projection = mat3(gbufferPreviousModelView) * projection + gbufferPreviousModelView[3].xyz; // 转上一帧视空间。
 			}
-		#elif defined OMNI_DISABLE_HAND_GI_VELOCITY // 只有手不参与。
+		#elif OMNI_DISABLE_HAND_GI_VELOCITY // 只有手不参与。
 			if (depth >= 0.7){ // 较远的像素才重投影。
 				projection = mat3(gbufferModelViewInverse) * projection + gbufferModelViewInverse[3].xyz; // 视空间转世界。
 				projection += cameraPosition - previousCameraPosition; // 加相机位移。
 				projection = mat3(gbufferPreviousModelView) * projection + gbufferPreviousModelView[3].xyz; // 转上一帧视空间。
 			}
-		#elif defined OMNI_DISABLE_PLAYER_GI_VELOCITY // 只有玩家不参与。
+		#elif OMNI_DISABLE_PLAYER_GI_VELOCITY // 只有玩家不参与。
 			float materialIDs = floor(texelFetch(colortex5, ivec2(floor(coord * screenSize)), 0).b * 255.0); // 读材质编号。
 			if (materialIDs != MATID_ENTITIES_PLAYER){ // 非玩家像素。
 				if (depth < 0.7){ // 手部像素只加一个固定位移。
@@ -122,20 +122,20 @@ vec2 GiCameraVelocity(vec2 coord, float depth, bool isDH){
 vec2 GiCameraVelocity(vec2 coord, float depth){
 	vec3 projection = vec3(coord, depth) * 2.0 - 1.0; // 屏幕坐标换到负一到一。
 	projection = (vec3(vec2(gbufferProjectionInverse[0].x, gbufferProjectionInverse[1].y) * projection.xy, 0.0) + gbufferProjectionInverse[3].xyz) / (gbufferProjectionInverse[2].w * projection.z + gbufferProjectionInverse[3].w); // 逆投影到视空间。
-	#if defined OMNI_DISABLE_HAND_GI_VELOCITY && defined OMNI_DISABLE_PLAYER_GI_VELOCITY // 手和玩家都不参与。
+	#if OMNI_DISABLE_HAND_GI_VELOCITY && OMNI_DISABLE_PLAYER_GI_VELOCITY // 手和玩家都不参与。
 		float materialIDs = floor(texelFetch(colortex5, ivec2(floor(coord * screenSize)), 0).b * 255.0); // 读材质编号。
 		if (depth >= 0.7 && materialIDs != MATID_ENTITIES_PLAYER){ // 非玩家且较远。
 			projection = mat3(gbufferModelViewInverse) * projection + gbufferModelViewInverse[3].xyz; // 视空间转世界。
 			projection += cameraPosition - previousCameraPosition; // 加相机位移。
 			projection = mat3(gbufferPreviousModelView) * projection + gbufferPreviousModelView[3].xyz; // 转上一帧视空间。
 		}
-	#elif defined OMNI_DISABLE_HAND_GI_VELOCITY // 只有手不参与。
+	#elif OMNI_DISABLE_HAND_GI_VELOCITY // 只有手不参与。
 		if (depth >= 0.7){ // 较远像素才重投影。
 			projection = mat3(gbufferModelViewInverse) * projection + gbufferModelViewInverse[3].xyz; // 视空间转世界。
 			projection += cameraPosition - previousCameraPosition; // 加相机位移。
 			projection = mat3(gbufferPreviousModelView) * projection + gbufferPreviousModelView[3].xyz; // 转上一帧视空间。
 		}
-	#elif defined OMNI_DISABLE_PLAYER_GI_VELOCITY // 只有玩家不参与。
+	#elif OMNI_DISABLE_PLAYER_GI_VELOCITY // 只有玩家不参与。
 		float materialIDs = floor(texelFetch(colortex5, ivec2(floor(coord * screenSize)), 0).b * 255.0); // 读材质编号。
 		if (materialIDs != MATID_ENTITIES_PLAYER){ // 非玩家像素。
 			if (depth < 0.7){ // 手部像素固定位移。
@@ -194,7 +194,7 @@ vec4 GI_TemporalFilter(){
 		float currDepth = texelFetch(depthtex1, texel, 0).x; // 本帧不透明深度。
 		#ifdef DISTANT_HORIZONS // 有远景时天空像素改读远景深度。
 			bool isDH = false; // 标记是否远景像素。
-			#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何，关闭时远景像素按天空处理。
+			#if OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何，关闭时远景像素按天空处理。
 				if (currDepth == 1.0){ // 天空像素。
 					currDepth = texelFetch(dhDepthTex0, texel, 0).x; // 改读远景深度。
 					isDH = true; // 标记为远景。
@@ -248,7 +248,7 @@ vec4 GI_TemporalFilter(){
 		float depth = texelFetch(depthtex1, texel, 0).x; // 不透明深度。
 		#ifdef DISTANT_HORIZONS // 远景处理。
 			bool isDH = false; // 远景标记。
-			#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何。
+			#if OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何。
 				if (depth == 1.0){ // 天空像素。
 					depth = texelFetch(dhDepthTex0, texel, 0).x; // 改读远景深度。
 					isDH = true; // 标记远景。

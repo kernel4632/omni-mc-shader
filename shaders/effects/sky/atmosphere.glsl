@@ -20,11 +20,11 @@
 #define OMNI_ATMOSPHERE_INCLUDED
 // @effect {"label":{"zh_cn":"氛围","en_us":"Atmosphere"}}
 // @option {"label":{"zh_cn":"极光","en_us":"Aurora"},"description":{"zh_cn":"夜里高空出现极光帘幕；默认关闭，打开后才计算。","en_us":"Shows aurora curtains high in the night sky; off by default."}}
-//#define OMNI_AURORA
+#define OMNI_AURORA 0 // [0 1]
 // @option {"label":{"zh_cn":"彩虹","en_us":"Rainbow"},"description":{"zh_cn":"雨后晴天出现彩虹；默认关闭，打开后才计算。","en_us":"Shows a rainbow after rain; off by default."}}
-//#define OMNI_RAINBOW
+#define OMNI_RAINBOW 0 // [0 1]
 // @option {"label":{"zh_cn":"闪电照明","en_us":"Lightning Illumination"},"description":{"zh_cn":"读取加载器实际闪电强度，在雷暴闪电瞬间给附近表面、体积云和体积雾叠一层冷色闪光；这是额外功能，默认关闭，关闭时默认画面与 iterationT 一致。","en_us":"Uses the loader lightning strength to flash nearby surfaces, volumetric clouds and volumetric fog during a strike; an extra feature, off by default so the default scene matches iterationT."}}
-//#define OMNI_LIGHTNING
+#define OMNI_LIGHTNING 0 // [0 1]
 // @option {"label":{"zh_cn":"极光强度","en_us":"Aurora Strength"},"description":{"zh_cn":"极光多亮。","en_us":"How bright the aurora is."},"slider":true}
 #define OMNI_AURORA_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"极光颜色","en_us":"Aurora Colour"},"description":{"zh_cn":"正值偏绿、负值偏蓝紫。","en_us":"Positive leans green, negative leans blue-purple."},"slider":true}
@@ -44,7 +44,7 @@ uniform vec4 lightningBoltPosition; // 闪电的相机相对世界位置与强�
 #endif
 // 极光：主世界夜晚高空的缓慢帘幕，雨天被云遮挡。
 vec3 omniAurora(vec3 color, vec3 direction) {
-#ifdef OMNI_AURORA // 打开极光才生成采样。
+#if OMNI_AURORA // 打开极光才生成采样。
 	float night = 1.0-smoothstep(-0.2,0.1,omniNormalize(mat3(gbufferModelViewInverse)*sunPosition).y); // 太阳越低夜色越浓，极光越亮。
 	float ripple = 0.5+0.5*sin(direction.x*6.0+frameTimeCounter*0.02)*sin(direction.z*5.0-frameTimeCounter*0.015); // 两个方向的正弦交叉出缓慢起伏，代替已移除的噪声。
 	float curtain = pow(max(0.0,sin(direction.x*18.0+ripple*3.0)),8.0); // 帘幕随位置起伏、随时间缓慢移动。
@@ -55,7 +55,7 @@ vec3 omniAurora(vec3 color, vec3 direction) {
 }
 // 彩虹：雨后晴天的背太阳方向，出现一条窄彩色弧。
 vec3 omniRainbow(vec3 color, vec3 direction) {
-#ifdef OMNI_RAINBOW // 打开彩虹才生成采样。
+#if OMNI_RAINBOW // 打开彩虹才生成采样。
 	vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*sunPosition); // 转到世界空间的太阳方向。
 	float angle = acos(clamp(dot(direction,-sun),-1.0,1.0)); // 与背太阳方向的夹角，先钳住取值范围。
 	float offset = (angle-0.733)/0.018; // 相对约四十二度彩虹角的偏移，单位是弧度。
@@ -77,7 +77,7 @@ vec3 omniAtmosphere(vec3 color, vec3 direction) {
 // 闪电照明：加载器给出真实闪电事件时，按到闪电的距离照亮附近表面。
 // 天空可见度抑制洞穴闪光，避免不透光的洞里也发亮。
 vec3 omniLightning(vec3 color, vec3 world, float skylight) {
-#ifdef OMNI_LIGHTNING // 打开闪电才读取事件。
+#if OMNI_LIGHTNING // 打开闪电才读取事件。
 #ifdef IS_IRIS // 只有 Iris 提供闪电输入。
 	float intensity = lightningBoltPosition.w; // 强度来自实际闪电事件，没有事件时为零。
 	float boltDistance = length(world-lightningBoltPosition.xyz); // 表面到闪电的距离，越近越亮。
@@ -91,7 +91,7 @@ vec3 omniLightning(vec3 color, vec3 world, float skylight) {
 // 所以这里不做可见度衰减，改由调用方按介质多少（云厚、雾每步的吸收）缩放。
 // `lightDistance` 是照明范围、`falloff` 是指数衰减强度，两种介质的取值照 Eclipse `lib/lightning_stuff.glsl:31`（云）与 `:44`（雾）。
 vec3 omniLightningVolume(vec3 relativePos, float lightDistance, float falloff) {
-#ifdef OMNI_LIGHTNING // 打开闪电照明才计算。
+#if OMNI_LIGHTNING // 打开闪电照明才计算。
 #ifdef IS_IRIS // 只有 Iris 提供闪电输入。
 	if (lightningBoltPosition.w > 0.0) { // 没有闪电事件时不加。
 		vec3 boltPos = vec3(lightningBoltPosition.x, clamp(relativePos.y, lightningBoltPosition.y, lightningBoltPosition.y + 116.0), lightningBoltPosition.z); // 光柱同一水平位置，竖直方向夹在光柱高度区间。

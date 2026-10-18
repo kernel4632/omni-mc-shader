@@ -144,11 +144,11 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 	#else
 		float baseDensity = OMNI_VFOG_DENSITY_BASE * (timeMidnight * 0.1 + 0.05) / max(far, 100.0); // 没有远景时按近景远裁剪面归一化。
 	#endif
-	#ifndef OMNI_INDOOR_FOG // 默认让体积雾随天空光等级衰减，暗处雾更淡。
+	#if !OMNI_INDOOR_FOG // 默认让体积雾随天空光等级衰减，暗处雾更淡。
 		baseDensity *= eyeBrightnessSmoothCurved; // 乘天空光曲线平滑值。
 	#endif
 
-	#if defined(OMNI_SNOW_STORM) || defined(OMNI_SAND_STORM) // 只有开启至少一种暴风时才计算强度，默认零开销。
+	#if OMNI_SNOW_STORM || OMNI_SAND_STORM // 只有开启至少一种暴风时才计算强度，默认零开销。
 		float stormSnow = OmniSnowStorm(); // 雪暴强度，零到一。
 		float stormSand = OmniSandStorm(); // 沙暴强度，零到一。
 		float stormStrength = clamp(stormSnow + stormSand, 0.0, 1.0); // 两种暴风的总强度，即使都没刮也保持零。
@@ -158,7 +158,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 
 	float fogDensityScale = FogDensityScale(stormStrength); // 密度标度：时段雾与每日天气按当前雾类型给出，暴风时退回固定密度避免与暴风通道叠加。
 
-	#ifdef OMNI_PER_BIOME_ENV // 群系权重每像素算一次，供下面的雾密度与雾色共用。
+	#if OMNI_PER_BIOME_ENV // 群系权重每像素算一次，供下面的雾密度与雾色共用。
 		vec4 biomeWeights = omniBiomeWeights(); // 四个群系的权重，来自加载器平滑量。
 	#endif
 
@@ -180,7 +180,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 	transmittance = 1.0; // 透射率从全透开始。
 	float fogDensity = 0.0; // 环境雾累计量。
 	float rayDensity = 0.0; // 阳光散射累计量。
-	#ifdef OMNI_LIGHTNING // 闪电点亮的空气累计量，按每一步的吸收量叠加。
+	#if OMNI_LIGHTNING // 闪电点亮的空气累计量，按每一步的吸收量叠加。
 		vec3 lightningFogLight = vec3(0.0); // 闪电在雾里点亮的空气颜色。
 	#endif
 	#ifdef OMNI_LPV_FOG_LIGHT // 雾照明要同时开启体积光与雾照明、并具备自定义图像能力才累计。
@@ -201,11 +201,11 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		vec3 fogPos = start + stepLength * rayVector; // 这一步的雾采样位置。
 		vec3 shadowPos = shadowStart + stepLength * shadowRayVector; // 这一步的阴影图坐标。
 
-		#ifdef OMNI_LIGHTNING // 闪电照亮空气：先按本步的雾采样点算冷色闪光，稍后按本步吸收量累加。
+		#if OMNI_LIGHTNING // 闪电照亮空气：先按本步的雾采样点算冷色闪光，稍后按本步吸收量累加。
 			vec3 lightningStep = omniLightningVolume(fogPos - cameraPosition, 150.0, -15.0); // 采样点是绝对世界坐标，先换相机相对；一百五十格与快速衰减照 Eclipse。
 		#endif
 
-		#ifdef OMNI_PER_BIOME_ENV // 群系内按离相机的距离替换雾密度，远处退回原值。
+		#if OMNI_PER_BIOME_ENV // 群系内按离相机的距离替换雾密度，远处退回原值。
 			float biomeDistance = length((stepLength * rayVector).xz); // 这一步相对起点的水平距离，与 Eclipse 的口径一致。
 			float biomeEnvelope = min(max(1.0 - biomeDistance / 256.0, 0.0) * 2.0, 1.0); // 二百五十六米内替换最明显，与 Eclipse 同一包络。
 			float biomeUniformScale = fogDensityScale; // 高度衰减雾用的密度标度，先用原值再被混合。
@@ -222,7 +222,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 
 		float density = FogDensity(fogPos, wind); // 算这一点的雾密度，仅高度衰减模式忽略风。
 		density = (density * densityScale + baseDensity) * fogTimeFactor; // 噪声密度乘密度标度再加基础密度，再乘时间因子。
-		#if defined(OMNI_SNOW_STORM) || defined(OMNI_SAND_STORM) // 暴风时在这条射线上再叠一层浓雾。
+		#if OMNI_SNOW_STORM || OMNI_SAND_STORM // 暴风时在这条射线上再叠一层浓雾。
 			density += OmniStormFog(fogPos, stormSnow) * stormStrength * OMNI_STORM_DENSITY; // 暴风噪声密度乘总强度与浓度选项。
 		#endif
 		float absorption = exp2(-density * stepDensity); // 这一步吸收掉的光。
@@ -304,7 +304,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		
 		transmittance *= absorption; // 透射率逐步衰减。
 
-		#ifdef OMNI_LIGHTNING // 闪电点亮的空气，按本步吸收量累加进来。
+		#if OMNI_LIGHTNING // 闪电点亮的空气，按本步吸收量累加进来。
 			lightningFogLight += lightningStep * integral; // 雾越厚、这一步吸收越多，被点亮的部分越多。
 		#endif
 
@@ -316,7 +316,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 			float lpvLuma = dot(lpvColor, vec3(0.2126, 0.7152, 0.0722)); // 亮度，用来按 Eclipse 抑制暗色光。
 			vec3 lpvLighting = lpvColor * (OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS * 0.25) * exp(-5.0 * (1.0 - lpvLuma)); // 照 Eclipse `composite3.fsh:247`，亮度基准按一百换算。
 			lpvFogLight += lpvLighting * integral * lpvFade; // 按这一步吸收量与边缘淡出累积。
-			#ifdef OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD // 雾照明-手持光：手里的火把等也照亮这一步的空气。
+			#if OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD // 雾照明-手持光：手里的火把等也照亮这一步的空气。
 				// 取两只手持光源在该点留下的光，按 Eclipse `composite3.fsh:258` 的系数（零点零四，再按本项目百分之一定标缩到零点零零零四）累加。
 				vec3 handLight = omniLpvHandLight(heldItemId, fogPos - cameraPosition) + omniLpvHandLight(heldItemId2, fogPos - cameraPosition); // 两手光源的光色乘距离衰减。
 				lpvFogLight += handLight * (OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS * 0.0004) * integral * lpvFade; // 与体积光同一处累积，得到暖色的手持光晕。
@@ -334,13 +334,13 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 	vec3 fogColor = skylight         * fogDensity; // 环境雾色。
 	vec3 rayColor = colorShadowlight * rayDensity; // 阳光散射色。
 
-	#if defined(OMNI_SNOW_STORM) || defined(OMNI_SAND_STORM) // 暴风时把雾色与散射色染成雪白或沙黄。
+	#if OMNI_SNOW_STORM || OMNI_SAND_STORM // 暴风时把雾色与散射色染成雪白或沙黄。
 		vec3 stormTint = mix(vec3(1.0), OmniStormColor(stormSnow, stormSand), stormStrength); // 没刮风时为单位色，不改变画面。
 		fogColor *= stormTint; // 环境雾按暴风颜色染色。
 		rayColor *= stormTint; // 阳光散射同样染色，与 Eclipse 染色两组光色一致。
 	#endif
 
-	#ifdef OMNI_PER_BIOME_ENV // 群系配色给雾的环境色与直射散射染色，与 Eclipse 的 `BiomeVLFogColors` 同一处作用。
+	#if OMNI_PER_BIOME_ENV // 群系配色给雾的环境色与直射散射染色，与 Eclipse 的 `BiomeVLFogColors` 同一处作用。
 		vec3 biomeFogColor; // 本群系合成的雾色。
 		float biomeCoverage; // 落在任一已启用群系内的程度。
 		omniBiomeFogColor(biomeWeights, biomeFogColor, biomeCoverage); // 取本群系雾色与覆盖程度。
@@ -361,12 +361,12 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		rayColor *= mix(globalCloudShadow, 1.0, wetness * 0.1); // 全局云影压散射。
 	#endif
 
-	#ifndef OMNI_INDOOR_FOG // 默认体积雾随天空光等级衰减。
+	#if !OMNI_INDOOR_FOG // 默认体积雾随天空光等级衰减。
 		fogColor *= eyeBrightnessSmoothCurved; // 环境雾按天空光衰减。
 		#ifdef OMNI_CAVE_MODE // 洞穴模式下散射也衰减，避免洞口过亮。
 			rayColor *= eyeBrightnessSmoothCurved;
 		#endif
-		#ifdef OMNI_LIGHTNING // 闪电来自天空，洞穴里看不到，按天空光压掉。
+		#if OMNI_LIGHTNING // 闪电来自天空，洞穴里看不到，按天空光压掉。
 			lightningFogLight *= eyeBrightnessSmoothCurved;
 		#endif
 		transmittance = mix(1.0, transmittance, eyeBrightnessSmoothCurved); // 透射率也按天空光拉回，暗处雾更淡。
@@ -374,7 +374,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 
 	color = transmittance * color; // 场景色先被雾吸收。
 	color += fogColor + rayColor; // 再叠上雾色与散射。
-	#ifdef OMNI_LIGHTNING // 闪电照明：叠上被闪电点亮的空气。
+	#if OMNI_LIGHTNING // 闪电照明：叠上被闪电点亮的空气。
 		color += lightningFogLight; // 直接加到画面上。
 	#endif
 	#ifdef OMNI_LPV_FOG_LIGHT // 雾照明：叠上被体积彩色光照亮的空气，不随天空光衰减，暗处彩色光晕也能看见。

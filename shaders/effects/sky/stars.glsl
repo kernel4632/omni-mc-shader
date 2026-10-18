@@ -47,7 +47,7 @@ float StableStarField(vec3 vSamplePos, float fThreshhold){
 	return StarVal; // 平滑后的星点亮度。
 }
 
-#if defined OMNI_STARS_COLORED // 彩色星场（Eclipse 的 `starbox`）只在开启时才编进来，默认关闭、不产生无用代码。
+#if OMNI_STARS_COLORED // 彩色星场（Eclipse 的 `starbox`）只在开启时才编进来，默认关闭、不产生无用代码。
 // 彩色星场散列：来源 Eclipse `lib/stars.glsl` 的 `hash12_alt`，只用二维坐标。
 float hash12(vec2 co){
 	return fract(sin(2.0 * PI * fract(dot(co.xy, vec2(12.9898, 78.233)))) * 43758.5453); // 正弦放大再取小数，是最常见的二维散列写法。
@@ -92,7 +92,7 @@ float starbox(vec3 dir, out vec3 starColor){
 // 星场总入口：来源 Eclipse 的 `stars`；按是否开启彩色星点选白色稳定星场或彩色星盒。
 // 返回星场亮度，`starColor` 回填星色；白色路径没有星温，星色固定为一。
 float stars(vec3 viewPos, out vec3 starColor){
-	#if defined OMNI_STARS_COLORED
+	#if OMNI_STARS_COLORED
 		starColor = vec3(1.0); // 星色由下面的星盒回填，这里先给初值。
 		float s = max(1.0 - starbox(viewPos, starColor), 0.0); // 彩色星盒星场。
 		return 75.0 * OMNI_STARS_BRIGHTNESS * exp(s * -20.0 * (1.0 / OMNI_STARS_AMOUNT)); // 系数与 Eclipse 相同。
@@ -112,7 +112,7 @@ vec3 CalculateStars(vec3 worldDir, vec3 sunVector){
 	float cosecantSquared = 1.0 / dot(axis, axis); // 旋转公式里的比例因子。
 	worldDir = cosine * worldDir + cross(axis, worldDir) + (cosecantSquared - cosecantSquared * cosine) * dot(axis, worldDir) * axis; // 按罗德里格公式把星场对齐到太阳方向。
 
-	#if defined OMNI_STARS_COLORED
+	#if OMNI_STARS_COLORED
 		const float starScale = 0.05 / 75.0; // 彩色路径在 Eclipse 里带七十五倍系数，除回去，使两条路径最亮星一致。
 	#else
 		const float starScale = 0.05; // 与旧 `CalculateStars` 最亮星零点零五对齐，保持夜间曝光不变。

@@ -16,7 +16,7 @@
 // @option {"label": {"zh_cn": "调试显示", "en_us": "Debug view"}, "description": {"zh_cn": "0：正常画面；1：几何法线；2：深度；3：光照图。用现有中间画面直接观察，关闭时画面不变。", "en_us": "0: scene; 1: geometry normals; 2: depth; 3: lightmap. Reads existing buffers directly; off keeps the scene."}, "values": {"0": {"zh_cn": "正常画面", "en_us": "Scene"}, "1": {"zh_cn": "几何法线", "en_us": "Normals"}, "2": {"zh_cn": "深度", "en_us": "Depth"}, "3": {"zh_cn": "光照图", "en_us": "Lightmap"}}}
 #define OMNI_DEBUG_VIEW 0 // [0 1 2 3]
 // @option {"label":{"zh_cn":"性能计时","en_us":"Frame-time bar"},"description":{"zh_cn":"在屏幕左下角画一条横条显示每帧耗时，越长越慢；这是整帧时间，不是逐效果耗时。","en_us":"Draws a bar in the bottom-left showing per-frame time; this is total frame time, not per-effect."}}
-//#define OMNI_PROFILER
+#define OMNI_PROFILER 0 // [0 1]
 // 加载器输入提供中间画面与画面尺寸，调试视图按编号读取它们。
 #include "/common/uniforms.glsl"
 // 法线解码 `DecodeNormal` 来自共用数学，调试视图用它把打包法线还原成可见颜色。
@@ -30,7 +30,7 @@
 // 性能计时：加载器只给整帧耗时，没有逐效果计时，所以这里只画一条按耗时长短变化的横条。
 // 满格约三十三毫秒；快帧偏绿、慢帧偏红，方便一眼看出卡顿。
 vec3 omniProfiler(vec3 color, vec2 coordinates){
-#ifdef OMNI_PROFILER // 关闭时不画任何东西。
+#if OMNI_PROFILER // 关闭时不画任何东西。
 	vec2 pixel = coordinates*vec2(viewWidth,viewHeight); // 屏幕像素坐标，左下角为原点。
 	float filled = clamp(frameTime*1000.0/33.0,0.0,1.0); // 把毫秒换算成零到一的填充比例。
 	if (pixel.x < 160.0 && pixel.y < 8.0) { // 只画左下角一小块，不遮挡画面主体。

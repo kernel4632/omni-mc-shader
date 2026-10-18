@@ -37,7 +37,7 @@
 // --- 玩家选项：体素反射开关、追踪距离与强度 ---
 // @effect {"label":{"zh_cn":"体素反射","en_us":"Voxel reflections"}}
 // @option {"label":{"zh_cn":"体素反射","en_us":"Voxel reflections"},"description":{"zh_cn":"在体素图上追踪反射，屏幕空间反射没命中的地方用体素里的方块颜色补上；只在主世界生效，缺自定义图像能力时不参与编译，关闭时画面不变。","en_us":"Traces reflections through the voxel grid and fills screen-space misses with stored block colours; overworld only, off keeps the picture unchanged."}}
-//#define OMNI_VOXEL_REFLECTION
+#define OMNI_VOXEL_REFLECTION 0 // [0 1]
 // @option {"label":{"zh_cn":"追踪距离","en_us":"Trace distance"},"description":{"zh_cn":"体素反射最远能打多远，越大越能反射远处地形，也更慢。","en_us":"How far voxel reflections reach; larger reflects more distant terrain but is slower."},"slider":true}
 #define OMNI_VOXEL_REFLECTION_DISTANCE 64 // [32 48 64 96]
 // @option {"label":{"zh_cn":"反射强度","en_us":"Reflection strength"},"description":{"zh_cn":"体素反射混进画面的比例，一为原样。","en_us":"How much of the voxel reflection is blended in; one is neutral."},"slider":true}
@@ -45,7 +45,7 @@
 
 // ========================= 写入：阴影片元把方块颜色与光照存进颜色缓冲 =========================
 // 只在阴影片元阶段、开启功能且具备自定义图像能力时编译；顶点阶段写编号图，片元阶段才拿得到贴图色。
-#if defined(OMNI_FRAGMENT) && defined(OMNI_SHADOW_PASS) && !defined(OMNI_DH_SHADOW_PASS) && !defined(OMNI_END) && !defined(OMNI_NETHER) && defined(OMNI_VOXEL_REFLECTION) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+#if defined(OMNI_FRAGMENT) && defined(OMNI_SHADOW_PASS) && !defined(OMNI_DH_SHADOW_PASS) && !defined(OMNI_END) && !defined(OMNI_NETHER) && OMNI_VOXEL_REFLECTION && defined(IRIS_FEATURE_CUSTOM_IMAGES)
 layout(rgba8) uniform restrict image3D omniVoxelColor; // 体素颜色图，阴影片元写、合成只读。
 // 写一格：把方块底色与打包光照存进 `omniVoxelColor`；越界不写，下标与体素编号图完全一致。
 void omniVoxelColorStore(ivec3 coord, vec3 albedo, vec2 light){
@@ -59,7 +59,7 @@ void omniVoxelColorStore(ivec3 coord, vec3 albedo, vec2 light){
 
 // ========================= 读取与追踪：合成二号沿反射方向在体素图里逐格前进 =========================
 // 只在合成二号的片元阶段、主世界、开启功能且具备自定义图像能力时编译，其余程序整段不参与。
-#if defined(OMNI_FRAGMENT) && defined(OMNI_COMPOSITE2_PASS) && !defined(OMNI_NETHER) && !defined(OMNI_END) && defined(OMNI_VOXEL_REFLECTION) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+#if defined(OMNI_FRAGMENT) && defined(OMNI_COMPOSITE2_PASS) && !defined(OMNI_NETHER) && !defined(OMNI_END) && OMNI_VOXEL_REFLECTION && defined(IRIS_FEATURE_CUSTOM_IMAGES)
 uniform sampler3D omniVoxelColorTex; // 颜色图按采样器读，逐格取色用 texelFetch 保证不插值。
 uniform usampler3D omniLpvVoxelTex; // 体素编号图按整数采样器读，用来判断这一格是不是实心。
 

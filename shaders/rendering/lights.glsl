@@ -53,7 +53,7 @@ vec2 texCoord; // 零到一屏幕坐标，环境遮蔽与时间抗锯齿引用�
 
 // 太阳可见度只在镜头光晕或眩光开启时才有意义，与 iterationT 一致按这两个选项分派。
 #ifdef VS_SUN_VISIBILITY
-	#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE
+	#if OMNI_LENS_GLARE || OMNI_LENS_FLARE
 		out vec2 sunCoord; // 太阳在屏幕上的坐标，光晕与眩光按它找位置。
 		out float sunVisibility; // 太阳可见度，零到一，被云或地形挡住时变低。
 	#endif
@@ -79,7 +79,7 @@ void main(){
 	timeMidnight = 1.0 - curve(saturate((1.0 - saturate(MdotU)) * 5.0 - 4.0)); // 月亮越高越接近一。
 
 	// 云可见度与太阳可见度共用一段天空盒投影，只有需要它们的两个分支才编译这段。
-	#if (defined VS_SUN_VISIBILITY && !defined OMNI_CAVE_MODE && (defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE)) || defined VS_SHADOW_HIGHLIGHT
+	#if (defined VS_SUN_VISIBILITY && !defined OMNI_CAVE_MODE && (OMNI_LENS_GLARE || OMNI_LENS_FLARE)) || defined VS_SHADOW_HIGHLIGHT
 		float tileSize = min(OMNI_SKY_IMAGE_RESOLUTION, floor(min(screenSize.x / 3.3, screenSize.y * 0.45))); // 天空盒图边长，与原程序一致。
 		vec2 skyImageCoord = ProjectSky(worldShadowVector, tileSize); // 光方向投到天空盒图上的坐标。
 
@@ -94,7 +94,7 @@ void main(){
 	#endif
 
 	#ifdef VS_SUN_VISIBILITY
-		#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE
+		#if OMNI_LENS_GLARE || OMNI_LENS_FLARE
 			#ifdef OMNI_CAVE_MODE
 				sunVisibility = 0.0; // 洞穴模式下看不到太阳，直接给零。
 			#else

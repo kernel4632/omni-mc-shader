@@ -16,15 +16,15 @@
 // 为什么这些单独处理：它们来自原版药水与介质状态，不属于自定义雾，改动可能影响玩法判断，所以按原版逻辑照搬。
 void VanillaFog(inout vec3 color, float dist){
 	#ifdef OMNI_OVERWORLD // 洞穴雾与边界雾只属于主世界，下界与末地不画。
-		#ifdef OMNI_CAVE_FOG // 洞内空气里的洞穴雾：与 Eclipse 一样只在空气中且相机高度低于一千五百米。
+		#if OMNI_CAVE_FOG // 洞内空气里的洞穴雾：与 Eclipse 一样只在空气中且相机高度低于一千五百米。
 			if (isEyeInWater == 0 && cameraPosition.y < 1500.0) CaveFog(color, dist); // 按距离与视线方向补洞内雾。
 		#endif
-		#ifdef OMNI_BORDER_FOG // 渲染距离附近的区块边界雾。
+		#if OMNI_BORDER_FOG // 渲染距离附近的区块边界雾。
 			BorderFog(color, dist); // 把远处画面混向天空色，遮住区块加载。
 		#endif
 	#endif
 
-	#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 调试开关，关闭后不看失明与黑暗。
+	#if !OMNI_DISABLE_BLINDNESS_DARKNESS // 调试开关，关闭后不看失明与黑暗。
 		if (darknessFactor > 0.0) color = mix(color, vec3(0.0), smoothstep(5.0, mix(far, 15.0, darknessFactor), dist) * darknessFactor); // 黑暗效果：越远越黑。
 		if (blindness > 0.0) color = mix(color, vec3(0.0), smoothstep(1.5, mix(far, 4.5, blindness), dist) * blindness); // 失明效果：更近就开始变黑。
 	#endif

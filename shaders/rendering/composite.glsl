@@ -180,7 +180,7 @@ uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴�
 #if defined OMNI_NETHER || defined OMNI_END // 下界与末地只写一号画面。
 // 下界与末地的合成五号原程序只写一号画面，不画镜头光斑，所以这里不声明三号输出。
 #else
-#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE || (defined OMNI_VFOG && !defined OMNI_DOF) // 开启镜头相关效果或体积雾时才写三号。
+#if OMNI_LENS_GLARE || OMNI_LENS_FLARE || (defined OMNI_VFOG && !defined OMNI_DOF) // 开启镜头相关效果或体积雾时才写三号。
 	layout(location = 1) out vec4 compositeOutput3; // 三号画面：镜头光斑，仅在开启相关效果时写出。
 #endif
 #endif

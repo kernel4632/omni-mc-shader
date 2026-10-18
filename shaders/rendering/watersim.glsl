@@ -92,7 +92,7 @@ void main(){
 #ifdef OMNI_COMPUTE
 #ifdef OMNI_WAVE_SIM_SPREAD
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in; // 每工作组盖三十二乘三十二块。
-const ivec3 workGroups = ivec3(OMNI_WAVE_SIM_RES / 32, OMNI_WAVE_SIM_RES / 32, 1); // 工作组数正好盖满整张图。
+const ivec3 workGroups = ivec3(32, 32, 1); // 工作组数正好盖满整张图。
 
 // 传播主函数：对齐旧场后推进，并把结果写进中间场。
 void main(){
@@ -123,7 +123,7 @@ void main(){
 #ifdef OMNI_COMPUTE
 #ifdef OMNI_WAVE_SIM_GRADIENT
 layout(local_size_x = 32, local_size_y = 32, local_size_z = 1) in; // 与传播阶段相同的覆盖方式。
-const ivec3 workGroups = ivec3(OMNI_WAVE_SIM_RES / 32, OMNI_WAVE_SIM_RES / 32, 1); // 盖满整张图。
+const ivec3 workGroups = ivec3(32, 32, 1); // 盖满整张图。
 
 // 坡度主函数：用左右、上下邻居的压强差近似压强梯度，供片元拼出波法线。
 void main(){

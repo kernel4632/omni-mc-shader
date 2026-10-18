@@ -32,7 +32,7 @@
 
 // @effect {"label":{"zh_cn":"光传播体积","en_us":"Light propagation"}}
 // @option {"label":{"zh_cn":"光传播体积","en_us":"Light propagation"},"description":{"zh_cn":"在相机周围的三维格子里让彩色方块光扩散，再混回表面；缺计算能力或自定义图像时退回屏幕空间间接光。","en_us":"Diffuses colored block light in a grid around the camera and blends it into surfaces; falls back to screen space without compute or custom images."}}
-//#define OMNI_LPV_ENABLED
+#define OMNI_LPV_ENABLED 0 // [0 1]
 // @option {"label":{"zh_cn":"体积大小","en_us":"Volume size"},"description":{"zh_cn":"体积格每边的方块数，越大覆盖越广、占用显存越多。","en_us":"Blocks per side of the volume; larger covers more and uses more VRAM."},"values":{"6":{"zh_cn":"小","en_us":"Small"},"7":{"zh_cn":"中","en_us":"Medium"},"8":{"zh_cn":"大","en_us":"Large"}}}
 #define OMNI_LPV_SIZE 7 // [6 7 8]
 // @option {"label":{"zh_cn":"光饱和度","en_us":"Light saturation"},"slider":true,"description":{"zh_cn":"传播中的颜色有多鲜艳，一百为原色。","en_us":"How vivid the propagated colors are; 100 keeps the source color."}}
@@ -50,16 +50,16 @@
 // @option {"label":{"zh_cn":"实体光源","en_us":"Entity lights"},"description":{"zh_cn":"让烈焰人、发光鱿鱼、岩浆怪、点燃的炸药、末地水晶与光灵箭，以及信标、潮涌核心、附魔台、酿造台这些发光方块实体，还有掉在地上的火把、荧石等发光物品，在体积光里发光；只在体积光开启时生效，默认开、等于 Eclipse。","en_us":"Lets blazes, glow squid, magma cubes, primed TNT, end crystals and spectral arrows, glowing block entities (beacon, conduit, enchanting table, brewing stand) and dropped glowing items (torches, glowstone) add light to the volume; only used when the volume is on; on by default to match Eclipse."}}
 #define OMNI_LPV_ENTITY_LIGHTS
 // @option {"label":{"zh_cn":"雾照明","en_us":"Fog illumination"},"description":{"zh_cn":"让体积里的彩色光照亮周围的空气，洞穴里能看到带颜色的光晕；默认关闭，开启后雾会带上颜色。","en_us":"Lets the volume's colored light illuminate the surrounding air so caves show colored glow; off by default."}}
-//#define OMNI_LPV_VL_FOG_ILLUMINATION
+#define OMNI_LPV_VL_FOG_ILLUMINATION 0 // [0 1]
 // @option {"label":{"zh_cn":"雾照明亮度","en_us":"Fog illumination brightness"},"description":{"zh_cn":"被照亮的雾的亮度，一百为基准；只在雾照明开启时生效。","en_us":"Brightness of the lit fog, 100 is the baseline; only used when Fog illumination is on."},"slider":true}
 #define OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS 50 // [0 5 10 15 20 25 30 35 40 45 50 55 60 65 70 75 80 85 90 95 100 110 120 130 140 150 160 180 200 250 300]
 // @option {"label":{"zh_cn":"雾照明-手持光","en_us":"Fog illumination - handheld"},"description":{"zh_cn":"让手里的火把、荧石等手持光源也照亮空气，光色取自手持物品；只在雾照明开启时生效，默认关闭、等于 Eclipse。","en_us":"Lets held light sources such as a torch or glowstone also light up the air, using the held item's own colour; only used when Fog illumination is on; off by default to match Eclipse."}}
-//#define OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD
+#define OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD 0 // [0 1]
 // @option {"label":{"zh_cn":"雾照明-水下手持光","en_us":"Fog illumination - water handheld"},"description":{"zh_cn":"在水下让手持光源照亮水体，靠近火把的水先亮暖色、远处只剩青蓝；只在雾照明开启时生效，默认开、等于 Eclipse。","en_us":"Underwater, lets held light sources light up the water, warm near the torch and blue-green farther out; only used when Fog illumination is on; on by default to match Eclipse."}}
 #define OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER
 
 // 雾照明是否具备条件：要同时开启雾照明与体积光，并具备自定义图像能力，三者齐备才让雾去采样体积图；缺少任一项就整段退回原样。
-#if defined OMNI_LPV_VL_FOG_ILLUMINATION && defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
+#if OMNI_LPV_VL_FOG_ILLUMINATION && OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES
 	#define OMNI_LPV_FOG_LIGHT // 置上标记，供雾的算法体判断是否可以采样体积图。
 #endif
 
@@ -165,7 +165,7 @@ uint omniLpvDroppedItemVoxelId(int item){
 
 // ========================= 片元取样：读体积图并混回表面 =========================
 // 只在非计算阶段、开启功能且具备自定义图像能力时编译，否则整段不参与。
-#if !defined(OMNI_COMPUTE) && defined(OMNI_LPV_ENABLED) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+#if !defined(OMNI_COMPUTE) && OMNI_LPV_ENABLED && defined(IRIS_FEATURE_CUSTOM_IMAGES)
 uniform sampler3D omniLpvTex1; // 偶数帧写入的一张体积图，片元只读。
 uniform sampler3D omniLpvTex2; // 奇数帧写入的另一张，交替读取。
 // 读一个体积样本并解码：先把存下的 RGB 当 HSV 还原，再按 Eclipse 的编码曲线缩放。
@@ -200,7 +200,7 @@ vec3 omniLpvApply(vec3 blockLight, vec3 playerPos, vec3 worldNormal){
 // 只在雾照明与对应手持选项同时开启时才定义，避免默认配置里出现无人调用的函数。
 // 为什么不用体积图：手持光源跟着玩家走、也不会被阴影阶段写进体素，而光表里本来就存着每个物品的光色与范围，
 // 直接按手持物品编号读表最省，也与 Eclipse `diffuse_lighting.glsl:74` 的 `GetHandLight` 同一套做法。
-#if defined OMNI_LPV_FOG_LIGHT && (defined OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD || defined OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER)
+#if defined OMNI_LPV_FOG_LIGHT && (OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD || defined OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER)
 uniform usampler1D omniLpvBlocksTex; // 方块光表按整数采样器读，与计算阶段写的图像 `omniLpvBlocks` 是同一张纹理。
 // 把打包在低字里的光色与范围拆出来：按字节顺序还原四个零到一分量，避免依赖打包扩展。
 vec4 omniLpvUnpackColorRange(uint packed){
@@ -224,7 +224,7 @@ vec3 omniLpvHandLight(int itemId, vec3 playerPos){
 // ========================= 顶点写体素：阴影顶点阶段把方块编号写进体素图 =========================
 // 只在阴影顶点阶段编译；远景阴影不写，因为它的几何和近景阴影不同源。
 // 为什么同时接受体积光与体素反射两个开关：编号图是两者共用的，谁打开都要有这张图，缺一就补不了。
-#if !defined(OMNI_COMPUTE) && defined(OMNI_VERTEX) && defined(OMNI_SHADOW_PASS) && !defined(OMNI_DH_SHADOW_PASS) && (defined(OMNI_LPV_ENABLED) || defined(OMNI_VOXEL_REFLECTION)) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+#if !defined(OMNI_COMPUTE) && defined(OMNI_VERTEX) && defined(OMNI_SHADOW_PASS) && !defined(OMNI_DH_SHADOW_PASS) && (OMNI_LPV_ENABLED || OMNI_VOXEL_REFLECTION) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
 layout(r16ui) uniform restrict uimage3D omniLpvVoxel; // 体素编号图，阴影顶点写、计算只读。
 // 把方块编号写进对应体素格，越界丢弃；照 Eclipse `SetVoxelBlock`。
 void omniVoxelStore(ivec3 coord, uint blockId){
@@ -235,7 +235,7 @@ void omniVoxelStore(ivec3 coord, uint blockId){
 
 // ========================= 计算阶段：方块光表与传播 =========================
 // 只有计算阶段、开启功能且具备自定义图像能力时才编译下面的图像、光表与传播函数。
-#if defined(OMNI_COMPUTE) && defined(OMNI_LPV_ENABLED) && defined(IRIS_FEATURE_CUSTOM_IMAGES)
+#if defined(OMNI_COMPUTE) && OMNI_LPV_ENABLED && defined(IRIS_FEATURE_CUSTOM_IMAGES)
 layout(rgba8) uniform restrict image3D omniLpv1; // 传播缓冲之一（偶数帧写）。
 layout(rgba8) uniform restrict image3D omniLpv2; // 另一个缓冲（奇数帧写）。
 layout(r16ui) uniform restrict uimage3D omniLpvVoxel; // 体素编号，阴影顶点阶段写入。

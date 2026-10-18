@@ -93,7 +93,7 @@ void main(){
 	viewPos = v_viewPos.xyz; // 传给片元，用下沉后的位置重建世界坐标。
 	gl_Position = dhProjection * v_viewPos; // 用远景投影。
 
-	#if defined(OMNI_TAA) && defined(OMNI_DH_TAA_JITTER) // 远景自己也抖动时才加本帧抖动；关掉远景抖动时远景稳定、不与近景同抖。
+	#if defined(OMNI_TAA) && OMNI_DH_TAA_JITTER // 远景自己也抖动时才加本帧抖动；关掉远景抖动时远景稳定、不与近景同抖。
 		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加抖动。
 	#endif
 
@@ -142,7 +142,7 @@ void main(){
 	viewPos = v_viewPos.xyz; // 传给片元，用下沉后的位置重建世界坐标。
 	gl_Position = dhProjection * v_viewPos; // 用远景投影。
 
-	#if defined(OMNI_TAA) && defined(OMNI_DH_TAA_JITTER) // 远景自己也抖动时才加本帧抖动；关掉远景抖动时远景稳定、不与近景同抖。
+	#if defined(OMNI_TAA) && OMNI_DH_TAA_JITTER // 远景自己也抖动时才加本帧抖动；关掉远景抖动时远景稳定、不与近景同抖。
 		gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加抖动。
 	#endif
 

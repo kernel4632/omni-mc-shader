@@ -212,10 +212,10 @@ void CompositeSceneColor(){
 	#endif
 
 	#if !defined OMNI_NETHER && !defined OMNI_END
-		#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE || (defined OMNI_VFOG && !defined OMNI_DOF)
+		#if OMNI_LENS_GLARE || OMNI_LENS_FLARE || (defined OMNI_VFOG && !defined OMNI_DOF)
 			compositeOutput3 = vec4(0.0); // 默认没有镜头光斑。
 
-			#if defined OMNI_LENS_GLARE || defined OMNI_LENS_FLARE
+			#if OMNI_LENS_GLARE || OMNI_LENS_FLARE
 				if (sunVisibility > 0.0 && isEyeInWater == 0) compositeOutput3.rgb = LensFlare(); // 看得到太阳时画眩光与光斑。
 			#endif
 

@@ -25,7 +25,7 @@
 #define OMNI_GRASS_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"程序化草","en_us":"Shader grass"}}
 // @option {"label":{"zh_cn":"程序化草","en_us":"Shader grass"},"description":{"zh_cn":"在草方块顶面长出会随风摆动的立体草丛。关闭时整条通路不参与编译。","en_us":"Grows wind-swept blades on grass blocks. Nothing compiles while off."}}
-//#define OMNI_SHADER_GRASS
+#define OMNI_SHADER_GRASS 0 // [0 1]
 // @option {"label":{"zh_cn":"草叶质量","en_us":"Grass quality"},"description":{"zh_cn":"一片草叶最多几段：低三段、中五段、高七段；越高越圆润也越慢。","en_us":"Segments per blade: Low 3, Medium 5, High 7; higher is smoother and slower."},"values":{"0":{"zh_cn":"低","en_us":"Low"},"1":{"zh_cn":"中","en_us":"Medium"},"2":{"zh_cn":"高","en_us":"High"}}}
 #define OMNI_GRASS_QUALITY 1 // [0 1 2]
 // @option {"label":{"zh_cn":"细分等级","en_us":"Grass density"},"description":{"zh_cn":"每个草方块顶面长几片草，越高越密也越慢；本项目没有细分着色器，用多长几片草来近似 Eclipse 的细分等级。","en_us":"Blades per grass block top; higher is denser and slower. Without tessellation shaders this approximates Eclipse's subdivision level."},"values":{"0":{"zh_cn":"低","en_us":"Low"},"1":{"zh_cn":"中","en_us":"Medium"},"2":{"zh_cn":"高","en_us":"High"},"3":{"zh_cn":"非常高","en_us":"Very high"}}}
@@ -45,9 +45,9 @@
 // @option {"label":{"zh_cn":"替换原版矮草","en_us":"Replace vanilla short grass"},"description":{"zh_cn":"否：原版矮草照旧；是：隐藏范围内的原版矮草，草方块顶面照常长草；仅矮草：只把原版矮草换成程序化草，草方块顶面不长。","en_us":"Off keeps vanilla short grass; On hides it within range and grows grass on grass blocks; Short grass only replaces just the vanilla short grass with blades and leaves grass blocks bare."},"values":{"0":{"zh_cn":"否","en_us":"Off"},"1":{"zh_cn":"是","en_us":"On"},"2":{"zh_cn":"仅矮草","en_us":"Short grass only"}}}
 #define OMNI_REPLACE_SHORT_GRASS 0 // [0 1 2]
 // @option {"label":{"zh_cn":"草底部检测","en_us":"Grass edge detection"},"description":{"zh_cn":"草丛紧挨台阶或落差的一侧会压低草叶，避免越过隔壁地面；关时四周一样高。来源 Eclipse `GRASS_DETECT_FALLOFF`。","en_us":"Lowers blades on the side of a step or drop-off so they do not spill over the edge; off keeps all sides equal. From Eclipse `GRASS_DETECT_FALLOFF`."}}
-#define OMNI_GRASS_DETECT_FALLOFF
+#define OMNI_GRASS_DETECT_FALLOFF 1 // [0 1]
 // @option {"label":{"zh_cn":"草侧向检测","en_us":"Grass side detection"},"description":{"zh_cn":"草丛旁边也是草或矮草时把草叶抬高，草场中央因此更高；关时只保留底部检测的压低。来源 Eclipse `GRASS_DETECT_INV_FALLOFF`。","en_us":"Raises blades when a neighbour is grass or short grass, so the middle of a field is taller; off keeps only the edge lowering. From Eclipse `GRASS_DETECT_INV_FALLOFF`."}}
-#define OMNI_GRASS_DETECT_INV_FALLOFF
+#define OMNI_GRASS_DETECT_INV_FALLOFF 1 // [0 1]
 // 草方块编号：本项目的 `block.properties` 把草方块编号定为八十五，与 Eclipse 一致。
 // 为什么用八十五：Eclipse 的草方块就是八十五，沿用同一个数字便于和参考对照。
 #define OMNI_GRASS_BLOCK_ID 85.0 // 草方块编号，几何阶段按它挑出草方块顶面。

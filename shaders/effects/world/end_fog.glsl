@@ -28,7 +28,7 @@
 //   本项目没有这块缓冲，且原程序在不开 `END_LIGHTNING` 时整段退化为「纯涡旋」锚点，所以这里直接取纯涡旋锚点。
 //   二、原程序把雾的吸收率交回上层乘在场景上；本项目把吸收率随返回值带回，
 //   只叠散射的调用点只用散射色，合成阶段按 `color = color * 透射率 + 散射色` 让被雾挡住的背景真正变暗。
-#ifdef OMNI_END_VORTEX_FOG // 开关关闭时整段不编译，默认画面与采样都省掉。
+#if OMNI_END_VORTEX_FOG // 开关关闭时整段不编译，默认画面与采样都省掉。
 
 // 读一张贴着世界坐标的三维噪声：水平切格后，用噪声贴图的上下两层按高度插值，得到雾团的颗粒。
 float EndVortexNoise(vec3 pos){
@@ -178,7 +178,7 @@ vec4 EndFogLayers(float dist, vec3 worldDir){
 	vec3 fog = vec3(density * 1e-5 * OMNI_SUNLIGHT_INTENSITY); // 解析雾的贡献，换算到管线单位并乘阳光强度。
 
 	float transmittance = 1.0; // 解析雾只加色不遮挡，默认全透；只有体积涡旋雾会把它压下来。
-	#ifdef OMNI_END_VORTEX_FOG // 打开涡旋体积雾时再沿视线叠一层，关闭时这一行不生成，透射率保持为一。
+	#if OMNI_END_VORTEX_FOG // 打开涡旋体积雾时再沿视线叠一层，关闭时这一行不生成，透射率保持为一。
 		vec4 vortex = EndVortexFog(worldDir, dist); // 体积涡旋雾的散射色与剩余透射率。
 		fog += vortex.rgb; // 散射色照旧叠加。
 		transmittance = vortex.a; // 交回体积雾的透射率，供合成阶段压暗背景。

@@ -36,9 +36,9 @@
 
 // @effect {"label":{"zh_cn":"每日天气","en_us":"Daily weather"}}
 // @option {"label":{"zh_cn":"每日天气表","en_us":"Daily weather table"},"description":{"zh_cn":"按游戏日轮换取当天的云量与雾密度；默认关闭，关闭时画面与原来一致。","en_us":"Rotates cloud coverage and fog density by in-game day; off by default, so the default look is unchanged."}}
-//#define OMNI_DAILY_WEATHER
+#define OMNI_DAILY_WEATHER 0 // [0 1]
 // @option {"label":{"zh_cn":"随机天气","en_us":"Random weather"},"description":{"zh_cn":"每天从十天里随机取一行，而不是按天数顺序取；只在每日天气表开启时生效。","en_us":"Picks a random row of ten each day instead of cycling in order; used only when the table is on."}}
-//#define OMNI_DAILY_WEATHER_RANDOM
+#define OMNI_DAILY_WEATHER_RANDOM 0 // [0 1]
 // @option {"label":{"zh_cn":"轮换天数","en_us":"Cycle length"},"description":{"zh_cn":"多少天走完一遍天气表；取十天时和 Eclipse 默认一致，取小则只用前几行。","en_us":"Days to go through the whole table; ten matches Eclipse, smaller uses only the first rows."},"slider":true}
 #define OMNI_DAILY_WEATHER_CYCLE 10 // [1 2 3 4 5 6 7 8 9 10]
 
@@ -47,7 +47,7 @@
 // 共用数学：提供 `fract`、`mod`、`clamp` 等小工具，重复引入由守卫去重。
 #include "/common/math.glsl"
 
-#ifdef OMNI_DAILY_WEATHER // 关闭时下面整段不参与编译，默认画面与原来一致。
+#if OMNI_DAILY_WEATHER // 关闭时下面整段不参与编译，默认画面与原来一致。
 
 // --- 哈希：把整数天数打散成零到一的小数 ---
 // 照 Eclipse `dimensions/begin.csh:29-35` 的 `hash11` 一比一搬运，用于随机取档。
@@ -105,7 +105,7 @@ const vec2 OMNI_WEATHER_FOG[10] = vec2[](
 // --- 取档：算出当天应该用天气表的哪一行 ---
 // 返回零到九的行号，供表取值；`worldDay` 从加载器来，跨天自增。
 int omniWeatherDayIndex(){
-	#ifdef OMNI_DAILY_WEATHER_RANDOM // 随机模式：用哈希在十天里跳着取。
+	#if OMNI_DAILY_WEATHER_RANDOM // 随机模式：用哈希在十天里跳着取。
 		return int(clamp(omniWeatherHash(float(mod(worldDay, 1000))) * 10.0, 0.0, 9.0)); // 先压缩天数范围再哈希取整，结果落在十天之内。
 	#else // 顺序模式：按天数对轮换周期取余。
 		return int(mod(worldDay, OMNI_DAILY_WEATHER_CYCLE)); // 走完一遍从头开始。

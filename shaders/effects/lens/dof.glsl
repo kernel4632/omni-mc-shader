@@ -122,7 +122,7 @@ vec4 DepthOfField(){
 	float spreadCoc = currData.a * maxCoc; // 把存下来的弥散范围还原成半径。
 	float centerWeight = spreadCoc * spreadCoc - spreadCoc + 1.0; // 中心权重多项式。
 	centerWeight = mix(centerWeight, 1e-20, pow(currCoc / spreadCoc, 4.0)); // 当前点自己很清晰时把它自己压到极小。
-	#ifdef OMNI_DOF_CATSEYE // 猫眼效应：把散焦区域在画面边缘裁成椭圆。
+	#if OMNI_DOF_CATSEYE // 猫眼效应：把散焦区域在画面边缘裁成椭圆。
 		vec2 catsEyeOffset = (texCoord) * 2.0 - 1.0; // 从中心指向当前点。
 		catsEyeOffset.x *= aspectRatio; // 按宽高比修正成圆。
 		float catsEyeDist = length(catsEyeOffset); // 到中心的距离。
@@ -149,7 +149,7 @@ vec4 DepthOfField(){
 		rot *= rotMat; // 每步旋转一点。
 		float sampleRadius = sqrt((i + noise.y) * rSteps) * spreadCoc; // 样本半径。
 		vec2 sampleCoordOffset = rot * sampleRadius; // 屏幕偏移。
-		#ifdef OMNI_DOF_CATSEYE // 猫眼裁剪：偏移超出裁剪半径就跳过。
+		#if OMNI_DOF_CATSEYE // 猫眼裁剪：偏移超出裁剪半径就跳过。
 			if (distance(catsEyeOffset, sampleCoordOffset) > spreadCoc) continue; // 超出就不采。
 		#endif
 		sampleCoordOffset.x *= rAspectRatio * OMNI_DOF_ANAMORPHIC_RATIO; // 按宽高比修正后再按变形比横向拉伸；变形比为一表示不变形。

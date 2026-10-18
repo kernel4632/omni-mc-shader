@@ -23,12 +23,12 @@
 
 // @effect {"label":{"zh_cn":"波浪模拟","en_us":"Wave simulation"}}
 // @option {"label":{"zh_cn":"波浪模拟","en_us":"Wave simulation"},"description":{"zh_cn":"玩家在水面移动时，水面被推出一圈会自己传播和衰减的波纹（Eclipse 的波浪模拟）。默认关闭；需要计算着色器与自定义图像能力，缺少时自动跳过、画面不变。","en_us":"Waves that spread and fade as the player moves on water (Eclipse's Wave Simulation). Off by default; needs compute shaders and custom images, and is skipped when they are missing."}}
-//#define OMNI_WAVE_SIMULATION
+#define OMNI_WAVE_SIMULATION 0 // [0 1]
 // @option {"label":{"zh_cn":"模拟波纹强度","en_us":"Simulation strength"},"description":{"zh_cn":"模拟波纹盖过基础波法线的程度；调大波纹更明显。上一项关闭时不生效。","en_us":"How strongly the simulated ripples override the base wave normals; larger is more visible. Has no effect while the option above is off."},"slider":true}
 #define OMNI_WAVE_SIM_STRENGTH 1.0 // [0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.4 1.6 1.8 2.0]
 
 // 只有开启选项且加载器真的提供自定义图像能力，才打开整段实现；两者缺一，下面什么都不编译。
-#if defined OMNI_WAVE_SIMULATION && defined IRIS_FEATURE_CUSTOM_IMAGES
+#if OMNI_WAVE_SIMULATION && defined IRIS_FEATURE_CUSTOM_IMAGES
 	#define OMNI_WAVE_SIM_ON 1 // 单一开关，图像声明、计算与采样都看它，避免半开半关对不上。
 #endif
 

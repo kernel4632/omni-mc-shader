@@ -519,11 +519,11 @@
 		vec4 cloudImage = textureLod(colortex10, texCoord, 0.0); // 双线性放大低分辨率体积云。
 		vec3 color = CurveToLinear(base.rgb) * MAIN_OUTPUT_FACTOR; // 一号画面解回管线亮度单位。
 		color = color * cloudImage.a + cloudImage.rgb; // 体积云：天空乘透过率加云色。
-		#ifdef OMNI_PLANAR_CLOUDS // 平面云仍在全分辨率上算，接在体积云之后，顺序与从前一致。
+		#if OMNI_PLANAR_CLOUDS // 平面云仍在全分辨率上算，接在体积云之后，顺序与从前一致。
 			if (cameraPosition.y < OMNI_PLANAR_ALTITUDE && !intersectsGround)
 				PlanarClouds(color, worldDir, camera, noise.y, cloudImage.a); // 平面云，传入体积云留下的透过率。
 		#endif
-		#if OMNI_CLOUD_CUMULONIMBUS > 0 || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层同样在全分辨率上叠加。
+		#if OMNI_CLOUD_CUMULONIMBUS > 0 || OMNI_CLOUD_ALTOSTRATUS || OMNI_CLOUD_CIRRUS // 附加层同样在全分辨率上叠加。
 			float cloudTransmittance = cloudImage.a; // 从体积云留下的透过率接着算。
 			NubisExtraLayers(color, worldDir, windDirection, camera, noise, intersectsGround, cloudTransmittance); // 卷云、高层云与积雨云。
 		#endif

@@ -65,7 +65,7 @@ float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
 				float sampleDepth = textureLod(depthtex1, sampleCoord, 0.0).x; // 采样深度。
 				#ifdef DISTANT_HORIZONS // 远景处理。
 					vec3 sampleVector = vec3(0.0); // 采样向量。
-					#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景样本当作遮挡物。
+					#if OMNI_DH_AO // 只有开启远景遮蔽才把远景样本当作遮挡物。
 						if (sampleDepth == 1.0){ // 天空像素改读远景深度。
 							sampleDepth = textureLod(dhDepthTex0, sampleCoord, 0.0).x; // 远景深度。
 							sampleVector = ViewPos_From_ScreenPos_DH(sampleCoord, sampleDepth); // 远景还原。
@@ -94,7 +94,7 @@ float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
 				float sampleDepth = textureLod(depthtex1, sampleCoord, 0.0).x; // 采样深度。
 				#ifdef DISTANT_HORIZONS // 远景处理。
 					vec3 sampleVector = vec3(0.0); // 采样向量。
-					#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景样本当作遮挡物。
+					#if OMNI_DH_AO // 只有开启远景遮蔽才把远景样本当作遮挡物。
 						if (sampleDepth == 1.0){ // 天空像素改读远景深度。
 							sampleDepth = textureLod(dhDepthTex0, sampleCoord, 0.0).x; // 远景深度。
 							sampleVector = ViewPos_From_ScreenPos_DH(sampleCoord, sampleDepth); // 远景还原。

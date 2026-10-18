@@ -295,7 +295,7 @@ void main(){
 
 		if (iswater){
 			vec3 simWorldPos = mcPos; // 视差改写前的世界位置：模拟场按它取坐标，不受波高偏移影响。
-			#ifdef OMNI_WATER_PARALLAX // 开启水面视差时按波高偏移采样位置。
+			#if OMNI_WATER_PARALLAX // 开启水面视差时按波高偏移采样位置。
 				mcPos = GetWaterParallaxCoord(mcPos, normalize(viewPos.xyz * tbn)); // 找到真正可见的波面位置。
 			#endif
 			NdotU = saturate(NdotU + float(isEyeInWater == 1) * 2.0); // 在水下时朝向视为朝上。

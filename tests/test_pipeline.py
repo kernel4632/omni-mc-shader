@@ -126,6 +126,12 @@ class PipelineTests(unittest.TestCase):
             source.write_text(json.dumps(data), encoding="utf-8")
             migrated = config.shared(source, found, build.version())  # 导入应当通过并被忽略，而不是报未知选项。
             self.assertNotIn(removed, migrated["values"])  # 已移除的项不再出现在结果里。
+            # ?????? 0/1 ?????????? true/false ?????
+            toggle = next(name for name, option in found.items() if tuple(option.values) == ("0", "1"))
+            for old_value, new_value in (("true", "1"), ("false", "0")):
+                data["values"] = {toggle: old_value}
+                source.write_text(json.dumps(data), encoding="utf-8")
+                self.assertEqual(config.shared(source, found, build.version())["values"][toggle], new_value)
 
     def test_comment_audit_ignores_normal_strings(self):
         """只有注释和接口文档算中文，字符串不能凑比例。"""

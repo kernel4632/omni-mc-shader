@@ -28,13 +28,13 @@
 #define OMNI_BLOOM_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"泛光","en_us":"Bloom"}}
 // @option {"label": {"zh_cn": "泛光开关", "en_us": "Bloom"}, "description": {"zh_cn": "让亮部产生柔和光晕。", "en_us": "Adds a soft glow around bright areas."}}
-#define OMNI_BLOOM
+#define OMNI_BLOOM 1 // [0 1]
 // @option {"label": {"zh_cn": "泛光强度", "en_us": "Bloom Amount"}, "slider": true, "description": {"zh_cn": "光晕混入场景的强度，越大越亮。", "en_us": "How strongly the glow is mixed into the scene."}}
 #define OMNI_BLOOM_AMOUNT 0.13 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.25 0.3 0.35 0.4 0.45 0.5 0.6 0.7 0.8 0.9 1.0]
 // @option {"label": {"zh_cn": "下界末地泛光增强", "en_us": "Nether End Bloom Boost"}, "slider": true, "description": {"zh_cn": "下界与末地雾中的泛光额外增强量。", "en_us": "Extra bloom boost through Nether and End fog."}}
 #define OMNI_NETHER_END_BLOOM_BOOST 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label": {"zh_cn": "体积雾散射泛光", "en_us": "Volumetric Fog Scattering Bloom"}, "description": {"zh_cn": "用体积雾的散射引导泛光，让光柱周围一起发亮。", "en_us": "Uses volumetric fog scattering to guide the glow around light shafts."}}
-#define OMNI_VFOG_BLOOM
+#define OMNI_VFOG_BLOOM 1 // [0 1]
 // @option {"label": {"zh_cn": "雾内泛光", "en_us": "Bloomy Fog"}, "slider": true, "description": {"zh_cn": "把光晕往体积雾里按雾的浓淡混进去，让雾看起来柔和、顺带盖住一点噪点；零为关闭、画面不变。来源 Eclipse `lib/settings.glsl:215` 的 `BLOOMY_FOG`（原程序默认零点五）。", "en_us": "Blends the glow into volumetric fog by how thick the fog is, making it look soft and hiding a little noise; zero is off and changes nothing. From Eclipse `BLOOMY_FOG` (upstream default 0.5)."}}
 #define OMNI_FOG_BLOOM 0.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 3.0 4.0 6.0 10.0 15.0 20.0]
 // @option {"label": {"zh_cn": "水下雾内泛光", "en_us": "Underwater Bloomy Fog"}, "slider": true, "description": {"zh_cn": "在水下把光晕按水的浓淡混进去，让浑水里也有柔光；零为关闭、画面不变。来源 Eclipse `lib/settings.glsl:216` 的 `UNDERWATER_BLOOMY_FOG`（原程序默认一）。", "en_us": "Underwater, blends the glow by how murky the water is; zero is off and changes nothing. From Eclipse `UNDERWATER_BLOOMY_FOG` (upstream default 1.0)."}}
@@ -175,7 +175,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 	bloomAmount = max(bloomAmount, fogFactor); // 取两者较大值。
 #endif
 #ifdef OMNI_OVERWORLD // 主世界还要看下雨和体积雾。
-	#ifndef OMNI_INDOOR_FOG // 室外按天空光给雨的泛光。
+	#if !OMNI_INDOOR_FOG // 室外按天空光给雨的泛光。
 		float rainBloomAmount = wetness * (0.2 * eyeBrightnessSmoothCurved + 0.15); // 湿润度与天空光共同决定。
 	#else // 室内按固定值。
 		float rainBloomAmount = wetness * 0.35; // 室内雨的泛光。
@@ -186,7 +186,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 	float fogBloomEdge = clamp(1.0 - pow(max(abs(texCoord.x - 0.5), abs(texCoord.y - 0.5)) * 2.0, 15.0), 0.0, 1.0); // 越靠近屏幕边缘越淡。
 	#if defined OMNI_VFOG && !defined OMNI_DOF // 开体积雾且没开景深时，才用体积雾的浓淡引导（`colortex3` 此时存的是体积雾吸收）。
 		float fogGuide = textureLod(colortex3, texCoord + taaJitter * 0.5, 0.0).a; // 读体积雾吸收（一减透过率），雾越浓越大。
-		#ifdef OMNI_VFOG_BLOOM // 只有开启体积雾散射泛光才处理。
+		#if OMNI_VFOG_BLOOM // 只有开启体积雾散射泛光才处理。
 			bloomAmount = max(bloomAmount, fogGuide * bloomGuide); // 只在亮的地方随雾增强。
 		#endif
 		// 雾内泛光：照 Eclipse `dimensions/composite11.fsh:314` 把光晕往雾里按雾的浓淡混，让雾变柔、盖住噪点。
@@ -204,7 +204,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 		}
 	#endif
 #endif
-	#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 失明或黑暗效果时不加光晕。
+	#if !OMNI_DISABLE_BLINDNESS_DARKNESS // 失明或黑暗效果时不加光晕。
 		bloomAmount *= 1.0 - blindness - darknessFactor; // 按遮挡强度压低。
 	#endif
 	return mix(color, bloom, saturate(bloomAmount)); // 按占比把光晕混进场景。

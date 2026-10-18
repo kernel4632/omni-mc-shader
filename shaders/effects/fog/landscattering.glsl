@@ -48,7 +48,7 @@ void LandAtmosphericScattering(inout vec3 color, in float dist, vec3 startPos, v
 	#ifdef OMNI_VFOG // 有体积雾时按白天缩放，避免和体积雾双重叠加。
 		strength *= timeNoon;
 	#endif
-	#ifndef OMNI_INDOOR_FOG // 默认随天空光等级衰减。
+	#if !OMNI_INDOOR_FOG // 默认随天空光等级衰减。
 		strength *= eyeBrightnessSmoothCurved;
 	#endif
 
@@ -62,7 +62,7 @@ void LandAtmosphericScattering(inout vec3 color, in float dist, vec3 startPos, v
 
 		float shadowDist = dist; // 受光的距离，默认等于总距离。
 
-		#ifdef OMNI_LANDSCATTERING_SHADOW // 打开阴影遮蔽时沿视线段查阴影图，按被挡的比例缩短受光距离。
+		#if OMNI_LANDSCATTERING_SHADOW // 打开阴影遮蔽时沿视线段查阴影图，按被挡的比例缩短受光距离。
 			float rSteps = 1.0 / OMNI_LANDSCATTERING_SHADOW_QUALITY; // 采样数倒数。
 
 			vec3 shadowStart = ShadowScreenPos_From_WorldPos(startPos + gbufferModelViewInverse[3].xyz); // 起点投到阴影图。

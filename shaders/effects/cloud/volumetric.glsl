@@ -150,7 +150,7 @@ void NubisCloudLayer(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 w
 			if (cloudTransmittance < 0.0001) break; // 几乎不透明就不再采样。
 		}
 	// 空气透视：远处云融进大气，近处云保持实体。
-		#ifdef OMNI_CLOUD_FADE // 打开淡出时按距离混合。
+		#if OMNI_CLOUD_FADE // 打开淡出时按距离混合。
 			rayHitPos /= sumTransmit; // 平均命中位置。
 			rayHitPos -= cameraPosition; // 换成相对相机的方向。
 			float fade = saturate(exp2(-length(rayHitPos) * 8e-5)); // 越远越淡。
@@ -183,7 +183,7 @@ void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 wind
 	vec2 lightingStrength = vec2(mix(OMNI_CLOUD_CLEAR_SUNLIGHTING, OMNI_CLOUD_RAIN_SUNLIGHTING, wetness), // 直射强度按天气插值。
 								 mix(OMNI_CLOUD_CLEAR_SKYLIGHTING, OMNI_CLOUD_RAIN_SKYLIGHTING, wetness)); // 环境强度按天气插值。
 	float cloudScale = mix(OMNI_CLOUD_CLEAR_SCALE, OMNI_CLOUD_RAIN_SCALE, wetness); // 云块大小按天气插值。
-	#ifdef OMNI_DAILY_WEATHER // 每日天气开启时，当天云量顶替“晴天云量”这一侧，雨天侧仍按湿润度插值。
+	#if OMNI_DAILY_WEATHER // 每日天气开启时，当天云量顶替“晴天云量”这一侧，雨天侧仍按湿润度插值。
 		vec4 dailyCoverage = omniWeatherCoverage(); // 当天四层覆盖度：`x` 小积云、`y` 大积云、`z` 高层云、`w` 卷云。
 		vec4 dailyDensity = omniWeatherDensity(); // 当天四层消光密度，顺序同上。
 		float clearCoverage = max(dailyCoverage.x, dailyCoverage.y); // Omni 只有一层积云，把小积云与大积云取较大者合并成这一天的低空云量。
@@ -199,7 +199,7 @@ void NubisCumulus(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 wind
 // 附加层：卷云、高层云与积雨云，默认全部关闭；关闭时整段不参与编译，不产生任何额外采样。
 // 打开后各自把海拔、厚度、云量、密度、尺度与受光交给同一套步进核心，按 Eclipse 的分层顺序叠加。
 // 调用前提：`color` 是已叠好天空与基础云的天空颜色，`intersectsGround` 是视线是否打到地面。
-#if OMNI_CLOUD_CUMULONIMBUS > 0 || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS
+#if OMNI_CLOUD_CUMULONIMBUS > 0 || OMNI_CLOUD_ALTOSTRATUS || OMNI_CLOUD_CIRRUS
 void NubisExtraLayers(inout vec3 color, vec3 worldDir, vec3 windDirection, vec3 camera, vec2 noise, bool intersectsGround, inout float cloudTransmittance){
 	#if OMNI_CLOUD_CUMULONIMBUS > 0 // 积雨云：高耸的雷暴云，最先叠在基础云之上。
 		// 为什么不受每日天气影响：Eclipse 的积雨云由雷暴强度与固定密度驱动，每日天气表没有它，所以这里只取积雨云自己的选项。
@@ -216,7 +216,7 @@ void NubisExtraLayers(inout vec3 color, vec3 worldDir, vec3 windDirection, vec3 
 			float cumulonimbusTransmittance; // 这一层留下的透过率。
 			NubisCloudLayer(color, worldDir, cumulonimbusAltitude, windDirection, camera, noise, cumulonimbusTransmittance, // 复用基础云的步进核心。
 				vec2(OMNI_CLOUD_CUMULONIMBUS_SUNLIGHTING, OMNI_CLOUD_CUMULONIMBUS_SKYLIGHTING), OMNI_CLOUD_CUMULONIMBUS_SCALE, OMNI_CLOUD_CUMULONIMBUS_DENSITY * cumulonimbusStrength, OMNI_CLOUD_CUMULONIMBUS_COVERAGE); // 受光、尺度、云量与档位强度缩放后的密度。
-			#if defined OMNI_CUMULONIMBUS_LIGHTNING && defined OMNI_LIGHTNING && defined IS_IRIS // 只有真实闪电输入可用时才加云内闪电。
+			#if OMNI_CUMULONIMBUS_LIGHTNING && OMNI_LIGHTNING && defined IS_IRIS // 只有真实闪电输入可用时才加云内闪电。
 				if (lightningBoltPosition.w > 0.0){ // 没有闪电事件时不加。
 					float boltDistance = length(lightningBoltPosition.xyz); // 闪电到相机的距离，闪电位置是相机相对坐标。
 					float distanceWeight = saturate(1.0 - boltDistance / 7500.0); // 超过七千五百格的闪电照不到云。
@@ -227,11 +227,11 @@ void NubisExtraLayers(inout vec3 color, vec3 worldDir, vec3 windDirection, vec3 
 			cloudTransmittance *= cumulonimbusTransmittance; // 积雨云也挡住后面的天体。
 		}
 	#endif
-	#ifdef OMNI_CLOUD_ALTOSTRATUS // 高层云：中等高度的一片云层。
+	#if OMNI_CLOUD_ALTOSTRATUS // 高层云：中等高度的一片云层。
 		vec2 altostratusAltitude = vec2(OMNI_CLOUD_ALTOSTRATUS_ALTITUDE); // 底部高度。
 		altostratusAltitude.y += OMNI_CLOUD_ALTOSTRATUS_THICKNESS; // 顶部高度。
 		if ((cameraPosition.y > altostratusAltitude.x || !intersectsGround) && (cameraPosition.y < altostratusAltitude.y || worldDir.y < 0.0)){ // 同一可见判据。
-			#ifdef OMNI_DAILY_WEATHER // 每日天气开启时，高层云的云量与密度取当天第三项 `l2`。
+			#if OMNI_DAILY_WEATHER // 每日天气开启时，高层云的云量与密度取当天第三项 `l2`。
 				float altostratusDensity = omniWeatherDensity().b; // 当天高层云密度。
 				float altostratusCoverage = omniWeatherCoverage().b; // 当天高层云量。
 			#else // 关闭时用选项原值，行为与引入每日天气之前完全一致。
@@ -244,11 +244,11 @@ void NubisExtraLayers(inout vec3 color, vec3 worldDir, vec3 windDirection, vec3 
 			cloudTransmittance *= altostratusTransmittance; // 高层云也挡住后面的天体。
 		}
 	#endif
-	#ifdef OMNI_CLOUD_CIRRUS // 卷云：最高处的一层薄云。
+	#if OMNI_CLOUD_CIRRUS // 卷云：最高处的一层薄云。
 		vec2 cirrusAltitude = vec2(OMNI_CLOUD_CIRRUS_ALTITUDE); // 底部高度。
 		cirrusAltitude.y += OMNI_CLOUD_CIRRUS_THICKNESS; // 顶部高度。
 		if ((cameraPosition.y > cirrusAltitude.x || !intersectsGround) && (cameraPosition.y < cirrusAltitude.y || worldDir.y < 0.0)){ // 同一可见判据。
-			#ifdef OMNI_DAILY_WEATHER // 每日天气开启时，卷云的云量与密度取当天第四项 `l3`。
+			#if OMNI_DAILY_WEATHER // 每日天气开启时，卷云的云量与密度取当天第四项 `l3`。
 				float cirrusDensity = omniWeatherDensity().a; // 当天卷云密度。
 				float cirrusCoverage = omniWeatherCoverage().a; // 当天卷云量。
 			#else // 关闭时用选项原值，行为与引入每日天气之前完全一致。

@@ -72,11 +72,11 @@
 // @option {"label":{"zh_cn":"地面大气散射距离","en_us":"Land scattering distance"},"description":{"zh_cn":"地面大气散射沿视线的累积倍率，越大越浓。","en_us":"Multiplier on the optical length for land scattering; larger is hazier."},"slider":true}
 #define OMNI_LANDSCATTERING_DISTANCE 0.003 // [0.001 0.002 0.003 0.005 0.007 0.01 0.15 0.2 0.3 0.5 0.7 1.0]
 // @option {"label":{"zh_cn":"地面大气散射阴影遮蔽","en_us":"Land scattering shadow"},"description":{"zh_cn":"在阴影区降低地面大气散射，避免阴影里也泛白。","en_us":"Reduces land scattering in shadowed areas so they do not wash out."}}
-//#define OMNI_LANDSCATTERING_SHADOW
+#define OMNI_LANDSCATTERING_SHADOW 0 // [0 1]
 // @option {"label":{"zh_cn":"阴影遮蔽采样质量","en_us":"Land scattering shadow quality"},"description":{"zh_cn":"地面大气散射阴影的采样次数，越高噪点越少也越慢。","en_us":"Samples for the land scattering shadow; higher is cleaner and slower."},"slider":true}
 #define OMNI_LANDSCATTERING_SHADOW_QUALITY 6 // [4 6 8 10 12 14 16 18 20 22 24 28 32 48 64 128]
 // @option {"label":{"zh_cn":"禁用光照衰减","en_us":"Disable fog falloff"},"description":{"zh_cn":"关闭体积雾与地表散射随天空光等级的衰减；关掉后暗处雾气可能过强。","en_us":"Disables the skylight falloff of fog and land scattering; off may be too foggy in the dark."}}
-//#define OMNI_INDOOR_FOG
+#define OMNI_INDOOR_FOG 0 // [0 1]
 // @option {"label":{"zh_cn":"反射中渲染体积雾","en_us":"Volumetric fog in reflections"},"description":{"zh_cn":"在屏幕反射里也补体积雾，反射不再是干净的镜面。","en_us":"Adds volumetric fog inside reflections so they are not mirror-clean."}}
 #define OMNI_VFOG_REFLECTION
 // @option {"label":{"zh_cn":"折射后渲染体积雾","en_us":"Volumetric fog after refraction"},"description":{"zh_cn":"在彩色玻璃后方的折射画面里补体积雾。","en_us":"Adds volumetric fog to the refracted image behind stained glass."}}
@@ -93,7 +93,7 @@
 // --- 洞穴雾与边界雾：来源 Eclipse `lib/settings.glsl:219-233` 与 `dimensions/composite4.fsh:449-533` ---
 // 两项在原程序里都默认开启且会改变画面，本项目按“默认中性”约定默认关闭，开启后才生效。
 // @option {"label":{"zh_cn":"洞穴雾","en_us":"Cave fog"},"description":{"zh_cn":"洞穴深处单独的一层雾，用可调颜色与衰减把黑暗空间填出空气感；默认关闭，开启后洞穴内画面会变化。","en_us":"A separate fog layer deep in caves with adjustable colour and falloff; off by default, turning it on changes the look inside caves."}}
-//#define OMNI_CAVE_FOG
+#define OMNI_CAVE_FOG 0 // [0 1]
 // @option {"label":{"zh_cn":"洞穴雾衰减","en_us":"Cave fog falloff"},"description":{"zh_cn":"洞穴雾由近向远变浓的快慢，越大越早变浓；只在洞穴雾开启时生效。","en_us":"How quickly cave fog thickens from near to far; larger thickens sooner; only used when Cave fog is on."},"slider":true}
 #define OMNI_CAVE_FOG_FALLOFF 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 4.0 5.0]
 // @option {"label":{"zh_cn":"洞穴雾红","en_us":"Cave fog red"},"description":{"zh_cn":"洞穴雾的红色分量，三个颜色分量一起决定雾色；只在洞穴雾开启时生效。","en_us":"Red component of the cave fog colour; only used when Cave fog is on."},"slider":true}
@@ -103,7 +103,7 @@
 // @option {"label":{"zh_cn":"洞穴雾蓝","en_us":"Cave fog blue"},"description":{"zh_cn":"洞穴雾的蓝色分量，三个颜色分量一起决定雾色；只在洞穴雾开启时生效。","en_us":"Blue component of the cave fog colour; only used when Cave fog is on."},"slider":true}
 #define OMNI_CAVE_FOG_COLOR_B 0.5 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99 1.0]
 // @option {"label":{"zh_cn":"区块边界雾","en_us":"Chunk border fog"},"description":{"zh_cn":"在渲染距离附近拉起一层天空色的雾墙，遮住区块加载；默认关闭，开启后远处会出现雾墙。","en_us":"Fades distant terrain into a sky-coloured fog wall near the render distance to hide chunk loading; off by default."}}
-//#define OMNI_BORDER_FOG
+#define OMNI_BORDER_FOG 0 // [0 1]
 // @option {"label":{"zh_cn":"边界雾浓度","en_us":"Border fog intensity"},"description":{"zh_cn":"边界雾雾墙出现的位置，数值越大雾墙离得越近、越明显；只在区块边界雾开启时生效。","en_us":"Where the fog wall appears; larger brings it closer and thicker; only used when Chunk border fog is on."},"slider":true}
 #define OMNI_BORDER_FOG_INTENSITY 0.6 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 
@@ -113,7 +113,7 @@
 // Eclipse 默认开启且会改变画面，本项目按“默认中性”约定把总开关默认关闭；下面的系数与总倍率虽然
 // 默认启用，但只在总开关打开后才参与计算，所以默认画面与原来一致。
 // @option {"label":{"zh_cn":"时段雾","en_us":"Time-of-day fog"},"description":{"zh_cn":"让体积雾密度随主世界一天时间与雾类型变化，来自 Eclipse；默认关闭，打开后夜间更浓、清晨与傍晚居中。","en_us":"Varies volumetric fog density by time of day and fog type, from Eclipse; off by default."}}
-//#define OMNI_TOD_FOG
+#define OMNI_TOD_FOG 0 // [0 1]
 // @option {"label":{"zh_cn":"时段雾总倍率","en_us":"Time-of-day fog multiplier"},"description":{"zh_cn":"统一放大或缩小四段时段密度，对应 Eclipse 的总倍率。","en_us":"Overall multiplier on the four time-of-day densities; matches Eclipse."},"slider":true}
 #define OMNI_TOD_FOG_MULT 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 3.0 4.0 5.0]
 // @option {"label":{"zh_cn":"清晨均匀雾密度","en_us":"Morning uniform fog density"},"description":{"zh_cn":"清晨“均匀雾”（仅高度衰减的雾）的密度；只在时段雾开启且体积雾噪声类型为仅高度衰减时生效。","en_us":"Morning density of the uniform (height-only) fog; used only when Time-of-day fog is on and the fog noise type is height only."},"slider":true}
@@ -155,7 +155,7 @@
 #include "/effects/weather/storm.glsl"
 
 // 雾照明要用体积光的取样函数与选项；只在雾照明开启时引入，默认关闭时整段不出现，不影响原来引用。
-#if defined OMNI_LPV_VL_FOG_ILLUMINATION
+#if OMNI_LPV_VL_FOG_ILLUMINATION
 	#include "/effects/lighting/lpv.glsl"
 #endif
 

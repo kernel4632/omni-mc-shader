@@ -218,7 +218,7 @@ void omniTerrainFragment(){
 		mat3 tbn = mat3(T * invmax, B * invmax, N); // 组装切线基。
 	#endif
 
-	#ifdef OMNI_DIRECTIONAL_BLOCKLIGHT // 指向性方块光要用方块光的屏幕梯度。
+	#if OMNI_DIRECTIONAL_BLOCKLIGHT // 指向性方块光要用方块光的屏幕梯度。
 		vec2 blockLightDir = vec2(dFdx(blockLight.x), dFdy(blockLight.x)); // 方块光的屏幕变化方向。
 	#endif
 
@@ -253,7 +253,7 @@ void omniTerrainFragment(){
 // 方块光：默认取原版方块光，指向性开启时再按表面朝向倾斜。
 	float blockLightDirectional = blockLight.x; // 默认直接用原版方块光横轴。
 
-	#ifdef OMNI_DIRECTIONAL_BLOCKLIGHT // 指向性方块光：按法线把方块光偏向一侧。
+	#if OMNI_DIRECTIONAL_BLOCKLIGHT // 指向性方块光：按法线把方块光偏向一侧。
 		float blockLightFwidth = abs(blockLightDir.x) + abs(blockLightDir.y); // 梯度大小，用来挡住跳变处。
 		blockLightDir = normalize(vec2(tbn * vec3(blockLightDir, 1e-10))); // 梯度转到切线空间。
 
@@ -280,7 +280,7 @@ void omniTerrainFragment(){
 		vec3 mcPos = mat3(gbufferModelViewInverse) * viewPos + gbufferModelViewInverse[3].xyz + cameraPosition; // 还原世界位置。
 		float NdotU = dot(tbn[2], gbufferModelView[1].xyz); // 表面法线与世上方向的夹角，越朝上越易积水。
 
-		#if defined OMNI_TEXTURE_PBR_POROSITY && OMNI_TEXTURE_PBR_FORMAT < 2 // 资源包自带孔隙率时按标准位宽解码。
+		#if OMNI_TEXTURE_PBR_POROSITY && OMNI_TEXTURE_PBR_FORMAT < 2 // 资源包自带孔隙率时按标准位宽解码。
 			float porosity = saturate(specularTex.b * (255.0 / 63.0) - step(64.0 / 255.0, specularTex.b)); // 高位为孔隙率。
 		#else
 			float porosity = OMNI_TEXTURE_DEFAULT_POROSITY; // 否则用默认孔隙率。
@@ -372,14 +372,14 @@ void omniTerrainFragment(){
 	// 自发光矿石：按贴图颜色算出矿物颗粒的发光，写进五号画面的自发光通道（来源 Eclipse `all_solid.fsh:856-863`）。
 	// 为什么与红石一样用 max：这个通道也可能来自资源包自发光，取较大者不会把资源包自发光压暗。
 	// 为什么要求开启物理光照：关闭 PBR 时合成阶段不读取这份自发光，写了也不生效。
-	#if defined OMNI_EMISSIVE_ORES && defined OMNI_ENABLE_PBR
+	#if OMNI_EMISSIVE_ORES && defined OMNI_ENABLE_PBR
 		if (isOre > 0.5) specularTex.a = max(specularTex.a, OMNI_EMISSIVE_ORES_STRENGTH * omniOreEmission(albedo)); // 合并矿石发光。
 	#endif
 
 
 	WriteTerrainGbuffer(albedo, normalEnc, blockLightDirectional, blockLight, specularTex, materialIDs, wet, parallaxShadow); // 统一写出零、三、五号画面。
 
-	#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
+	#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD
 		// 九号画面：红通道记方块编号，绿通道记生物群系，供下一帧几何阶段的草丛查询。
 		// 为什么记成字节：编号和生物群系都是小整数，八位够用，跨帧查询不需要更高精度。
 		gbufferOutput9 = vec4(blockID / 255.0, float(biome & 255) / 255.0, 0.0, 1.0); // 归一化到零到一存进八位画面。

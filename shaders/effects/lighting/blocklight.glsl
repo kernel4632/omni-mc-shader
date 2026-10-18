@@ -31,7 +31,7 @@
 // @option {"label":{"zh_cn":"方块光色温","en_us":"Block light temperature"},"description":{"zh_cn":"光源方块发光与照亮周围的色温，单位开尔文；只改颜色不改强度。","en_us":"Colour temperature of block light in kelvin; changes colour only, not brightness."},"slider":true}
 #define OMNI_TORCHLIGHT_COLOR_TEMPERATURE 3000 // [2000 2500 3000 3500 4000 4500 5000 5500 6000 6500 7000 7500 8000 8500 9000 9500 10000 12000 15000]
 // @option {"label":{"zh_cn":"指向性方块光","en_us":"Directional block light"},"description":{"zh_cn":"在法线贴图上显示光照方向；需要支持法线贴图的资源包，可能出现光照衔接错误。","en_us":"Shows the light direction on normal maps; needs a normal-map pack and may show seams."}}
-//#define OMNI_DIRECTIONAL_BLOCKLIGHT
+#define OMNI_DIRECTIONAL_BLOCKLIGHT 0 // [0 1]
 // @option {"label":{"zh_cn":"指向性权重","en_us":"Directional strength"},"description":{"zh_cn":"指向性方块光的强度；调大方向感更强，光照衔接错误也更明显。","en_us":"Strength of directional block light; larger is more directional and shows more seams."},"slider":true}
 #define OMNI_DIRECTIONAL_BLOCKLIGHT_STRENGTH 0.5 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 // @option {"label":{"zh_cn":"自发光贴图模式","en_us":"Emissive mode"},"description":{"zh_cn":"硬编码发光、资源包 PBR 发光，或两者相加。","en_us":"Hardcoded emissive, resource-pack PBR emissive, or both added."},"values":{"0":{"zh_cn":"仅硬编码","en_us":"Hardcoded only"},"1":{"zh_cn":"仅PBR贴图","en_us":"PBR only"},"2":{"zh_cn":"PBR贴图 + 硬编码","en_us":"PBR + hardcoded"}}}
@@ -59,7 +59,7 @@
 // @option {"label":{"zh_cn":"手电筒衰减系数","en_us":"Flashlight falloff"},"description":{"zh_cn":"手电筒模式下亮度随距离衰减的快慢；调大衰减更快。","en_us":"How fast flashlight brightness falls with distance; larger fades faster."},"slider":true}
 #define OMNI_FLASHLIGHT_HELDLIGHT_FALLOFF 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0]
 // @option {"label":{"zh_cn":"手电筒指向平滑","en_us":"Flashlight aim smoothing"},"description":{"zh_cn":"让手电筒指向滞后于视角变化，转头时光束不会瞬间跟到底。","en_us":"Makes the flashlight aim lag behind camera turns so the beam does not snap."}}
-#define OMNI_FLASHLIGHT_CAMERA_SMOOTH
+#define OMNI_FLASHLIGHT_CAMERA_SMOOTH 1 // [0 1]
 // @option {"label":{"zh_cn":"手电筒过渡时长","en_us":"Flashlight aim time"},"description":{"zh_cn":"手电筒指向平滑的过渡时间，单位秒。","en_us":"Transition time of the aim smoothing in seconds."},"slider":true}
 #define OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME 10.0 // [5.0 7.0 10.0 15.0 20.0 30.0 50.0]
 // @option {"label":{"zh_cn":"手电筒颜色-红","en_us":"Flashlight colour - R"},"description":{"zh_cn":"手电筒光束的红色分量。","en_us":"Red channel of the flashlight beam."},"slider":true}

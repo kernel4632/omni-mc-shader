@@ -33,7 +33,7 @@
 // @option {"label":{"zh_cn":"法线高光也过滤","en_us":"Filter Normal & Specular"},"description":{"zh_cn":"把各向异性过滤也用在法线与高光贴图上，代价略高但更清晰。","en_us":"Applies anisotropic filtering to the normal and specular maps too."}}
 //#define OMNI_ANISOTROPIC_FILTERING_NORMAL_SPECULAR
 // @option {"label":{"zh_cn":"实体视差","en_us":"Entity Parallax"},"description":{"zh_cn":"给实体也做视差；需要先正确设置实体纹理分辨率。","en_us":"Enables parallax on entities; set the entity texture resolution first."}}
-#define OMNI_ENTITIES_PARALLAX
+#define OMNI_ENTITIES_PARALLAX 1 // [0 1]
 // @option {"label":{"zh_cn":"视差模式","en_us":"Parallax Mode"},"description":{"zh_cn":"关、锐利或平滑；锐利保持像素外观，平滑更少锯齿。","en_us":"Off, Sharp or Smooth; Sharp keeps the pixel look, Smooth has fewer artifacts."},"values":{"0":{"zh_cn":"关","en_us":"off"},"1":{"zh_cn":"锐利","en_us":"Sharp"},"2":{"zh_cn":"平滑","en_us":"Smooth"}}}
 #define OMNI_PARALLAX_MODE 0 // [0 1 2]
 // @option {"label":{"zh_cn":"视差采样质量","en_us":"Parallax Quality"},"description":{"zh_cn":"锐利模式决定视差范围，平滑模式决定伪影多少，越大越细也越慢。","en_us":"Sharp sets the parallax range, Smooth sets artifact level; higher is finer and slower."},"slider":true}
@@ -41,7 +41,7 @@
 // @option {"label":{"zh_cn":"视差细化步数","en_us":"Parallax Refinements"},"description":{"zh_cn":"平滑视差找到交点后再二分细化的次数，越大边缘越准也越慢。","en_us":"Bisection steps after the parallax hit in Smooth mode; higher is more accurate and slower."},"slider":true}
 #define OMNI_PARALLAX_MAX_REFINEMENTS 12 // [0 2 4 6 8 12 16]
 // @option {"label":{"zh_cn":"视差阴影","en_us":"Parallax Self Shadow"},"description":{"zh_cn":"让视差像素自己也投出阳光阴影，代价很低。","en_us":"Lets parallax pixels cast their own sunlight shadow; cheap."}}
-#define OMNI_PARALLAX_SHADOW
+#define OMNI_PARALLAX_SHADOW 1 // [0 1]
 // @option {"label":{"zh_cn":"视差阴影质量","en_us":"Self Shadow Quality"},"description":{"zh_cn":"视差阴影的采样数，越大越细也越慢。","en_us":"Sample count for the parallax shadow; higher is finer and slower."},"slider":true}
 #define OMNI_PARALLAX_SHADOW_QUALITY 20 // [10 15 20 30 40 60 80 100 150 200 300 500]
 // @option {"label":{"zh_cn":"由视差生成法线","en_us":"Parallax Based Normal"},"description":{"zh_cn":"让法线效果与视差一致；平滑模式只对侧面生效。","en_us":"Keeps normals consistent with parallax; Smooth only affects sides."},"values":{"0":{"zh_cn":"关","en_us":"off"},"1":{"zh_cn":"仅侧面","en_us":"Side Only"},"2":{"zh_cn":"全部","en_us":"All"}}}
@@ -55,7 +55,7 @@
 // @option {"label":{"zh_cn":"PBR 标准类型","en_us":"PBR Format"},"description":{"zh_cn":"资源包用的是 labPBR 还是另一种表面贴图编码。","en_us":"Whether the pack stores labPBR or PTGI surface data."},"values":{"0":{"zh_cn":"labPBR","en_us":"labPBR"},"2":{"zh_cn":"PTGI","en_us":"PTGI"}}}
 #define OMNI_TEXTURE_PBR_FORMAT 0 // [0 2]
 // @option {"label":{"zh_cn":"限制最大粗糙度","en_us":"Clamp High Roughness"},"description":{"zh_cn":"把高粗糙表面的反射直接屏蔽，省性能。","en_us":"Skips reflections on very rough surfaces to save performance."}}
-#define OMNI_ROUGHNESS_CLAMP
+#define OMNI_ROUGHNESS_CLAMP 1 // [0 1]
 // @option {"label":{"zh_cn":"限制方块法线强度","en_us":"Terrain Normal Clamp"},"description":{"zh_cn":"压住方块的极端法线，减少噪点。","en_us":"Limits extreme terrain normals to reduce noise."}}
 //#define OMNI_TERRAIN_NORMAL_CLAMP
 // @option {"label":{"zh_cn":"限制手部法线强度","en_us":"Hand Normal Clamp"},"description":{"zh_cn":"压住手持物的极端法线，减少噪点。","en_us":"Limits extreme hand normals to reduce noise."}}
@@ -65,7 +65,7 @@
 // --- 资源包法线的整体强度与材质遮蔽：来源 Eclipse `lib/settings.glsl:371-376`、`dimensions/all_solid.fsh:743-752` ---
 // 这一组默认不改变画面：材质遮蔽默认关闭，法线倍率默认一倍与资源包期望一致。
 // @option {"label":{"zh_cn":"材质环境光遮蔽","en_us":"Material Ambient Occlusion"},"description":{"zh_cn":"用资源包法线贴图的蓝通道当作遮蔽，压暗凹陷处的底色；默认关闭，关闭时画面不变。","en_us":"Uses the resource pack normal map's blue channel as occlusion to darken cavities; off by default so the current look is unchanged."}}
-//#define OMNI_MATERIAL_AO
+#define OMNI_MATERIAL_AO 0 // [0 1]
 // @option {"label":{"zh_cn":"法线贴图强度","en_us":"Normal Map Strength"},"description":{"zh_cn":"资源包法线贴图的整体起伏倍率，一倍为资源包期望的原始强度；默认一倍，画面不变。","en_us":"Overall relief multiplier for resource pack normal maps; 1 is the value packs expect; default 1 leaves the current look unchanged."},"slider":true}
 #define OMNI_NORMAL_MAP_MULT 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0]
 // @option {"label":{"zh_cn":"次表面散射强度","en_us":"SSS Strength"},"description":{"zh_cn":"光照穿透表面的深度倍率，与偏移一起为零时关闭次表面散射。","en_us":"Depth multiplier of light through the surface; with the offset at zero it disables SSS."},"slider":true}
@@ -75,7 +75,7 @@
 // @option {"label":{"zh_cn":"自发光曲线","en_us":"Emissive Gamma"},"description":{"zh_cn":"PBR 自发光的亮暗对比强度，越大反差越明显。","en_us":"Contrast curve of PBR emissiveness; higher is more contrast."},"slider":true}
 #define OMNI_EMISSIVENESS_GAMMA 2.2 // [1.0 1.2 1.4 1.6 1.8 2.0 2.2 2.4 2.6 2.8 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0]
 // @option {"label":{"zh_cn":"labPBR 孔隙率","en_us":"labPBR Porosity"},"description":{"zh_cn":"使用资源包里的孔隙率通道，决定表面多容易积水。","en_us":"Uses the porosity channel so the surface can puddle more or less."}}
-//#define OMNI_TEXTURE_PBR_POROSITY
+#define OMNI_TEXTURE_PBR_POROSITY 0 // [0 1]
 // @option {"label":{"zh_cn":"默认孔隙率","en_us":"Default Porosity"},"description":{"zh_cn":"资源包不给孔隙率时用的值，越小越不吸水、水洼越明显。","en_us":"Porosity when the pack has none; lower means less absorbent and more puddles."},"slider":true}
 #define OMNI_TEXTURE_DEFAULT_POROSITY 0.3 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 // @option {"label":{"zh_cn":"潮湿反照吸收","en_us":"Wetness Albedo Absorption"},"description":{"zh_cn":"潮湿表面压暗的强度，孔隙率越大越明显。","en_us":"How much wet surfaces darken; stronger with higher porosity."},"slider":true}
@@ -85,11 +85,11 @@
 // @option {"label":{"zh_cn":"禁用玩家高光","en_us":"Disable Player Specular"},"description":{"zh_cn":"去掉玩家自身的高光，解决某些模组下的反射噪点。","en_us":"Removes the player's own specular, fixing reflection noise with some mods."}}
 //#define OMNI_DISABLE_PLAYER_SPECULAR
 // @option {"label":{"zh_cn":"实体顶点法线平滑","en_us":"Entity Vertex Normal Smoothing"},"description":{"zh_cn":"为某些模组提供实体顶点切线与法线，代价很低。","en_us":"Provides entity vertex tangents and normals for some mods; cheap."}}
-#define OMNI_ENTITIES_VS_TBN
+#define OMNI_ENTITIES_VS_TBN 1 // [0 1]
 // @option {"label":{"zh_cn":"方块顶点法线平滑","en_us":"Block Vertex Normal Smoothing"},"description":{"zh_cn":"为某些模组提供方块顶点切线与法线，代价很低。","en_us":"Provides block vertex tangents and normals for some mods; cheap."}}
 //#define OMNI_TERRAIN_VS_TBN
 // @option {"label":{"zh_cn":"未指定方块按植物处理","en_us":"General Grass Fix"},"description":{"zh_cn":"把倾斜的面都当成植物渲染，可能误伤其他方块。","en_us":"Treats tilted faces as plants; may misfire on other blocks."}}
-//#define OMNI_GENERAL_GRASS_FIX
+#define OMNI_GENERAL_GRASS_FIX 0 // [0 1]
 // @option {"label":{"zh_cn":"白色调试世界","en_us":"White Debug World"},"page":"dev","description":{"zh_cn":"把所有几何的底色改写成纯白，用来检查光照与几何；仅供调试。","en_us":"Rewrites every geometry albedo to plain white for checking lighting and geometry; debug only."}}
 //#define OMNI_WHITE_DEBUG_WORLD
 // 内部常数：方块与实体材质编号，按 iterationT `Settings.glsl` 原值，几何与合成阶段共用一份。
@@ -200,7 +200,7 @@ const Material material_ice = Material(0.0, 0.0, 0.018, 0.0, 0.0, 1.0);
 // 从表面贴图解出材质：孔隙率决定吸水压暗，其余通道解出粗糙、金属、自发光与散射。
 // 参数 `wet` 是这一处的湿润度，`baseTex` 会被吸水压暗，所以是 `inout`。
 Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
-	#ifdef OMNI_TEXTURE_PBR_POROSITY // 资源包自带孔隙率时按标准位宽解码。
+	#if OMNI_TEXTURE_PBR_POROSITY // 资源包自带孔隙率时按标准位宽解码。
 		#if OMNI_TEXTURE_PBR_FORMAT < 2
 			float porosity = saturate(specTex.b * (255.0 / 63.0) - step(64.0 / 255.0, specTex.b)); // 蓝色通道的高六位表示孔隙率。
 		#else
@@ -222,13 +222,13 @@ Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
 	#if OMNI_TEXTURE_PBR_FORMAT == 0
 		rawMetalness = saturate(rawMetalness + step(0.9, rawMetalness)); // labPBR 允许预设金属，把高位拉满。
 	#endif
-	#ifdef OMNI_ROUGHNESS_CLAMP // 开启限制时把金属度往零点一以内收，配合反射屏蔽。
+	#if OMNI_ROUGHNESS_CLAMP // 开启限制时把金属度往零点一以内收，配合反射屏蔽。
 		material.metalness = saturate(rawMetalness * 1.1 - 0.1); // 先放大再平移，最后夹紧。
 	#else
 		material.metalness = rawMetalness; // 否则原样使用。
 	#endif
 	material.f0 = rawMetalness * 0.96 + 0.04; // 金属度高则反射率接近底色，非金属约零点零四。
-	#ifdef OMNI_ROUGHNESS_CLAMP // 限制模式用更陡的曲线快速去掉粗糙面的反射。
+	#if OMNI_ROUGHNESS_CLAMP // 限制模式用更陡的曲线快速去掉粗糙面的反射。
 		material.reflectionStrength = saturate(2.0 - material.roughness * 5.0); // 粗糙度超过零点四就基本不反射。
 	#else
 		material.reflectionStrength = saturate(2.0 - material.roughness * 2.0); // 普通模式反射保留更多。
@@ -398,7 +398,7 @@ void ApplyMaterial(inout Material material, in MaterialMask materialMask, inout 
 // 材质遮蔽：资源包把遮蔽存在法线贴图的蓝通道，取出来乘到底色上；未开该选项时恒为一。
 // 为什么单独拆出来：视差路径已经自己解出法线，只差遮蔽要另外取一次贴图，拆开才能单独复用。
 float omniMaterialAO(vec3 normalTexRGB){
-	#ifdef OMNI_MATERIAL_AO // 打开才拿蓝通道当遮蔽。
+	#if OMNI_MATERIAL_AO // 打开才拿蓝通道当遮蔽。
 		return normalTexRGB.b * 0.5 + 0.5; // 蓝通道零到一映射到零点五到一，来源 Eclipse 同一行。
 	#else
 		return 1.0; // 未开时不做任何遮蔽。

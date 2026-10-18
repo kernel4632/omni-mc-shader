@@ -91,7 +91,7 @@ out vec3 viewPos; // 视空间位置。
 out vec2 blockLight; // 方块光与天光。
 
 // 开关实体顶点切线时多传一组切线基。
-#if (defined OMNI_ENTITIES_VS_TBN && (defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS) && (MC_VERSION < 11500 || MC_VERSION > 11604)) || (defined OMNI_HAND_PASS && MC_VERSION < 11300)
+#if (OMNI_ENTITIES_VS_TBN && (defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS) && (MC_VERSION < 11500 || MC_VERSION > 11604)) || (defined OMNI_HAND_PASS && MC_VERSION < 11300)
 	// 顶点切线属性，由模组或资源包提供。
 	attribute vec4 at_tangent;
 	out mat3 tbn; // 顶点切线基。
@@ -117,7 +117,7 @@ void main(){
 
 	#ifdef OMNI_TAA // 时间抗锯齿：按程序决定是否给顶点加抖动。
 		#if defined OMNI_HAND_PASS // 手持物单独看开关。
-			#ifndef OMNI_DISABLE_HAND_TAA // 未关闭手部抗锯齿时加抖动。
+			#if !OMNI_DISABLE_HAND_TAA // 未关闭手部抗锯齿时加抖动。
 				gl_Position.xy = taaJitter * gl_Position.w + gl_Position.xy; // 叠加本帧抖动。
 			#endif
 		#elif defined OMNI_ENTITIES_PASS // 普通实体单独看玩家开关。
@@ -143,7 +143,7 @@ void main(){
 		blockLight.x = min(blockLight.x, 0.85); // 避免实体自身过亮。
 	#endif
 
-	#if (defined OMNI_ENTITIES_VS_TBN && (defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS) && (MC_VERSION < 11500 || MC_VERSION > 11604)) || (defined OMNI_HAND_PASS && MC_VERSION < 11300)
+	#if (OMNI_ENTITIES_VS_TBN && (defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS) && (MC_VERSION < 11500 || MC_VERSION > 11604)) || (defined OMNI_HAND_PASS && MC_VERSION < 11300)
 		vec3 N = normalize(gl_NormalMatrix * gl_Normal); // 法线转到视空间。
 		vec3 T = normalize(gl_NormalMatrix * at_tangent.xyz); // 切线转到视空间。
 		vec3 B = cross(T, N) * sign(at_tangent.w); // 副切线由叉乘与手性得到。
@@ -181,7 +181,7 @@ in vec2 texCoord; // 纹理坐标。
 // `in vec3 viewPos;` 已在文件顶部、引入视差函数之前声明。
 in vec2 blockLight; // 方块光。
 
-#if (defined OMNI_ENTITIES_VS_TBN && (defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS) && (MC_VERSION < 11500 || MC_VERSION > 11604)) || (defined OMNI_HAND_PASS && MC_VERSION < 11300)
+#if (OMNI_ENTITIES_VS_TBN && (defined OMNI_ENTITIES_PASS || defined OMNI_SPIDEREYES_PASS) && (MC_VERSION < 11500 || MC_VERSION > 11604)) || (defined OMNI_HAND_PASS && MC_VERSION < 11300)
 	in mat3 tbn; // 顶点切线基。
 #endif
 
@@ -288,7 +288,7 @@ vec2 DecodeEntityMaterial(){
 
 // 切线基：顶点给了就用顶点的，否则用屏幕导数推出来。
 mat3 BuildEntityTangentBasis(vec2 duv1, vec2 duv2){
-	#if (!defined OMNI_ENTITIES_VS_TBN || (!defined OMNI_ENTITIES_PASS && !defined OMNI_SPIDEREYES_PASS) || (MC_VERSION >= 11500 && MC_VERSION <= 11604)) && (!defined OMNI_HAND_PASS || MC_VERSION >= 11300)
+	#if (!OMNI_ENTITIES_VS_TBN || (!defined OMNI_ENTITIES_PASS && !defined OMNI_SPIDEREYES_PASS) || (MC_VERSION >= 11500 && MC_VERSION <= 11604)) && (!defined OMNI_HAND_PASS || MC_VERSION >= 11300)
 		vec3 dp1 = dFdx(viewPos); // 视空间位置横向变化。
 		vec3 dp2 = dFdy(viewPos); // 视空间位置纵向变化。
 
@@ -310,7 +310,7 @@ mat3 BuildEntityTangentBasis(vec2 duv1, vec2 duv2){
 // `materialAO` 是资源包法线蓝通道给出的材质遮蔽，未开该功能时恒为一，调用方把它乘到底色。
 void SampleEntitySurface(vec2 texCoord, vec2 duv1, vec2 duv2, mat3 tbnMat, vec3 shadowVector, float materialIDs, float noDiscard, out vec4 albedoTex, out vec4 specularTex, out vec3 normalTex, inout float parallaxShadow, out float materialAO){
 	materialAO = 1.0; // 默认不压暗：视差路径与没有法线的情形都保持一。
-	#if defined OMNI_ENTITIES_PARALLAX && OMNI_PARALLAX_MODE > 0 && defined MC_NORMAL_MAP // 实体视差开启且有法线贴图。
+	#if OMNI_ENTITIES_PARALLAX && OMNI_PARALLAX_MODE > 0 && defined MC_NORMAL_MAP // 实体视差开启且有法线贴图。
 
 		vec3 normalOut = vec3(0.0, 0.0, 1.0); // 视差函数会写回法线。
 		ivec2 parallaxTexel = ParallaxOcclusionMapping(texCoord, tbnMat, shadowVector, duv1, duv2, normalOut, parallaxShadow); // 找到可见交点。
@@ -434,7 +434,7 @@ void main(){
 
 		float NdotU = dot(tbnMat[2], gbufferModelView[1].xyz); // 表面法线与世上方向的夹角。
 
-		#if defined OMNI_TEXTURE_PBR_POROSITY && OMNI_TEXTURE_PBR_FORMAT < 2
+		#if OMNI_TEXTURE_PBR_POROSITY && OMNI_TEXTURE_PBR_FORMAT < 2
 			float porosity = saturate(specularTex.b * (255.0 / 63.0) - step(64.0 / 255.0, specularTex.b)); // 资源包孔隙率。
 		#else
 			float porosity = OMNI_TEXTURE_DEFAULT_POROSITY; // 默认孔隙率。
@@ -593,7 +593,7 @@ void main(){
 	// 自发光纹饰：亮纹饰与暗纹饰按明度发光，写进五号画面的自发光通道（来源 Eclipse `all_solid.fsh:866-870`）。
 	// 为什么亮纹饰要减半：亮纹饰本身就很亮，不减半会过曝，照 Eclipse 的 0.4 系数。
 	// 为什么要求开启物理光照：关闭 PBR 时合成阶段不读取这份自发光，写了也不生效。
-	#if defined OMNI_ENTITIES_PASS && defined OMNI_EMISSIVE_TRIMS && defined OMNI_ENABLE_PBR
+	#if defined OMNI_ENTITIES_PASS && OMNI_EMISSIVE_TRIMS && defined OMNI_ENABLE_PBR
 		if (currentRenderedItemId == 1026 || currentRenderedItemId == 1027){ // 两个编号见 item.properties。
 			float trimGlow = OMNI_EMISSIVE_TRIMS_STRENGTH * omniTrimEmission(albedo.rgb); // 按明度算发光。
 			if (currentRenderedItemId == 1026) trimGlow *= 0.4; // 亮纹饰发光减半。

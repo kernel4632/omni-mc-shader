@@ -22,15 +22,15 @@
 #define OMNI_DISTORTION_INCLUDED // 置上标记，后续再次引用直接跳过。
 // @effect {"label":{"zh_cn":"镜头形变","en_us":"Lens Distortion"}}
 // @option {"label": {"zh_cn": "色差", "en_us": "Chromatic Aberration"}, "description": {"zh_cn": "全屏的镜头色差，让画面边缘的红蓝通道错开出彩边；与景深的散景色散不同。来源 Eclipse `lib/settings.glsl:811`。", "en_us": "Full-screen lens chromatic aberration; edges fringe red and blue. Different from the depth-of-field bokeh dispersion. From Eclipse `lib/settings.glsl:811`."}}
-//#define OMNI_CHROMATIC_ABERRATION
+#define OMNI_CHROMATIC_ABERRATION 0 // [0 1]
 // @option {"label": {"zh_cn": "色差强度", "en_us": "Chromatic Aberration Strength"}, "slider": true, "description": {"zh_cn": "色错的错开量，越大彩边越宽。来源 Eclipse `lib/settings.glsl:812`。", "en_us": "How far the colour channels are offset. From Eclipse `lib/settings.glsl:812`."}}
 #define OMNI_CHROMATIC_ABERRATION_STRENGTH 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0 3.0 4.0 5.0]
 // @option {"label": {"zh_cn": "鱼眼畸变", "en_us": "Fisheye"}, "description": {"zh_cn": "把画面从中心向外卷成桶形，模拟鱼眼镜头。来源 Eclipse `lib/settings.glsl:828`。", "en_us": "Warps the frame into a barrel shape, like a fisheye lens. From Eclipse `lib/settings.glsl:828`."}}
-//#define OMNI_FISHEYE
+#define OMNI_FISHEYE 0 // [0 1]
 // @option {"label": {"zh_cn": "鱼眼强度", "en_us": "Fisheye Strength"}, "slider": true, "description": {"zh_cn": "鱼眼卷曲的程度，越大边缘收得越紧。来源 Eclipse `lib/settings.glsl:827`。", "en_us": "How strongly the frame is warped. From Eclipse `lib/settings.glsl:827`."}}
 #define OMNI_FISHEYE_STRENGTH 0.2 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 // @option {"label": {"zh_cn": "像素化", "en_us": "Pixelate"}, "description": {"zh_cn": "把画面按方块取色，模拟低分辨率画面。来源 Eclipse `lib/settings.glsl:820`。", "en_us": "Snaps the frame to blocks, like a low resolution. From Eclipse `lib/settings.glsl:820`."}}
-//#define OMNI_PIXELATE
+#define OMNI_PIXELATE 0 // [0 1]
 // @option {"label": {"zh_cn": "像素块大小", "en_us": "Pixel Size"}, "slider": true, "description": {"zh_cn": "每个方块占多少屏幕像素。来源 Eclipse `lib/settings.glsl:823` 的 `PIXELIZATION_STRENGTH`。", "en_us": "How many screen pixels each block covers. From Eclipse `lib/settings.glsl:823` `PIXELIZATION_STRENGTH`."}}
 #define OMNI_PIXELATE_STRENGTH 4 // [2 3 4 5 6 7 8 9 10 16 32 64]
 // @option {"label": {"zh_cn": "每通道色数", "en_us": "Colors per Channel"}, "slider": true, "description": {"zh_cn": "每个通道分几档颜色，零表示不分档，与像素化各自独立。来源 Eclipse `lib/settings.glsl:825` 的 `MAX_COLORS_PER_CHANNEL`。", "en_us": "Quantisation steps per channel; zero disables it, independent of pixelate. From Eclipse `lib/settings.glsl:825` `MAX_COLORS_PER_CHANNEL`."}}
@@ -40,15 +40,15 @@
 // 为什么把三项合在一个函数：三者共用同一个输入画面与坐标，分开调用会重复读同一张画面。
 // `source` 是要重采样的最终画面：未开放大时是低分辨率的一号画面，开放大时是放大后的八号画面。
 vec3 LensDistortion(sampler2D source, vec3 color, vec2 coord){
-#if defined OMNI_CHROMATIC_ABERRATION || defined OMNI_FISHEYE || defined OMNI_PIXELATE || OMNI_PIXELATE_COLORS > 1 // 任一项开启时才展开重采样体。
+#if OMNI_CHROMATIC_ABERRATION || OMNI_FISHEYE || OMNI_PIXELATE || OMNI_PIXELATE_COLORS > 1 // 任一项开启时才展开重采样体。
 	// 先按像素化或鱼眼定出一个基础采样坐标；两者互斥，优先顺序照 Eclipse 的最终程序，像素化在前。
 	vec2 sampleCoord = coord; // 默认原样取样，对应三项里只有色差或色数的情形。
-	#ifdef OMNI_PIXELATE // 开启像素化。
+	#if OMNI_PIXELATE // 开启像素化。
 		// 像素化：把坐标对齐到方块左上角，整块取同一个点，得到整齐的大色块。
 		vec2 blockSize = vec2(OMNI_PIXELATE_STRENGTH); // 每块占多少屏幕像素。
 		vec2 blockOrigin = floor(gl_FragCoord.xy / blockSize) * blockSize; // 方块左上角的像素坐标。
 		sampleCoord = (blockOrigin + 0.5) * finalPixelSize; // 换成零到一坐标，指向方块左上角像素的中心。
-	#elif defined OMNI_FISHEYE // 未开像素化但开鱼眼。
+	#elif OMNI_FISHEYE // 未开像素化但开鱼眼。
 		// 鱼眼：到中心的距离越远，向内收缩越多，画面边缘被卷起，得到桶形畸变。
 		vec2 centered = coord - 0.5; // 相对画面中心。
 		float dist = length(centered); // 到中心的距离。
@@ -56,7 +56,7 @@ vec3 LensDistortion(sampler2D source, vec3 color, vec2 coord){
 	#endif
 
 	vec3 warped; // 形变后取到的最终画面色。
-	#ifdef OMNI_CHROMATIC_ABERRATION // 开启色差时红蓝通道分别错开取色。
+	#if OMNI_CHROMATIC_ABERRATION // 开启色差时红蓝通道分别错开取色。
 		// 色差：红蓝通道沿屏幕半径错开，绿通道不动；离中心越远错开越多，边缘彩边最明显。
 		float noise = InterleavedGradientNoise(gl_FragCoord.xy) - 0.5; // 每像素抖动一点，避免固定图案，作用同 Eclipse 的蓝噪声。
 		vec2 caCenter = coord - 0.5; // 相对画面中心，单独取名，避免与上面鱼眼分支的同名局部量在一份源码里撞名。

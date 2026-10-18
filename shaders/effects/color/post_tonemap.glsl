@@ -15,11 +15,11 @@ void TonemapColor(){
 	vec4 data1 = texelFetch(colortex1, texelCoord, 0); // 读一号画面，透明通道是泛光引导。
 	vec3 color = CurveToLinear(data1.rgb); // 换成线性颜色。
 
-	#ifdef OMNI_BLOOM // 开启泛光时先合并光晕。
+	#if OMNI_BLOOM // 开启泛光时先合并光晕。
 		color = MergeBloom(color, 1.0 - data1.a); // 按引导强度把五号光晕混进来。
 	#endif
 
-	#ifdef OMNI_VIGNETTE // 开启暗角时压暗四角。
+	#if OMNI_VIGNETTE // 开启暗角时压暗四角。
 		color *= Vignette(texCoord, OMNI_VIGNETTE_FALLOFF, OMNI_VIGNETTE_ROUNDNESS); // 按到中心的距离压暗。
 	#endif
 
@@ -35,11 +35,11 @@ void TonemapColor(){
 		color = AgX(color); // 宽色域压缩，保住高光颜色。
 	#endif
 
-	#ifdef OMNI_ADVANCED_COLOR // 开启高级调色时做白光裁剪、亮度伽马与饱和度。
+	#if OMNI_ADVANCED_COLOR // 开启高级调色时做白光裁剪、亮度伽马与饱和度。
 		color = AdvancedColor(color); // 一体化的调色函数。
 	#endif
 
-	#ifdef OMNI_SNEAKING_VIGNETTE // 潜行时画面下边缘再加一层暗角。
+	#if OMNI_SNEAKING_VIGNETTE // 潜行时画面下边缘再加一层暗角。
 		color *= mix(1.0, Vignette(vec2(0.5, texCoord.y), 0.7, 0.0), isSneakingSmooth); // 按潜行强度混入。
 	#endif
 

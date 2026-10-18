@@ -57,7 +57,7 @@ void CompositeSurfaceLighting(){
 			#else
 				materialMaskSoild.leaves *= saturate(3.2 - opaqueDist / min(shadowDistance, far) * 4.0 - float(isDH) * 1e10) * 0.65 + 0.35; // 没有远景阴影时远景叶子不透光。
 			#endif
-			#ifndef OMNI_DH_SSS // 关闭远景透光时，远景叶片与雪的透光比重归零，只影响远景像素。
+			#if !OMNI_DH_SSS // 关闭远景透光时，远景叶片与雪的透光比重归零，只影响远景像素。
 				materialMaskSoild.leaves *= saturate(1.0 - float(isDH));
 			#endif
 		#else

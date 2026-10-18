@@ -24,7 +24,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in; // 二维工作
 const ivec3 workGroups = ivec3(16, 16, 1); // 每轴十六组，覆盖 128×128 个表项，足够放八千一百九十二项。
 // 填表主函数：每个线程负责一个方块编号，算出它的光色、光强、透光率与掩码后写进光表。
 void main(){
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时不填表。
+#if OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时不填表。
 	int blockId = int(gl_GlobalInvocationID.x + gl_GlobalInvocationID.y * 128u); // 展平成一维编号，每行 128 项。
 	if (blockId < 0 || blockId >= int(omniLpvBlockTableSize)) return; // 超出表范围直接返回。
 	uvec2 row = omniLpvBlockData(uint(blockId)); // 算出这个编号的光表项。
@@ -36,9 +36,9 @@ void main(){
 // ========================= 阶段二 shadowcomp：每帧一步传播 =========================
 #ifdef OMNI_LPV_SHADOWCOMP // 只有本阶段编译下面的入口。
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; // 三维工作组，逐个填体积格。
-const ivec3 workGroups = ivec3(int(omniLpvSide) / 8); // 每轴覆盖整条体积边长，八格一组。
+const ivec3 workGroups = ivec3(32, 32, 32); // ????????????????????????????????????? main ??????
 
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时 main 保持空实现。
+#if OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时 main 保持空实现。
 
 // 共享缓冲比工作组大一圈（十格）：中间八格是本职工作项，外面一圈是邻居，读邻居不用再访存图。
 shared vec4 omniLpvShared[10 * 10 * 10]; // 体积值，含前一帧的时间累积。
@@ -86,7 +86,7 @@ vec4 omniLpvMixNeighbours(ivec3 fragCoord, uint mask){
 
 // 传播主函数：先把周围十立方读进共享，再一个格子算一次混合加自发光，最后写回本帧那张图。
 void main(){
-#if defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时保持空实现。
+#if OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时保持空实现。
 	uvec3 chunkPos = gl_WorkGroupID * gl_WorkGroupSize; // 本工作组的起点格。
 	if (any(greaterThanEqual(chunkPos, uvec3(omniLpvSide)))) return; // 超出体积边长的工作组直接退出。
 

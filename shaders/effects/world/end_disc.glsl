@@ -144,7 +144,7 @@ void BlackHole_AccretionDisc_Stars(inout vec3 color, in vec3 rayDir, in vec3 lig
 			density = saturate(density + bloomFactor * 0.1); // 叠上辉光。
 
 			if (density > 0.0001){ // 有密度才算这一步的颜色。
-				#ifdef OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE // 细节沿纬度分布时用方位角。
+				#if OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE // 细节沿纬度分布时用方位角。
 					vec3 discCoord = vec3(r, p * (1.0 - radialGradient * 0.5), h * 0.1) * 3.5; // 盘坐标带方位角。
 					float fbm = CalculateCloudFBM(discCoord, frameTimeCounter * vec3(0.1, 0.07, 0.0)); // 高质量云噪声。
 				#else // 默认细节只沿半径与高度分布。
@@ -161,7 +161,7 @@ void BlackHole_AccretionDisc_Stars(inout vec3 color, in vec3 rayDir, in vec3 lig
 				float glowStrength = 1.0 / (gr * gr * 400.0 + 0.002); // 越靠内越亮的辉光。
 				vec3 glow = Blackbody(2700.0 + glowStrength * 50.0) * glowStrength; // 按辉光强度取黑体色。
 
-				#ifdef OMNI_ACCRETIONDISC_DOPPLER_EFFECT // 多普勒效应：一侧更亮。
+				#if OMNI_ACCRETIONDISC_DOPPLER_EFFECT // 多普勒效应：一侧更亮。
 					glow *= sin(p - 1.07) * 0.75 + 1.0; // 按方位角调制。
 				#endif
 
@@ -247,7 +247,7 @@ void BlackHole_AccretionDisc_Reflection(inout vec3 color, in vec3 rayDir, in vec
 			density = saturate(density + bloomFactor * 0.1); // 叠上辉光。
 
 			if (density > 0.0001){ // 有密度才算颜色。
-				#ifdef OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE // 细节沿纬度分布。
+				#if OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE // 细节沿纬度分布。
 					vec3 discCoord = vec3(r, p * (1.0 - radialGradient * 0.5), h * 0.1) * 3.5; // 带方位角的盘坐标。
 					float fbm = CalculateCloudFBM(discCoord, frameTimeCounter * vec3(0.1, 0.07, 0.0)); // 高质量云噪声。
 				#else // 默认不带方位角。
@@ -264,7 +264,7 @@ void BlackHole_AccretionDisc_Reflection(inout vec3 color, in vec3 rayDir, in vec
 				float glowStrength = 1.0 / (gr * gr * 400.0 + 0.002); // 越靠内越亮。
 				vec3 glow = Blackbody(2700.0 + glowStrength * 50.0) * glowStrength; // 按辉光强度取黑体色。
 
-				#ifdef OMNI_ACCRETIONDISC_DOPPLER_EFFECT // 多普勒效应。
+				#if OMNI_ACCRETIONDISC_DOPPLER_EFFECT // 多普勒效应。
 					glow *= sin(p - 1.07) * 0.75 + 1.0; // 按方位角调制。
 				#endif
 

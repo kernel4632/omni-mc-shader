@@ -109,7 +109,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 			sampleHeight = BilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock); // 读高度。
 		}
 		if (sampleHeight <= parallaxTexelCoord.z) parallaxTexelCoord += stepDir * stepLength * 2.0; // 最后仍未越界就多走两步，避免停在表面下。
-		#ifdef OMNI_PARALLAX_SHADOW // 需要视差自阴影时。
+		#if OMNI_PARALLAX_SHADOW // 需要视差自阴影时。
 			if (parallaxShadow > 0.0){ // 只有原先允许受光的像素才算阴影。
 				shadowVector = shadowVector * tbnMat; // 阳光方向转到切线空间。
 				shadowVector /= shadowVector.z * 0.9 + 0.1; // 归一化到单位深度步长，避免水平方向过大。
@@ -223,7 +223,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 			sampleHeight = texelFetch(normals, parallaxTexel, 0).a; // 读新像素的高度。
 			sampleHeight += saturate(1.0 - sampleHeight * 1e20); // 高度为零时补成完整高度。
 		}
-		#ifdef OMNI_PARALLAX_SHADOW // 需要自阴影时。
+		#if OMNI_PARALLAX_SHADOW // 需要自阴影时。
 			shadowVector = shadowVector * tbnMat; // 阳光方向转到切线空间。
 			float shadow = 1.0; // 阴影透过率从全透开始。
 			if (dot(shadowVector, hitNormal) * parallaxShadow > 0.0 && exit){ // 命中的侧面朝向阳光才需要阴影。

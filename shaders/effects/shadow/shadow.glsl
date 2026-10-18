@@ -28,7 +28,7 @@
 // @option {"label":{"zh_cn":"阴影图投影偏差","en_us":"Shadow map bias"},"description":{"zh_cn":"阴影相机把边缘坐标向内收的程度；调大能减轻阴影边抖动，但远处阴影会略微缩小。","en_us":"How far shadow coordinates are pulled inward near the edge; larger hides edge wobble but slightly shrinks far shadows."},"slider":true}
 #define OMNI_SHADOW_MAP_BIAS 0.9 // [0.0 0.1 0.7 0.75 0.8 0.85 0.9 0.92 0.94 0.96]
 // @option {"label":{"zh_cn":"可变半影","en_us":"Variable penumbra"},"description":{"zh_cn":"按遮挡物远近自动调软阴影边缘：遮挡物离得远影子边更软，贴近时更锐。","en_us":"Widens shadow edges with the distance to the occluder, so far shadows are softer and near ones stay sharp."}}
-#define OMNI_VARIABLE_PENUMBRA_SHADOWS
+#define OMNI_VARIABLE_PENUMBRA_SHADOWS 1 // [0 1]
 // @option {"label":{"zh_cn":"阴影基础模糊","en_us":"Shadow basic blur"},"description":{"zh_cn":"影子边缘的基础模糊量；调大整体更软，调小更锐。","en_us":"Base blur of the shadow edge; higher is softer overall."},"slider":true}
 #define OMNI_SHADOW_BASIC_BLUR 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0]
 // @option {"label":{"zh_cn":"半影采样数","en_us":"Penumbra samples"},"description":{"zh_cn":"可变半影每像素的采样次数；越大边缘越干净也越耗性能。","en_us":"Samples per pixel for the penumbra; higher is cleaner but costlier."}}
@@ -36,7 +36,7 @@
 // @option {"label":{"zh_cn":"半影扩散","en_us":"Penumbra spread"},"description":{"zh_cn":"阴影边缘往外散开的宽度；调大半影更宽、影子更柔和。","en_us":"How wide the shadow edge spreads; larger gives a wider, softer penumbra."},"slider":true}
 #define OMNI_VPS_SPREAD 0.1 // [0.02 0.03 0.05 0.07 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0]
 // @option {"label":{"zh_cn":"彩色半透明阴影","en_us":"Colored translucent shadows"},"description":{"zh_cn":"半透明方块用自身颜色给影子染色，例如有色玻璃投出同色的影子。","en_us":"Translucent blocks tint the shadow by their own color, such as stained glass casting a matching shadow."}}
-#define OMNI_COLORED_SHADOWS
+#define OMNI_COLORED_SHADOWS 1 // [0 1]
 // @option {"label":{"zh_cn":"屏幕空间阴影","en_us":"Screen space shadows"},"description":{"zh_cn":"补充阴影图覆盖不到的近处细节；关掉后植物等薄片可能出现漏光。","en_us":"Adds nearby detail the shadow map cannot cover; turning it off may cause light leaking through thin geometry."}}
 #define OMNI_SCREEN_SPACE_SHADOWS
 // @option {"label":{"zh_cn":"玩家关闭屏幕阴影","en_us":"Player screen shadows"},"description":{"zh_cn":"避免玩家自己身上出现屏幕空间阴影，减少第三人称下的错误暗块。","en_us":"Skips screen space shadows on the player to avoid wrong dark patches in third person."}}
@@ -50,13 +50,13 @@
 // @option {"label":{"zh_cn":"焦散对比","en_us":"Caustics power"},"description":{"zh_cn":"水面焦散花纹的对比指数，越大亮纹越集中、暗处越暗；一为不变。来源 Eclipse `settings.glsl:1000` 的 `WATER_CAUSTICS_POWER`。","en_us":"Contrast exponent of the water caustics pattern; larger concentrates the bright veins and darkens the rest; one is unchanged. From Eclipse `settings.glsl:1000` `WATER_CAUSTICS_POWER`."},"slider":true}
 #define OMNI_WATER_CAUSTICS_POWER 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95 1.0 1.05 1.1 1.15 1.2 1.25 1.3 1.35 1.4 1.45 1.5 1.55 1.6 1.65 1.7 1.75 1.8 1.85 1.9 1.95 2.0 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.0 3.2 3.4 3.6 3.8 4.0 4.5 5.0 6.0 7.0 8.0 9.0 10.0]
 // @option {"label":{"zh_cn":"透光朝向","en_us":"Directional translucency"},"description":{"zh_cn":"让透过的光随观察角度变化，逆光看叶片时更亮。","en_us":"Makes the light through leaves vary with view angle, brighter when backlit."}}
-//#define OMNI_SSS_NORMAL
+#define OMNI_SSS_NORMAL 0 // [0 1]
 // @option {"label":{"zh_cn":"远景透光（次表面散射）","en_us":"Distant SSS"},"description":{"zh_cn":"让远景地形的叶片与雪像近景一样透光；关闭后远景叶片与雪不透光，影子更硬。默认开启，与原来一致。来源 Eclipse 的 DH_SUBSURFACE_SCATTERING。","en_us":"Lets distant leaves and snow pass light like nearby ones; when off they stop being translucent and shadows get harder. On by default. Ports Eclipse's DH_SUBSURFACE_SCATTERING."}}
-#define OMNI_DH_SSS
+#define OMNI_DH_SSS 1 // [0 1]
 // @option {"label":{"zh_cn":"远景进阴影","en_us":"Distant terrain in shadows"},"description":{"zh_cn":"让远景地形也投进阴影图，远处山体才能挡住阳光。","en_us":"Casts distant terrain into the shadow map so far hills can block sunlight."}}
 //#define OMNI_DH_SHADOW
 // @option {"label":{"zh_cn":"远景阴影剔除","en_us":"Distant shadow culling"},"description":{"zh_cn":"剔除阴影图里被近处地形挡住、看不到的远景块，省性能；极端情况下可能出现阴影缺口。","en_us":"Culls distant chunks hidden behind near terrain in the shadow map to save cost; may rarely cut a shadow."}}
-#define OMNI_DH_SHADOW_CULLING
+#define OMNI_DH_SHADOW_CULLING 1 // [0 1]
 // @option {"label":{"zh_cn":"远景阴影伪影修复","en_us":"Distant shadow fix"},"description":{"zh_cn":"修正远景地形投出的颗粒状阴影伪影。","en_us":"Fixes grainy shadow artifacts cast by distant terrain."}}
 #define OMNI_DH_SHADOW_FIX
 // Iris 原生阴影分辨率常量必须直接使用字面量，菜单范围仍从这一行唯一读取。
@@ -187,10 +187,10 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 
 	#ifdef OMNI_TAA // 打开时间抗锯齿时用逐帧抖动，抗锯齿会把噪点平均掉。
 		vec2 noise = BlueNoiseTemporal(); // 每帧变化的蓝噪声。
-		#if defined OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都关了时间抗锯齿时改用固定噪声。
+		#if OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都关了时间抗锯齿时改用固定噪声。
 			if (mask.hand > 0.5 || mask.entityPlayer > 0.5) noise = BlueNoise(); // 这两类像素不靠时间累积，固定噪声避免闪烁。
 		#else
-			#ifdef OMNI_DISABLE_HAND_TAA // 只关手的抗锯齿。
+			#if OMNI_DISABLE_HAND_TAA // 只关手的抗锯齿。
 				if (mask.hand > 0.5) noise = BlueNoise(); // 手部像素用固定噪声。
 			#endif
 			#ifdef OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只关玩家的抗锯齿。
@@ -238,7 +238,7 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 
 		float distFalloff = saturate(((min(shadowDistance, far) - length(worldPos)) * 0.05 - 1.0)); // 超出阴影范围就淡出透光。
 
-		#ifdef OMNI_SSS_NORMAL // 开启朝向透光时按观察角计算。
+		#if OMNI_SSS_NORMAL // 开启朝向透光时按观察角计算。
 			sss = scattering * (OMNI_SSS_BRIGHTNESS * distFalloff * (MiePhaseFunction(0.5, dot(worldNormal, -worldShadowVector)) * 0.5 + 0.15)); // 逆光方向更亮的米氏相位。
 		#else // 关闭朝向透光时用固定亮度。
 			sss = scattering * (OMNI_SSS_BRIGHTNESS * distFalloff * 0.2); // 固定占比，不随角度变化。
@@ -259,7 +259,7 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 
 			float avgDiff = 0.0; // 遮挡物与接收点的平均深度差，用来放大半影。
 
-			#ifdef OMNI_VARIABLE_PENUMBRA_SHADOWS // 可变半影：先估遮挡物距离再决定边缘宽度。
+			#if OMNI_VARIABLE_PENUMBRA_SHADOWS // 可变半影：先估遮挡物距离再决定边缘宽度。
 				float spreadLod = log2(shadowMapResolution / 512.0); // 按分辨率选取合适的纹理细节层级，高分辨率用更粗层级抑制噪点。
 				for (int i = -1; i <= 1; i++){ // 三乘三邻域估计遮挡物距离。
 					for (int j = -1; j <= 1; j++){
@@ -293,7 +293,7 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 
 				vec3 sampleCoord = vec3(shadowScreenPos.xy + offset, shadowScreenPos.z); // 采样坐标。
 
-				#ifdef OMNI_COLORED_SHADOWS // 彩色阴影：半透明层用自身颜色，实心层只按遮挡。
+				#if OMNI_COLORED_SHADOWS // 彩色阴影：半透明层用自身颜色，实心层只按遮挡。
 					float translucentShadow = step(sampleCoord.z, textureLod(shadowtex0, sampleCoord.xy, 0.0).x); // 半透明阴影：深度更远即未遮挡。
 					result += vec3(translucentShadow); // 半透明部分累加可见度。
 
@@ -309,7 +309,7 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 		}
 	}
 
-	#ifdef OMNI_SSS_NORMAL // 开启朝向透光时，用透光比例把阴影往亮处提一点。
+	#if OMNI_SSS_NORMAL // 开启朝向透光时，用透光比例把阴影往亮处提一点。
 		return result * (saturate(0.4 - scatteringStrength * 0.4) + 0.6); // 透光越强整体越亮。
 	#else
 		return result * (saturate(0.5 - scatteringStrength * 0.5) + 0.5); // 关闭时提亮幅度更小。

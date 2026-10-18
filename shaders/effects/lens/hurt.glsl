@@ -27,11 +27,11 @@
 
 // @effect {"label":{"zh_cn":"受伤、血量与镜头发水","en_us":"Hurt, health & water on camera"}}
 // @option {"label":{"zh_cn":"受伤与低血量效果","en_us":"Hurt & low health effect"},"description":{"zh_cn":"受击闪红边、重击整屏染红、低血量染红心跳、死亡整屏暗红；默认关闭，关闭时画面与现在完全一致。来源 Eclipse `lib/gameplay_effects.glsl`。","en_us":"Red edges on a hit, a full-screen red flash on a heavy hit, low-health red heartbeat and a dark red on death; off by default so the default look is unchanged. From Eclipse `lib/gameplay_effects.glsl`."}}
-//#define OMNI_HURT_EFFECT
+#define OMNI_HURT_EFFECT 0 // [0 1]
 // @option {"label":{"zh_cn":"低血量红屏","en_us":"Low health red screen"},"description":{"zh_cn":"血量低时画面边缘染红并随心跳脉冲；默认开启，只有打开上面的总开关才生效。来源 Eclipse `LOW_HEALTH_EFFECT`。","en_us":"Red screen edges with a heartbeat pulse when health is low; on by default, only active when the master effect is enabled. From Eclipse `LOW_HEALTH_EFFECT`."}}
-#define OMNI_HURT_LOW_HEALTH
+#define OMNI_HURT_LOW_HEALTH 1 // [0 1]
 // @option {"label":{"zh_cn":"受击闪红","en_us":"Damage flash"},"description":{"zh_cn":"小伤闪红边（一次掉一点五颗心以上），重击整屏染红（一次掉三点五颗心以上）；默认开启，只有打开总开关才生效。来源 Eclipse `DAMAGE_TAKEN_EFFECT`。","en_us":"Red edges on a small hit (1.5 hearts or more in one go) and a full-screen red flash on a heavy hit (3.5 hearts or more); on by default, only active when the master effect is enabled. From Eclipse `DAMAGE_TAKEN_EFFECT`."}}
-#define OMNI_HURT_DAMAGE
+#define OMNI_HURT_DAMAGE 1 // [0 1]
 // @option {"label":{"zh_cn":"低血量阈值","en_us":"Low health threshold"},"slider":true,"description":{"zh_cn":"血量低于这个值（单位半颗心）开始出现红屏；默认六点零，来源 Eclipse `LOW_HEALTH_EFFECT_START`。","en_us":"Red screen starts below this health in half-hearts; default 6.0, from Eclipse `LOW_HEALTH_EFFECT_START`."}}
 #define OMNI_HURT_LOW_HEALTH_START 6.0 // [1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 21.0 22.0 23.0 24.0]
 // @option {"label":{"zh_cn":"危急低血量阈值","en_us":"Critical health threshold"},"slider":true,"description":{"zh_cn":"血量低于这个值（单位半颗心）红屏更强；默认二点零，来源 Eclipse `CRITICALLY_LOW_HEALTH_EFFECT_START`。","en_us":"The red screen gets stronger below this health in half-hearts; default 2.0, from Eclipse `CRITICALLY_LOW_HEALTH_EFFECT_START`."}}
@@ -39,12 +39,12 @@
 // @option {"label":{"zh_cn":"心跳抖动强度","en_us":"Heartbeat distortion"},"slider":true,"description":{"zh_cn":"低血量时边缘随心跳的抖动量；默认零点二五，来源 Eclipse `MOTION_AMOUNT`。","en_us":"How much the edges wobble with the heartbeat at low health; default 0.25, from Eclipse `MOTION_AMOUNT`."}}
 #define OMNI_HURT_MOTION 0.25 // [0.0 0.05 0.1 0.15 0.2 0.25 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0]
 // @option {"label":{"zh_cn":"着火热浪","en_us":"On-fire heat"},"description":{"zh_cn":"身上着火时边缘染橙并随火焰抖动；默认开启，只有打开总开关才生效。来源 Eclipse `ON_FIRE_DISTORT_EFFECT`。","en_us":"Orange edges and a heat wobble while burning; on by default, only active when the master effect is enabled. From Eclipse `ON_FIRE_DISTORT_EFFECT`."}}
-#define OMNI_HURT_FIRE
+#define OMNI_HURT_FIRE 1 // [0 1]
 // @option {"label":{"zh_cn":"溺水压暗","en_us":"Drowning darkening"},"description":{"zh_cn":"在水下且血量偏低时整屏偏蓝压暗；默认开启，只有打开总开关才生效。本项目拿不到氧气量，用“在水下且血量低于低血量阈值”近似，来源 Eclipse `DROWNING_EFFECT`。","en_us":"Bluish darkening while underwater at low health; on by default, only active when the master effect is enabled. Air level is unavailable here, so underwater plus low health is used as an approximation. From Eclipse `DROWNING_EFFECT`."}}
-#define OMNI_HURT_DROWNING
+#define OMNI_HURT_DROWNING 1 // [0 1]
 
 // @option {"label":{"zh_cn":"镜头发水","en_us":"Water on camera"},"description":{"zh_cn":"下雨、快速移动或在水下时在镜头上挂水珠，水珠把画面轻微抖动并糊开；默认关闭。这是近似：Eclipse 的原始效果依赖跨帧平滑的入水与离水自定义量，本项目拿不到，改用降雨湿润度、相机速度与是否在水下估算。","en_us":"Droplets on the lens that wobble and blur the view when it rains, while moving fast or while the eye is in water; off by default. Approximation: Eclipse drives this from cross-frame smoothed enter and exit water amounts, unavailable here, so wetness, camera speed and the underwater state are combined instead."}}
-//#define OMNI_WATER_ON_CAMERA
+#define OMNI_WATER_ON_CAMERA 0 // [0 1]
 // @option {"label":{"zh_cn":"镜头发水强度","en_us":"Water on camera strength"},"slider":true,"description":{"zh_cn":"水珠折射与糊开的强度；默认一点零，只在上面的镜头发水开启时生效。","en_us":"Strength of the droplet refraction and blur; default 1.0, only used when water on camera is on."}}
 #define OMNI_WATER_ON_CAMERA_STRENGTH 1.0 // [0.0 0.25 0.5 0.75 1.0 1.5 2.0 3.0]
 
@@ -54,7 +54,7 @@
 #include "/common/math.glsl"
 
 // Iris 的玩家状态输入：只在开启效果且运行在 Iris 上时声明，避免在其它加载器上出现未声明标识符。
-#if defined OMNI_HURT_EFFECT && defined IS_IRIS
+#if OMNI_HURT_EFFECT && defined IS_IRIS
 uniform float currentPlayerHealth; // 相对血量，零到一；创造与旁观模式给负一。
 uniform float maxPlayerHealth; // 最大血量，单位半颗心；创造与旁观模式给负一。
 uniform bool is_burning; // 玩家着火时为真；本文件是唯一的声明处，别处要用需自行引入。
@@ -67,7 +67,7 @@ uniform float CriticalDamageTaken; // 重击强度，加载器按 `pipeline.prop
 // 为什么是近似：Eclipse 用跨帧平滑的入水 `enterWater` 与离水 `exitWater` 决定水珠的出现与消散，
 //   本项目这一步不能改绘制设置，拿不到这两个平滑量，改用降雨湿润度、相机速度与是否在水下估算。
 vec3 omniWaterOnCamera(vec3 color, vec2 texcoord){
-	#ifdef OMNI_WATER_ON_CAMERA // 只在开启镜头发水时展开，默认关闭时本函数原样返回画面。
+	#if OMNI_WATER_ON_CAMERA // 只在开启镜头发水时展开，默认关闭时本函数原样返回画面。
 		float underWater = float(isEyeInWater == 1); // 眼睛在水下为一，用来给镜头挂一层水膜。
 		float speed = length(cameraPosition - previousCameraPosition) / max(frameTime, 1e-4); // 相机移动速度，单位米每秒；帧时为零时用极小值兜底，避免除零。
 		float motion = saturate(speed * 0.06); // 速度换算成零到一的晃动权重，约十六米每秒到顶；动得越快水珠抖得越厉害。
@@ -92,13 +92,13 @@ vec3 omniWaterOnCamera(vec3 color, vec2 texcoord){
 vec3 omniHurtEffect(vec3 color, vec2 texcoord){
 	// 镜头发水先叠加：由独立选项 `OMNI_WATER_ON_CAMERA` 控制，不受受伤总开关影响。
 	color = omniWaterOnCamera(color, texcoord);
-#if defined OMNI_HURT_EFFECT && defined IS_IRIS // 开启效果且是 Iris 才展开，否则直接返回。
+#if OMNI_HURT_EFFECT && defined IS_IRIS // 开启效果且是 Iris 才展开，否则直接返回。
 	float absHealth = currentPlayerHealth * maxPlayerHealth; // 绝对血量，单位半颗心。
 	bool alive = currentPlayerHealth > -1.0; // 负一是创造或旁观，不是有效生存态。
 	bool isDead = alive && absHealth <= 0.0; // 生存态下血量归零就是死亡。
 
 	float threeHeart = 0.0; // 低血量红屏与心跳的强度；未开低血量时保持零，心跳与形变随之消失。
-	#if defined OMNI_HURT_LOW_HEALTH // 开启低血量时才按血量算强度。
+	#if OMNI_HURT_LOW_HEALTH // 开启低血量时才按血量算强度。
 		threeHeart = 1.0 - smoothstep(OMNI_HURT_LOW_HEALTH_START, OMNI_HURT_LOW_HEALTH_START + 1.0, absHealth); // 低于阈值拉满，高出一个半步的心回到零。
 		float oneHeart = 1.0 - smoothstep(OMNI_HURT_CRITICAL_START, OMNI_HURT_CRITICAL_START + 1.0, absHealth); // 危急阈值同样做阶跃。
 	#endif
@@ -111,7 +111,7 @@ vec3 omniHurtEffect(vec3 color, vec2 texcoord){
 	float heartBeat = pow(sin(frameTimeCounter * 15.0) * 0.5 + 0.5, 2.0) * 0.2 + 0.1;
 	// 形变量：低血量按心跳在边缘抖动；重击时把边缘抖动升级成整屏抖动；强度统一由选项缩放；死亡时整个画面都在抖。
 	float damageDistortion = vignette * noise * heartBeat * threeHeart;
-	#if defined OMNI_HURT_DAMAGE // 重击时整屏抖，照 Eclipse 把边缘权重换成「半个基础量加噪声」。
+	#if OMNI_HURT_DAMAGE // 重击时整屏抖，照 Eclipse 把边缘权重换成「半个基础量加噪声」。
 		damageDistortion = mix(damageDistortion, vignette * (0.5 + noise), CriticalDamageTaken);
 	#endif
 	damageDistortion *= OMNI_HURT_MOTION;
@@ -123,21 +123,21 @@ vec3 omniHurtEffect(vec3 color, vec2 texcoord){
 	// 红色分量的亮度：只留红光，红屏与红边都用它。
 	vec3 distortedLuma = vec3(1.0, 0.0, 0.0) * dot(distortedColor, vec3(0.21, 0.72, 0.07));
 
-	#if defined OMNI_HURT_LOW_HEALTH // 低血量：边缘按强度染红。
+	#if OMNI_HURT_LOW_HEALTH // 低血量：边缘按强度染红。
 		float colorLuma = dot(color, vec3(0.21, 0.72, 0.07)); // 当前像素的亮度。
 		vec3 lumaRedEdges = mix(vec3(colorLuma), vec3(1.0, 0.3, 0.3) * distortedLuma.r, vignette); // 灰度画面在边缘偏红。
 		color = mix(color, lumaRedEdges, mix(vignette * threeHeart, oneHeart, oneHeart)); // 越危急混得越多。
 	#endif
-	#if defined OMNI_HURT_DAMAGE // 受击：小伤染红边缘，重击整屏染红，照 Eclipse。
+	#if OMNI_HURT_DAMAGE // 受击：小伤染红边缘，重击整屏染红，照 Eclipse。
 		color = mix(color, distortedLuma, vignette * sqrt(min(MinorDamageTaken, 1.0))); // 小伤只在边缘，越靠边越红。
 		color = mix(color, distortedLuma, sqrt(CriticalDamageTaken)); // 重击不乘边缘权重，整屏变红，越重越红。
 	#endif
-	#if defined OMNI_HURT_FIRE // 着火：边缘染橙并随火焰抖动。
+	#if OMNI_HURT_FIRE // 着火：边缘染橙并随火焰抖动。
 		float burning = float(is_burning); // 身上着火时为一。
 		vec3 fireEdge = vec3(1.0, 0.45, 0.12) * max(dot(color, vec3(0.21, 0.72, 0.07)), 0.15); // 橙色边缘的基色，至少留一点亮。
 		color = mix(color, mix(color, fireEdge, 0.6), vignette * burning * (0.5 + noise * 0.5)); // 越靠边缘染得越多，噪声让火焰跳动。
 	#endif
-	#if defined OMNI_HURT_DROWNING // 溺水：水下且血量偏低时整屏偏蓝压暗。
+	#if OMNI_HURT_DROWNING // 溺水：水下且血量偏低时整屏偏蓝压暗。
 		// 为什么这样近似：原版溺水按氧气量表现，Iris 不提供氧气量；这里用“在水下且血量低于低血量阈值”代表已经快淹死。
 		float drowning = float(isEyeInWater == 1) * step(absHealth, OMNI_HURT_LOW_HEALTH_START); // 在水下且血量偏低时为一时压暗。
 		color = mix(color, color * vec3(0.55, 0.7, 1.0), drowning * 0.5); // 偏蓝压暗一半。

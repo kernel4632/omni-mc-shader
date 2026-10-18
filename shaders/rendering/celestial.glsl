@@ -105,7 +105,7 @@ in vec4 color; // 顶点色。
 // 片元主函数：星点类型为关且没开资源包天空时丢弃，其余把顶点色叠进零号。
 void main(){
 	#if OMNI_STAR_TYPE < 2 // 星点关或点状时天空基础一般不用。
-		#if !(defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空要原版天空底色与星空，这时照画。
+		#if !(OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空要原版天空底色与星空，这时照画。
 			discard; // 直接丢弃。
 		#endif
 	#endif
@@ -165,24 +165,24 @@ void main(){
 		#ifdef OMNI_MOON_TEXTURE // 开启月亮贴图时按是否在水下决定要不要画。
 			if (isEyeInWater != 0) discard; // 水下不画月亮。
 		#else
-			#if !(defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空也要资源包的月亮，这时照画。
+			#if !(OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空也要资源包的月亮，这时照画。
 				discard; // 关闭月亮贴图时丢弃。
 			#endif
 		#endif
 
-		#ifdef OMNI_BILINEAR_MOON_TEXTURE // 月亮贴图按开关选双线性或普通采样。
+		#if OMNI_BILINEAR_MOON_TEXTURE // 月亮贴图按开关选双线性或普通采样。
 			albedo = BilinearTexture(tex, texCoord, vec2(textureSize(tex, 0))); // 双线性采样。
 		#else
 			albedo = textureLod(tex, texCoord, 0.0); // 普通采样。
 		#endif	
 	}else{ // 天空盒图块，资源包天空时这里还包括太阳与自定义天空层。
-		#ifndef OMNI_SKYBOX_TEXTURE // 关闭天空盒贴图时丢弃。
-			#if !(defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空要资源包的天空层与太阳，这时照画。
+		#if !OMNI_SKYBOX_TEXTURE // 关闭天空盒贴图时丢弃。
+			#if !(OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 资源包天空要资源包的天空层与太阳，这时照画。
 				discard; // 丢弃。
 			#endif
 		#endif
 
-		#ifdef OMNI_BILINEAR_SKYBOX_TEXTURE // 天空盒按开关选双线性或普通采样。
+		#if OMNI_BILINEAR_SKYBOX_TEXTURE // 天空盒按开关选双线性或普通采样。
 			albedo = BilinearTextureSkybox(tex, texCoord, vec2(textureSize(tex, 0))); // 天空盒双线性采样。
 		#else
 			albedo = textureLod(tex, texCoord, 0.0); // 普通采样。

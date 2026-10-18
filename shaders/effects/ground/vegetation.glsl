@@ -18,7 +18,7 @@
 #define OMNI_VEGETATION_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"植物","en_us":"Plants"}}
 // @option {"label":{"zh_cn":"植物晃动","en_us":"Waving Plants"},"description":{"zh_cn":"草和树叶会不会随风摆，代价很低。","en_us":"Whether grass and leaves sway in the wind; cheap."}}
-#define OMNI_WAVING_PLANTS
+#define OMNI_WAVING_PLANTS 1 // [0 1]
 // @option {"label":{"zh_cn":"阴影贴图植物晃动","en_us":"Waving Plants in ShadowMap"},"description":{"zh_cn":"让影子里的植物也摆；开启后阴影图中植物会闪。","en_us":"Waves plants inside the shadow map; may flicker in the shadow map."}}
 //#define OMNI_SHADOW_WAVING_PLANTS
 // 内部常数：草的重风参数，风和随机相位一起决定大幅摆动。
@@ -53,7 +53,7 @@
 // 植物摆动：按方块编号选择一套风，在原地修改传入的相机相对世界坐标。
 // 为什么单独拆出来：地形顶点与阴影顶点要摆得完全一致，共用一份才能保证地上的植物和它的影子对齐。
 void WavingPlants(inout vec3 worldPos, float entityId, float blockLightY, float texCoordY, float midTexCoordY){
-#if !defined(OMNI_END) && defined(OMNI_WAVING_PLANTS) // 末地不摆，未开摆动时整个函数不做事。
+#if !defined(OMNI_END) && OMNI_WAVING_PLANTS // 末地不摆，未开摆动时整个函数不做事。
 	float tick = frameTimeCounter * ANIMATION_SPEED; // 动画时间按速度常数缩放。
 	float lightWeight = saturate(blockLightY * 1.5 - 0.5); // 天光太暗的植物不动，避免洞穴里乱摆。
 	lightWeight = lightWeight * lightWeight; // 平方。

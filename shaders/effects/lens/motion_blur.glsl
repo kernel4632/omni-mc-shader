@@ -56,7 +56,7 @@ vec3 MotionBlur(){
 		float steps = OMNI_MOTION_BLUR_QUALITY; // 一侧的采样步数。
 		float samples = 0.0; // 有效样本计数。
 		float dither = 0.0; // 采样抖动。
-		#ifdef OMNI_MOTION_BLUR_DITHER // 开启抖动时给采样位置加噪声。
+		#if OMNI_MOTION_BLUR_DITHER // 开启抖动时给采样位置加噪声。
 			dither = InterleavedGradientNoise(gl_FragCoord.xy); // 交错梯度噪声。
 		#endif
 		for (float i = -steps; i <= steps; i++){ // 沿快门方向对称取样。

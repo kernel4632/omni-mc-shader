@@ -24,7 +24,7 @@
 // 读零号画面里原版与资源包画好的天空：天空程序按原版加色混合把各层叠进零号，这里从伽马空间转线性再乘亮度档。
 // 为什么只能读零号画面：资源包的自定义天空层在天空绘制阶段被画成几何，没有暴露成采样器，只能读它画出来的结果。
 // 为什么先转线性：零号存的是贴图色（伽马空间），而天空底色要与程序化大气在同一线性单位里比较与合成。
-#ifdef OMNI_RESOURCEPACK_SKY // 只在开启时生成，默认构建里连这个函数都不编出来。
+#if OMNI_RESOURCEPACK_SKY // 只在开启时生成，默认构建里连这个函数都不编出来。
 vec3 omniResourcePackSky(){
 	return GammaToLinear(texelFetch(colortex0, texelCoord, 0).rgb) * OMNI_RESOURCEPACK_SKY_BRIGHTNESS; // 天空底色。
 }
@@ -50,12 +50,12 @@ void AccumulateSkyClouds(vec3 dir, vec3 atmosphereCamera, vec3 cloudCamera, vec2
 			NubisCumulus(color, dir, cloudAltitude, windDirection, cloudCamera, noise, cloudTransmittance); // 体积云。
 	#endif
 
-	#ifdef OMNI_PLANAR_CLOUDS // 打开平面云才算。
+	#if OMNI_PLANAR_CLOUDS // 打开平面云才算。
 		if (applyClouds && cameraPosition.y < OMNI_PLANAR_ALTITUDE && !ray_r_mu_intersects_ground) // 相机在云平面以下才看得到。
 			PlanarClouds(color, dir, atmosphereCamera, planarNoise, cloudTransmittance); // 平面云。
 	#endif
 
-	#if OMNI_CLOUD_CUMULONIMBUS > 0 || defined OMNI_CLOUD_ALTOSTRATUS || defined OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
+	#if OMNI_CLOUD_CUMULONIMBUS > 0 || OMNI_CLOUD_ALTOSTRATUS || OMNI_CLOUD_CIRRUS // 附加层默认全关，关闭时连调用都不生成。
 		if (applyClouds) NubisExtraLayers(color, dir, windDirection, cloudCamera, noise, ray_r_mu_intersects_ground, cloudTransmittance); // 卷云、高层云与积雨云。
 	#endif
 }
@@ -121,7 +121,7 @@ void RenderDeferredSky(){
 		#else // 原分辨率：与从前完全一致，天空这一步就把云画好。
 			bool applyClouds = true; // 天空与云一起累积。
 		#endif
-		#if defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD // 资源包天空：先铺资源包画好的整片天空当底色。
+		#if OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD // 资源包天空：先铺资源包画好的整片天空当底色。
 			finalComposite = omniResourcePackSky(); // 资源包天空底色。
 			bool addAtmosphere = false; // 程序化大气不再叠进画面，只用来给云提供透过率与地面相交判据。
 		#else // 默认：底色由程序化大气提供。
@@ -129,7 +129,7 @@ void RenderDeferredSky(){
 		#endif
 		AccumulateSkyClouds(worldDir, camera, camera, noise_1, noise_1.y, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, applyClouds, addAtmosphere, finalComposite, transmittance, cloudTransmittance, eclipseDarkening); // 叠底色（大气或资源包天空）与全部云层。
 
-		#if !(defined OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 默认路径：叠零号画面的日月贴图与程序化星空。
+		#if !(OMNI_RESOURCEPACK_SKY && defined OMNI_OVERWORLD) // 默认路径：叠零号画面的日月贴图与程序化星空。
 		vec3 celestial = GammaToLinear(texelFetch(colortex0, texelCoord, 0).rgb) * (OMNI_SKY_TEXTURE_BRIGHTNESS * 0.2); // 零号画面的天体颜色转线性并按选项缩放。
 
 		#if OMNI_STAR_TYPE == 1

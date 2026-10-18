@@ -117,7 +117,7 @@ vec3 HeldLighting(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3
 		if (isHand){ // 手部直接按发光等级给亮度。
 			heldLightFalloff = 0.01 * max(heldBlockLightValue, heldBlockLightValue2); // 取两只手里较大的发光等级。
 		}else{
-			#ifdef OMNI_FLASHLIGHT_CAMERA_SMOOTH // 打开指向平滑时，光束方向滞后于视角。
+			#if OMNI_FLASHLIGHT_CAMERA_SMOOTH // 打开指向平滑时，光束方向滞后于视角。
 				float angleRx = eyeRxSmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 俯仰角按过渡时长滞后。
 				mat3 Rx = mat3(1.0,  0.0,          0.0,
 							   0.0,  cos(angleRx), sin(angleRx),
@@ -233,7 +233,7 @@ vec3 HeldLighting(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3
 void TorchSpecularHighlight(inout vec3 color, vec3 viewPos, vec3 viewDir, float dist, vec3 albedo, vec3 normal, Material material){
 	material.roughness = max(material.roughness, 0.002); // 粗糙度给一个下限，避免高光被压成无限细的线。
 	#if OMNI_HELDLIGHT_MODE > 0 // 手电筒模式：高光只落在光束里。
-		#ifdef OMNI_FLASHLIGHT_CAMERA_SMOOTH // 与手持光一致地处理光束指向平滑。
+		#if OMNI_FLASHLIGHT_CAMERA_SMOOTH // 与手持光一致地处理光束指向平滑。
 			float angleRx = eyeRxSmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 俯仰角按过渡时长滞后。
 			mat3 Rx = mat3(1.0,  0.0,          0.0,
 							0.0,  cos(angleRx), sin(angleRx),

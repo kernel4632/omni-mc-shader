@@ -20,7 +20,7 @@
 
 // @effect {"label": {"zh_cn": "色彩分级", "en_us": "Color grading"}}
 // @option {"label": {"zh_cn": "色彩分级", "en_us": "Color Grading"}, "description": {"zh_cn": "按暗部、中间调、高光三段分别染色。默认关闭，开启后下面三组参数才参与计算。", "en_us": "Tints shadows, mids and highlights separately. Off by default; the three groups below take effect only when enabled."}}
-//#define OMNI_COLOR_GRADING
+#define OMNI_COLOR_GRADING 0 // [0 1]
 // @option {"label": {"zh_cn": "暗部红", "en_us": "Shadows Red"}, "slider": true, "description": {"zh_cn": "暗部偏向的目标色红色分量；三个分量都为一表示中性。", "en_us": "Red component of the shadow target colour; all three at one is neutral."}}
 #define OMNI_COLOR_GRADING_SHADOWS_R 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label": {"zh_cn": "暗部绿", "en_us": "Shadows Green"}, "slider": true, "description": {"zh_cn": "暗部偏向的目标色绿色分量；三个分量都为一表示中性。", "en_us": "Green component of the shadow target colour; all three at one is neutral."}}
@@ -46,7 +46,7 @@
 // @option {"label": {"zh_cn": "高光倍率", "en_us": "Highlights Multiplier"}, "slider": true, "description": {"zh_cn": "高光整体的明暗倍率，一为不变，越大越亮。", "en_us": "Overall brightness multiplier for highlights; one is unchanged, larger is brighter."}}
 #define OMNI_COLOR_GRADING_HIGHLIGHTS_MUL 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label": {"zh_cn": "亮度曲线", "en_us": "Luminance Curve"}, "description": {"zh_cn": "按下面两个参数把暗部与亮部的亮度拉开或收回。默认关闭，关闭时不改画面。", "en_us": "Pushes shadows and highlights apart or together using the two values below. Off by default."}}
-//#define OMNI_LUMINANCE_CURVE
+#define OMNI_LUMINANCE_CURVE 0 // [0 1]
 // @option {"label": {"zh_cn": "暗部曲线", "en_us": "Lower Curve"}, "slider": true, "description": {"zh_cn": "正值抬高暗部，负值压暗暗部，零为不变。", "en_us": "Positive lifts shadows, negative darkens them, zero is unchanged."}}
 #define OMNI_LUMINANCE_CURVE_LOWER 0.0 // [-2.0 -1.9 -1.8 -1.7 -1.6 -1.5 -1.4 -1.3 -1.2 -1.1 -1.0 -0.9 -0.8 -0.7 -0.6 -0.5 -0.4 -0.3 -0.2 -0.1 0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
 // @option {"label": {"zh_cn": "亮部曲线", "en_us": "Upper Curve"}, "slider": true, "description": {"zh_cn": "正值抬高亮部，负值压暗亮部，零为不变。", "en_us": "Positive lifts highlights, negative darkens them, zero is unchanged."}}
@@ -103,10 +103,10 @@ vec3 OmniSegmentGrade(vec3 color){
 // 顺序照 Eclipse：先做亮度曲线，再做分段染色。两个开关默认关闭，都关时原样返回颜色。
 // 串色（`OMNI_CROSSTALK`）独立于两个开关，默认零时不做任何处理、画面不变。
 vec3 OmniColorGrade(vec3 color){
-	#ifdef OMNI_LUMINANCE_CURVE // 开着亮度曲线时先调明暗两端。
+	#if OMNI_LUMINANCE_CURVE // 开着亮度曲线时先调明暗两端。
 		color = OmniLuminanceCurve(color); // 按通道做暗部与亮部修正。
 	#endif
-	#ifdef OMNI_COLOR_GRADING // 开着色彩分级时再做三段染色。
+	#if OMNI_COLOR_GRADING // 开着色彩分级时再做三段染色。
 		color = OmniSegmentGrade(color); // 按亮度分段染色并叠加。
 	#endif
 	if (OMNI_CROSSTALK != 0.0){ // 串色：让亮度拉近或推开颜色的饱和程度，默认零跳过。

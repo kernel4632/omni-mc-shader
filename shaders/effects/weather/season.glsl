@@ -15,7 +15,7 @@
 #define OMNI_SEASON_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"季节","en_us":"Seasons"}}
 // @option {"label":{"zh_cn":"季节开关","en_us":"Seasons"},"description":{"zh_cn":"草地、树叶和藤蔓的颜色随游戏天数缓慢变化；默认关闭，不影响默认画面。","en_us":"Grass, leaf and vine colour shifts with the in-game day count; off by default so the default look is unchanged."}}
-//#define OMNI_SEASONS
+#define OMNI_SEASONS 0 // [0 1]
 // @option {"label":{"zh_cn":"季节颜色","en_us":"Season Colour"},"description":{"zh_cn":"正值偏暖偏秋黄，负值偏冷偏绿。","en_us":"Positive leans warm autumn-yellow, negative leans cool green."},"slider":true}
 #define OMNI_SEASON_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // 世界天数 `worldDay` 由加载器提供，已在 `common/uniforms.glsl` 声明，这里不重复声明。
@@ -27,7 +27,7 @@ float omniFoliage(vec3 vertexColor){
 // 季节上色：植被按一年的相位混入秋色，再按选项整体偏暖或偏冷；非植被原样返回。
 // 调用前提：只在地形片元调用，`vertexColor` 是加载器给该顶点的顶点色。
 vec3 omniSeason(vec3 albedo, vec3 vertexColor){
-	#ifdef OMNI_SEASONS // 关闭时原样返回，不改变默认画面。
+	#if OMNI_SEASONS // 关闭时原样返回，不改变默认画面。
 		float foliage = omniFoliage(vertexColor); // 这一面有多像植被。
 		float phase = fract(float(worldDay) / 24.0); // 一年按二十四个游戏日循环。
 		float autumn = 0.5 - 0.5 * cos(phase * 6.283185); // 在零到一之间缓慢摆动，一年过半时最接近秋天。

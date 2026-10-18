@@ -72,7 +72,7 @@ float TraceSampleDepth(vec2 coord, bool isHand){
 		if (isHand) return textureLod(depthtex2, coord, 0.0).x; // 手部读不含玩家的深度。
 	#endif
 	float depth = textureLod(depthtex1, coord, 0.0).x; // 其他像素读普通不透明深度。
-	#if defined DISTANT_HORIZONS && defined OMNI_DH_SSR // 近景是天空且开启远景反射时改读远景深度；关闭时远景按天空处理，反射只打到近景几何。
+	#if defined DISTANT_HORIZONS && OMNI_DH_SSR // 近景是天空且开启远景反射时改读远景深度；关闭时远景按天空处理，反射只打到近景几何。
 		if (depth == 1.0) depth = ScreenDepth_From_DHScreenDepth(textureLod(dhDepthTex1, coord, 0.0).x); // 换成同一距离在近景投影下的深度。
 	#endif
 	return depth; // 返回该坐标的深度。
@@ -360,7 +360,7 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 		reflection += colorShadowlight * highlightGGX; // 叠加直射高光。
 	#endif
 
-	#if defined OMNI_VOXEL_REFLECTION && defined IRIS_FEATURE_CUSTOM_IMAGES // 屏幕空间没命中时再用体素反射补一次。
+	#if OMNI_VOXEL_REFLECTION && defined IRIS_FEATURE_CUSTOM_IMAGES // 屏幕空间没命中时再用体素反射补一次。
 		if(!hit && !totalInternalReflection && isEyeInWater == 0){ // 空中且屏幕空间没命中才追踪体素。
 			vec3 voxelHitWorld; // 体素命中的相机相对世界位置，用来把反射雾的雾段算到真实命中点。
 			vec4 voxelHit = omniVoxelReflection(worldPos, rayWorldDir, normal, voxelHitWorld); // 世界空间追踪体素图。

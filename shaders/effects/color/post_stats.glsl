@@ -15,7 +15,7 @@ vec4 UpdateStatPixels(vec4 data2){
 
 	if (texel == vec2(0.0, screenSize.y - 1.0)){ // 顶行横坐标零：自动曝光统计。
 		float avgExposure = GetExposureTiles(); // 按分块平均亮度算目标曝光。
-		#ifdef OMNI_SMOOTH_EXPOSURE // 开启平滑时按帧时间向前一帧过渡。
+		#if OMNI_SMOOTH_EXPOSURE // 开启平滑时按帧时间向前一帧过渡。
 			float prevAvgExposure = data2.a; // 上一帧的曝光统计。
 			float frameTimeFixed = frameTime + step(frameTime, 0.0) * 5.0; // 帧时间为零时给一个兜底值。
 			float exposureTime = saturate((step(avgExposure, prevAvgExposure) * 2.0 + 1.0) * frameTimeFixed / OMNI_EXPOSURE_TIME); // 变暗比变快慢一倍。
@@ -44,7 +44,7 @@ vec4 UpdateStatPixels(vec4 data2){
 			centerDepth = max(centerDepth, 0.875); // 近处下限，避免对焦距离趋近零。
 			float f = exp2(-frameTime * 10.0 / OMNI_DOF_DEPTH_SMOOTH_HALFLIFE); // 对焦深度的平滑因子。
 			float centerMaterialID = floor(texelFetch(colortex5, centerTexelCoord, 0).b * 255.0); // 中心的材质编号。
-			#ifdef OMNI_DOF_FOCUS_IGNORE_HAND_PARTICLE // 中心是手或粒子时不动焦点。
+			#if OMNI_DOF_FOCUS_IGNORE_HAND_PARTICLE // 中心是手或粒子时不动焦点。
 				if (heldItemId != 358.0 && centerMaterialID == MATID_HAND || centerMaterialID == MATID_PARTICLE) f = 1.0; // 直接用上一帧深度。
 			#endif
 			data2.a = saturate(mix(centerDepth, prevCenterDepth, f) * 8.0 - 7.0); // 编码后写进透明通道。

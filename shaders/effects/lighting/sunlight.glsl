@@ -46,7 +46,7 @@ vec3 SkyLighting(vec3 worldNormal, float lightmap, float cloudShadow){
 	vec3 skylight = colorSunSkylight * (SdotN * 0.35 + 0.65); // 太阳侧环境光按朝向分一点。
 	skylight += colorMoonSkylight * (MdotN * 0.35 + 0.65); // 月亮侧同理。
 	vec3 skySunLight = (worldNormal.y * 0.4 * lightmapFalloff + 0.6) * colorShadowlight * 0.025; // 朝上的面额外接一份直射方向的天光。
-	#ifdef OMNI_GI_RSM // 有全局光时这份天光已经算过，不再加倍。
+	#if OMNI_GI_RSM // 有全局光时这份天光已经算过，不再加倍。
 		skylight += skySunLight; // 直接加上。
 	#else // 没有全局光时补一份替代。
 		skylight += skySunLight * 1.5; // 放大补偿。

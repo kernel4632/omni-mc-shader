@@ -37,7 +37,7 @@
 // @option {"label":{"zh_cn":"深度差阈值","en_us":"Depth difference"},"description":{"zh_cn":"命中判定的相对深度差阈值，越小越严格。","en_us":"Relative depth-difference threshold for a hit; smaller is stricter."},"slider":true}
 #define OMNI_RAYTRACE_ZDIFF_THRESHOLD 0.2 //[0.05 0.1 0.15 0.2 0.3 0.4 0.5]
 // @option {"label":{"zh_cn":"远景反射","en_us":"Distant reflections"},"description":{"zh_cn":"让屏幕空间反射也能命中远景地形；关闭后反射只打到近景几何，远景处反射天空。默认开启，与原来一致。来源 Eclipse 的 DH_SCREENSPACE_REFLECTIONS。","en_us":"Lets screen-space reflections hit distant terrain; when off, rays only hit near geometry and reflect the sky over distant chunks. On by default. Ports Eclipse's DH_SCREENSPACE_REFLECTIONS."}}
-#define OMNI_DH_SSR
+#define OMNI_DH_SSR 1 // [0 1]
 // 数学提供光照模型与颜色曲线，坐标换算提供屏幕与视空间互转，两份都供三个通道共用。
 #include "/common/math.glsl"
 #include "/common/coordinates.glsl"

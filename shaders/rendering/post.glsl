@@ -153,12 +153,12 @@
 		void main(){
 			vec3 color = MotionBlurSceneColor(); // 模糊后的线性场景颜色。
 			float bloomGuide = 0.0; // 泛光引导，默认零。
-			#ifdef OMNI_TITLE // 开着标题标志时叠加图标，并取它的不透明度当引导。
+			#if OMNI_TITLE // 开着标题标志时叠加图标，并取它的不透明度当引导。
 				bloomGuide = TitleLogo(color); // 图标叠回线性场景颜色并返回不透明度。
 			#endif
 			compositeOutput1 = vec4(LinearToCurve(color), bloomGuide); // 写一号画面，透明度是泛光引导。
 			vec4 data2 = UpdateStatPixels(texelFetch(colortex2, texelCoord, 0)); // 逐像素改写二号顶行统计像素。
-			#ifdef OMNI_TITLE // 开着标题标志时同时累加标题计数像素。
+			#if OMNI_TITLE // 开着标题标志时同时累加标题计数像素。
 				data2 = UpdateTitleCounter(data2); // 累加顶行横坐标二十那个像素。
 			#endif
 			compositeOutput2 = data2; // 写二号画面。

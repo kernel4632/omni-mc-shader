@@ -49,7 +49,7 @@ float CloudShadowFromTex(vec3 worldPos, vec3 shadowLightVector){
 		vec2 fade = saturate(5.9 - abs(coord - 0.5) * 12.0); // 贴图边缘淡出，避免硬边界。
 		cloudShadow = mix(cloudShadow, CloudBicubicBlurTexture(colortex2, shadowTexel * pixelSize, screenSize), fade.x * fade.y); // 三次采样并淡出。
 	}
-	#ifdef OMNI_CLOUD_SHADOW_FADE // 打开淡出时，太阳越贴地云影越淡。
+	#if OMNI_CLOUD_SHADOW_FADE // 打开淡出时，太阳越贴地云影越淡。
 		float fadeAngle = smoothstep(0.06, 0.18, abs(shadowLightVector.y)); // 光方向越平越淡。
 		cloudShadow = mix(1.0 - wetness, cloudShadow, fadeAngle * fadeAngle); // 按淡出权重混合。
 	#endif

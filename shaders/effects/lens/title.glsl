@@ -22,13 +22,13 @@
 #define OMNI_TITLE_INCLUDED // 置上标记，后续再次引用直接跳过。
 // @effect {"label":{"zh_cn":"标题标志","en_us":"Title Logo"}}
 // @option {"label": {"zh_cn": "标题标志", "en_us": "Title Logo"}, "description": {"zh_cn": "世界加载后短暂浮现 iterationT 品牌图标，来源 iterationT `Lib/Settings.glsl:481` 的 `TITLE`。", "en_us": "Briefly fades in the iterationT brand logo after a world loads. From iterationT `Lib/Settings.glsl:481` `TITLE`."}}
-#define OMNI_TITLE
+#define OMNI_TITLE 1 // [0 1]
 
 // 图标贴图：iterationT 自带的 `texture/itt320.png`，由 `rendering/pipeline.properties` 绑到合成阶段这个二维采样器上。
 // 为什么单独开一个采样器：合成阶段的八号画面是大气三维贴图，图标不能借用同一个名字。
 uniform sampler2D omniTitleTex;
 
-#ifdef OMNI_TITLE // 关闭时整个功能在编译期去掉，不占逐像素开销。
+#if OMNI_TITLE // 关闭时整个功能在编译期去掉，不占逐像素开销。
 
 // --- 曝光：把二号画面顶行的自动曝光统计换算成图标要乘的亮度 ---
 // 为什么乘两个管线系数：原程序把图标放在线性场景里，颜色要跟场景同一套单位才不会过曝。

@@ -62,12 +62,12 @@
 
 		// 是否需要给手或玩家这类没有时间积累的像素补一次边缘抗锯齿；由排除选项决定，先算成一个布尔量。
 		bool useEdgeAA = false;
-		#if defined OMNI_DISABLE_HAND_TAA || defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只有相关排除选项开启时才读材质编号。
+		#if OMNI_DISABLE_HAND_TAA || defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只有相关排除选项开启时才读材质编号。
 			float materialIDs = floor(texelFetch(colortex6, texelCoord, 0).b * 255.0); // 读材质编号，判断像素是不是手或玩家。
 		#endif
-		#if defined OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都关了时间抗锯齿。
+		#if OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都关了时间抗锯齿。
 			useEdgeAA = materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER; // 这两类像素没有时间积累。
-		#elif defined OMNI_DISABLE_HAND_TAA // 只关了手的时间抗锯齿。
+		#elif OMNI_DISABLE_HAND_TAA // 只关了手的时间抗锯齿。
 			useEdgeAA = materialIDs == MATID_HAND; // 手没有时间积累。
 		#elif defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只关了玩家的时间抗锯齿与动态模糊。
 			useEdgeAA = materialIDs == MATID_ENTITIES_PLAYER; // 玩家没有时间积累。
@@ -76,7 +76,7 @@
 		// 内部渲染比例低于一且开着放大程序时，画面来自放大输出；同样先算成布尔量，让后面的判断是一整条 if。
 		bool fsrUpscaled = false;
 		#if MC_VERSION >= 11801 // 放大功能只在一点一八点一以后可用。
-			#ifdef OMNI_FSR // 开着放大程序。
+			#if OMNI_FSR // 开着放大程序。
 				fsrUpscaled = MC_RENDER_QUALITY < 1.0; // 内部比例低于一才走放大输出。
 			#endif
 		#endif
@@ -86,7 +86,7 @@
 			if (useEdgeAA){ // 手或玩家没有时间积累。
 				color = Fxaa(color, texCoord); // 改用边缘抗锯齿补一次。
 			}else{ // 其余像素就地锐化。
-				#if OMNI_CAS_SHARPNESS > 0 && defined OMNI_TAA && (!defined OMNI_FSR || MC_VERSION < 11801) // 开了锐化、开着时间抗锯齿，且没有独立的放大程序时。
+				#if OMNI_CAS_SHARPNESS > 0 && defined OMNI_TAA && (!OMNI_FSR || MC_VERSION < 11801) // 开了锐化、开着时间抗锯齿，且没有独立的放大程序时。
 					color = FidelityFX_CAS(color, texelCoord); // 按十字邻域对比度自适应锐化。
 				#endif
 			}
@@ -98,7 +98,7 @@
 
 		// 镜头形变：按选项对最终画面做色差、鱼眼或像素化重采样；三项默认全关时原样返回，画面不变。
 		// 源画面跟随前面选出的路径：走放大时是八号放大画面，否则是一号画面，避免形变把放大结果丢掉。
-		#if MC_VERSION >= 11801 && defined OMNI_FSR
+		#if MC_VERSION >= 11801 && OMNI_FSR
 			if (fsrUpscaled){ // 最终颜色来自放大画面，形变也要重采样同一张。
 				color = LensDistortion(colortex8, color, texCoord);
 			}else{ // 未走放大时重采样一号画面。

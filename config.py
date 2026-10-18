@@ -171,6 +171,10 @@ def shared(source: Path, found: dict[str, "options.Option"], shader_version: str
     if any(not isinstance(value, str) for value in changes.values()):
         raise ValueError("分享配置的每个选项取值都必须是字符串")  # 结构错误在读取边界报可读原因，不留给下游抛类型错误。
     changes = rename(changes)  # 旧名先按对照表迁移，玩家改过名的设置不丢，改过名又写错才在这里报错。
+    # ?????? 0/1 ?????????????????????????? 0/1 ??????
+    for name, value in list(changes.items()):
+        if value in ("true", "false") and name in found and tuple(found[name].values) == ("0", "1"):
+            changes[name] = "1" if value == "true" else "0"
     dropped = sorted(name for name in changes if name in REMOVED_OPTIONS)  # 已被算法整体替换掉的选项：导入时忽略，但要报出来。
     for name in dropped:
         del changes[name]  # 这些选项当前源码里没有对应计算，留着只会让人以为生效了。

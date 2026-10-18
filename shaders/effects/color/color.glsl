@@ -34,9 +34,9 @@
 // @option {"label": {"zh_cn": "AgX 动态范围", "en_us": "AgX Dynamic Range"}, "slider": true, "description": {"zh_cn": "AgX 曲线承认的曝光范围，越大高光与暗部保留越多。", "en_us": "Exposure range the AgX curve accepts; larger keeps more highlight and shadow."}}
 #define OMNI_AGX_EV 13.0 // [8.0 8.5 9.0 9.5 10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0 15.5 16.0 16.5 17.0 17.5 18.0 24.0 32.0]
 // @option {"label": {"zh_cn": "阿布尼效应校正", "en_us": "Abney Effect Correction"}, "description": {"zh_cn": "抵消加亮时色相偏移，亮部颜色更接近真实。", "en_us": "Counteracts the hue shift when lightening, keeping highlights more natural."}}
-#define OMNI_ABNEY_EFFECT_CORRECTION
+#define OMNI_ABNEY_EFFECT_CORRECTION 1 // [0 1]
 // @option {"label": {"zh_cn": "高级调色", "en_us": "Advanced Color Adjustment"}, "description": {"zh_cn": "启用白光裁剪、亮度伽马与饱和度这组更细致的调整。", "en_us": "Enables the finer white-clip, luminance-gamma and saturation adjustments."}}
-//#define OMNI_ADVANCED_COLOR
+#define OMNI_ADVANCED_COLOR 0 // [0 1]
 // @option {"label": {"zh_cn": "伽马", "en_us": "Gamma"}, "slider": true, "description": {"zh_cn": "高级调色里的显示伽马，越大越暗。", "en_us": "Display gamma inside advanced color; higher is darker."}}
 #define OMNI_GAMMA 1.0 // [0.5 0.55 0.6 0.65 0.7 0.75 0.8 0.85 0.9 0.95 1.0 1.05 1.1 1.15 1.2 1.25 1.3 1.35 1.4 1.45 1.5]
 // @option {"label": {"zh_cn": "亮度伽马", "en_us": "Luminance Gamma"}, "slider": true, "description": {"zh_cn": "只作用在亮度上的伽马，调整明暗对比而不改色相。", "en_us": "Gamma applied to luminance only, changing contrast without hue."}}
@@ -48,7 +48,7 @@
 // @option {"label": {"zh_cn": "白平衡", "en_us": "White Balance"}, "slider": true, "description": {"zh_cn": "按色温给画面染色，值低偏暖、值高偏冷；默认六千五百为中性，完全不改画面。来源 Eclipse `lib/settings.glsl:748` 的 `WHITE_BALANCE`。", "en_us": "Tints the image by colour temperature; lower leans warm, higher leans cool. The default 6500 is neutral and changes nothing. From Eclipse `lib/settings.glsl:748` `WHITE_BALANCE`."}}
 #define OMNI_WHITE_BALANCE 6500 // [1000 1100 1200 1300 1400 1500 1600 1700 1800 1900 2000 2100 2200 2300 2400 2500 2600 2700 2800 2900 3000 3100 3200 3300 3400 3500 3600 3700 3800 3900 4000 4100 4200 4300 4400 4500 4600 4700 4800 4900 5000 5100 5200 5300 5400 5500 5600 5700 5800 5900 6000 6100 6200 6300 6400 6500 6600 6700 6800 6900 7000 7100 7200 7300 7400 7500 7600 7700 7800 7900 8000 8100 8200 8300 8400 8500 8600 8700 8800 8900 9000 9100 9200 9300 9400 9500 9600 9700 9800 9900 10000 15000 20000 25000 50000]
 // @option {"label": {"zh_cn": "手动曝光", "en_us": "Manual Exposure"}, "description": {"zh_cn": "关掉自动曝光，改用下面的固定曝光值。", "en_us": "Turns off auto exposure and uses the fixed EV value below."}}
-//#define OMNI_MANUAL_EXPOSURE
+#define OMNI_MANUAL_EXPOSURE 0 // [0 1]
 // @option {"label": {"zh_cn": "固定曝光值", "en_us": "Exact EV value"}, "slider": true, "description": {"zh_cn": "手动曝光所用的曝光值。", "en_us": "Exposure value used by manual exposure."}}
 #define OMNI_EV_VALUE 14.0 // [0.0 0.33 0.67 1.0 1.33 1.67 2.0 2.33 2.67 3.0 3.33 3.67 4.0 4.33 4.67 5.0 5.33 5.67 6.0 6.33 6.67 7.0 7.33 7.67 8.0 8.33 8.67 9.0 9.33 9.67 10.0 10.33 10.67 11.0 11.33 11.67 12.0 12.33 12.67 13.0 13.33 13.67 14.0 14.33 14.67 15.0 15.33 15.67 16.0 16.33 16.67 17.0 17.33 17.67 18.0 18.33 18.67 19.0 19.33 19.67 20.0]
 // @option {"label": {"zh_cn": "曝光偏移", "en_us": "AE Offset"}, "slider": true, "description": {"zh_cn": "在自动曝光结果上整体加减的曝光，负值更暗。", "en_us": "Exposure added on top of the auto result; negative is darker."}}
@@ -68,7 +68,7 @@
 // @option {"label": {"zh_cn": "计权强度", "en_us": "Weighted Strength"}, "slider": true, "description": {"zh_cn": "亮度计权的强度，越大越偏向所选的暗部或高光。", "en_us": "Strength of luminance weighting."}}
 #define OMNI_LUMINANCE_WEIGHT_STRENGTH 0.7 // [0.5 0.7 1.0 1.5 2.0]
 // @option {"label": {"zh_cn": "平滑曝光", "en_us": "Smooth AE"}, "description": {"zh_cn": "让自动曝光随时间缓慢变化，减少亮暗突变时的跳动。", "en_us": "Makes auto exposure change gradually over time."}}
-#define OMNI_SMOOTH_EXPOSURE
+#define OMNI_SMOOTH_EXPOSURE 1 // [0 1]
 // @option {"label": {"zh_cn": "曝光过渡时间", "en_us": "AE Transition Time"}, "slider": true, "description": {"zh_cn": "自动曝光适应亮度变化所需的秒数。", "en_us": "Seconds auto exposure takes to adapt to a brightness change."}}
 #define OMNI_EXPOSURE_TIME 1.0 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.2 1.4 1.6 1.8 2.0]
 // @option {"label": {"zh_cn": "黑边比例", "en_us": "AspectRatio"}, "description": {"zh_cn": "按电影比例在画面上下加黑边；零为不加。", "en_us": "Adds cinematic black bars; zero means none."}, "values": {"0.0": {"zh_cn": "不加", "en_us": "None"}, "1.333333": {"zh_cn": "四比三", "en_us": "4:3"}, "1.777778": {"zh_cn": "十六比九", "en_us": "16:9"}, "2.0": {"zh_cn": "二比一", "en_us": "2:1"}, "2.39": {"zh_cn": "宽银幕", "en_us": "2.39:1"}}}
@@ -80,9 +80,9 @@
 // @option {"label": {"zh_cn": "浦肯野强度", "en_us": "Strength"}, "slider": true, "description": {"zh_cn": "色偏的强度。", "en_us": "Strength of the colour shift."}}
 #define OMNI_PURKINJE_EFFECT_STRENGTH 0.7 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 // @option {"label": {"zh_cn": "关闭夜视校正", "en_us": "Disable Night Vision"}, "page": "dev", "description": {"zh_cn": "调试开关：忽略夜视对曝光曲线的抬升，用来比较真实亮度。","en_us": "Debug switch: ignores the night-vision lift of the exposure curve to compare real brightness."}}
-//#define OMNI_DISABLE_NIGHTVISION
+#define OMNI_DISABLE_NIGHTVISION 0 // [0 1]
 // @option {"label": {"zh_cn": "关闭失明与黑暗校正", "en_us": "Disable Blindness & Darkness"}, "page": "dev", "description": {"zh_cn": "调试开关：忽略失明与黑暗对曝光、泛光和原版雾的影响。","en_us": "Debug switch: ignores blindness and darkness on exposure, bloom and vanilla fog."}}
-//#define OMNI_DISABLE_BLINDNESS_DARKNESS
+#define OMNI_DISABLE_BLINDNESS_DARKNESS 0 // [0 1]
 
 // --- 内部常数：原 `Settings.glsl` 里不进菜单的曝光常数 ---
 #define AE_CLAMP // 给分块亮度设一个极小下限，避免全黑画面把曝光推到无穷。
@@ -102,7 +102,7 @@ vec3 RRTAndODTFit(vec3 v){
 // 影院标准的 ACES 近似：先转色域，再压缩，最后转回显示原色。
 vec3 ACES(vec3 color){
 	color *= 1.4; // 整体提亮一点，贴近影院观感。
-	#ifdef OMNI_ABNEY_EFFECT_CORRECTION // 可选地抵消阿布尼效应。
+	#if OMNI_ABNEY_EFFECT_CORRECTION // 可选地抵消阿布尼效应。
 		color *= mat3(0.99999976, -1.26657e-7, -1.29064e-9, 1.67316e-8, 0.99999976, -5.32026e-9, -0.00725587, 6.47740e-9, 1.00725580); // 一次微小色域修正。
 	#endif
 	color *= mat3(0.59719, 0.35458, 0.04823, 0.07600, 0.90834, 0.01566, 0.02840, 0.13383, 0.83777); // 转 AP1 工作色域。
@@ -119,7 +119,7 @@ vec3 AgxDefaultContrastApprox(vec3 x){
 // AgX 强光压缩：先转宽色域工作空间，把曝光压到承认范围，再用 S 曲线成形，保住色相。
 vec3 AgX(vec3 color) {
 	color *= 2.3; // 整体提亮一点。
-	#ifdef OMNI_ABNEY_EFFECT_CORRECTION // 可选地抵消阿布尼效应。
+	#if OMNI_ABNEY_EFFECT_CORRECTION // 可选地抵消阿布尼效应。
 		color *= mat3(0.99999976, -1.26657e-7, -1.29064e-9, 1.67316e-8, 0.99999976, -5.32026e-9, -0.00725587, 6.47740e-9, 1.00725580); // 一次微小色域修正。
 	#endif
 	color *= mat3(0.842479062253094, 0.0784335999999992, 0.0792237451477643, 0.0423282422610123, 0.878468636469772, 0.0791661274605434, 0.0423756549057051, 0.0784336, 0.879142973793104); // 转宽色域工作空间。
@@ -220,12 +220,12 @@ float GetExposureTiles(){
 // 最后统一叠三项 Eclipse 曝光增益（乘数、变暗、增亮），默认均为一时结果与原来相同。
 float GetExposureValue(){
 	float exposure; // 先算出基础曝光，再统一叠增益。
-	#ifdef OMNI_MANUAL_EXPOSURE // 手动曝光。
+	#if OMNI_MANUAL_EXPOSURE // 手动曝光。
 		exposure = 1.5e5 * MAIN_OUTPUT_FACTOR * exp2(-OMNI_EV_VALUE); // 由曝光值直接换算。
 	#else // 自动曝光。
 		float ae = CurveToLinear(texelFetch(colortex2, ivec2(0, screenSize.y - 1.0), 0).a) * (5120.0 / EXPOSURE_OUTPUT_FACTOR); // 读顶行自动曝光统计。
 		float aeCurve = OMNI_AE_CURVE; // 曲线指数初值。
-		#ifndef OMNI_DISABLE_NIGHTVISION // 夜视时把曲线指数抬到接近一。
+		#if !OMNI_DISABLE_NIGHTVISION // 夜视时把曲线指数抬到接近一。
 			aeCurve = mix(aeCurve, 0.95, nightVision); // 按夜视强度混合。
 		#endif
 		#ifdef AE_CLAMP // 开启曝光钳位时按亮度压曲线。
@@ -236,7 +236,7 @@ float GetExposureValue(){
 		#endif
 		ae = pow(ae, -aeCurve); // 按曲线把亮度换成曝光。
 		ae *= exp2(OMNI_AE_OFFSET); // 叠加曝光偏移。
-		#ifndef OMNI_DISABLE_BLINDNESS_DARKNESS // 黑暗效果时压低曝光。
+		#if !OMNI_DISABLE_BLINDNESS_DARKNESS // 黑暗效果时压低曝光。
 			ae *= 1.0 - min(darknessLightFactor * 2.0, 0.9); // 按黑暗脉动亮度压低。
 		#endif
 		exposure = 8.5 * MAIN_OUTPUT_FACTOR * ae; // 乘回管线单位得到基础曝光。

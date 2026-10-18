@@ -20,7 +20,7 @@
 // 传入 `stormStrength` 是为了与暴风通道分工：暴风时雾由 `OmniStormFog` 负责，这里退回固定密度，
 // 避免同一个每日雾值既被当作标度、又被暴风通道当作加性密度叠两次。
 float FogDensityScale(float stormStrength){
-	#ifdef OMNI_DAILY_WEATHER // 每日天气开启时用当天雾密度；默认关闭时不产生这段代码。
+	#if OMNI_DAILY_WEATHER // 每日天气开启时用当天雾密度；默认关闭时不产生这段代码。
 		#ifdef OMNI_OVERWORLD // 每日天气只属于主世界；下界与末地没有正常昼夜与季节轮换。
 			#if OMNI_VFOG_NOISE_TYPE == 0 // 仅高度衰减模式取匀雾那一项。
 				float dailyScale = omniWeatherFog().x; // 当天匀雾密度。
@@ -37,7 +37,7 @@ float FogDensityScale(float stormStrength){
 		float dailyScale = OMNI_VFOG_DENSITY; // 固定密度选项原值。
 	#endif
 
-	#ifdef OMNI_TOD_FOG // 时段雾总开关默认关闭，打开后密度才随一天变化。
+	#if OMNI_TOD_FOG // 时段雾总开关默认关闭，打开后密度才随一天变化。
 		#ifdef OMNI_OVERWORLD // 时段雾只属于主世界；下界与末地没有正常昼夜循环。
 			float todTime = mod(float(worldTime), 24000.0); // 当天时刻，取一天内的循环。
 
@@ -55,7 +55,7 @@ float FogDensityScale(float stormStrength){
 			#endif
 
 			float todScale = todDensity * OMNI_TOD_FOG_MULT; // 乘总倍率，对应 Eclipse 的 `TOD_Fog_mult`。
-			#ifdef OMNI_DAILY_WEATHER // 时段雾与每日天气同时开启：照 Eclipse 的 `max` 取较大者，不叠加。
+			#if OMNI_DAILY_WEATHER // 时段雾与每日天气同时开启：照 Eclipse 的 `max` 取较大者，不叠加。
 				return max(dailyScale, todScale); // 两个来源取大值。
 			#else
 				return todScale; // 只有时段雾时直接返回时段值。

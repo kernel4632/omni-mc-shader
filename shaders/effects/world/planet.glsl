@@ -24,7 +24,7 @@
 
 // @effect {"label":{"zh_cn":"行星曲率","en_us":"Planet curvature"}}
 // @option {"label":{"zh_cn":"行星曲率","en_us":"Planet curvature"},"description":{"zh_cn":"让远处地形、实体与水面随距相机的距离逐渐下沉，模拟星球表面的弯曲地平线。默认关闭，关闭时画面与现在完全一致。","en_us":"Sinks terrain, entities and water with distance from the camera to simulate a curved planet surface. Off by default."}}
-//#define OMNI_PLANET_CURVATURE
+#define OMNI_PLANET_CURVATURE 0 // [0 1]
 // @option {"label":{"zh_cn":"曲率强度","en_us":"Curvature amount"},"description":{"zh_cn":"下沉的强度，越大弯曲越明显；默认一，照 Eclipse。零等于不弯曲。","en_us":"Strength of the drop; larger bends more. Default matches Eclipse; zero means no bending."},"slider":true}
 #define OMNI_CURVATURE_AMOUNT 1.0 // [-10.0 -5.0 -2.0 -1.5 -1.0 -0.5 0.0 0.5 1.0 1.5 2.0 5.0 10.0]
 
@@ -37,7 +37,7 @@
 float omniPlanetCurvatureDrop(vec2 horizontal){
 	float curvature = length(horizontal) / (16.0 * 8.0); // 水平距离除以十六乘八即一百二十八，Eclipse 的分母，照抄。
 	float amount = 0.0; // 下沉强度默认零，表示关闭。
-	#ifdef OMNI_PLANET_CURVATURE // 开启时才取玩家的强度。
+	#if OMNI_PLANET_CURVATURE // 开启时才取玩家的强度。
 		amount = OMNI_CURVATURE_AMOUNT; // 取玩家设置的曲率强度。
 	#endif
 	return curvature * curvature * amount; // 平方后乘强度，得到该点要下沉的高度。

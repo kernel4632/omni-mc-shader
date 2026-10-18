@@ -601,6 +601,36 @@ def dependencies() -> dict[str, bytes]:
         raise ValueError("第三方目录存在未登记或缺失的文件")
     return result  # 清单和许可声明随第三方原文一同交付。
 
+# --- 加载器边界检查：属性文件编码与计算工作组 ---
+def check_loader_properties() -> None:
+    """检查三个方块与物品编号属性文件只含 ASCII。
+
+    加载器用 C 预处理器读取它们，遇到中文会报 `Bad token` 并让整张编号表失效，
+    方块、实体与物品的编号就全部对不上。这里在构建时直接拒绝，不让它再进游戏才暴露。
+    """
+    for name in ("block.properties", "entity.properties", "item.properties"):  # 这三个文件由加载器的编号解析器读取。
+        path = SHADERS / name  # ????????????
+        data = path.read_bytes()  # 按字节判断，避免先解码再漏掉坏字节。
+        bad = [index for index, byte in enumerate(data) if byte > 127]  # 任何非 ASCII 字节都不行。
+        if bad:
+            raise ValueError(f"{path.relative_to(ROOT)} 含非 ASCII 字节（首个位置 {bad[0]}），加载器会拒绝整张编号表")
+
+
+def check_compute_workgroups() -> None:
+    """检查计算着色器的 `workGroups` 只写整数字面量。
+
+    加载器用整数解析这一行，不评估宏、常量名或算式；写成 `ivec3(RES / 32)`
+    会在进游戏时报 `NumberFormatException`，整个程序加载失败。
+    """
+    pattern = re.compile(r"^\s*const\s+ivec3\s+workGroups\s*=\s*(.+?)\s*;\s*(?://.*)?$")  # 只认这一种声明写法。
+    literal = re.compile(r"^ivec3\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*\)$")  # 三个十进制整数，别的都不合法。
+    for source in SHADERS.rglob("*.glsl"):  # 计算主体也放在效果与渲染文件里。
+        for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):  # 逐行找声明。
+            match = pattern.match(line)  # 不是工作组声明就跳过。
+            if match and not literal.match(match.group(1)):
+                raise ValueError(f"{source.relative_to(ROOT)}:{number} 的 workGroups 必须是整数字面量：{match.group(1)}")
+
+
 # --- 全量检查：先核来源，再编译，最后检查工作流 ---
 def check() -> None:
     """检查本版说明、生成文件、所有引用、选项、依赖、着色器链接和工作流。
@@ -621,6 +651,8 @@ def check() -> None:
     if generated_entries != set(program_files()):  # 旧程序可能被加载器忽略，必须明确清理并审查。
         raise ValueError("存在流程表之外的旧入口，请重新生成并审查")
     audited = audit.check(ROOT)  # 自有源码先通过中文说明与未实现标记审计。
+    check_loader_properties()  # 编号属性文件必须能被加载器的预处理器读取。
+    check_compute_workgroups()  # 计算工作组必须能被加载器的整数解析器读取。
     dependencies()  # 发行包中的第三方文件与许可也必须满足白名单。
     print(f"中文注释与实现审计通过：{len(audited)} 个代码文件")  # 共享审计函数不直接写终端，构建入口统一报告。
     check_option_wiring(found)  # 选项必须真的参与计算，和编译探针范围无关。

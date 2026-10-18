@@ -37,9 +37,9 @@
 
 // @effect {"label":{"zh_cn":"雪暴与沙暴","en_us":"Snow & sand storms"}}
 // @option {"label":{"zh_cn":"雪暴","en_us":"Snowstorm"},"description":{"zh_cn":"下雪群系下雪时刮起暴风雪，空气被雪雾填满、能见度骤降；默认关闭，开启后画面变化明显。","en_us":"A blizzard floods the air with snow haze in snowy biomes while it snows; off by default."}}
-//#define OMNI_SNOW_STORM
+#define OMNI_SNOW_STORM 0 // [0 1]
 // @option {"label":{"zh_cn":"沙暴","en_us":"Sandstorm"},"description":{"zh_cn":"干旱群系在雷暴时刮起沙尘暴，空气被沙尘填满；默认关闭，开启后画面变化明显。","en_us":"A sandstorm floods the air with dust in dry biomes during thunderstorms; off by default."}}
-//#define OMNI_SAND_STORM
+#define OMNI_SAND_STORM 0 // [0 1]
 // @option {"label":{"zh_cn":"暴风浓度","en_us":"Storm density"},"description":{"zh_cn":"暴风额外浓雾的浓度，越大雾越厚、能见度越低；只在雪暴或沙暴开启时生效。","en_us":"Density of the extra storm fog; larger is thicker and less visible; used only when a storm is on."},"slider":true}
 #define OMNI_STORM_DENSITY 0.1 // [0.0 0.02 0.05 0.08 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0]
 // @option {"label":{"zh_cn":"暴风雾起始高度","en_us":"Storm fog start height"},"description":{"zh_cn":"雪暴雾开始随高度变淡的基准高度，照 Eclipse 的雾起始高度；沙暴不看高度。","en_us":"Base height where snowstorm fog starts thinning with altitude, matching Eclipse; sandstorms ignore height."},"slider":true}
@@ -59,7 +59,7 @@ uniform float thunderStrength; // 雷暴强度，零到一，沙暴按它起风�
 // --- 暴风强度：由群系标记与天气强度相乘得到 ---
 // 雪暴强度：所在群系下雪（`eyeSnowySmooth`）且正在降水的强度，对应 Eclipse 的 `snowStorm` 自定义输入。
 float OmniSnowStorm(){
-	#ifdef OMNI_SNOW_STORM // 开关关闭时恒为零，不参与任何计算。
+	#if OMNI_SNOW_STORM // 开关关闭时恒为零，不参与任何计算。
 		return eyeSnowySmooth * rainStrength; // 下雪群系标记乘降雨强度，两者都已是零到一的平滑值。
 	#else
 		return 0.0; // 关闭时返回零，函数整体不影响画面。
@@ -68,7 +68,7 @@ float OmniSnowStorm(){
 
 // 沙暴强度：干旱群系在雷暴时的强度，对应 Eclipse 在 Iris 下的 `sandStorm` 自定义输入。
 float OmniSandStorm(){
-	#ifdef OMNI_SAND_STORM // 开关关闭时恒为零，不参与任何计算。
+	#if OMNI_SAND_STORM // 开关关闭时恒为零，不参与任何计算。
 		return eyeNoPrecipitationSmooth * thunderStrength; // 干热群系标记乘雷暴强度，两者都已是零到一的平滑值。
 	#else
 		return 0.0; // 关闭时返回零，函数整体不影响画面。
@@ -80,14 +80,14 @@ float OmniSandStorm(){
 // 云量部分由 `effects/cloud/cloud.glsl` 另行接入，本文件只负责雾这一项。
 // 说明：Eclipse 的匀雾密度多数日子取零，所以这项对画面的改变通常很小。
 float OmniDailyWeatherFog(){
-	#ifdef OMNI_DAILY_WEATHER // 每日天气关闭时恒为零，不改变暴风雾。
+	#if OMNI_DAILY_WEATHER // 每日天气关闭时恒为零，不改变暴风雾。
 		return omniWeatherFog().x; // 当天匀雾密度，`x` 是匀雾、`y` 是云雾。
 	#else
 		return 0.0; // 关闭时返回零。
 	#endif
 }
 
-#if defined(OMNI_SNOW_STORM) || defined(OMNI_SAND_STORM) // 只有至少开启一种暴风时才编译噪声与浓度函数，默认完全不增加代码。
+#if OMNI_SNOW_STORM || OMNI_SAND_STORM // 只有至少开启一种暴风时才编译噪声与浓度函数，默认完全不增加代码。
 // --- 暴风噪声取值 ---
 // 照 Eclipse `lib/overworld_fog.glsl:3-13` 的 `densityAtPosFog` 一比一搬运。
 // 为什么先除以十八再把横向缩一半：这是 Eclipse 的噪声格子尺度，直接照搬保证雾团大小一致。

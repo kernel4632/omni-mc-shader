@@ -18,9 +18,9 @@
 #define OMNI_ENTITY_INCLUDED // 置上标记。
 // @effect {"label":{"zh_cn":"生物与玩家","en_us":"Mobs & player"}}
 // @option {"label":{"zh_cn":"实体状态颜色","en_us":"Entity Status Color"},"description":{"zh_cn":"实体受伤时贴图会染上的红色。","en_us":"The red tint a mob shows when hurt."}}
-#define OMNI_ENTITIES_STATUS_COLOR
+#define OMNI_ENTITIES_STATUS_COLOR 1 // [0 1]
 // @option {"label":{"zh_cn":"实体眼部发光","en_us":"Entity Eyes Lighting"},"description":{"zh_cn":"让末影人、蜘蛛、坚守者等实体的部分纹理发光。","en_us":"Makes parts of endermen, spiders and wardens glow."}}
-#define OMNI_EYES_LIGHTING
+#define OMNI_EYES_LIGHTING 1 // [0 1]
 // @option {"label":{"zh_cn":"手部视场角模式","en_us":"Hand FOV Mode"},"description":{"zh_cn":"默认、跟随游戏设置或跟随光影设置；跟随游戏设置会使用选项里的视场角。","en_us":"Default, follow the game FOV, or follow the shader FOV; game mode uses the option value."},"values":{"0":{"zh_cn":"默认","en_us":"Default"},"1":{"zh_cn":"跟随游戏设置","en_us":"Follow Game Setting"},"2":{"zh_cn":"跟随光影设置","en_us":"Follow Shader Setting"}}}
 #define OMNI_HAND_FOV_MODE 0 // [0 1 2]
 // @option {"label":{"zh_cn":"手部视场角","en_us":"Hand FOV"},"description":{"zh_cn":"跟随光影设置时手持物的视场角，七十是原版大小。","en_us":"Held item FOV when following the shader; 70 is the vanilla size."},"slider":true}
@@ -30,7 +30,7 @@
 #include "/common/math.glsl"
 // 实体状态色：受伤时把底色朝受伤颜色混，混合量取自受伤颜色的透明度。
 vec3 EntityStatusColor(vec3 albedo, vec4 entityColor){
-	#ifdef OMNI_ENTITIES_STATUS_COLOR // 关闭时直接返回原底色。
+	#if OMNI_ENTITIES_STATUS_COLOR // 关闭时直接返回原底色。
 		albedo = mix(albedo, entityColor.rgb, vec3(entityColor.a)); // 按受伤颜色本身的透明度混合。
 	#endif
 	return albedo; // 交回处理后的底色。

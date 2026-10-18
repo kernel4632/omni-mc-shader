@@ -27,7 +27,7 @@
 #define OMNI_AMBIENT_INCLUDED
 // @effect {"label":{"zh_cn":"环境光与遮蔽","en_us":"GI & AO"}}
 // @option {"label":{"zh_cn":"全局光反射阴影图","en_us":"GI RSM"},"description":{"zh_cn":"用阴影图里可见的表面做一次屏幕外反弹，给阴影补光。","en_us":"Bounces light from surfaces visible in the shadow map to fill in shadows."}}
-#define OMNI_GI_RSM
+#define OMNI_GI_RSM 1 // [0 1]
 // @option {"label":{"zh_cn":"全局光质量","en_us":"GI Quality"},"description":{"zh_cn":"每个像素的反弹采样次数，越高越干净也越慢。","en_us":"Bounce samples per pixel; higher is cleaner and slower."},"slider":true}
 #define OMNI_GI_QUALITY 16 // [4 8 12 16 24 32 48 64 96 128]
 // @option {"label":{"zh_cn":"全局光半径","en_us":"GI Radius"},"description":{"zh_cn":"反弹搜索的半径，越大补光越广。","en_us":"Search radius of the bounce; larger spreads more light."},"slider":true}
@@ -43,11 +43,11 @@
 // @option {"label":{"zh_cn":"关闭手部全局光","en_us":"Disable Hand GI"},"description":{"zh_cn":"手不接收屏幕外的反弹补光。","en_us":"Keeps the hand from receiving off-screen bounce light."}}
 //#define OMNI_DISABLE_HAND_GI
 // @option {"label":{"zh_cn":"关闭手部全局光速度","en_us":"Disable Hand GI Velocity"},"description":{"zh_cn":"手不参与全局光的历史重投影，减少手的拖影。","en_us":"Excludes the hand from GI history reprojection to reduce smearing."}}
-//#define OMNI_DISABLE_HAND_GI_VELOCITY
+#define OMNI_DISABLE_HAND_GI_VELOCITY 0 // [0 1]
 // @option {"label":{"zh_cn":"关闭玩家全局光","en_us":"Disable Player GI"},"description":{"zh_cn":"玩家角色不接收屏幕外的反弹补光。","en_us":"Keeps the player from receiving off-screen bounce light."}}
 //#define OMNI_DISABLE_PLAYER_GI
 // @option {"label":{"zh_cn":"关闭玩家全局光速度","en_us":"Disable Player GI Velocity"},"description":{"zh_cn":"玩家不参与全局光的历史重投影。","en_us":"Excludes the player from GI history reprojection."}}
-//#define OMNI_DISABLE_PLAYER_GI_VELOCITY
+#define OMNI_DISABLE_PLAYER_GI_VELOCITY 0 // [0 1]
 // @option {"label":{"zh_cn":"地平线遮蔽","en_us":"GTAO"},"description":{"zh_cn":"地面真相环境遮蔽，墙角缝隙变暗。","en_us":"Ground-truth ambient occlusion; darkens corners and creases."}}
 #define OMNI_GTAO
 // @option {"label":{"zh_cn":"遮蔽质量","en_us":"GTAO Quality"},"description":{"zh_cn":"环绕视线的切片数，越高越稳也越慢。","en_us":"Slices around the view; higher is steadier and slower."},"slider":true}
@@ -69,7 +69,7 @@
 // @option {"label":{"zh_cn":"遮蔽多弹射","en_us":"GTAO Multibounce"},"description":{"zh_cn":"按表面底色给遮蔽做一次多弹射补偿，暗部不会压死。","en_us":"Multi-bounce correction using albedo so dark areas do not crush."}}
 #define OMNI_GTAO_MULTIBOUNCE
 // @option {"label":{"zh_cn":"远景遮蔽","en_us":"Distant AO"},"description":{"zh_cn":"让远景地形参与地平线遮蔽与全局光；关闭后远景不接收遮蔽，近景也不会被远景挡住。默认开启，与原来一致。来源 Eclipse 的 DH_AMBIENT_OCCLUSION。","en_us":"Lets distant terrain take part in ground-truth AO and GI; when off, distant chunks get no occlusion and nearby pixels are not occluded by distant geometry. On by default. Ports Eclipse's DH_AMBIENT_OCCLUSION."}}
-#define OMNI_DH_AO
+#define OMNI_DH_AO 1 // [0 1]
 // 相对坐标、数学、噪声与共享效果按下述顺序引入；本文件末尾的算法只在这里定义一次。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
@@ -91,7 +91,7 @@ vec4 RenderGISpatialFilter(float startDepth){
 	vec3 viewPos = ViewPos_From_ScreenPos(texCoord, depth); // 还原视空间位置，自动撤销抖动。
 
 	#ifdef DISTANT_HORIZONS // 有远景时天空像素改读远景深度。
-		#ifdef OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何，关闭时远景像素按天空处理。
+		#if OMNI_DH_AO // 只有开启远景遮蔽才把远景当作有几何，关闭时远景像素按天空处理。
 			if (depth == 1.0){ // 天空像素改读远景深度。
 				depth = texelFetch(dhDepthTex0, texelCoord, 0).x; // 远景深度。
 				viewPos = ViewPos_From_ScreenPos_DH(texCoord, depth); // 用远景逆投影还原。
@@ -109,7 +109,7 @@ vec4 RenderGISpatialFilter(float startDepth){
 			if (-viewPos.z > 0.15) gi.a = GroundTruthBasedAmbientOcclusion(viewPos, -viewDir, normal); // 太近的像素不算遮蔽。
 		#endif
 
-		#ifdef OMNI_GI_RSM // 打开全局光反弹才算。
+		#if OMNI_GI_RSM // 打开全局光反弹才算。
 			gi.rgb = GI_SpatialFilter(-viewPos.z, normal, viewDir); // 半分辨率全局光做空间滤波。
 		#endif
 	}

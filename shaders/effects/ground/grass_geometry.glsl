@@ -20,7 +20,7 @@
 */
 #ifndef OMNI_GRASS_GEOMETRY_INCLUDED // 只引入一次，避免函数重复定义。
 #define OMNI_GRASS_GEOMETRY_INCLUDED // 置上标记，后续再次引用直接跳过。
-#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD // 关闭程序化草或不在主世界时整段不编译。
+#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD // 关闭程序化草或不在主世界时整段不编译。
 
 // 判断一个邻居对草丛高度的作用：旁边是草或矮草就加高，临台阶就压低，其余不动。
 // `neighborId` 是九号画面里那一格的方块编号，`neighborPos` 是它的视空间位置，`viewUp` 是世界竖直方向。
@@ -28,7 +28,7 @@
 float omniGrassSideSign(float neighborId, vec3 neighborPos, vec3 viewUp){
 	if (abs(neighborId - OMNI_GRASS_BLOCK_ID) < 0.5 || abs(neighborId - OMNI_SHORT_GRASS_BLOCK_ID) < 0.5) return 1.0; // 邻居是草方块或矮草，抬高。
 	if (neighborId < 0.5) return 0.0; // 没有记录（新加载、被遮挡或第一帧），保守当平，避免整片草被压低。
-	#ifdef OMNI_GRASS_DETECT_FALLOFF // 开启底部检测时才向下多查一格。
+	#if OMNI_GRASS_DETECT_FALLOFF // 开启底部检测时才向下多查一格。
 		float below = omniGrassBlockAt(colortex9, neighborPos - viewUp, gbufferProjection, screenSize); // 邻居正下方一格的编号。
 		if (below >= 0.5 && abs(below - OMNI_GRASS_BLOCK_ID) >= 0.5 && abs(below - OMNI_SHORT_GRASS_BLOCK_ID) >= 0.5) return -1.0; // 下方也不是草，说明是台阶，压低。
 	#endif
@@ -81,7 +81,7 @@ void omniGrassGeometry(){
 		float signW = omniGrassSideSign(idW, bladeBaseCenter - viewEast, viewUp); // 西侧作用档。
 		float signS = omniGrassSideSign(idS, bladeBaseCenter + viewSouth, viewUp); // 南侧作用档。
 		float signN = omniGrassSideSign(idN, bladeBaseCenter - viewSouth, viewUp); // 北侧作用档。
-		#ifndef OMNI_GRASS_DETECT_INV_FALLOFF // 关掉侧向检测：去掉加高，只保留底部检测的压低。
+		#if !OMNI_GRASS_DETECT_INV_FALLOFF // 关掉侧向检测：去掉加高，只保留底部检测的压低。
 			signE = min(signE, 0.0); signW = min(signW, 0.0); signS = min(signS, 0.0); signN = min(signN, 0.0); // 正档归零。
 		#endif
 		float neighborSum = 0.25 * (signE + signW + signS + signN); // 四邻合起来落在负一到一之间。

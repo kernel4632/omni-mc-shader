@@ -238,7 +238,7 @@ class EffectTests(unittest.TestCase):
         off = ("OMNI_AURORA", "OMNI_RAINBOW", "OMNI_LIGHTNING", "OMNI_SEASONS", "OMNI_SNOW_OVERLAY", "OMNI_LPV_ENABLED", "OMNI_PROFILER", "OMNI_FSR", "OMNI_DOF", "OMNI_LENS_FLARE", "OMNI_LINE_IMAGE_OUTPUT", "OMNI_CLOUD_CIRRUS", "OMNI_CLOUD_ALTOSTRATUS", "OMNI_SHADER_GRASS")
         for name in off:
             with self.subTest(option=name):
-                self.assertEqual(found[name].default, "false")  # 额外功能默认关闭。
+                self.assertIn(found[name].default, ("false", "0"))  # 额外功能默认关闭。
         neutral = {"OMNI_DEBUG_VIEW": "0", "OMNI_SURFACE_WETNESS": "0.0", "OMNI_SEASON_TINT": "0.0", "OMNI_AURORA_TINT": "0.0", "OMNI_CLOUD_SPEED": "1.0", "OMNI_CLOUD_CUMULONIMBUS": "0"}  # 数值型额外功能取中性值；积雨云是三档，零档即关闭。
         for name, value in neutral.items():
             with self.subTest(option=name):
@@ -258,7 +258,7 @@ class EffectTests(unittest.TestCase):
     def test_bloom_switch_and_amount(self):
         """泛光可开关、强度可调，合并阶段按选项叠加；雾内泛光与水下雾内泛光都可调并接入合并。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_BLOOM"].values, ("false", "true"))  # 泛光可开关。
+        self.assertIn(found["OMNI_BLOOM"].values, (("false", "true"), ("0", "1")))  # 泛光可开关。
         self.assertIn("OMNI_BLOOM_AMOUNT", found)  # 泛光强度可调。
         self.assertIn("OMNI_FOG_BLOOM", found)  # 雾内泛光强度可调。
         self.assertEqual(found["OMNI_FOG_BLOOM"].default, "0.0")  # 默认关闭，画面不变。
@@ -305,7 +305,7 @@ class EffectTests(unittest.TestCase):
         gi = support.text("effects/lighting/gi.glsl")  # 全局光主体（按算法从入口拆出）。
         self.assertIn("RSM(", gi)  # 反射阴影图独立成函数。
         self.assertIn("GI_TemporalFilter", gi)  # 时间滤波独立成函数。
-        self.assertIn("#ifdef OMNI_GI_RSM", gi)  # 延迟阶段按选项执行空间滤波与时间滤波。
+        self.assertRegex(gi, r"#\s*(ifdef|if)\s+OMNI_GI_RSM\b")  # 延迟阶段按选项执行空间滤波与时间滤波。
 
     def test_shadow_penumbra_and_bias(self):
         """可变半影阴影可开关、质量与展开可调，阴影偏置参与投影压缩。"""
@@ -314,7 +314,7 @@ class EffectTests(unittest.TestCase):
             self.assertIn(name, found)  # 每个阴影参数由阴影源码定义。
         shadow = support.text("effects/shadow/shadow.glsl")  # 阴影主体。
         self.assertIn("VariablePenumbraShadow", shadow)  # 半影阴影独立成函数。
-        self.assertIn("#ifdef OMNI_VARIABLE_PENUMBRA_SHADOWS", shadow)  # 由选项分出开关分支。
+        self.assertRegex(shadow, r"#\s*(ifdef|if)\s+OMNI_VARIABLE_PENUMBRA_SHADOWS\b")  # 由选项分出开关分支。
         self.assertIn("OMNI_SHADOW_MAP_BIAS", shadow)  # 偏置参与投影压缩。
 
     def test_screen_space_shadow_and_colored_shadow(self):
@@ -337,8 +337,8 @@ class EffectTests(unittest.TestCase):
         self.assertIn("CalculateStars", support.text("effects/sky/stars.glsl"))  # 星空独立成函数。
         self.assertIn("OMNI_STAR_TYPE", sky)  # 星空类型参与计算。
         celestial = support.text("rendering/celestial.glsl")  # 天体贴图程序。
-        self.assertIn("#ifdef OMNI_MOON_TEXTURE", celestial)  # 月亮贴图决定是否叠加。
-        self.assertIn("#ifndef OMNI_SKYBOX_TEXTURE", celestial)  # 关闭天空盒时回退。
+        self.assertRegex(celestial, r"#\s*(ifdef|if)\s+OMNI_MOON_TEXTURE\b")  # 月亮贴图决定是否叠加。
+        self.assertRegex(celestial, r"#\s*(ifndef|if\s+!)\s*OMNI_SKYBOX_TEXTURE\b")  # 关闭天空盒时回退。
 
     def test_atmosphere_extras_strengths(self):
         """极光、彩虹、闪电可开关且强度可调，默认关闭不影响 iterationT 画面。"""
@@ -361,11 +361,11 @@ class EffectTests(unittest.TestCase):
     def test_cloud_styles_selectable(self):
         """云提供平面与体积两种做法，切换后延迟阶段绘制不同分支，两者共用同一套天气与颜色来源。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_PLANAR_CLOUDS"].values, ("false", "true"))  # 平面云可开关。
-        self.assertEqual(found["OMNI_VOLUMETRIC_CLOUDS"].values, ("false", "true"))  # 体积云可开关。
+        self.assertIn(found["OMNI_PLANAR_CLOUDS"].values, (("false", "true"), ("0", "1")))  # 平面云可开关。
+        self.assertIn(found["OMNI_VOLUMETRIC_CLOUDS"].values, (("false", "true"), ("0", "1")))  # 体积云可开关。
         skyrender = support.text("effects/sky/skyrender.glsl")  # 云在延迟三号主体、天空盒与主天空共用一段累积。
-        self.assertIn("#ifdef OMNI_PLANAR_CLOUDS", skyrender)  # 平面云分支存在。
-        self.assertIn("#ifdef OMNI_VOLUMETRIC_CLOUDS", skyrender)  # 体积云分支存在。
+        self.assertRegex(skyrender, r"#\s*(ifdef|if)\s+OMNI_PLANAR_CLOUDS\b")  # 平面云分支存在。
+        self.assertRegex(skyrender, r"#\s*(ifdef|if)\s+OMNI_VOLUMETRIC_CLOUDS\b")  # 体积云分支存在。
         self.assertIn("PlanarClouds", support.text("effects/cloud/planar.glsl"))  # 平面云做法存在。
         self.assertIn("NubisCumulus", support.text("effects/cloud/volumetric.glsl"))  # 体积云做法存在。
 
@@ -387,7 +387,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("CloudShadowFromTex", cloud)  # 云影采样独立成函数。
         self.assertIn("OMNI_CLOUD_SHADOW_RANGE", cloud)  # 范围参与贴图坐标。
         self.assertIn("OMNI_CLOUD_SHADOWTEX_SIZE", cloud)  # 贴图尺寸参与分辨率。
-        self.assertIn("#ifdef OMNI_CLOUD_SHADOW", support.text("effects/lighting/sunlight.glsl"))  # 直射光按云影压低。
+        self.assertRegex(support.text("effects/lighting/sunlight.glsl"), r"#\s*(ifdef|if)\s+OMNI_CLOUD_SHADOW\b")  # 直射光按云影压低。
 
     def test_cloud_layer_options(self):
         """卷云、高层云与积雨云作为附加云层可开关，积雨云照 Eclipse 分三档，各自的高度、厚度与覆盖可调。"""
@@ -414,7 +414,7 @@ class EffectTests(unittest.TestCase):
     def test_volumetric_fog_parameters(self):
         """体积雾可开关，步数与噪声类型可选，密度、高度与衰减都可调。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_VFOG"].values, ("false", "true"))  # 体积雾可开关。
+        self.assertIn(found["OMNI_VFOG"].values, (("false", "true"), ("0", "1")))  # 体积雾可开关。
         for name in ("OMNI_VFOG_QUALITY", "OMNI_VFOG_NOISE_TYPE", "OMNI_VFOG_DENSITY", "OMNI_VFOG_HEIGHT", "OMNI_VFOG_FALLOFF"):
             self.assertIn(name, found)  # 每个体积雾参数由雾源码定义。
         fog = support.text("effects/fog/volumetric.glsl")  # 体积雾主体。
@@ -425,12 +425,12 @@ class EffectTests(unittest.TestCase):
     def test_underwater_volumetric_fog(self):
         """水下体积雾可开关、浓度可调，复用同一份阴影可见性且接入折射。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_UNDERWATER_VFOG"].values, ("false", "true"))  # 水下体积雾可开关。
+        self.assertIn(found["OMNI_UNDERWATER_VFOG"].values, (("false", "true"), ("0", "1")))  # 水下体积雾可开关。
         self.assertIn("OMNI_UNDERWATER_VFOG_DENSITY", found)  # 浓度可调。
         fog = support.text("effects/fog/underwater_fog.glsl")  # 水下体积雾主体。
         self.assertIn("UnderwaterVolumetricFog", fog)  # 水下体积雾独立成函数。
         self.assertIn("OMNI_UNDERWATER_VFOG_DENSITY", fog)  # 浓度参与散射。
-        self.assertIn("#ifdef OMNI_UNDERWATER_VFOG", support.text("effects/reflection/screenspace.glsl"))  # 反射路径按选项叠加水下光柱。
+        self.assertRegex(support.text("effects/reflection/screenspace.glsl"), r"#\s*(ifdef|if)\s+OMNI_UNDERWATER_VFOG\b")  # 反射路径按选项叠加水下光柱。
 
     def test_land_atmospheric_scattering_and_indoor_fog(self):
         """地表大气散射与室内雾都可开关，浓度与距离可调。"""
@@ -493,7 +493,7 @@ class EffectTests(unittest.TestCase):
     def test_material_pbr_parallax(self):
         """物理光照、视差模式与次表面散射都可开关或调速，材质主体按选项分派。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_ENABLE_PBR"].values, ("false", "true"))  # 物理光照可开关。
+        self.assertIn(found["OMNI_ENABLE_PBR"].values, (("false", "true"), ("0", "1")))  # 物理光照可开关。
         for name in ("OMNI_PARALLAX_MODE", "OMNI_PARALLAX_QUALITY", "OMNI_PARALLAX_SHADOW", "OMNI_SSS_STRENGTH"):
             self.assertIn(name, found)  # 每个材质参数由材质源码定义。
         material = support.text("effects/ground/material.glsl")  # 材质主体。
@@ -522,36 +522,36 @@ class EffectTests(unittest.TestCase):
     def test_taa_options(self):
         """时间抗锯齿可开关，混合权重与攻击性可调，后期阶段按选项执行重投影。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_TAA"].values, ("false", "true"))  # 时间抗锯齿可开关。
+        self.assertIn(found["OMNI_TAA"].values, (("false", "true"), ("0", "1")))  # 时间抗锯齿可开关。
         for name in ("OMNI_TAA_BLENDWEIGHT", "OMNI_TAA_AGGRESSION", "OMNI_DISABLE_HAND_TAA"):
             self.assertIn(name, found)  # 每个时间抗锯齿参数由清晰度源码定义。
         self.assertIn("taa.glsl", support.text("effects/clarity/antialiasing.glsl"))  # 入口按引入顺序展开 TAA 核心。
         taa = support.text("effects/clarity/taa.glsl")  # 时间抗锯齿核心（按算法从入口拆出）。
         self.assertIn("TemporalReprojection", taa)  # 重投影独立成函数。
         self.assertIn("OMNI_TAA_BLENDWEIGHT", taa)  # 混合权重参与累积。
-        self.assertIn("#ifdef OMNI_TAA", support.text("effects/clarity/antialiasing.glsl"))  # 后期时间抗锯齿主体按选项执行。
+        self.assertRegex(support.text("effects/clarity/antialiasing.glsl"), r"#\s*(ifdef|if)\s+OMNI_TAA\b")  # 后期时间抗锯齿主体按选项执行。
 
     def test_fsr_and_cas(self):
         """`FSR` 放大可开关、锐化与去噪可调，`CAS` 锐化强度独立可调。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_FSR"].values, ("false", "true"))  # 放大可开关。
+        self.assertIn(found["OMNI_FSR"].values, (("false", "true"), ("0", "1")))  # 放大可开关。
         for name in ("OMNI_FSR_SHARPNESS", "OMNI_FSR_DENOISE", "OMNI_CAS_SHARPNESS", "OMNI_CAS_DENOISE"):
             self.assertIn(name, found)  # 每个放大参数由清晰度源码定义。
         upscale = support.text("effects/clarity/upscale.glsl")  # 放大主体。
         self.assertIn("FidelityFX_CAS", upscale)  # `CAS` 锐化独立成函数。
         self.assertIn("FidelityFX_FSR1", upscale)  # `FSR` 放大独立成函数。
         self.assertIn("OMNI_FSR_SHARPNESS", upscale)  # 锐化强度参与权重。
-        self.assertIn("#ifdef OMNI_FSR", support.text("rendering/final.glsl"))  # 最终阶段按选项放大。
+        self.assertRegex(support.text("rendering/final.glsl"), r"#\s*(ifdef|if)\s+OMNI_FSR\b")  # 最终阶段按选项放大。
 
     def test_fsr_switch_survives_real_preprocessing(self):
         """真实预处理器里，季节开关关闭时走关闭分支、开启后走启用分支。"""
         found, _, _ = support.configuration()  # 选项替换沿用真实菜单定义。
         source = "#version 330 compatibility\n" + support.expand(build.SHADERS / "effects/weather/season.glsl")  # 展开依赖后的真实效果文本。
-        source += "\n#ifdef OMNI_SEASONS\nconst bool seasonOn = true;\n#else\nconst bool seasonOn = false;\n#endif\n"  # 用可观察输出标出实际选中的分支。
+        source += "\n#if OMNI_SEASONS\nconst bool seasonOn = true;\n#else\nconst bool seasonOn = false;\n#endif\n"  # 用可观察输出标出实际选中的分支。
         defaults = {name: option.default for name, option in found.items()}  # 开启时仅修改目标选项。
         with tempfile.TemporaryDirectory() as temporary:
             shader = Path(temporary) / "probe.frag"  # 不碰项目入口和构建缓存。
-            for enabled, text in ((False, source), (True, build.option_source(source, found, defaults | {"OMNI_SEASONS": "true"}))):
+            for enabled, text in ((False, source), (True, build.option_source(source, found, defaults | {"OMNI_SEASONS": "1"}))):
                 with self.subTest(enabled=enabled):
                     shader.write_text(text, encoding="utf-8")  # 每次用同一实际预处理器读取探针。
                     result = subprocess.run([str(build.tool("glslang")), "-E", str(shader)], capture_output=True, text=True, encoding="utf-8", errors="replace")
@@ -565,19 +565,19 @@ class EffectTests(unittest.TestCase):
             self.assertIn(name, found)  # 每个镜头光参数由镜头源码定义。
         glare = support.text("effects/lens/glare.glsl")  # 眩光与光斑主体（按算法从入口拆出）。
         self.assertIn("LensFlare", glare)  # 光斑独立成函数。
-        self.assertIn("#ifdef OMNI_LENS_FLARE", glare)  # 按选项分出光斑分支。
+        self.assertRegex(glare, r"#\s*(ifdef|if)\s+OMNI_LENS_FLARE\b")  # 按选项分出光斑分支。
         self.assertIn("OMNI_FLARE_BRIGHTNESS", glare)  # 亮度参与叠加。
 
     def test_dof_controls(self):
         """景深可开关，模糊半径、质量与焦外散景形状都可调。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_DOF"].values, ("false", "true"))  # 景深可开关。
+        self.assertIn(found["OMNI_DOF"].values, (("false", "true"), ("0", "1")))  # 景深可开关。
         for name in ("OMNI_DOF_BLUR", "OMNI_DOF_QUALITY", "OMNI_DOF_MAX_COC", "OMNI_DOF_CATSEYE"):
             self.assertIn(name, found)  # 每个景深参数由镜头源码定义。
         dof = support.text("effects/lens/dof.glsl")  # 景深主体（按算法从入口拆出）。
         self.assertIn("DepthOfField", dof)  # 景深独立成函数。
         self.assertIn("OMNI_DOF_QUALITY", dof)  # 质量参与采样数。
-        self.assertIn("#ifdef OMNI_DOF", support.text("rendering/post.glsl"))  # 后期阶段按选项执行景深。
+        self.assertRegex(support.text("rendering/post.glsl"), r"#\s*(ifdef|if)\s+OMNI_DOF\b")  # 后期阶段按选项执行景深。
 
     def test_motion_blur_and_vignette(self):
         """运动模糊与暗角都可开关，快门角与暗角参数可调。"""
@@ -602,21 +602,21 @@ class EffectTests(unittest.TestCase):
     def test_shader_grass_and_block_buffer(self):
         """程序化草默认关闭且只在主世界编译；地形写九号方块编号缓冲，草阶段按世界坐标查询。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_SHADER_GRASS"].default, "false")  # 默认关闭，默认画面不变。
+        self.assertIn(found["OMNI_SHADER_GRASS"].default, ("false", "0"))  # 默认关闭，默认画面不变。
         self.assertEqual(found["OMNI_REPLACE_SHORT_GRASS"].values, ("0", "1", "2"))  # 替换矮草有否/是/仅矮草三档。
         for name in ("OMNI_GRASS_BASE_HEIGHT", "OMNI_GRASS_SHORT_HEIGHT", "OMNI_GRASS_DETECT_FALLOFF", "OMNI_GRASS_DETECT_INV_FALLOFF"):
             self.assertIn(name, found)  # 两套高度与邻接检测都来自草效果源码。
         grass = support.text("effects/ground/grass.glsl")  # 草效果主体。
         self.assertIn("omniGrassWindOffset", grass)  # 摆动独立成函数。
         self.assertIn("omniGrassBlockAt", grass)  # 方块编号查询独立成函数。
-        self.assertIn("//#define OMNI_SHADER_GRASS", grass)  # 关闭是唯一默认。
+        self.assertIn("#define OMNI_SHADER_GRASS 0", grass)  # ???????
         geometry = support.text("effects/ground/grass_geometry.glsl")  # 草几何主体。
         self.assertIn("OMNI_GRASS_DETECT_FALLOFF", geometry)  # 底部检测参与高度。
         self.assertIn("OMNI_GRASS_DETECT_INV_FALLOFF", geometry)  # 侧向检测参与高度。
         self.assertIn("OMNI_SHORT_GRASS_BLOCK_ID", geometry)  # 仅矮草档按矮草方块生长。
         terrain = support.text("rendering/terrain.glsl")  # 地形主体。
         self.assertIn('/effects/ground/grass.glsl"', terrain)  # 地形引入草效果。
-        self.assertIn("#if defined OMNI_SHADER_GRASS && defined OMNI_OVERWORLD", terrain)  # 只在主世界且开启时编译。
+        self.assertIn("#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD", terrain)  # ????????????
         self.assertIn("DRAWBUFFERS:0359", terrain)  # 地形多写九号方块编号画面。
         self.assertIn("colortex9Clear = false", support.text("rendering/buffers.glsl"))  # 方块编号跨帧保留。
         self.assertIn("block.85 = grass_block", support.text("block.properties"))  # 草方块编号是八十五。
@@ -624,7 +624,7 @@ class EffectTests(unittest.TestCase):
     def test_vegetation_winding(self):
         """植物摆动可开关，阴影阶段另有独立开关，摆动在世界空间推移顶点。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_WAVING_PLANTS"].values, ("false", "true"))  # 摆动可开关。
+        self.assertIn(found["OMNI_WAVING_PLANTS"].values, (("false", "true"), ("0", "1")))  # 摆动可开关。
         self.assertIn("OMNI_SHADOW_WAVING_PLANTS", found)  # 阴影摆动可单独开关。
         vegetation = support.text("effects/ground/vegetation.glsl")  # 摆动主体。
         self.assertIn("WavingPlants", vegetation)  # 摆动独立成函数。
@@ -643,7 +643,7 @@ class EffectTests(unittest.TestCase):
     def test_surface_wetness(self):
         """地表湿润可手动设定，雨滴溅射可开关，湿润量参与地面底色。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_RAIN_SPLASH_EFFECT"].values, ("false", "true"))  # 溅射可开关。
+        self.assertIn(found["OMNI_RAIN_SPLASH_EFFECT"].values, (("false", "true"), ("0", "1")))  # 溅射可开关。
         self.assertIn("OMNI_SURFACE_WETNESS", found)  # 手动湿润可调。
         weather = support.text("effects/weather/weather.glsl")  # 天气主体。
         self.assertIn("OMNI_SURFACE_WETNESS", weather)  # 手动湿润参与计算。
@@ -652,26 +652,26 @@ class EffectTests(unittest.TestCase):
     def test_season_colour(self):
         """季节可开关、整体色调可调，只对植被顶点色着色，默认关闭。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_SEASONS"].default, "false")  # 默认关闭。
+        self.assertIn(found["OMNI_SEASONS"].default, ("false", "0"))  # 默认关闭。
         self.assertIn("OMNI_SEASON_TINT", found)  # 季节颜色可调。
         season = support.text("effects/weather/season.glsl")  # 季节主体。
         self.assertIn("omniSeason", season)  # 季节着色独立成函数。
-        self.assertIn("#ifdef OMNI_SEASONS", season)  # 关闭时原样返回。
+        self.assertRegex(season, r"#\s*(ifdef|if)\s+OMNI_SEASONS\b")  # 关闭时原样返回。
         self.assertIn("OMNI_SEASON_TINT", season)  # 色调参与着色。
 
     def test_snow_overlay(self):
         """积雪覆盖可开关、强度可调，默认关闭时函数与贴图都不被编译；底色、法线与粗糙度三张贴图都接入。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_SNOW_OVERLAY"].default, "false")  # 默认关闭。
+        self.assertIn(found["OMNI_SNOW_OVERLAY"].default, ("false", "0"))  # 默认关闭。
         self.assertIn("OMNI_SNOW_OVERLAY_STRENGTH", found)  # 强度可调。
         snow = support.text("effects/weather/snow.glsl")  # 积雪主体。
         self.assertIn("omniSnowOverlay", snow)  # 积雪独立成函数。
-        self.assertIn("#ifdef OMNI_SNOW_OVERLAY", snow)  # 关闭时不增加代码。
+        self.assertRegex(snow, r"#\s*(ifdef|if)\s+OMNI_SNOW_OVERLAY\b")  # 关闭时不增加代码。
         for name in ("snowTexA", "snowTexN", "snowTexR"):  # 三张贴图都在函数体里采样。
             self.assertIn(name, snow)  # 底色、法线、粗糙度各一张，缺一就是没接入。
         self.assertIn("inout vec3 normal", snow)  # 法线通过 `inout` 传回，参与光照。
         self.assertIn("inout float smoothness", snow)  # 粗糙度以平滑度通过 `inout` 传回五号画面。
-        self.assertIn("#ifdef OMNI_SNOW_OVERLAY", support.text("effects/ground/terrain_surface.glsl"))  # 地形片元主函数体按开关调用。
+        self.assertRegex(support.text("effects/ground/terrain_surface.glsl"), r"#\s*(ifdef|if)\s+OMNI_SNOW_OVERLAY\b")  # 地形片元主函数体按开关调用。
         self.assertIn("omniSnowOverlay", support.text("rendering/entities.glsl"))  # 实体与方块实体也调用同一份函数。
 
     def test_entity_status_and_hand_fov(self):
@@ -718,17 +718,17 @@ class EffectTests(unittest.TestCase):
         """调试视图与性能计时都可开关，默认关闭时不改变画面。"""
         found, _, _ = support.configuration()  # 真实选项。
         self.assertEqual(found["OMNI_DEBUG_VIEW"].default, "0")  # 调试视图默认关闭。
-        self.assertEqual(found["OMNI_PROFILER"].default, "false")  # 性能计时默认关闭。
+        self.assertIn(found["OMNI_PROFILER"].default, ("false", "0"))  # 性能计时默认关闭。
         debug = support.text("effects/dev/debug.glsl")  # 调试主体。
         self.assertIn("debugColor", debug)  # 调试视图独立成函数。
         self.assertIn("omniProfiler", debug)  # 性能计时独立成函数。
-        self.assertIn("#ifdef OMNI_PROFILER", debug)  # 关闭时不增加代码。
+        self.assertRegex(debug, r"#\s*(ifdef|if)\s+OMNI_PROFILER\b")  # 关闭时不增加代码。
         self.assertIn("debugColor", support.text("rendering/final.glsl"))  # 最终阶段调用调试视图。
 
     def test_lpv_compute_options(self):
         """光传播体积可开关、体积大小可选，计算阶段填方块光表与传播，片元阶段混回方块光。"""
         found, _, _ = support.configuration()  # 真实选项。
-        self.assertEqual(found["OMNI_LPV_ENABLED"].values, ("false", "true"))  # 体积光可开关。
+        self.assertIn(found["OMNI_LPV_ENABLED"].values, (("false", "true"), ("0", "1")))  # 体积光可开关。
         self.assertEqual(found["OMNI_LPV_SIZE"].values, ("6", "7", "8"))  # 体积边长保持三档。
         scene = support.expand(build.SHADERS / "world0/setup.csh")  # 从填表计算入口展开。
         self.assertIn("omniLpvBlockData", scene)  # 方块光表接入 setup 阶段。
@@ -770,7 +770,7 @@ class EffectTests(unittest.TestCase):
         source = support.text("rendering/lpv.glsl")  # 计算主体而不是复制实现。
         self.assertNotIn("memoryBarrierImage", source)  # 读写的不是同一张图，没有同派发内的先后依赖。
         self.assertEqual(source.count("barrier();"), 1)  # 共享缓冲填充完成后同步一次工作组。
-        self.assertIn("defined OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES", source)  # 关闭或缺少能力时不读写图像。
+        self.assertRegex(source, r"(defined\s+)?OMNI_LPV_ENABLED\s*&&\s*defined\s+IRIS_FEATURE_CUSTOM_IMAGES")  # 关闭或缺少能力时不读写图像。
 
     def test_selection_box_options(self):
         """选择框颜色可调，线条图像输出可开关，选择框已接入合成。"""
