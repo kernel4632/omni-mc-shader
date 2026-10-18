@@ -167,6 +167,9 @@ def shared(source: Path, found: dict[str, "options.Option"], shader_version: str
     changes = data["values"]  # 分享数据进入已检查的选项边界。
     if data["schemaVersion"] == 1 and any(name != "OMNI_DEBUG_VIEW" or value not in ("0", "1", "2") for name, value in changes.items()):
         raise ValueError("旧版配置只能包含原有调试视图；当前选项请按当前格式导入")  # 不把当前水云等选项伪装成旧接口。
+    # 取值必须都是字符串：JSON 允许把值写成对象或数组，若直接进迁移表会触发不可哈希异常，先在这里统一拒绝。
+    if any(not isinstance(value, str) for value in changes.values()):
+        raise ValueError("分享配置的每个选项取值都必须是字符串")  # 结构错误在读取边界报可读原因，不留给下游抛类型错误。
     changes = rename(changes)  # 旧名先按对照表迁移，玩家改过名的设置不丢，改过名又写错才在这里报错。
     dropped = sorted(name for name in changes if name in REMOVED_OPTIONS)  # 已被算法整体替换掉的选项：导入时忽略，但要报出来。
     for name in dropped:
@@ -305,7 +308,10 @@ def main() -> None:
         parser.error("--format 必须与 --output 的文件后缀一致")  # 内容格式和文件名不符时在写盘前拒绝。
     defaults = {name: option.default for name, option in found.items()}  # 默认值来自真实声明，不来自旧配置或预设。
     if args.command == "reset":
-        save(destination, defaults, release, build.ROOT)  # 重置只保存工具管理的共享配置。
+        if output_format == "properties":
+            save_properties(destination, defaults, release, build.ROOT)  # 选到 properties 后缀时重置也写加载器可读属性，内容与文件名一致。
+        else:
+            save(destination, defaults, release, build.ROOT)  # 默认写工具管理的共享配置。
         print("已重置开发共享配置")  # 保留现有成功文字，供用户和脚本识别。
         return  # 重置无需输入文件，不进入分享读取流程。
     if not args.input:
@@ -317,8 +323,8 @@ def main() -> None:
             if current[name] != other[name]:
                 print(f"{name}: {other[name]} → {current[name]}")  # 箭头继续从对照值指向输入值。
         return  # 对比到此结束，不触发任何保存函数。
-    if args.command == "export" and destination.suffix == ".properties":
-        save_properties(destination, current, release, build.ROOT)  # 导出的完整属性可直接交给加载器。
+    if output_format == "properties":
+        save_properties(destination, current, release, build.ROOT)  # 后缀或格式选到properties时，任何命令都写加载器可直接读的完整属性。
     else:
         save(destination, current, release, build.ROOT)  # 分享对象保留格式和目标光影版本。
     print("共享配置已保存到开发目录")  # 只有实际保存成功后才报告完成。

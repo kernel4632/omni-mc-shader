@@ -330,9 +330,9 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_MOON_TEXTURE", "OMNI_SKYBOX_TEXTURE", "OMNI_STAR_TYPE", "OMNI_STARS_AMOUNT", "OMNI_NIGHT_BRIGHTNESS"):
             self.assertIn(name, found)  # 每个天空参数由天空源码定义。
-        sky = support.text("effects/sky/sky.glsl")  # 天空主体。
-        self.assertIn("RenderMoonDisc", sky)  # 月盘独立成函数。
-        self.assertIn("CalculateStars", sky)  # 星空独立成函数。
+        sky = support.text("effects/sky/sky.glsl")  # 天空入口，选项与内部常数在这里。
+        self.assertIn("RenderMoonDisc", support.text("effects/sky/sun_moon.glsl"))  # 月盘独立成函数。
+        self.assertIn("CalculateStars", support.text("effects/sky/stars.glsl"))  # 星空独立成函数。
         self.assertIn("OMNI_STAR_TYPE", sky)  # 星空类型参与计算。
         celestial = support.text("rendering/celestial.glsl")  # 天体贴图程序。
         self.assertIn("#ifdef OMNI_MOON_TEXTURE", celestial)  # 月亮贴图决定是否叠加。
@@ -349,7 +349,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniLightning", atmosphere)  # 闪电独立成函数。
         self.assertIn("omniLightningVolume", atmosphere)  # 闪电对体积云与体积雾的照明也在这里定义。
         self.assertIn("*OMNI_AURORA_STRENGTH", atmosphere)  # 极光强度参与着色。
-        cloud = support.text("effects/cloud/cloud.glsl")  # 体积云主体。
+        cloud = support.text("effects/cloud/volumetric.glsl")  # 体积云主体。
         self.assertIn("omniLightningVolume", cloud)  # 体积云接到闪电照明。
         self.assertIn("marchingPos - cameraPosition", cloud)  # 云采样点换成相机相对坐标后再比闪电距离。
         fog = support.text("effects/fog/volumetric.glsl")  # 体积雾主体。
@@ -364,16 +364,15 @@ class EffectTests(unittest.TestCase):
         skyrender = support.text("effects/sky/skyrender.glsl")  # 云在延迟三号主体、天空盒与主天空共用一段累积。
         self.assertIn("#ifdef OMNI_PLANAR_CLOUDS", skyrender)  # 平面云分支存在。
         self.assertIn("#ifdef OMNI_VOLUMETRIC_CLOUDS", skyrender)  # 体积云分支存在。
-        cloud = support.text("effects/cloud/cloud.glsl")  # 云主体。
-        self.assertIn("PlanarClouds", cloud)  # 平面云做法存在。
-        self.assertIn("NubisCumulus", cloud)  # 体积云做法存在。
+        self.assertIn("PlanarClouds", support.text("effects/cloud/planar.glsl"))  # 平面云做法存在。
+        self.assertIn("NubisCumulus", support.text("effects/cloud/volumetric.glsl"))  # 体积云做法存在。
 
     def test_cloud_step_controls(self):
         """体积云步数由采样数上限与精细度倍率共同决定，两者都接入步进。"""
         found, _, _ = support.configuration()  # 真实选项。
         self.assertIn("OMNI_CLOUD_SAMPLES", found)  # 采样数由云源码定义。
         self.assertIn("OMNI_CLOUD_QUALITY", found)  # 精细度倍率仍在。
-        cloud = support.text("effects/cloud/cloud.glsl")  # 云主体。
+        cloud = support.text("effects/cloud/volumetric.glsl")  # 体积云主体。
         self.assertIn("OMNI_CLOUD_SAMPLES -", cloud)  # 采样数参与步数上限。
         self.assertIn("marchingSteps * OMNI_CLOUD_QUALITY", cloud)  # 倍率参与步数。
 
@@ -382,7 +381,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_CLOUD_SHADOW", "OMNI_CLOUD_SHADOW_RANGE", "OMNI_CLOUD_SHADOWTEX_SIZE", "OMNI_CLOUD_SHADOW_FADE"):
             self.assertIn(name, found)  # 每个云影参数由云源码定义。
-        cloud = support.text("effects/cloud/cloud.glsl")  # 云主体。
+        cloud = support.text("effects/cloud/shadow.glsl")  # 云影主体。
         self.assertIn("CloudShadowFromTex", cloud)  # 云影采样独立成函数。
         self.assertIn("OMNI_CLOUD_SHADOW_RANGE", cloud)  # 范围参与贴图坐标。
         self.assertIn("OMNI_CLOUD_SHADOWTEX_SIZE", cloud)  # 贴图尺寸参与分辨率。
@@ -394,7 +393,7 @@ class EffectTests(unittest.TestCase):
         for name in ("OMNI_CLOUD_CIRRUS", "OMNI_CLOUD_ALTOSTRATUS", "OMNI_CLOUD_CUMULONIMBUS", "OMNI_CLOUD_CIRRUS_ALTITUDE", "OMNI_CLOUD_ALTOSTRATUS_THICKNESS", "OMNI_CLOUD_CUMULONIMBUS_COVERAGE"):
             self.assertIn(name, found)  # 每个附加云层参数由云源码定义。
         self.assertEqual(found["OMNI_CLOUD_CUMULONIMBUS"].values, ("0", "1", "2"))  # 积雨云照 Eclipse 的 `0/1/2` 分三档。
-        cloud = support.text("effects/cloud/cloud.glsl")  # 云主体。
+        cloud = support.text("effects/cloud/volumetric.glsl")  # 体积云主体。
         self.assertIn("NubisExtraLayers", cloud)  # 附加层独立成函数。
         self.assertIn("#if OMNI_CLOUD_CUMULONIMBUS == 1", cloud)  # 中档按雷暴强度分派。
         self.assertIn("OMNI_CLOUD_FADE", found)  # 云淡出可开关。
@@ -405,7 +404,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_CLOUD_CLEAR_COVERAGE", "OMNI_CLOUD_RAIN_COVERAGE", "OMNI_CLOUD_CLEAR_THICKNESS", "OMNI_CLOUD_RAIN_THICKNESS", "OMNI_CLOUD_CLEAR_SUNLIGHTING", "OMNI_CLOUD_RAIN_SUNLIGHTING"):
             self.assertIn(name, found)  # 每个晴雨参数由云源码定义。
-        cloud = support.text("effects/cloud/cloud.glsl")  # 云主体。
+        cloud = support.text("effects/cloud/volumetric.glsl")  # 体积云主体。
         self.assertIn("OMNI_CLOUD_CLEAR_COVERAGE", cloud)  # 晴天覆盖参与云量。
         self.assertIn("OMNI_CLOUD_RAIN_COVERAGE", cloud)  # 雨天覆盖参与云量。
         self.assertIn("OMNI_CLOUD_RAIN_SUNLIGHTING", cloud)  # 雨天受光参与着色。
@@ -585,6 +584,15 @@ class EffectTests(unittest.TestCase):
         self.assertIn("MotionBlur", lens)  # 运动模糊独立成函数。
         self.assertIn("Vignette", lens)  # 暗角独立成函数。
         self.assertIn("OMNI_MOTION_BLUR_SHUTTER_ANGLE", lens)  # 快门角参与位移。
+
+    def test_lens_distortion_resamples_current_source(self):
+        """镜头形变重采样当前路径的源画面：开放大时用八号放大画面，避免把放大结果丢掉。"""
+        distortion = support.text("effects/lens/distortion.glsl")  # 镜头形变主体。
+        self.assertIn("LensDistortion(sampler2D source", distortion)  # 源画面由调用方传入。
+        self.assertNotIn("texture(colortex1", distortion)  # 不再把低分辨率一号画面写死进形变。
+        final = support.text("rendering/final.glsl")  # 调用方。
+        self.assertIn("LensDistortion(colortex8", final)  # 放大路径重采样放大画面。
+        self.assertIn("LensDistortion(colortex1", final)  # 非放大路径重采样一号画面。
 
     def test_shader_grass_and_block_buffer(self):
         """程序化草默认关闭且只在主世界编译；地形写九号方块编号缓冲，草阶段按世界坐标查询。"""

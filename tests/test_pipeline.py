@@ -89,6 +89,10 @@ class PipelineTests(unittest.TestCase):
                 with self.assertRaises(ValueError): config.shared(source,found,build.version())  # 未知键值都失败。
             data["values"]={}; data["shaderVersion"]="9.0.0"; source.write_text(json.dumps(data),encoding="utf-8")
             with self.assertRaises(ValueError): config.shared(source,found,build.version())  # 没有未来版本迁移规则。
+            data["schemaVersion"]=config.SHARE_SCHEMA; data["shaderVersion"]=build.version()  # 当前格式也必须是结构正确的输入。
+            for values in ({"OMNI_EXPOSURE":{"x":1}},{"OMNI_EXPOSURE":["1"]},{"OMNI_EXPOSURE":True}):  # JSON 允许对象、数组与布尔，选项取值只认字符串。
+                data["values"]=values; source.write_text(json.dumps(data),encoding="utf-8")
+                with self.assertRaises(ValueError): config.shared(source,found,build.version())  # 非字符串取值要报可读错误，不能抛不可哈希的类型错误。
             loadable = root/".dev/load.properties"
             config.save_properties(loadable,migrated["values"],build.version(),root)  # 导出路径保持加载器使用的properties格式。
             text = loadable.read_text(encoding="ascii")

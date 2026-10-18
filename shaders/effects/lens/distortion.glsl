@@ -8,8 +8,10 @@
 与既有散景色散的区别：`effects/lens/lens.glsl` 里的 `OMNI_DOF_DISPERSION_MULT` 只在景深采样时对失焦像素做色散，
   只影响开了景深的那部分模糊；本文件是全屏、与景深无关的镜头色差，两者作用对象完全不同，不会重复处理同一批像素。
 调用位置：`rendering/final.glsl` 的片元阶段，在算出最终颜色之后、抖动与黑边之前调用 `LensDistortion`。
-可复制示例：`color = LensDistortion(color, texCoord);`
-调用前提：调用方必须先声明 `texCoord`、`finalPixelSize`，并引入提供 `colortex1`、`aspectRatio` 的加载器输入。
+可复制示例：`color = LensDistortion(colortex1, color, texCoord);`
+调用前提：调用方必须先声明 `texCoord`、`finalPixelSize` 与 `aspectRatio`，并把要重采样的源画面作为第一个参数传入。
+  为什么源画面由调用方给：开了放大（`FSR`）时最终画面来自八号画面而不是一号画面，形变必须重采样同一张源图，
+  否则会把放大结果丢掉、退回低分辨率画面；源图由调用方按当前路径选择，本文件不猜。
 设计原因与取舍：
   Eclipse 把色差放在合成十二号、鱼眼与像素化放在最终程序；Omni 把三者统一放在最终程序，
   因为这三项都要按畸变后的坐标重采样已经写完的最终画面，放在同一步只做一次全屏读写。
@@ -34,9 +36,10 @@
 // @option {"label": {"zh_cn": "每通道色数", "en_us": "Colors per Channel"}, "slider": true, "description": {"zh_cn": "每个通道分几档颜色，零表示不分档，与像素化各自独立。来源 Eclipse `lib/settings.glsl:825` 的 `MAX_COLORS_PER_CHANNEL`。", "en_us": "Quantisation steps per channel; zero disables it, independent of pixelate. From Eclipse `lib/settings.glsl:825` `MAX_COLORS_PER_CHANNEL`."}}
 #define OMNI_PIXELATE_COLORS 0 // [0 4 8 16 32 64 128 256 512]
 
-// 镜头形变主入口：按选项把最终画面重采样后返回；三项都关时原样返回传入颜色。
+// 镜头形变主入口：按选项把源画面重采样后返回；三项都关时原样返回传入颜色。
 // 为什么把三项合在一个函数：三者共用同一个输入画面与坐标，分开调用会重复读同一张画面。
-vec3 LensDistortion(vec3 color, vec2 coord){
+// `source` 是要重采样的最终画面：未开放大时是低分辨率的一号画面，开放大时是放大后的八号画面。
+vec3 LensDistortion(sampler2D source, vec3 color, vec2 coord){
 #if defined OMNI_CHROMATIC_ABERRATION || defined OMNI_FISHEYE || defined OMNI_PIXELATE || OMNI_PIXELATE_COLORS > 1 // 任一项开启时才展开重采样体。
 	// 先按像素化或鱼眼定出一个基础采样坐标；两者互斥，优先顺序照 Eclipse 的最终程序，像素化在前。
 	vec2 sampleCoord = coord; // 默认原样取样，对应三项里只有色差或色数的情形。
@@ -59,11 +62,11 @@ vec3 LensDistortion(vec3 color, vec2 coord){
 		vec2 caCenter = coord - 0.5; // 相对画面中心，单独取名，避免与上面鱼眼分支的同名局部量在一份源码里撞名。
 		float edge = 1.0 - clamp(1.0 - length(caCenter * vec2(aspectRatio, 1.0)) / 200.0, 0.0, 1.0); // 离中心越远权重越大，照原式写成两百的尺度。
 		vec2 offset = (caCenter + caCenter * noise) * (OMNI_CHROMATIC_ABERRATION_STRENGTH * edge); // 红蓝各错开这么多。
-		warped.r = texture(colortex1, sampleCoord - offset).r; // 红通道向外错开。
-		warped.g = texture(colortex1, sampleCoord).g; // 绿通道不动。
-		warped.b = texture(colortex1, sampleCoord + offset).b; // 蓝通道向内错开。
+		warped.r = texture(source, sampleCoord - offset).r; // 红通道向外错开。
+		warped.g = texture(source, sampleCoord).g; // 绿通道不动。
+		warped.b = texture(source, sampleCoord + offset).b; // 蓝通道向内错开。
 	#else // 没开色差时只取一次样本。
-		warped = texture(colortex1, sampleCoord).rgb; // 像素化或鱼眼的单次取样。
+		warped = texture(source, sampleCoord).rgb; // 像素化或鱼眼的单次取样。
 	#endif
 
 	#if OMNI_PIXELATE_COLORS > 1 // 开启色数时才做量化。

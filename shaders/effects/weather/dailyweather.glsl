@@ -7,7 +7,7 @@
   二、天气表：十天为一行，每天四层云的覆盖度与密度，加两项雾密度，数值照 Eclipse 默认；
   三、选取：按 `worldDay` 取当天那一行，或按哈希在十天里随机取一行。
 调用位置：本文件对外只暴露一组取值函数，由绘制主体按需调用；
-  云量：`effects/cloud/cloud.glsl` 的基础体积云读 `l0`/`l1`、高层云读 `l2`、卷云读 `l3`，用当天值替换默认云量；
+  云量：`effects/cloud/volumetric.glsl` 的基础体积云读 `l0`/`l1`、高层云读 `l2`、卷云读 `l3`，用当天值替换默认云量；
   平面云与积雨云不受本表影响：Eclipse 的每日天气表只有四层体积云，平面云是 iterationT 独有的层，
   积雨云在 Eclipse 里由雷暴强度 `thunderStrength` 与固定密度驱动，两处都没有接每日天气的来源；
   雾：`effects/fog/fog.glsl` 的 `FogDensityScale` 读 `omniWeatherFog`，把当天匀雾与云雾密度接进体积雾密度标度；

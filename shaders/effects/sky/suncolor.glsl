@@ -3,9 +3,9 @@
 来源：Eclipse `lib/settings.glsl:392-450`（`colortype`、`Sun_temp`、`sunColorR/G/B`、`sun_illuminance`）
   与 `lib/util.glsl:95-109`（`blackbody`）；本项目复用已有的等价黑体色函数 `common/math.glsl` 的 `Blackbody`。
 调用位置：天空程序把太阳侧颜色算好后，乘上 `omniSunTint()`。两处最直接的接入点：
-  `effects/sky/sky.glsl` 的 `GetSunAndSkyIrradiance`：`vec3 sun_irradiance = atmosphereModel_solar_irradiance;` 改成乘 `omniSunTint()`；
-  `effects/sky/sky.glsl` 的 `RenderSunDisc`：`return vec3(1.1114, 0.9756, 0.9133) * disc;` 改成再乘 `omniSunTint()`。
-  这两处都在 `effects/sky/sky.glsl`，本文件不修改它，由主助手统一接线。
+  `effects/sky/atmosphere_model.glsl` 的 `GetSunAndSkyIrradiance`：`vec3 sun_irradiance = atmosphereModel_solar_irradiance;` 改成乘 `omniSunTint()`；
+  `effects/sky/sun_moon.glsl` 的 `RenderSunDisc`：`return vec3(1.1114, 0.9756, 0.9133) * disc;` 改成再乘 `omniSunTint()`。
+  这两处由主助手统一接线；本文件只提供选项与 `omniSunTint()`。
 可复制示例：
   `vec3 sunLightColor = atmosphereModel_solar_irradiance * omniSunTint();` // 太阳直射色。
   `vec3 sunDiscColor  = vec3(1.1114, 0.9756, 0.9133) * disc * omniSunTint();` // 太阳圆盘色。

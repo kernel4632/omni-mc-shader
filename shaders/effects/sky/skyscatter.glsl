@@ -1,9 +1,9 @@
 /*
 天空散射：给预计算大气的瑞利散射与米氏散射一组逐通道系数倍率，再给整个天空辐射一个亮度倍率。
 来源：Eclipse `lib/settings.glsl:382`（`Sky_Brightness`）与 `:385-390`（`sky_coefficientRayleighR/G/B`、`sky_coefficientMieR/G/B`）。
-调用位置：`effects/sky/sky.glsl` 的 `GetSkyRadiance` 与 `GetSkyRadianceToPoint`：
+调用位置：`effects/sky/atmosphere_model.glsl` 的 `GetSkyRadiance` 与 `GetSkyRadianceToPoint`：
     瑞利散射项乘 `omniSkyRayleighTint()`，米氏散射项乘 `omniSkyMieTint()`，最后整个天空辐射乘 `OMNI_SKY_BRIGHTNESS`；
-    这几处都在 `effects/sky/sky.glsl`，本文件只提供选项与两个取颜色的函数。
+    这几处都在 `effects/sky/atmosphere_model.glsl`，本文件只提供选项与两个取颜色的函数。
 可复制示例：
     `vec3 rayleigh = (sun_scattering * RayleighPhaseFunction(sun_nu)) * omniSkyRayleighTint();` // 逐通道缩放瑞利散射。
     `vec3 mie = sun_single_mie_scattering * MiePhaseFunction(g, sun_nu) * omniSkyMieTint();`    // 逐通道缩放米氏散射。

@@ -6,6 +6,7 @@ import contextlib  # 参数错误输出不污染测试结果。
 import ctypes  # Windows短路径回归使用系统规范化接口。
 import io  # 收集统一入口的可读错误。
 import json  # 构造外部依赖与配置输入。
+import os  # 为并发测试给出互不冲突的输出名。
 import subprocess  # 使用真实命令行检查不会执行动作的非法参数。
 import sys  # 测试与构建使用同一解释器。
 import tempfile  # 所有文件边界放在自有临时目录。
@@ -138,6 +139,19 @@ class BoundaryTests(unittest.TestCase):
         for command in commands:
             result = subprocess.run([sys.executable,*command],cwd=build.ROOT,capture_output=True,text=True,encoding="utf-8",errors="replace")  # 只运行必定在参数边界退出的命令。
             self.assertEqual(result.returncode,2,result.stdout+result.stderr)  # 拒绝无效参数而不执行后续动作。
+
+    def test_config_output_format_matches_suffix(self):
+        """显式选 properties 后缀时，`reset` 也写加载器可读内容，不能接受后缀却写 JSON。"""
+        name = f".dev/config/omni-format-{os.getpid()}.properties"  # 独立文件名，不覆盖开发共享配置。
+        target = build.ROOT / name
+        try:
+            result = subprocess.run([sys.executable, "config.py", "reset", "--output", name], cwd=build.ROOT, capture_output=True, text=True, encoding="utf-8", errors="replace")  # 走真实命令入口。
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)  # 命令必须成功，不能先过后写盘报错。
+            text = target.read_text(encoding="ascii")  # 加载器只读 ASCII 属性。
+            self.assertTrue(text.startswith(f"# @shaderVersion {build.version()}"), text)  # 内容是属性格式而不是 JSON。
+            self.assertFalse(text.lstrip().startswith("{"), "properties 后缀不能写 JSON 内容")
+        finally:
+            target.unlink(missing_ok=True)  # 测试不留开发产物。
 
     def test_release_stops_when_generation_changes_tracked_source(self):
         """确认发布后生成文件变化也必须停止，不能只暂存版本掩盖源码差异。"""

@@ -544,7 +544,10 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     number_to_path = {str(index): path.relative_to(SHADERS).as_posix() for path, index in numbered_sources().items()}  # 编译器数字编号反查为项目内相对路径。
     failures = _run_compile_jobs(jobs, validator, number_to_path, known_good)  # 并行编译并汇总失败。
     cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
-    cache_path.write_text(json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n", encoding="utf-8")  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
+    cache_text = json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n"  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
+    temporary_cache = cache_path.with_name(cache_path.name + ".part")  # 同目录临时文件，替换才在同一个文件系统内。
+    temporary_cache.write_text(cache_text, encoding="utf-8")  # 先写完整内容。
+    os.replace(temporary_cache, cache_path)  # 原子替换：并发的另一个构建或中途失败都不会让读者读到半截 JSON。
     if failures:  # 资源目录退出后临时文件已清理，再统一报告最多五项失败。
         raise ValueError("\n\n".join(failures[:5]))  # 只报前五条，避免长错误淹没真正原因；完整失败仍需逐条修。
     unique_programs = len(seen)  # 唯一程序数由新编译与成功缓存复用共同组成。

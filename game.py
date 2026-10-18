@@ -82,6 +82,8 @@ def launch(capture: bool) -> None:
 
     游戏目录只使用 `.dev/minecraft`，资源目录可以复用已有安装以减少复制。
     启动使用开发测试身份，不读取玩家账号；进程记录、日志和捕获也不能写入玩家目录。
+    捕获模式启动的是 RenderDoc 包装进程，它的进程号不是游戏本体，所以不写采样身份记录，
+    避免性能采样把包装进程当成游戏；性能采样请用非捕获方式启动。
     """
     from minecraft_launcher_lib.command import get_minecraft_command  # 成熟依赖解析启动参数。
     from minecraft_launcher_lib.utils import generate_test_options  # 不读取玩家账号。
@@ -125,8 +127,14 @@ def launch(capture: bool) -> None:
     record = development_path(ROOT/".dev/game-process.json")  # 启动前确认采样身份记录可安全写入。
     with log.open("wb") as output:  # 游戏原始日志可追溯启动失败。
         process = subprocess.Popen(command, cwd=game, stdout=output, stderr=subprocess.STDOUT)
-    record.write_text(json.dumps({"pid":process.pid,"java":str(Path(data["java"]).resolve()),"gameDirectory":str(game.resolve())})+"\n",encoding="utf-8")  # 后续仍核对实际进程，防止进程号复用。
-    print(f"已启动专用开发实例，进程 {process.pid}；日志：.dev/game-launch.log")
+    if capture:  # 捕获模式启动的是 RenderDoc 包装进程，不是游戏本体。
+        # 包装进程的进程号不能当作游戏身份：真实 Java 是它的子进程，采样器直接指向包装进程会采不到画面。
+        # 所以清掉上次的进程记录，避免采样误把包装进程或已经结束的旧实例当成游戏；性能采样请用非捕获方式启动。
+        record.unlink(missing_ok=True)  # 让身份记录为空，采样会明确失败而不是打错进程。
+        print(f"已通过 RenderDoc 启动专用开发实例，包装进程 {process.pid}；捕获不写采样身份，性能采样请用非捕获方式启动")
+    else:  # 普通启动记录的进程号就是游戏本体。
+        record.write_text(json.dumps({"pid":process.pid,"java":str(Path(data["java"]).resolve()),"gameDirectory":str(game.resolve())})+"\n",encoding="utf-8")  # 后续仍核对实际进程，防止进程号复用。
+        print(f"已启动专用开发实例，进程 {process.pid}；日志：.dev/game-launch.log")
 
 
 # --- 准备版本描述 ---

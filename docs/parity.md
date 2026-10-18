@@ -99,8 +99,8 @@ Iris 的执行顺序：阴影 → 不透明几何 → deferred 0–8 → 半透�
 | `Lib/GbufferData.glsl`、`Settings.glsl` 的材质编号 | `effects/ground/material.glsl` |
 | `Lib/IndividualFounctions/Parallax.glsl` | `effects/ground/parallax.glsl`（算法；选项仍在 `effects/ground/material.glsl`） |
 | `Lib/Uniform/Shadow*.glsl`、`Lib/BasicFounctions/Sunlight_Shadow.glsl` | `effects/shadow/shadow.glsl` |
-| `Lib/BasicFounctions/PrecomputedAtmosphere.glsl`、`deferred3` 的星星与天空盒投影 | `effects/sky/sky.glsl` |
-| `NUBIS.glsl`、`PlanarClouds.glsl`、`CloudShadow.glsl` | `effects/cloud/cloud.glsl` |
+| `Lib/BasicFounctions/PrecomputedAtmosphere.glsl`、`deferred3` 的星星与天空盒投影 | `effects/sky/sky.glsl`（入口）与同目录 `atmosphere_model.glsl`、`sun_moon.glsl`、`moon_orbit.glsl`、`stars.glsl`、`skybox.glsl` |
+| `NUBIS.glsl`、`PlanarClouds.glsl`、`CloudShadow.glsl` | `effects/cloud/cloud.glsl`（入口）与同目录 `volumetric.glsl`、`planar.glsl`、`shadow.glsl` |
 | `GlobalIllumination.glsl`、`GTAO.glsl` | `effects/lighting/ambient.glsl` |
 | `Lib/BasicFounctions/Blocklight.glsl` | `effects/lighting/blocklight.glsl` |
 | `composite.fsh` 的 `SkyLighting` 与 `CompositeVS.glsl` 的光色计算 | `effects/lighting/sunlight.glsl` |
@@ -229,8 +229,8 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 - 植物摆动常数 `heavy*`、`light*`、`speed*`：只在 `effects/ground/vegetation.glsl` 定义一次，地形与阴影顶点共用。
 - 时间抗锯齿辅助函数（`clipAABB`、`RGB_To_YCoCg`、`SampleDepthFetch` 等）：主世界与下界版放 `effects/clarity/antialiasing.glsl`，用 `#ifdef OMNI_NETHER` 选择不同的部分。
 - `CalculateCameraVelocity`：放 `common/coordinates.glsl` 一份；各处实现不同时加后缀。
-- `AxialGaussianBlur`：泛光版留在 `effects/color/bloom.glsl`，云影模糊版改名 `CloudShadowAxialBlur` 放 `effects/cloud/cloud.glsl`。
-- `Calculate3DNoise`、`CalculateStars`：末地版加 `End` 前缀并拆到 `effects/world/end_disc.glsl`、`effects/world/end_sky.glsl`；主世界版分别在 `effects/fog/volumetric.glsl`、`effects/sky/sky.glsl`。（2026-10-18：末地星空改用 Eclipse 星场，`EndCalculateStars` 只转发主世界 `CalculateStars`，见偏离记录 49；`Calculate3DNoise` 仍按下述加 `End` 前缀。）
+- `AxialGaussianBlur`：泛光版留在 `effects/color/bloom.glsl`，云影模糊版改名 `CloudShadowAxialBlur` 放 `effects/cloud/shadow.glsl`。
+- `Calculate3DNoise`、`CalculateStars`：末地版加 `End` 前缀并拆到 `effects/world/end_disc.glsl`、`effects/world/end_sky.glsl`；主世界版分别在 `effects/fog/volumetric.glsl`、`effects/sky/stars.glsl`。（2026-10-18：末地星空改用 Eclipse 星场，`EndCalculateStars` 只转发主世界 `CalculateStars`，见偏离记录 49；`Calculate3DNoise` 仍按下述加 `End` 前缀。）
 - `NetherFog`、`ComputeFakeSkyReflection`、`RefractSampleOnce`、`TransparentAbsorption`：维度各自实现不同时，下界与末地版加 `Nether`、`End` 后缀，由己片负责。
 
 ## 十、分片与状态
@@ -241,7 +241,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 | --- | --- | --- |
 | 甲 地基 | `build.py`、`options.py`、`rendering/programs.json`、`rendering/pipeline.properties`、`rendering/buffers.glsl`、`common/*`、`shaders/texture/`、`*.properties`、工具测试 | 完成（占位主体可编译，`python build.py verify` 通过） |
 | 乙 几何阶段 | `rendering/terrain.glsl`、`rendering/entities.glsl`、`rendering/translucent.glsl`、`rendering/overlay.glsl`、`rendering/celestial.glsl`、`rendering/shadow.glsl`、`rendering/distant.glsl`；`effects/ground/material.glsl`、`effects/shadow/shadow.glsl`、`effects/water/water.glsl`、`effects/ground/vegetation.glsl`、`effects/weather/weather.glsl`、`effects/entity/entity.glsl`、`effects/world/world.glsl`、`effects/ground/selection.glsl`、`effects/weather/season.glsl` | 完成（离线编译通过；待实机核对） |
-| 丙 延迟阶段 | `rendering/deferred.glsl`、`rendering/lights.glsl`；`effects/sky/sky.glsl`、`effects/sky/atmosphere.glsl`、`effects/cloud/cloud.glsl`、`effects/lighting/ambient.glsl`、`effects/lighting/sunlight.glsl` | 完成（离线编译通过；待实机核对） |
+| 丙 延迟阶段 | `rendering/deferred.glsl`、`rendering/lights.glsl`；`effects/sky/sky.glsl` 及同目录子文件、`effects/sky/atmosphere.glsl`、`effects/cloud/cloud.glsl` 及同目录子文件、`effects/lighting/ambient.glsl`、`effects/lighting/sunlight.glsl` | 完成（离线编译通过；待实机核对） |
 | 丁 合成阶段 | `rendering/composite.glsl`；`effects/lighting/blocklight.glsl`、`effects/reflection/reflection.glsl`、`effects/fog/fog.glsl`、`effects/lighting/lpv.glsl` 与 `rendering/lpv.glsl` | 完成（离线编译通过；待实机核对） |
 | 戊 后期 | `rendering/post.glsl`、`rendering/final.glsl`；`effects/lens/lens.glsl`、`effects/clarity/antialiasing.glsl`、`effects/color/bloom.glsl`、`effects/color/color.glsl`、`effects/clarity/upscale.glsl`、`effects/dev/debug.glsl` | 完成（离线编译通过；待实机核对） |
 | 己 下界与末地 | 维度程序、`effects/world/nether.glsl`、`effects/world/end.glsl`、下界时间抗锯齿 | 完成（离线编译通过；待实机核对） |
@@ -368,6 +368,12 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
     - 空气项 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD`（`effects/lighting/lpv.glsl`，默认关、等于 Eclipse）：在 `effects/fog/volumetric.glsl` 的体积雾步进里按本步吸收量累加手持光。
     - 水下项 `OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER`（`effects/lighting/lpv.glsl`，默认开、等于 Eclipse）：在 `effects/fog/underwater_fog.glsl` 的水下体积雾里叠加手持光，按水的分波段吸收衰减。
     - 两项都要求雾照明 `OMNI_LPV_VL_FOG_ILLUMINATION`（默认关），所以默认画面不变。亮度系数照 Eclipse（空气项 `0.04`、水下项 `0.2`）按本项目既有的百分之一定标缩小，未按游戏内观感校准。Eclipse 水下项原本接在解析水雾的间接光上，本项目接在水下体积雾上，属换落点的近似。
+51. 长文件按效果拆分（内部结构，不改画面）：`effects/sky/sky.glsl`（原 728 行）拆成入口 `sky.glsl` 加 `atmosphere_model.glsl`（预计算大气与天空辐射）、
+    `sun_moon.glsl`（日月圆盘）、`moon_orbit.glsl`（月亮轨道、月食与月相）、`stars.glsl`（星场）、`skybox.glsl`（天空盒投影）；
+    `effects/cloud/cloud.glsl`（原 638 行）拆成入口 `cloud.glsl` 加 `volumetric.glsl`（体积云、附加层与低分辨率云总图，含 `CloudShadowTex`）、
+    `planar.glsl`（平面云）、`shadow.glsl`（云影贴图与模糊）。入口集中定义本效果的全部选项，分文件按同一顺序引入。
+    体积云与平面云只在能读三维云噪声的延迟三号、七号、八号参与编译，这个判据收成 `OMNI_CLOUD_DENSITY_PASS` 一处定义、两个文件各自按它开关；
+    选项名、默认值与菜单分组不变（生成菜单逐字节一致），`#include` 语义与拆分前逐段一致，默认画面与算法不变。
 
 51. 十号画面新增为低分辨率体积云缓冲（Eclipse `VL_RENDER_SCALE` 的近似合并，`dev.146`）：iterationT 只用零到八号，Omni 九号已给程序化草；本轮为 `OMNI_CLOUD_RENDER_SCALE` 大于一时新增十号 `RGBA16`、尺寸 0.5 或 0.25、每帧清除，登记在 `rendering/buffers.glsl:57` 与 `:78`。低分辨率基础体积云搬进独立阶段 `deferred7`（写十号）与 `deferred8`（读十号放大回一号），平面云与附加层仍在全分辨率合成；`OMNI_CLOUD_RENDER_SCALE` 默认 1 时不生成这两个阶段，默认画面不变。第四节表格与 `docs/rendering.md` 已同步补记。
 52. 合成五号三个维度分支合并为一个流程（内部结构，不改画面）：`effects/world/composite_scene.glsl` 原按维度写三份 `CompositeSceneColor`（对应 `composite5.fsh`、`world-1/composite5.fsh`、`world1/composite5.fsh`），三份几乎相同。现只保留一份流程，共用的表面读取与输出编码抽成 `SceneReadSurface`、`SceneWriteOutput`，只在折射函数、彩色玻璃吸收、雾函数、水吸收、透明通道与镜头光斑这几处按 `OMNI_NETHER`/`OMNI_END` 分派；各维度原程序里不同的值（远裁剪面系数、按掩码还是按深度判天空、下界输出写半透明深度）逐处照原程序保留，画面与合并前一致。

@@ -10,7 +10,7 @@
     `color += omniLightningVolume(relPos, 400.0, -10.0);` 按真实闪电事件照亮一段体积云或体积雾。
 设计原因与取舍：
     极光与彩虹各自独立成一个函数、各自带开关，默认关闭，关掉后连采样都不生成，默认画面与 iterationT 一致；
-    大气散射已由 `effects/sky/sky.glsl` 的预计算模型统一出图，这里不再重复叠一份；
+    大气散射已由 `effects/sky/atmosphere_model.glsl` 的预计算模型统一出图，这里不再重复叠一份；
     闪电只在加载器给出真实事件、并且玩家主动打开时才叠加；iterationT 不使用 `lightningBoltPosition`，所以默认关闭以免雷暴时多出一层闪光；
     闪电对表面用 `omniLightning`（按太阳可见度压制洞穴闪光），对参与散射的体积云与体积雾用 `omniLightningVolume`
     （闪电是一根竖直光柱，介质采样点离柱越近越亮），两种介质的范围与衰减常数照 Eclipse 的 `Iris_Lightningflash_VLcloud`/`_VLfog`；

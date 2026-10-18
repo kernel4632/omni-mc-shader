@@ -97,7 +97,16 @@
 		}
 
 		// 镜头形变：按选项对最终画面做色差、鱼眼或像素化重采样；三项默认全关时原样返回，画面不变。
-		color = LensDistortion(color, texCoord);
+		// 源画面跟随前面选出的路径：走放大时是八号放大画面，否则是一号画面，避免形变把放大结果丢掉。
+		#if MC_VERSION >= 11801 && defined OMNI_FSR
+			if (fsrUpscaled){ // 最终颜色来自放大画面，形变也要重采样同一张。
+				color = LensDistortion(colortex8, color, texCoord);
+			}else{ // 未走放大时重采样一号画面。
+				color = LensDistortion(colortex1, color, texCoord);
+			}
+		#else
+			color = LensDistortion(colortex1, color, texCoord);
+		#endif
 
 		// 受伤、低血量与死亡的画面表现；效果关闭时原样返回，画面不变。
 		color = omniHurtEffect(color, texCoord);

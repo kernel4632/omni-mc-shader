@@ -102,6 +102,10 @@ class BuildTests(unittest.TestCase):
                 source.write_text(valid.replace("value=xy", "value=x/**/y"), encoding="utf-8")  # 注释隔开两个变量，没有运算符，应当报错。
                 with self.assertRaisesRegex(ValueError, "GLSL 编译/链接失败"):
                     build.compile_shaders([source], {}, [], {source.stem})  # 不能复用先前合法源码的成功记录。
+            cache = root / ".dev/reports/glsl-cache.json"  # 成功缓存原子写入的位置。
+            self.assertTrue(cache.is_file())  # 缓存确实写出。
+            json.loads(cache.read_text(encoding="utf-8"))  # 写出的必须是完整 JSON，不能被并发的另一次写入截断。
+            self.assertFalse(cache.with_name(cache.name + ".part").exists())  # 临时文件已在替换后清理，不留在目录里。
 
     def test_release_notes_only_include_selected_version(self):
         """说明只取本版章节，并保留中文小标题。"""

@@ -348,7 +348,7 @@ vec3 BicubicTexture(sampler2D texSampler, vec2 coord, vec2 texSize){
 
 // --- 噪声贴图三次模糊：原程序地形顶点与阴影顶点各写一份且逐字相同，合并到这里一份 ---
 // 调用前提：`common/uniforms.glsl` 已引入，函数固定读取六十四像素的 `noisetex`，`texSampler` 参数只为保持原签名。
-// 泛光版与云影版参数和返回类型不同，分别留在 `effects/color/bloom.glsl` 与 `effects/cloud/cloud.glsl`，见移植合同偏离记录。
+// 泛光版与云影版参数和返回类型不同，分别留在 `effects/color/bloom.glsl` 与 `effects/cloud/shadow.glsl`，见移植合同偏离记录。
 vec4 BicubicBlurTexture(sampler2D texSampler, vec2 coord){
 	const float texPixelSize = 1.0 / 64.0; // 噪声贴图一个像素的大小。
 	coord = coord * 64.0 - 0.5; // 换成以像素中心为原点的坐标。
