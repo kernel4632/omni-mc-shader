@@ -84,5 +84,6 @@ shaders/
 ## 六、进度
 
 - 已完成：`gfx/color.glsl` 建立；ACES、AgX、无压缩、伽马与亮度迁入；`effects/color/color.glsl` 只保留选项、曝光统计与调用；全量 280 组程序编译通过。
-- 下一步：批次 2，抽 `gfx/math.glsl` 与 `gfx/sampling.glsl`。
+- 已完成：`gfx/math.glsl` 建立；曲线、编码、材质、光线求交、噪声与双三次采样迁入，`common/math.glsl` 只保留引擎常数与转发；`gfx/sampling.glsl` 建立，蓝噪声与拜尔抖动改为传入纹理、坐标与帧号。
+- 下一步：批次 3，抽 `gfx/surface.glsl` 与 `gfx/shadow.glsl`。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

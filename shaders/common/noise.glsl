@@ -17,6 +17,8 @@
 // 噪声贴图来自加载器输入声明，拜尔矩阵来自共用计算，这里自己先引入这两份。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
+// 采样算法放在通用库，本文件只把加载器纹理、像素坐标和帧号传进去。
+#include "/gfx/sampling.glsl"
 
 // 统一像素坐标：片元阶段用真实片元坐标，其它阶段取零；见文件头的取舍说明。
 #ifdef OMNI_FRAGMENT
@@ -27,16 +29,16 @@
 
 // 不随时间变化的二维蓝噪声，按像素位置平铺。
 vec2 BlueNoise(){
-	return texelFetch(noisetex, ivec2(OMNI_PIXEL) % 64, 0).xy; // 贴图边长六十四，取余后平铺。
+	return gfx_blue_noise(noisetex, ivec2(OMNI_PIXEL)); // 传纹理和坐标，库负责取模平铺。
 }
 
 // 每帧平移的二维蓝噪声，六十四帧一循环。
 vec2 BlueNoiseTemporal(){
-	return fract(texelFetch(noisetex, ivec2(OMNI_PIXEL) % 64, 0).xy + vec2(goldenRatio, plasticRatio) * vec2(frameCounter % 64)); // 两个方向用不同无理数步长，避免重复图案。
+	return gfx_blue_noise_temporal(noisetex, ivec2(OMNI_PIXEL), frameCounter); // 帧号交给库做时间偏移。
 }
 
 // 每帧平移的拜尔抖动，一百二十八帧一循环。
 float BayerTemporal(){
-	return fract(bayer64(OMNI_PIXEL) + goldenRatio * float(frameCounter % 128)); // 黄金比步长让相邻帧尽量不同。
+	return gfx_bayer_temporal(ivec2(OMNI_PIXEL), frameCounter); // 拜尔矩阵与帧偏移都在库里。
 }
 #endif // 文件守卫结束。
