@@ -11,86 +11,19 @@
 */
 #ifndef OMNI_CLOUD_PLANAR_INCLUDED
 #define OMNI_CLOUD_PLANAR_INCLUDED
-#ifdef OMNI_CLOUD_DENSITY_PASS // 由 effects/cloud/cloud.glsl 在三维云噪声可用的阶段打开；其它程序整段不编译。
+#include "/gfx/cloud.glsl"
+// 由 effects/cloud/cloud.glsl 在三维云噪声可用的阶段打开；其它程序整段不编译。
+#ifdef OMNI_CLOUD_DENSITY_PASS
 // --- 三次模糊噪声：平面云专用，与共用数学里的版本返回类型和纹理都不同，按合同留在这里一份 ---
-float BicubicBlurNoise(vec2 coord){
-	coord = coord * (1.2e-4 * 64.0) - 0.5; // 噪声贴图按每方块一点二万分之一缩放。
-	vec2 p = floor(coord); // 整数像素。
-	vec2 f = coord - p; // 小数偏移。
-	vec2 ff = f * f; // 偏移平方。
-	vec4 w0; // 两个方向的前两个权重。
-	vec4 w1; // 两个方向的后两个权重。
-	w0.xz = 1.0 - f; w0.xz *= w0.xz * w0.xz; // 第一个权重是反向偏移的立方。
-	w1.yw = ff * f; // 第四个权重是偏移立方。
-	w1.xz = 3.0 * w1.yw + 4.0 - 6.0 * ff; // 第三个权重。
-	w0.yw = 6.0 - w1.xz - w1.yw - w0.xz; // 第二个权重由总和为六推出。
-	vec4 s = w0 + w1; // 每对权重和。
-	vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy + w1 / s; // 每对合并成一次双线性采样的位置。
-	c *= 1.0 / 64.0; // 换回零到一坐标。
-	vec2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
-	return mix(mix(textureLod(noisetex, c.yw, 0.0).w, textureLod(noisetex, c.xw, 0.0).w, m.x),
-			   mix(textureLod(noisetex, c.yz, 0.0).w, textureLod(noisetex, c.xz, 0.0).w, m.x),
-			   m.y); // 四次双线性采样得到十六像素的三次模糊，取第四通道。
-}
+float BicubicBlurNoise(vec2 coord) { return gfx_bicubic_blur_noise(coord, noisetex); }
 // 双线性噪声：平面云细节用的普通采样。
-float BilinearNoise(vec2 position) {
-	return textureLod(noisetex, position * 1.2e-4, 0.0).w; // 与三次版同一缩放，取第四通道。
-}
+float BilinearNoise(vec2 position) { return gfx_bilinear_noise(position, noisetex); }
 // 平面云的扭曲：几层噪声叠出缓慢起伏的偏移量，让云块边缘不平整。
-float GetPlanarCloudsDistortion(vec2 position, vec2 windDirection){
-	float density = BilinearNoise(position - windDirection); // 第一层。
-	float scale = 4.0; // 起始频率。
-	for (int i = 0; i < 3; i++, scale *= 3.0){ // 三层，频率逐级乘三。
-		density += BilinearNoise(scale * (position - windDirection * fsqrt(scale))) * pow(scale, -1.3); // 每层按频率的负一点三次方衰减。
-	}
-	return density; // 返回扭曲量。
-}
+float GetPlanarCloudsDistortion(vec2 position, vec2 windDirection) { return gfx_planar_distortion(position, windDirection, noisetex); }
 // 平面云密度：位置先被扭曲，再叠多层旋转噪声得到云块。
-float GetPlanarCloudsDensity(vec2 position, vec2 windDirection){
-	position *= OMNI_PLANAR_NOISE_SCALE; // 按选项缩放位置。
-	float distortion = GetPlanarCloudsDistortion(position, windDirection); // 取扭曲量。
-	position += distortion * 50.0; // 用扭曲量偏移位置。
-	const float octScale = 2.8; // 每层频率倍数。
-	const mat2 rotateGoldenAngle = octScale * mat2(cos(goldenAngle), -sin(goldenAngle), sin(goldenAngle), cos(goldenAngle)); // 按黄金角旋转并缩放的矩阵。
-	float density = BicubicBlurNoise(position - windDirection); // 第一层密度。
-	mat2 rot = rotateGoldenAngle; // 旋转矩阵逐步累乘。
-	float weights = 1.0; // 权重和。
-	for (float i = 1.0; i <= 6.0; i++, rot *= rotateGoldenAngle){ // 六层。
-		float scale = fsqrt(i); // 每层频率取平方根。
-		vec2 noisePosition = rot * (position - windDirection * scale); // 旋转并随风偏移。
-		noisePosition *= vec2(1.0 - 0.35 * scale, 1.0 + 0.05 * scale); // 两个方向拉伸不同，云块更有方向感。
-		float weight = pow(octScale, -0.85 * i); // 每层权重按频率衰减。
-		density += BicubicBlurNoise(noisePosition) * weight; // 累加这一层。
-		weights += weight; // 累加权重。
-	}
-	density /= weights; // 平均到零到一附近。
-	density = saturate(density + OMNI_PLANAR_COVERAGE - 1.0); // 用云量抬阈值。
-	density *= exp(-distortion); // 扭曲大的地方压薄。
-	return density * density; // 平方让边缘更收。
-}
+float GetPlanarCloudsDensity(vec2 position, vec2 windDirection) { return gfx_planar_density(position, windDirection, noisetex, OMNI_PLANAR_NOISE_SCALE, OMNI_PLANAR_COVERAGE); }
 // 平面云的光照密度：与上面同理，但用双线性噪声且层数更少，专供光照估计。
-float GetPlanarCloudsLightingDensity(vec2 position, vec2 windDirection){
-	position *= OMNI_PLANAR_NOISE_SCALE; // 按选项缩放位置。
-	float distortion = GetPlanarCloudsDistortion(position, windDirection); // 取扭曲量。
-	position += distortion * 50.0; // 用扭曲量偏移位置。
-	const float octScale = 2.8; // 每层频率倍数。
-	const mat2 rotateGoldenAngle = octScale * mat2(cos(goldenAngle), -sin(goldenAngle), sin(goldenAngle), cos(goldenAngle)); // 按黄金角旋转并缩放的矩阵。
-	float density = BicubicBlurNoise(position - windDirection); // 第一层。
-	mat2 rot = rotateGoldenAngle; // 旋转矩阵逐步累乘。
-	float weights = 1.0; // 权重和。
-	for (float i = 1.0; i <= 3.0; i++, rot *= rotateGoldenAngle){ // 三层，比密度版少。
-		float scale = fsqrt(i); // 每层频率取平方根。
-		vec2 noisePosition = rot * (position - windDirection * scale); // 旋转并随风偏移。
-		noisePosition *= vec2(1.0 - 0.35 * scale, 1.0 + 0.05 * scale); // 两个方向拉伸不同。
-		float weight = pow(octScale, -0.85 * i); // 每层权重。
-		density += BilinearNoise(noisePosition) * weight; // 用便宜的噪声累加。
-		weights += weight; // 累加权重。
-	}
-	density /= weights; // 平均。
-	density = saturate(density + OMNI_PLANAR_COVERAGE - 1.0); // 用云量抬阈值。
-	density *= exp(-distortion); // 扭曲大的地方压薄。
-	return density * density; // 平方收口。
-}
+float GetPlanarCloudsLightingDensity(vec2 position, vec2 windDirection) { return gfx_planar_lighting_density(position, windDirection, noisetex, OMNI_PLANAR_NOISE_SCALE, OMNI_PLANAR_COVERAGE); }
 // 平面云：视线与云平面求一次交点，再沿光方向叠几层光照密度估遮挡。
 // 调用前提：`color` 已算好天空颜色（会被就地修改），`cloudTransmittance` 是体积云留下的透过率。
 // 为什么不受每日天气影响：平面云是 iterationT 独有的层，Eclipse 的每日天气表没有它，所以这里只读 `OMNI_PLANAR_*`。

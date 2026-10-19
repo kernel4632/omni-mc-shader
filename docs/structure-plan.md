@@ -90,5 +90,6 @@ shaders/
 - 已完成：`gfx/water.glsl` 建立；六层波高、波法线与水面视差迁入，`effects/water/waves.glsl` 只保留转发与玩家涟漪。
 - 已完成：`gfx/atmosphere.glsl` 建立；球面几何、密度剖面与预计算贴图坐标迁入，`effects/sky/atmosphere_model.glsl` 只保留转发。
 - 已完成：`gfx/cloud.glsl` 建立，云的光照相位与顶部曲线迁入；`gfx/fog.glsl` 建立，粉末效应与散射相位迁入。
-- 下一步：把云的形状与雾的密度计算也迁入通用库。
+- 已完成：`gfx/cloud.glsl` 增加平面云噪声、扭曲、密度与光照密度，`effects/cloud/planar.glsl` 只保留转发。
+- 下一步：把雾的三维噪声与密度计算迁入通用库。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。
