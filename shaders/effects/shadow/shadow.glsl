@@ -70,6 +70,8 @@ const float shadowDistance = 192.0; // [64.0 96.0 128.0 192.0 256.0 384.0 512.0 
 #include "/common/coordinates.glsl"
 #include "/common/math.glsl"
 #include "/common/noise.glsl"
+// ????????????????????????????
+#include "/gfx/shadow.glsl"
 
 // --- 阴影图坐标：世界位置投向阴影相机 ---
 // 三个函数只差一处：是否做边缘压缩，以及是否把深度按投影缩放；分开写让调用方按用途挑选，不在函数里加开关。
@@ -98,64 +100,22 @@ const float shadowDistance = 192.0; // [64.0 96.0 128.0 192.0 256.0 384.0 512.0 
 	                                      vec4(rotInverse[2], 0.0),
 	                                      vec4(-shadowInterval.xy, 100 - shadowInterval.z, 1.0)); // 末地阴影相机的逆矩阵，供世界位置还原。
 	// 投到阴影相机并做边缘压缩，压缩让阴影图边缘分辨率更高。
-	vec3 ShadowScreenPos_From_WorldPos_Distorted(vec3 worldPos){
-	    vec3 shadowPos = mat3(shadowModelViewEnd) * worldPos + shadowModelViewEnd[3].xyz; // 世界位置转到阴影相机视空间。
-	    shadowPos *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按投影缩放，深度取半。
-	    float dist = length(shadowPos.xy); // 到阴影图中心的距离，用来决定压缩强度。
-	    float distortFactor = (1.0 - OMNI_SHADOW_MAP_BIAS) + dist * OMNI_SHADOW_MAP_BIAS; // 边缘压缩系数，中心为一。
-	    shadowPos.xy *= 0.95 / distortFactor; // 向内压缩，零点九五留出边界余量。
-	    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一的纹理坐标。
-	}
+	vec3 ShadowScreenPos_From_WorldPos_Distorted(vec3 worldPos){ return gfx_shadow_screen_pos_distorted(worldPos, shadowModelViewEnd, shadowProjection, OMNI_SHADOW_MAP_BIAS); }
 	// 投到阴影相机，不做边缘压缩。
-	vec3 ShadowScreenPos_From_WorldPos(vec3 worldPos){
-	    vec3 shadowPos = mat3(shadowModelViewEnd) * worldPos + shadowModelViewEnd[3].xyz; // 世界位置转到阴影相机视空间。
-	    shadowPos *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按投影缩放，深度取半。
-	    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一的纹理坐标。
-	}
+	vec3 ShadowScreenPos_From_WorldPos(vec3 worldPos){ return gfx_shadow_screen_pos(worldPos, shadowModelViewEnd, shadowProjection); }
 	// 投到阴影相机，不做边缘压缩；与上一个函数相同，名字保留原程序写法的差异。
-	vec3 ShadowScreenPos_From_WorldPos_WithoutZScaling(vec3 worldPos){
-	    vec3 shadowPos = mat3(shadowModelViewEnd) * worldPos + shadowModelViewEnd[3].xyz; // 世界位置转到阴影相机视空间。
-	    shadowPos *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按投影缩放，深度取半。
-	    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一的纹理坐标。
-	}
+	vec3 ShadowScreenPos_From_WorldPos_WithoutZScaling(vec3 worldPos){ return gfx_shadow_screen_pos(worldPos, shadowModelViewEnd, shadowProjection); }
 	// 对已经算好的阴影图坐标再补一次边缘压缩，读取端补压缩用。
-	vec2 DistortShadowScreenPos(vec2 shadowPos){
-	    shadowPos = shadowPos * 2.0 - 1.0; // 零到一先转回负一到一。
-	    float dist = length(shadowPos.xy); // 到中心距离。
-	    float distortFactor = (1.0 - OMNI_SHADOW_MAP_BIAS) + dist * OMNI_SHADOW_MAP_BIAS; // 与写入端同一压缩系数。
-	    shadowPos *= 0.95 / distortFactor; // 同一压缩量。
-	    return shadowPos * 0.5 + 0.5; // 再转回零到一。
-	}
+	vec2 DistortShadowScreenPos(vec2 shadowPos){ return gfx_distort_shadow_pos(shadowPos, OMNI_SHADOW_MAP_BIAS); }
 #else // 主世界与下界：使用加载器给的普通阴影相机矩阵。
 	// 投到阴影相机并做边缘压缩，压缩让阴影图边缘分辨率更高。
-	vec3 ShadowScreenPos_From_WorldPos_Distorted(vec3 worldPos){
-	    vec3 shadowPos = mat3(shadowModelView) * worldPos + shadowModelView[3].xyz; // 世界位置转到阴影相机视空间。
-	    shadowPos *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按投影缩放，深度取半。
-	    float dist = length(shadowPos.xy); // 到阴影图中心的距离，用来决定压缩强度。
-	    float distortFactor = (1.0 - OMNI_SHADOW_MAP_BIAS) + dist * OMNI_SHADOW_MAP_BIAS; // 边缘压缩系数，中心为一。
-	    shadowPos.xy *= 0.95 / distortFactor; // 向内压缩，零点九五留出边界余量。
-	    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一的纹理坐标。
-	}
+	vec3 ShadowScreenPos_From_WorldPos_Distorted(vec3 worldPos){ return gfx_shadow_screen_pos_distorted(worldPos, shadowModelView, shadowProjection, OMNI_SHADOW_MAP_BIAS); }
 	// 投到阴影相机，不做边缘压缩。
-	vec3 ShadowScreenPos_From_WorldPos(vec3 worldPos){
-	    vec3 shadowPos = mat3(shadowModelView) * worldPos + shadowModelView[3].xyz; // 世界位置转到阴影相机视空间。
-	    shadowPos *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按投影缩放，深度取半。
-	    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一的纹理坐标。
-	}
+	vec3 ShadowScreenPos_From_WorldPos(vec3 worldPos){ return gfx_shadow_screen_pos(worldPos, shadowModelView, shadowProjection); }
 	// 投到阴影相机，不做边缘压缩；与上一个函数相同，名字保留原程序写法的差异。
-	vec3 ShadowScreenPos_From_WorldPos_WithoutZScaling(vec3 worldPos){
-	    vec3 shadowPos = mat3(shadowModelView) * worldPos + shadowModelView[3].xyz; // 世界位置转到阴影相机视空间。
-	    shadowPos *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按投影缩放，深度取半。
-	    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一的纹理坐标。
-	}
+	vec3 ShadowScreenPos_From_WorldPos_WithoutZScaling(vec3 worldPos){ return gfx_shadow_screen_pos(worldPos, shadowModelView, shadowProjection); }
 	// 对已经算好的阴影图坐标再补一次边缘压缩，读取端补压缩用。
-	vec2 DistortShadowScreenPos(vec2 shadowPos){
-	    shadowPos = shadowPos * 2.0 - 1.0; // 零到一先转回负一到一。
-	    float dist = length(shadowPos.xy); // 到中心距离。
-	    float distortFactor = (1.0 - OMNI_SHADOW_MAP_BIAS) + dist * OMNI_SHADOW_MAP_BIAS; // 与写入端同一压缩系数。
-	    shadowPos *= 0.95 / distortFactor; // 同一压缩量。
-	    return shadowPos * 0.5 + 0.5; // 再转回零到一。
-	}
+	vec2 DistortShadowScreenPos(vec2 shadowPos){ return gfx_distort_shadow_pos(shadowPos, OMNI_SHADOW_MAP_BIAS); }
 #endif // 末地与主世界的坐标函数二选一结束。
 
 // 可变半影阴影按深度比较采样 `shadowtex1`（`sampler2DShadow`），只有把它声明为比较采样器的程序才编译这一段：
