@@ -88,5 +88,6 @@ shaders/
 - 已完成：`gfx/surface.glsl` 建立；方块光曲线、材质遮蔽与法线缩放迁入，`effects/ground/material.glsl` 只保留选项与转发。
 - 已完成：`gfx/shadow.glsl` 建立；阴影相机投影、边缘压缩与读取端补压缩迁入，`effects/shadow/shadow.glsl` 只保留同名转发。
 - 已完成：`gfx/water.glsl` 建立；六层波高、波法线与水面视差迁入，`effects/water/waves.glsl` 只保留转发与玩家涟漪。
-- 下一步：批次 4 剩余部分，抽 `gfx/atmosphere.glsl`。
+- 已完成：`gfx/atmosphere.glsl` 建立；球面几何、密度剖面与预计算贴图坐标迁入，`effects/sky/atmosphere_model.glsl` 只保留转发。
+- 下一步：批次 5，抽 `gfx/cloud.glsl` 与 `gfx/fog.glsl`。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

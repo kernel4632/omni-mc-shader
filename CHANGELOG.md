@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.9
+
+通用库第六批：大气几何。
+
+- 新增 `shaders/gfx/atmosphere.glsl`：半径夹取、安全开方、到层顶与层底的距离、地面求交、密度剖面和预计算贴图坐标。
+- `effects/sky/atmosphere_model.glsl` 的九个小函数只保留同名转发，大气半径与贴图尺寸由效果文件传入。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.8
 
 通用库第五批：水面波形。

@@ -12,14 +12,11 @@
 */
 #ifndef OMNI_SKY_ATMOSPHERE_MODEL_INCLUDED
 #define OMNI_SKY_ATMOSPHERE_MODEL_INCLUDED
+#include "/gfx/atmosphere.glsl"
 // 把半径夹进大气层范围内，越界时按最近的边界算。
-float ClampRadius(float r){
-	return clamp(r, atmosphereModel_bottom_radius, atmosphereModel_top_radius); // 下不低于地面、上不超过层顶。
-}
+float ClampRadius(float r) { return gfx_clamp_radius(r, atmosphereModel_bottom_radius, atmosphereModel_top_radius); }
 // 安全开方：负零以下一律当零，避免判别式因浮点误差变负时出非数。
-float SafeSqrt(float a){
-	return sqrt(max(a, 0.0)); // 负数开到零。
-}
+float SafeSqrt(float a) { return gfx_safe_sqrt(a); }
 
 // 视线到大气层顶的距离，解视线与顶球面的方程取远根。
 float DistanceToTopAtmosphereBoundary(
@@ -62,13 +59,9 @@ float GetProfileDensityAbsorption(
 			profile.z * altitude + profile.w; // 以上用后两个系数。
 }
 // 把零到一的比例映射到贴图坐标的像素中心，避免采到子图交界。
-float GetTextureCoordFromUnitRange(float x, float texture_size) {
-	return 0.5 / texture_size + x * (1.0 - 1.0 / texture_size); // 内缩半像素。
-}
+float GetTextureCoordFromUnitRange(float x, float texture_size) { return gfx_texture_coord(x, texture_size); }
 // 把子图内部的比例映射到拼合大图上的坐标，子图在大图里也内缩半像素。
-float GetCombinedTextureCoordFromUnitRange(float x, float original_texture_size, float combined_texture_size) {
-	return 0.5 / combined_texture_size + x * (original_texture_size / combined_texture_size - 1.0 / combined_texture_size); // 按子图尺寸缩放。
-}
+float GetCombinedTextureCoordFromUnitRange(float x, float original_texture_size, float combined_texture_size) { return gfx_combined_texture_coord(x, original_texture_size, combined_texture_size); }
 // 把半径与几个角度换成散射三维贴图的四维坐标：前三维是坐标，第四维留给上层插值。
 vec4 GetScatteringTextureUvwzFromRMuMuSNu(
 	float r,
