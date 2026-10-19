@@ -10,6 +10,18 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.11
+
+通用库第七批：云的相位与雾的散射。
+
+- 新增 `shaders/gfx/cloud.glsl`：亨耶-格林斯坦相位与云的顶部曲线。
+- 新增 `shaders/gfx/fog.glsl`：粉末效应、混合米氏相位与四次多次散射相位。
+- `effects/cloud/volumetric.glsl` 与 `effects/fog/volumetric.glsl` 只保留同名转发，采样循环、密度与光照流程未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.10
 
 记录结构重构的连续执行授权。

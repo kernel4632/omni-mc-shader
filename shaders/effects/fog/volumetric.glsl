@@ -16,25 +16,23 @@
 */
 #ifndef OMNI_VOLUMETRIC_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_VOLUMETRIC_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 雾的粉末效应与散射相位放在通用库，这里只传入夹角与吸收。
+#include "/gfx/fog.glsl"
 
 // --- 体积雾：相位、噪声与密度 ---
 // 粉末效应：光穿过一层薄雾时，正对光源方向更亮，背光方向的雾壁反而更暗，模拟粒子间的多次散射。
 float PowderEffect(float absorption, float lightingAbsorption, float VdotL){
-	return mix((1.0 - absorption) * (1.0 - lightingAbsorption), 1.0, VdotL * 0.5 + 0.5); // 采样点两侧的剩余光越少粉末效应越强。
+	return gfx_powder_effect(absorption, lightingAbsorption, VdotL); // 转发到通用库。
 }
 
 // 雾的相位：前向与后向两个米氏相位加权，得到雾里比较均匀的散射方向性。
 float FogPhase(float VdotL){
-	return MiePhaseFunction(-0.4, VdotL) * 0.3 + MiePhaseFunction(0.5, VdotL) * 0.7; // 后向占三成、前向占七成。
+	return gfx_fog_phase(VdotL); // 转发到通用库。
 }
 
 // 多次散射相位：把相位按指数缩放的夹角重复四次，模拟光在雾里多次反弹后更均匀。
 void MultiScatteringPhases(float VdotL, inout float phases[4]){
-	float cn = 1.0; // 每一级的夹角缩放，从一倍开始逐级减半。
-
-	for (int i = 0; i < 4; i++, cn *= 0.5){ // 四次，每次夹角缩放减半。
-		phases[i] = FogPhase(VdotL * cn); // 记录这一级的相位。
-	}
+	gfx_multi_scattering_phases(VdotL, phases); // 转发到通用库。
 }
 
 // 三维噪声：用噪声贴图的两通道做一次三线性插值，得到零到一的雾密度。

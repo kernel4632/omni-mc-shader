@@ -13,21 +13,19 @@
 */
 #ifndef OMNI_CLOUD_VOLUMETRIC_INCLUDED
 #define OMNI_CLOUD_VOLUMETRIC_INCLUDED
+// 云的光照相位与顶部曲线放在通用库，这里只传角度与参数。
+#include "/gfx/cloud.glsl"
 #ifdef OMNI_CLOUD_DENSITY_PASS // 由 effects/cloud/cloud.glsl 在三维云噪声可用的阶段打开；其它程序整段不编译。
 #if OMNI_CLOUD_CUMULONIMBUS == 1 // 中档积雨云要读雷暴强度；Iris 内建量，本程序里 `storm.glsl` 不参与编译，所以在此声明。
 uniform float thunderStrength; // 雷暴强度，零到一，已由加载器平滑；零表示没有雷暴。
 #endif
 // --- 亨耶-格林斯坦相位函数：云这种大粒子的前向散射，输入夹角余弦与不透明度参数 ---
 float HenyeyGreenstein(float inCosAngle, float inG){
-	float num = 1.0 - inG * inG; // 分子，归一化用。
-	float denom = 1.0 + inG * inG - 2.0 * inG * inCosAngle; // 分母，越前向越小。
-	float rsqrt_denom = inversesqrt(denom); // 分母的近似负二分之一次方。
-	return num * rsqrt_denom * rsqrt_denom * rsqrt_denom * (0.25 / PI); // 归一化后返回相位值。
+	return gfx_henyey_greenstein(inCosAngle, inG); // 转发到通用库。
 }
 // 云顶上凸的收口曲线：把零到一映射成一道平滑的弧，云顶因此不是平切。
 float curveTop(float x){
-	x = x - 1.0; // 先平移到负一到零。
-	return 1.0 - x * x; // 开口向下的抛物线。
+	return gfx_cloud_top_curve(x); // 转发到通用库。
 }
 // 采样云密度：先叠基础形状与云量得到不透明密度，再叠细节噪声得到碎边。
 // 返回 `x` 是基础密度、`y` 是用于消光的最终密度；`sampleDetail` 为假时跳过细节以省性能。
