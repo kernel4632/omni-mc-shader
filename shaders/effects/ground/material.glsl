@@ -126,21 +126,16 @@
 // 解码、掩码与视差都用到共用数学，先引入加载器输入与共用计算。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
+// 方块光曲线、材质法线与遮蔽算法放在通用库；这里只传入选项值。
+#include "/gfx/surface.glsl"
 // --- 方块光曲线：把原版方块光等级压成光照要用的亮度 ---
 // 天光曲线的形状：先抬高低等级，再整体压暗，等级越高越接近饱和。
 float CurveBlockLightSky(float blockLight){
-	blockLight = 1.0 - pow(1.0 - blockLight * 0.9, 0.7); // 抬高低等级并保留低端细节。
-	blockLight = saturate(blockLight * blockLight * blockLight * 1.95); // 三次方拉开对比后夹紧。
-	return blockLight; // 返回处理后的天光等级。
+	return gfx_curve_block_light_sky(blockLight); // 转发到通用库。
 }
 // 方块光曲线的形状：先按距离平方衰减，再给高等级补一份提升，得到火把那样集中的光。
 float CurveBlockLightTorch(float blockLight){
-	float dist = (1.0 - blockLight) * 15.0 + 1.0; // 把等级转成米制距离，等级为零时距离最远。
-	dist = dist * dist; // 距离平方，衰减更快。
-	float boost = saturate(blockLight * 2.0 - 1.0); // 只有高等级才有的提升量。
-	blockLight = blockLight + boost * boost; // 先加提升，突出光源附近的亮度。
-	blockLight /= dist; // 再按距离平方衰减。
-	return blockLight; // 返回处理后的方块光。
+	return gfx_curve_block_light_torch(blockLight); // 转发到通用库。
 }
 // --- 表面数据结构：读回画面后一次装完光照要用的量 ---
 // 每次采样的表面材质参数：粗糙、金属、菲涅尔零点、自发光、散射与反射强度。
@@ -398,19 +393,15 @@ void ApplyMaterial(inout Material material, in MaterialMask materialMask, inout 
 // 材质遮蔽：资源包把遮蔽存在法线贴图的蓝通道，取出来乘到底色上；未开该选项时恒为一。
 // 为什么单独拆出来：视差路径已经自己解出法线，只差遮蔽要另外取一次贴图，拆开才能单独复用。
 float omniMaterialAO(vec3 normalTexRGB){
-	#if OMNI_MATERIAL_AO // 打开才拿蓝通道当遮蔽。
-		return normalTexRGB.b * 0.5 + 0.5; // 蓝通道零到一映射到零点五到一，来源 Eclipse 同一行。
-	#else
-		return 1.0; // 未开时不做任何遮蔽。
-	#endif
+	return gfx_material_ao(normalTexRGB, bool(OMNI_MATERIAL_AO)); // 选项决定是否启用遮蔽。
 }
 // 法线倍率：围绕朝外方向缩放起伏，`OMNI_NORMAL_MAP_MULT` 越大起伏越强；为一等于原样。
 // 传入的已经是切线空间单位法线，所以视差路径解出的法线也能直接套用，不必重采贴图。
 vec3 omniMaterialNormalScale(vec3 tangentNormal){
-	return normalize(tangentNormal * OMNI_NORMAL_MAP_MULT + vec3(0.0, 0.0, 1.0 - OMNI_NORMAL_MAP_MULT)); // z 补齐后重新单位化，与 Eclipse `applyBump` 数学等价。
+	return gfx_material_normal_scale(tangentNormal, OMNI_NORMAL_MAP_MULT); // 倍率由选项传入。
 }
 vec4 omniMaterialNormal(vec3 normalTexRGB){
-	return vec4(omniMaterialNormalScale(DecodeNormalTex(normalTexRGB)), omniMaterialAO(normalTexRGB)); // 解码后按选项缩放起伏，并把遮蔽一起交回。
+	return gfx_material_normal(normalTexRGB, bool(OMNI_MATERIAL_AO), OMNI_NORMAL_MAP_MULT); // 解码、缩放与遮蔽一次完成。
 }
 // 视差算法（`ParallaxOcclusionMapping`）在 ground/parallax.glsl：它只服务地表材质，且只在地形、实体等几何片元阶段编译。
 // 为什么放在这里引入：任何引入本文件的阶段都靠这一行拿到视差算法，原有调用点（地形、实体）一个都不用改。
