@@ -9,128 +9,34 @@
     物理解析波浪的顶点与片元两段靠 `PHYSICS_VS` / `PHYSICS_FS` 宏分派，保留 iterationT 原样。
 */
 #ifndef OMNI_WATER_WAVES_INCLUDED
+#include "/gfx/water.glsl"
 #define OMNI_WATER_WAVES_INCLUDED // 置上标记，后续再次引用直接跳过。
 // --- 波浪：多层噪声正弦叠成起伏 ---
 // 先用三次曲线把噪声采样平滑化，再逐层缩小频率、加快速度，得到自然且可重复的波浪。
 // 为什么用噪声贴图而不是解析正弦：贴图里已经烘好一层细节，叠几层就有足够丰富感，省下大量三角计算。
-vec4 textureSmooth(sampler2D texSampler, vec2 coord){
-	coord *= 64.0; // 噪声贴图边长六十四，先换成像素坐标。
-	coord += 0.5; // 移到像素中心。
-
-	vec2 whole = floor(coord); // 整数像素。
-	vec2 part  = coord - whole; // 小数部分。
-
-	coord = whole + curve(part); // 用三次曲线改写小数部分，采样更平滑。
-
-	coord -= 0.5; // 移回像素角。
-	coord *= 0.015625; // 除以六十四，换回零到一坐标。
-
-	return textureLod(texSampler, coord, 0.0); // 读取平滑后的噪声四通道。
-}
+vec4 textureSmooth(sampler2D texSampler, vec2 coord){ return gfx_texture_smooth(texSampler, coord); }
 
 // 把零到一的值压成两端平、中间过渡的形状，用来让波浪峰值更饱满。
-float AlmostIdentity(float x, float m, float n){
-	x = abs(x * 2.0 - 1.0); // 折回零到一并取绝对值，得到对称形状。
-
-	if (x <= m){ // 只在靠近中间的一段改写。
-		float a = 2.0 * n - m; // 三次项系数。
-		float b = 2.0 * m - 3.0 * n; // 二次项系数。
-		float t = x / m; // 归一化到零到一。
-
-		x = (a * t + b) * t * t + n; // 三次多项式重排形状。
-	}
-
-	return 1.0 - x; // 翻转方向。
-}
+float AlmostIdentity(float x, float m, float n){ return gfx_almost_identity(x, m, n); }
 
 // 主波函数：把世界位置缩放后逐层累加噪声采样，每层频率与速度都不同。
-float GetWaves(vec3 position) {
-	float wavesTime = frameTimeCounter * 0.0035; // 波浪时间，比真实秒慢很多，水面更平静。
-
-	position *= OMNI_WAVE_SCALE; // 按波浪密度缩放空间坐标。
-	vec2 p = position.xz - position.y; // 用水平坐标，减去高度让波浪随高度起伏。
-	p += -3.875 * wavesTime; // 整片波沿一个方向平移。
-	p.x = -p.x; // 翻转一个轴，打散规则方向。
-
-	vec2 waves = vec2(0.0); // 前两个分量分别存累加高度和累加权重。
-
-	waves += vec2(textureSmooth(noisetex, p * vec2(2.0, 1.2) + vec2(0.0, p.x * 2.1)).w,
-				  1.0); // 第一层：低频大波，权重一。
-
-		p = p * 0.475; // 收缩坐标，频率升高。
-		p += vec2(-5.16, -7.75) * wavesTime; // 每层自己的行进方向与速度。
-
-	waves += vec2(textureSmooth(noisetex, p * vec2(2.0, 1.4) + vec2(0.0, -p.x * 2.1)).w
-				  * 4.0, 4.0); // 第二层：加四倍权重。
-
-		p *= 0.67; // 继续抬高频率。
-		p.x += 7.75 * wavesTime; // 换一个方向。
-
-	waves += vec2(textureSmooth(noisetex, p + vec2(0.0, p.x * 1.1)).z
-				  * 8.0, 8.0); // 第三层：换一个通道，权重八。
-
-		p *= 0.7; // 再抬高频率。
-		p.x += -2.82 * wavesTime; // 换方向。
-
-	waves += vec2(textureSmooth(noisetex, p * vec2(1.0, 0.75) + vec2(0.0, -p.x * 1.7)).w
-				  * 16.0, 16.0); // 第四层：权重十六。
-
-		p *= 0.45; // 高频细节。
-		p.x += wavesTime; // 换方向。
-
-	waves += vec2(AlmostIdentity(textureSmooth(noisetex, p * vec2(1.0, 0.8) + vec2(0.0, -p.x * 1.7)).z, 0.2, 0.1)
-				  * 30.0, 30.0); // 第五层：用形状函数让峰值饱满，权重三十。
-
-		p *= 0.5; // 最高频一层。
-		p.x += wavesTime; // 换方向。
-
-	waves += vec2(AlmostIdentity(textureSmooth(noisetex, p * vec2(1.0, 0.8) + vec2(0.0,  p.x * 1.7)).w, 0.2, 0.1)
-				  * 20.0, 20.0); // 第六层：最高频，权重二十。
-
-	return waves.x / waves.y; // 高度除以权重和，归一化到合理范围。
-}
+float GetWaves(vec3 position){ return gfx_waves(position, noisetex, frameTimeCounter, OMNI_WAVE_SCALE); }
 
 #define sampleDistance 12.0 // 法线差分采样距离，原程序取值，写死让每个程序代价一致。
 
 // 波法线：用高度差近似倾斜，中央差分取横纵两个方向。
 // 为什么乘 `WAVE_HEIGHT / sampleDistance`：高度差除以采样距离才是坡度，再乘波浪高度选项统一缩放。
 vec3 GetWavesNormal(vec3 position, const float waveHeight){
-	position.xz -= 0.005 * sampleDistance; // 采样点整体后移一点，让差分落在波面中心。
-
-	float wavesCenter = GetWaves(position); // 中心高度。
-	float wavesLeft = GetWaves(position + vec3(0.01 * sampleDistance, 0.0, 0.0)); // 横向偏移一点的高度。
-	float wavesUp   = GetWaves(position + vec3(0.0, 0.0, 0.01 * sampleDistance)); // 纵向偏移一点的高度。
-
-	vec3 wavesNormal = vec3(wavesCenter - wavesLeft, wavesCenter - wavesUp, 1.0); // 用两个方向的高度差构成法线，竖直分量为一。
-
-	wavesNormal.xy *= waveHeight * (OMNI_WAVE_HEIGHT / sampleDistance); // 按波高选项与采样距离缩放坡度。
-
-	#if OMNI_PLAYER_WATER > 0 // 玩家交互水面：把玩家带起的涟漪叠到波法线的纵向分量上。
-		wavesNormal.y = mix(wavesNormal.y, 1.0, PlayerWaterRipple(position)); // 涟漪越高越把法线朝上推，形成一圈凸起。
+	vec3 n = gfx_waves_normal(position, noisetex, frameTimeCounter, OMNI_WAVE_SCALE, waveHeight, OMNI_WAVE_HEIGHT);
+	#if OMNI_PLAYER_WATER > 0
+		n.y = mix(n.y, 1.0, PlayerWaterRipple(position));
 	#endif
-
-	return normalize(wavesNormal); // 归一化成单位法线。
+	return normalize(n);
 }
 
 // 水面视差：沿视线在波高场里一步步前进，找到真正可见的波面位置。
 // 为什么限制十二步：步数直接决定开销，写死让每个程序代价一致，也让画面表现稳定。
-vec3 GetWaterParallaxCoord(vec3 position, vec3 viewVector){
-	const vec3 stepSize = vec3(OMNI_WAVE_HEIGHT * 0.8, OMNI_WAVE_HEIGHT * 0.8, 0.6); // 每步的大小，横向按波高缩放，纵向固定。
-	float waveHeight = GetWaves(position); // 起点波高。
-	vec3 pCoord = vec3(0.0, 0.0, 1.0); // 以表面为参考，向前推进的深度。
-	vec3 steps = viewVector * stepSize; // 每步的位移。
-
-	float sampleHeight = waveHeight; // 当前位置的波高。
-
-	for (int i = 0; sampleHeight < pCoord.z && i < 12; ++i) // 波高还没追上视线深度就继续走，最多十二步。
-	{
-		pCoord.xy += steps.xy * saturate((pCoord.z - sampleHeight) * (-viewVector.z + 0.05) / (stepSize.z * 0.2)); // 按深度差决定这一步走多远。
-		pCoord.z += steps.z; // 视线深度前进。
-		sampleHeight = GetWaves(position + vec3(pCoord.x, 0.0, pCoord.y)); // 读取新位置的波高。
-	}
-
-	return position.xyz + vec3(pCoord.x, 0.0, pCoord.y); // 返回偏移后的采样坐标。
-}
+vec3 GetWaterParallaxCoord(vec3 position, vec3 viewVector){ return gfx_water_parallax(position, viewVector, noisetex, frameTimeCounter, OMNI_WAVE_SCALE, OMNI_WAVE_HEIGHT); }
 
 // --- 海洋物理波：按迭代正弦合成海面，供外部海洋物理扩展使用 ---
 // 形状必须与原程序一致，因为实体偏移在中央处理器一侧也按同一套公式计算，两边不一致会让实体浮空或陷进水里。
