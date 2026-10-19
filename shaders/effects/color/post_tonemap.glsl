@@ -1,10 +1,10 @@
 /*
 后期色调映射：`composite14` 程序的算法体，把一号颜色合并泛光、压暗角、乘曝光，再做色调映射与高级调色。
-职责：按选项依次合并五号光晕、压暗四角、乘自动曝光、白平衡、按算子选 `ACES`、无压缩或 `AgX`，最后叠高级调色与潜行暗角。
+职责：按选项依次合并五号光晕、压暗四角、乘自动曝光、白平衡、按算子选 `gfx_aces`、`gfx_tonemap_none` 或 `gfx_agx`，最后叠高级调色与潜行暗角。
 调用位置：`rendering/post.glsl` 的 `OMNI_COMPOSITE14_PASS` 分支先引入共享声明与曝光、镜头、泛光文件，再引入本文件，
     最后 `void main(){ TonemapColor(); }` 调用；输出 `compositeOutput1` 由主文件的程序块声明。
 可复制示例：`TonemapColor();`（要求调用方已提供 `texelCoord`、`texCoord`、`colortex1` 与各效果函数）。
-设计原因与取舍：曝光、白平衡与三条色调映射曲线在 `effects/color/color.glsl`，暗角在 `effects/lens/lens.glsl`，
+设计原因与取舍：曝光、白平衡与三条色调映射曲线在 `effects/color/color.glsl`，通用曲线本体在 `libraries/omni-gfx/color.glsl`，暗角在 `effects/lens/lens.glsl`，
     合并泛光在 `effects/color/bloom.glsl`；本文件只做程序级的顺序排布，逐行照 `composite14.fsh`。
     原程序在这里另声明了一个局部 `texelCoord`，值与共享声明相同，这里直接用共享声明，行为不变。
 */
@@ -27,12 +27,12 @@ void TonemapColor(){
 
 	color = WhiteBalance(color); // 白平衡：按色温给曝光后的线性颜色染色，默认中性时不做任何改动。
 
-	#if OMNI_TONEMAP_OPERATOR == 1 // 序号一取 `ACES`。
-		color = ACES(color); // 影院标准压缩曲线。
+	#if OMNI_TONEMAP_OPERATOR == 1 // 序号一取 `gfx_aces`。
+		color = gfx_aces(color, bool(OMNI_ABNEY_EFFECT_CORRECTION)); // 影院标准压缩曲线。
 	#elif OMNI_TONEMAP_OPERATOR == 2 // 序号二取无压缩。
-		color = None(color); // 只做伽马编码。
-	#else // 其余（默认零）取 `AgX`。
-		color = AgX(color); // 宽色域压缩，保住高光颜色。
+		color = gfx_tonemap_none(color); // 只做伽马编码。
+	#else // 其余（默认零）取 `gfx_agx`。
+		color = gfx_agx(color, OMNI_AGX_EV, bool(OMNI_ABNEY_EFFECT_CORRECTION)); // 宽色域压缩，保住高光颜色。
 	#endif
 
 	#if OMNI_ADVANCED_COLOR // 开启高级调色时做白光裁剪、亮度伽马与饱和度。

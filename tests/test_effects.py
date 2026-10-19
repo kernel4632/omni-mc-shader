@@ -253,7 +253,7 @@ class EffectTests(unittest.TestCase):
         post = support.text("effects/color/post_tonemap.glsl")  # 分派在后期色调映射效果文件里。
         self.assertIn("#if OMNI_TONEMAP_OPERATOR == 1", post)  # 一档取 ACES。
         self.assertIn("#elif OMNI_TONEMAP_OPERATOR == 2", post)  # 二档取无压缩曲线。
-        self.assertIn("AgX(color)", post)  # 默认走 AgX。
+        self.assertIn("gfx_agx(color, OMNI_AGX_EV", post)  # 默认走通用库的 AgX。
 
     def test_bloom_switch_and_amount(self):
         """泛光可开关、强度可调，合并阶段按选项叠加；雾内泛光与水下雾内泛光都可调并接入合并。"""
