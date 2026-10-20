@@ -80,4 +80,27 @@ vec4 gfx_bloom_bicubic(sampler2D source, vec2 coord, vec2 texSize){
 	           m.y); // 四次采样合成模糊。
 }
 
+// 亮度曲线：暗部与亮部各一条抛物线，通道独立处理避免串色。
+float gfx_lower_curve(float x){
+	return clamp(16.0 * x * (0.5 - x) * 0.1, 0.0, 1.0); // 峰在四分之一附近。
+}
+
+// 亮部曲线：在亮端抬起一段抛物线。
+float gfx_upper_curve(float x){
+	return clamp(16.0 * (0.5 - x) * (x - 1.0) * 0.1, 0.0, 1.0); // 峰在四分之三附近。
+}
+
+// 把暗部与亮部修正同时加到三个通道，系数由调用方传入。
+vec3 gfx_luminance_curve(vec3 color, float lower, float upper){
+	color.r += lower * gfx_lower_curve(color.r) + upper * gfx_upper_curve(color.r); // 红通道。
+	color.g += lower * gfx_lower_curve(color.g) + upper * gfx_upper_curve(color.g); // 绿通道。
+	color.b += lower * gfx_lower_curve(color.b) + upper * gfx_upper_curve(color.b); // 蓝通道。
+	return color;
+}
+
+// 把三个通道归一化成染色方向；接近零时返回零，避免除零。
+vec3 gfx_grade_target(float red, float green, float blue){
+	vec3 target = vec3(red, green, blue); // 原始目标向量。
+	return length(target) < 0.001 ? vec3(0.0) : normalize(target); // 太短就没有方向。
+}
 #endif

@@ -96,5 +96,6 @@ shaders/
 - 已完成：`gfx/antialias.glsl` 建立；亮度色差转换、历史裁剪与四分量三次采样迁入，`effects/clarity/taa.glsl` 只保留转发。
 - 已完成：`gfx/reflection.glsl` 建立；可见法线分布采样迁入，`effects/reflection/screenspace.glsl` 只保留转发。
 - 已完成：`gfx/gi.glsl` 建立；环境遮蔽多弹射迁入，`effects/lighting/gtao.glsl` 只保留转发。
-- 下一步：抽 `gfx/material.glsl` 的材质解码与表面组装辅助。
+- 已完成：`gfx/post.glsl` 增加调色曲线与染色方向归一化，`effects/color/colorgrade.glsl` 只保留转发。
+- 下一步：抽材质与表面的剩余纯计算，然后整理菜单与 `bind/`。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

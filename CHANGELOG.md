@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.18
+
+通用库第十四批：调色曲线。
+
+- `shaders/gfx/post.glsl` 增加暗部曲线、亮部曲线、亮度曲线与染色方向归一化。
+- `effects/color/colorgrade.glsl` 只保留同名转发，三段染色、串色与开关顺序未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.17
 
 通用库第十三批：环境遮蔽多弹射。

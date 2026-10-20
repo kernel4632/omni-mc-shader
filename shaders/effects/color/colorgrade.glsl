@@ -56,32 +56,21 @@
 
 // 共用数学：提供 `saturate` 等基础函数，本文件的分段染色与曲线都用到它。
 #include "/common/math.glsl"
+#include "/gfx/post.glsl"
 
 // --- 亮度曲线：按通道把暗部与亮部拉开或收回 ---
 // 暗部曲线：在零点附近抬起一段抛物线，`OMNI_LUMINANCE_CURVE_LOWER` 为正时暗部变亮，为零时整条曲线为零。
-float OmniLowerCurve(float x){
-	return saturate(16.0 * x * (0.5 - x) * 0.1); // 抛物线的峰在四分之一附近，两端夹回零到一。
-}
+float OmniLowerCurve(float x) { return gfx_lower_curve(x); }
 
 // 亮部曲线：在一附近抬起一段抛物线，`OMNI_LUMINANCE_CURVE_UPPER` 为正时亮部更亮，为零时整条曲线为零。
-float OmniUpperCurve(float x){
-	return saturate(16.0 * (0.5 - x) * (x - 1.0) * 0.1); // 抛物线的峰在四分之三附近，两端夹回零到一。
-}
+float OmniUpperCurve(float x) { return gfx_upper_curve(x); }
 
 // 亮度曲线整体：三个通道各自叠加一条暗部曲线与一条亮部曲线，通道独立处理所以不会串色。
-vec3 OmniLuminanceCurve(vec3 color){
-	color.r += OMNI_LUMINANCE_CURVE_LOWER * OmniLowerCurve(color.r) + OMNI_LUMINANCE_CURVE_UPPER * OmniUpperCurve(color.r); // 红色通道的暗部与亮部修正。
-	color.g += OMNI_LUMINANCE_CURVE_LOWER * OmniLowerCurve(color.g) + OMNI_LUMINANCE_CURVE_UPPER * OmniUpperCurve(color.g); // 绿色通道的暗部与亮部修正。
-	color.b += OMNI_LUMINANCE_CURVE_LOWER * OmniLowerCurve(color.b) + OMNI_LUMINANCE_CURVE_UPPER * OmniUpperCurve(color.b); // 蓝色通道的暗部与亮部修正。
-	return color; // 返回调整后的颜色。
-}
+vec3 OmniLuminanceCurve(vec3 color) { return gfx_luminance_curve(color, OMNI_LUMINANCE_CURVE_LOWER, OMNI_LUMINANCE_CURVE_UPPER); }
 
 // --- 分段染色：暗部、中间调、高光各乘一个目标色与倍率，再按亮度权重叠加 ---
 // 目标色：把三个通道的取值归一化成方向；三者都接近零时没有方向，返回零，避免归一化除以零。
-vec3 OmniGradeTarget(float red, float green, float blue){
-	vec3 target = vec3(red, green, blue); // 三个通道的原始取值拼成目标向量。
-	return length(target) < 0.001 ? vec3(0.0) : normalize(target); // 太短就没有方向，否则归一化成单位方向。
-}
+vec3 OmniGradeTarget(float red, float green, float blue) { return gfx_grade_target(red, green, blue); }
 
 // 分段染色主体：按三通道平均亮度把每个像素分到暗部、中间调、高光三段，各段乘自己的目标与倍率。
 // 为什么用平均亮度而不是感知亮度：此处沿用 Eclipse 原写法，三通道各占三分之一，改权重会改变分段边界。
