@@ -52,35 +52,7 @@
 // 合并泛光用失明与黑暗的调试开关 `OMNI_DISABLE_BLINDNESS_DARKNESS`，它的归属文件是颜色效果，这里引入才拿到定义。
 #include "/effects/color/color.glsl"
 
-// --- 内部常数：各级降采样与升采样的半径和步长 ---
-// 半径是每一级高斯核的相对大小，步长是每一级沿轴取多少个样本；数值照 iterationT 原样，改动会直接改变光晕形状。
-#define BLOOM_SIZE_LOD3 0.16 // 第三级核半径。
-#define BLOOM_SIZE_LOD4 0.035 // 第四级核半径。
-#define BLOOM_SIZE_LOD5 0.0085 // 第五级核半径。
-#define BLOOM_SIZE_LOD6 0.002 // 第六级核半径。
-#define BLOOM_SIZE_LOD7 0.0005 // 第七级核半径。
-#define BLOOM_SIZE_LOD8 0.00015 // 第八级核半径。
-
-#define BLOOM_STEP_LOD3 2.0 // 第三级轴向样本数。
-#define BLOOM_STEP_LOD4 5.0 // 第四级轴向样本数。
-#define BLOOM_STEP_LOD5 12.0 // 第五级轴向样本数。
-#define BLOOM_STEP_LOD6 28.0 // 第六级轴向样本数。
-#define BLOOM_STEP_LOD7 50.0 // 第七级轴向样本数。
-#define BLOOM_STEP_LOD8 90.0 // 第八级轴向样本数。
-
-// --- 降采样：在缩小的分辨率上做一次便宜的模糊，为后面的轴向模糊准备输入 ---
-// 十三个样本按中心大、四角小的权重合并，权重和为四，输出前乘回四分之一保持亮度不变。
-vec3 BloomDownSample(sampler2D texSampler, vec2 sampleCoord) { return gfx_bloom_downsample(texSampler, sampleCoord, pixelSize); }
-
-// --- 轴向高斯模糊：沿一个方向做长条高斯，横竖各来一次就得到二维模糊 ---
-// `coordScale` 把当前级的坐标还原到该级的分辨率；`sampleOrigin` 是该级在合图里的左下角；`sampleSize` 是该级大小；
-// `axis` 是模糊方向；`alpha` 控制核的宽度；`steps` 是每侧样本数。
-// 为什么沿轴而不是整块：横竖两次一维高斯等价于一次二维高斯，样本数从平方降到线性，性能好得多。
-vec3 AxialGaussianBlur(sampler2D texSampler, vec2 coord, vec2 coordScale, float sampleOrigin, vec2 sampleSize, vec2 axis, const float alpha, const float steps) { return gfx_axial_gaussian_blur(texSampler, coord, coordScale, sampleOrigin, sampleSize, axis, alpha, steps, pixelSize); }
-
-// --- 三次模糊：在升采样合并时把一张小图放大成平滑的大图 ---
-// 与共享数学里的同名函数不同，这里接收纹理尺寸参数并读取调用方指定的画面，按合同留在本文件。
-vec4 BloomBicubicBlurTexture(sampler2D texSampler, vec2 coord, vec2 texSize) { return gfx_bloom_bicubic(texSampler, coord, texSize); }
+// 降采样、轴向高斯与三次升采样的公式和内部常数全部在 `gfx/post.glsl`；本文件只保留选项与合并逻辑。
 
 // --- 合并泛光：把光晕按物体与雾的透明度混进场景颜色 ---
 // `bloomGuide` 是引导强度，通常取一号画面的透明度，用来判断该处亮部有多亮。
@@ -165,7 +137,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 	return mix(color, bloom, saturate(bloomAmount)); // 按占比把光晕混进场景。
 }
 
-// --- 五级泛光链：合成九号到十三号各调用一个，逐行照 iterationT `composite9.fsh` 到 `composite13.fsh` ---
+// --- 五级泛光链：合成九号到十三号各调用一个通用库函数，这里只选纹理与雨遮罩 ---
 // 为什么按程序宏隔开：这五级只在合成九号到十三号生成，合并泛光（合成十四号）也引入本文件，但不需要它们。
 // 为什么返回颜色而不是直接写 `compositeOutput5`：本文件在程序声明输出之前就被引入，写输出会要求声明顺序颠倒；
 // 改成把结果交回调用方，程序自己 `compositeOutput5 = ...;`，任何程序都能安全引入这份效果文件。
@@ -173,190 +145,32 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 
 // 泛光第一级：把一号画面降采样到半分辨率。
 vec4 BloomDownSampleScene(){
-	vec2 sampleCoord = texCoord * 2.0; // 采样坐标放大两倍，对应半分辨率画面。
-	vec2 border = pixelSize * 4.0 + 1.0; // 允许超出的边界。
-	vec3 blur = vec3(0.0); // 默认黑色。
-	if (sampleCoord.x <= border.x && sampleCoord.y <= border.y) // 只在画面范围内采样。
-		blur = BloomDownSample(colortex1, sampleCoord); // 从一号画面降采样。
-	return vec4(blur, 0.0); // 交回五号画面要写的内容。
+	return gfx_bloom_downsample_scene(colortex1, texCoord, pixelSize); // 一次调用完成整级。
 }
 
 // 泛光第二级：从五号画面继续降采样。
 vec4 BloomDownSampleChain(){
-	vec2 sampleCoord = texCoord * 2.0; // 采样坐标放大两倍。
-	vec2 border = pixelSize * 2.0 + 0.5; // 允许超出的边界。
-	vec3 blur = vec3(0.0); // 默认黑色。
-	if (sampleCoord.x <= border.x && sampleCoord.y <= border.y) // 只在画面范围内采样。
-		blur = BloomDownSample(colortex5, sampleCoord); // 从五号画面降采样。
-	return vec4(blur, 0.0); // 交回五号画面要写的内容。
+	return gfx_bloom_downsample_chain(colortex5, texCoord, pixelSize); // 一次调用完成整级。
 }
 
 // 泛光第三级：横向轴向高斯，链上各级排成一行。
 vec4 BloomBlurHorizontal(){
-	vec2 originSize = vec2(0.25); // 每一级占画面宽度的初值。
-	vec2 borderWidth = pixelSize; // 边界用一像素宽。
-	const float intervalWidth = 3.0; // 级与级之间隔三像素。
-	vec2 border = originSize + borderWidth; // 当前级的边界。
-	vec2 axis = vec2(1.0, 0.0); // 横向模糊。
-	vec3 blur = vec3(0.0); // 累积颜色。
-	vec2 coord = texCoord; // 在本级内推进的坐标。
-
-	if (coord.x <= border.x && coord.y <= border.y){ // 第二级：直接抄。
-		blur = CurveToLinear(textureLod(colortex5, clamp(coord, vec2(0.0), originSize), 0.0).rgb); // 读上一级结果。
-	}
-	coord.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-	originSize.x *= 0.5; // 下一级宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第三级：横向模糊。
-		blur = AxialGaussianBlur(colortex5, coord, vec2(2.0, 1.0), 0.0, originSize, axis, BLOOM_SIZE_LOD3, BLOOM_STEP_LOD3); // 半径与步长来自上面的内部常数。
-	}
-	coord.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-	originSize.x *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第四级。
-		blur = AxialGaussianBlur(colortex5, coord, vec2(4.0, 1.0), 0.0, originSize, axis, BLOOM_SIZE_LOD4, BLOOM_STEP_LOD4); // 更长的横向核。
-	}
-	coord.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-	originSize.x *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第五级。
-		blur = AxialGaussianBlur(colortex5, coord, vec2(8.0, 1.0), 0.0, originSize, axis, BLOOM_SIZE_LOD5, BLOOM_STEP_LOD5); // 横向核继续变长。
-	}
-	coord.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-	originSize.x *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第六级。
-		blur = AxialGaussianBlur(colortex5, coord, vec2(16.0, 1.0), 0.0, originSize, axis, BLOOM_SIZE_LOD6, BLOOM_STEP_LOD6); // 横向核继续变长。
-	}
-	coord.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-	originSize.x *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第七级。
-		blur = AxialGaussianBlur(colortex5, coord, vec2(32.0, 1.0), 0.0, originSize, axis, BLOOM_SIZE_LOD7, BLOOM_STEP_LOD7); // 横向核继续变长。
-	}
-	coord.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-	originSize.x *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第八级。
-		blur = AxialGaussianBlur(colortex5, coord, vec2(64.0, 1.0), 0.0, originSize, axis, BLOOM_SIZE_LOD8, BLOOM_STEP_LOD8); // 最长的一级。
-	}
-	return vec4(LinearToCurve(blur), 0.0); // 编码后交回五号画面要写的内容。
+	return gfx_bloom_blur_horizontal(colortex5, texCoord, pixelSize); // 一次调用完成整级。
 }
 
 // 泛光第四级：纵向轴向高斯，采样坐标回拧到各级自己的起点。
 vec4 BloomBlurVertical(){
-	vec2 originSize = vec2(0.25); // 每一级占画面宽度的初值。
-	vec2 borderWidth = pixelSize; // 边界用一像素宽。
-	const float intervalWidth = 3.0; // 级与级之间隔三像素。
-	vec2 border = originSize + borderWidth; // 当前级的边界。
-	vec2 axis = vec2(0.0, 1.0); // 纵向模糊。
-	vec3 blur = vec3(0.0); // 累积颜色。
-	vec2 coord = texCoord; // 用于判断落在哪一级的坐标。
-	float currInterval = 0.0; // 到下一级的间隔。
-	float sampleOrigin = 0.0; // 当前级在图里的起始横坐标。
-
-	if (coord.x <= border.x && coord.y <= border.y){ // 第二级：直接抄。
-		blur = CurveToLinear(textureLod(colortex5, clamp(coord, vec2(0.0), originSize), 0.0).rgb); // 读上一级结果。
-	}
-	currInterval = originSize.x + pixelSize.x * intervalWidth; // 当前级的宽度加间隔。
-	coord.x -= currInterval; // 移到下一级。
-	sampleOrigin += currInterval; // 起始横坐标同步前移。
-	originSize *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第三级。
-		blur = AxialGaussianBlur(colortex5, texCoord, vec2(1.0, 2.0), sampleOrigin, originSize, axis, BLOOM_SIZE_LOD3, BLOOM_STEP_LOD3); // 纵向核。
-	}
-	currInterval = originSize.x + pixelSize.x * intervalWidth; // 下一级的间隔。
-	coord.x -= currInterval; // 移到下一级。
-	sampleOrigin += currInterval; // 起始横坐标前移。
-	originSize *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第四级。
-		blur = AxialGaussianBlur(colortex5, texCoord, vec2(1.0, 4.0), sampleOrigin, originSize, axis, BLOOM_SIZE_LOD4, BLOOM_STEP_LOD4); // 纵向核变长。
-	}
-	currInterval = originSize.x + pixelSize.x * intervalWidth; // 下一级的间隔。
-	coord.x -= currInterval; // 移到下一级。
-	sampleOrigin += currInterval; // 起始横坐标前移。
-	originSize *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第五级。
-		blur = AxialGaussianBlur(colortex5, texCoord, vec2(1.0, 8.0), sampleOrigin, originSize, axis, BLOOM_SIZE_LOD5, BLOOM_STEP_LOD5); // 纵向核变长。
-	}
-	currInterval = originSize.x + pixelSize.x * intervalWidth; // 下一级的间隔。
-	coord.x -= currInterval; // 移到下一级。
-	sampleOrigin += currInterval; // 起始横坐标前移。
-	originSize *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第六级。
-		blur = AxialGaussianBlur(colortex5, texCoord, vec2(1.0, 16.0), sampleOrigin, originSize, axis, BLOOM_SIZE_LOD6, BLOOM_STEP_LOD6); // 纵向核变长。
-	}
-	currInterval = originSize.x + pixelSize.x * intervalWidth; // 下一级的间隔。
-	coord.x -= currInterval; // 移到下一级。
-	sampleOrigin += currInterval; // 起始横坐标前移。
-	originSize *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第七级。
-		blur = AxialGaussianBlur(colortex5, texCoord, vec2(1.0, 32.0), sampleOrigin, originSize, axis, BLOOM_SIZE_LOD7, BLOOM_STEP_LOD7); // 纵向核变长。
-	}
-	currInterval = originSize.x + pixelSize.x * intervalWidth; // 下一级的间隔。
-	coord.x -= currInterval; // 移到下一级。
-	sampleOrigin += currInterval; // 起始横坐标前移。
-	originSize *= 0.5; // 宽度减半。
-	border = originSize + borderWidth; // 更新边界。
-	if (coord.x >= -borderWidth.x && coord.x <= border.x && coord.y <= border.y){ // 第八级。
-		blur = AxialGaussianBlur(colortex5, texCoord, vec2(1.0, 64.0), sampleOrigin, originSize, axis, BLOOM_SIZE_LOD8, BLOOM_STEP_LOD8); // 最长的一级。
-	}
-	return vec4(LinearToCurve(blur), 0.0); // 编码后交回五号画面要写的内容。
+	return gfx_bloom_blur_vertical(colortex5, texCoord, pixelSize); // 一次调用完成整级。
 }
 
 // 泛光第五级：把各级三次模糊后的结果按权重叠成一张光晕，雨里权重更高。
 vec4 BloomCombine(){
-	vec2 originSize = vec2(0.25); // 每一级占画面宽度的初值。
-	const float intervalWidth = 3.0; // 级与级之间隔三像素。
-	vec2 tCoord = texCoord * 2.0; // 采样坐标放大两倍。
-	vec2 border = pixelSize * 8.0 + 1.0; // 允许超出的边界。
-
 	float rainAlpha = 0.0; // 雨遮罩；主世界才有。
 	#ifdef OMNI_OVERWORLD // 主世界从零号画面读雨量。
-		rainAlpha = 1.0 - textureLod(colortex0, tCoord, 0.0).a; // 零号透明度越低说明雨越密。
+		rainAlpha = 1.0 - textureLod(colortex0, texCoord * 2.0, 0.0).a; // 零号透明度越低说明雨越密。
 		rainAlpha = saturate(rainAlpha * OMNI_RAIN_VISIBILITY); // 乘雨可见度选项。
 	#endif
-
-	vec2 coord = texCoord; // 当前级坐标。
-	vec2 sampleOrigin = vec2(0.0); // 当前级在图里的起始横坐标。
-	vec3 bloom = vec3(0.0); // 累积光晕。
-
-	if (tCoord.x <= border.x && tCoord.y <= border.y){ // 只在画面范围内叠加。
-		bloom += CurveToLinear(BloomBicubicBlurTexture(colortex5, coord * 0.5, screenSize).rgb) * 1.0; // 第二级直接取。
-
-		sampleOrigin.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-		originSize *= 0.5; // 宽度减半。
-		bloom += CurveToLinear(BloomBicubicBlurTexture(colortex5, coord * 0.25 - sampleOrigin, screenSize).rgb) * mix(0.83333333, 1.0, rainAlpha); // 第三级，雨里权重更高。
-
-		sampleOrigin.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-		originSize *= 0.5; // 宽度减半。
-		bloom += CurveToLinear(BloomBicubicBlurTexture(colortex5, coord * 0.125 - sampleOrigin, screenSize).rgb) * mix(0.69444444, 1.0, rainAlpha); // 第四级。
-
-		sampleOrigin.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-		originSize *= 0.5; // 宽度减半。
-		bloom += CurveToLinear(BloomBicubicBlurTexture(colortex5, coord * 0.0625 - sampleOrigin, screenSize).rgb) * mix(0.57870370, 1.0, rainAlpha); // 第五级。
-
-		sampleOrigin.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-		originSize *= 0.5; // 宽度减半。
-		bloom += CurveToLinear(BloomBicubicBlurTexture(colortex5, coord * 0.03125 - sampleOrigin, screenSize).rgb) * mix(0.48225309, 1.0, rainAlpha); // 第六级。
-
-		sampleOrigin.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-		originSize *= 0.5; // 宽度减半。
-		bloom += CurveToLinear(BloomBicubicBlurTexture(colortex5, coord * 0.015625 - sampleOrigin, screenSize).rgb) * mix(0.40187757, 1.0, rainAlpha); // 第七级。
-
-		sampleOrigin.x -= originSize.x + pixelSize.x * intervalWidth; // 移到下一级。
-		originSize *= 0.5; // 宽度减半。
-		bloom += CurveToLinear(BloomBicubicBlurTexture(colortex5, coord * 0.0078125 - sampleOrigin, screenSize).rgb) * mix(0.33489798, 1.0, rainAlpha); // 第八级。
-	}
-
-	bloom *= mix(0.2774, 1.2 / 7.0, rainAlpha); // 雨里整体提亮，原程序保留的常数。
-
-	return vec4(LinearToCurve(bloom), 0.0); // 编码后交回五号画面要写的内容。
+	return gfx_bloom_combine(colortex5, texCoord, pixelSize, screenSize, rainAlpha); // 一次调用完成整级。
 }
 #endif // 五级泛光链结束。
 #endif // 文件守卫结束。

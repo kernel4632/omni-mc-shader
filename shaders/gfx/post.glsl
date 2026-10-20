@@ -15,6 +15,12 @@
 #define GFX_POST_INCLUDED
 
 // 把管线编码换回线性亮度：平方两次。
+float gfx_curve_to_linear(float color){
+	color = color * color; // 第一次平方。
+	return color * color; // 第二次平方，得到四次方。
+}
+
+// 三分量版本，逐通道做同样的平方两次。
 vec3 gfx_curve_to_linear(vec3 color){
 	color = color * color; // 第一次平方。
 	return color * color; // 第二次平方，得到四次方。
@@ -179,5 +185,286 @@ float gfx_dof_lens_factor(float focalLength, float aperture, float referenceFoca
 	float focalRatio = focalLength / referenceFocal; // 焦距相对基准的倍数，越长越大。
 	float apertureRatio = referenceAperture / aperture; // f 值越小口径越大，取倒数表示反比。
 	return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
+}
+
+// 米制距离换回非线性屏幕深度；景深写回下界历史时需要这个反向换算。
+float gfx_screen_depth_from_linear_depth(float depth, mat4 projectionInverse){
+	depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 解出负一到一的深度。
+	return depth * 0.5 + 0.5; // 再转回零到一。
+}
+
+// 读一个坐标的米制深度；`useDh` 为真且近景没有几何时改读远景深度，再统一到近景尺度。
+// 为什么把下限夹在换米制之前：近处深度趋近于零时薄透镜公式会爆炸，先夹屏幕深度最稳。
+float gfx_dof_linear_depth(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projectionInverse, mat4 dhProjectionInverse, bool useDh){
+	float depth = textureLod(depthTexture, coord, 0.0).x; // 读含半透明的近景深度。
+	if (useDh && depth == 1.0){ // 只有启用远景且近景是天空时才改读远景。
+		float dhDepth = textureLod(dhDepthTexture, coord, 0.0).x; // 读远景深度。
+		float meters = 1.0 / ((dhDepth * 2.0 - 1.0) * dhProjectionInverse[2][3] + dhProjectionInverse[3][3]); // 远景深度换米制。
+		depth = (1.0 / meters - projectionInverse[3][3]) / projectionInverse[2][3]; // 米制换到近景投影的负一到一深度。
+		depth = clamp(depth * 0.5 + 0.5, 0.0, 1.0); // 转回零到一并夹紧。
+	}
+	depth = max(depth, 0.875); // 近处下限，避免对焦距离趋近零时弥散爆炸。
+	return 1.0 / ((depth * 2.0 - 1.0) * projectionInverse[2][3] + projectionInverse[3][3]); // 换成米制距离。
+}
+
+// 前景弥散范围：在螺旋上找更近且弥散更大的样本，把它们的弥散并进当前点。
+// 输入是当前点、焦距、模糊量、投影缩放、镜头倍数、最大弥散、画面比例与搜索次数；输出归一化弥散范围。
+float gfx_dof_coc_spread(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projectionInverse, mat4 dhProjectionInverse, bool useDh,
+		float focus, float blur, float projectionScale, float lensFactor, float maxCoc, float aspect, int steps, vec2 noise){
+	float cocRadiusfactor = blur * projectionScale * lensFactor; // 口径系数：模糊量乘投影缩放与镜头倍数。
+	float rMaxCoc = 1.0 / maxCoc; // 最大弥散的倒数，用来归一化。
+	float rAspect = 1.0 / aspect; // 宽高比倒数，让椭圆散景在像素上是圆的。
+	float currDepth = gfx_dof_linear_depth(coord, depthTexture, dhDepthTexture, projectionInverse, dhProjectionInverse, useDh); // 当前点米制深度。
+	float currCoc = gfx_coc_radius(focus, currDepth, cocRadiusfactor); // 当前点弥散半径。
+	float startRadius = currCoc * rMaxCoc; // 当前弥散占最大值的比例。
+	startRadius *= startRadius; // 平方，让搜索从中心附近开始。
+	float spreadCoc = currCoc; // 弥散范围初值为当前点。
+	float rSteps = 1.0 / float(steps); // 步数倒数。
+	const float gap = 2.39996322973; // 黄金角，螺旋均匀铺开。
+	const mat2 rotMat = mat2(cos(gap), sin(gap), -sin(gap), cos(gap)); // 每次旋转黄金角。
+	float angle = noise.x * 6.28318530718; // 起始角由噪声给出，避免固定图案。
+	vec2 rot = vec2(cos(angle), sin(angle)); // 起始方向。
+	for (int i = 0; i < steps; i++){ // 螺旋逐点搜索。
+		rot *= rotMat; // 每步旋转一点。
+		float sampleRadius = sqrt(startRadius + (float(i) + noise.y) * (1.0 - startRadius) * rSteps) * maxCoc; // 这个样本的半径。
+		vec2 sampleOffset = rot * sampleRadius; // 屏幕偏移。
+		sampleOffset.x *= rAspect; // 按宽高比修正成圆。
+		float sampleDepth = gfx_dof_linear_depth(coord + sampleOffset, depthTexture, dhDepthTexture, projectionInverse, dhProjectionInverse, useDh); // 样本深度。
+		float sampleCoc = gfx_coc_radius(focus, sampleDepth, cocRadiusfactor); // 样本弥散。
+		if (sampleCoc >= sampleRadius && sampleDepth <= currDepth) spreadCoc = max(spreadCoc, sampleCoc); // 更近且弥散够大才并进来。
+	}
+	return min(spreadCoc, maxCoc) * rMaxCoc; // 夹到最大值并归一化。
+}
+
+// 景深散焦：按存下来的弥散范围在螺旋上取样，让更近且弥散够大的样本散到当前像素上。
+// `storeDepth` 为真时把散焦后的深度一起写进透明度，供下界历史使用；屏幕深度由调用方投影矩阵换算。
+vec4 gfx_depth_of_field(vec2 coord, sampler2D colorTexture, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projectionInverse, mat4 dhProjectionInverse, bool useDh,
+		float focus, float blur, float projectionScale, float lensFactor, float maxCoc, vec2 texel, float aspect, int quality,
+		bool catEye, float catEyeMidpoint, float catEyeStrength, float anamorphic, float dispersion, bool storeDepth, vec2 noise){
+	float cocRadiusfactor = blur * projectionScale * lensFactor; // 口径系数，与弥散统计共用同一换算。
+	float minCoc = 0.5641895835 * texel.y; // 一个像素大小的最小弥散，避免零半径时除零。
+	float rAspect = 1.0 / aspect; // 宽高比倒数。
+	float currDepth = gfx_dof_linear_depth(coord, depthTexture, dhDepthTexture, projectionInverse, dhProjectionInverse, useDh); // 当前点深度。
+	float currCoc = gfx_coc_radius(focus, currDepth, cocRadiusfactor); // 当前点弥散。
+	currCoc = clamp(currCoc, minCoc, maxCoc); // 夹在最小与最大之间。
+	vec4 currData = textureLod(colorTexture, coord, 0.0); // 当前点的曲线编码颜色与弥散范围。
+	float spreadCoc = currData.a * maxCoc; // 把存下来的范围还原成半径。
+	float centerWeight = spreadCoc * spreadCoc - spreadCoc + 1.0; // 中心权重多项式。
+	centerWeight = mix(centerWeight, 1e-20, pow(currCoc / spreadCoc, 4.0)); // 当前点很清晰时把它自己压到极小。
+	vec2 catEyeOffset = vec2(0.0); // 猫眼裁剪半径；关闭时保持零。
+	if (catEye){ // 只有开启猫眼效应才算裁剪。
+		catEyeOffset = coord * 2.0 - 1.0; // 从中心指向当前点。
+		catEyeOffset.x *= aspect; // 按宽高比修正成圆。
+		float catEyeDist = length(catEyeOffset); // 到中心的距离。
+		catEyeDist = max(catEyeDist - catEyeMidpoint, 0.0); // 超过中点才开始裁剪。
+		catEyeDist *= spreadCoc * catEyeStrength; // 按弥散与强度缩放。
+		catEyeOffset = normalize(catEyeOffset) * catEyeDist; // 得到裁剪半径。
+	}
+	vec3 dof = vec3(0.0); // 散焦进来的颜色累加。
+	float weights = 0.0; // 样本权重累加。
+	vec3 selfColor = gfx_curve_to_linear(currData.rgb) * 1e-20; // 当前点自贡献初值极小。
+	float selfSamples = 1e-20; // 自计入样本数初值极小。
+	float selfWeights = 0.0; // 被拒绝样本在中心上的权重累加。
+	float blendedDepth = 0.0; // 散焦后的深度累加。
+	float selfDepth = currDepth * 1e-20; // 当前点自计入深度初值极小。
+	const float gap = 2.39996322973; // 黄金角。
+	const mat2 rotMat = mat2(cos(gap), sin(gap), -sin(gap), cos(gap)); // 每次旋转黄金角。
+	float rSteps = 1.0 / float(quality); // 步数倒数。
+	float angle = noise.x * 6.28318530718; // 起始角。
+	vec2 rot = vec2(cos(angle), sin(angle)); // 起始方向。
+	for (int i = 0; i < quality; i++){ // 螺旋采样。
+		rot *= rotMat; // 每步旋转一点。
+		float sampleRadius = sqrt((float(i) + noise.y) * rSteps) * spreadCoc; // 样本半径。
+		vec2 sampleOffset = rot * sampleRadius; // 屏幕偏移。
+		if (catEye && distance(catEyeOffset, sampleOffset) > spreadCoc) continue; // 超出猫眼裁剪半径就不采。
+		sampleOffset.x *= rAspect * anamorphic; // 按宽高比修正后再按变形比横向拉伸。
+		vec2 sampleCoord = coord + sampleOffset; // 样本坐标。
+		float sampleDepth = gfx_dof_linear_depth(sampleCoord, depthTexture, dhDepthTexture, projectionInverse, dhProjectionInverse, useDh); // 样本深度。
+		float sampleCoc = gfx_coc_radius(focus, sampleDepth, cocRadiusfactor); // 样本弥散。
+		sampleCoc = clamp(sampleCoc, minCoc, maxCoc); // 夹到范围。
+		vec3 sampleColor; // 样本线性颜色。
+		if (dispersion != 1.0){ // 色散开启时红蓝通道沿到中心的方向错开。
+			vec2 dispersionOffset = (coord - 0.5) * sampleRadius * (dispersion - 1.0); // 错开量随半径与到中心距离增大。
+			sampleColor.r = gfx_curve_to_linear(textureLod(colorTexture, sampleCoord + dispersionOffset, 0.0).r); // 红通道向外。
+			sampleColor.g = gfx_curve_to_linear(textureLod(colorTexture, sampleCoord, 0.0).g); // 绿通道不动。
+			sampleColor.b = gfx_curve_to_linear(textureLod(colorTexture, sampleCoord - dispersionOffset, 0.0).b); // 蓝通道向内。
+		}else{ // 默认无色散只取一次样本。
+			sampleColor = gfx_curve_to_linear(textureLod(colorTexture, sampleCoord, 0.0).rgb); // 样本线性颜色。
+		}
+		float sampleWeight = max(1.0, currCoc / sampleCoc); // 近处前方样本权重更高。
+		sampleWeight *= sampleWeight; // 平方加强。
+		bool isSelfSample = currCoc >= sampleRadius && sampleDepth >= currDepth; // 样本属于当前点自己。
+		bool isBlurredSample = sampleCoc >= sampleRadius && sampleDepth < currDepth; // 更近且弥散够大，散焦进来。
+		if (isSelfSample){ // 属于当前点自己。
+			selfColor += sampleColor; // 记为自贡献。
+			selfSamples += 1.0; // 自贡献样本数。
+		}else if (isBlurredSample){ // 散焦进来。
+			dof += sampleColor * sampleWeight; // 累加散焦颜色。
+			weights += sampleWeight; // 累加权重。
+		}else{ // 不满足条件，记进中心权重。
+			selfWeights += centerWeight; // 累加中心权重。
+		}
+		if (isSelfSample) selfDepth += sampleDepth; // 自己的样本累加深度。
+		else if (isBlurredSample) blendedDepth += sampleDepth * sampleWeight; // 散焦样本按权重累加深度。
+	}
+	dof += selfColor * (1.0 + selfWeights / selfSamples); // 把自贡献按被拒绝样本的补偿加回来。
+	dof /= weights + selfSamples + selfWeights; // 归一化。
+	if (!storeDepth) return vec4(gfx_linear_to_curve(dof), 0.0); // 主世界与末地不写深度。
+	blendedDepth += selfDepth * (1.0 + selfWeights / selfSamples); // 下界把深度按同一套补偿。
+	blendedDepth /= weights + selfSamples + selfWeights; // 归一化深度。
+	return vec4(gfx_linear_to_curve(dof), gfx_screen_depth_from_linear_depth(blendedDepth, projectionInverse)); // 返回颜色与换回的屏幕深度。
+}
+
+// --- 五级泛光链：降采样、两级轴向高斯与最终合并，各级参数照原程序保留 ---
+// 每一级的核半径与样本数是固定内部常数，改一项都会改变光晕形状，所以集中写在这里。
+#define GFX_BLOOM_SIZE_LOD3 0.16 // 第三级核半径。
+#define GFX_BLOOM_SIZE_LOD4 0.035 // 第四级核半径。
+#define GFX_BLOOM_SIZE_LOD5 0.0085 // 第五级核半径。
+#define GFX_BLOOM_SIZE_LOD6 0.002 // 第六级核半径。
+#define GFX_BLOOM_SIZE_LOD7 0.0005 // 第七级核半径。
+#define GFX_BLOOM_SIZE_LOD8 0.00015 // 第八级核半径。
+#define GFX_BLOOM_STEP_LOD3 2.0 // 第三级轴向样本数。
+#define GFX_BLOOM_STEP_LOD4 5.0 // 第四级轴向样本数。
+#define GFX_BLOOM_STEP_LOD5 12.0 // 第五级轴向样本数。
+#define GFX_BLOOM_STEP_LOD6 28.0 // 第六级轴向样本数。
+#define GFX_BLOOM_STEP_LOD7 50.0 // 第七级轴向样本数。
+#define GFX_BLOOM_STEP_LOD8 90.0 // 第八级轴向样本数。
+
+// 泛光第一级：把场景画面降采样到半分辨率；画面外的坐标返回黑色。
+vec4 gfx_bloom_downsample_scene(sampler2D sceneTexture, vec2 coord, vec2 texel){
+	vec2 sampleCoord = coord * 2.0; // 采样坐标放大两倍，对应半分辨率画面。
+	vec2 border = texel * 4.0 + 1.0; // 允许超出的边界。
+	vec3 blur = vec3(0.0); // 默认黑色。
+	if (sampleCoord.x <= border.x && sampleCoord.y <= border.y) blur = gfx_bloom_downsample(sceneTexture, sampleCoord, texel); // 只在画面范围内采样。
+	return vec4(blur, 0.0); // 交回五号画面要写的内容。
+}
+
+// 泛光第二级：从上一级泛光图继续降采样。
+vec4 gfx_bloom_downsample_chain(sampler2D chainTexture, vec2 coord, vec2 texel){
+	vec2 sampleCoord = coord * 2.0; // 采样坐标放大两倍。
+	vec2 border = texel * 2.0 + 0.5; // 允许超出的边界。
+	vec3 blur = vec3(0.0); // 默认黑色。
+	if (sampleCoord.x <= border.x && sampleCoord.y <= border.y) blur = gfx_bloom_downsample(chainTexture, sampleCoord, texel); // 只在画面范围内采样。
+	return vec4(blur, 0.0); // 交回五号画面要写的内容。
+}
+
+// 泛光第三级：横向轴向高斯，链上各级排成一行。
+vec4 gfx_bloom_blur_horizontal(sampler2D chainTexture, vec2 coord, vec2 texel){
+	vec2 originSize = vec2(0.25); // 每一级占画面宽度的初值。
+	vec2 borderWidth = texel; // 边界用一像素宽。
+	const float intervalWidth = 3.0; // 级与级之间隔三像素。
+	vec2 border = originSize + borderWidth; // 当前级的边界。
+	vec2 axis = vec2(1.0, 0.0); // 横向模糊。
+	vec3 blur = vec3(0.0); // 累积颜色。
+	vec2 local = coord; // 在本级内推进的坐标。
+	if (local.x <= border.x && local.y <= border.y) blur = gfx_curve_to_linear(textureLod(chainTexture, clamp(local, vec2(0.0), originSize), 0.0).rgb); // 第二级直接抄。
+	local.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+	originSize.x *= 0.5; // 下一级宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, local, vec2(2.0, 1.0), 0.0, originSize, axis, GFX_BLOOM_SIZE_LOD3, GFX_BLOOM_STEP_LOD3, texel); // 第三级横向模糊。
+	local.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+	originSize.x *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, local, vec2(4.0, 1.0), 0.0, originSize, axis, GFX_BLOOM_SIZE_LOD4, GFX_BLOOM_STEP_LOD4, texel); // 第四级。
+	local.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+	originSize.x *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, local, vec2(8.0, 1.0), 0.0, originSize, axis, GFX_BLOOM_SIZE_LOD5, GFX_BLOOM_STEP_LOD5, texel); // 第五级。
+	local.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+	originSize.x *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, local, vec2(16.0, 1.0), 0.0, originSize, axis, GFX_BLOOM_SIZE_LOD6, GFX_BLOOM_STEP_LOD6, texel); // 第六级。
+	local.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+	originSize.x *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, local, vec2(32.0, 1.0), 0.0, originSize, axis, GFX_BLOOM_SIZE_LOD7, GFX_BLOOM_STEP_LOD7, texel); // 第七级。
+	local.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+	originSize.x *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, local, vec2(64.0, 1.0), 0.0, originSize, axis, GFX_BLOOM_SIZE_LOD8, GFX_BLOOM_STEP_LOD8, texel); // 第八级。
+	return vec4(gfx_linear_to_curve(blur), 0.0); // 编码后交回五号画面要写的内容。
+}
+
+// 泛光第四级：纵向轴向高斯，采样坐标回拧到各级自己的起点。
+vec4 gfx_bloom_blur_vertical(sampler2D chainTexture, vec2 coord, vec2 texel){
+	vec2 originSize = vec2(0.25); // 每一级占画面宽度的初值。
+	vec2 borderWidth = texel; // 边界用一像素宽。
+	const float intervalWidth = 3.0; // 级与级之间隔三像素。
+	vec2 border = originSize + borderWidth; // 当前级的边界。
+	vec2 axis = vec2(0.0, 1.0); // 纵向模糊。
+	vec3 blur = vec3(0.0); // 累积颜色。
+	vec2 local = coord; // 用于判断落在哪一级的坐标。
+	if (local.x <= border.x && local.y <= border.y) blur = gfx_curve_to_linear(textureLod(chainTexture, clamp(local, vec2(0.0), originSize), 0.0).rgb); // 第二级直接抄。
+	float currInterval = originSize.x + texel.x * intervalWidth; // 当前级宽度加间隔。
+	local.x -= currInterval; // 移到下一级。
+	float sampleOrigin = currInterval; // 当前级在图里的起始横坐标。
+	originSize *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, coord, vec2(1.0, 2.0), sampleOrigin, originSize, axis, GFX_BLOOM_SIZE_LOD3, GFX_BLOOM_STEP_LOD3, texel); // 第三级纵向核。
+	currInterval = originSize.x + texel.x * intervalWidth; // 下一级的间隔。
+	local.x -= currInterval; // 移到下一级。
+	sampleOrigin += currInterval; // 起始横坐标前移。
+	originSize *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, coord, vec2(1.0, 4.0), sampleOrigin, originSize, axis, GFX_BLOOM_SIZE_LOD4, GFX_BLOOM_STEP_LOD4, texel); // 第四级。
+	currInterval = originSize.x + texel.x * intervalWidth; // 下一级的间隔。
+	local.x -= currInterval; // 移到下一级。
+	sampleOrigin += currInterval; // 起始横坐标前移。
+	originSize *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, coord, vec2(1.0, 8.0), sampleOrigin, originSize, axis, GFX_BLOOM_SIZE_LOD5, GFX_BLOOM_STEP_LOD5, texel); // 第五级。
+	currInterval = originSize.x + texel.x * intervalWidth; // 下一级的间隔。
+	local.x -= currInterval; // 移到下一级。
+	sampleOrigin += currInterval; // 起始横坐标前移。
+	originSize *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, coord, vec2(1.0, 16.0), sampleOrigin, originSize, axis, GFX_BLOOM_SIZE_LOD6, GFX_BLOOM_STEP_LOD6, texel); // 第六级。
+	currInterval = originSize.x + texel.x * intervalWidth; // 下一级的间隔。
+	local.x -= currInterval; // 移到下一级。
+	sampleOrigin += currInterval; // 起始横坐标前移。
+	originSize *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, coord, vec2(1.0, 32.0), sampleOrigin, originSize, axis, GFX_BLOOM_SIZE_LOD7, GFX_BLOOM_STEP_LOD7, texel); // 第七级。
+	currInterval = originSize.x + texel.x * intervalWidth; // 下一级的间隔。
+	local.x -= currInterval; // 移到下一级。
+	sampleOrigin += currInterval; // 起始横坐标前移。
+	originSize *= 0.5; // 宽度减半。
+	border = originSize + borderWidth; // 更新边界。
+	if (local.x >= -borderWidth.x && local.x <= border.x && local.y <= border.y) blur = gfx_axial_gaussian_blur(chainTexture, coord, vec2(1.0, 64.0), sampleOrigin, originSize, axis, GFX_BLOOM_SIZE_LOD8, GFX_BLOOM_STEP_LOD8, texel); // 第八级。
+	return vec4(gfx_linear_to_curve(blur), 0.0); // 编码后交回五号画面要写的内容。
+}
+
+// 泛光第五级：把各级三次模糊后的结果按权重叠成一张光晕，雨里权重更高。
+vec4 gfx_bloom_combine(sampler2D chainTexture, vec2 coord, vec2 texel, vec2 screen_size, float rainAlpha){
+	vec2 originSize = vec2(0.25); // 每一级占画面宽度的初值。
+	const float intervalWidth = 3.0; // 级与级之间隔三像素。
+	vec2 tCoord = coord * 2.0; // 采样坐标放大两倍。
+	vec2 border = texel * 8.0 + 1.0; // 允许超出的边界。
+	vec2 local = coord; // 当前级坐标。
+	vec2 sampleOrigin = vec2(0.0); // 当前级在图里的起始横坐标。
+	vec3 bloom = vec3(0.0); // 累积光晕。
+	if (tCoord.x <= border.x && tCoord.y <= border.y){ // 只在画面范围内叠加。
+		bloom += gfx_curve_to_linear(gfx_bloom_bicubic(chainTexture, local * 0.5, screen_size).rgb) * 1.0; // 第二级直接取。
+		sampleOrigin.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+		originSize *= 0.5; // 宽度减半。
+		bloom += gfx_curve_to_linear(gfx_bloom_bicubic(chainTexture, local * 0.25 - sampleOrigin, screen_size).rgb) * mix(0.83333333, 1.0, rainAlpha); // 第三级，雨里权重更高。
+		sampleOrigin.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+		originSize *= 0.5; // 宽度减半。
+		bloom += gfx_curve_to_linear(gfx_bloom_bicubic(chainTexture, local * 0.125 - sampleOrigin, screen_size).rgb) * mix(0.69444444, 1.0, rainAlpha); // 第四级。
+		sampleOrigin.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+		originSize *= 0.5; // 宽度减半。
+		bloom += gfx_curve_to_linear(gfx_bloom_bicubic(chainTexture, local * 0.0625 - sampleOrigin, screen_size).rgb) * mix(0.57870370, 1.0, rainAlpha); // 第五级。
+		sampleOrigin.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+		originSize *= 0.5; // 宽度减半。
+		bloom += gfx_curve_to_linear(gfx_bloom_bicubic(chainTexture, local * 0.03125 - sampleOrigin, screen_size).rgb) * mix(0.48225309, 1.0, rainAlpha); // 第六级。
+		sampleOrigin.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+		originSize *= 0.5; // 宽度减半。
+		bloom += gfx_curve_to_linear(gfx_bloom_bicubic(chainTexture, local * 0.015625 - sampleOrigin, screen_size).rgb) * mix(0.40187757, 1.0, rainAlpha); // 第七级。
+		sampleOrigin.x -= originSize.x + texel.x * intervalWidth; // 移到下一级。
+		originSize *= 0.5; // 宽度减半。
+		bloom += gfx_curve_to_linear(gfx_bloom_bicubic(chainTexture, local * 0.0078125 - sampleOrigin, screen_size).rgb) * mix(0.33489798, 1.0, rainAlpha); // 第八级。
+	}
+	bloom *= mix(0.2774, 1.2 / 7.0, rainAlpha); // 雨里整体提亮，原程序保留的常数。
+	return vec4(gfx_linear_to_curve(bloom), 0.0); // 编码后交回五号画面要写的内容。
 }
 #endif
