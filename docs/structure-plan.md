@@ -134,6 +134,7 @@ shaders/
 - 已完成：`gfx/antialias.glsl` 增加当前帧与历史取样、邻域方差、历史裁剪与时间重投影；`effects/clarity/taa.glsl` 只保留相机速度、选项换算与重投影入口。
 - 已完成：新增 `gfx/cloud_volume.glsl`，体积云的密度、光照、沿视线步进、闪电与云影迁入通用库；`effects/cloud/volumetric.glsl` 只保留天气换算、附加层编排与空气透视合成。
 - 已完成：新增 `gfx/fog_volume.glsl`，体积雾的密度、光照吸收、步进、阴影、云影、闪电、暴风与群系迁入通用库；`effects/fog/volumetric.glsl` 只保留选项换算与一次调用，雾照明用 `GFX_FOG_LPV_STEP` 可选钩子接入。
-- 后续可选：迁移屏幕空间反射的主循环；它还要处理天空回退、体素反射与反射雾，需先设计显式参数接口。
+- 已完成：`gfx/reflection.glsl` 增加屏幕空间追踪的坐标换算、深度取样、远景转换、步进与二分细化；`effects/reflection/screenspace.glsl` 只保留深度图选择与质量选项换算。
+- 后续可选：把屏幕空间反射的天空回退、体素反射与反射雾也迁入通用库；它们仍调用天空、雾与体素效果，需要显式参数接口。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。

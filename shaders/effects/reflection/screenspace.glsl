@@ -49,86 +49,59 @@ vec3 ComputeFakeSkyReflection(vec3 reflectWorldDir){
 // 来源：原程序改自一篇公开论文的可见法线抽样，作者名字与链接见参考包，本函数保持原程序写法。
 vec3 sampleGGXVNDF(vec3 viewVector, float roughness, vec2 noise) { return gfx_sample_ggx_vndf(viewVector, roughness, noise); }
 
-// 取追踪采样点的深度：手部读手部深度，其他读不透明深度，近景是天空时改读远景深度。
-// 为什么单独成函数：追踪循环每前进一步、每细化一步都要重读深度，抽到一处后循环体只剩一条读深度，
-// 既能保证三种读法一致，也让追踪循环少一层预处理嵌套，整段读起来是一段平铺的步进。
+// 远景深度贴图选择：没有远景模组时用近景深度占位，通用库按开关决定是否读取。
+#ifdef DISTANT_HORIZONS
+	#define OMNI_REFLECTION_DH_DEPTH dhDepthTex1 // 远景不含半透明深度。
+#else
+	#define OMNI_REFLECTION_DH_DEPTH depthtex1 // 占位，不会被读取。
+#endif
+
+// 取追踪采样点的深度：把深度图选择与手部/远景开关交给通用库。
 float TraceSampleDepth(vec2 coord, bool isHand){
+	#if defined DISTANT_HORIZONS && OMNI_DH_SSR // 近景是天空且开启远景反射时改读远景深度。
+		const bool dhSsr = true; // 启用远景反射。
+	#else
+		const bool dhSsr = false; // 远景按天空处理。
+	#endif
 	#if MC_VERSION >= 11605 // 一点一六点五以后手部有单独深度。
-		if (isHand) return textureLod(depthtex2, coord, 0.0).x; // 手部读不含玩家的深度。
+		const bool handSupported = true; // 支持手部深度。
+	#else
+		const bool handSupported = false; // 没有手部深度。
 	#endif
-	float depth = textureLod(depthtex1, coord, 0.0).x; // 其他像素读普通不透明深度。
-	#if defined DISTANT_HORIZONS && OMNI_DH_SSR // 近景是天空且开启远景反射时改读远景深度；关闭时远景按天空处理，反射只打到近景几何。
-		if (depth == 1.0) depth = ScreenDepth_From_DHScreenDepth(textureLod(dhDepthTex1, coord, 0.0).x); // 换成同一距离在近景投影下的深度。
+	#ifdef DISTANT_HORIZONS
+		const bool hasDh = true; // 有远景深度。
+		mat4 dhInverse = dhProjectionInverse; // 远景逆投影。
+	#else
+		const bool hasDh = false; // 没有远景深度。
+		mat4 dhInverse = gbufferProjectionInverse; // 占位。
 	#endif
-	return depth; // 返回该坐标的深度。
+	return gfx_reflection_sample_depth(coord, isHand, handSupported, depthtex1, depthtex2, OMNI_REFLECTION_DH_DEPTH,
+		hasDh, dhSsr, dhInverse, gbufferProjectionInverse); // 一次调用完成深度选择。
 }
 
-// 屏幕空间追踪：从起点沿反射方向在屏幕里逐步前进，撞到比射线更近的几何就命中。
-// 输入是射线起点与方向、视线余弦、抖动噪声、最小步长与是否手部；就地推进 `screenPos`，返回是否命中。
-// 为什么命中后要二分细化：粗步长会跨过薄几何，细化几次把交点收窄到表面附近，反射边界才不抖。
-// 为什么经过 `screenPos.z` 与深度的相对差判定：只看深度大小会把掠射面判成命中，用相对差更稳。
+// 屏幕空间追踪：步进与二分细化在通用库，这里只传深度图、投影与质量选项。
 bool ScreenSpaceTracer(vec3 viewRayOri, vec3 viewRayDir, float NdotV, float noise, float minLength, bool isHand, inout vec3 screenPos){
-	const float rSteps = 1.0 / OMNI_RAYTRACE_QUALITY; // 步数的倒数，用作归一化步长。
-
-	float viewRayLength = (-near - viewRayOri.z) / viewRayDir.z + step(viewRayDir.z, 0.0) * 1e20; // 射线到近裁剪面的长度，背向时给一个极远值。
-	vec3 rayDir = normalize(ScreenPos_From_ViewPos_Raw(viewRayOri + viewRayDir * viewRayLength) - screenPos); // 屏幕坐标下的射线方向，用不去抖动的投影。
-
-	float minStepLength = minLength * rSteps; // 最小步长按质量缩放。
-
-	float stepLength = mix(minStepLength, rSteps, NdotV); // 正对视线时步长更大，掠射时步长更小更稳。
-	float zScaling = abs(1.0 / rayDir.z); // 深度方向的缩放，把深度差换算成屏幕距离。
-
-	bool hit = false; // 命中标记，初值未命中。
-
-	#ifdef DISTANT_HORIZONS // 有远景时步进上限是远景最远距离，没有远景时是近景最远处。
-		float maxDepth = ScreenDepth_From_LinearDepth(LinearDepth_From_ScreenDepth_DH(1.0)); // 远景最远距离对应的近景深度，作为有效深度与步进上限。
+	#ifdef DISTANT_HORIZONS
+		const bool hasDh = true; // 有远景深度。
+		mat4 dhInverse = dhProjectionInverse; // 远景逆投影。
+		#if OMNI_DH_SSR
+			const bool dhSsr = true; // 启用远景反射。
+		#else
+			const bool dhSsr = false; // 远景按天空处理。
+		#endif
 	#else
-		float maxDepth = 1.0; // 没有远景时近景最远处为一。
+		const bool hasDh = false; // 没有远景深度。
+		const bool dhSsr = false; // 没有远景反射。
+		mat4 dhInverse = gbufferProjectionInverse; // 占位。
 	#endif
-
-	screenPos += rayDir * stepLength * noise; // 起点按噪声抖动，减少规则条纹。
-	float depth = TraceSampleDepth(screenPos.xy, false); // 读该点深度，起始点不按手部处理。
-
-	for(int i = 0; i < OMNI_RAYTRACE_QUALITY + 3; i++){ // 最多走质量加三次，多出的几次用于边界收尾。
-
-		if (saturate(screenPos.xy) != screenPos.xy) break; // 出了屏幕就停止，屏幕外没有可靠深度。
-
-		if (screenPos.z >= maxDepth){ // 射线到达最远处。
-			hit = depth >= maxDepth; // 该处也是尽头才算命中。
-			break; // 结束步进。
-		}else if (screenPos.z < 0.7 && !isHand){ // 射线跑到相机很近的地方，后面没有可靠深度。
-			break; // 结束步进。
-		}
-
-		if (depth < screenPos.z){ // 几何深度比射线更近，说明可能撞上几何。
-
-			vec3 refineDir = rayDir * stepLength * 0.5; // 细化步长，从半步开始逐次减半。
-
-			for (int j = 0; j < OMNI_RAYTRACE_REFINEMENT_STEPS; j++, refineDir *= 0.5) { // 二分细化交点。
-
-				screenPos += refineDir * (step(screenPos.z, depth) * 2.0 - 1.0); // 越过就回退半步，没越过就前进半步。
-				depth = TraceSampleDepth(screenPos.xy, isHand); // 重读该点深度，手部读手部深度。
-			}
-
-			if (depth > screenPos.z) continue; // 细化后几何又跑到后面，这一步不算命中。
-
-			float stepDist = LinearDepth_From_ScreenDepth(screenPos.z); // 射线点的米制距离。
-			float sampleDist = LinearDepth_From_ScreenDepth(depth); // 几何点的米制距离。
-
-			float distDiff = abs(sampleDist - stepDist) / stepDist; // 两点的相对深度差。
-
-			if (distDiff < OMNI_RAYTRACE_ZDIFF_THRESHOLD && screenPos.z > 0.0 && screenPos.z < maxDepth){ // 差足够小且深度在有效范围内才算命中。
-				hit = true;
-				break;
-			}
-		}
-
-		stepLength = clamp(abs(depth - screenPos.z) * zScaling, minStepLength, rSteps); // 按深度差自适应下一步长度，落在最小与最大之间。
-		screenPos += rayDir * stepLength; // 前进一步。
-		depth = TraceSampleDepth(screenPos.xy, false); // 读新位置的深度，步进点不按手部处理。
-	}
-
-	return hit; // 返回是否命中。
+	#if MC_VERSION >= 11605
+		const bool handSupported = true; // 支持手部深度。
+	#else
+		const bool handSupported = false; // 没有手部深度。
+	#endif
+	return gfx_screen_space_trace(viewRayOri, viewRayDir, NdotV, noise, minLength, isHand, screenPos,
+		depthtex1, depthtex2, OMNI_REFLECTION_DH_DEPTH, gbufferProjection, gbufferProjectionInverse, dhInverse, near,
+		handSupported, hasDh, dhSsr, int(OMNI_RAYTRACE_QUALITY), int(OMNI_RAYTRACE_REFINEMENT_STEPS), OMNI_RAYTRACE_ZDIFF_THRESHOLD); // 一次调用完成追踪。
 }
 
 #if defined OMNI_NETHER
