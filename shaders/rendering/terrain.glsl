@@ -31,7 +31,6 @@ uniform sampler2D gaux2; // 雨点第二张动画贴图。
 uniform sampler2D gaux3; // 雨点第三张动画贴图。
 uniform ivec2 atlasSize; // 方块图集尺寸。
 uniform int renderStage; // 当前原版绘制阶段，用来区分实体方块与透明方块。
-uniform float rainStrength; // 降雨强度，雨点函数读取它。
 // 视差函数照 iterationT 原样读取调用方声明的 `viewPos` 与地形 `textureResolution`，而且会被
 // `antialiasing` 间接引入（它要用 `MATID_*`），所以片元必须在引入任何效果文件之前先声明这两个插值量。
 #ifdef OMNI_FRAGMENT

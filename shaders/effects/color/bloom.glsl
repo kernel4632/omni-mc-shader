@@ -42,6 +42,8 @@
 #define OMNI_UNDERWATER_FOG_BLOOM 0.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 3.0 4.0 6.0 10.0 15.0 20.0]
 // 颜色曲线、亮度与共享数学，以及做深度换算的坐标函数都要先引入。
 #include "/common/uniforms.glsl"
+// 降雨强度由绑定层提供，泛光强度按雨势提升。
+#include "/bind/weather.glsl"
 #include "/common/math.glsl"
 #include "/effects/clarity/antialiasing.glsl"
 #include "/common/coordinates.glsl"
@@ -144,7 +146,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 		#endif
 		// 雾内泛光：照 Eclipse `dimensions/composite11.fsh:314` 把光晕往雾里按雾的浓淡混，让雾变柔、盖住噪点。
 		// 近似：Eclipse 另用一条平均光晕，这里复用同一条光晕；引导取体积雾吸收，来自 Omni 的体积雾透过率。
-		float fogBloomAmount = saturate(fogGuide * OMNI_FOG_BLOOM * 0.75 * (1.0 + rainStrength)) * fogBloomEdge; // 吸收乘倍率与雨天放大，再乘边缘掩码。
+		float fogBloomAmount = saturate(fogGuide * OMNI_FOG_BLOOM * 0.75 * (1.0 + bind_weather().rain)) * fogBloomEdge; // 吸收乘倍率与雨天放大，再乘边缘掩码。
 		bloomAmount = max(bloomAmount, fogBloomAmount); // 并入光晕混入占比。
 	#endif
 	// 水下雾内泛光：Omni 水下不跑体积雾，改用水体的距离吸收当引导，所以不放在上面的体积雾与景深开关里。
@@ -152,7 +154,7 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 	#ifdef OMNI_UNDERWATER_FOG
 		if (isEyeInWater == 1){ // 眼睛在水里时才处理。
 			float waterFogGuide = 1.0 - exp2(-linearDepth * 0.06 * OMNI_WATER_FOG_DENSITY); // 与合成五号的水体吸收同一式子，水越远越浑、引导越大。
-			float waterFogBloom = saturate(waterFogGuide * OMNI_UNDERWATER_FOG_BLOOM * 0.75 * (1.0 + rainStrength)) * fogBloomEdge; // 同一套公式，倍率换成水下专用的 Eclipse `UNDERWATER_BLOOMY_FOG`。
+			float waterFogBloom = saturate(waterFogGuide * OMNI_UNDERWATER_FOG_BLOOM * 0.75 * (1.0 + bind_weather().rain)) * fogBloomEdge; // 同一套公式，倍率换成水下专用的 Eclipse `UNDERWATER_BLOOMY_FOG`。
 			bloomAmount = max(bloomAmount, waterFogBloom); // 并入光晕混入占比。
 		}
 	#endif

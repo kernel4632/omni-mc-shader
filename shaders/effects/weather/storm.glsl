@@ -11,9 +11,9 @@
   `density += OmniStormFog(worldPos, snow) * clamp(snow + sand, 0.0, 1.0) * OMNI_STORM_DENSITY;`
   `fogColor *= mix(vec3(1.0), OmniStormColor(snow, sand), clamp(snow + sand, 0.0, 1.0));`
 调用前提（由 `effects/fog/fog.glsl` 所在的合成片元程序先声明这些全局量）：
-  `rainStrength` 由 `rendering/composite_shared.glsl` 与 `effects/clarity/post_shared.glsl` 声明；
+  `rainStrength`、`eyeSnowySmooth`、`eyeNoPrecipitationSmooth` 由 `common/uniforms.glsl` 声明，本文件经 `bind/weather.glsl` 读取；
   `thunderStrength` 由本文件声明（Iris 内建量，Omni 别处没有用到）；
-  `eyeSnowySmooth`、`eyeNoPrecipitationSmooth`、`frameTimeCounter` 与噪声贴图 `noisetex` 由 `common/uniforms.glsl` 声明。
+  `frameTimeCounter` 与噪声贴图 `noisetex` 由 `common/uniforms.glsl` 声明。
 关键设计原因与取舍：
   一、起风量换用等价输入。Eclipse 用加载器的 `biome_category`（寒冷、沙漠、台地）判断是否起风，
     本项目没有这个分类输入，改用两份现成的平滑标记：`eyeSnowySmooth` 表示“冷群系正在下雪”，
@@ -45,8 +45,10 @@
 // @option {"label":{"zh_cn":"暴风雾起始高度","en_us":"Storm fog start height"},"description":{"zh_cn":"雪暴雾开始随高度变淡的基准高度，照 Eclipse 的雾起始高度；沙暴不看高度。","en_us":"Base height where snowstorm fog starts thinning with altitude, matching Eclipse; sandstorms ignore height."},"slider":true}
 #define OMNI_STORM_HEIGHT 60.0 // [0.0 10.0 20.0 30.0 40.0 50.0 60.0 70.0 80.0 90.0 100.0 120.0 150.0 200.0]
 
-// 加载器输入：`noisetex`、`frameTimeCounter`、`eyeSnowySmooth`、`eyeNoPrecipitationSmooth` 都在这份声明里。
+// 加载器输入：`noisetex`、`frameTimeCounter` 与天气标记都由声明和绑定层提供。
 #include "/common/uniforms.glsl"
+// 降雨与群系标记由绑定层整理，暴风强度只做乘法。
+#include "/bind/weather.glsl"
 // 共用数学：提供 `clamp`、`exp2`、`floor`、`fract`、`mix`、`texture` 等小工具，重复引入由守卫去重。
 #include "/common/math.glsl"
 // 暴风噪声与颜色、每日天气哈希的纯计算放在通用库。
@@ -59,10 +61,11 @@
 uniform float thunderStrength; // 雷暴强度，零到一，沙暴按它起风。
 
 // --- 暴风强度：由群系标记与天气强度相乘得到 ---
-// 雪暴强度：所在群系下雪（`eyeSnowySmooth`）且正在降水的强度，对应 Eclipse 的 `snowStorm` 自定义输入。
+// 雪暴强度：所在群系下雪且正在降水的强度（标记由绑定层提供），对应 Eclipse 的 `snowStorm` 自定义输入。
 float OmniSnowStorm(){
 	#if OMNI_SNOW_STORM // 开关关闭时恒为零，不参与任何计算。
-		return eyeSnowySmooth * rainStrength; // 下雪群系标记乘降雨强度，两者都已是零到一的平滑值。
+		OmniWeather weather = bind_weather(); // 本帧的天气标记只读一次。
+		return weather.snowy * weather.rain; // 下雪群系标记乘降雨强度，两者都已是零到一的平滑值。
 	#else
 		return 0.0; // 关闭时返回零，函数整体不影响画面。
 	#endif
@@ -71,7 +74,7 @@ float OmniSnowStorm(){
 // 沙暴强度：干旱群系在雷暴时的强度，对应 Eclipse 在 Iris 下的 `sandStorm` 自定义输入。
 float OmniSandStorm(){
 	#if OMNI_SAND_STORM // 开关关闭时恒为零，不参与任何计算。
-		return eyeNoPrecipitationSmooth * thunderStrength; // 干热群系标记乘雷暴强度，两者都已是零到一的平滑值。
+		return bind_weather().noPrecipitation * thunderStrength; // 干热群系标记乘雷暴强度，两者都已是零到一的平滑值。
 	#else
 		return 0.0; // 关闭时返回零，函数整体不影响画面。
 	#endif

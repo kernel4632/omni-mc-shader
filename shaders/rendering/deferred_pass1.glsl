@@ -80,7 +80,6 @@
 		uniform sampler2D gaux1; // 第一张涟漪动画贴图，雨点函数引用。
 		uniform sampler2D gaux2; // 第二张涟漪动画贴图。
 		uniform sampler2D gaux3; // 第三张涟漪动画贴图。
-		uniform float rainStrength; // 降雨强度，雨点函数引用。
 		uniform sampler2D shadowtex0; // 阴影遮挡图，雾文件引用。
 		uniform sampler2D shadowtex1; // 阴影实心图，雾文件引用。
 		uniform sampler2D shadowcolor0; // 阴影颜色图，雾文件引用。

@@ -10,6 +10,10 @@
 #define OMNI_WATER_RAIN_INCLUDED // 置上标记，后续再次引用直接跳过。
 // 雨雾高光与雨点动画的纯公式放在通用库。
 #include "/gfx/water.glsl"
+// 降雨、雪天与干燥群系标记由绑定层整理，涟漪只接收普通数值。
+#include "/bind/weather.glsl"
+// 雨点动画的当前帧由累计秒数换算。
+#include "/bind/time.glsl"
 // --- 雨点涟漪：用三张动画贴图叠出雨滴落点，供水面与地表使用 ---
 // 三层动画贴图越大越散开，用降雨强度与降雪、无降水标记调制，雪天与干燥群系不出现雨点。
 // 为什么用三重噪声：单层噪声太规则，三层不同缩放叠加后落点更自然。
@@ -29,17 +33,18 @@ vec2 GetRainAnimationTex(sampler2D texSampler, vec2 coord, float rp){
 // 末尾再按「雨点涟漪强度」与「雨点涟漪对比」两个选项统一缩放，两个默认都为一、画面不变。
 vec2 GetRainNormal(vec3 pos, float strength, inout float wet){
 	pos.xyz *= 0.5; // 缩放坐标，让落点更大。
+	OmniWeather weather = bind_weather(); // 本帧的降雨与群系标记只读一次。
 	#ifdef OMNI_DISABLE_LOCAL_PRECIPITATION // 强制局部无降水时只看整体降雨。
-		strength *= rainStrength; // 只乘降雨强度。
+		strength *= weather.rain; // 只乘降雨强度。
 	#else // 默认按所在群系的下雪与无降水标记调制。
-		strength *= rainStrength * (1.0 - eyeSnowySmooth) * (1.0 - eyeNoPrecipitationSmooth); // 雪天或干燥群系雨点减弱。
+		strength *= weather.rain * (1.0 - weather.snowy) * (1.0 - weather.noPrecipitation); // 雪天或干燥群系雨点减弱。
 	#endif
 
 	#if OMNI_PUDDLE_MODE == 0 // 模式零：不出雨点，强度直接归零。
 		strength = 0.0; // 后面乘出零向量，等于关闭涟漪。
 	#endif
 
-	float frame = fract(floor(frameTimeCounter * 60.0) / 60.0); // 当前动画帧，按每秒六十帧取整。
+	float frame = fract(floor(bind_time().seconds * 60.0) / 60.0); // 当前动画帧，按每秒六十帧取整。
 	vec2 coord = vec2(pos.x, fract(pos.z / 60.0) - frame); // 动画沿一个轴滑动。
 
 	float wet2 = wet * wet; // 湿润度平方。

@@ -20,7 +20,7 @@
   `ivec2 texelCoord`、`vec2 screenCoordInput` 由延迟与合成主程序声明；
   `in vec3 colorShadowlight`、`in vec3 colorSkylight` 等光色输入由合成主程序声明；
   物理海浪的 `physics_*` 输入由外部海洋物理扩展提供，缺失时对应函数不被调用，不影响基础水面；
-  雨点涟漪的 `rainStrength` 与 `gaux1`、`gaux2`、`gaux3` 三张动画贴图由几何阶段主程序声明。
+  雨点涟漪的降雨强度由 `bind/weather.glsl` 从 `rainStrength` 转换，`gaux1`、`gaux2`、`gaux3` 三张动画贴图由几何阶段主程序声明。
 关键设计原因与取舍：
   波浪高度与法线都从 `GetWaves` 一处取，顶点抬升和片元法线不会各写一套而对不上；
   折射采样附带防泄漏：偏移后的位置若落在水面前方就退回原位，避免前景颜色漏进水里；

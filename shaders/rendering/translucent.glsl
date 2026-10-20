@@ -35,7 +35,6 @@
 	uniform sampler2D gaux1; // 雨点第一张动画贴图。
 	uniform sampler2D gaux2; // 雨点第二张动画贴图。
 	uniform sampler2D gaux3; // 雨点第三张动画贴图。
-	uniform float rainStrength; // 降雨强度，雨点函数读取它。
 	// 天气文件里的雨色与风偏移读取阳光、天光与露天标记，按调用前提给空全局；本程序不调用它们。
 	vec3 colorShadowlight; // 阳光颜色。
 	vec3 colorSkylight; // 天光颜色。

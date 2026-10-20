@@ -65,7 +65,6 @@
 	uniform sampler2D gaux1; // 雨点第一张动画贴图，本程序不调用雨点函数。
 	uniform sampler2D gaux2; // 雨点第二张动画贴图。
 	uniform sampler2D gaux3; // 雨点第三张动画贴图。
-	uniform float rainStrength; // 降雨强度。
 	// 波浪、涟漪与水波法线。
 	#include "/effects/water/water.glsl"
 	// 远景噪声与剔除。

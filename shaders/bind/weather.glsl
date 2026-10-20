@@ -12,6 +12,7 @@
 #include "/common/uniforms.glsl"
 
 struct OmniWeather {
+	float rain; // 当前降雨强度，零到一，不做平滑。
 	float wetness; // 平滑后的降雨湿润度，零到一。
 	float nightVision; // 夜视强度，零到一。
 	float blindness; // 失明强度，零到一。
@@ -29,6 +30,7 @@ struct OmniWeather {
 // 读取本帧的天气与环境输入；只做打包，不改变任何数值。
 OmniWeather bind_weather(){
 	OmniWeather weather; // 待填充的结构体。
+	weather.rain = rainStrength; // 当前降雨强度。
 	weather.wetness = wetness; // 平滑降雨湿润度。
 	weather.nightVision = nightVision; // 夜视强度。
 	weather.blindness = blindness; // 失明强度。

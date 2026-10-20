@@ -45,6 +45,7 @@ uniform mat4 shadowProjection; // 阴影相机投影。
 uniform mat4 shadowModelView; // 世界到阴影相机视空间。
 uniform mat4 shadowModelViewInverse; // 阴影相机视空间回到世界。
 uniform float wetness; // 湿润度，按半衰期平滑的降雨强度。
+uniform float rainStrength; // 当前降雨强度，零到一；平滑湿润度见上一行。
 uniform ivec2 eyeBrightnessSmooth; // 平滑眼部亮度，横轴方块光、纵轴天空光，零到两百四十。
 uniform int isEyeInWater; // 眼睛所在介质：零空气、一水、二岩浆、三细雪。
 uniform float nightVision; // 夜视强度。

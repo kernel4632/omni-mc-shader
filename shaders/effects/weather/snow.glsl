@@ -9,7 +9,7 @@
   `omniSnowOverlay(albedo, normalTex, specularTex.r, worldPos, worldNormal, worldFlatNormal, blockLight.y);`
 调用前提（由绘制主体先声明这些全局量）：
   世界位置与两个世界空间法线由调用方算好传入；露天程度用几何阶段已有的天光 `blockLight.y`；
-  下雪状态读 `eyeSnowySmooth`（在 `common/uniforms.glsl` 声明）与 `rainStrength`（由绘制主体声明）；
+  下雪状态由 `bind/weather.glsl` 从 `eyeSnowySmooth` 与 `rainStrength` 转成普通结构体字段；
   三张贴图在开启本效果时由 `rendering/pipeline.properties` 绑定到 `texture/snowA.png`、`snowN.png`、`snowR.png`。
 关键设计原因与取舍：
   一、一次改写底色、法线与平滑度。Eclipse 的同一段会叠底色（`snowA`）、扰除法线（`snowN`）、改粗糙度（`snowR`）；
@@ -22,6 +22,8 @@
 */
 #ifndef OMNI_SNOW_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_SNOW_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 下雪与降雨标记由绑定层整理，积雪只判断普通数值。
+#include "/bind/weather.glsl"
 
 // @effect {"label":{"zh_cn":"积雪覆盖","en_us":"Snow cover"}}
 // @option {"label":{"zh_cn":"积雪覆盖","en_us":"Snow cover"},"description":{"zh_cn":"下雪时给露天朝上的方块表面叠一层雪；默认关闭，关闭时画面与现在完全一致。","en_us":"Overlays snow on up-facing, sky-exposed block surfaces while it snows; off by default so the default look is unchanged."}}
@@ -50,11 +52,11 @@ uniform sampler2D snowTexR;
 // 为什么用贴图坐标乘零点一：Eclipse 用 `worldPos.xz*0.1` 让雪纹在世界里平铺，不随方块贴图重复。
 // 为什么先算 `upnormal`：把法线朝上的程度转成零到一，面越朝上越接近零，侧面接近一。
 // 为什么还要乘露天程度：洞穴与屋檐下的面即使朝上也不该积雪，露天的面才盖雪。
-// 调用前提：本函数只在片元阶段调用；调用方需已声明 `rainStrength`。
+// 调用前提：本函数只在片元阶段调用；降雨与下雪标记由绑定层提供。
 void omniSnowOverlay(inout vec3 albedo, inout vec3 normal, inout float smoothness, vec3 worldPos, vec3 normalW, vec3 flatNormalW, float skyVisibility){
-	// 下雪状态：所在群系下雪（`eyeSnowySmooth`）且此刻确实在下（`rainStrength` 大于零）才积雪。
+	// 下雪状态：所在群系下雪且此刻确实在下才积雪。
 	// 这对应 Eclipse 的默认模式一“下雪时”（`shaders.properties:790`）。
-	float snowAmount = eyeSnowySmooth * step(0.01, rainStrength);
+	float snowAmount = bind_weather().snowy * step(0.01, bind_weather().rain);
 	if (snowAmount < 0.01) return; // 没下雪时直接返回，省掉后面的采样与混合。
 
 	float effectStrength = smoothstep(0.85, 1.0, skyVisibility); // 天光接近满值的露天面才积雪。

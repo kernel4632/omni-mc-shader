@@ -99,7 +99,6 @@
 	uniform sampler2D gaux1; // 第一张涟漪动画贴图，雨点涟漪函数引用它。
 	uniform sampler2D gaux2; // 第二张涟漪动画贴图。
 	uniform sampler2D gaux3; // 第三张涟漪动画贴图。
-	uniform float rainStrength; // 降雨强度，雨点涟漪函数引用它。
 	#include "/common/coordinates.glsl"
 	#include "/common/noise.glsl"
 	// 体积雾选项供丢弃判断，并带入水面、阴影、天空、云与光照依赖。

@@ -40,7 +40,6 @@
 	uniform sampler2D gaux1; // 第一张涟漪动画贴图，雨点涟漪函数引用。
 	uniform sampler2D gaux2; // 第二张涟漪动画贴图。
 	uniform sampler2D gaux3; // 第三张涟漪动画贴图。
-	uniform float rainStrength; // 降雨强度，雨点涟漪函数引用。
 	#ifdef OMNI_NETHER // 下界泛光按群系调整，需要这几个群系平滑量。
 		uniform float BiomeNetherWastesSmooth; // 下界荒地群系平滑量。
 		uniform float BiomeSoulSandValleySmooth; // 灵魂沙峡谷群系平滑量。
