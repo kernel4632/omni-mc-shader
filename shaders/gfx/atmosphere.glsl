@@ -61,4 +61,99 @@ float gfx_combined_texture_coord(float x, float originalSize, float combinedSize
 	return 0.5 / combinedSize + x * (originalSize / combinedSize - 1.0 / combinedSize); // 按子图尺寸缩放。
 }
 
+// --- 星场：把视线方向化成星点亮度与星色，算法照 Eclipse `lib/stars.glsl` ---
+// 这些函数只做纯计算，星点密度、亮度与彩色开关由调用方决定。
+
+// 星场散列：把一个方向格打散成零到一的随机数。
+float gfx_star_hash13(vec3 p3){
+	p3 = fract(p3 * 0.1031); // 先乘一个小数再取小数部分，打散整数格的规律。
+	p3 += dot(p3, p3.zyx + 31.32); // 三个分量互相掺入，避免相邻格出现相近的值。
+	return fract((p3.x + p3.y) * p3.z); // 合并三个分量，得到零到一。
+}
+
+// 噪声星场：把散列值低于阈值的格子压成零，剩下的当作星点原始亮度。
+float gfx_star_noisy_field(vec3 samplePos, float threshold){
+	float starVal = gfx_star_hash13(samplePos); // 先取这个格的随机值。
+	starVal = clamp(starVal / (1.0 - threshold) - threshold / (1.0 - threshold), 0.0, 1.0); // 阈值以下压到零，剩下归一化到零到一。
+	return starVal; // 返回星点亮度。
+}
+
+// 稳定星场：只在整数格上取值，再用双线性插值平滑，避免相机移动时星点闪烁。
+// 已知代价（Eclipse 原注释承认）：双线性插值会把单个星点拉成十字，这里按合同保留原写法。
+float gfx_star_stable_field(vec3 samplePos, float threshold){
+	float fractX = fract(samplePos.x); // 当前点在 x 方向的格内偏移。
+	float fractY = fract(samplePos.y); // 当前点在 y 方向的格内偏移。
+	vec3 floorSample = floor(samplePos.xyz); // 所在整数格。
+	float v1 = gfx_star_noisy_field(floorSample, threshold); // 左下格的星点亮度。
+	float v2 = gfx_star_noisy_field(floorSample + vec3(0.0, 1.0, 0.0), threshold); // 左上格。
+	float v3 = gfx_star_noisy_field(floorSample + vec3(1.0, 0.0, 0.0), threshold); // 右下格。
+	float v4 = gfx_star_noisy_field(floorSample + vec3(1.0, 1.0, 0.0), threshold); // 右上格。
+	float starVal = v1 * (1.0 - fractX) * (1.0 - fractY) // 四角按格内偏移加权求和。
+				  + v2 * (1.0 - fractX) * fractY // 左上权重。
+				  + v3 * fractX * (1.0 - fractY) // 右下权重。
+				  + v4 * fractX * fractY; // 右上权重。
+	return starVal; // 平滑后的星点亮度。
+}
+
+// 彩色星场散列：只用二维坐标，正弦放大再取小数。
+float gfx_star_hash12(vec2 co){
+	return fract(sin(2.0 * GFX_PI * fract(dot(co.xy, vec2(12.9898, 78.233)))) * 43758.5453); // 最常见的二维散列写法。
+}
+
+// 星温：把零到一的散列映射成色温，三次方让多数星星偏冷白、少数偏暖。
+float gfx_star_temperature(float hash){
+	return hash * hash * hash * (19000.0 - 5500.0) + 5500.0; // 色温范围五千五到一万九开尔文。
+}
+
+// 星面：把方向投到立方体的一面按格撒星，输出该方向的亮度与颜色。
+float gfx_star_plane(vec3 dir, out vec3 starColor){
+	float scale = 1.0 / 600.0; // 格子大小，越小星点越密。
+	vec2 basePos = dir.xy * (0.4 / scale) / max(1e-3, abs(dir.z)); // 投到这个面上并按深度缩放。
+	starColor = vec3(0.0); // 这个面的星色初值。
+	vec2 pos = floor(basePos); // 所在整数格。
+	vec2 center = pos + vec2(0.5); // 格中心，用来算到星心的距离。
+	float d = distance(basePos, center); // 当前采样点到星心的距离。
+	basePos = floor(basePos); // 锁定到格，保证相机移动时星点不飘。
+	float color = 0.0; // 这个面的星点亮度。
+	if (gfx_star_hash12(basePos.xy * scale) > 0.997){ // 只有极少数格子有星。
+		float radius = 0.4; // 星点半径，越大越胖。
+		float brightness = exp(-(d * d) / (2.0 * radius * radius)); // 高斯衰减，星心最亮。
+		float r = gfx_star_hash12(basePos.xy * 0.5); // 这颗星的随机亮度因子。
+		color = r * (0.3 * sin(1.0 * (r * 5.0) + r) + 0.7) * brightness; // 亮度带一点随机起伏。
+		starColor = 2.0 * gfx_Blackbody(gfx_star_temperature(gfx_star_hash12(center))); // 按格中心的散列取色温上色。
+	}
+	return color * pow(abs(dir.z), 2); // 按该面朝向加权，面边界处平滑过渡。
+}
+
+// 星盒：把方向分别当立方体三轴投影，叠出完整六面星场。
+float gfx_star_box(vec3 dir, out vec3 starColor){
+	vec3 starColor1 = vec3(0.0); // 第一组投影的星色。
+	vec3 starColor2 = vec3(0.0); // 第二组投影的星色。
+	vec3 starColor3 = vec3(0.0); // 第三组投影的星色。
+	float color = gfx_star_plane(dir.xyz, starColor1) + gfx_star_plane(dir.yzx, starColor2) + gfx_star_plane(dir.zxy, starColor3); // 三组投影叠亮度。
+	starColor = starColor1 + starColor2 + starColor3; // 三组投影叠星色。
+	return sqrt(color); // 开方压一下亮度分布，与 Eclipse 一致。
+}
+
+// 白色稳定星场：返回星场亮度；星色固定为白，由调用方直接使用。
+float gfx_stars_stable(vec3 viewPos, float brightness, float amount){
+	float s = max(1.0 - gfx_star_stable_field(viewPos * 300.0, 0.99), 0.0); // 采样密度三百、阈值零点九九与 Eclipse 相同。
+	return brightness * exp(s * -20.0 * (1.0 / amount)); // 系数与 Eclipse 相同。
+}
+
+// 彩色星盒星场：返回亮度并由 `starColor` 回填星色，调用方按需要相乘。
+float gfx_stars_colored(vec3 viewPos, float brightness, float amount, out vec3 starColor){
+	starColor = vec3(1.0); // 星色由星盒回填，这里先给初值。
+	float s = max(1.0 - gfx_star_box(viewPos, starColor), 0.0); // 彩色星盒星场。
+	return 75.0 * brightness * exp(s * -20.0 * (1.0 / amount)); // 系数与 Eclipse 相同。
+}
+
+// 把视线方向绕太阳轴旋转对齐天球：罗德里格旋转公式，太阳方向由调用方传入。
+vec3 gfx_align_to_sun_axis(vec3 worldDir, vec3 sunVector){
+	float cosine = dot(sunVector, vec3(0, 0, 1)); // 太阳轴与参考轴夹角余弦。
+	vec3 axis = cross(sunVector, vec3(0, 0, 1)); // 旋转轴。
+	float cosecantSquared = 1.0 / dot(axis, axis); // 旋转公式里的比例因子。
+	return cosine * worldDir + cross(axis, worldDir) + (cosecantSquared - cosecantSquared * cosine) * dot(axis, worldDir) * axis; // 按罗德里格公式对齐星场。
+}
+
 #endif
