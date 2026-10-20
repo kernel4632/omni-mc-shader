@@ -151,10 +151,11 @@ shaders/
 - 已完成：`gfx/shadow.glsl` 增加阴影图视线段的遮挡统计，`effects/fog/landscattering.glsl` 只保留投影与受光距离缩短。
 - 已完成：`gfx/post.glsl` 增加自动曝光分块统计，`gfx_exposure_params` 打包场景画面、屏幕尺寸、像素大小、粗估亮度、测光方式、亮度计权与三个维度标记；`effects/color/color.glsl` 只保留粗估亮度、选项换算与一次调用，非注释行从 144 降到 107。
 - 已完成：`gfx/fog_volume.glsl` 增加水下焦散与水下体积雾步进，阴影图、波法线图、相机位置、阴影矩阵、光色与选项全部显式传入；`effects/fog/underwater_fog.glsl` 只保留能力换算与一次调用，非注释行从 71 降到 25。
+- 已完成：`gfx/post.glsl` 增加相机动态模糊取样，`effects/lens/motion_blur.glsl` 只保留材质深度选择、屏幕位移与一次调用，非注释行从 56 降到 42。
 - 后续可选：把 `effects/reflection/voxel.glsl` 的体素步进也迁入通用库；它依赖光传播体积的网格映射、方块编号与颜色图，需要先把网格原点和边长作为参数传入。
 - 后续可选：`effects/` 里仍有几处成段的步进循环，按风险从低到高依次是海洋物理波与若干采样循环；它们各自带一组游戏选项或多张输入图，迁移前要先定参数接口，不能只搬循环。
 - 后续可选：`rendering/deferred_pass0.glsl`、`deferred_pass1.glsl`、`deferred_pass2.glsl` 仍有相似的全局声明块，但每支程序的声明子集与顺序不同，抽模板前要先核对每个阶段的采样器类型，暂不动。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
-- 当前固定口径（0.1.71）：`gfx/` 3026 行、`effects/` 7197 行、`rendering/` 3142 行；绑定与入口合计仍为 1991 行。复现命令：
+- 当前固定口径（0.1.72）：`gfx/` 3047 行、`effects/` 7183 行、`rendering/` 3142 行；绑定与入口合计仍为 1991 行。复现命令：
   `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','gfx','effects','world0','world1','world-1')})"`
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。

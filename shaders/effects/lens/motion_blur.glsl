@@ -10,6 +10,8 @@
 */
 #ifndef OMNI_MOTION_BLUR_INCLUDED
 #define OMNI_MOTION_BLUR_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 模糊取样循环放在通用后期库，本文件只判断哪些像素参与并传入位移。
+#include "/gfx/post.glsl"
 // --- 相机动态模糊 ---
 // 用上一帧相机把当前表面重投影回屏幕，沿两帧之间的屏幕位移取几个历史位置做平均，模拟快门时间内相机的移动。
 // 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理相机移动造成的整屏位移。
@@ -47,28 +49,13 @@ vec3 MotionBlur(){
 	if (blurPixel){ // 先用宏决定是否参与，再走一条完整的 `if`，避免判断括号被预处理指令切开。
 		velocity = MotionBlurCameraVelocity(texCoord, depth); // 算屏幕位移。
 	}
-	vec3 color = vec3(0.0); // 输出颜色。
-	if (length(velocity) < 5e-7){ // 位移极小说明相机没动，直接用历史颜色。
-		color = CurveToLinear(texelFetch(colortex7, texelCoord, 0).rgb); // 读七号画面当前颜色。
-	}else{ // 相机动了，沿位移方向平均。
-		velocity *= OMNI_MOTION_BLUR_SHUTTER_ANGLE / 720.0; // 快门角换算成拖影长度。
-		velocity = clamp(velocity, -0.1, 0.1); // 限制单帧拖影上限。
-		float steps = OMNI_MOTION_BLUR_QUALITY; // 一侧的采样步数。
-		float samples = 0.0; // 有效样本计数。
-		float dither = 0.0; // 采样抖动。
-		#if OMNI_MOTION_BLUR_DITHER // 开启抖动时给采样位置加噪声。
-			dither = InterleavedGradientNoise(gl_FragCoord.xy); // 交错梯度噪声。
-		#endif
-		for (float i = -steps; i <= steps; i++){ // 沿快门方向对称取样。
-			vec2 coord = texCoord.st + velocity / (steps + 1.0) * (i + dither); // 这个样本的坐标。
-			if (saturate(coord) == coord){ // 坐标在画面内才采。
-				color += CurveToLinear(textureLod(colortex7, coord, 0.0).rgb); // 累加历史颜色。
-				samples++; // 计数。
-			}
-		}
-		color.rgb /= samples; // 按有效样本数平均。
-	}
-	return color; // 返回模糊后的线性颜色。
+	#if OMNI_MOTION_BLUR_DITHER // 开启抖动时把开关交给通用库。
+		bool dither = true; // 采样位置加交错梯度噪声。
+	#else
+		bool dither = false; // 不加抖动。
+	#endif
+	return gfx_motion_blur(colortex7, texCoord, texelCoord, gl_FragCoord.xy, velocity,
+		OMNI_MOTION_BLUR_SHUTTER_ANGLE, int(OMNI_MOTION_BLUR_QUALITY), dither); // 取样循环在通用库里。
 }
 
 #endif // 文件守卫结束。

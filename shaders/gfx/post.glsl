@@ -471,6 +471,31 @@ vec4 gfx_bloom_combine(sampler2D chainTexture, vec2 coord, vec2 texel, vec2 scre
 	return vec4(gfx_linear_to_curve(bloom), 0.0); // 编码后交回五号画面要写的内容。
 }
 
+// --- 相机动态模糊：沿两帧之间的屏幕位移，在历史画面上取一串样本求平均 ---
+// 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理相机移动造成的整屏位移。
+// 画面、坐标、位移、快门角、质量与抖动开关都由调用方传入，库不读取任何引擎状态。
+vec3 gfx_motion_blur(sampler2D color_texture, vec2 coord, ivec2 texel, vec2 pixel, vec2 velocity,
+		float shutter_angle, int quality, bool dither){
+	if (length(velocity) < 5e-7){ // 位移极小说明相机没动，直接取当前画面。
+		return gfx_curve_to_linear(texelFetch(color_texture, texel, 0).rgb); // 读当前像素颜色。
+	}
+	float shutter = shutter_angle / 720.0; // 快门角换算成拖影长度。
+	velocity = clamp(velocity * shutter, vec2(-0.1), vec2(0.1)); // 限制单帧拖影上限。
+	float steps = float(quality); // 一侧的采样步数。
+	float samples = 0.0; // 有效样本计数。
+	float offset = 0.0; // 采样抖动。
+	if (dither) offset = gfx_InterleavedGradientNoise(pixel); // 交错梯度噪声打散条纹。
+	vec3 color = vec3(0.0); // 输出颜色。
+	for (float i = -steps; i <= steps; i++){ // 沿快门方向对称取样。
+		vec2 sample_coord = coord + velocity / (steps + 1.0) * (i + offset); // 这个样本的坐标。
+		if (gfx_saturate(sample_coord) == sample_coord){ // 坐标在画面内才采。
+			color += gfx_curve_to_linear(textureLod(color_texture, sample_coord, 0.0).rgb); // 累加历史颜色。
+			samples++; // 计数。
+		}
+	}
+	return color / samples; // 按有效样本数平均。
+}
+
 // --- 自动曝光分块统计：把画面按多级纹理的块大小切开，逐块取亮度后加权平均 ---
 // 为什么分块而不是逐像素：逐像素太贵；分块加计权既便宜又能得到接近整屏的平均亮度。
 // 为什么用加权而不是直接平均：人眼更在意画面中心与偏离整体亮度的区域，权重让测光更接近相机行为。
