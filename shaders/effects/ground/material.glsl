@@ -133,10 +133,6 @@
 float CurveBlockLightSky(float blockLight){
 	return gfx_curve_block_light_sky(blockLight); // 转发到通用库。
 }
-// 方块光曲线的形状：先按距离平方衰减，再给高等级补一份提升，得到火把那样集中的光。
-float CurveBlockLightTorch(float blockLight){
-	return gfx_curve_block_light_torch(blockLight); // 转发到通用库。
-}
 // --- 表面数据结构：读回画面后一次装完光照要用的量 ---
 // 每次采样的表面材质参数：粗糙、金属、菲涅尔零点、自发光、散射与反射强度。
 struct Material{

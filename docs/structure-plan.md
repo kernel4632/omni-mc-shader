@@ -143,6 +143,7 @@ shaders/
 - 已完成：`gfx/shadow.glsl` 增加手持光的屏幕空间阴影步进，`effects/lighting/held_light.glsl` 只选步数、深度图与抖动。
 - 已完成：新增 `rendering/post_vertex.glsl` 与 `rendering/post_fragment_deps.glsl`，十个后期程序共用整屏顶点与片元依赖；`rendering/` 非注释行从 3287 降到 3188。
 - 已完成：新增 `rendering/deferred_cloud_shadow_blur.glsl`，延迟四号与五号共用云影横纵模糊阶段，`rendering/` 非注释行从 3188 降到 3142。
+- 已完成：`gfx/surface.glsl` 增加方块光与纹理自发光合成，`effects/lighting/blocklight.glsl` 只保留选项与掩码求和；无调用者的 `CurveBlockLightTorch` 转发已删除。
 - 后续可选：把 `effects/reflection/voxel.glsl` 的体素步进也迁入通用库；它依赖光传播体积的网格映射、方块编号与颜色图，需要先把网格原点和边长作为参数传入。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。

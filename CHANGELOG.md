@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.63
+
+结构重构：方块光与纹理自发光合成迁入通用库。
+
+- `gfx/surface.glsl` 增加 `gfx_block_light` 与 `gfx_texture_emissive`，方块光等级曲线、遮蔽抬升、光源压档、三种自发光模式与维度倍率集中到一处。
+- `effects/lighting/blocklight.glsl` 只保留选项、材质掩码求和与一次调用，硬编码与资源包两套发光仍按原顺序累加。
+- 删掉已无调用者的 `CurveBlockLightTorch` 转发；`gfx_curve_block_light_torch` 继续由通用库内部使用。
+- 选项名、默认值与配置格式未变；光源染色判断点与原来一致。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
 ## 0.1.62
 
 结构重构：延迟四号与延迟五号合并为同一份云影模糊阶段。
