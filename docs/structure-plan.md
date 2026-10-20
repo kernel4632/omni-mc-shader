@@ -154,10 +154,11 @@ shaders/
 - 已完成：`gfx/post.glsl` 增加相机动态模糊取样，`effects/lens/motion_blur.glsl` 只保留材质深度选择、屏幕位移与一次调用，非注释行从 56 降到 42。
 - 已完成：`gfx/gi.glsl` 增加地平线遮蔽的多切片搜索，深度图、投影、画面比例、噪声与画质参数全部显式传入；`effects/lighting/gtao.glsl` 只保留噪声选择与参数打包，非注释行从 122 降到 43。
 - 已完成：`gfx/shadow.glsl` 增加可变半影阴影，阴影图、比较采样器、矩阵、分辨率、偏置、噪声与选项全部显式传入；`effects/shadow/shadow.glsl` 只保留噪声选择与一次调用，非注释行从 175 降到 92。
+- 已完成：新增 `gfx/parallax.glsl`，高度采样、平滑与锐利视差、自阴影与高度场法线全部移入通用库；`effects/ground/parallax.glsl` 只保留图集分辨率选择、阶段条件与一次调用，非注释行从 249 降到 70。
 - 后续可选：把 `effects/reflection/voxel.glsl` 的体素步进也迁入通用库；它依赖光传播体积的网格映射、方块编号与颜色图，需要先把网格原点和边长作为参数传入。
 - 后续可选：`effects/` 里仍有几处成段的步进循环，按风险从低到高依次是海洋物理波与若干采样循环；它们各自带一组游戏选项或多张输入图，迁移前要先定参数接口，不能只搬循环。
 - 后续可选：`rendering/deferred_pass0.glsl`、`deferred_pass1.glsl`、`deferred_pass2.glsl` 仍有相似的全局声明块，但每支程序的声明子集与顺序不同，抽模板前要先核对每个阶段的采样器类型，暂不动。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
-- 当前固定口径（0.1.74）：`gfx/` 3247 行、`effects/` 7021 行、`rendering/` 3142 行；绑定与入口合计仍为 1991 行。复现命令：
+- 当前固定口径（0.1.75）：`gfx/` 3459 行、`effects/` 6842 行、`rendering/` 3142 行；绑定与入口合计仍为 1991 行。复现命令：
   `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','gfx','effects','world0','world1','world-1')})"`
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。
