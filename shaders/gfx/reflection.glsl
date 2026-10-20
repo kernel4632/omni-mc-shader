@@ -1,9 +1,10 @@
 /*
-通用图形库反射模块：可见法线采样、屏幕空间追踪、反射主流程与菲涅耳合并。
-调用位置：任何需要反射的程序；本仓库由 `effects/reflection/screenspace.glsl` 转发调用。
+通用图形库反射模块：可见法线采样、屏幕空间追踪、反射主流程、菲涅耳合并与小波滤波。
+调用位置：任何需要反射的程序；本仓库由 `effects/reflection/screenspace.glsl` 与 `effects/reflection/denoise.glsl` 转发调用。
 可复制示例：
     vec3 d = gfx_sample_ggx_vndf(viewVector, roughness, noise); // 生成一条模糊反射方向。
     vec4 r = gfx_specular_reflections(surface, trace, media, noise, depth1, depth2, dhDepth, scene); // 追踪并着色。
+    gfx_reflection_atrous_filter(data, viewPos, viewDir, normal, roughness, 40.0, noise, texCoord, reflectTex, depthTex, normalTex, pixelSize, projectionInverse); // 九点滤波。
 设计原因与取舍：
     主流程不读取 Minecraft uniform：深度图、投影、光色与天空都由参数传入；
     天空兜底、体素回退、命中深度与反射雾这些宿主细节用 `GFX_REFLECTION_*` 钩子注入，默认是中性操作。
