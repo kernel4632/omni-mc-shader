@@ -6,7 +6,8 @@
     调用方先声明 `texelCoord`、`texCoord`、`in` 光色方向、阴影采样器与一号二号输出，再引入本文件；
     随后 `void main(){ RenderDeferredSky(); }` 即写出延迟三号的两个输出。
 调用前提（iterationT 原样保留）：全局量 `texelCoord`、`texCoord`、`worldSunVector`、`worldMoonVector`、
-    `timeNoon`、`timeMidnight` 与输出 `deferredOutput1`、`deferredOutput2` 由绘制主体在引入前给出，本文件不重复声明。
+    `timeNoon`、`timeMidnight` 与输出 `deferredOutput1`、`deferredOutput2` 由绘制主体在引入前给出，本文件不重复声明；
+    相机、时间与天气由 `bind/` 的绑定结构提供。
 设计原因与取舍：
     主天空与反射天空盒原本是两段近逐行复制的代码，`hop-audit-final.md` 记为越界复制；这里抽成 `AccumulateSkyClouds()`，
     仅把两者真正不同的量作为参数传入（相机、方向、噪声、地平线开关），公式与调用顺序逐行保持一致。
@@ -19,6 +20,10 @@
 */
 #ifndef OMNI_SKY_RENDER_INCLUDED // 只引入一次，避免函数重复定义。
 #define OMNI_SKY_RENDER_INCLUDED
+// 相机、时间与天气输入由绑定层整理成普通结构体，本文件只负责合成。
+#include "/bind/camera.glsl"
+#include "/bind/time.glsl"
+#include "/bind/weather.glsl"
 
 // --- 资源包天空底色 ---
 // 读零号画面里原版与资源包画好的天空：天空程序按原版加色混合把各层叠进零号，这里从伽马空间转线性再乘亮度档。
@@ -38,6 +43,7 @@ vec3 omniResourcePackSky(){
 void AccumulateSkyClouds(vec3 dir, vec3 atmosphereCamera, vec3 cloudCamera, vec2 noise, float planarNoise,
 						 bool horizon, bool dirBelowHorizon, vec2 cloudAltitude, vec3 windDirection, bool applyClouds, bool addAtmosphere,
 						 inout vec3 color, out vec3 transmittance, out float cloudTransmittance, out float eclipseDarkening){
+	OmniCamera cameraData = bind_camera(); // 相机位置、画面尺寸与矩阵只读一次。
 	transmittance = vec3(1.0); // 大气透过率初值，由下面的查表回填。
 	bool ray_r_mu_intersects_ground; // 视线是否打到地面，由大气查表回填。
 	vec3 atmosphere = GetSkyRadiance(atmosphereCamera, dir, worldSunVector, worldMoonVector, horizon, transmittance, ray_r_mu_intersects_ground); // 查预计算大气的天空辐射。
@@ -46,12 +52,12 @@ void AccumulateSkyClouds(vec3 dir, vec3 atmosphereCamera, vec3 cloudCamera, vec2
 
 	cloudTransmittance = 1.0; // 云留下的透过率初值。
 	#ifdef OMNI_VOLUMETRIC_CLOUDS // 打开体积云才步进。
-		if (applyClouds && (cameraPosition.y > cloudAltitude.x || !ray_r_mu_intersects_ground) && (cameraPosition.y < cloudAltitude.y || dirBelowHorizon)) // 相机在云层附近或朝上看才需要步进。
+		if (applyClouds && (cameraData.position.y > cloudAltitude.x || !ray_r_mu_intersects_ground) && (cameraData.position.y < cloudAltitude.y || dirBelowHorizon)) // 相机在云层附近或朝上看才需要步进。
 			NubisCumulus(color, dir, cloudAltitude, windDirection, cloudCamera, noise, cloudTransmittance); // 体积云。
 	#endif
 
 	#if OMNI_PLANAR_CLOUDS // 打开平面云才算。
-		if (applyClouds && cameraPosition.y < OMNI_PLANAR_ALTITUDE && !ray_r_mu_intersects_ground) // 相机在云平面以下才看得到。
+		if (applyClouds && cameraData.position.y < OMNI_PLANAR_ALTITUDE && !ray_r_mu_intersects_ground) // 相机在云平面以下才看得到。
 			PlanarClouds(color, dir, atmosphereCamera, planarNoise, cloudTransmittance); // 平面云。
 	#endif
 
@@ -63,6 +69,9 @@ void AccumulateSkyClouds(vec3 dir, vec3 atmosphereCamera, vec3 cloudCamera, vec2
 // --- 延迟三号片元主流程 ---
 // 画天空像素（写一号）与反射天空盒图（写二号），并顺带在右上角写云影贴图；整段与 iterationT 的 `deferred3` 逐行一致。
 void RenderDeferredSky(){
+	OmniCamera cameraData = bind_camera(); // 相机位置、画面尺寸与矩阵只读一次。
+	OmniTime time = bind_time(); // 云漂动时间只读一次。
+	OmniWeather weather = bind_weather(); // 降雨与水下标记只读一次。
 	float depth = texelFetch(depthtex1, texelCoord, 0).x; // 不含半透明的不透明深度。
 	vec3 viewPos = ViewPos_From_ScreenPos(texCoord, depth); // 还原视空间位置。
 
@@ -73,7 +82,7 @@ void RenderDeferredSky(){
 		}
 	#endif
 
-	vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos; // 视空间转相机相对世界空间。
+	vec3 worldPos = mat3(cameraData.viewInverse) * viewPos; // 视空间转相机相对世界空间。
 
 	vec3 viewDir = normalize(viewPos); // 视线方向。
 	vec3 worldDir = normalize(worldPos); // 世界方向。
@@ -81,26 +90,26 @@ void RenderDeferredSky(){
 	#ifdef DISTANT_HORIZONS
 		float farDist = max(dhFarPlane, 1024.0); // 有远景时用远景远裁剪面。
 	#else
-		float farDist = max(far * 1.2, 1024.0); // 否则用近景远裁剪面留一点余量。
+		float farDist = max(cameraData.farPlane * 1.2, 1024.0); // 否则用近景远裁剪面留一点余量。
 	#endif
 	float cloudShadow = 1.0; // 全局云影初值，本程序不使用。
 
 	#ifdef OMNI_ATMO_HORIZON // 打开地平线时相机高度有下限。
-		vec3 camera = vec3(0.0, max(cameraPosition.y, ATMO_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 打开地平线时相机高度有下限。
+		vec3 camera = vec3(0.0, max(cameraData.position.y, ATMO_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 打开地平线时相机高度有下限。
 	#else
-		vec3 camera = vec3(0.0, max(cameraPosition.y, 63.0) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 否则至少按海平面高度算。
+		vec3 camera = vec3(0.0, max(cameraData.position.y, 63.0) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 否则至少按海平面高度算。
 	#endif
 
-	vec3 cameraSkyBox = vec3(0.0, max(cameraPosition.y, ATMO_SKYBOX_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 天空盒投影用的相机高度。
+	vec3 cameraSkyBox = vec3(0.0, max(cameraData.position.y, ATMO_SKYBOX_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0); // 天空盒投影用的相机高度。
 
 	vec2 noise_0 = vec2(bayer64(gl_FragCoord.xy), 0.5); // 天空盒像素用的固定拜尔抖动。
 	vec2 noise_1 = BlueNoiseTemporal().xy; // 主画面用的逐帧蓝噪声。
 
-	vec2 cloudAltitude = vec2(mix(OMNI_CLOUD_CLEAR_ALTITUDE, OMNI_CLOUD_RAIN_ALTITUDE, wetness)); // 晴雨两档云底高度。
-	cloudAltitude.y += mix(OMNI_CLOUD_CLEAR_THICKNESS, OMNI_CLOUD_RAIN_THICKNESS, wetness); // 加上层厚得到云顶高度。
+	vec2 cloudAltitude = vec2(mix(OMNI_CLOUD_CLEAR_ALTITUDE, OMNI_CLOUD_RAIN_ALTITUDE, weather.wetness)); // 晴雨两档云底高度。
+	cloudAltitude.y += mix(OMNI_CLOUD_CLEAR_THICKNESS, OMNI_CLOUD_RAIN_THICKNESS, weather.wetness); // 加上层厚得到云顶高度。
 
-	float wind = 0.0005 * (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_CLOUD_TIME_OFFSET); // 云漂动的时间量。
-	vec3 windDirection = vec3(1.0, wetness * 0.1 - 0.05, -0.4) * wind; // 云漂动的方向与位移。
+	float wind = 0.0005 * (time.seconds * OMNI_CLOUD_SPEED + 10.0 * OMNI_CLOUD_TIME_OFFSET); // 云漂动的时间量。
+	vec3 windDirection = vec3(1.0, weather.wetness * 0.1 - 0.05, -0.4) * wind; // 云漂动的方向与位移。
 
 	deferredOutput1 = texelFetch(colortex1, texelCoord, 0); // 默认原样保留场景颜色。
 
@@ -143,12 +152,12 @@ void RenderDeferredSky(){
 
 		#ifdef OMNI_MOON_TEXTURE
 			celestial = mix(celestial * cloudTransmittance + sunDisc + moonDisc, // 用贴图月亮时水下不画月亮。
-							(celestial + sunDisc + moonDisc * float(isEyeInWater != 0)) * cloudTransmittance,
-							mix(1.0, OMNI_RAIN_SHADOW, wetness));
+							(celestial + sunDisc + moonDisc * float(weather.eyeInWater != 0)) * cloudTransmittance,
+							mix(1.0, OMNI_RAIN_SHADOW, weather.wetness));
 		#else
 			celestial = mix(celestial * cloudTransmittance + sunDisc + moonDisc, // 不用贴图月亮时水里也画月亮。
 							(celestial + sunDisc + moonDisc) * cloudTransmittance,
-							mix(1.0, OMNI_RAIN_SHADOW, wetness));
+							mix(1.0, OMNI_RAIN_SHADOW, weather.wetness));
 		#endif
 
 		finalComposite += celestial * transmittance * 200.0; // 天体带大气透过率叠到天空上。
@@ -156,7 +165,7 @@ void RenderDeferredSky(){
 
 		finalComposite = omniAtmosphere(finalComposite, worldDir); // Omni 额外功能：叠加极光与彩虹，默认关闭。
 		#ifdef OMNI_CAVE_MODE
-			finalComposite = mix(finalComposite, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00007) * 0.05), saturate(eyeBrightnessZeroSmooth)); // 完全看不到天空时换成极暗配色。
+			finalComposite = mix(finalComposite, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00007) * 0.05), saturate(weather.eyeBrightnessZero)); // 完全看不到天空时换成极暗配色。
 		#endif
 
 		finalComposite /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
@@ -168,9 +177,9 @@ void RenderDeferredSky(){
 	// ------------------------------ 天空盒图 ------------------------------
 	deferredOutput2 = texelFetch(colortex2, texelCoord, 0); // 默认原样保留二号画面。
 
-	float tileSize = min(OMNI_SKY_IMAGE_RESOLUTION, floor(min(screenSize.x / 3.3, screenSize.y * 0.45))); // 天空盒图边长。
+	float tileSize = min(OMNI_SKY_IMAGE_RESOLUTION, floor(min(cameraData.screenSize.x / 3.3, cameraData.screenSize.y * 0.45))); // 天空盒图边长。
 	vec2 skyImageTexel = gl_FragCoord.xy; // 当前像素坐标。
-	skyImageTexel.y -= ceil(screenSize.y * 0.5 + 1.0); // 抬到上半屏。
+	skyImageTexel.y -= ceil(cameraData.screenSize.y * 0.5 + 1.0); // 抬到上半屏。
 	vec2 boundary = tileSize * vec2(3.0, 2.0); // 三乘二张面的总范围。
 
 	if (clamp(skyImageTexel, vec2(0.0), boundary) == skyImageTexel){ // 只有落在天空盒图范围内才重画。
@@ -189,7 +198,7 @@ void RenderDeferredSky(){
 		AccumulateSkyClouds(viewVector, cameraSkyBox, camera, noise_0, noise_0.x, horizon, worldDir.y < 0.0, cloudAltitude, windDirection, true, true, skyImage, transmittance, cloudTransmittance, eclipseDarkening); // 与主天空同一流程，只是相机与噪声不同；天空盒始终保持全分辨率，也始终叠程序化大气。
 
 		#ifdef OMNI_CAVE_MODE
-			skyImage = mix(skyImage, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00005) * 0.07), eyeBrightnessZeroSmooth); // 洞穴模式下的极暗天空盒。
+			skyImage = mix(skyImage, vec3(max(OMNI_NOLIGHT_BRIGHTNESS, 0.00005) * 0.07), weather.eyeBrightnessZero); // 洞穴模式下的极暗天空盒。
 		#endif
 
 		skyImage /= MAIN_OUTPUT_FACTOR; // 换成管线亮度单位。
@@ -198,8 +207,8 @@ void RenderDeferredSky(){
 	}
 
 	#ifdef OMNI_CLOUD_SHADOW
-		vec2 shadowTexel = screenSize - gl_FragCoord.xy; // 云影贴在画面右上角，坐标要翻转。
-		float shadowTexSize = floor(min(screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)); // 方贴图边长。
+		vec2 shadowTexel = cameraData.screenSize - gl_FragCoord.xy; // 云影贴在画面右上角，坐标要翻转。
+		float shadowTexSize = floor(min(cameraData.screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)); // 方贴图边长。
 		shadowTexel /= shadowTexSize; // 换成零到一的贴图坐标。
 
 		if (saturate(shadowTexel) == shadowTexel){ // 只有落在方贴图范围内才算云影。
