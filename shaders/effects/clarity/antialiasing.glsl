@@ -85,11 +85,11 @@ vec4 WriteTaaHistory(){
 		// 先算出这个像素要不要用历史：三条宏分支各把要排除的材质标记为假，其余像素保持为真。
 		bool reproject = true; // 默认走重投影。
 		#if OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都排除。
-			if (materialIDs == MATID_HAND || materialIDs == MATID_ENTITIES_PLAYER) reproject = false; // 这两类像素不用历史。
+			if (bind_is_hand_id(materialIDs) || bind_is_player_id(materialIDs)) reproject = false; // 这两类像素不用历史。
 		#elif OMNI_DISABLE_HAND_TAA // 只排除手。
-			if (materialIDs == MATID_HAND) reproject = false; // 手不用历史。
+			if (bind_is_hand_id(materialIDs)) reproject = false; // 手不用历史。
 		#elif defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 只排除玩家。
-			if (materialIDs == MATID_ENTITIES_PLAYER) reproject = false; // 玩家不用历史。
+			if (bind_is_player_id(materialIDs)) reproject = false; // 玩家不用历史。
 		#endif
 		if (!reproject){ // 被排除的像素直接用当前帧颜色。
 			taa = texelFetch(colortex1, texelCoord, 0); // 当前帧颜色。

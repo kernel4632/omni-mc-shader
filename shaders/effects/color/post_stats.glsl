@@ -45,7 +45,7 @@ vec4 UpdateStatPixels(vec4 data2){
 			float f = exp2(-frameTime * 10.0 / OMNI_DOF_DEPTH_SMOOTH_HALFLIFE); // 对焦深度的平滑因子。
 			float centerMaterialID = floor(texelFetch(colortex5, centerTexelCoord, 0).b * 255.0); // 中心的材质编号。
 			#if OMNI_DOF_FOCUS_IGNORE_HAND_PARTICLE // 中心是手或粒子时不动焦点。
-				if (heldItemId != 358.0 && centerMaterialID == MATID_HAND || centerMaterialID == MATID_PARTICLE) f = 1.0; // 直接用上一帧深度。
+				if (heldItemId != 358.0 && bind_is_hand_id(centerMaterialID) || centerMaterialID == MATID_PARTICLE) f = 1.0; // 直接用上一帧深度。
 			#endif
 			data2.a = saturate(mix(centerDepth, prevCenterDepth, f) * 8.0 - 7.0); // 编码后写进透明通道。
 		}
