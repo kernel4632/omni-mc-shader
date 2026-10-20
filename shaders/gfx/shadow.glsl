@@ -153,4 +153,26 @@ float gfx_sun_screen_shadow(vec3 view_pos, vec3 view_dir, vec3 normal, vec3 shad
 	return shadow; // 返回可见度。
 }
 
+// 阴影图里一段视线的遮挡距离：沿线段在阴影图采样，统计被实心几何挡住的样本比例。
+// `shadow_start` 与 `shadow_end` 是线段两端已经投到阴影图的坐标，`bias` 是边缘压缩强度。
+// 为什么把线段长度也传进来：遮挡距离要按样本比例折算成米，调用方已经知道这段有多长。
+float gfx_shadow_segment_occlusion(vec3 shadow_start, vec3 shadow_end, sampler2D shadow_texture, int steps,
+		float noise, float bias, float segment_length){
+	float r_steps = 1.0 / float(steps); // 采样数倒数。
+	vec3 increment = (shadow_end - shadow_start) * r_steps; // 阴影图里的步进。
+	vec3 position = increment * noise + shadow_start; // 起点加抖动。
+	float occluded = 0.0; // 被挡住的样本数。
+
+	for (int i = 0; i < steps; i++, position += increment){ // 沿视线段采样。
+		vec3 shadow_pos = position; // 当前采样坐标。
+		shadow_pos.xy = gfx_distort_shadow_pos(shadow_pos.xy, bias); // 补边缘压缩。
+		if (gfx_saturate(shadow_pos.xy) == shadow_pos.xy && shadow_pos.z < 1.0){ // 落在阴影图内。
+			float solid_depth = textureLod(shadow_texture, shadow_pos.xy, 0.0).x; // 读遮挡深度。
+			occluded += step(solid_depth, shadow_pos.z); // 遮挡物在射线前面才算被挡。
+		}
+	}
+
+	return occluded * (segment_length * r_steps); // 按样本比例折算成被遮挡的米数。
+}
+
 #endif

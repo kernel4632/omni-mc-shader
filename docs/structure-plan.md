@@ -148,8 +148,9 @@ shaders/
 - 已完成：`gfx/shadow.glsl` 增加阳光的屏幕空间阴影步进，`effects/shadow/screen_shadow.glsl` 只保留视野、吸收量与噪声；非注释行从 61 降到 30。
 - 已完成：`gfx/reflection.glsl` 增加九点小波滤波，`effects/reflection/denoise.glsl` 只传三张输入图与像素大小；非注释行从 48 降到 10。
 - 已完成：`gfx/water.glsl` 增加波法线方块读取与水下焦散，`effects/shadow/water_caustics.glsl` 只传七号画面、折射率与两个选项；非注释行从 39 降到 14。
+- 已完成：`gfx/shadow.glsl` 增加阴影图视线段的遮挡统计，`effects/fog/landscattering.glsl` 只保留投影与受光距离缩短。
 - 后续可选：把 `effects/reflection/voxel.glsl` 的体素步进也迁入通用库；它依赖光传播体积的网格映射、方块编号与颜色图，需要先把网格原点和边长作为参数传入。
-- 后续可选：`effects/` 里仍有几处成段的步进循环，按风险从低到高依次是水面下雾的阴影步进、地面大气散射的阴影采样、自动曝光的分块统计与海洋物理波；它们各自带一组游戏选项或多张输入图，迁移前要先定参数接口，不能只搬循环。
+- 后续可选：`effects/` 里仍有几处成段的步进循环，按风险从低到高依次是水面下雾的阴影步进、自动曝光的分块统计与海洋物理波；它们各自带一组游戏选项或多张输入图，迁移前要先定参数接口，不能只搬循环。
 - 后续可选：`rendering/deferred_pass0.glsl`、`deferred_pass1.glsl`、`deferred_pass2.glsl` 仍有相似的全局声明块，但每支程序的声明子集与顺序不同，抽模板前要先核对每个阶段的采样器类型，暂不动。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。

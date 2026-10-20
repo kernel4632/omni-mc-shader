@@ -63,8 +63,6 @@ void LandAtmosphericScattering(inout vec3 color, in float dist, vec3 startPos, v
 		float shadowDist = dist; // 受光的距离，默认等于总距离。
 
 		#if OMNI_LANDSCATTERING_SHADOW // 打开阴影遮蔽时沿视线段查阴影图，按被挡的比例缩短受光距离。
-			float rSteps = 1.0 / OMNI_LANDSCATTERING_SHADOW_QUALITY; // 采样数倒数。
-
 			vec3 shadowStart = ShadowScreenPos_From_WorldPos(startPos + gbufferModelViewInverse[3].xyz); // 起点投到阴影图。
 			vec3 shadowEnd = ShadowScreenPos_From_WorldPos(endPos + gbufferModelViewInverse[3].xyz); // 终点投到阴影图。
 
@@ -74,22 +72,10 @@ void LandAtmosphericScattering(inout vec3 color, in float dist, vec3 startPos, v
 				float noise = bayer64(gl_FragCoord.xy);
 			#endif
 
-			vec3 shadowIncrement = (shadowEnd - shadowStart) * rSteps; // 阴影图里的步进。
-			vec3 shadowRayPosition = shadowIncrement * noise + shadowStart; // 起点加抖动。
+			float occluded = gfx_shadow_segment_occlusion(shadowStart, shadowEnd, shadowtex0, int(OMNI_LANDSCATTERING_SHADOW_QUALITY),
+				noise, OMNI_SHADOW_MAP_BIAS, length(endPos - startPos)); // 一次调用统计被挡住的米数。
 
-			float shadowLength = 0.0; // 被遮挡的段数。
-
-			for (int i = 0; i < OMNI_LANDSCATTERING_SHADOW_QUALITY; i++, shadowRayPosition += shadowIncrement){ // 沿视线段采样。
-				vec3 shadowPos = shadowRayPosition; // 当前采样坐标。
-				shadowPos.xy = DistortShadowScreenPos(shadowPos.xy); // 补边缘压缩。
-
-				if (saturate(shadowPos.xy) == shadowPos.xy && shadowPos.z < 1.0){ // 落在阴影图内。
-					float solidDepth = textureLod(shadowtex0, shadowPos.xy, 0).x; // 读遮挡深度。
-					shadowLength += step(solidDepth, shadowPos.z); // 遮挡物在射线前面才算被挡。
-				}
-			}
-
-			shadowDist = max(shadowDist - shadowLength * length((endPos - startPos) * rSteps), 0.0); // 按被挡比例缩短受光距离。
+			shadowDist = max(shadowDist - occluded, 0.0); // 按被挡比例缩短受光距离。
 		#endif
 
 		dist *= OMNI_LANDSCATTERING_DISTANCE; // 总距离乘距离倍率。
