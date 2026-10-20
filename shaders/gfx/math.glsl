@@ -282,4 +282,10 @@ vec3 gfx_omniRgbToHsv(vec3 c){
 	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x); // 交回色相、饱和度、明度。
 }
 
+// 环带径向轮廓：四次方乘线性衰减，中心亮、边缘暗。
+float gfx_pcurve(float x){
+	float x2 = x * x; // 平方。
+	return 12.207 * x2 * x2 * (1.0 - x); // 四次方乘线性衰减。
+}
+
 #endif

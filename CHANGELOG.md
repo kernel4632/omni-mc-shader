@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.22
+
+通用库第十八批：末地环带轮廓。
+
+- `shaders/gfx/math.glsl` 增加环带径向曲线。
+- `effects/world/end_disc.glsl` 只保留同名转发，吸积盘步进与星空合成未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.21
 
 通用库第十七批：季节上色。

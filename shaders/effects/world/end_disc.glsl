@@ -15,6 +15,8 @@
 */
 #ifndef OMNI_END_DISC_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_END_DISC_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 环带径向轮廓放在通用库，这里只传归一化半径。
+#include "/gfx/math.glsl"
 
 // 来源：原程序在此处标注了出处网址 `www.shadertoy.com/view/lstSRS`，按合同保留来源注释与写法。
 
@@ -80,8 +82,7 @@ float CalculateCloudFBM(vec3 position, vec3 shift){
 }
 
 float pcurve(float x){
-	float x2 = x * x; // 平方。
-	return 12.207 * x2 * x2 * (1.0 - x); // 四次方乘线性衰减，得到环带的径向轮廓。
+	return gfx_pcurve(x); // 转发到通用库。
 }
 
 // --- 吸积盘（天空版）：沿视线在黑洞附近步进，累加盘的颜色，再叠星空 ---
