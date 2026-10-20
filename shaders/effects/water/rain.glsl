@@ -8,39 +8,20 @@
 */
 #ifndef OMNI_WATER_RAIN_INCLUDED
 #define OMNI_WATER_RAIN_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 雨雾高光与雨点动画的纯公式放在通用库。
+#include "/gfx/water.glsl"
 // --- 雨点涟漪：用三张动画贴图叠出雨滴落点，供水面与地表使用 ---
 // 三层动画贴图越大越散开，用降雨强度与降雪、无降水标记调制，雪天与干燥群系不出现雨点。
 // 为什么用三重噪声：单层噪声太规则，三层不同缩放叠加后落点更自然。
-float Get3DNoise(vec3 pos){
-	vec3 p = floor(pos); // 整数格。
-	vec3 f = pos - p; // 格内小数。
-	f = curve(f); // 平滑小数，插值更自然。
-
-	vec2 uv = 17.0 * p.z + p.xy + f.xy; // 任意分配一个三维到二维的坐标。
-	vec2 rg = textureLod(noisetex, (uv + 0.5) / 64.0, 0.0).zw; // 读噪声贴图后两个通道。
-
-	return mix(rg.x, rg.y, f.z); // 按高度插值。
-}
 
 // 雨雾高光调制：三层噪声叠加后归一，让雨中的高光随时间轻微变化。
 float GetModulatedRainSpecular(vec3 pos){
-	pos.y *= 0.2; // 压缩竖直方向，雨高光在竖直上变化更慢。
-
-	float n = Get3DNoise(pos); // 第一层。
-		  n += Get3DNoise(pos * 0.5) * 2.0; // 第二层，缩小坐标并放大权重。
-		  n += Get3DNoise(pos * 0.25) * 4.0; // 第三层，更细更高权重。
-
-	n /= 7.0; // 归一化到大致零到一。
-
-	return saturate(n) * 0.7 + 0.3; // 夹紧后留一个下限，避免完全无高光。
+	return gfx_rain_specular(pos, noisetex); // 三层噪声公式在通用库。
 }
 
 // 读一张雨点动画贴图并转成带符号的法线，指数控制边缘锐度。
 vec2 GetRainAnimationTex(sampler2D texSampler, vec2 coord, float rp){
-	vec2 n = textureLod(texSampler, coord, 0.0).rg; // 读红绿两通道。
-	n =  n * vec2(2.0, -2.0) + vec2(-1.0, 1.0); // 零到一转成负一到一，并翻转纵轴。
-	n = pow(abs(n), vec2(rp)) * sign(n); // 按指数压形状，符号保留。
-	return n; // 返回法线横纵分量。
+	return gfx_rain_animation_normal(texSampler, coord, rp); // 转发到通用库。
 }
 
 // 雨点法线：按动画相位在贴图上采样，三层按降雨强弱叠加。
