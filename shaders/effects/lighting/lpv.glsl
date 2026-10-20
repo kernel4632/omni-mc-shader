@@ -67,6 +67,8 @@
 #include "/common/uniforms.glsl"
 // 共用纯计算：夹取、法线工具。
 #include "/common/math.glsl"
+// 颜色转换与饱和度矩阵放在通用库。
+#include "/gfx/color.glsl"
 
 // --- 体积常量：边长、半边、编码范围 ---
 const uint omniLpvSide = uint(exp2(float(OMNI_LPV_SIZE))); // 每边单元数，六十四、一百二十八或二百五十六。
@@ -80,12 +82,10 @@ const uint omniLpvBlockTableSize = 8192u;
 // --- 颜色编码：HSV 与线性化，照 Eclipse `lib/hsv.glsl` 与 `util.glsl` ---
 // `omniRgbToHsv` 已移到 `common/math.glsl`（自发光矿石/纹饰也要用），本文件在上面已引入它。
 vec3 omniHsvToRgb(vec3 c){ // 色相、饱和度、明度转回颜色。
-	const vec4 K = vec4(3.0, 2.0, 1.0, 9.0) / 3.0; // 六个扇区的折叠常数。
-	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www); // 把色相折成三角波。
-	return c.z * mix(K.xxx, saturate(p - K.xxx), c.y); // 明度与饱和度还原到通道。
+	return gfx_hsv_to_rgb(c); // 转换公式在通用库。
 }
 vec3 omniSrgbToLinear(vec3 s){ // sRGB 到线性，照 Eclipse 的近似多项式，供方块光表复原颜色。
-	return s * (s * (s * 0.305306011 + 0.682171111) + 0.012522878);
+	return gfx_srgb_to_linear(s); // 多项式在通用库。
 }
 float omniLpvCurve(float v){ return v * v; } // 体积光的曲线，照 Eclipse `lpv_render.glsl:5` 的非蒙版分支。
 
@@ -243,14 +243,7 @@ layout(rg32ui) uniform uimage1D omniLpvBlocks; // 方块光表，`setup` 阶段�
 
 // --- 饱和度矩阵：让光色按玩家设置变鲜艳或变灰，照 Eclipse `setup.csh:39` ---
 mat4 omniLpvSaturationMatrix(float saturation){
-	const vec3 luminance = vec3(0.3086, 0.6094, 0.0820); // 亮度权重。
-	vec3 lumSat = luminance * (1.0 - saturation); // 去饱和时保留的灰分量。
-	vec2 satZero = vec2(saturation, 0.0); // 原色分量。
-	return mat4(
-		vec4(lumSat.r + satZero.xyy, 0.0),
-		vec4(lumSat.g + satZero.yxy, 0.0),
-		vec4(lumSat.b + satZero.yyx, 0.0),
-		vec4(0.0, 0.0, 0.0, 1.0));
+	return gfx_saturation_matrix(saturation); // 矩阵在通用库。
 }
 
 // --- 蜡烛颜色：照 Eclipse `dimensions/setup.csh:12-33` 的 `LightColor_Candles_*` ---

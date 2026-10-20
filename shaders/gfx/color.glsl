@@ -108,4 +108,28 @@ vec3 gfx_advanced_color(vec3 color, float lumaGamma, float whiteClip, float satu
 	return color; // 返回调好的颜色。
 }
 
+// 色相、饱和度、明度转回颜色，与数学模块的 `gfx_omniRgbToHsv` 互逆。
+vec3 gfx_hsv_to_rgb(vec3 c){
+	const vec4 K = vec4(3.0, 2.0, 1.0, 9.0) / 3.0; // 六个扇区的折叠常数。
+	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www); // 把色相折成三角波。
+	return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y); // 明度与饱和度还原到通道。
+}
+
+// sRGB 到线性：照 Eclipse 的近似多项式，供方块光表复原颜色。
+vec3 gfx_srgb_to_linear(vec3 s){
+	return s * (s * (s * 0.305306011 + 0.682171111) + 0.012522878); // 三次多项式近似。
+}
+
+// 饱和度矩阵：把颜色朝灰阶收或向外推，一为原色。
+mat4 gfx_saturation_matrix(float saturation){
+	const vec3 luminance = vec3(0.3086, 0.6094, 0.0820); // 饱和度用的亮度权重。
+	vec3 lumSat = luminance * (1.0 - saturation); // 去饱和时混入的灰分量。
+	vec2 satZero = vec2(saturation, 0.0); // 原色保留量。
+	return mat4(
+		vec4(lumSat.r + satZero.xyy, 0.0),
+		vec4(lumSat.g + satZero.yxy, 0.0),
+		vec4(lumSat.b + satZero.yyx, 0.0),
+		vec4(0.0, 0.0, 0.0, 1.0)); // 三个颜色通道加一行齐次坐标。
+}
+
 #endif

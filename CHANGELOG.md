@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.42
+
+通用库第三十八批：光传播体积颜色工具。
+
+- `shaders/gfx/color.glsl` 增加 HSV 转颜色、sRGB 转线性与饱和度矩阵。
+- `effects/lighting/lpv.glsl` 只保留同名转发，方块光表、传播与取样未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.41
 
 通用库第三十七批：雨雾高光与雨点动画。
