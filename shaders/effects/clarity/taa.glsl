@@ -8,19 +8,15 @@
 */
 #ifndef OMNI_TAA_CORE_INCLUDED
 #define OMNI_TAA_CORE_INCLUDED // 置上标记，后续再次引用直接跳过。
+#include "/gfx/antialias.glsl"
 // --- 颜色空间：把颜色转到亮度与色度分离的空间，重投影时更稳 ---
 // 转到该空间后亮度单独一维，色度两维，历史裁剪对色度的扰动更小，边缘不容易染色。
 // 以下函数都在片元阶段运行：它们读 `taaTexelCoord`、`gl_FragCoord` 与各号画面，顶点阶段没有这些输入。
 // 顶点阶段（例如合成零号的光色顶点）也会整段引入本文件，所以上面的阶段宏把整份实现隔开，顶点不会编译它们。
-vec3 RGB_To_YCoCg(vec3 color) {
-	return vec3(color.r * 0.25 + color.g * 0.5 + color.b * 0.25, color.r * 0.5 - color.b * 0.5, color.r * -0.25 + color.g * 0.5 + color.b * -0.25); // 一维亮度两维色度。
-}
+vec3 RGB_To_YCoCg(vec3 color) { return gfx_rgb_to_ycocg(color); }
 
 // 从亮度色度空间换回红绿蓝，与上面互逆。
-vec3 YCoCg_To_RGB(vec3 color) {
-	float temp = color.r - color.b; // 亮度与色度之差。
-	return vec3(temp + color.g, color.r + color.b, temp - color.g); // 解回三个通道。
-}
+vec3 YCoCg_To_RGB(vec3 color) { return gfx_ycocg_to_rgb(color); }
 
 // --- 当前帧取样 ---
 // 主世界与末地把颜色与深度分开取；下界把颜色和线性深度打包进同一个四分量的结果。
@@ -48,33 +44,7 @@ vec3 SamplePrevColor(vec2 coord){
 }
 #else // 下界版：取样结果连线性深度一起返回。
 // 用四次采样读一个四分量纹理，与上面的 `BicubicTexture` 同理，只是保留透明度通道。
-vec4 BicubicTextureVec4(sampler2D texSampler, vec2 coord, vec2 texSize){
-	vec2 texPixelSize = 1.0 / texSize; // 一个纹素的大小。
-	coord = coord * texSize; // 换到像素坐标。
-
-	vec2 p = floor(coord - 0.5) + 0.5; // 采样核中心。
-	vec2 f = coord - p; // 中心偏移。
-	vec2 f2 = f * f; // 平方。
-	vec2 f3 = f * f2; // 立方。
-
-	const float c = 0.5; // 三次核系数，与原程序一致。
-	vec2 w0 =        -c  * f3 +  2.0 * c         * f2 - c * f; // 最左权重。
-	vec2 w1 =  (2.0 - c) * f3 - (3.0 - c)        * f2         + 1.0; // 左权重。
-	vec2 w2 = -(2.0 - c) * f3 + (3.0 -  2.0 * c) * f2 + c * f; // 右权重。
-	vec2 w3 =         c  * f3 -                c * f2; // 最右权重。
-
-	vec2 w12 = w1 + w2; // 左右权重和。
-	vec2 tc12 = texPixelSize * (p + w2 / w12); // 左右两个采样点的混合坐标。
-	vec2 tc0 = texPixelSize * (p - 1.0); // 最左采样点。
-	vec2 tc3 = texPixelSize * (p + 2.0); // 最右采样点。
-
-	vec4 color = textureLod(texSampler, vec2(tc12.x, tc0.y ), 0.0) * (w12.x * w0.y ) + // 五个采样点加权。
-				 textureLod(texSampler, vec2(tc0.x,  tc12.y), 0.0) * (w0.x  * w12.y) +
-				 textureLod(texSampler, vec2(tc12.x, tc12.y), 0.0) * (w12.x * w12.y) +
-				 textureLod(texSampler, vec2(tc3.x,  tc12.y), 0.0) * (w3.x  * w12.y) +
-				 textureLod(texSampler, vec2(tc12.x, tc3.y ), 0.0) * (w12.x * w3.y );
-	return color / (w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y); // 除以权重和归一化。
-}
+vec4 BicubicTextureVec4(sampler2D texSampler, vec2 coord, vec2 texSize) { return gfx_bicubic_texture4(texSampler, coord, texSize); }
 // 双线性读当前帧，颜色转亮度色度空间，透明度换成线性深度。
 vec4 SampleCurr(vec2 coord){
 	vec4 curr = textureLod(colortex1, coord, 0.0); // 读当前帧颜色与深度。
@@ -220,25 +190,11 @@ vec3 GetVariance3x3(ivec2 coord, vec3 currColor, out vec3 avgColor, out vec3 cro
 // --- 把历史颜色夹进当前帧范围 ---
 // 落在范围外的历史说明对应点已经变化，按两种做法之一把它拉回范围，避免旧颜色拖影。
 vec3 clipAABB(vec3 avgColor, vec3 variance, vec3 prevColor){
-	#ifdef TAA_CLIP_TO_CENTER // 原程序默认关闭的裁剪做法：朝范围中心拉。
-		const float eps = 1e-20; // 极小量，避免除零。
-		vec3 p_clip = avgColor; // 范围中心。
-		vec3 e_clip = variance - eps; // 范围半径。
-		vec3 v_clip = prevColor - p_clip; // 历史相对中心的偏移。
-		vec3 v_unit = v_clip.xyz / e_clip; // 相对半径的偏移。
-		vec3 a_unit = abs(v_unit); // 各分量绝对值。
-		float ma_unit = max3(a_unit.x, a_unit.y, a_unit.z); // 最大的越界比例。
-		if (ma_unit > 1.0) // 超出范围才夹回。
-			return p_clip + v_clip / ma_unit; // 沿原方向拉回边界。
-		else // 没超出就原样保留。
-			return prevColor; // 历史可用。
-	#else // 原程序默认做法：按分量分别裁剪。
-		vec3 diff = prevColor - avgColor; // 历史相对中心的偏移。
-		vec3 clipMax = mix(vec3(1.0), variance / diff, greaterThan(diff, variance)); // 超出上界的分量按比例缩小。
-		vec3 clipMin = mix(vec3(1.0), -variance / diff, lessThan(diff, -variance)); // 超出下界的分量按比例缩小。
-		diff *= clipMax.x * clipMax.y * clipMax.z * clipMin.x * clipMin.y * clipMin.z; // 三个分量一次性缩到范围里。
-		return avgColor + diff; // 返回夹好的历史颜色。
-	#endif
+#ifdef TAA_CLIP_TO_CENTER
+	return gfx_clip_aabb(avgColor, variance, prevColor, true);
+#else
+	return gfx_clip_aabb(avgColor, variance, prevColor, false);
+#endif
 }
 
 // --- 时间重投影 ---

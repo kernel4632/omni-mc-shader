@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.15
+
+通用库第十一批：抗锯齿。
+
+- 新增 `shaders/gfx/antialias.glsl`：亮度色差空间转换、两种历史裁剪方式与五次采样四分量纹理。
+- `effects/clarity/taa.glsl` 只保留同名转发；`TAA_CLIP_TO_CENTER` 分支仍由效果层选择，默认裁剪方式不变。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.14
 
 通用库第十批：泛光采样。
