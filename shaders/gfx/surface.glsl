@@ -1,10 +1,12 @@
 /*
-通用图形库表面模块：方块光曲线与材质法线、遮蔽换算。
-调用位置：任何需要把方块光等级、法线贴图和材质遮蔽变成光照输入的程序；本仓库由 `effects/ground/material.glsl` 转发调用。
+通用图形库表面模块：方块光曲线、材质法线、遮蔽换算与自发光。
+调用位置：任何需要把方块光等级、法线贴图和材质遮蔽变成光照输入，或按贴图色算自发光的程序；
+    本仓库由 `effects/ground/material.glsl` 与 `effects/lighting/emissive.glsl` 转发调用。
 可复制示例：
     float c = gfx_curve_block_light_sky(blockLight); // 天光等级曲线。
     vec3 n = gfx_material_normal_scale(tangentNormal, 1.0); // 法线起伏倍率。
     vec4 m = gfx_material_normal(normalTexRGB, true, 1.0); // 法线加遮蔽。
+    float e = gfx_ore_emission(albedo); // 矿石发光。
 设计原因与取舍：
     选项值由调用方作为参数传入，库不读取任何 `OMNI_*` 宏。
     曲线常数照 iterationT 与 Eclipse 原程序保留，迁移只改名字与参数位置。
@@ -45,6 +47,18 @@ vec3 gfx_material_normal_scale(vec3 tangentNormal, float multiplier){
 vec4 gfx_material_normal(vec3 normalTexRGB, bool aoEnabled, float multiplier){
 	vec3 normal = gfx_material_normal_scale(gfx_DecodeNormalTex(normalTexRGB), multiplier); // 先解码再缩放。
 	return vec4(normal, gfx_material_ao(normalTexRGB, aoEnabled)); // 把遮蔽一起交回。
+}
+
+// 矿石发光：鲜艳又明亮的矿物颗粒才发光，灰色石底几乎不亮。
+float gfx_ore_emission(vec3 albedo){
+	vec3 hsv = gfx_omniRgbToHsv(albedo); // 拆出饱和度与明度。
+	return smoothstep(0.05, 0.15, hsv.y) * pow(hsv.z, 3.5) * 0.5; // 饱和度当门槛，明度拉对比，再乘 Eclipse 的半值。
+}
+
+// 纹饰发光：只看明度，越亮的纹路越亮；明度开方让暗纹也保留一部分发光。
+float gfx_trim_emission(vec3 albedo){
+	vec3 hsv = gfx_omniRgbToHsv(albedo); // 拆出明度。
+	return sqrt(hsv.z); // 明度开方，照 Eclipse。
 }
 
 #endif

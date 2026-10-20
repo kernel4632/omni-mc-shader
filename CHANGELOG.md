@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.38
+
+通用库第三十四批：矿石与纹饰自发光。
+
+- `shaders/gfx/surface.glsl` 增加矿石与纹饰发光公式，底色改为显式参数。
+- `effects/lighting/emissive.glsl` 只保留选项与同名转发，发光公式与常数不变。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.37
 
 通用库第三十三批：天空盒投影。
