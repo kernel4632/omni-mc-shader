@@ -25,6 +25,8 @@
 */
 #ifndef OMNI_WEATHER_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_WEATHER_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 雨雪随风偏移放在通用库，这里只传入相机、时间与选项。
+#include "/gfx/weather.glsl"
 
 // @effect {"label":{"zh_cn":"天气","en_us":"Weather"}}
 // @option {"label":{"zh_cn":"雨可见度","en_us":"Rain visibility"},"description":{"zh_cn":"雨丝与雨中画面的强度；取零等于几乎看不到雨。","en_us":"Strength of rain streaks and the rainy look; zero makes rain almost invisible."},"slider":true}
@@ -74,11 +76,7 @@ void Rain(inout vec3 color, float rainMask, vec3 shadowlightColorInput, vec3 sky
 // 为什么乘 `eyeBrightnessOneSmooth`：只有玩家真正露天时雨雪才该倾斜，洞穴里看到的雨雪不跟着动。
 // 说明：iterationT 把这段写在 `Weather_VS` 的主函数里，没有独立名字；这里按职责抽成函数，命名是 Omni 的补充。
 vec2 RainWindOffset(vec3 worldPos){
-	float angle = dot(worldPos.xyz + cameraPosition.xyz, vec3(3.0, 0.5, 3.0)) + frameTimeCounter * 0.2; // 用位置与时间算一个缓慢摆动的相位。
-	vec2 rot = vec2(sin(angle), cos(angle)); // 由相位得到摆动方向。
-	vec2 offset = (vec2(OMNI_RAIN_WIND_X, OMNI_RAIN_WIND_Z) + rot * OMNI_RAIN_DISTURBANCE) * worldPos.y; // 固定风向加摆动，再按高度放大。
-
-	return eyeBrightnessOneSmooth * offset; // 只有露天时倾斜，返回最终偏移。
+	return gfx_rain_wind_offset(worldPos, cameraPosition, frameTimeCounter, vec2(OMNI_RAIN_WIND_X, OMNI_RAIN_WIND_Z), OMNI_RAIN_DISTURBANCE, eyeBrightnessOneSmooth); // 全局量与选项交给库。
 }
 
 // --- 雨遮罩：读天气贴图的透明通道，空白纹素直接丢弃 ---

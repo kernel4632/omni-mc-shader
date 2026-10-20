@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.20
+
+通用库第十六批：雨雪风向。
+
+- 新增 `shaders/gfx/weather.glsl`：雨雪在风中的倾斜偏移，位置、相机、时间、风向、扰动与露天系数全部改为参数。
+- `effects/weather/weather.glsl` 只保留同名转发，雨丝绘制与天气遮罩未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.19
 
 通用库第十五批：暗角。

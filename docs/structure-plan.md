@@ -98,5 +98,6 @@ shaders/
 - 已完成：`gfx/gi.glsl` 建立；环境遮蔽多弹射迁入，`effects/lighting/gtao.glsl` 只保留转发。
 - 已完成：`gfx/post.glsl` 增加调色曲线与染色方向归一化，`effects/color/colorgrade.glsl` 只保留转发。
 - 已完成：`gfx/post.glsl` 增加暗角，画面纵横比改为参数；`effects/lens/lens.glsl` 只保留转发。
-- 下一步：继续把镜头、天气与世界页面的纯计算迁入通用库。
+- 已完成：`gfx/weather.glsl` 建立；雨雪随风偏移迁入，`effects/weather/weather.glsl` 只保留转发。
+- 下一步：继续把世界与末地页面的纯计算迁入通用库。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。
