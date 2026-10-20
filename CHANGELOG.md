@@ -3,10 +3,10 @@
 
 结构重构：G 缓冲读取、材质编号与手部判断迁入绑定层。
 
-- 新增 `bind/gbuffer.glsl`，`Material`、`GbufferData`、固定材质、`MATID_*` 编号、材质掩码、粒子修正与水玻璃冰覆盖都移入绑定层。
-- `bind_gbuffer` 的画面与深度采样器全部显式传入；`bind_material_mask` 与 `bind_is_hand_depth` 等入口集中解释 Minecraft 通道与手部阈值。
-- `effects/ground/material.glsl` 只保留选项、PBR 解码与原调用名转发，非注释行从 296 降到 129；运动模糊改用绑定层的手部与玩家判断。
-- 绑定与入口合计从 1991 行降到 1946 行，达到结构计划约 2000 行的目标；画面公式、选项名、默认值与配置格式未变。
+- 新增 `bind/gbuffer.glsl`，`Material`、`GbufferData`、固定材质、`MATID_*` 编号、材质掩码、粒子修正、水玻璃冰覆盖与 labPBR 材质解码都移入绑定层。
+- `bind_gbuffer` 的画面与深度采样器全部显式传入；`bind_material_from_tex` 的画质与格式选项也全部由效果层传入；`bind_material_mask` 与 `bind_is_hand_depth` 等入口集中解释 Minecraft 通道与手部阈值。
+- `effects/ground/material.glsl` 只保留选项与原调用名转发，非注释行从 296 降到 90；运动模糊改用绑定层的手部与玩家判断。
+- 绑定与入口合计从 1991 行降到 1973 行，达到结构计划约 2000 行的目标；画面公式、选项名、默认值与配置格式未变。
 
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 

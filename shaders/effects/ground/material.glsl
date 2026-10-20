@@ -126,54 +126,12 @@ struct Intersection{
 // 所以由本文件引入并在那里调用；水洼覆盖（`OmniPuddleCoverage`）仍由水效果自己引入，两边各取所需。
 // 为什么放在函数之前：GLSL 要求先声明后使用，放在文件末尾会报找不到函数。
 #include "/effects/water/puddle.glsl"
-// 从表面贴图解出材质：孔隙率决定吸水压暗，其余通道解出粗糙、金属、自发光与散射。
+// 从表面贴图解出材质：孔隙率、金属、自发光与散射的通道解释在绑定层，本文件只把选项接进去。
 // 参数 `wet` 是这一处的湿润度，`baseTex` 会被吸水压暗，所以是 `inout`。
 Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
-	#if OMNI_TEXTURE_PBR_POROSITY // 资源包自带孔隙率时按标准位宽解码。
-		#if OMNI_TEXTURE_PBR_FORMAT < 2
-			float porosity = saturate(specTex.b * (255.0 / 63.0) - step(64.0 / 255.0, specTex.b)); // 蓝色通道的高六位表示孔隙率。
-		#else
-			float porosity = OMNI_TEXTURE_DEFAULT_POROSITY; // `PTGI` 格式没有孔隙率，退回默认值。
-		#endif
-	#else
-		float porosity = OMNI_TEXTURE_DEFAULT_POROSITY; // 没开孔隙率时统一用默认值。
-	#endif
-	baseTex *= 1.0 - wet * fsqrt(porosity) * OMNI_POROSITY_ABSORPTION; // 吸水越多的表面越暗，孔隙率开方让差异更平缓。
-	Material material; // 下面逐项填入。
-	float rawSmoothness = mix(specTex.r, 1.0, saturate(wet * (1.7 - porosity * 0.7))); // 湿润把表面拉向光滑，孔隙率大则拉得少。
-	material.roughness = 1.0 - rawSmoothness; // 平滑度取反得到粗糙度。
-	material.roughness *= material.roughness; // 再平方，让光滑面更集中。
-	// 湿面反射锐度：把干表面粗糙度朝湿表面粗糙度混合，湿得越深反射越清晰。
-	// 为什么接在平方之后：Eclipse 在 `applyPuddles` 里就是对已经算好的粗糙度做这一步混合，顺序一致才等价。
-	// 为什么湿表面粗糙度固定取零点五：雪面粗糙度已在几何阶段写进五号画面的平滑度，合成阶段读不到单独的 `snowR`。
-	material.roughness = OmniPuddleRoughness(material.roughness, 0.5, wet);
-	float rawMetalness = specTex.g; // 绿色通道是金属度。
-	#if OMNI_TEXTURE_PBR_FORMAT == 0
-		rawMetalness = saturate(rawMetalness + step(0.9, rawMetalness)); // labPBR 允许预设金属，把高位拉满。
-	#endif
-	#if OMNI_ROUGHNESS_CLAMP // 开启限制时把金属度往零点一以内收，配合反射屏蔽。
-		material.metalness = saturate(rawMetalness * 1.1 - 0.1); // 先放大再平移，最后夹紧。
-	#else
-		material.metalness = rawMetalness; // 否则原样使用。
-	#endif
-	material.f0 = rawMetalness * 0.96 + 0.04; // 金属度高则反射率接近底色，非金属约零点零四。
-	#if OMNI_ROUGHNESS_CLAMP // 限制模式用更陡的曲线快速去掉粗糙面的反射。
-		material.reflectionStrength = saturate(2.0 - material.roughness * 5.0); // 粗糙度超过零点四就基本不反射。
-	#else
-		material.reflectionStrength = saturate(2.0 - material.roughness * 2.0); // 普通模式反射保留更多。
-	#endif
-	material.reflectionStrength = saturate(material.reflectionStrength + material.metalness * 1e10 + wet * 3.0); // 金属和湿润表面一律全反射。
-	material.emissiveness = specTex.a; // 透明通道是自发光。
-	#if OMNI_TEXTURE_PBR_FORMAT < 2
-		material.emissiveness -= step(1.0, material.emissiveness); // 标准规定满值表示没有自发光，减掉它。
-	#endif
-	material.emissiveness = pow(material.emissiveness, OMNI_EMISSIVENESS_GAMMA); // 按选项重整亮暗对比。
-	#if OMNI_TEXTURE_PBR_FORMAT < 2
-		material.scattering = saturate((specTex.b * 255.0 - 64.0) / 191.0) * OMNI_SSS_STRENGTH + OMNI_SSS_STRENGTH_OFFSET; // 蓝色通道的其余位表示散射强度。
-	#else
-		material.scattering = 0.0; // `PTGI` 格式没有散射，记零。
-	#endif
-	return material; // 交回解码好的材质。
+	return bind_material_from_tex(baseTex, specTex, wet, bool(OMNI_TEXTURE_PBR_POROSITY), OMNI_TEXTURE_PBR_FORMAT,
+		OMNI_TEXTURE_DEFAULT_POROSITY, OMNI_POROSITY_ABSORPTION, bool(OMNI_ROUGHNESS_CLAMP), OMNI_EMISSIVENESS_GAMMA,
+		OMNI_SSS_STRENGTH, OMNI_SSS_STRENGTH_OFFSET, OMNI_PUDDLE_REFLECTION_SHARPNESS); // 解码公式在绑定层。
 }
 // 从各号画面读回一个像素的完整表面数据，供合成阶段使用。
 // 调用前提：调用方必须先声明整数像素坐标 `texelCoord`。
