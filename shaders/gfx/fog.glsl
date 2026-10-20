@@ -32,4 +32,40 @@ void gfx_multi_scattering_phases(float VdotL, inout float phases[4]){
 	}
 }
 
+// 三维噪声：用噪声贴图两通道做一次三线性插值，得到零到一的密度。
+float gfx_fog_noise(vec3 position, sampler2D noiseTexture){
+	vec3 p = floor(position); // 整数格。
+	vec3 f = position - p; // 格内小数偏移。
+	f = f * f * (3.0 - 2.0 * f); // 三次曲线平滑小数。
+	vec2 uv = 17.0 * p.z + p.xy + f.xy; // 把三维格子映射到二维噪声坐标。
+	vec2 n = textureLod(noiseTexture, uv * 0.015625 + 0.0078125, 0.0).zw; // 读噪声贴图后两通道。
+	return mix(n.x, n.y, f.z); // 按高度插值。
+}
+
+// 仅高度衰减的雾密度：两档高度之间最浓，超出后指数下降。
+float gfx_fog_density_height(vec3 fogPos, float heightA, float heightB, float falloff, float timeMidnight){
+	float maxHeight = max(heightA, heightB); // 两档里较高的。
+	float minHeight = min(heightA, heightB); // 两档里较低的。
+	float dh = max(fogPos.y - maxHeight, 0.0) + max(minHeight - fogPos.y, 0.0); // 到最浓区间外的距离。
+	dh *= 2.0 / falloff; // 按衰减距离归一化。
+	float density = exp2(-dh * (1.0 - timeMidnight * 0.5)); // 指数下降，夜里更浓。
+	return density * 0.1; // 缩到合理量级。
+}
+
+// 团雾密度：高度包络乘三层噪声叠出的雾团。
+float gfx_fog_density_noise(vec3 fogPos, vec3 wind, float heightA, float heightB, float falloff, float timeMidnight, sampler2D noiseTexture){
+	float dh = abs(fogPos.y - max(heightA, heightB)); // 到最高密度高度的距离。
+	dh *= 1.0 / falloff; // 按衰减距离归一化。
+	float envelope = exp2(-dh * (1.0 - timeMidnight * 0.5)); // 高度衰减包络。
+	float density = 0.0; // 累加的雾密度。
+	fogPos = fogPos * 0.02 + wind; // 换到雾坐标并叠加风速。
+	for (float alpha = 0.5; alpha >= 0.125; alpha *= 0.5){ // 三层不同频率的噪声。
+		density += alpha * gfx_fog_noise(fogPos, noiseTexture); // 按权重累加。
+		fogPos = (fogPos + wind) * 3.5; // 抬高频率并再叠一次风。
+	}
+	density *= envelope; // 乘高度衰减。
+	density = density * density; // 平方拉开明暗。
+	return density * density * 3.0; // 再平方并放大，得到清晰边界。
+}
+
 #endif

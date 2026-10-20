@@ -37,53 +37,17 @@ void MultiScatteringPhases(float VdotL, inout float phases[4]){
 
 // 三维噪声：用噪声贴图的两通道做一次三线性插值，得到零到一的雾密度。
 // 为什么用噪声贴图而不是实时噪声：贴图里已经烘好一层分布，采样代价低，也保证全屏可重复。
-float Calculate3DNoise(vec3 position){
-	vec3 p = floor(position); // 整数格。
-	vec3 f = position - p; // 格内小数偏移。
-
-	f = curve(f); // 用三次曲线平滑小数，插值更自然。
-
-	vec2 uv = 17.0 * p.z + p.xy + f.xy; // 把三维格子映射到二维噪声坐标。
-	vec2 n = textureLod(noisetex, uv * 0.015625 + 0.0078125, 0.0).zw; // 读噪声贴图后两通道。
-
-	return mix(n.x, n.y, f.z); // 按高度在小数位置插值。
-}
+float Calculate3DNoise(vec3 position) { return gfx_fog_noise(position, noisetex); }
 
 #if OMNI_VFOG_NOISE_TYPE == 0 // 仅高度衰减：只用高度决定密度。
 
 // 雾密度：以两档衰减高度之间最浓，超出后按衰减距离指数下降。
-float FogDensity(vec3 fogPos, vec3 wind){
-	float maxHeight = max(OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2); // 两档高度里较高的。
-	float minHeight = min(OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2); // 两档高度里较低的。
-
-	float dh = max(fogPos.y - maxHeight, 0.0) + max(minHeight - fogPos.y, 0.0); // 到最浓高度区间外的距离。
-	dh *= 2.0 / OMNI_VFOG_FALLOFF; // 按衰减距离归一化。
-	float density = exp2(-dh * (1.0 - timeMidnight * 0.5)); // 指数下降，夜里衰减更慢雾更浓。
-
-	return density * 0.1; // 缩到合理量级。
-}
+float FogDensity(vec3 fogPos, vec3 wind) { return gfx_fog_density_height(fogPos, OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2, OMNI_VFOG_FALLOFF, timeMidnight); }
 
 #else // 团雾：用三维噪声叠出雾团。
 
 // 雾密度：先按高度算一个衰减包络，再乘多层噪声叠出的雾团。
-float FogDensity(vec3 fogPos, vec3 wind){
-	float dh = abs(fogPos.y - max(OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2)); // 到最高密度高度的距离。
-	dh *= 1.0 / OMNI_VFOG_FALLOFF; // 按衰减距离归一化。
-	float falloff = exp2(-dh * (1.0 - timeMidnight * 0.5)); // 高度衰减包络。
- 
-	float density = 0.0; // 累加的雾密度。
-	fogPos = fogPos * 0.02 + wind; // 换到雾坐标并叠加风速。
-
-	for (float stepAlpha = 0.5; stepAlpha >= 0.125; stepAlpha *= 0.5) { // 三层不同频率的噪声叠加。
-		density += stepAlpha * Calculate3DNoise(fogPos); // 按权重累加这一层噪声。
-		fogPos = (fogPos + wind) * 3.5; // 抬高频率并再叠一次风。
-	}
-
-	density *= falloff; // 乘高度衰减。
-
-	density = density * density; // 平方拉开明暗。
-	return density * density * 3.0; // 再平方并放大，得到清晰的雾团边界。
-}
+float FogDensity(vec3 fogPos, vec3 wind) { return gfx_fog_density_noise(fogPos, wind, OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2, OMNI_VFOG_FALLOFF, timeMidnight, noisetex); }
 
 #endif
 
