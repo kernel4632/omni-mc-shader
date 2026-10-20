@@ -103,4 +103,12 @@ vec3 gfx_grade_target(float red, float green, float blue){
 	vec3 target = vec3(red, green, blue); // 原始目标向量。
 	return length(target) < 0.001 ? vec3(0.0) : normalize(target); // 太短就没有方向。
 }
+
+// 暗角：按到画面中心的距离压暗四角，圆度控制椭圆与圆形之间的形状。
+float gfx_vignette(vec2 coord, float falloff, float roundness, float aspect){
+	vec2 p = coord * 2.0 - 1.0; // 转负一到一。
+	p.x *= mix(1.0, aspect, roundness); // 按圆度修正横坐标。
+	float rf = dot(p, p) * falloff * falloff + 1.0; // 距离平方乘强度。
+	return 1.0 / (rf * rf); // 二次衰减。
+}
 #endif

@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.19
+
+通用库第十五批：暗角。
+
+- `shaders/gfx/post.glsl` 增加暗角曲线，画面纵横比改为参数。
+- `effects/lens/lens.glsl` 只保留同名转发，暗角强度、圆度与潜行叠加未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.18
 
 通用库第十四批：调色曲线。

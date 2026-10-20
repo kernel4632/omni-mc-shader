@@ -98,6 +98,8 @@
 // 加载器输入、共享数学、时间噪声先引入；坐标换算依赖本文件先定义的 `OMNI_TAA`，所以放在选项之后。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
+// 暗角曲线放在通用库，这里只传入画面纵横比与选项。
+#include "/gfx/post.glsl"
 #include "/effects/clarity/antialiasing.glsl"
 #include "/common/noise.glsl"
 
@@ -110,9 +112,6 @@
 // --- 暗角 ---
 // 按到画面中心的距离把四角压暗；`falloff` 是强度，`roundness` 在椭圆与圆形之间插值。
 float Vignette(vec2 coord, const float falloff, const float roundness){
-	vec2 aCoord = coord * 2.0 - 1.0; // 转负一到一。
-	aCoord.x *= mix(1.0, aspectRatio, roundness); // 按圆度修正横坐标。
-	float rf = dot(aCoord, aCoord) * falloff * falloff + 1.0; // 距离平方乘强度。
-	return 1.0 / (rf * rf); // 取二次衰减。
+	return gfx_vignette(coord, falloff, roundness, aspectRatio); // 画面纵横比由效果层传入。
 }
 #endif // 文件守卫结束。
