@@ -1,10 +1,12 @@
 /*
-通用图形库后期模块：泛光降采样、轴向高斯模糊与三次升采样。
-调用位置：任何需要多级泛光的程序；本仓库由 `effects/color/bloom.glsl` 转发调用。
+通用图形库后期模块：泛光降采样、轴向高斯模糊、三次升采样、镜头眩光、景深公式与胶片颗粒。
+调用位置：任何需要多级泛光、镜头光斑或最终画面噪点的程序；本仓库由 `effects/color/bloom.glsl`、
+    `effects/lens/glare.glsl`、`effects/lens/dof.glsl` 与 `effects/clarity/grain.glsl` 转发调用。
 可复制示例：
     vec3 c = gfx_bloom_downsample(source, uv, texel); // 十三样本降采样。
     vec3 b = gfx_axial_gaussian_blur(source, uv, scale, origin, size, axis, 0.12, 6.0, texel); // 一维高斯。
     vec4 u = gfx_bloom_bicubic(small, uv, smallSize); // 三次升采样。
+    vec3 f = gfx_glare_flare(uv, pos, -0.9, 0.02, size, 1.0); // 色散光点。
 设计原因与取舍：
     纹理、像素大小、子图范围与模糊参数全部由调用方传入，库不读取引擎画面或屏幕尺寸。
     伽马编码沿用管线的四次方根近似，保证与原程序相同的亮度。
@@ -157,5 +159,25 @@ vec3 gfx_glare_ring(vec2 uv, vec2 pos, float dist, float chromaOffset, float blu
 	float g = max(1.0 / (1.0 + 250.0 * pow(length(uvd +  dist                 * pos), blur)), 0.0) * 1.0; // 绿色通道。
 	float b = max(1.0 / (1.0 + 250.0 * pow(length(uvd + (dist + chromaOffset) * pos), blur)), 0.0) * 1.5; // 蓝色通道。
 	return vec3(r, g, b); // 返回光环颜色。
+}
+
+// 胶片颗粒：把屏幕坐标与时间合成种子，折成一个正负各半的细噪点加在颜色上。
+// `time` 是累计秒数，`strength` 是颗粒幅度；关闭开关由调用方决定。
+vec3 gfx_film_grain(vec3 color, vec2 coord, float time, float strength){
+	float seed = (coord.x + 4.0) * (coord.y + 4.0) * (time * 10.0); // 屏幕坐标与时间合成种子，时间项让它逐帧变化。
+	float flicker = mod((mod(seed, 13.0) + 1.0) * (mod(seed, 123.0) + 1.0), 0.01) - 0.005; // 两次取模相乘再折叠成一个很小的数。
+	return color + vec3(flicker) * strength; // 三个通道同量叠加，颗粒不改变颜色比例。
+}
+
+// 弥散圆半径：按薄透镜公式估算一个点离对焦平面越远时散焦多大。
+float gfx_coc_radius(float focus, float depth, float aperture){
+	return abs(aperture * (depth - focus) / (depth * focus)); // 薄透镜近似。
+}
+
+// 景深镜头倍数：焦距平方乘口径倍数，焦距与光圈取基准值时正好为一。
+float gfx_dof_lens_factor(float focalLength, float aperture, float referenceFocal, float referenceAperture){
+	float focalRatio = focalLength / referenceFocal; // 焦距相对基准的倍数，越长越大。
+	float apertureRatio = referenceAperture / aperture; // f 值越小口径越大，取倒数表示反比。
+	return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
 }
 #endif

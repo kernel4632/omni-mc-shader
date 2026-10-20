@@ -23,15 +23,15 @@
 #define OMNI_FILM_GRAIN_STRENGTH 2.5 // [0.5 1.0 1.5 2.0 2.5 3.0 3.5 4.0 4.5 5.0 5.5 6.0 6.5 7.0 7.5 8.0 8.5 9.0 9.5 10.0]
 // 加载器输入提供时间量 `frameTimeCounter`（累计运行秒数），种子按它逐帧推进。
 #include "/common/uniforms.glsl"
+// 颗粒公式放在通用库。
+#include "/gfx/post.glsl"
 
 // --- 胶片颗粒：把屏幕坐标与时间合成一个种子，再折成一个正负各半的细噪点 ---
 // 为什么用取模反复折叠：原实现只用取模和乘法把坐标与时间搅成一个伪随机数，不做噪声贴图采样，代价很低。
 // 为什么乘零点零一再减零点零零五：让结果落在正负零点零零五之间，围绕零上下波动，只加噪点而不整体提亮或压暗画面。
 vec3 OmniFilmGrain(vec3 color, vec2 coord){
 	#if OMNI_FILM_GRAIN // 关闭时整段不编译，直接原样返回。
-		float seed = (coord.x + 4.0) * (coord.y + 4.0) * (frameTimeCounter * 10.0); // 屏幕坐标与时间合成种子，时间项让它逐帧变化。
-		float flicker = mod((mod(seed, 13.0) + 1.0) * (mod(seed, 123.0) + 1.0), 0.01) - 0.005; // 两次取模相乘再折叠成一个很小的数。
-		color += vec3(flicker) * OMNI_FILM_GRAIN_STRENGTH; // 三个通道同量叠加，颗粒不改变颜色比例。
+		color = gfx_film_grain(color, coord, frameTimeCounter, OMNI_FILM_GRAIN_STRENGTH); // 颗粒公式在通用库，时间与强度在这里传入。
 	#endif
 	return color; // 返回叠加颗粒后的颜色，关闭时就是原颜色。
 }

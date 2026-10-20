@@ -8,11 +8,13 @@
 */
 #ifndef OMNI_DOF_INCLUDED
 #define OMNI_DOF_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 弥散圆与镜头倍数公式放在通用库，这里只传选项与焦距光圈参数。
+#include "/gfx/post.glsl"
 // --- 景深：弥散圆半径与深度 ---
 // 按薄透镜公式估算一个点的弥散圆半径：离对焦平面越远，弥散越大。
 // `f` 是对焦距离，`d` 是该点距离，`a` 是口径系数；三者单位一致时结果就是像素半径。
 float CalculateCoCRadius(float f, float d, float a){
-	return abs(a * (d - f) / (d * f)); // 薄透镜近似。
+	return gfx_coc_radius(f, d, a); // 转发到通用库。
 }
 
 // --- 景深：焦距与光圈换算成模糊倍数 ---
@@ -22,9 +24,7 @@ float CalculateCoCRadius(float f, float d, float a){
 const float DoF_RefFocal = 50.0; // 基准焦距，毫米。
 const float DoF_RefAperture = 2.8; // 基准光圈，f 值。
 float DoFLensFactor(){
-	float focalRatio = OMNI_DOF_FOCAL_LENGTH / DoF_RefFocal; // 焦距相对基准的倍数，越长越大。
-	float apertureRatio = DoF_RefAperture / OMNI_DOF_APERTURE; // f 值越小口径越大，取倒数表示反比。
-	return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
+	return gfx_dof_lens_factor(OMNI_DOF_FOCAL_LENGTH, OMNI_DOF_APERTURE, DoF_RefFocal, DoF_RefAperture); // 公式在通用库。
 }
 
 // 读某个坐标的米制深度；远景像素改用远景深度，并给一个近处下限避免紧贴相机时数值失控。

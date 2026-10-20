@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.35
+
+通用库第三十一批：景深与胶片颗粒。
+
+- `shaders/gfx/post.glsl` 增加弥散圆、镜头倍数与胶片颗粒公式，焦距、光圈、时间与强度改为参数。
+- `effects/lens/dof.glsl` 与 `effects/clarity/grain.glsl` 只保留选项、基准常数与同名转发，公式不变。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.34
 
 通用库第三十批：水洼。
