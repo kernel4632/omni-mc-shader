@@ -10,6 +10,7 @@
 */
 #ifndef OMNI_REFLECTION_SCREENSPACE_INCLUDED
 #define OMNI_REFLECTION_SCREENSPACE_INCLUDED // 置上标记，后续再次引用直接跳过。
+#include "/gfx/reflection.glsl"
 // --- composite2：屏幕空间反射与天空盒回退 ---
 #ifdef OMNI_COMPOSITE2_PASS
 // 蓝噪声给追踪与体积反射抖动，材质提供解码材质，天空云提供假天空反射与云影开关，雾提供反射里的体积雾与地表散射。
@@ -46,23 +47,7 @@ vec3 ComputeFakeSkyReflection(vec3 reflectWorldDir){
 
 // 可见法线抽样：按粗糙度把反射方向散射开，粗糙面因此得到模糊反射。
 // 来源：原程序改自一篇公开论文的可见法线抽样，作者名字与链接见参考包，本函数保持原程序写法。
-vec3 sampleGGXVNDF(vec3 viewVector, float roughness, vec2 noise) {
-	vec3 orthoNormal = normalize(vec3(roughness * viewVector.xy, viewVector.z)); // 把视线按粗糙度压扁后归一化，得到分布主轴。
-
-	float length2 = dot(orthoNormal.xy, orthoNormal.xy); // 主轴水平分量的长度平方。
-	vec3 orthoTangent = length2 > 0.0 ? vec3(-orthoNormal.y, orthoNormal.x, 0.0) * inversesqrt(length2) : vec3(1.0, 0.0, 0.0); // 水平切向，主轴水平分量为零时给一个占位方向。
-	vec3 orthoBitangent = cross(orthoNormal, orthoTangent); // 副切向由叉积得到。
-
-	float radius = sqrt(noise.y * 0.7); // 采样半径取噪声，乘零点七限制在圆盘内。
-	float angle = TAU * noise.x; // 采样角度取噪声。
-	vec2 samplePos = vec2(cos(angle), sin(angle)) * radius; // 圆盘上的采样位置。
-
-	float scaling = orthoNormal.z * 0.5 + 0.5; // 主轴竖直分量决定的缩放，让圆盘在主轴附近压扁。
-	samplePos.y = (1.0 - scaling) * sqrt(1.0 - samplePos.x * samplePos.x) + scaling * samplePos.y; // 把采样点投到椭圆上。
-
-	vec3 sampleVector = samplePos.x * orthoTangent + samplePos.y * orthoBitangent + sqrt(max(0.0, 1.0 - dot(samplePos, samplePos))) * orthoNormal; // 组合成三维方向。
-	return normalize(vec3(roughness * sampleVector.xy, max(sampleVector.z, 0.0))); // 按粗糙度压扁并归一化。
-}
+vec3 sampleGGXVNDF(vec3 viewVector, float roughness, vec2 noise) { return gfx_sample_ggx_vndf(viewVector, roughness, noise); }
 
 // 取追踪采样点的深度：手部读手部深度，其他读不透明深度，近景是天空时改读远景深度。
 // 为什么单独成函数：追踪循环每前进一步、每细化一步都要重读深度，抽到一处后循环体只剩一条读深度，

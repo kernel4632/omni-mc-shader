@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.16
+
+通用库第十二批：反射方向。
+
+- 新增 `shaders/gfx/reflection.glsl`：可见法线分布的反射方向采样。
+- `effects/reflection/screenspace.glsl` 只保留同名转发，屏幕空间追踪、深度判断与反射合成未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.15
 
 通用库第十一批：抗锯齿。
