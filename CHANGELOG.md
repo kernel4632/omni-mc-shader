@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.23
+
+通用库第十九批：下界雾密度。
+
+- `shaders/gfx/fog.glsl` 增加下界单格雾密度，噪声纹理改为参数。
+- `effects/world/nether.glsl` 只保留同名转发，羽流、烟柱与体积步进未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.22
 
 通用库第十八批：末地环带轮廓。

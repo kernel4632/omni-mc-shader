@@ -31,6 +31,8 @@
 */
 #ifndef OMNI_NETHER_INCLUDED // 只引入一次，避免选项与群系量重复定义。
 #define OMNI_NETHER_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 下界单格雾密度放在通用库，这里只传噪声纹理。
+#include "/gfx/fog.glsl"
 // @effect {"label":{"zh_cn":"下界","en_us":"Nether"}}
 // @option {"label":{"zh_cn":"环境亮度","en_us":"Nether Ambient Brightness"},"description":{"zh_cn":"下界不等于无光，这里的整体亮度。","en_us":"Overall ambient brightness in the Nether, which is never fully dark."},"slider":true}
 #define OMNI_NETHER_BRIGHTNESS 1.0 // [0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
@@ -83,19 +85,7 @@ vec4 NetherFogColor(){
 // 一格噪声密度：把世界坐标折成三维格子再查二维噪声图，得到零到一的基础密度。
 // 为什么用二维图模拟三维：噪声图已烘好一层分布，采样代价低，也保证全屏可重复。
 float NetherFogDensityAt(vec3 pos){
-	pos /= 18.0; // 先整体缩小，让格子更大。
-	pos.xz *= 0.5; // 水平再压一半，雾团更扁。
-
-	vec3 p = floor(pos); // 整数格坐标。
-	vec3 f = fract(pos); // 格内小数偏移。
-
-	f = f * f * (3.0 - 2.0 * f); // 平滑小数，三线性插值用。
-
-	vec2 uv = p.xz + f.xz + p.y * vec2(0.0, 193.0); // 三维格子映射到二维噪声图，纵向叠一个偏移错开层。
-	vec2 coord = uv / 512.0; // 换成零到一贴图坐标。
-	vec2 xy = texture(noisetex, coord).yx; // 读噪声两通道并交换。
-
-	return mix(xy.r, xy.g, f.y); // 按高度在两通道之间插值。
+	return gfx_nether_fog_density_at(pos, noisetex); // 转发到通用库。
 }
 
 // 体积雾原始密度：叠上被时间侵蚀的羽流形状、贴地烟与高度衰减，返回零附近的密度。

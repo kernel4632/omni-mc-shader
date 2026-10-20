@@ -68,4 +68,17 @@ float gfx_fog_density_noise(vec3 fogPos, vec3 wind, float heightA, float heightB
 	return density * density * 3.0; // 再平方并放大，得到清晰边界。
 }
 
+// 下界雾的单格密度：世界坐标折成三维格子，再查二维噪声图。
+float gfx_nether_fog_density_at(vec3 pos, sampler2D noiseTexture){
+	pos /= 18.0; // 整体缩小，让格子更大。
+	pos.xz *= 0.5; // 水平再压一半，雾团更扁。
+	vec3 p = floor(pos); // 整数格坐标。
+	vec3 f = fract(pos); // 格内小数偏移。
+	f = f * f * (3.0 - 2.0 * f); // 平滑小数。
+	vec2 uv = p.xz + f.xz + p.y * vec2(0.0, 193.0); // 三维格子映射到二维图。
+	vec2 coord = uv / 512.0; // 换成零到一坐标。
+	vec2 xy = texture(noiseTexture, coord).yx; // 读两通道并交换。
+	return mix(xy.r, xy.g, f.y); // 按高度插值。
+}
+
 #endif
