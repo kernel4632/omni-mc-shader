@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.25
+
+通用库第二十一批：三轴旋转矩阵。
+
+- `shaders/gfx/math.glsl` 增加三轴旋转矩阵。
+- `effects/world/end_disc.glsl` 只保留同名转发，吸积盘与空间扭曲未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.24
 
 通用库第二十批：下界羽流形状。

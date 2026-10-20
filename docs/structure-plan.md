@@ -103,5 +103,6 @@ shaders/
 - 已完成：`gfx/math.glsl` 增加末地环带径向曲线，`effects/world/end_disc.glsl` 只保留转发。
 - 已完成：`gfx/fog.glsl` 增加下界单格雾密度，`effects/world/nether.glsl` 只保留转发。
 - 已完成：`gfx/fog.glsl` 增加下界体积雾原始密度，`effects/world/nether.glsl` 只保留转发。
+- 已完成：`gfx/math.glsl` 增加三轴旋转矩阵，`effects/world/end_disc.glsl` 只保留转发。
 - 下一步：继续迁末地雾与行星的纯计算，再整理菜单与 `bind/`。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

@@ -288,4 +288,12 @@ float gfx_pcurve(float x){
 	return 12.207 * x2 * x2 * (1.0 - x); // 四次方乘线性衰减。
 }
 
+// 依次绕三个轴旋转后合成矩阵。
+mat3 gfx_rotate_matrix(float x, float y, float z){
+	mat3 matx = mat3(1.0, 0.0, 0.0, 0.0, cos(x), sin(x), 0.0, -sin(x), cos(x)); // 绕横轴。
+	mat3 maty = mat3(cos(y), 0.0, -sin(y), 0.0, 1.0, 0.0, sin(y), 0.0, cos(y)); // 绕纵轴。
+	mat3 matz = mat3(cos(z), sin(z), 0.0, -sin(z), cos(z), 0.0, 0.0, 0.0, 1.0); // 绕前后轴。
+	return maty * matx * matz; // 三个旋转合成。
+}
+
 #endif
