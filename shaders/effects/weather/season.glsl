@@ -20,21 +20,19 @@
 #define OMNI_SEASON_TINT 0.0 // [-1.0 -0.5 0.0 0.5 1.0]
 // 世界天数 `worldDay` 由加载器提供，已在 `common/uniforms.glsl` 声明，这里不重复声明。
 #include "/common/uniforms.glsl"
+// 植被判断与季节上色放在通用库，这里只传入游戏日与选项。
+#include "/gfx/weather.glsl"
 // 植被程度：顶点色里绿色比红、蓝多出越多，越像群系染过的植被；白色方块与偏蓝的水都得零。
 float omniFoliage(vec3 vertexColor){
-	return clamp((vertexColor.g - max(vertexColor.r, vertexColor.b)) * 4.0, 0.0, 1.0); // 乘四让普通草色就能接近一，再夹到零到一。
+	return gfx_foliage(vertexColor); // 转发到通用库。
 }
 // 季节上色：植被按一年的相位混入秋色，再按选项整体偏暖或偏冷；非植被原样返回。
 // 调用前提：只在地形片元调用，`vertexColor` 是加载器给该顶点的顶点色。
 vec3 omniSeason(vec3 albedo, vec3 vertexColor){
-	#if OMNI_SEASONS // 关闭时原样返回，不改变默认画面。
-		float foliage = omniFoliage(vertexColor); // 这一面有多像植被。
-		float phase = fract(float(worldDay) / 24.0); // 一年按二十四个游戏日循环。
-		float autumn = 0.5 - 0.5 * cos(phase * 6.283185); // 在零到一之间缓慢摆动，一年过半时最接近秋天。
-		vec3 seasonal = mix(vec3(1.0), vec3(1.15, 0.9, 0.5), autumn * 0.6); // 秋色最多混六成，保留原本的绿。
-		seasonal *= vec3(1.0 + 0.2 * OMNI_SEASON_TINT, 1.0, 1.0 - 0.2 * OMNI_SEASON_TINT); // 季节颜色整体偏暖或偏冷。
-		albedo *= mix(vec3(1.0), seasonal, foliage); // 只按植被程度生效，边缘不会突然变色。
+	#if OMNI_SEASONS // 关闭时只传假值，库里原样返回。
+		return gfx_season(albedo, vertexColor, fract(float(worldDay) / 24.0), OMNI_SEASON_TINT, true);
+	#else
+		return gfx_season(albedo, vertexColor, 0.0, OMNI_SEASON_TINT, false);
 	#endif
-	return albedo; // 交回处理后的底色。
 }
 #endif // 文件守卫结束。

@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.21
+
+通用库第十七批：季节上色。
+
+- `shaders/gfx/weather.glsl` 增加植被判断与季节上色，季节相位与色调改为参数。
+- `effects/weather/season.glsl` 保留 `#if OMNI_SEASONS` 编译分支，只把计算转发给通用库。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.20
 
 通用库第十六批：雨雪风向。
