@@ -793,6 +793,27 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_SELECTION_BOX_COLOR_R", selection)  # 颜色参与着色。
 
     # --- 引入与流程设置的边界 ---
+    def test_gfx_library_has_no_host_symbols(self):
+        """通用库只接收参数：不出现加载器输入、选项宏、版本声明或宿主文件引用。"""
+        hosts = (
+            "worldTime", "worldDay", "frameCounter", "frameTimeCounter",
+            "sunAngle", "sunPosition", "shadowLightPosition", "cameraPosition",
+            "gbufferModelView", "gbufferProjection", "screenSize", "pixelSize",
+            "taaJitter", "viewWidth", "viewHeight", "aspectRatio", "rainStrength",
+            "eyeBrightness", "isEyeInWater", "nightVision", "blindness",
+            "darknessFactor", "darknessLightFactor",
+        )  # 这些名字只在宿主层出现，通用库必须通过参数接收；不收录同名的自定义参数。
+        for path in sorted((build.SHADERS / "gfx").glob("*.glsl")):  # 逐个检查可独立发布的通用库。
+            code = build._code_only(path.read_text(encoding="utf-8"))  # 去掉注释，只检查真正参与编译的代码。
+            with self.subTest(file=path.name):
+                self.assertNotIn("#version", code)  # 版本由宿主决定。
+                self.assertNotIn("uniform", code)  # 通用库自己声明输入就会绑定到宿主。
+                self.assertNotIn('"/common/', code)  # 不依赖项目共用层。
+                self.assertNotIn('"/effects/', code)  # 不依赖具体效果。
+                self.assertNotIn("OMNI_", code)  # 不读取项目选项宏。
+                for token in hosts:  # 宿主输入只能由调用方传入。
+                    self.assertNotRegex(code, rf"\b{token}\b")
+
     def test_include_lines_are_bare_references(self):
         """任何一行出现 `#include` 都必须是干净的引用行：加载器在去注释之前扫描引用，注释里的示例会被当成自我包含。"""
         references = re.compile(r'\s*#include\s+"[^"]+"\s*$')  # 允许前导空白与行尾空白。
