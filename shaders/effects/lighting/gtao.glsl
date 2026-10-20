@@ -10,6 +10,8 @@
 */
 #ifndef OMNI_GTAO_INCLUDED
 #define OMNI_GTAO_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 多弹射补偿放在通用库，这里只传入遮蔽与底色。
+#include "/gfx/gi.glsl"
 // 地平线遮蔽：沿视线做多切片搜索最大地平线角，积分出半球被挡住的比重。
 // 调用前提：`texCoord`、`gbufferProjection`、`depthtex1` 已声明。
 float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
@@ -129,10 +131,7 @@ float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
 }
 // 遮蔽多弹射：按表面底色给遮蔽补一层间接光，深色表面补得少，避免暗部压死。
 vec3 GTAOMultiBounce(float ao, vec3 albedo){
-	vec3 a =  2.0404 * albedo - 0.3324; // 一次项拟合系数。
-	vec3 b = -4.7951 * albedo + 0.6417; // 二次项拟合系数。
-	vec3 c =  2.7552 * albedo + 0.6903; // 三次项拟合系数。
-	return max(vec3(ao), ((ao * a + b) * ao + c) * ao); // 取多项式与原始遮蔽的较大值。
+	return gfx_ao_multi_bounce(ao, albedo); // 转发到通用库。
 }
 
 #endif // 文件守卫结束。

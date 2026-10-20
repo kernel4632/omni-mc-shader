@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.17
+
+通用库第十三批：环境遮蔽多弹射。
+
+- 新增 `shaders/gfx/gi.glsl`：按底色补偿环境遮蔽的多项式。
+- `effects/lighting/gtao.glsl` 只保留同名转发，遮蔽采样与强度流程未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.16
 
 通用库第十二批：反射方向。
