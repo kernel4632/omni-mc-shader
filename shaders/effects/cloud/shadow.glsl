@@ -6,12 +6,15 @@
 可复制示例：
     `float shadow = CloudShadowFromTex(worldPos, worldShadowVector);`
     `vec4 blurred = CloudShadowAxialBlur(texelCoord, ivec2(1, 0));`
-调用前提：中间画面 `colortex2`、屏幕尺寸与湿度由绘制主体与加载器提供；云影范围、贴图尺寸与雨天阴影选项由 `effects/cloud/cloud.glsl` 定义。
+调用前提：中间画面 `colortex2` 由绘制主体提供，相机与湿度由 `bind/` 转换；云影范围、贴图尺寸与雨天阴影选项由 `effects/cloud/cloud.glsl` 定义。
 设计原因与取舍：这些函数不依赖三维云密度，所以不随云密度阶段一起关闭，任何引入云的程序都能编译；
     原程序横纵两个程序各写一份、只差采样轴，按合同合并成一个 `CloudShadowAxialBlur`，用轴参数区分。
 */
 #ifndef OMNI_CLOUD_SHADOW_INCLUDED
 #define OMNI_CLOUD_SHADOW_INCLUDED
+// 相机与天气输入由绑定层整理，云影只接收普通数值。
+#include "/bind/camera.glsl"
+#include "/bind/weather.glsl"
 // --- 云影三次采样：与共用数学里的同名函数返回类型和参数都不同，按合同留在云影这里一份 ---
 // 读一张二维纹理的十六像素三次模糊，返回第一个通道，`texSize` 是纹理尺寸。
 float CloudBicubicBlurTexture(sampler2D texSampler, vec2 coord, vec2 texSize){
@@ -37,37 +40,42 @@ float CloudBicubicBlurTexture(sampler2D texSampler, vec2 coord, vec2 texSize){
 // 云影贴图取值：把世界坐标投到云影贴图，采样后按天气在晴天与雨天两档之间混合。
 // 调用前提：全局量 `worldShadowVector` 已声明，云影贴在二号画面右上角。
 float CloudShadowFromTex(vec3 worldPos, vec3 shadowLightVector){
+	OmniCamera cameraData = bind_camera(); // 相机位置、画面尺寸与像素大小只读一次。
+	OmniWeather weather = bind_weather(); // 降雨湿润度只读一次。
 	#ifdef NO_COMPOSITE_VS // 没有合成顶点阶段时退回按阴影相机方向投影。
-		vec3 worldShadowVector = shadowModelViewInverse[2].xyz; // 用阴影相机视线方向作为光方向。
+		vec3 worldShadowVector = cameraData.shadowViewInverse[2].xyz; // 用阴影相机视线方向作为光方向。
 	#endif
-	vec2 coord = worldPos.xz - shadowLightVector.xz * ((worldPos.y + cameraPosition.y) / shadowLightVector.y); // 沿光方向投到云影贴图平面。
+	vec2 coord = worldPos.xz - shadowLightVector.xz * ((worldPos.y + cameraData.position.y) / shadowLightVector.y); // 沿光方向投到云影贴图平面。
 	coord = coord * (1.0 / OMNI_CLOUD_SHADOW_RANGE) + 0.5; // 换成零到一的贴图坐标。
-	float cloudShadow = 1.0 - wetness; // 雨天默认的云影底值。
+	float cloudShadow = 1.0 - weather.wetness; // 雨天默认的云影底值。
 	if (saturate(coord) == coord){ // 只有落在贴图范围内才采样。
-		float shadowTexSize = floor(min(screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)); // 云影贴图实际边长。
-		vec2 shadowTexel = screenSize - coord * shadowTexSize; // 贴图贴在画面右上角，坐标要翻转。
+		float shadowTexSize = floor(min(cameraData.screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)); // 云影贴图实际边长。
+		vec2 shadowTexel = cameraData.screenSize - coord * shadowTexSize; // 贴图贴在画面右上角，坐标要翻转。
 		vec2 fade = saturate(5.9 - abs(coord - 0.5) * 12.0); // 贴图边缘淡出，避免硬边界。
-		cloudShadow = mix(cloudShadow, CloudBicubicBlurTexture(colortex2, shadowTexel * pixelSize, screenSize), fade.x * fade.y); // 三次采样并淡出。
+		cloudShadow = mix(cloudShadow, CloudBicubicBlurTexture(colortex2, shadowTexel * cameraData.pixelSize, cameraData.screenSize), fade.x * fade.y); // 三次采样并淡出。
 	}
 	#if OMNI_CLOUD_SHADOW_FADE // 打开淡出时，太阳越贴地云影越淡。
 		float fadeAngle = smoothstep(0.06, 0.18, abs(shadowLightVector.y)); // 光方向越平越淡。
-		cloudShadow = mix(1.0 - wetness, cloudShadow, fadeAngle * fadeAngle); // 按淡出权重混合。
+		cloudShadow = mix(1.0 - weather.wetness, cloudShadow, fadeAngle * fadeAngle); // 按淡出权重混合。
 	#endif
-	return ((OMNI_RAIN_SHADOW - 1.0) * wetness + 1.0) * cloudShadow + (wetness - OMNI_RAIN_SHADOW * wetness); // 晴天与雨天两档之间插值。
+	return ((OMNI_RAIN_SHADOW - 1.0) * weather.wetness + 1.0) * cloudShadow + (weather.wetness - OMNI_RAIN_SHADOW * weather.wetness); // 晴天与雨天两档之间插值。
 }
 // 全局云影：给整个场景用的一个粗粒度云影值，来自二号画面顶行的统计像素。
 float GetSmoothCloudShadow(){
+	OmniCamera cameraData = bind_camera(); // 画面高度只读一次。
+	OmniWeather weather = bind_weather(); // 降雨湿润度只读一次。
 	#if defined OMNI_VOLUMETRIC_CLOUDS && defined OMNI_CLOUD_SHADOW // 有体积云和云影时读统计像素。
-		float globalCloudShadow = mix(texelFetch(colortex2, ivec2(40, screenSize.y - 1.0), 0).a, 1.0, 0.03 - wetness * 0.015); // 顶行四十号像素存全局云影。
+		float globalCloudShadow = mix(texelFetch(colortex2, ivec2(40, cameraData.screenSize.y - 1.0), 0).a, 1.0, 0.03 - weather.wetness * 0.015); // 顶行四十号像素存全局云影。
 	#else // 否则用纯天气估一个值。
-		float globalCloudShadow = 1.0 - wetness * (OMNI_RAIN_SHADOW * 0.985); // 雨天按雨天阴影压暗。
+		float globalCloudShadow = 1.0 - weather.wetness * (OMNI_RAIN_SHADOW * 0.985); // 雨天按雨天阴影压暗。
 	#endif
 	return globalCloudShadow; // 返回全局云影。
 }
 // 云影三次采样：原程序横纵两个程序各写一份只差采样轴，按合同合并成一个函数，名字加云影前缀。
-// 调用前提：`colortex2` 与 `screenSize` 已声明；`axis` 取值横向 `(1,0)` 或纵向 `(0,1)`。
+// 调用前提：`colortex2` 已声明，画面尺寸从绑定层读取；`axis` 取值横向 `(1,0)` 或纵向 `(0,1)`。
 vec4 CloudShadowAxialBlur(ivec2 texelCoord, ivec2 axis){
-	ivec4 shadowTexBorder = ivec4(screenSize - floor(min(screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)), screenSize - 1.0); // 云影贴图的边界，采样要夹在里面。
+	vec2 screenExtent = bind_camera().screenSize; // 画面尺寸只读一次。
+	ivec4 shadowTexBorder = ivec4(screenExtent - floor(min(screenExtent.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)), screenExtent - 1.0); // 云影贴图的边界，采样要夹在里面。
 	vec4 blur = vec4(0.0); // 模糊结果。
 	ivec2 sampleCoord = clamp(texelCoord - 3 * axis, shadowTexBorder.xy, shadowTexBorder.zw); // 第三个负向样本。
 	blur.r += texelFetch(colortex2, sampleCoord, 0).r * 0.054543; // 按高斯权重累加。
