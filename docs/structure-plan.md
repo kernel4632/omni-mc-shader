@@ -138,6 +138,7 @@ shaders/
 - 已完成：`gfx/reflection.glsl` 增加屏幕空间追踪的坐标换算、深度取样、远景转换、步进与二分细化；`effects/reflection/screenspace.glsl` 只保留深度图选择与质量选项换算。
 - 已完成：`gfx/reflection.glsl` 增加反射合并的菲涅耳、金属度、水吸收与亮度补正，`effects/reflection/screenspace.glsl` 的合成五号入口只做一次调用。
 - 已完成：`gfx/reflection.glsl` 增加反射主流程与三个维度的合成结构；天空兜底、体素回退、命中深度、视空间还原与反射雾改用 `GFX_REFLECTION_*` 钩子注入。`effects/reflection/screenspace.glsl` 只保留维度差异与一次调用，非注释行 331 降到 242。
+- 已完成：`gfx/cloud.glsl` 增加云影投影、十六像素三次模糊、天气两档混合、全局云影统计与七点高斯模糊；`effects/cloud/shadow.glsl` 只保留宿主相机与选项换算，非注释行 77 降到 36。
 - 后续可选：把 `effects/reflection/voxel.glsl` 的体素步进也迁入通用库；它依赖光传播体积的网格映射、方块编号与颜色图，需要先把网格原点和边长作为参数传入。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。
