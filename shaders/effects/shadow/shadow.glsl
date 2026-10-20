@@ -127,24 +127,6 @@ const float shadowDistance = 192.0; // [64.0 96.0 128.0 192.0 256.0 384.0 512.0 
 // 为什么先做透光散射：叶片、草这类薄片本身就透光，先算透光再把阳光按透光比例削弱，阴影才不会在薄片上过硬。
 // 为什么阴影图外坐标直接放弃采样：半影采样会跑出阴影图边界，硬读边界会把边界压成一条黑线。
 vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec3 albedo, float scatteringStrength, MaterialMask mask, out vec3 sss){
-	worldPos += gbufferModelViewInverse[3].xyz; // 相机相对世界位置补上相机位置，换成阴影相机能用的世界坐标。
-	worldPos -= gbufferModelViewInverse[2].xyz * 0.5 * mask.hand; // 手持物抬高半格，避免手贴脸时投出错误的自阴影。
-
-	#ifdef OMNI_END // 末地阴影相机单独一套矩阵。
-		vec3 shadowNormal = mat3(shadowModelViewEnd) * worldNormal; // 世界法线转到末地阴影相机空间。
-		shadowNormal.z = -shadowNormal.z; // 深度轴与视空间相反，翻转过来比较方向才正确。
-		vec3 shadowScreenPos = mat3(shadowModelViewEnd) * worldPos + shadowModelViewEnd[3].xyz; // 世界位置转到末地阴影相机空间。
-	#else // 主世界与下界用加载器矩阵。
-		vec3 shadowNormal = mat3(shadowModelView) * worldNormal; // 世界法线转到阴影相机空间。
-		shadowNormal.z = -shadowNormal.z; // 深度轴翻转。
-		vec3 shadowScreenPos = mat3(shadowModelView) * worldPos + shadowModelView[3].xyz; // 世界位置转到阴影相机空间。
-	#endif
-	shadowScreenPos *= vec3(shadowProjection[0][0], shadowProjection[0][0], -shadowProjection[0][0] * 0.5); // 按投影缩放，深度取半。
-
-	float zScale = 1.0 / shadowProjection[0][0]; // 深度缩放倒数，把深度差还原成实际距离。
-	float dist = length(shadowScreenPos.xy); // 到阴影图中心的距离。
-	float distortFactor = (1.0 - OMNI_SHADOW_MAP_BIAS) + dist * OMNI_SHADOW_MAP_BIAS; // 边缘压缩系数，与坐标变换一致。
-
 	#ifdef OMNI_TAA // 打开时间抗锯齿时用逐帧抖动，抗锯齿会把噪点平均掉。
 		vec2 noise = BlueNoiseTemporal(); // 每帧变化的蓝噪声。
 		#if OMNI_DISABLE_HAND_TAA && defined OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 手与玩家都关了时间抗锯齿时改用固定噪声。
@@ -160,120 +142,21 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 	#else // 不开时间抗锯齿时只能固定噪声。
 		vec2 noise = BlueNoise(); // 按像素平铺的固定蓝噪声。
 	#endif
-
-	const mat2 rotMat = mat2(cos(goldenAngle), sin(goldenAngle), -sin(goldenAngle), cos(goldenAngle)); // 每步旋转黄金角，样本沿螺旋散开避免规则条纹。
-
-	vec3 result = vec3(1.0); // 阴影可见度，初值全亮。
-
-	sss = vec3(0.0); // 次表面散射初值为零。
-
-	if (scatteringStrength > 0.0){ // 只有透光材质才走散射，普通表面直接跳过整段。
-		vec3 shadowScreenPosRaw = shadowScreenPos; // 未压缩坐标，散射采样要用。
-		shadowScreenPosRaw.xy *= 0.95 / distortFactor; // 补上与写入端一致的边缘压缩。
-		shadowScreenPosRaw = shadowScreenPosRaw * 0.5 + 0.5; // 转成零到一纹理坐标。
-
-		float spread = (scatteringStrength * 0.12 + 0.05) / (distortFactor * shadowDistance) + OMNI_SHADOW_BASIC_BLUR / shadowMapResolution; // 散射采样半径：透光越强、距离越远越大，再加基础模糊。
-		vec3 scatteringDensity = 15.0 / (scatteringStrength * albedo + 0.1); // 散射密度：底色的透光通道越大越容易透过。
-
-		const float steps = OMNI_SSS_QUALITY; // 散射采样次数来自选项。
-		const float rSteps = 1.0 / steps; // 次数的倒数，用来归一化半径与结果。
-
-		float angle = noise.x * TAU; // 初始角度也取随机，避免所有像素从同一方向起步。
-		vec2 rot = vec2(cos(angle), sin(angle)); // 当前旋转方向。
-
-		float scatteringDepth = 0.0; // 累计散射深度。
-
-		for (float i = 0.0; i < steps; i++){ // 逐次采样阴影图，累计遮挡厚度。
-			rot *= rotMat; // 每步旋转黄金角。
-			float radius = (i + noise.y) * rSteps; // 半径从随机相位起步，样本不重叠。
-			vec2 offset = rot * spread * radius; // 当前采样偏移。
-
-			float sampleDepth = textureLod(shadowtex0, shadowScreenPosRaw.xy + offset, 0.0).x; // 读取该点遮挡深度。
-
-			scatteringDepth += max(shadowScreenPosRaw.z - sampleDepth, 1e-5); // 累加接收点到遮挡物的距离，最小留一点避免零。
-		}
-		scatteringDepth *= rSteps * zScale; // 取平均并还原成实际距离。
-
-		vec3 scattering = exp2(-scatteringDepth * scatteringDensity); // 厚度越大透光越弱，指数衰减。
-
-		float distFalloff = saturate(((min(shadowDistance, far) - length(worldPos)) * 0.05 - 1.0)); // 超出阴影范围就淡出透光。
-
-		#if OMNI_SSS_NORMAL // 开启朝向透光时按观察角计算。
-			sss = scattering * (OMNI_SSS_BRIGHTNESS * distFalloff * (MiePhaseFunction(0.5, dot(worldNormal, -worldShadowVector)) * 0.5 + 0.15)); // 逆光方向更亮的米氏相位。
-		#else // 关闭朝向透光时用固定亮度。
-			sss = scattering * (OMNI_SSS_BRIGHTNESS * distFalloff * 0.2); // 固定占比，不随角度变化。
-		#endif
-
-		scatteringStrength *= distFalloff; // 阳光也按同一淡出缩放，远处不再额外透光。
-	}
-
-	if (sunlight > 0.0){ // 没有阳光时不必采样阴影。
-		shadowScreenPos += shadowNormal * (0.002 * (1.0 - mask.leaves) * distortFactor); // 沿法线抬一点减少自身条纹，叶片不抬以免漏光。
-		shadowScreenPos.xy *= 0.95 / distortFactor; // 补上与写入端一致的边缘压缩。
-		shadowScreenPos = shadowScreenPos * 0.5 + 0.5; // 转成零到一纹理坐标。
-
-		if (saturate(shadowScreenPos.xy) == shadowScreenPos.xy){ // 只在阴影图内采样，图外保持全亮。
-			result = vec3(0.0); // 从全暗开始累加可见样本。
-
-			float spread = OMNI_VPS_SPREAD * 200.0 / (distortFactor * shadowDistance); // 半影搜索半径：随扩散选项与距离缩放。
-
-			float avgDiff = 0.0; // 遮挡物与接收点的平均深度差，用来放大半影。
-
-			#if OMNI_VARIABLE_PENUMBRA_SHADOWS // 可变半影：先估遮挡物距离再决定边缘宽度。
-				float spreadLod = log2(shadowMapResolution / 512.0); // 按分辨率选取合适的纹理细节层级，高分辨率用更粗层级抑制噪点。
-				for (int i = -1; i <= 1; i++){ // 三乘三邻域估计遮挡物距离。
-					for (int j = -1; j <= 1; j++){
-						vec2 lookupCoord = shadowScreenPos.xy + vec2(i, j) * spread * 0.0039; // 邻域采样坐标。
-						float depthDiff = shadowScreenPos.z - textureLod(shadowtex0, lookupCoord, spreadLod).x; // 接收点深度减去遮挡物深度。
-						depthDiff = clamp(depthDiff * zScale * 0.0035, 0.0, 0.025); // 归一化并限制范围。
-						avgDiff += depthDiff * depthDiff; // 平方累加，后面开根得到均方根。
-					}
-				}
-
-				avgDiff /= 9.0; // 求九个样本的平均。
-				avgDiff = sqrt(avgDiff); // 开根得到平均深度差。
-			#endif
-
-			avgDiff = max(avgDiff, 0.015 * mask.leaves + 0.01 * mask.grass); // 叶片与草至少给一点半影，避免薄片边缘过硬。
-
-			float sampleSpread = avgDiff * 0.2 * spread + OMNI_SHADOW_BASIC_BLUR / shadowMapResolution; // 最终采样半径：深度差越大半影越宽，再加基础模糊。
-
-			shadowScreenPos.z -= (2e-6 + noise.y * 2e-6) * (dist + 0.03) * (1.0 - 0.9 * mask.leaves) * shadowDistance; // 深度偏移随距离增大，抵消阴影图分辨率不足带来的条纹。
-
-			const float steps = OMNI_VPS_QUALITY; // 半影采样次数来自选项。
-			const float rSteps = 1.0 / steps; // 次数倒数。
-
-			float angle = noise.y * TAU; // 初始角度取随机。
-			vec2 rot = vec2(cos(angle), sin(angle)); // 当前旋转方向。
-
-			for (float i = 0.0; i < steps; i++){ // 逐次采样阴影图求未遮挡比例。
-				rot *= rotMat; // 每步旋转黄金角。
-				float radius = sqrt((i + noise.x) * rSteps); // 平方根半径让样本在圆面上均匀分布。
-				vec2 offset = rot * radius * sampleSpread; // 当前采样偏移。
-
-				vec3 sampleCoord = vec3(shadowScreenPos.xy + offset, shadowScreenPos.z); // 采样坐标。
-
-				#if OMNI_COLORED_SHADOWS // 彩色阴影：半透明层用自身颜色，实心层只按遮挡。
-					float translucentShadow = step(sampleCoord.z, textureLod(shadowtex0, sampleCoord.xy, 0.0).x); // 半透明阴影：深度更远即未遮挡。
-					result += vec3(translucentShadow); // 半透明部分累加可见度。
-
-					float soildShadow = textureLod(shadowtex1, sampleCoord, 0.0); // 实心阴影贴图：含彩色阴影的合成结果。
-					vec3 shadowColorSample = GammaToLinear(textureLod(shadowcolor0, sampleCoord.xy, 0.0).rgb); // 该点半透明颜色转线性。
-					result += shadowColorSample * (soildShadow - translucentShadow); // 实心与半透明之差乘颜色，得到彩色阴影贡献。
-				#else // 关闭彩色阴影时只按实心遮挡。
-					float soildShadow = textureLod(shadowtex1, sampleCoord, 0.0); // 实心阴影贴图。
-					result += vec3(soildShadow); // 直接累加可见度。
-				#endif
-			}
-			result *= rSteps; // 取平均得到最终可见度。
-		}
-	}
-
-	#if OMNI_SSS_NORMAL // 开启朝向透光时，用透光比例把阴影往亮处提一点。
-		return result * (saturate(0.4 - scatteringStrength * 0.4) + 0.6); // 透光越强整体越亮。
-	#else
-		return result * (saturate(0.5 - scatteringStrength * 0.5) + 0.5); // 关闭时提亮幅度更小。
+	float sssPhase = 0.0; // 朝向透光用的米氏相位。
+	#if OMNI_SSS_NORMAL // 开启朝向透光时才需要算相位。
+		sssPhase = MiePhaseFunction(0.5, dot(worldNormal, -worldShadowVector)); // 逆光方向更亮。
 	#endif
+	#ifdef OMNI_END // 末地阴影相机单独一套矩阵。
+		mat4 shadowView = shadowModelViewEnd; // 末地阴影相机视图。
+	#else // 主世界与下界用加载器矩阵。
+		mat4 shadowView = shadowModelView; // 普通阴影相机视图。
+	#endif
+	return gfx_variable_penumbra_shadow(worldPos, worldNormal, sunlight, albedo, scatteringStrength,
+		mask.hand, mask.leaves, mask.grass, gbufferModelViewInverse[3].xyz, gbufferModelViewInverse[2].xyz,
+		shadowView, shadowProjection, shadowtex0, shadowtex1, shadowcolor0, shadowMapResolution, shadowDistance,
+		far, OMNI_SHADOW_MAP_BIAS, noise, bool(OMNI_VARIABLE_PENUMBRA_SHADOWS), bool(OMNI_COLORED_SHADOWS),
+		bool(OMNI_SSS_NORMAL), OMNI_SSS_BRIGHTNESS, sssPhase, OMNI_SSS_QUALITY, OMNI_VPS_QUALITY,
+		OMNI_VPS_SPREAD, OMNI_SHADOW_BASIC_BLUR, sss); // 采样循环全部在通用库。
 }
 
 #endif // 可变半影阴影结束，只由声明比较采样器的程序编译。

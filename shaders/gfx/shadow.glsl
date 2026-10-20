@@ -175,4 +175,103 @@ float gfx_shadow_segment_occlusion(vec3 shadow_start, vec3 shadow_end, sampler2D
 	return occluded * (segment_length * r_steps); // 按样本比例折算成被遮挡的米数。
 }
 
+// 不透明表面阴影：把相机相对世界位置投到阴影相机，做可变半影与彩色半透明阴影，并算出次表面散射。
+// 阴影图、矩阵、分辨率、噪声与全部选项由调用方传入；通用库不读取引擎状态。
+// 为什么先做透光散射：叶片、草这类薄片本身就透光，先算透光再把阳光按透光比例削弱，阴影才不会在薄片上过硬。
+// 为什么阴影图外坐标直接放弃采样：半影采样会跑出阴影图边界，硬读边界会把边界压成一条黑线。
+vec3 gfx_variable_penumbra_shadow(vec3 world_pos, vec3 world_normal, float sunlight, vec3 albedo,
+		float scattering_strength, float hand, float leaves, float grass, vec3 camera_position, vec3 view_axis_z,
+		mat4 shadow_view, mat4 shadow_projection, sampler2D shadow_depth0, sampler2DShadow shadow_depth1,
+		sampler2D shadow_color0, float shadow_map_resolution, float shadow_distance, float far_plane, float bias,
+		vec2 noise, bool variable_penumbra, bool colored_shadows, bool sss_directional, float sss_brightness,
+		float sss_phase, float sss_quality, float vps_quality, float vps_spread, float basic_blur, out vec3 sss){
+	world_pos += camera_position; // 相机相对世界位置补上相机位置，换成阴影相机能用的世界坐标。
+	world_pos -= view_axis_z * 0.5 * hand; // 手持物抬高半格，避免手贴脸时投出错误的自阴影。
+	vec3 shadow_normal = mat3(shadow_view) * world_normal; // 世界法线转到阴影相机空间。
+	shadow_normal.z = -shadow_normal.z; // 深度轴与视空间相反，翻转过来比较方向才正确。
+	vec3 shadow_screen_pos = gfx_shadow_view_pos(world_pos, shadow_view, shadow_projection); // 世界位置按投影缩放、深度取半。
+	float z_scale = 1.0 / shadow_projection[0][0]; // 深度缩放倒数，把深度差还原成实际距离。
+	float dist = length(shadow_screen_pos.xy); // 到阴影图中心的距离。
+	float distort_factor = (1.0 - bias) + dist * bias; // 边缘压缩系数，与坐标变换一致。
+	const mat2 rot_mat = mat2(cos(2.39996322973), sin(2.39996322973), -sin(2.39996322973), cos(2.39996322973)); // 每步旋转黄金角，样本沿螺旋散开避免规则条纹。
+	vec3 result = vec3(1.0); // 阴影可见度，初值全亮。
+	sss = vec3(0.0); // 次表面散射初值为零。
+	if (scattering_strength > 0.0){ // 只有透光材质才走散射，普通表面直接跳过整段。
+		vec3 shadow_screen_pos_raw = shadow_screen_pos; // 未压缩坐标，散射采样要用。
+		shadow_screen_pos_raw.xy *= 0.95 / distort_factor; // 补上与写入端一致的边缘压缩。
+		shadow_screen_pos_raw = shadow_screen_pos_raw * 0.5 + 0.5; // 转成零到一纹理坐标。
+		float spread = (scattering_strength * 0.12 + 0.05) / (distort_factor * shadow_distance) + basic_blur / shadow_map_resolution; // 散射采样半径：透光越强、距离越远越大，再加基础模糊。
+		vec3 scattering_density = 15.0 / (scattering_strength * albedo + 0.1); // 散射密度：底色的透光通道越大越容易透过。
+		float r_steps = 1.0 / sss_quality; // 次数的倒数，用来归一化半径与结果。
+		float angle = noise.x * 6.28318530718; // 初始角度也取随机，避免所有像素从同一方向起步。
+		vec2 rot = vec2(cos(angle), sin(angle)); // 当前旋转方向。
+		float scattering_depth = 0.0; // 累计散射深度。
+		for (float i = 0.0; i < sss_quality; i++){ // 逐次采样阴影图，累计遮挡厚度。
+			rot *= rot_mat; // 每步旋转黄金角。
+			float radius = (i + noise.y) * r_steps; // 半径从随机相位起步，样本不重叠。
+			vec2 offset = rot * spread * radius; // 当前采样偏移。
+			float sample_depth = textureLod(shadow_depth0, shadow_screen_pos_raw.xy + offset, 0.0).x; // 读取该点遮挡深度。
+			scattering_depth += max(shadow_screen_pos_raw.z - sample_depth, 1e-5); // 累加接收点到遮挡物的距离，最小留一点避免零。
+		}
+		scattering_depth *= r_steps * z_scale; // 取平均并还原成实际距离。
+		vec3 scattering = exp2(-scattering_depth * scattering_density); // 厚度越大透光越弱，指数衰减。
+		float dist_falloff = gfx_saturate(((min(shadow_distance, far_plane) - length(world_pos)) * 0.05 - 1.0)); // 超出阴影范围就淡出透光。
+		if (sss_directional){ // 开启朝向透光时按观察角计算。
+			sss = scattering * (sss_brightness * dist_falloff * (sss_phase * 0.5 + 0.15)); // 逆光方向更亮的米氏相位。
+		}else{ // 关闭朝向透光时用固定亮度。
+			sss = scattering * (sss_brightness * dist_falloff * 0.2); // 固定占比，不随角度变化。
+		}
+		scattering_strength *= dist_falloff; // 阳光也按同一淡出缩放，远处不再额外透光。
+	}
+	if (sunlight > 0.0){ // 没有阳光时不必采样阴影。
+		shadow_screen_pos += shadow_normal * (0.002 * (1.0 - leaves) * distort_factor); // 沿法线抬一点减少自身条纹，叶片不抬以免漏光。
+		shadow_screen_pos.xy *= 0.95 / distort_factor; // 补上与写入端一致的边缘压缩。
+		shadow_screen_pos = shadow_screen_pos * 0.5 + 0.5; // 转成零到一纹理坐标。
+		if (gfx_saturate(shadow_screen_pos.xy) == shadow_screen_pos.xy){ // 只在阴影图内采样，图外保持全亮。
+			result = vec3(0.0); // 从全暗开始累加可见样本。
+			float spread = vps_spread * 200.0 / (distort_factor * shadow_distance); // 半影搜索半径：随扩散选项与距离缩放。
+			float avg_diff = 0.0; // 遮挡物与接收点的平均深度差，用来放大半影。
+			if (variable_penumbra){ // 可变半影：先估遮挡物距离再决定边缘宽度。
+				float spread_lod = log2(shadow_map_resolution / 512.0); // 按分辨率选取合适的纹理细节层级，高分辨率用更粗层级抑制噪点。
+				for (int i = -1; i <= 1; i++){ // 三乘三邻域估计遮挡物距离。
+					for (int j = -1; j <= 1; j++){
+						vec2 lookup_coord = shadow_screen_pos.xy + vec2(i, j) * spread * 0.0039; // 邻域采样坐标。
+						float depth_diff = shadow_screen_pos.z - textureLod(shadow_depth0, lookup_coord, spread_lod).x; // 接收点深度减去遮挡物深度。
+						depth_diff = clamp(depth_diff * z_scale * 0.0035, 0.0, 0.025); // 归一化并限制范围。
+						avg_diff += depth_diff * depth_diff; // 平方累加，后面开根得到均方根。
+					}
+				}
+				avg_diff /= 9.0; // 求九个样本的平均。
+				avg_diff = sqrt(avg_diff); // 开根得到平均深度差。
+			}
+			avg_diff = max(avg_diff, 0.015 * leaves + 0.01 * grass); // 叶片与草至少给一点半影，避免薄片边缘过硬。
+			float sample_spread = avg_diff * 0.2 * spread + basic_blur / shadow_map_resolution; // 最终采样半径：深度差越大半影越宽，再加基础模糊。
+			shadow_screen_pos.z -= (2e-6 + noise.y * 2e-6) * (dist + 0.03) * (1.0 - 0.9 * leaves) * shadow_distance; // 深度偏移随距离增大，抵消阴影图分辨率不足带来的条纹。
+			float r_steps = 1.0 / vps_quality; // 次数倒数。
+			float angle = noise.y * 6.28318530718; // 初始角度取随机。
+			vec2 rot = vec2(cos(angle), sin(angle)); // 当前旋转方向。
+			for (float i = 0.0; i < vps_quality; i++){ // 逐次采样阴影图求未遮挡比例。
+				rot *= rot_mat; // 每步旋转黄金角。
+				float radius = sqrt((i + noise.x) * r_steps); // 平方根半径让样本在圆面上均匀分布。
+				vec2 offset = rot * radius * sample_spread; // 当前采样偏移。
+				vec3 sample_coord = vec3(shadow_screen_pos.xy + offset, shadow_screen_pos.z); // 采样坐标。
+				if (colored_shadows){ // 彩色阴影：半透明层用自身颜色，实心层只按遮挡。
+					float translucent_shadow = step(sample_coord.z, textureLod(shadow_depth0, sample_coord.xy, 0.0).x); // 半透明阴影：深度更远即未遮挡。
+					result += vec3(translucent_shadow); // 半透明部分累加可见度。
+					float solid_shadow = textureLod(shadow_depth1, sample_coord, 0.0); // 实心阴影贴图：含彩色阴影的合成结果。
+					vec3 shadow_color_sample = gfx_GammaToLinear(textureLod(shadow_color0, sample_coord.xy, 0.0).rgb); // 该点半透明颜色转线性。
+					result += shadow_color_sample * (solid_shadow - translucent_shadow); // 实心与半透明之差乘颜色，得到彩色阴影贡献。
+				}else{ // 关闭彩色阴影时只按实心遮挡。
+					result += vec3(textureLod(shadow_depth1, sample_coord, 0.0)); // 直接累加可见度。
+				}
+			}
+			result *= r_steps; // 取平均得到最终可见度。
+		}
+	}
+	if (sss_directional){ // 开启朝向透光时，用透光比例把阴影往亮处提一点。
+		return result * (gfx_saturate(0.4 - scattering_strength * 0.4) + 0.6); // 透光越强整体越亮。
+	}
+	return result * (gfx_saturate(0.5 - scattering_strength * 0.5) + 0.5); // 关闭时提亮幅度更小。
+}
+
 #endif

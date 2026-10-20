@@ -322,7 +322,8 @@ class EffectTests(unittest.TestCase):
             self.assertIn(name, found)  # 每个阴影参数由阴影源码定义。
         shadow = support.text("effects/shadow/shadow.glsl")  # 阴影主体。
         self.assertIn("VariablePenumbraShadow", shadow)  # 半影阴影独立成函数。
-        self.assertRegex(shadow, r"#\s*(ifdef|if)\s+OMNI_VARIABLE_PENUMBRA_SHADOWS\b")  # 由选项分出开关分支。
+        self.assertIn("OMNI_VARIABLE_PENUMBRA_SHADOWS", shadow)  # 开关作为参数交给通用库。
+        self.assertIn("variable_penumbra", support.text("gfx/shadow.glsl"))  # 通用库按参数决定是否估计遮挡物距离。
         self.assertIn("OMNI_SHADOW_MAP_BIAS", shadow)  # 偏置参与投影压缩。
 
     def test_screen_space_shadow_and_colored_shadow(self):
