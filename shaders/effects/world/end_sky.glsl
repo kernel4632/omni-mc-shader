@@ -17,6 +17,8 @@
 */
 #ifndef OMNI_END_SKY_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_END_SKY_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 行星表面与环带的纯公式放在通用库。
+#include "/gfx/atmosphere.glsl"
 
 // --- 星空：与主世界共用同一份 Eclipse 星场，来源 Eclipse `lib/stars.glsl`（经 `effects/sky/sky.glsl`） ---
 // 为什么共用：用户要求末地星空也换成 Eclipse 的实现，而主世界已把星场核换成 Eclipse；
@@ -31,27 +33,15 @@ vec3 EndCalculateStars(vec3 worldDir){
 
 // --- 行星表面的双向反射：把入射与出射两侧的积分近似各算一次 ---
 vec3 H(vec3 albedo, float a){
-	vec3 R = sqrt(vec3(1.0) - albedo); // 单次散射反照率的平方根。
-	vec3 r = (1.0 - R) / (1.0 + R); // 反射率比值。
-	vec3 H = r + (0.5 - r * a) * log((1.0 + a) / a); // 钱德拉塞卡近似。
-	H *= albedo * a; // 乘反照率与余弦项。
-
-	return 1.0 / (1.0 - H); // 取倒数得到倍增。
+	return gfx_chandrasekhar_h(albedo, a); // 钱德拉塞卡近似在通用库。
 }
 
 vec3 ppss(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir, float s){
-	float NdotL = dot(normal, lightDir); // 法线与光方向夹角余弦。
-	float NdotV = dot(normal, eyeDir); // 法线与视线夹角余弦。
-	albedo *= curve(saturate(NdotL)); // 反照率按入射角衰减。
-
-	vec3 color = albedo * H(albedo, NdotL) * H(albedo, NdotV) / (4.0 * PI * (NdotL + NdotV)); // 两侧近似与相函数分母。
-
-	return saturate(color); // 夹到合理范围。
+	return gfx_planet_brdf(albedo, normal, eyeDir, lightDir); // 双向反射在通用库；`s` 为保持原调用签名。
 }
 
 float Disc(float a, float s, float h){
-	float disc = curve(saturate((a - (1.0 - s)) * h)); // 由阈值与斜率构成的圆盘剖面。
-	return disc * disc; // 平方拉开明暗边界。
+	return gfx_disc_profile(a, s, h); // 圆盘剖面在通用库。
 }
 
 // --- 行星本体：射线与行星球求交，算出地表、光环与大气 ---
@@ -109,23 +99,8 @@ void PlanetEnd2(inout vec3 color, in vec3 eye, in vec3 rayDir, in vec3 lightDir)
 		float rayRadius = length(rayPos); // 交点到光环中心的半径。
 
 		if (rayRadius > ringRadius.x && rayRadius < ringRadius.y && dot(rayPos - origin, lightDirRing) > 0.0){ // 落在环带内且朝光一侧。
-			const float octAlpha = 0.5; // 每层噪声的权重衰减。
-			float octScale = 4.0; // 每层频率放大。
-			float octShift = (octAlpha / octScale) / 5; // 层间偏移。
-			float accum = 0.0; // 累积噪声。
-			float alpha = 0.5; // 当前层权重。
-			float shift = 0.0; // 层间位移。
-			float position = rayRadius * 0.5 + 0.69; // 环带上的采样位置。
-
-			position += shift; // 加上层间位移。
-
-			for (int i = 0; i < 5; i++){ // 五层噪声叠出环带的细缝。
-				accum += alpha * textureLod(noisetex, vec2(position, 0.0), 0.0).z; // 读噪声的第三通道。
-				position = (position + shift) * octScale; // 抬高频率。
-				alpha *= octAlpha; // 权重衰减。
-			}
-
-			surface *= exp(-pow(saturate(accum + octShift - 0.1) * 1.5, 3.0) * smoothstep(ringRadius.x, ringRadius.x * 1.1, rayRadius)); // 噪声把环带压出缝隙。
+			float ringNoise = gfx_planet_ring_noise(rayRadius * 0.5 + 0.69, noisetex); // 五层噪声叠出环带细缝。
+			surface *= exp(-pow(saturate(ringNoise) * 1.5, 3.0) * smoothstep(ringRadius.x, ringRadius.x * 1.1, rayRadius)); // 噪声把环带压出缝隙。
 		}
 
 		float UdotN = saturate(dot(ringRoataionMatrixInverse[2], surfaceNormal)); // 光环上表面法线与地表法线夹角。
@@ -164,23 +139,8 @@ void PlanetEnd2(inout vec3 color, in vec3 eye, in vec3 rayDir, in vec3 lightDir)
 
 		if(rayRadius > ringRadius.x && rayRadius < ringRadius.y) // 落在环带内。
 		{
-			const float octAlpha = 0.5; // 每层噪声权重衰减。
-			float octScale = 4.0; // 每层频率放大。
-			float octShift = (octAlpha / octScale) / 5; // 层间偏移。
-			float accum = 0.0; // 累积噪声。
-			float alpha = 0.5; // 当前层权重。
-			float shift = 0.0; // 层间位移。
-			float position = rayRadius * 0.5 + 0.69; // 环带采样位置。
-
-			position += shift; // 加上层间位移。
-
-			for (int i = 0; i < 5; i++) { // 五层噪声叠缝。
-				accum += alpha * textureLod(noisetex, vec2(position, 0.0), 0.0).z; // 读噪声第三通道。
-				position = (position + shift) * octScale; // 抬高频率。
-				alpha *= octAlpha; // 权重衰减。
-			}
-
-			ring += pow(saturate(accum + octShift - 0.1) * 1.5, 3.0); // 噪声得到环带形状。
+			float ringNoise = gfx_planet_ring_noise(rayRadius * 0.5 + 0.69, noisetex); // 五层噪声叠出环带细缝。
+			ring += pow(saturate(ringNoise) * 1.5, 3.0); // 噪声得到环带形状。
 			ring *= smoothstep(ringRadius.x, ringRadius.x * 1.1, rayRadius); // 内边缘渐入。
 
 			if(ringPos.y < 0.0 && groundIntersection.y > 0.0){ // 交点在环面下方且视线打到地面。

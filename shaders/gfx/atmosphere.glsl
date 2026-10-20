@@ -282,4 +282,47 @@ vec3 gfx_rainbow(vec3 color, vec3 direction, vec3 sunDirection, float wetness, f
 	return color + spectrum * band * wetness * (1.0 - wetness) * smoothstep(0.0, 0.1, direction.y) * strength; // 只在雨停后仍湿润时出现。
 }
 
+// --- 行星表面与环带：钱德拉塞卡近似、双向反射与圆盘剖面 ---
+// 这些函数只做纯计算，行星半径、时间与噪声贴图由调用方传入。
+
+// 钱德拉塞卡近似：各项同性散射的倍增因子，反照率越高、余弦越大越亮。
+vec3 gfx_chandrasekhar_h(vec3 albedo, float a){
+	vec3 R = sqrt(vec3(1.0) - albedo); // 单次散射反照率的平方根。
+	vec3 r = (1.0 - R) / (1.0 + R); // 反射率比值。
+	vec3 h = r + (0.5 - r * a) * log((1.0 + a) / a); // 钱德拉塞卡近似。
+	h *= albedo * a; // 乘反照率与余弦项。
+	return 1.0 / (1.0 - h); // 取倒数得到倍增。
+}
+
+// 行星表面双向反射：入射与出射两侧各算一次钱德拉塞卡近似，再除以相函数分母。
+vec3 gfx_planet_brdf(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir){
+	float NdotL = dot(normal, lightDir); // 法线与光方向夹角余弦。
+	float NdotV = dot(normal, eyeDir); // 法线与视线夹角余弦。
+	albedo *= clamp(NdotL, 0.0, 1.0) * clamp(NdotL, 0.0, 1.0) * (3.0 - 2.0 * clamp(NdotL, 0.0, 1.0)); // 反照率按入射角衰减。
+	vec3 color = albedo * gfx_chandrasekhar_h(albedo, NdotL) * gfx_chandrasekhar_h(albedo, NdotV) / (4.0 * GFX_PI * (NdotL + NdotV)); // 两侧近似与相函数分母。
+	return clamp(color, 0.0, 1.0); // 夹到合理范围。
+}
+
+// 圆盘剖面：由阈值与斜率构成边缘平滑的圆盘，平方后边界更清楚。
+float gfx_disc_profile(float a, float s, float h){
+	float x = clamp((a - (1.0 - s)) * h, 0.0, 1.0); // 由阈值与斜率构成的圆盘剖面。
+	float disc = x * x * (3.0 - 2.0 * x); // 平滑收口。
+	return disc * disc; // 平方拉开明暗边界。
+}
+
+// 行星环带噪声：五层噪声叠出环带细缝，返回已经去掉偏移的累加值。
+float gfx_planet_ring_noise(float position, sampler2D noiseTexture){
+	const float octAlpha = 0.5; // 每层噪声的权重衰减。
+	const float octScale = 4.0; // 每层频率放大。
+	const float octShift = (octAlpha / octScale) / 5.0; // 层间偏移。
+	float accum = 0.0; // 累积噪声。
+	float alpha = 0.5; // 当前层权重。
+	for (int i = 0; i < 5; i++){ // 五层噪声叠出环带细缝。
+		accum += alpha * textureLod(noiseTexture, vec2(position, 0.0), 0.0).z; // 读噪声的第三通道。
+		position = position * octScale; // 抬高频率。
+		alpha *= octAlpha; // 权重衰减。
+	}
+	return accum + octShift - 0.1; // 加上层间偏移并减去阈值。
+}
+
 #endif
