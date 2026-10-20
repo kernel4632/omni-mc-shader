@@ -35,15 +35,9 @@
 
 // ================================ 顶点阶段 ================================
 // 原程序里泛光五级与放大各写一份顶点做缩放，其余程序统一用 `Lib/Programs/PostVS.glsl` 的整屏三角形。
-#ifdef OMNI_VERTEX
-
-		void main(){
-			vec2 texCoord = gl_Vertex.xy; // 加载器顶点在零到一的方块上。
-			texCoord *= 0.51; // 缩到百分之五十一，覆盖半分辨率画面。
-			gl_Position = vec4(texCoord * 2.0 - 1.0, 0.0, 1.0); // 缩放后的整屏四边形。
-		}
-
-#endif
+// 全屏顶点只写一次；缩放比例由本程序给出。
+#define POST_VERTEX_SCALE 0.51
+#include "/rendering/post_vertex.glsl"
 
 // ================================ 片元阶段 ================================
 
@@ -57,27 +51,8 @@
 #if defined OMNI_FRAGMENT
 
 	// 后期共享声明，全项目只声明一次。
-	#include "/effects/clarity/post_shared.glsl"
-	// 材质编号（并提供视差与材质选项）。
-	#include "/effects/ground/material.glsl"
-	// 提供 `OMNI_TAA` 与时间抗锯齿选项，并带入坐标换算。
-	#include "/effects/clarity/antialiasing.glsl"
-	// 提供雨可见度等选项，泛光的合并读它。
-	#include "/effects/weather/weather.glsl"
-	// 提供水下雾开关与浓度选项，泛光的合并读它。
-	#include "/effects/water/water.glsl"
-	// 提供体积雾选项，并带入水面、阴影、天空、云与光照依赖。
-	#include "/effects/fog/fog.glsl"
-	// 坐标与深度换算。
-	#include "/common/coordinates.glsl"
-	// 时间噪声，景深与动态模糊的抖动读它。
-	#include "/common/noise.glsl"
-	// 曝光统计、曝光值与强光压缩曲线。
-	#include "/effects/color/color.glsl"
-	// 景深、动态模糊、暗角与镜头光斑。
-	#include "/effects/lens/lens.glsl"
-	// 泛光降采样、轴向模糊与合并泛光。
-	#include "/effects/color/bloom.glsl"
+// 后期共用的效果依赖按固定顺序引入一次。
+#include "/rendering/post_fragment_deps.glsl"
 
 	// --- 合成六号：景深 ---
 		/* DRAWBUFFERS:5 */
