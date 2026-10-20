@@ -17,6 +17,8 @@
 #define OMNI_END_DISC_INCLUDED // 置上标记，后续再次引用直接跳过。
 // 环带径向轮廓放在通用库，这里只传归一化半径。
 #include "/gfx/math.glsl"
+// 末地三维噪声放在通用库，这里只传噪声纹理。
+#include "/gfx/fog.glsl"
 
 // 来源：原程序在此处标注了出处网址 `www.shadertoy.com/view/lstSRS`，按合同保留来源注释与写法。
 
@@ -41,13 +43,7 @@ void WarpSpace(inout vec3 eyevec, inout vec3 raypos){
 
 // --- 三维噪声：和主世界那份同源，按合同加 `End` 前缀以区分同名 ---
 float EndCalculate3DNoise(vec3 position){
-	vec3 p = floor(position); // 整数格。
-	vec3 b = curve(fract(position)); // 格内偏移并平滑。
-
-	vec2 uv = 17.0 * p.z + p.xy + b.xy; // 三维到二维的坐标分配。
-	vec2 rg = textureLod(noisetex, (uv + 0.5) / 64.0, 0.0).zx; // 读噪声两个通道。
-
-	return mix(rg.x, rg.y, b.z); // 按高度插值。
+	return gfx_end_3d_noise(position, noisetex); // 转发到通用库。
 }
 
 // --- 云状分形噪声：四层不同频率叠加，供吸积盘细节使用 ---

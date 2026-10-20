@@ -94,4 +94,14 @@ float gfx_nether_fog_cloud_volume(vec3 pos, float time, sampler2D noiseTexture){
 	return max((roofToFloor - plumes * (1.0 - erosion)) * 2.0, clamp((floorFalloff - floorPlumes * 0.5) * erosion, 0.0, 1.0)); // 两种形状取大者。
 }
 
+// 末地三维噪声：把世界坐标折成三维格子，再查二维噪声图。
+float gfx_end_3d_noise(vec3 position, sampler2D noiseTexture){
+	vec3 p = floor(position); // 整数格。
+	vec3 b = fract(position); // 格内偏移。
+	b = b * b * (3.0 - 2.0 * b); // 平滑偏移。
+	vec2 uv = 17.0 * p.z + p.xy + b.xy; // 三维到二维的坐标分配。
+	vec2 rg = textureLod(noiseTexture, (uv + 0.5) / 64.0, 0.0).zx; // 读噪声两个通道。
+	return mix(rg.x, rg.y, b.z); // 按高度插值。
+}
+
 #endif
