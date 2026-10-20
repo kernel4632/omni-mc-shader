@@ -35,12 +35,11 @@
 // 为什么以相机为原点：曲率表示“离我越远越往下弯”，改用世界绝对坐标会随坐标漂移，模型之间会错位。
 // 为什么与水平距离平方成正比：真实球面相对切面的高度亏损近似正比于水平距离平方，Eclipse 用同一写法。
 float omniPlanetCurvatureDrop(vec2 horizontal){
-	float curvature = length(horizontal) / (16.0 * 8.0); // 水平距离除以十六乘八即一百二十八，Eclipse 的分母，照抄。
 	float amount = 0.0; // 下沉强度默认零，表示关闭。
 	#if OMNI_PLANET_CURVATURE // 开启时才取玩家的强度。
 		amount = OMNI_CURVATURE_AMOUNT; // 取玩家设置的曲率强度。
 	#endif
-	return curvature * curvature * amount; // 平方后乘强度，得到该点要下沉的高度。
+	return gfx_planet_curvature_drop(horizontal, amount); // 公式在通用库。
 }
 // 视空间下沉版本：按调用方给定的一对互逆矩阵把视空间位置转到相机相对世界坐标，下沉纵向后再转回。
 // 为什么把矩阵当作参数：不同阶段的视空间属于不同相机——普通绘制挂在 `gbufferModelView`，阴影挂在 `shadowModelView`；

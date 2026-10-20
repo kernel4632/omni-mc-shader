@@ -296,4 +296,10 @@ mat3 gfx_rotate_matrix(float x, float y, float z){
 	return maty * matx * matz; // 三个旋转合成。
 }
 
+// 行星曲率下沉：水平距离平方乘强度，模拟球面相对切面的高度亏损。
+float gfx_planet_curvature_drop(vec2 horizontal, float amount){
+	float curvature = length(horizontal) / 128.0; // 水平距离除以一百二十八。
+	return curvature * curvature * amount; // 平方后乘强度。
+}
+
 #endif

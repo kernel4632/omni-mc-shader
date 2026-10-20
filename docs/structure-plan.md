@@ -105,5 +105,6 @@ shaders/
 - 已完成：`gfx/fog.glsl` 增加下界体积雾原始密度，`effects/world/nether.glsl` 只保留转发。
 - 已完成：`gfx/math.glsl` 增加三轴旋转矩阵，`effects/world/end_disc.glsl` 只保留转发。
 - 已完成：`gfx/fog.glsl` 增加末地三维噪声，`effects/world/end_disc.glsl` 只保留转发。
+- 已完成：`gfx/math.glsl` 增加行星曲率下沉公式，`effects/world/planet.glsl` 保留编译开关与转发。
 - 下一步：继续迁末地雾与行星的纯计算，再整理菜单与 `bind/`。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

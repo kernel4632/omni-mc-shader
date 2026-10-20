@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.27
+
+通用库第二十三批：行星曲率。
+
+- `shaders/gfx/math.glsl` 增加行星曲率下沉公式，强度改为参数。
+- `effects/world/planet.glsl` 保留 `OMNI_PLANET_CURVATURE` 编译分支，只把公式转发给通用库。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.26
 
 通用库第二十二批：末地三维噪声。
