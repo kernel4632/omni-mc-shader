@@ -217,4 +217,48 @@ vec3 gfx_moon_direction(float time, float latitude, float pathRotation, float mo
 	return vec3(cos_h * sin(A), sin_h, cos_h * cos(A)); // 单位方向，y 轴朝天。
 }
 
+// --- 天空盒投影：世界方向与三乘二天空盒贴图的纹素坐标互相换算 ---
+// `tileSize` 是单张面的边长；投影结果不带屏幕偏移，由调用方按自己的贴图布局追加。
+
+// 把天空盒三维贴图上的一个纹素坐标反解成世界方向，与 `gfx_sky_project` 互为逆。
+vec3 gfx_sky_unproject(vec2 texel, float tileSize){
+	float tileSizeDivide = 1.0 / (0.5 * tileSize - 1.5); // 纹素到方向的缩放系数。
+	vec3 direction = vec3(0.0); // 待求的世界方向。
+	if (texel.x < tileSize) { // 第一张面，朝 x 正负。
+		direction.x = step(tileSize, texel.y) * 2.0 - 1.0; // 纵半决定正负。
+		direction.y = (texel.x - tileSize * 0.5) * tileSizeDivide; // 横坐标映射到一个轴。
+		direction.z = (texel.y - tileSize * (step(tileSize, texel.y) + 0.5)) * tileSizeDivide; // 纵坐标映射到另一个轴。
+	} else if (texel.x < 2.0 * tileSize) { // 第二张面，朝 y 正负。
+		direction.x = (texel.x - tileSize * 1.5) * tileSizeDivide; // 横坐标映射到一个轴。
+		direction.y = step(tileSize, texel.y) * 2.0 - 1.0; // 纵半决定正负。
+		direction.z = (texel.y - tileSize * (step(tileSize, texel.y) + 0.5)) * tileSizeDivide; // 纵坐标映射到另一个轴。
+	} else { // 第三张面，朝 z 正负。
+		direction.x = (texel.x - tileSize * 2.5) * tileSizeDivide; // 横坐标映射到一个轴。
+		direction.y = (texel.y - tileSize * (step(tileSize, texel.y) + 0.5)) * tileSizeDivide; // 纵坐标映射到另一个轴。
+		direction.z = step(tileSize, texel.y) * 2.0 - 1.0; // 纵半决定正负。
+	}
+	return normalize(direction); // 单位世界方向。
+}
+
+// 把一个世界方向投到天空盒三维贴图上，与 `gfx_sky_unproject` 互为逆。
+vec2 gfx_sky_project(vec3 dir, float tileSize){
+	float tileSizeDivide = 0.5 * tileSize - 1.5; // 方向到纹素的缩放系数。
+	vec3 adir = abs(dir); // 三个分量的绝对值，用来选主轴。
+	vec2 texel; // 待求的纹素坐标。
+	if (adir.x > adir.y && adir.x > adir.z){ // x 份量最大时用第一张面。
+		dir /= adir.x; // 归一化主轴分量。
+		texel.x = dir.y * tileSizeDivide + tileSize * 0.5; // 一个轴映射到横坐标。
+		texel.y = dir.z * tileSizeDivide + tileSize * (step(0.0, dir.x) + 0.5); // 另一个轴映射到纵坐标，符号决定上下半。
+	}else if (adir.y > adir.x && adir.y > adir.z){ // y 分量最大时用第二张面。
+		dir /= adir.y; // 归一化主轴分量。
+		texel.x = dir.x * tileSizeDivide + tileSize * 1.5; // 偏移到第二张面。
+		texel.y = dir.z * tileSizeDivide + tileSize * (step(0.0, dir.y) + 0.5); // 符号决定上下半。
+	}else{ // 否则用第三张面。
+		dir /= adir.z; // 归一化主轴分量。
+		texel.x = dir.x * tileSizeDivide + tileSize * 2.5; // 偏移到第三张面。
+		texel.y = dir.y * tileSizeDivide + tileSize * (step(0.0, dir.z) + 0.5); // 符号决定上下半。
+	}
+	return texel; // 返回纹素坐标，屏幕偏移由调用方追加。
+}
+
 #endif
