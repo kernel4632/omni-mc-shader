@@ -124,9 +124,9 @@ shaders/
 - 已完成：`gfx/water.glsl` 增加雨雾高光与雨点动画法线，`effects/water/rain.glsl` 只保留调制与入口转发。
 - 已完成：`gfx/color.glsl` 增加 HSV 转颜色、sRGB 转线性与饱和度矩阵，`effects/lighting/lpv.glsl` 只保留转发。
 - 已完成：`gfx/atmosphere.glsl` 增加行星表面与环带公式，`effects/world/end_sky.glsl` 只保留同名转发。
-- 下一步：继续把地面与远景的纯计算迁入通用库，再整理菜单。
-- 已完成：`bind/` 建立；`time.glsl`、`camera.glsl`、`weather.glsl`、`world.glsl` 把宿主时间、相机、天气与维度转成普通结构体，水面、天气、氛围、胶片颗粒、水洼、末地与下界先接入。
+- 已完成：`bind/` 建立；`time.glsl`、`camera.glsl`、`weather.glsl`、`world.glsl` 把宿主时间、相机、天气与维度转成普通结构体，水面、天气、氛围、天空渲染、云影、泛光、积雪、暴风、水洼、末地与下界已接入。
 - 已完成：顶层菜单合并为九页；`options.py` 用 `GROUP_PAGES` 把十五种效果文件夹归入九个入口，快速设置复用常用选项，关于页平铺调试开关，不设“高级”页；选项名、默认值与配置兼容未变。
 - 已完成：宿主层行数达标；`common/`、`bind/`、`rendering/` 与生成的入口文件合计 1887 行非注释代码（去掉空行与整行注释），低于约 2000 行目标。
 - 已完成：清理与文档；没有空目录，`gfx/` 没有未引用函数；新增通用库边界测试，检查通用库不出现宿主输入、选项宏、版本声明或宿主文件引用；更新 `gfx/README.md`、`docs/rendering.md` 与 `docs/parity.md`。
-- 尚未开始：把 `bind/` 覆盖到所有仍直接读宿主量的效果；当前已覆盖时间、水面、天气、氛围、天空渲染、云影、泛光、积雪、暴风、水洼、末地与下界，剩余按需迁移，不影响已有画面。
+- 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
+- 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。
