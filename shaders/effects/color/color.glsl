@@ -79,9 +79,9 @@
 #define OMNI_PURKINJE_EFFECT_THRESHOLD 0.00003 // [0.00001 0.000015 0.00002 0.00003 0.00005 0.00007 0.0001 0.00015 0.0002 0.0003 0.0005 0.0007 0.001]
 // @option {"label": {"zh_cn": "浦肯野强度", "en_us": "Strength"}, "slider": true, "description": {"zh_cn": "色偏的强度。", "en_us": "Strength of the colour shift."}}
 #define OMNI_PURKINJE_EFFECT_STRENGTH 0.7 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
-// @option {"label": {"zh_cn": "关闭夜视校正", "en_us": "Disable Night Vision"}, "page": "dev", "description": {"zh_cn": "调试开关：忽略夜视对曝光曲线的抬升，用来比较真实亮度。","en_us": "Debug switch: ignores the night-vision lift of the exposure curve to compare real brightness."}}
+// @option {"label": {"zh_cn": "关闭夜视校正", "en_us": "Disable Night Vision"}, "page": "about", "description": {"zh_cn": "调试开关：忽略夜视对曝光曲线的抬升，用来比较真实亮度。","en_us": "Debug switch: ignores the night-vision lift of the exposure curve to compare real brightness."}}
 #define OMNI_DISABLE_NIGHTVISION 0 // [0 1]
-// @option {"label": {"zh_cn": "关闭失明与黑暗校正", "en_us": "Disable Blindness & Darkness"}, "page": "dev", "description": {"zh_cn": "调试开关：忽略失明与黑暗对曝光、泛光和原版雾的影响。","en_us": "Debug switch: ignores blindness and darkness on exposure, bloom and vanilla fog."}}
+// @option {"label": {"zh_cn": "关闭失明与黑暗校正", "en_us": "Disable Blindness & Darkness"}, "page": "about", "description": {"zh_cn": "调试开关：忽略失明与黑暗对曝光、泛光和原版雾的影响。","en_us": "Debug switch: ignores blindness and darkness on exposure, bloom and vanilla fog."}}
 #define OMNI_DISABLE_BLINDNESS_DARKNESS 0 // [0 1]
 
 // --- 内部常数：原 `Settings.glsl` 里不进菜单的曝光常数 ---

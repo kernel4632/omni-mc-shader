@@ -90,7 +90,7 @@
 //#define OMNI_TERRAIN_VS_TBN
 // @option {"label":{"zh_cn":"未指定方块按植物处理","en_us":"General Grass Fix"},"description":{"zh_cn":"把倾斜的面都当成植物渲染，可能误伤其他方块。","en_us":"Treats tilted faces as plants; may misfire on other blocks."}}
 #define OMNI_GENERAL_GRASS_FIX 0 // [0 1]
-// @option {"label":{"zh_cn":"白色调试世界","en_us":"White Debug World"},"page":"dev","description":{"zh_cn":"把所有几何的底色改写成纯白，用来检查光照与几何；仅供调试。","en_us":"Rewrites every geometry albedo to plain white for checking lighting and geometry; debug only."}}
+// @option {"label":{"zh_cn":"白色调试世界","en_us":"White Debug World"},"page":"about","description":{"zh_cn":"把所有几何的底色改写成纯白，用来检查光照与几何；仅供调试。","en_us":"Rewrites every geometry albedo to plain white for checking lighting and geometry; debug only."}}
 //#define OMNI_WHITE_DEBUG_WORLD
 // 内部常数：方块与实体材质编号，按 iterationT `Settings.glsl` 原值，几何与合成阶段共用一份。
 #define MATID_SKY 0.0 // 天空里没有几何的像素。

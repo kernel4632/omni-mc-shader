@@ -6,6 +6,8 @@
 设计取舍：源码中直接交给加载器的宏声明 `#define`、常量声明 `const` 和旁边的 `@option`
 说明是唯一来源；常量仅扫描加载器明确支持的名称，工具不另存默认值。
 分享配置的读写、版本格式和命令入口都在 `config.py`，本文件只负责从源码生成菜单，两者都不手工维护产物。
+菜单把十五种效果文件夹收进九个顶层页：`GROUP_PAGES` 只决定入口，效果文件夹仍决定子页面标题；
+快速设置页重复展示常用选项，不改变归属、默认值和配置文件；关于页平铺调试开关，不新增配置键。
 """
 
 from __future__ import annotations
@@ -60,24 +62,62 @@ class Option:
     valueLabels: dict[str, dict[str, str]] = field(default_factory=dict)  # 档位取值的玩家可读名称，从源码旁读取。
 
 
+# 页面顺序就是玩家打开菜单时看到的按钮顺序。
+# 关于页集中放调试开关和标题开关，不再单独设开发者页。
+# 快速设置没有独立选项，避免同一配置出现两个默认值来源。
+# 预设按钮由生成器放在快速设置页最前面，切换预设仍然一次写入全部选项。
+# 玩家分享的配置文件只按选项名匹配，因此这次只移动菜单位置，不改写任何旧设置。
 # 主界面分类：顺序即菜单里的按钮顺序，`id` 用于 `screen.<ID>` 键名。
 MAIN_PAGES: list[tuple[str, dict[str, str]]] = [
+    ("quick", {"zh_cn": "快速设置", "en_us": "Quick setup"}),
     ("sky", {"zh_cn": "天空", "en_us": "Sky"}),
-    ("cloud", {"zh_cn": "云", "en_us": "Clouds"}),
-    ("fog", {"zh_cn": "雾与空气", "en_us": "Fog"}),
-    ("water", {"zh_cn": "水", "en_us": "Water"}),
-    ("ground", {"zh_cn": "地面与植物", "en_us": "Ground & plants"}),
-    ("lighting", {"zh_cn": "光照", "en_us": "Lighting"}),
-    ("shadow", {"zh_cn": "影子", "en_us": "Shadows"}),
-    ("reflection", {"zh_cn": "反射", "en_us": "Reflections"}),
-    ("color", {"zh_cn": "画面颜色", "en_us": "Color"}),
-    ("lens", {"zh_cn": "镜头", "en_us": "Lens"}),
-    ("clarity", {"zh_cn": "清晰与流畅", "en_us": "Clarity & speed"}),
+    ("cloudfog", {"zh_cn": "云与雾", "en_us": "Clouds & fog"}),
+    ("waterground", {"zh_cn": "水与地面", "en_us": "Water & ground"}),
+    ("lightshadow", {"zh_cn": "光照与阴影", "en_us": "Light & shadow"}),
+    ("camera", {"zh_cn": "画面与镜头", "en_us": "Image & camera"}),
     ("weather", {"zh_cn": "天气与季节", "en_us": "Weather & seasons"}),
-    ("entity", {"zh_cn": "生物与玩家", "en_us": "Mobs & player"}),
     ("world", {"zh_cn": "世界与远景", "en_us": "World & distance"}),
-    ("dev", {"zh_cn": "开发者", "en_us": "Development"}),
+    ("about", {"zh_cn": "关于与调试", "en_us": "About & debug"}),
 ]  # 封面分类只在一处定义，菜单与翻译都从这里取。
+
+# 顶层分页只改菜单入口，不改效果文件位置、选项名称或已有配置。
+# 九个入口覆盖全部效果，快速设置只提供常用选项的第二个入口。
+# 文件夹仍是最小效果单位，子页面标题继续用效果自己的名称。
+# 旧配置按选项名读取，换页不会让玩家已有设置失效。
+# 效果文件夹到主页面的归属：文件夹仍决定子页面标题，页面只决定顶层入口。
+# 这样顶层保持九页，效果文件不必为了分页而搬家，已有子页面名称也不变。
+GROUP_PAGES: dict[str, str] = {
+    "sky": "sky",
+    "cloud": "cloudfog",
+    "fog": "cloudfog",
+    "water": "waterground",
+    "ground": "waterground",
+    "lighting": "lightshadow",
+    "shadow": "lightshadow",
+    "reflection": "lightshadow",
+    "color": "camera",
+    "lens": "camera",
+    "clarity": "camera",
+    "entity": "camera",
+    "weather": "weather",
+    "world": "world",
+    "dev": "about",
+}  # 十五种效果文件夹归入九个主页面，不设“高级”总入口。
+
+# 快速设置页的快捷入口：只重复展示常用选项，不改变选项归属、默认值或配置文件。
+# 同一选项仍保留在所属效果的子页面里，删除或改名这里不会删除任何选项。
+QUICK_OPTIONS: tuple[str, ...] = (
+    "OMNI_VOLUMETRIC_CLOUDS",
+    "OMNI_CLOUD_QUALITY",
+    "OMNI_VFOG",
+    "OMNI_VFOG_QUALITY",
+    "OMNI_WATER_PARALLAX",
+    "OMNI_UNDERWATER_FOG",
+    "OMNI_VARIABLE_PENUMBRA_SHADOWS",
+    "OMNI_GTAO",
+    "OMNI_MANUAL_EXPOSURE",
+    "OMNI_AE_OFFSET",
+)  # 预设按钮由生成器加在这一页最前面。
 
 
 @dataclass(frozen=True)
@@ -307,15 +347,15 @@ def profile_values(values: dict[str, str], options: dict[str, Option]) -> str:
 def page_of(option: Option) -> str:
     """返回选项所属的主页面名称。
 
-    优先用 `@option` 声明的 `page`；否则用效果文件所在的文件夹名（文件夹按主页面命名）。
-    文件夹名就是页面的唯一来源，没有第二张映射表；都不匹配时直接报错，
-    避免选项悄悄消失或落到错误分类里。
+    优先用 `@option` 声明的 `page`；否则按效果文件夹查 `GROUP_PAGES`。
+    文件夹仍是效果分组与子页面标题的唯一来源，`GROUP_PAGES` 只决定它落在哪个顶层入口；
+    都不匹配时直接报错，避免选项悄悄消失或落到错误分类里。
     """
     if option.page:
         return option.page  # 单个选项可覆盖所在效果的默认页面。
-    folder = option.group.split("/")[0]  # 效果分组是“文件夹/文件”，文件夹就是主页面名。
-    if folder in {pid for pid, _ in MAIN_PAGES}:
-        return folder  # 文件夹名直接就是页面，不用再登记。
+    folder = option.group.split("/")[0]  # 效果分组是“文件夹/文件”，文件夹就是效果名。
+    if folder in GROUP_PAGES:
+        return GROUP_PAGES[folder]  # 文件夹归入九页之一，不再要求文件夹名等于页面名。
     raise ValueError(f"{option.source}：效果 {option.group} 没有登记主页面")
 
 
@@ -324,9 +364,12 @@ def _subpages(pages: dict[str, list[str]], options: dict[str, Option]) -> dict[s
 
     一个分类只来自一个效果文件时返回空，菜单保持平铺；来自多个效果时才建子页面，
     这样玩家先选分类、再选效果，长列表不会一次摊开。子页面名称直接复用效果自己的标题。
+    快速设置与关于页保持平铺：它们本来就是少量快捷入口和调试开关，再折一层只会多点一次。
     """
     result: dict[str, dict[str, list[str]]] = {}
     for pid, names in pages.items():
+        if pid in {"quick", "about"}:  # 这两页故意平铺，不按效果再分组。
+            continue
         by_group: dict[str, list[str]] = {}
         for name in names:
             by_group.setdefault(options[name].group, []).append(name)  # 同一效果的选项归到一起。
@@ -360,11 +403,27 @@ def generated(shaders: Path, options: dict[str, Option], groups: dict,
         pages.setdefault(page_of(option), []).append(option.name)  # 每个选项只落在一个页面。
     if sum(len(names) for names in pages.values()) != len(options):  # 自检：不允许漏项或重复登记。
         raise ValueError("菜单页面没有覆盖全部选项")
-    ordered = [pid for pid, _ in MAIN_PAGES if pid in pages]  # 页面顺序由主界面定义决定。
+    quick: list[str] = []  # 快速设置页只放快捷入口，选项仍留在自己的效果页。
+    for name in QUICK_OPTIONS:  # 快捷入口必须指向真实选项，拼写错误直接报出来。
+        if name not in options:
+            raise ValueError(f"快速设置引用了不存在的选项：{name}")
+        if name in quick:
+            raise ValueError(f"快速设置重复引用选项：{name}")
+        quick.append(name)
+    ordered = [pid for pid, _ in MAIN_PAGES if pid in pages and pid != "quick"]  # 页面顺序由主界面定义决定。
     unknown = set(pages) - {pid for pid, _ in MAIN_PAGES}  # 未登记页面说明映射遗漏。
     if unknown:
         raise ValueError(f"未登记的菜单页面：{sorted(unknown)}")
-    lines += ["", "screen = " + " ".join((["<profile>"] if profiles else []) + [f"[{pid.upper()}]" for pid in ordered])]  # 顶层列主界面分类，有预设时才显示预设入口。
+    top = [f"[{pid.upper()}]" for pid in ordered]  # 九个顶层入口里的八个效果页。
+    if quick:  # 有快捷入口时把它放第一个，预设按钮也收进这一页。
+        top.insert(0, "[QUICK]")
+    elif profiles:  # 没有快速页时保持原有预设入口。
+        top.insert(0, "<profile>")
+    lines += ["", "screen = " + " ".join(top)]  # 顶层只列九个分类，不再平铺选项。
+    if quick:  # 快速设置页：预设加一组常用选项，全部复用原选项。
+        entries = (["<profile>"] if profiles else []) + quick
+        lines.append("screen.QUICK = " + " ".join(entries))  # 预设放在最前，后面是快捷选项。
+        lines.append("screen.QUICK.columns = 3")  # 与效果页一致的三栏排布。
     subpages = _subpages(pages, options)  # 一个分类里出现多个效果时，各效果折叠成子页面，菜单仍然一眼看到分类。
     for pid in ordered:  # 每页列出自己的子页面或直接平铺选项，并固定三栏。
         if pid in subpages:
@@ -399,6 +458,10 @@ def _language(options: dict[str, Option], groups: dict, profiles: list[Preset], 
     for option in options.values():
         pages.setdefault(page_of(option), []).append(option.name)
     for pid, label in MAIN_PAGES:  # 页面顺序与菜单一致，跨系统生成时不产生无意义差异。
+        if pid == "quick":  # 快速设置页没有自己的选项，只要配了快捷入口就显示。
+            if QUICK_OPTIONS:
+                lines.append(f"screen.QUICK={escape(label[locale])}")
+            continue
         if pid in pages:  # 只输出真正有选项的页面。
             lines.append(f"screen.{pid.upper()}={escape(label[locale])}")
     for pid, by_group in _subpages(pages, options).items():  # 子页面标题直接复用效果自己的名称。

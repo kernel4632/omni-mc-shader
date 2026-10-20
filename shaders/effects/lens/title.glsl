@@ -21,7 +21,7 @@
 #ifndef OMNI_TITLE_INCLUDED // 只引入一次，避免选项、采样器与函数重复定义。
 #define OMNI_TITLE_INCLUDED // 置上标记，后续再次引用直接跳过。
 // @effect {"label":{"zh_cn":"标题标志","en_us":"Title Logo"}}
-// @option {"label": {"zh_cn": "标题标志", "en_us": "Title Logo"}, "description": {"zh_cn": "世界加载后短暂浮现 iterationT 品牌图标，来源 iterationT `Lib/Settings.glsl:481` 的 `TITLE`。", "en_us": "Briefly fades in the iterationT brand logo after a world loads. From iterationT `Lib/Settings.glsl:481` `TITLE`."}}
+// @option {"label": {"zh_cn": "标题标志", "en_us": "Title Logo"}, "page": "about", "description": {"zh_cn": "世界加载后短暂浮现 iterationT 品牌图标，来源 iterationT `Lib/Settings.glsl:481` 的 `TITLE`。", "en_us": "Briefly fades in the iterationT brand logo after a world loads. From iterationT `Lib/Settings.glsl:481` `TITLE`."}}
 #define OMNI_TITLE 1 // [0 1]
 
 // 图标贴图：iterationT 自带的 `texture/itt320.png`，由 `rendering/pipeline.properties` 绑到合成阶段这个二维采样器上。

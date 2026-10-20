@@ -209,6 +209,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实扫描结果。
         known = {name for name, _ in options.MAIN_PAGES}  # 主分类只在一处定义。
         used = {options.page_of(option) for option in found.values()}  # 每个选项实际落在的页面。
+        used.add("quick")  # 快速设置只放已存在选项的快捷按钮，没有独立选项。
         self.assertEqual(used <= known, True, used - known)  # 不允许选项落到未登记的页面。
         self.assertEqual(known <= used, True, known - used)  # 不允许出现空分类。
 
@@ -216,11 +217,18 @@ class EffectTests(unittest.TestCase):
         """一个分类有多个效果时折叠成子页面，档位按钮显示玩家能看懂的取值名称。"""
         _, _, files = support.configuration()  # 真实生成文件。
         menu = files[build.SHADERS / "shaders.properties"]  # 读取真实生成内容。
+        self.assertIn("screen = [QUICK] [SKY] [CLOUDFOG] [WATERGROUND] [LIGHTSHADOW] [CAMERA] [WEATHER] [WORLD] [ABOUT]", menu)  # 顶层固定九页。
+        self.assertNotIn("[ADVANCED]", menu)  # 不设“高级”总入口。
+        self.assertIn("screen.QUICK = <profile> OMNI_VOLUMETRIC_CLOUDS", menu)  # 快速设置先放预设，再放常用选项。
         self.assertIn("screen.SKY = ", menu)  # 天空分类存在。
         self.assertIn("screen.SKY_SKY_ATMOSPHERE = ", menu)  # 天空下的子页面自带选项列表。
-        self.assertIn("screen.WATER_WATER_WATER = OMNI_WAVE_SCALE", menu)  # 水面基础选项落在自己的子页面。
-        self.assertIn("screen.WATER_WATER_WAVESIM = OMNI_WAVE_SIMULATION", menu)  # 波浪模拟独立成一个水面子页面。
-        self.assertIn("screen.CLOUD = OMNI_PLANAR_CLOUDS", menu)  # 单效果分类保持平铺，不建子页面。
+        self.assertIn("screen.WATERGROUND_WATER_WATER = OMNI_WAVE_SCALE", menu)  # 水面基础选项落在水与地面页。
+        self.assertIn("screen.WATERGROUND_WATER_WAVESIM = OMNI_WAVE_SIMULATION", menu)  # 波浪模拟独立成一个水面子页面。
+        self.assertIn("screen.CLOUDFOG_CLOUD_CLOUD = OMNI_PLANAR_CLOUDS", menu)  # 云与雾页保留云的子页面。
+        about = next(line for line in menu.splitlines() if line.startswith("screen.ABOUT = "))  # 关于页平铺。
+        self.assertIn("OMNI_TITLE", about)  # 标题开关归入关于页。
+        self.assertIn("OMNI_DEBUG_VIEW", about)  # 调试入口也在这一页。
+        self.assertNotIn("screen.ABOUT_", menu)  # 关于页不再折子页面。
         lang = files[build.SHADERS / "lang" / "zh_cn.lang"]  # 中文翻译文件。
         self.assertIn("value.OMNI_TONEMAP_OPERATOR.0=AgX", lang)  # 色调映射的档位名称已生成。
         self.assertIn("value.OMNI_DEBUG_VIEW.0=", lang)  # 调试视图的档位名称已生成。

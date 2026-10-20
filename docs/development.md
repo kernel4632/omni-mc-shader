@@ -127,6 +127,9 @@ actionlint 同时检查 GitHub 工作流语法。
 布尔选项使用 `#define WATER_ENABLED`，默认关闭使用 `//#define WATER_ENABLED`。
 每条说明提供 `zh_cn` 和 `en_us`；需要帮助文字时增加同样带两种翻译的 `description`。
 每个有选项的效果定义一次 `@effect` 菜单名称。
+顶层菜单固定九页：快速设置、天空、云与雾、水与地面、光照与阴影、画面与镜头、天气与季节、世界与远景、关于与调试。
+效果文件夹到页面的归属写在 `options.py` 的 `GROUP_PAGES`；单个选项需要换页时在 `@option` 里加 `"page": "页面名"`。
+快速设置的快捷入口写在 `QUICK_OPTIONS`，只重复展示已有选项；不设“高级”总入口。
 
 `options.py` 同时扫描这两类原生声明，默认值和范围不在工具中另存。Iris当前源码的 `ConstDirectiveParser` 使用字面量解析，`OptionAnnotatedSource` 白名单包含 `shadowMapResolution` 与 `shadowDistance`；构建回归会检查声明类型和生成菜单名称。
 
