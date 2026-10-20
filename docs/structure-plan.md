@@ -92,5 +92,6 @@ shaders/
 - 已完成：`gfx/cloud.glsl` 建立，云的光照相位与顶部曲线迁入；`gfx/fog.glsl` 建立，粉末效应与散射相位迁入。
 - 已完成：`gfx/cloud.glsl` 增加平面云噪声、扭曲、密度与光照密度，`effects/cloud/planar.glsl` 只保留转发。
 - 已完成：`gfx/fog.glsl` 增加三维噪声、高度密度与团雾密度，`effects/fog/volumetric.glsl` 只保留转发。
-- 下一步：抽 `gfx/post.glsl`，先搬泛光与色调映射的纯计算。
+- 已完成：`gfx/post.glsl` 建立；泛光降采样、轴向高斯与三次升采样迁入，`effects/color/bloom.glsl` 只保留转发。
+- 下一步：抽 `gfx/antialias.glsl`，先搬时域抗锯齿的历史混合与邻域裁剪。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

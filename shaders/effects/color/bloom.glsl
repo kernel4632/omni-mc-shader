@@ -26,6 +26,7 @@
 */
 #ifndef OMNI_BLOOM_INCLUDED // 只引入一次，避免函数与内部常数重复定义。
 #define OMNI_BLOOM_INCLUDED // 置上标记。
+#include "/gfx/post.glsl"
 // @effect {"label":{"zh_cn":"泛光","en_us":"Bloom"}}
 // @option {"label":{"zh_cn":"开关","en_us":"Bloom"},"description":{"zh_cn":"让亮部产生柔和光晕。","en_us":"Adds a soft glow around bright areas."}}
 #define OMNI_BLOOM 1 // [0 1]
@@ -67,65 +68,17 @@
 
 // --- 降采样：在缩小的分辨率上做一次便宜的模糊，为后面的轴向模糊准备输入 ---
 // 十三个样本按中心大、四角小的权重合并，权重和为四，输出前乘回四分之一保持亮度不变。
-vec3 BloomDownSample(sampler2D texSampler, vec2 sampleCoord){
-	vec3 blur = CurveToLinear(textureLod(texSampler, sampleCoord, 0.0).rgb) * 0.125; // 中心样本先计入，权重八分之一。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + vec2( pixelSize.x,  pixelSize.y), 0.0).rgb) * 0.5; // 四个斜对角样本权重更高。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + vec2( pixelSize.x, -pixelSize.y), 0.0).rgb) * 0.5; // 右上对角样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + vec2(-pixelSize.x,  pixelSize.y), 0.0).rgb) * 0.5; // 左上对角样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + vec2(-pixelSize.x, -pixelSize.y), 0.0).rgb) * 0.5; // 左下对角样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + 2.0 * vec2( pixelSize.x,  0.0), 0.0).rgb) * 0.25; // 水平方向两像素外的样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + 2.0 * vec2( 0.0,  pixelSize.y), 0.0).rgb) * 0.25; // 竖直方向两像素外的样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + 2.0 * vec2(-pixelSize.x,  0.0), 0.0).rgb) * 0.25; // 水平反向两像素外的样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + 2.0 * vec2( 0.0, -pixelSize.y), 0.0).rgb) * 0.25; // 竖直反向两像素外的样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + 2.0 * vec2( pixelSize.x,  pixelSize.y), 0.0).rgb) * 0.125; // 远处对角样本权重更低。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + 2.0 * vec2( pixelSize.x, -pixelSize.y), 0.0).rgb) * 0.125; // 远处对角样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + 2.0 * vec2(-pixelSize.x,  pixelSize.y), 0.0).rgb) * 0.125; // 远处对角样本。
-	blur += CurveToLinear(textureLod(texSampler, sampleCoord + 2.0 * vec2(-pixelSize.x, -pixelSize.y), 0.0).rgb) * 0.125; // 远处对角样本。
-	return LinearToCurve(blur * 0.25); // 权重和为四，乘四分之一后亮度不变。
-}
+vec3 BloomDownSample(sampler2D texSampler, vec2 sampleCoord) { return gfx_bloom_downsample(texSampler, sampleCoord, pixelSize); }
 
 // --- 轴向高斯模糊：沿一个方向做长条高斯，横竖各来一次就得到二维模糊 ---
 // `coordScale` 把当前级的坐标还原到该级的分辨率；`sampleOrigin` 是该级在合图里的左下角；`sampleSize` 是该级大小；
 // `axis` 是模糊方向；`alpha` 控制核的宽度；`steps` 是每侧样本数。
 // 为什么沿轴而不是整块：横竖两次一维高斯等价于一次二维高斯，样本数从平方降到线性，性能好得多。
-vec3 AxialGaussianBlur(sampler2D texSampler, vec2 coord, vec2 coordScale, float sampleOrigin, vec2 sampleSize, vec2 axis, const float alpha, const float steps){
-	vec3 blur = vec3(0.0); // 累积的模糊颜色。
-	float weights = 0.0; // 累积的权重。
-	for (float i = -steps; i <= steps; i++){ // 从负步长到正步长对称取样。
-		float sampleWeight = exp2(-i * i * alpha * 5.77); // 高斯权重，离中心越远权重越小。
-		vec2 sampleCoord = coord + axis / coordScale * pixelSize * i * 2.0; // 当前方向的取样坐标。
-		vec2 tCoord = sampleCoord; // 记下原始坐标，用来判断有没有被夹到边界外。
-		sampleCoord = clamp(sampleCoord, vec2(sampleOrigin, 0.0), vec2(sampleOrigin + sampleSize.x, sampleSize.y)); // 夹在当前级的范围内。
-		sampleWeight *= float(tCoord == sampleCoord) + 1e-20; // 被夹过的样本权重归零，边界外不参与模糊。
-		sampleCoord *= coordScale; // 还原成读取该级所用的坐标。
-		blur += CurveToLinear(textureLod(texSampler, sampleCoord, 0.0).rgb) * sampleWeight; // 累加这一样本。
-		weights += sampleWeight; // 累加权重。
-	}
-	return blur / weights; // 按权重归一化，样本少时亮度也不会变。
-}
+vec3 AxialGaussianBlur(sampler2D texSampler, vec2 coord, vec2 coordScale, float sampleOrigin, vec2 sampleSize, vec2 axis, const float alpha, const float steps) { return gfx_axial_gaussian_blur(texSampler, coord, coordScale, sampleOrigin, sampleSize, axis, alpha, steps, pixelSize); }
 
 // --- 三次模糊：在升采样合并时把一张小图放大成平滑的大图 ---
 // 与共享数学里的同名函数不同，这里接收纹理尺寸参数并读取调用方指定的画面，按合同留在本文件。
-vec4 BloomBicubicBlurTexture(sampler2D texSampler, vec2 coord, vec2 texSize){
-	vec2 texPixelSize = 1.0 / texSize; // 一个像素的坐标大小。
-	coord = coord * texSize - 0.5; // 换成以像素中心为原点的坐标。
-	vec2 p = floor(coord); // 整数像素。
-	vec2 f = coord - p; // 小数偏移。
-	vec2 ff = f * f; // 偏移平方。
-	vec4 w0; // 两个方向的前两个三次样条权重。
-	vec4 w1; // 两个方向的后两个三次样条权重。
-	w0.xz = 1.0 - f; w0.xz *= w0.xz * w0.xz; // 第一个权重是反向偏移的立方。
-	w1.yw = ff * f; // 第四个权重是偏移立方。
-	w1.xz = 3.0 * w1.yw + 4.0 - 6.0 * ff; // 第三个权重。
-	w0.yw = 6.0 - w1.xz - w1.yw - w0.xz; // 第二个权重由总和为六推出。
-	vec4 s = w0 + w1; // 左右两对权重和。
-	vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy + w1 / s; // 每对合并成一次双线性采样的位置。
-	c *= texPixelSize.xxyy; // 换回零到一坐标。
-	vec2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
-	return mix(mix(textureLod(texSampler, c.yw, 0.0), textureLod(texSampler, c.xw, 0.0), m.x),
-			   mix(textureLod(texSampler, c.yz, 0.0), textureLod(texSampler, c.xz, 0.0), m.x),
-			   m.y); // 四次双线性采样得到十六像素的三次模糊。
-}
+vec4 BloomBicubicBlurTexture(sampler2D texSampler, vec2 coord, vec2 texSize) { return gfx_bloom_bicubic(texSampler, coord, texSize); }
 
 // --- 合并泛光：把光晕按物体与雾的透明度混进场景颜色 ---
 // `bloomGuide` 是引导强度，通常取一号画面的透明度，用来判断该处亮部有多亮。
