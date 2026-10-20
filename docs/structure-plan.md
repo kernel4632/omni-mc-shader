@@ -106,5 +106,6 @@ shaders/
 - 已完成：`gfx/math.glsl` 增加三轴旋转矩阵，`effects/world/end_disc.glsl` 只保留转发。
 - 已完成：`gfx/fog.glsl` 增加末地三维噪声，`effects/world/end_disc.glsl` 只保留转发。
 - 已完成：`gfx/math.glsl` 增加行星曲率下沉公式，`effects/world/planet.glsl` 保留编译开关与转发。
-- 下一步：继续迁末地雾与行星的纯计算，再整理菜单与 `bind/`。
+- 已完成：`gfx/fog.glsl` 增加末地涡旋雾形状、光柱、步进与解析雾密度，`effects/world/end_fog.glsl` 只保留选项、远景与抗锯齿分支和入口转发。
+- 下一步：建 `bind/`，把宿主数据整理成通用库参数，再整理菜单。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。
