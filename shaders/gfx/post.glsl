@@ -14,6 +14,9 @@
 #ifndef GFX_POST_INCLUDED
 #define GFX_POST_INCLUDED
 
+// 亮度权重与区间重映射来自数学模块。
+#include "/gfx/math.glsl"
+
 // 把管线编码换回线性亮度：平方两次。
 float gfx_curve_to_linear(float color){
 	color = color * color; // 第一次平方。
@@ -466,5 +469,77 @@ vec4 gfx_bloom_combine(sampler2D chainTexture, vec2 coord, vec2 texel, vec2 scre
 	}
 	bloom *= mix(0.2774, 1.2 / 7.0, rainAlpha); // 雨里整体提亮，原程序保留的常数。
 	return vec4(gfx_linear_to_curve(bloom), 0.0); // 编码后交回五号画面要写的内容。
+}
+
+// --- 自动曝光分块统计：把画面按多级纹理的块大小切开，逐块取亮度后加权平均 ---
+// 为什么分块而不是逐像素：逐像素太贵；分块加计权既便宜又能得到接近整屏的平均亮度。
+// 为什么用加权而不是直接平均：人眼更在意画面中心与偏离整体亮度的区域，权重让测光更接近相机行为。
+// 所有画面尺寸、像素大小与选项都由调用方传入，库不读取任何引擎状态。
+struct gfx_exposure_params {
+	vec2 screen_size; // 画面像素尺寸。
+	vec2 pixel_size; // 一个像素在零到一坐标里的大小。
+	int lod; // 多级纹理层级，决定一块覆盖多少像素。
+	float luma_scale; // 管线亮度换算系数。
+	float average; // 用一张粗样本估出的整体亮度，供亮度计权使用。
+	int mode; // 测光方式：零默认、一中心权重、二只看中心、三全屏平均。
+	int luminance_mode; // 亮度计权方式：零关闭，一到四对应四种曲线。
+	float luminance_strength; // 亮度计权的强度。
+	bool end_dimension; // 是否末地，末地默认测光不看中心。
+	bool nether; // 是否下界，亮度计权在下界用固定指数。
+	bool cave_mode; // 是否洞穴模式，洞穴按偏离整体亮度计权。
+	bool overworld; // 是否主世界，亮度计权的指数范围与末地不同。
+};
+
+// 返回加权平均亮度，单位与输入画面一致；调用方再乘曝光输出系数并编码。
+float gfx_exposure_tile_average(sampler2D scene_texture, gfx_exposure_params params){
+	float tile_scale = exp2(float(params.lod)); // 一个块覆盖多少像素。
+	vec2 tile_count = floor(params.screen_size / tile_scale); // 每行每列有多少块。
+	vec2 tile_center = tile_count * 0.5; // 块网格的中心。
+	float exposure = 0.0; // 加权亮度累加。
+	float weights = 0.0; // 权重累加。
+	for (int x = 0; x < tile_count.x; x++){ // 逐列遍历块。
+		for (int y = 0; y < tile_count.y; y++){ // 逐行遍历块。
+			float tile_exposure = gfx_math_luminance(gfx_curve_to_linear(texelFetch(scene_texture, ivec2(x, y), params.lod).rgb)) * params.luma_scale; // 这个块的亮度。
+			vec2 tile_distance = (tile_center - vec2(x, y) + 0.5) * params.pixel_size * tile_scale * 2.0; // 块中心到画面中心的屏幕距离。
+			float center_distance = length(tile_distance); // 到画面中心的距离。
+			float tile_weight = 1.0; // 块权重，先给等权。
+			if (params.mode == 0){ // 默认测光。
+				tile_weight = params.end_dimension ? 1.0 : gfx_remapSaturate(center_distance, 0.6, 0.4); // 末地等权，其他维度越靠中心越高。
+			}else if (params.mode == 1){ // 中心权重较强。
+				tile_weight = gfx_remapSaturate(center_distance, 0.7, 0.0); // 中心权重曲线。
+				tile_weight *= tile_weight; // 再平方，中心更突出。
+			}else if (params.mode == 2){ // 只看中心。
+				tile_weight = gfx_remapSaturate(center_distance, 0.6, 0.4); // 与默认相同的曲线。
+			}
+			tile_exposure = max(6.4e-9, tile_exposure); // 避免全黑块把权重推到无穷。
+			if (params.cave_mode && params.overworld){ // 洞穴模式且在主世界时按偏离程度计权。
+				float cave_weight = params.average / tile_exposure; // 相对整体亮度的比例。
+				tile_weight *= pow(cave_weight, 0.7); // 越偏离整体亮度权重越大，适应洞穴。
+			}else if (params.luminance_mode > 0){ // 其他情况按亮度计权方式。
+				float luma_weight = 1.0; // 相对亮度权重。
+				if (params.luminance_mode == 1){ // 预设一。
+					luma_weight = params.average / tile_exposure; // 相对亮度。
+					if (params.nether){ // 下界用固定指数。
+						luma_weight = pow(luma_weight, 0.7);
+					}else if (params.overworld){ // 主世界按整体亮度调指数。
+						luma_weight = pow(luma_weight, gfx_remapSaturate(params.average, 1.55e-6, 6.25e-8) * 0.7); // 暗环境更偏向亮块。
+					}else{ // 末地指数范围不同。
+						luma_weight = pow(luma_weight, gfx_remapSaturate(params.average, 1.55e-6, 6.25e-8) * 0.5 + 0.2); // 末地曲线。
+					}
+				}else if (params.luminance_mode == 2){ // 预设二。
+					luma_weight = params.average / tile_exposure; // 相对亮度。
+					luma_weight = pow(luma_weight, params.nether ? 0.7 : gfx_remapSaturate(params.average, 1.55e-6, 6.25e-8) * 0.5 + 0.2); // 下界固定，其余用较平的曲线。
+				}else if (params.luminance_mode == 3){ // 偏向暗部。
+					luma_weight = pow(params.average / tile_exposure, params.luminance_strength); // 用选项给的强度。
+				}else{ // 偏向高光。
+					luma_weight = pow(tile_exposure / params.average, params.luminance_strength); // 比例取反。
+				}
+				tile_weight *= luma_weight; // 把亮度权重乘进块权重。
+			}
+			exposure += tile_exposure * tile_weight; // 累加加权亮度。
+			weights += tile_weight; // 累加权重。
+		}
+	}
+	return exposure / weights; // 加权平均。
 }
 #endif

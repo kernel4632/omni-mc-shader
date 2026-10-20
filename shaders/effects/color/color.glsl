@@ -92,6 +92,8 @@
 #include "/common/math.glsl"
 // 强光压缩算法放在通用库里，本文件只保留选项、曝光统计与调用。
 #include "/gfx/color.glsl"
+// 自动曝光的分块统计也在通用后期库，本文件只填参数。
+#include "/gfx/post.glsl"
 
 // --- 曝光统计：按分块对一号画面求平均亮度，得到目标曝光 ---
 // 把画面切成固定大小的小块，每个块只读一个亮度，按到中心的距离和亮度给块计权，再加权平均。
@@ -99,74 +101,36 @@
 // 为什么用对数平均：亮度跨度很大，直接平均会被几个高光块带偏。
 float GetExposureTiles(){
 	float avg = Luminance(CurveToLinear(textureLod(colortex1, vec2(0.65, 0.65), floor(log2(min(viewWidth, viewHeight)))).rgb)) * (MAIN_OUTPUT_FACTOR / 128.0); // 用一个粗糙降采样估计整体亮度，供计权用。
-	int lod = 6; // 用第六级多级纹理做分块采样。
-	float tileScale = exp2(float(lod)); // 一个块覆盖多少像素。
-	vec2 tileCount = floor(screenSize / tileScale); // 每行每列有多少块。
-	vec2 tileCenter = tileCount * 0.5; // 块网格的中心。
-	float exposure = 0.0; // 加权亮度累加。
-	float weights = 0.0; // 权重累加。
-	for (int x = 0; x < tileCount.x; x++){ // 逐列遍历块。
-	for (int y = 0; y < tileCount.y; y++){ // 逐行遍历块。
-		float tileExposure = Luminance(CurveToLinear(texelFetch(colortex1, ivec2(x, y), lod).rgb)) * (MAIN_OUTPUT_FACTOR / 128.0); // 这个块的亮度。
-		vec2 tileDistance = (tileCenter - vec2(x, y) + 0.5) * pixelSize * tileScale * 2.0; // 块中心到画面中心的屏幕距离。
-		float centerDistance = length(tileDistance); // 到画面中心的距离。
-		#if OMNI_AE_MODE == 0 // 默认：中心权重。
-			#ifdef OMNI_END // 末地不看中心，全部等权。
-				float tileWeight = 1.0; // 末地每块权重相同。
-			#else // 其他维度按到中心的距离衰减。
-				float tileWeight = remapSaturate(centerDistance, 0.6, 0.4); // 越靠中心权重越高。
-			#endif
-		#elif OMNI_AE_MODE == 1 // 中心权重较强。
-			float tileWeight = remapSaturate(centerDistance, 0.7, 0.0); // 中心权重曲线。
-			tileWeight *= tileWeight; // 再平方，中心更突出。
-		#elif OMNI_AE_MODE == 2 // 只看中心。
-			float tileWeight = remapSaturate(centerDistance, 0.6, 0.4); // 与默认相同的曲线。
-		#elif OMNI_AE_MODE == 3 // 全屏平均。
-			float tileWeight = 1.0; // 每块等权。
-		#endif
-		#ifdef AE_CLAMP // 给块亮度设极小下限。
-			tileExposure = max(6.4e-9, tileExposure); // 避免全黑块把权重推到无穷。
-		#endif
-		#if defined OMNI_CAVE_MODE && defined OMNI_OVERWORLD // 洞穴模式且在主世界时按偏离程度计权。
-			float lumaWeight = avg / tileExposure; // 相对整体亮度的比例。
-			tileWeight *= pow(lumaWeight, 0.7); // 越偏离整体亮度权重越大，适应洞穴。
-		#else // 其他情况按亮度计权方式。
-			#if OMNI_LUMINANCE_WEIGHT_MODE > 0 // 关闭计权时不动权重。
-				#if OMNI_LUMINANCE_WEIGHT_MODE == 1 // 预设一。
-					#ifdef OMNI_NETHER // 下界用固定指数。
-						float lumaWeight = avg / tileExposure; // 相对亮度。
-						lumaWeight = pow(lumaWeight, 0.7); // 固定指数。
-					#else // 主世界与末地按整体亮度改变指数。
-						float lumaWeight = avg / tileExposure; // 相对亮度。
-						#ifdef OMNI_OVERWORLD // 主世界按整体亮度调指数。
-							lumaWeight = pow(lumaWeight, remapSaturate(avg, 1.55e-6, 6.25e-8) * 0.7); // 暗环境更偏向亮块。
-						#else // 末地指数范围不同。
-							lumaWeight = pow(lumaWeight, remapSaturate(avg, 1.55e-6, 6.25e-8) * 0.5 + 0.2); // 末地曲线。
-						#endif
-					#endif
-				#elif OMNI_LUMINANCE_WEIGHT_MODE == 2 // 预设二。
-					#ifdef OMNI_NETHER // 下界用固定指数。
-						float lumaWeight = avg / tileExposure; // 相对亮度。
-						lumaWeight = pow(lumaWeight, 0.7); // 固定指数。
-					#else // 其他维度用较平的曲线。
-						float lumaWeight = avg / tileExposure; // 相对亮度。
-						lumaWeight = pow(lumaWeight, remapSaturate(avg, 1.55e-6, 6.25e-8) * 0.5 + 0.2); // 曲线指数。
-					#endif
-				#elif OMNI_LUMINANCE_WEIGHT_MODE == 3 // 偏向暗部。
-					float lumaWeight = avg / tileExposure; // 相对亮度。
-					lumaWeight = pow(lumaWeight, OMNI_LUMINANCE_WEIGHT_STRENGTH); // 用选项给的强度。
-				#elif OMNI_LUMINANCE_WEIGHT_MODE == 4 // 偏向高光。
-					float lumaWeight = tileExposure / avg; // 比例取反。
-					lumaWeight = pow(lumaWeight, OMNI_LUMINANCE_WEIGHT_STRENGTH); // 用选项给的强度。
-				#endif
-				tileWeight *= lumaWeight; // 把亮度权重乘进块权重。
-			#endif
-		#endif
-		exposure += tileExposure * tileWeight; // 累加加权亮度。
-		weights += tileWeight; // 累加权重。
-	}
-	}
-	exposure /= weights; // 加权平均。
+	gfx_exposure_params params; // 分块统计需要的全部输入。
+	params.screen_size = screenSize; // 画面尺寸。
+	params.pixel_size = pixelSize; // 单像素大小。
+	params.lod = 6; // 用第六级多级纹理做分块采样。
+	params.luma_scale = MAIN_OUTPUT_FACTOR / 128.0; // 管线亮度换算。
+	params.average = avg; // 粗估整体亮度。
+	params.mode = OMNI_AE_MODE; // 测光方式。
+	params.luminance_mode = OMNI_LUMINANCE_WEIGHT_MODE; // 亮度计权方式。
+	params.luminance_strength = OMNI_LUMINANCE_WEIGHT_STRENGTH; // 计权强度。
+	#ifdef OMNI_END // 末地标记。
+		params.end_dimension = true; // 末地不看中心。
+	#else
+		params.end_dimension = false; // 其他维度按中心计权。
+	#endif
+	#ifdef OMNI_NETHER // 下界标记。
+		params.nether = true; // 下界用固定计权指数。
+	#else
+		params.nether = false; // 其他维度按整体亮度调整。
+	#endif
+	#ifdef OMNI_CAVE_MODE // 洞穴模式标记。
+		params.cave_mode = true; // 洞穴按偏离整体亮度计权。
+	#else
+		params.cave_mode = false; // 普通模式不启用洞穴计权。
+	#endif
+	#ifdef OMNI_OVERWORLD // 主世界标记。
+		params.overworld = true; // 主世界指数范围与末地不同。
+	#else
+		params.overworld = false; // 非主世界不套主世界曲线。
+	#endif
+	float exposure = gfx_exposure_tile_average(colortex1, params); // 分块循环在通用库里。
 	exposure *= EXPOSURE_OUTPUT_FACTOR; // 换到曝光单位。
 	return LinearToCurve(exposure); // 按管线编码后写进顶行像素。
 }
