@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.31
+
+通用库第二十七批：日月圆盘与月亮轨道。
+
+- `shaders/gfx/atmosphere.glsl` 增加日盘、月盘、反射月盘与月亮轨道方向，尺寸档位、时间、纬度与月份长度改为参数。
+- `effects/sky/sun_moon.glsl` 与 `effects/sky/moon_orbit.glsl` 只保留太阳色、尺寸分支、时间来源和同名转发，圆盘与轨道常数不变。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.30
 
 通用库第二十六批：星空。

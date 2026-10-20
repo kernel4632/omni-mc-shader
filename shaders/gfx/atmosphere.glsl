@@ -156,4 +156,65 @@ vec3 gfx_align_to_sun_axis(vec3 worldDir, vec3 sunVector){
 	return cosine * worldDir + cross(axis, worldDir) + (cosecantSquared - cosecantSquared * cosine) * dot(axis, worldDir) * axis; // 按罗德里格公式对齐星场。
 }
 
+// --- 日月圆盘：视线越接近天体方向越亮，边缘用平滑曲线收口 ---
+// 圆盘不是几何，而是方向夹角的遮罩；角半径与硬度属于形体参数，由调用方给出。
+
+// 太阳圆盘遮罩：返回零到一的亮度，太阳颜色与辐照倍率由调用方乘上。
+float gfx_sun_disc(vec3 worldDir, vec3 sunDir){
+	float d = dot(worldDir, sunDir); // 视线与太阳方向的夹角余弦。
+	float size = 5e-5; // 圆盘角半径，越小圆盘越细。
+	float hardness = 4e4; // 边缘硬度，越大边缘越陡。
+	float x = clamp((d - (1.0 - size)) * hardness, 0.0, 1.0); // 从中心到边缘的平滑遮罩。
+	float disc = x * x * (3.0 - 2.0 * x); // 三次平滑曲线收口。
+	return disc * disc; // 平方让边缘更收。
+}
+
+// 真实月亮圆盘：角半径由尺寸档位换算，档位越大圆盘越大。
+float gfx_moon_disc_real(vec3 worldDir, vec3 moonDir, float sizeSetting){
+	float d = dot(worldDir, moonDir); // 视线与月亮方向的夹角余弦。
+	float moonSize = 0.999 + (10.0 - sizeSetting) * 0.0001; // 档位越大圆盘越大。
+	float x = clamp((d - moonSize) / (1.0 - moonSize), 0.0, 1.0); // 从圆盘中心到边缘的遮罩。
+	float disc = x * x * (3.0 - 2.0 * x); // 平滑曲线。
+	return disc * disc; // 平方收口后返回零到一的亮度。
+}
+
+// 默认月亮圆盘：比太阳更硬、更小的圆盘。
+float gfx_moon_disc_default(vec3 worldDir, vec3 moonDir){
+	float d = dot(worldDir, moonDir); // 视线与月亮方向的夹角余弦。
+	float size = 5e-5; // 圆盘角半径。
+	float hardness = 1e5; // 边缘硬度，比太阳更硬。
+	float x = clamp((d - (1.0 - size)) * hardness, 0.0, 1.0); // 月亮遮罩。
+	float disc = x * x * (3.0 - 2.0 * x); // 平滑曲线。
+	return disc * disc; // 平方收口后返回零到一的亮度。
+}
+
+// 反射里的月亮圆盘：反射天空盒分辨率低，用更大的角半径换取可见。
+float gfx_moon_disc_reflection(vec3 worldDir, vec3 moonDir){
+	float d = dot(worldDir, moonDir); // 夹角余弦。
+	float size = 0.0025; // 反射用更大的角半径。
+	float hardness = 300.0; // 边缘更软。
+	float x = clamp((d - (1.0 - size)) * hardness, 0.0, 1.0); // 反射月亮遮罩。
+	float disc = x * x * (3.0 - 2.0 * x); // 平滑曲线。
+	return disc * disc; // 返回零到一亮度。
+}
+
+// --- 月亮轨道：由游戏时间、纬度与轨道倾角闭式算出月亮的世界方向 ---
+// `time` 是累计世界刻，`latitude` 与 `pathRotation` 是角度，`monthLength` 是月亮绕一圈的游戏日数。
+// 返回单位方向，y 轴朝天；数学步骤照 Eclipse `dimensions/begin.csh:73-95`。
+vec3 gfx_moon_direction(float time, float latitude, float pathRotation, float monthLength){
+	float phi = radians(-latitude); // 观测点纬度，换算成弧度。
+	float del = radians(pathRotation); // 月亮轨道相对天赤道的倾角。
+	float t = time / 24000.0; // 时间换算成天。
+	t *= 1.0 + 1.0 / monthLength; // 月亮每天比太阳多走一点，长期累积才产生月相与对齐。
+	float H = t * 2.0 * GFX_PI - GFX_PI; // 时角，一整天转一圈。
+	float sin_h = sin(phi) * sin(del) + cos(phi) * cos(del) * cos(H); // 高度角正弦。
+	float h = asin(clamp(sin_h, -1.0, 1.0)); // 高度角；钳一下避免浮点误差让反正弦出非数。
+	float cos_h = cos(h); // 高度角余弦。
+	float cosA = (sin(del) - sin(phi) * sin_h) / max(cos(phi) * cos_h, 1e-4); // 方位角余弦；分母加下限，避免两极附近除零。
+	cosA = clamp(cosA, -1.0, 1.0); // 同样钳一下，防止浮点误差越界。
+	float A = acos(cosA); // 方位角。
+	if (sin(H) > 0.0) A = 2.0 * GFX_PI - A; // 时角过午时镜像到另一半球。
+	return vec3(cos_h * sin(A), sin_h, cos_h * cos(A)); // 单位方向，y 轴朝天。
+}
+
 #endif

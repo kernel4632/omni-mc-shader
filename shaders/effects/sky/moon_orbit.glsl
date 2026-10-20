@@ -6,7 +6,8 @@
     `vec3 moonDir = CalculateWorldMoonVector(worldSunVector);`
     `float phase = CalculateMoonPhaseBrightness(worldSunVector, worldMoonVector);`
 设计原因与取舍：默认不改变画面——自定义轨道、月相亮度、真实月亮都默认关闭，月食默认开启但默认轨道下日月相对、永不接近。
-    轨道数学照 Eclipse `dimensions/begin.csh:73-95` 的 `moonDirection` 逐行移植；平滑时间由加载器按 `pipeline.properties` 每帧算好。
+    轨道数学照 Eclipse `dimensions/begin.csh:73-95` 的 `moonDirection` 逐行移植，纯公式在 `shaders/gfx/atmosphere.glsl`；
+    平滑时间由加载器按 `pipeline.properties` 每帧算好。
 */
 #ifndef OMNI_SKY_MOON_ORBIT_INCLUDED
 #define OMNI_SKY_MOON_ORBIT_INCLUDED
@@ -15,22 +16,11 @@
 #define MONTH_LENGTH 8 // 一个月多少游戏日，月亮绕一圈比一天略长，所以每天相对太阳移动一点。
 #define EARTH_ROTATION_TILT 14.0 // 月亮轨道随季节摆动的最大赤纬偏移，单位度。
 uniform float omniMoonTimeSmooth; // 平滑后的累计世界时间，由加载器按 `pipeline.properties` 每帧算好。世界天数 `worldDay` 由 `common/uniforms.glsl` 统一声明。
+// 月亮轨道公式放在通用库，这里只传时间、纬度与倾角。
+#include "/gfx/atmosphere.glsl"
 // 把时间换算成月亮的世界方向：纬度决定升起高度，倾角决定赤纬，时间决定时角。
-// 来源 Eclipse `dimensions/begin.csh:73-95` 的 `moonDirection`，数学与步骤逐行相同。
 vec3 MoonDirection(float time, float latitude, float pathRotation){
-	float phi = radians(-latitude); // 观测点纬度，换算成弧度。
-	float del = radians(pathRotation); // 月亮轨道相对天赤道的倾角。
-	float t = time / 24000.0; // 时间换算成天。
-	t *= 1.0 + 1.0 / float(MONTH_LENGTH); // 月亮每天比太阳多走一点，长期累积才产生月相与对齐。
-	float H = t * 2.0 * PI - PI; // 时角，一整天转一圈。
-	float sin_h = sin(phi) * sin(del) + cos(phi) * cos(del) * cos(H); // 高度角正弦。
-	float h = asin(clamp(sin_h, -1.0, 1.0)); // 高度角；钳一下避免浮点误差让反正弦出非数。
-	float cos_h = cos(h); // 高度角余弦。
-	float cosA = (sin(del) - sin(phi) * sin_h) / max(cos(phi) * cos_h, 1e-4); // 方位角余弦；分母加下限，避免两极附近除零。
-	cosA = clamp(cosA, -1.0, 1.0); // 同样钳一下，防止浮点误差越界。
-	float A = acos(cosA); // 方位角。
-	if (sin(H) > 0.0) A = 2.0 * PI - A; // 时角过午时镜像到另一半球。
-	return vec3(cos_h * sin(A), sin_h, cos_h * cos(A)); // 单位方向，y 轴朝天。
+	return gfx_moon_direction(time, latitude, pathRotation, float(MONTH_LENGTH)); // 转发到通用库，月份长度按本文件常数。
 }
 // 由世界时间闭式算出月亮方向：开启自定义轨道时月亮独立运行，关闭时月亮仍与太阳相对。
 // 这是顶点阶段的一项纯计算，不读取任何中间画面，因此各程序算出的方向完全一致。
