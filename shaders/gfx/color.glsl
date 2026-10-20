@@ -1,10 +1,11 @@
 /*
-通用图形库颜色模块：与引擎无关的线性颜色、亮度、伽马和强光压缩。
-调用位置：任何需要把线性高动态范围颜色映射到显示空间的程序；本仓库由 `effects/color/color.glsl` 引入。
+通用图形库颜色模块：与引擎无关的线性颜色、亮度、伽马、强光压缩、黑边与调色。
+调用位置：任何需要把线性高动态范围颜色映射到显示空间或做最终调色的程序；本仓库由 `effects/color/color.glsl` 引入。
 可复制示例：
     vec3 a = gfx_aces(linearColor, true);
     vec3 b = gfx_agx(linearColor, 13.0, true);
     vec3 c = gfx_tonemap_none(linearColor);
+    vec3 d = gfx_advanced_color(gammaColor, 1.0, 0.0, 1.0, 1.0);
 设计原因与取舍：
     这里只接收显式参数，不读取任何 Minecraft、Iris 或全局 uniform，因此可以直接复制到其他 OpenGL 项目。
     函数名统一使用 `gfx_` 前缀，避免与宿主工程的同名函数冲突。
@@ -75,6 +76,36 @@ vec3 gfx_agx(vec3 color, float ev, bool abney){
 // 无压缩：只做伽马编码，保留全部高光，代价是容易硬剪切。
 vec3 gfx_tonemap_none(vec3 color){
 	return pow(color, vec3(1.0 / 2.2)); // 与显示伽马相同。
+}
+
+// 黑边：按目标宽高比在画面上下或左右画黑边，返回该像素是否落在画面内。
+float gfx_black_bar(vec2 coord, float aspect, float targetRatio){
+	if (targetRatio == 0.0) return 1.0; // 不加黑边时全部保留。
+	vec2 aCoord = abs(coord - 0.5) * 2.0; // 到画面中心归一化后的偏移。
+	float width = min(targetRatio / aspect, 1.0); // 目标比例下的宽度。
+	float height = min(aspect / targetRatio, 1.0); // 目标比例下的高度。
+	return step(aCoord.x, width) * step(aCoord.y, height); // 落在目标画面内为一，外面为零。
+}
+
+// 浦肯野效应：亮度低于阈值时把颜色混向偏蓝的暗视觉，越暗混入越多。
+void gfx_purkinje(inout vec3 color, float threshold, float strength){
+	float luminance = gfx_luminance(color); // 当前颜色亮度。
+	color = mix(color, luminance * vec3(0.7777, 1.0004, 1.6190), clamp((threshold - luminance) * strength / threshold, 0.0, 1.0)); // 越暗混入越多。
+}
+
+// 白平衡：按调用方给的色温颜色乘在线性颜色上，中性时颜色为一、不改动。
+vec3 gfx_white_balance(vec3 color, vec3 tint){
+	return color * tint; // 直接乘色温颜色。
+}
+
+// 高级调色：白光裁剪、亮度伽马与饱和度，全部在线性空间处理后再回显示空间。
+vec3 gfx_advanced_color(vec3 color, float lumaGamma, float whiteClip, float saturation, float gamma){
+	color = gfx_gamma_to_linear(color); // 从伽马空间回到线性。
+	color = pow(length(color), 1.0 / lumaGamma) * normalize(color + 1e-20); // 只改颜色的长度，保色相。
+	color = clamp(color * (1.0 + whiteClip), 0.0, 1.0); // 按白点裁剪并夹紧。
+	color = mix(color, vec3(gfx_luminance(color)), vec3(1.0 - saturation)); // 朝灰阶混合以调整饱和度。
+	color = clamp(pow(color, vec3(((1.0 / 2.2) / gamma))), 0.0, 1.0); // 按伽马回显示空间。
+	return color; // 返回调好的颜色。
 }
 
 #endif

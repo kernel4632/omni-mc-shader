@@ -203,18 +203,13 @@ float GetExposureValue(){
 // --- 黑边：按电影比例在画面上下画黑边 ---
 // `newRatio` 是目标宽高比，零表示不加黑边。返回零或一表示该像素是否落在画面内。
 float BlackBar(float newRatio){
-	if (newRatio == 0.0) return 1.0; // 不加黑边时全部保留。
-	vec2 aCoord = abs(texCoord - 0.5) * 2.0; // 到画面中心归一化后的偏移。
-	float width = min(newRatio / aspectRatio, 1.0); // 目标比例下的宽度。
-	float height = min(aspectRatio / newRatio, 1.0); // 目标比例下的高度。
-	return step(aCoord.x, width) * step(aCoord.y, height); // 落在目标画面内为一，外面为零。
+	return gfx_black_bar(texCoord, aspectRatio, newRatio); // 黑边形状在通用库。
 }
 
 // --- 浦肯野效应：暗处向偏蓝的暗视觉偏移 ---
 // 亮度低于阈值时，颜色向偏蓝的亮度混合，阈值和强度由选项控制。
 void PurkinjeEffect(inout vec3 color){
-	float luminance = Luminance(color); // 当前颜色亮度。
-	color = mix(color, luminance * vec3(0.7777, 1.0004, 1.6190), saturate((OMNI_PURKINJE_EFFECT_THRESHOLD - luminance) * OMNI_PURKINJE_EFFECT_STRENGTH / OMNI_PURKINJE_EFFECT_THRESHOLD)); // 越暗混入越多。
+	gfx_purkinje(color, OMNI_PURKINJE_EFFECT_THRESHOLD, OMNI_PURKINJE_EFFECT_STRENGTH); // 混合公式在通用库。
 }
 
 // --- 白平衡：按色温给线性颜色染色 ---
@@ -224,19 +219,14 @@ void PurkinjeEffect(inout vec3 color){
 // 为什么放在色调映射之前：白平衡是相机白点校正，要在曝光后的线性颜色上做；
 //   压缩曲线之后再改会破坏已经压好的高光，也与真实相机的处理顺序不符。
 vec3 WhiteBalance(vec3 color){
-	if (OMNI_WHITE_BALANCE != 6500.0) color *= Blackbody(OMNI_WHITE_BALANCE); // 非中性时才按黑体色温染色，低值偏暖、高值偏冷。
+	if (OMNI_WHITE_BALANCE != 6500.0) color = gfx_white_balance(color, Blackbody(OMNI_WHITE_BALANCE)); // 非中性时才按黑体色温染色，低值偏暖、高值偏冷。
 	return color; // 返回染色后的线性颜色。
 }
 
 // --- 高级调色：白光裁剪、亮度伽马与饱和度，从十四号主体里单独拆出 ---
 // 先回线性空间，再压白点、按亮度伽马调整明暗对比、按饱和度调整鲜艳度，最后回显示空间。
 vec3 AdvancedColor(vec3 color){
-	color = GammaToLinear(color); // 从伽马空间回到线性。
-	color = pow(length(color), 1.0 / OMNI_LUMA_GAMMA) * normalize(color + 1e-20); // 只改颜色的长度，保色相。
-	color = saturate(color * (1.0 + OMNI_WHITE_CLIP)); // 按白点裁剪并夹紧。
-	color = mix(color, vec3(Luminance(color)), vec3(1.0 - OMNI_SATURATION)); // 朝灰阶混合以调整饱和度。
-	color = saturate(pow(color, vec3(((1.0 / 2.2) / OMNI_GAMMA)))); // 按伽马回显示空间。
-	return color; // 返回调好的颜色。
+	return gfx_advanced_color(color, OMNI_LUMA_GAMMA, OMNI_WHITE_CLIP, OMNI_SATURATION, OMNI_GAMMA); // 调色步骤在通用库，选项在这里传入。
 }
 
 // 说明：原程序里那套可配置宽色域压缩（`AgXConfigurable` 一族，八个函数与五个常量）在 iterationT 里

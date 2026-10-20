@@ -114,5 +114,6 @@ shaders/
 - 已完成：`gfx/math.glsl` 增加黑洞空间扭曲、`gfx/fog.glsl` 增加云状分形噪声，`effects/world/end_disc.glsl` 只保留同名转发。
 - 已完成：`gfx/water.glsl` 增加水洼覆盖与湿面粗糙度，`effects/water/puddle.glsl` 只保留选项与入口转发。
 - 已完成：`gfx/post.glsl` 增加景深公式与胶片颗粒，`effects/lens/dof.glsl`、`effects/clarity/grain.glsl` 只保留选项与入口转发。
-- 下一步：继续把镜头、地面与远景的纯计算迁入通用库，再建 `bind/` 与整理菜单。
+- 已完成：`gfx/color.glsl` 增加黑边、浦肯野效应、白平衡与高级调色，`effects/color/color.glsl` 只保留选项与入口转发。
+- 下一步：继续把天空盒、地面与远景的纯计算迁入通用库，再建 `bind/` 与整理菜单。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。
