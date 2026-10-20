@@ -429,47 +429,19 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 // 为什么主世界与下界末地共用一份签名：主世界给水吸收留权重，下界末地没有水吸收这一项，数值差异留在函数体内用 `OMNI_OVERWORLD` 分支处理，调用点保持同一个。
 // 为什么用 `length(color)` 与 `length(reflection)` 再补一项：亮度差大时补一点反射，金属与高亮边缘不会突黑。
 void CalculateSpecularReflections(inout vec3 color, vec3 viewDir, vec3 normal, vec3 albedo, float waterAbsorption, Material material){
-
 	vec3 reflection = CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb); // 读三号画面的反射颜色并换回线性。
-
 	#ifndef OMNI_NETHER // 下界没有全反射标记这一套。
 		bool notTotalReflection = texelFetch(colortex1, texelCoord, 0).a < 0.5; // 一号画面 a 通道小于零点五表示不是全反射像素。
 	#else
 		bool notTotalReflection = true; // 下界没有全反射标记，一律按普通像素处理。
 	#endif
-
-	if (notTotalReflection){ // 先算好布尔量再走一条完整的 `if`，避免判断括号被预处理指令切开。
-
-		reflection *= mix(vec3(1.0), albedo, vec3(material.metalness)); // 金属面用底色给反射染色。
-
-		vec3 l = normalize(reflect(viewDir, normal) + normal * material.roughness); // 反射方向按粗糙度偏一点，得到更亮的反射。
-		vec3 h = normalize(l - viewDir); // 反射方向与视线的半程。
-		float LdotH = saturate(dot(l, h)); // 反射与半程夹角。
-		float NdotL = saturate(dot(normal, l)); // 反射方向的入射余弦。
-		float NdotV = saturate(dot(normal, -viewDir)); // 视线方向的入射余弦。
-
-		float specular = F_Schlick(LdotH, material.f0, 1.0); // 菲涅耳。
-		specular *= V_Schlick(NdotL, NdotV + 0.8, material.roughness); // 乘可见性，视线余弦补零点八避免掠射过亮。
-		specular *= material.reflectionStrength; // 乘材质允许的反射强度。
-
-		specular = mix(specular, 1.0, material.metalness); // 金属面反射权重拉满。
-
-		vec3 temp = color; // 记下原底色，金属面要再加一份。
-
-		float diff = (length(color) - length(reflection)) / (length(color) + length(reflection)); // 底色与反射的亮度相对差。
-		diff = sign(diff) * sqrt(abs(diff)); // 开方让差的分布更平缓。
-		specular += 0.75 * diff * (1.0 - specular) * specular; // 亮度差大时补一点反射。
-
-		#ifdef OMNI_OVERWORLD
-			color = mix(color, reflection, saturate(specular * waterAbsorption)); // 主世界按水吸收缩反射权重。
-			color += temp * (material.metalness * waterAbsorption); // 金属面再加一份底色。
-		#else
-			color = mix(color, reflection, saturate(specular)); // 下界末地按反射权重混合。
-			color += temp * material.metalness; // 金属面再加一份底色。
-		#endif
-	}else{ // 全反射像素。
-		color = reflection; // 直接取反射颜色。
-	}
+	#ifdef OMNI_OVERWORLD
+		const bool overworld = true; // 主世界按水吸收缩反射权重。
+	#else
+		const bool overworld = false; // 下界末地按反射权重混合。
+	#endif
+	gfx_specular_reflection_mix(color, viewDir, normal, albedo, waterAbsorption, reflection, notTotalReflection,
+		material.metalness, material.roughness, material.f0, material.reflectionStrength, overworld); // 一次调用完成反射合并。
 }
 #endif // composite5 段结束。
 

@@ -116,4 +116,34 @@ bool gfx_screen_space_trace(vec3 view_ray_ori, vec3 view_ray_dir, float ndotv, f
 	return hit; // 返回是否命中。
 }
 
+// 把反射颜色按菲涅耳、金属度与水吸收混进场景色；`not_total` 为假时是全反射像素，直接取反射色。
+void gfx_specular_reflection_mix(inout vec3 color, vec3 view_dir, vec3 normal, vec3 albedo, float water_absorption, vec3 reflection,
+		bool not_total, float metalness, float roughness, float f0, float reflection_strength, bool overworld){
+	if (!not_total){ // 全反射像素直接取反射色。
+		color = reflection; // 表面看不到外面的东西。
+		return;
+	}
+	reflection *= mix(vec3(1.0), albedo, vec3(metalness)); // 金属面用底色给反射染色。
+	vec3 l = normalize(reflect(view_dir, normal) + normal * roughness); // 反射方向按粗糙度偏一点。
+	vec3 h = normalize(l - view_dir); // 反射方向与视线的半程。
+	float l_dot_h = gfx_saturate(dot(l, h)); // 反射与半程夹角。
+	float n_dot_l = gfx_saturate(dot(normal, l)); // 反射方向的入射余弦。
+	float n_dot_v = gfx_saturate(dot(normal, -view_dir)); // 视线方向的入射余弦。
+	float specular = gfx_F_Schlick(l_dot_h, f0, 1.0); // 菲涅耳。
+	specular *= gfx_V_Schlick(n_dot_l, n_dot_v + 0.8, roughness); // 乘可见性，视线余弦补零点八避免掠射过亮。
+	specular *= reflection_strength; // 乘材质允许的反射强度。
+	specular = mix(specular, 1.0, metalness); // 金属面反射权重拉满。
+	vec3 temp = color; // 记下原底色，金属面要再加一份。
+	float diff = (length(color) - length(reflection)) / (length(color) + length(reflection)); // 底色与反射的亮度相对差。
+	diff = sign(diff) * sqrt(abs(diff)); // 开方让差的分布更平缓。
+	specular += 0.75 * diff * (1.0 - specular) * specular; // 亮度差大时补一点反射。
+	if (overworld){ // 主世界按水吸收缩反射权重。
+		color = mix(color, reflection, gfx_saturate(specular * water_absorption)); // 混合反射。
+		color += temp * (metalness * water_absorption); // 金属面再加一份底色。
+	}else{ // 下界末地按反射权重混合。
+		color = mix(color, reflection, gfx_saturate(specular)); // 混合反射。
+		color += temp * metalness; // 金属面再加一份底色。
+	}
+}
+
 #endif
