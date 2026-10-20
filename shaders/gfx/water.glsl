@@ -1,10 +1,12 @@
 /*
-通用图形库水面模块：噪声波高、波法线与水面视差。
-调用位置：任何需要程序化水面起伏的程序；本仓库由 `effects/water/waves.glsl` 转发调用。
+通用图形库水面模块：噪声波高、波法线、水面视差与水洼覆盖。
+调用位置：任何需要程序化水面起伏或积水形状的程序；本仓库由 `effects/water/waves.glsl`、
+    `effects/water/puddle.glsl` 转发调用。
 可复制示例：
     float h = gfx_waves(worldPos, noiseTexture, seconds, 0.05); // 采样波高。
     vec3 n = gfx_waves_normal(worldPos, noiseTexture, seconds, 0.05, 1.0, 1.2); // 未归一化法线。
     vec3 p = gfx_water_parallax(worldPos, viewDir, noiseTexture, seconds, 0.05, 1.2); // 视差坐标。
+    float c = gfx_puddle_coverage(wetness, noise, 1.0); // 水洼覆盖。
 设计原因与取舍：
     噪声纹理、时间、空间缩放和波高全部由调用方传入，库不读取引擎时间或选项。
     波法线故意不做归一化，让调用方能在归一化前叠加玩家涟漪，保持与原程序相同的顺序。
@@ -89,6 +91,18 @@ vec3 gfx_water_parallax(vec3 position, vec3 viewVector, sampler2D noiseTexture, 
 		sampleHeight = gfx_waves(position + vec3(pCoord.x, 0.0, pCoord.y), noiseTexture, time, waveScale); // 读取新位置波高。
 	}
 	return position + vec3(pCoord.x, 0.0, pCoord.y); // 返回偏移后的采样坐标。
+}
+
+// 水洼覆盖：湿润度高于低洼噪声处的面积才积水，尺寸参数放大水洼范围。
+float gfx_puddle_coverage(float halfWet, float noise, float size){
+	float puddles = max(halfWet - noise, 0.0); // 只有湿润高于噪声阈值的低洼处才开始积水。
+	puddles = clamp(halfWet - exp(-25.0 * puddles * puddles * puddles * puddles * puddles * size), 0.0, 1.0); // 指数衰减给出覆盖率，尺寸越大衰减越慢。
+	return puddles; // 返回零到一的积水覆盖。
+}
+
+// 湿面反射锐度：把干表面粗糙度往湿表面粗糙度混合，锐度为零时原样返回。
+float gfx_puddle_roughness(float roughness, float wetRoughness, float wetnessStages, float sharpness){
+	return mix(roughness, wetRoughness, wetnessStages * sharpness); // 湿润阶段乘锐度作为混合比例。
 }
 
 #endif
