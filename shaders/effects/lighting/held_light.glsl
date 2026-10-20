@@ -10,6 +10,8 @@
 */
 #ifndef OMNI_HELD_LIGHT_INCLUDED
 #define OMNI_HELD_LIGHT_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 屏幕空间阴影的步进循环在通用库。
+#include "/gfx/shadow.glsl"
 // --- 手电筒光斑形状：按光线与指向的夹角给出一束光的强度分布 ---
 // 为什么用曲线两次叠加：主瓣给中心亮区，副瓣给一点点外圈余晖；再乘一圈环形暗环，让光斑边界更像手电筒。
 float spotShape(float r){
@@ -26,37 +28,13 @@ float spotShape(float r){
 // 输入是视空间表面位置、视线方向、法线与光源方向；输出可见度，零到一。
 // 为什么起点要沿法线抬一点：手持光源离表面很近，不抬会刚出发就打到自己，整片出现自阴影。
 // 为什么用蓝噪声抖动采样：固定采样会在光斑边缘留下规则条纹，抖动后配合时间抗锯齿消除。
+// 步进主循环在 `gfx/shadow.glsl`，本函数只选步数、深度图与抖动。
 float TorchScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowDir){
 	#if OMNI_HELDLIGHT_SHADOW_QUALITY > 0 // 高质量用两倍步数，阴影更连续、远处也压得住。
 		const int omniHeldShadowSteps = 16;
 	#else
 		const int omniHeldShadowSteps = 8; // 低质量步数与原来一致。
 	#endif
-
-	shadowDir.z = max(shadowDir.z, 1e-5); // 深度分量保证不太小，避免下列除法把射线推到无穷远。
-
-	float rayLength = -0.04 * viewPos.z / shadowDir.z; // 一步射线的长度，按当前深度与光源方向缩放。
-	vec3 viewRayDir = shadowDir * rayLength; // 视空间里的射线方向。
-
-	vec3 start = viewPos; // 射线起点就是当前表面。
-
-	float pixelScale = max(pixelSize.x, pixelSize.y); // 一个像素的最大边长，用来把偏移折算到屏幕。
-	float NdotL = saturate(dot(shadowDir, normal)); // 光源方向与法线的夹角余弦。
-
-	float fov = atan(1.0 / gbufferProjection[1][1]) * 360.0 * rPI; // 由投影反推视角，供偏移按视野缩放。
-	start += viewRayDir * (pixelScale * max(0.04 / max(dot(normal, -viewDir), 0.1), 1e3)); // 沿射线先跳过一段，掠射时跳得更多。
-	start += normal * (8e-3 * fov * -viewPos.z * pixelScale / max(NdotL, 0.01)); // 再沿法线抬一点，掠射角抬得更多。
-
-	vec3 end = start + viewRayDir; // 一步的终点。
-
-	start = vec3(vec2(gbufferProjection[0][0], gbufferProjection[1][1]) * start.xy, -start.z); // 起点投影到裁剪空间。
-	end   = vec3(vec2(gbufferProjection[0][0], gbufferProjection[1][1]) * end.xy,   -end.z); // 终点同样投影。
-
-	vec3 screenRayDir = (end - start); // 这一步在裁剪空间的位移。
-	screenRayDir.xy *= 0.5; // 横纵方向换算到零到一坐标。
-
-	start.xy += gbufferProjection[3].xy; // 补上投影的平移项。
-	start.xy *= 0.5; // 裁剪空间转到零到一。
 
 	#ifdef OMNI_TAA // 打开时间抗锯齿时用逐帧抖动，抗锯齿会把噪点平均掉。
 		float noise = BlueNoiseTemporal().x; // 每帧变化的蓝噪声。
@@ -66,44 +44,13 @@ float TorchScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shado
 		vec2 offsetCoord = vec2(0.5); // 不补抖动。
 	#endif
 
-	float minDist = LinearDepth_From_ScreenDepth(0.7); // 深度小于这个值的像素在前面，不再作为遮挡。
-
-	float shadow = 1.0; // 可见度，初值全亮。
-	float stepLength = 1.0; // 步长，逐步增大。
-
-	for (int i = 0; i < omniHeldShadowSteps; i++, start += screenRayDir * stepLength, stepLength += 0.3){ // 按质量取八或十六步，步长递增覆盖更远。
-		vec3 samplePos = start + screenRayDir * noise * stepLength; // 加抖动的采样位置。
-
-		if (samplePos.z < minDist) break; // 已经走到相机很近的地方，后面没有可靠深度。
-
-		samplePos.xy = samplePos.xy / samplePos.z + offsetCoord; // 透视除法得到屏幕坐标。
-
-		if (saturate(samplePos.xy) != samplePos.xy) break; // 出了屏幕就停止，屏幕外没有可靠深度。
-
-		float sampleDepth = textureLod(depthtex1, samplePos.xy, 0.0).x; // 读该点的不透明深度。
-
-		if (sampleDepth < 0.7) break; // 近处已有几何挡住，后面不必再看。
-
-		#ifdef DISTANT_HORIZONS // 有远景时，近景是天空才改用远景深度。
-			float sampleDist = 0.0; // 采样点距离。
-
-			if (sampleDepth == 1.0){ // 近景是天空。
-				sampleDepth = textureLod(dhDepthTex1, samplePos.xy, 0.0).x; // 改读远景深度。
-				sampleDist = LinearDepth_From_ScreenDepth_DH(sampleDepth); // 远景深度换成距离。
-			}else{
-				sampleDist = LinearDepth_From_ScreenDepth(sampleDepth); // 近景深度换成距离。
-			}
-		#else
-			float sampleDist = LinearDepth_From_ScreenDepth(textureLod(depthtex1, samplePos.xy, 0.0).x); // 直接把深度换成距离。
-		#endif
-
-		if (samplePos.z - sampleDist > 0.0){ // 射线深度超过几何深度，说明几何在前面。
-			shadow = 0.0; // 记为完全遮挡。
-			break; // 结束步进。
-		}
-	}
-
-	return max(shadow, 1.0 - OMNI_HELDLIGHT_SHADOW_STRENGTH); // 按强度给阴影压到下限，强度零点八五时与原来的零点一五底光完全一致。
+	#ifdef DISTANT_HORIZONS // 有远景时，近景是天空才改用远景深度。
+		return gfx_screen_space_shadow(viewPos, viewDir, normal, shadowDir, depthtex1, dhDepthTex1, gbufferProjection, gbufferProjectionInverse,
+			dhProjectionInverse, max(pixelSize.x, pixelSize.y), offsetCoord, noise, true, omniHeldShadowSteps, OMNI_HELDLIGHT_SHADOW_STRENGTH); // 一次调用完成屏幕步进。
+	#else
+		return gfx_screen_space_shadow(viewPos, viewDir, normal, shadowDir, depthtex1, depthtex1, gbufferProjection, gbufferProjectionInverse,
+			gbufferProjectionInverse, max(pixelSize.x, pixelSize.y), offsetCoord, noise, false, omniHeldShadowSteps, OMNI_HELDLIGHT_SHADOW_STRENGTH); // 没有远景时用近景深度占位。
+	#endif
 }
 
 // --- 手持光源：火把球形光与手电筒一束光 ---

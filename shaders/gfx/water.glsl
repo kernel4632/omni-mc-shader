@@ -1,15 +1,15 @@
 /*
-通用图形库水面模块：噪声波高、波法线、水面视差、水洼覆盖与雨点动画。
-调用位置：任何需要程序化水面起伏、积水形状或雨点涟漪的程序；本仓库由 `effects/water/waves.glsl`、
-    `effects/water/puddle.glsl` 与 `effects/water/rain.glsl` 转发调用。
+通用图形库水面模块：噪声波高、波法线、水面视差、水洼覆盖、雨点动画与水雾。
+调用位置：任何需要程序化水面起伏、积水形状、雨点涟漪或水雾的程序；本仓库由 `effects/water/*` 转发调用。
 可复制示例：
     float h = gfx_waves(worldPos, noiseTexture, seconds, 0.05); // 采样波高。
     vec3 n = gfx_waves_normal(worldPos, noiseTexture, seconds, 0.05, 1.0, 1.2); // 未归一化法线。
     vec3 p = gfx_water_parallax(worldPos, viewDir, noiseTexture, seconds, 0.05, 1.2); // 视差坐标。
     float c = gfx_puddle_coverage(wetness, noise, 1.0); // 水洼覆盖。
     vec2 r = gfx_rain_animation_normal(rippleTexture, coord, 2.0); // 雨点法线。
+    vec3 c = gfx_water_fog(color, viewDir, 20.0, 10.0, normal, ice, glass, hand, 0.0, 1.0, 0.0, lightDir, lightColor, skyColor, upView, 0.2, wetness, 1.2, 1.0, false); // 水雾。
 设计原因与取舍：
-    噪声纹理、时间、空间缩放和波高全部由调用方传入，库不读取引擎时间或选项。
+    噪声纹理、时间、空间缩放、波高、折射率与雾密度全部由调用方传入，库不读取引擎时间或选项。
     波法线故意不做归一化，让调用方能在归一化前叠加玩家涟漪，保持与原程序相同的顺序。
     六层噪声的权重与方向照 iterationT 原程序保留，只把常数换成参数。
 */
@@ -125,6 +125,55 @@ vec2 gfx_rain_animation_normal(sampler2D rainTexture, vec2 coord, float exponent
 	n = n * vec2(2.0, -2.0) + vec2(-1.0, 1.0); // 零到一转成负一到一，并翻转纵轴。
 	n = pow(abs(n), vec2(exponent)) * sign(n); // 按指数压形状，符号保留。
 	return n; // 返回法线横纵分量。
+}
+
+// 水下与水后雾：按距离做分波段衰减并向雾色靠拢，返回混合后的颜色。
+// 为什么水下与水面之上要分开：雾色、散射方向与基础密度都不同，原程序用 `isEyeInWater` 一次分派。
+// 参数说明：`opaque_dist` 是不透明面到相机的距离，`water_dist` 是水面到相机的距离，
+// `ice`、`stained_glass`、`hand` 是材质掩码，`water_skylight` 是该处水面接收的天光，
+// `up_view` 是视空间的竖直轴，`eye_water_depth` 由天空光反推，`refract_ior` 是水面折射率。
+vec3 gfx_water_fog(vec3 color, vec3 view_dir, float opaque_dist, float water_dist, vec3 normal,
+		float ice, float stained_glass, float hand, float occluded_water, float water_skylight, float total_internal,
+		vec3 light_dir, vec3 light_color, vec3 sky_color, vec3 up_view, float eye_water_depth, float wetness,
+		float refract_ior, float fog_density_option, bool underwater){
+	float dist_diff = opaque_dist - water_dist; // 水面到水底的真实厚度。
+	water_dist = underwater ? // 在水下且隔着玻璃时改用不透明距离。
+			mix(water_dist, opaque_dist, stained_glass) :
+			mix(dist_diff, min(dist_diff * 0.3, 6.0), occluded_water); // 隔着玻璃时厚度打折并封顶，避免过浓。
+	water_dist = max(water_dist, total_internal * eye_water_depth * 50.0); // 全反射时把雾距离拉长，形成亮环。
+
+	vec3 shadow_refracted = refract(-light_dir, up_view, 1.0 / refract_ior); // 阳光在水面折射后的方向。
+
+	vec3 fog_color = mix(vec3(0.05, 0.6, 1.0), vec3(0.3, 0.9, 1.5), ice); // 冰面偏亮青，普通水偏青。
+	fog_color = mix(fog_color, vec3(0.5), wetness * 0.6); // 越湿雾色越中性。
+	fog_color *= dot(vec3(0.33333), sky_color); // 乘天光色，雾色随环境变化。
+
+	if (!underwater){ // 水面之上看水下。
+		fog_color *= 0.04 - wetness * 0.032; // 水面之上的雾很淡，雨天更淡。
+		fog_color *= water_skylight; // 再乘该处水面接收的天光。
+
+		vec3 l = normalize(reflect(view_dir, normal)); // 视线在水面的反射方向。
+		vec3 h = normalize(l - view_dir); // 反射方向与视线的半程。
+		float fresnel = gfx_saturate(dot(normal, l)) * gfx_saturate(dot(l, h) * 1.5 - 0.5); // 一个简化的菲涅耳权重。
+		float scatter = 3.0 * fresnel * pow(dot(shadow_refracted, view_dir) * 5.0 + 5.2, -1.4); // 逆光时的散射更强。
+		fog_color = mix(fog_color, light_color * fog_color * 3.0, scatter * gfx_saturate(1.0 - wetness - occluded_water)); // 逆光散射叠上去，湿地或隔玻璃时减弱。
+	}else{ // 整只眼睛在水里。
+		fog_color *= 0.02 - wetness * 0.012; // 水下雾更淡。
+		float scatter = 1.0 / (dot(shadow_refracted, view_dir) * 5.0 + 5.1); // 朝向阳光的散射。
+		vec3 sun_scatter = light_color * scatter * fog_color * 2.0; // 阳光在水里的散射色。
+
+		fog_color *= dot(view_dir, up_view) * 0.4 + 0.6; // 朝上看更亮。
+		fog_color += sun_scatter * (eye_water_depth * (1.0 - wetness * 0.6)); // 叠加阳光散射。
+	}
+
+	float density = underwater ? ice * 0.96 + 0.04 : 0.29; // 基础雾密度，冰下更浓。
+	float visibility = exp2(-water_dist * density * fog_density_option); // 按密度指数衰减得到可见度。
+	visibility = clamp(visibility, 0.35 * ice, 1.0); // 冰下留一个最低可见度。
+	visibility = mix(visibility, 0.7, hand); // 手持物只受七成雾影响，避免手被糊掉。
+
+	vec3 attenuation = underwater ? vec3(0.1, 0.6, 1.0) : vec3(0.2, 0.5, 0.7); // 分波段衰减色，水下偏蓝。
+	color *= pow(attenuation * 0.99, vec3(water_dist * (0.21 * float(!underwater) + 0.04) * fog_density_option)); // 红衰减最快，蓝最慢。
+	return mix(fog_color, color, visibility); // 用可见度在雾色与场景色之间混合。
 }
 
 #endif
