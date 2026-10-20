@@ -146,6 +146,7 @@ shaders/
 - 已完成：`gfx/surface.glsl` 增加方块光与纹理自发光合成，`effects/lighting/blocklight.glsl` 只保留选项与掩码求和；无调用者的 `CurveBlockLightTorch` 转发已删除。
 - 已完成：新增 `gfx/accretion.glsl`，末地吸积盘积分迁入通用库，`effects/world/end_disc.glsl` 只保留步数、噪声与星空；非注释行从 174 降到 26。
 - 已完成：`gfx/shadow.glsl` 增加阳光的屏幕空间阴影步进，`effects/shadow/screen_shadow.glsl` 只保留视野、吸收量与噪声；非注释行从 61 降到 30。
+- 已完成：`gfx/reflection.glsl` 增加九点小波滤波，`effects/reflection/denoise.glsl` 只传三张输入图与像素大小；非注释行从 48 降到 10。
 - 后续可选：把 `effects/reflection/voxel.glsl` 的体素步进也迁入通用库；它依赖光传播体积的网格映射、方块编号与颜色图，需要先把网格原点和边长作为参数传入。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。

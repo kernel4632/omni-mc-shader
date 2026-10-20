@@ -341,4 +341,63 @@ void gfx_specular_reflection_mix(inout vec3 color, vec3 view_dir, vec3 normal, v
 	}
 }
 
+// 反射小波滤波：九点邻域按反射方向与深度相似度加权，抹掉追踪噪点同时保住反射边界。
+// 为什么按法线与深度加权：命中点落在不同法线或不同深度的邻居属于别的物体，混进来会把反射糊成一片。
+// 为什么先按亮度幂次重整再还原：高动态范围的反射点会盖住整片邻域，先压一下亮度再合并，边界更干净。
+void gfx_reflection_atrous_filter(inout vec4 reflection_data, vec3 view_pos, vec3 view_dir, vec3 normal,
+		float roughness, float radius, vec2 noise, vec2 tex_coord, sampler2D reflection_texture,
+		sampler2D depth_texture, sampler2D normal_texture, vec2 pixel_size, mat4 projection_inverse){
+	float linear_depth = -view_pos.z; // 表面的米制深度。
+	float ndotv = gfx_saturate(dot(-view_dir, normal)); // 视线与法线夹角余弦。
+
+	roughness = max(roughness, 1e-4); // 粗糙度给一个下限，避免除以零。
+	radius *= min(roughness * 20.0, 1.0); // 越粗糙反射越糊，滤波半径越大。
+	radius *= reflection_data.a * 0.9 + 0.1; // 命中距离越远半径越大。
+
+	const mat2 rot90 = mat2(cos(1.5708), -sin(1.5708), sin(1.5708), cos(1.5708)); // 旋转九十度，用来由切向得到副切向。
+	vec2 tangent = normalize(cross(normal, view_dir).xy) * radius; // 沿表面切向的采样步长。
+	vec2 bitangent = tangent * rot90; // 副切向的采样步长。
+	tangent *= mix(0.1075, 0.5, ndotv) * pixel_size; // 切向按视角缩放并换成屏幕坐标。
+	bitangent *= mix(0.7, 0.5, ndotv) * pixel_size; // 副切向同理。
+
+	vec3 reflected_dir = reflect(-view_dir, normal); // 当前像素的反射方向。
+	float normal_threshold = 75.0 / roughness; // 法线相似度的幂次，越粗糙越严。
+	float luminance_threshold = reflection_data.a * 0.95 + 0.05; // 亮度重整的幂次，按命中距离变化。
+
+	vec4 accum = vec4(0.0); // 加权累加的反射数据。
+	float weights = 0.0; // 累加权重。
+	const vec2 offset[9] = vec2[9]( // 三乘三邻域偏移。
+		vec2(-1.0, -1.0), vec2(0.0, -1.0), vec2(1.0, -1.0),
+		vec2(-1.0,  0.0), vec2(0.0,  0.0), vec2(1.0,  0.0),
+		vec2(-1.0,  1.0), vec2(0.0,  1.0), vec2(1.0,  1.0));
+
+	for (int i = 0; i < 9; i++){ // 遍历九个邻点。
+		vec2 sample_coord = tex_coord + tangent * (offset[i] + noise.x) + bitangent * (offset[i] + noise.y); // 邻点坐标，按抖动微调。
+		vec4 sample_data = textureLod(reflection_texture, sample_coord, 0.0); // 读邻点反射数据。
+		if (sample_data.a < 0.0001) continue; // 邻点没有反射，跳过。
+
+		float sample_depth = gfx_reflection_linear_depth(textureLod(depth_texture, sample_coord, 0.0).x, projection_inverse); // 邻点米制深度。
+		vec3 sample_reflected = reflect(-view_dir, gfx_DecodeNormal(textureLod(normal_texture, sample_coord, 0.0).xy)); // 邻点反射方向。
+
+		float normal_weight = pow(gfx_saturate(dot(sample_reflected, reflected_dir)), normal_threshold); // 反射方向越接近权重越大。
+		float depth_weight = exp2(-(abs(sample_depth - linear_depth) * 1.58)); // 深度越接近权重越大。
+		float sample_weight = normal_weight * depth_weight; // 两个权重相乘。
+
+		sample_data.rgb += 1e-13; // 避免零亮度在下面除法里出问题。
+		float luminance = length(sample_data.rgb); // 邻点亮度。
+		sample_data.rgb *= pow(luminance, luminance_threshold) / luminance; // 按幂次重整亮度。
+
+		accum += sample_data * sample_weight; // 按权重累加。
+		weights += sample_weight; // 累加权重。
+	}
+
+	if (weights > 1e-13){ // 有有效邻点才写回。
+		accum /= weights; // 取加权平均。
+		accum.rgb += 1e-13; // 同样避免零亮度。
+		float luminance = length(accum.rgb); // 平均后的亮度。
+		accum.rgb *= pow(luminance, 1.0 / luminance_threshold) / luminance; // 还原亮度重整。
+		reflection_data = accum; // 写回滤波结果。
+	}
+}
+
 #endif
