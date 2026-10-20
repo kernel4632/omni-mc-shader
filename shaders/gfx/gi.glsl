@@ -43,6 +43,119 @@ vec3 gfx_ao_multi_bounce(float ao, vec3 albedo){
 	return max(vec3(ao), ((ao * a + b) * ao + c) * ao); // 取多项式与原始遮蔽的较大值。
 }
 
+// 屏幕坐标还原视空间位置的声明：地平线遮蔽先用它们，定义在文件后面。
+vec3 gfx_gi_view_pos(vec2 coord, float depth, mat4 projection_inverse);
+vec3 gfx_gi_view_pos_dh(vec2 coord, float depth, mat4 dh_projection_inverse);
+
+// 地平线遮蔽的参数：画质、半径模式、远景能力与强度都由调用方给出。
+struct gfx_gtao_params {
+	float steps; // 环绕视线的切片数。
+	float slice_steps; // 每个切片的搜索步数。
+	float falloff_start; // 衰减起点，占半径的比例。
+	float max_sample_radius; // 屏幕半径上限。
+	float world_radius; // 世界半径模式下的起始半径。
+	float screen_radius; // 屏幕半径模式下的固定半径。
+	float strength; // 遮蔽强度，零为无遮蔽、一为全遮蔽。
+	int radius_mode; // 零为世界半径，其他为屏幕半径。
+	bool has_dh; // 是否有远景深度，决定世界半径随距离衰减的快慢。
+	bool dh_ao; // 是否把远景样本当作遮挡物。
+	bool falloff_z_offset; // 是否用深度加权的衰减距离。
+};
+
+// 地平线遮蔽：沿视线做多切片搜索最大地平线角，积分出半球被挡住的比重。
+// 深度图、投影矩阵、画面坐标、比例与噪声全部由调用方传入，库不读取任何引擎画面。
+float gfx_ground_truth_ao(vec3 view_pos, vec3 view_dir, vec3 normal, vec2 coord, float aspect,
+		sampler2D depth_texture, sampler2D dh_depth_texture, mat4 projection, mat4 projection_inverse,
+		mat4 dh_projection_inverse, gfx_gtao_params params, vec2 noise){
+	float r_steps = 1.0 / params.steps; // 切片数倒数。
+	float r_slice_steps = 1.0 / params.slice_steps; // 步数倒数。
+	float proj_factor = 0.125 * projection[1][1]; // 投影缩放系数。
+	float radius; // 世界半径或屏幕半径。
+	float sample_radius_raw; // 换算后的屏幕半径。
+	float sample_radius; // 夹紧后的屏幕半径。
+	float falloff; // 衰减距离。
+	if (params.radius_mode == 0){ // 世界半径模式。
+		radius = params.world_radius - view_pos.z * (params.has_dh ? 0.02 : 0.01); // 有远景时衰减更慢。
+		sample_radius_raw = radius * proj_factor / -view_pos.z; // 换成屏幕半径。
+		sample_radius = min(sample_radius_raw, params.max_sample_radius); // 上限。
+		falloff = sample_radius * radius / sample_radius_raw; // 衰减距离。
+	}else{ // 屏幕半径模式。
+		sample_radius = params.screen_radius; // 固定屏幕半径。
+		falloff = sample_radius / proj_factor * -view_pos.z; // 换算成世界衰减距离。
+	}
+	float ao = 0.0; // 累积的遮蔽。
+	float slice_steps = params.slice_steps; // 每个切片的搜索步数。
+	for (float i = 0.0; i < params.steps; i++){ // 逐切片。
+		float slice_angle = (i + noise.x) * r_steps * GFX_PI; // 切片角度，只扫半圈因为两侧对称。
+		vec3 slice_dir = vec3(cos(slice_angle), sin(slice_angle), 0.0); // 切片方向。
+		vec3 ortho_slice_dir = slice_dir - dot(slice_dir, view_dir) * view_dir; // 切片方向正交到视线的分量。
+		vec3 axis = cross(slice_dir, view_dir); // 切片平面法向。
+		vec3 proj_normal = normal - dot(normal, axis) * axis; // 法线投影到切片平面。
+		float r_proj_normal_length = inversesqrt(dot(proj_normal, proj_normal)); // 投影长度倒数。
+		float cos_normal_angle = gfx_saturate(dot(proj_normal, view_dir) * r_proj_normal_length); // 投影法线与视线夹角余弦。
+		float normal_angle = sign(dot(ortho_slice_dir, proj_normal)) * gfx_facos(cos_normal_angle); // 带符号的法线角。
+		vec2 min_cos_horizon_angle = cos(vec2(normal_angle + GFX_HALF_PI, normal_angle - GFX_HALF_PI)); // 两侧地平线角的下限。
+		vec2 max_cos_horizon_angle = min_cos_horizon_angle; // 两侧可见地平线角的初值。
+		for (float j = 0.0; j < slice_steps; j++){ // 逐搜索步。
+			float step_noise = (i + j * slice_steps) * 0.61803399; // 用黄金比错开各步。
+			step_noise = fract(step_noise + noise.y); // 加噪声后取小数。
+			float offset = (j + step_noise) * r_slice_steps; // 归一化搜索距离。
+			offset *= offset; // 平方让近处更密。
+			vec2 sample_offset = offset * slice_dir.xy * sample_radius; // 屏幕偏移。
+			sample_offset.y *= aspect; // 修正宽高比。
+			{ // 正向搜索。
+				vec2 sample_coord = coord + sample_offset; // 正向采样坐标。
+				float sample_depth = textureLod(depth_texture, sample_coord, 0.0).x; // 采样深度。
+				vec3 sample_vector; // 采样点相对当前点。
+				if (params.has_dh && params.dh_ao && sample_depth == 1.0){ // 天空样本改读远景深度。
+					sample_depth = textureLod(dh_depth_texture, sample_coord, 0.0).x; // 远景深度。
+					sample_vector = gfx_gi_view_pos_dh(sample_coord, sample_depth, dh_projection_inverse) - view_pos; // 远景还原。
+				}else{ // 近景样本正常还原。
+					sample_vector = gfx_gi_view_pos(sample_coord, sample_depth, projection_inverse) - view_pos; // 近景还原。
+				}
+				float r_sample_dist = inversesqrt(dot(sample_vector, sample_vector)); // 距离倒数。
+				float cos_horizon_angle = dot(sample_vector, view_dir) * r_sample_dist; // 采样点给出的地平线余弦。
+				float falloff_weight; // 衰减权重。
+				if (params.falloff_z_offset){ // 可选的深度加权。
+					float offset_dist = length(vec3(sample_vector.xy, sample_vector.z * 1.7)); // 加权距离。
+					falloff_weight = gfx_remapSaturate(offset_dist, falloff * params.falloff_start, falloff); // 衰减权重。
+				}else{ // 默认按距离加权。
+					falloff_weight = gfx_remapSaturate(1.0 / r_sample_dist, falloff * params.falloff_start, falloff); // 衰减权重。
+				}
+				cos_horizon_angle = mix(cos_horizon_angle, min_cos_horizon_angle.x, falloff_weight); // 远处回落到下限。
+				max_cos_horizon_angle.x = max(cos_horizon_angle, max_cos_horizon_angle.x); // 取可见地平线角。
+			}
+			{ // 反向搜索。
+				vec2 sample_coord = coord - sample_offset; // 反向采样坐标。
+				float sample_depth = textureLod(depth_texture, sample_coord, 0.0).x; // 采样深度。
+				vec3 sample_vector; // 采样点相对当前点。
+				if (params.has_dh && params.dh_ao && sample_depth == 1.0){ // 天空样本改读远景深度。
+					sample_depth = textureLod(dh_depth_texture, sample_coord, 0.0).x; // 远景深度。
+					sample_vector = gfx_gi_view_pos_dh(sample_coord, sample_depth, dh_projection_inverse) - view_pos; // 远景还原。
+				}else{ // 近景样本正常还原。
+					sample_vector = gfx_gi_view_pos(sample_coord, sample_depth, projection_inverse) - view_pos; // 近景还原。
+				}
+				float r_sample_dist = inversesqrt(dot(sample_vector, sample_vector)); // 距离倒数。
+				float cos_horizon_angle = dot(sample_vector, view_dir) * r_sample_dist; // 采样点给出的地平线余弦。
+				float falloff_weight; // 衰减权重。
+				if (params.falloff_z_offset){ // 可选的深度加权。
+					float offset_dist = length(vec3(sample_vector.xy, sample_vector.z * 1.7)); // 加权距离。
+					falloff_weight = gfx_remapSaturate(offset_dist, falloff * params.falloff_start, falloff); // 衰减权重。
+				}else{ // 默认按距离加权。
+					falloff_weight = gfx_remapSaturate(1.0 / r_sample_dist, falloff * params.falloff_start, falloff); // 衰减权重。
+				}
+				cos_horizon_angle = mix(cos_horizon_angle, min_cos_horizon_angle.y, falloff_weight); // 远处回落到下限。
+				max_cos_horizon_angle.y = max(cos_horizon_angle, max_cos_horizon_angle.y); // 取可见地平线角。
+			}
+		}
+		max_cos_horizon_angle = vec2(-gfx_facos(max_cos_horizon_angle.y), gfx_facos(max_cos_horizon_angle.x)) * 2.0; // 两侧换成开口角。
+		float horizon_angle_integra = 2.0 * cos_normal_angle + (max_cos_horizon_angle.x + max_cos_horizon_angle.y) * sin(normal_angle) - cos(max_cos_horizon_angle.x - normal_angle) - cos(max_cos_horizon_angle.y - normal_angle); // 这一片的半球可见缺口。
+		ao += horizon_angle_integra / r_proj_normal_length; // 累加。
+	}
+	ao *= 0.25 * r_steps; // 平均。
+	return gfx_saturate(mix(1.0, ao, params.strength)); // 按强度在无遮蔽与遮蔽之间插值。
+}
+
 // 屏幕坐标与深度还原视空间位置，不撤销抖动；重投影需要原始位置。
 vec3 gfx_gi_view_pos(vec2 coord, float depth, mat4 projection_inverse){
 	vec3 ndc = vec3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
