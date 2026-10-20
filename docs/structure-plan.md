@@ -102,5 +102,6 @@ shaders/
 - 已完成：`gfx/weather.glsl` 增加植被判断与季节上色，`effects/weather/season.glsl` 保留编译开关与转发。
 - 已完成：`gfx/math.glsl` 增加末地环带径向曲线，`effects/world/end_disc.glsl` 只保留转发。
 - 已完成：`gfx/fog.glsl` 增加下界单格雾密度，`effects/world/nether.glsl` 只保留转发。
-- 下一步：继续迁下界羽流与末地雾的纯计算，再整理菜单与 `bind/`。
+- 已完成：`gfx/fog.glsl` 增加下界体积雾原始密度，`effects/world/nether.glsl` 只保留转发。
+- 下一步：继续迁末地雾与行星的纯计算，再整理菜单与 `bind/`。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

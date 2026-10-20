@@ -81,4 +81,17 @@ float gfx_nether_fog_density_at(vec3 pos, sampler2D noiseTexture){
 	return mix(xy.r, xy.g, f.y); // 按高度插值。
 }
 
+// 下界体积雾的原始密度：羽流、贴地烟与高度包络叠在一起。
+float gfx_nether_fog_cloud_volume(vec3 pos, float time, sampler2D noiseTexture){
+	vec3 samplePos = pos * vec3(1.0, 1.0 / 48.0, 1.0); // 竖直拉伸，烟柱显得更高。
+	float wind = pow(max(pos.y - 30.0, 0.0) / 15.0, 2.1); // 越高风偏移越大。
+	float plumes = texture(noiseTexture, (samplePos.xz + wind) / 256.0).b; // 噪声蓝通道当羽流形状。
+	float floorPlumes = clamp(0.3 - exp(plumes * -6.0), 0.0, 1.0); // 贴地烟的量。
+	plumes *= plumes; // 平方拉开烟与空的差别。
+	float erosion = gfx_nether_fog_density_at(samplePos * 400.0 - time * 10.0 - wind * 10.0, noiseTexture) * 0.7 + 0.3; // 随时间的侵蚀。
+	float roofToFloor = exp(max(100.0 - pos.y, 0.0) / -15.0); // 从天花板到地面变淡。
+	float floorFalloff = pow(exp(max(pos.y - 31.0, 0.0) / -3.0), 2.0); // 离地越高越淡。
+	return max((roofToFloor - plumes * (1.0 - erosion)) * 2.0, clamp((floorFalloff - floorPlumes * 0.5) * erosion, 0.0, 1.0)); // 两种形状取大者。
+}
+
 #endif

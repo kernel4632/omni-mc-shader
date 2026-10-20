@@ -10,6 +10,17 @@
 验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
 
 
+## 0.1.24
+
+通用库第二十批：下界羽流形状。
+
+- `shaders/gfx/fog.glsl` 增加下界体积雾原始密度，时间与噪声纹理改为参数。
+- `effects/world/nether.glsl` 只保留同名转发，体积步进与光照未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.23
 
 通用库第十九批：下界雾密度。

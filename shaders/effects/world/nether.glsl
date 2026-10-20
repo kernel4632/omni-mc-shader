@@ -91,20 +91,7 @@ float NetherFogDensityAt(vec3 pos){
 // 体积雾原始密度：叠上被时间侵蚀的羽流形状、贴地烟与高度衰减，返回零附近的密度。
 // 为什么随高度变化：下界烟从地面升起、被天花板压住，越高越稀，密度必须带高度包络。
 float NetherFogCloudVolume(vec3 pos){
-	vec3 samplePos = pos * vec3(1.0, 1.0 / 48.0, 1.0); // 竖直拉伸，烟柱显得更高。
-
-	float wind = pow(max(pos.y - 30.0, 0.0) / 15.0, 2.1); // 越高风偏移越大，烟柱被风推偏。
-
-	float plumes = texture(noisetex, (samplePos.xz + wind) / 256.0).b; // 读噪声蓝通道当羽流形状。
-	float floorPlumes = clamp(0.3 - exp(plumes * -6.0), 0.0, 1.0); // 贴地烟的量。
-	plumes *= plumes; // 平方拉开烟与空的差别。
-
-	float erosion = NetherFogDensityAt(samplePos * 400.0 - frameTimeCounter * 10.0 - wind * 10.0) * 0.7 + 0.3; // 随时间的侵蚀，让烟慢慢变形。
-
-	float roofToFloor = exp(max(100.0 - pos.y, 0.0) / -15.0); // 从天花板到地面整体变淡的高度包络。
-	float floorFalloff = pow(exp(max(pos.y - 31.0, 0.0) / -3.0), 2.0); // 离地越高越淡的包络。
-
-	return max((roofToFloor - plumes * (1.0 - erosion)) * 2.0, clamp((floorFalloff - floorPlumes * 0.5) * erosion, 0.0, 1.0)); // 两种形状取大者，照原程序。
+	return gfx_nether_fog_cloud_volume(pos, frameTimeCounter, noisetex); // 时间与噪声纹理交给库。
 }
 
 // 当前像素的视空间射线方向：屏幕上任意深度的点都在同一条从相机出发的射线上，归一后就是方向。
