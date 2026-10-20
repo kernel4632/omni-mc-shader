@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.39
+
+通用库第三十五批：大气模型几何。
+
+- `effects/sky/atmosphere_model.glsl` 的球面距离、地面相交与密度剖面改为转发 `shaders/gfx/atmosphere.glsl`，半径与剖面系数按调用点传入。
+- 预计算贴图查询、透过率与天空辐射未动，查表结果不变。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.38
 
 通用库第三十四批：矿石与纹饰自发光。

@@ -23,30 +23,28 @@ float DistanceToTopAtmosphereBoundary(
 	float r,
 	float mu
 	){
-		float discriminant = r * r * (mu * mu - 1.0) + atmosphereModel_top_radius * atmosphereModel_top_radius; // 交点判别式。
-		return max(-r * mu + SafeSqrt(discriminant), 0.0); // 取朝向层顶一侧的根，负数归零。
+		return gfx_distance_to_top(r, mu, atmosphereModel_top_radius); // 球面几何在通用库，层顶半径在这里传入。
 }
 // 视线到大气层底的距离，解视线与底球面的方程取近根。
 float DistanceToBottomAtmosphereBoundary(
 	float r,
 	float mu
 	){
-		float discriminant = r * r * (mu * mu - 1.0) + atmosphereModel_bottom_radius * atmosphereModel_bottom_radius; // 球面交点判别式。
-		return max(-r * mu - SafeSqrt(discriminant), 0.0); // 取靠近相机一侧的根。
+		return gfx_distance_to_bottom(r, mu, atmosphereModel_bottom_radius); // 层底半径在这里传入。
 }
 // 判断一条朝下的视线是否真的打到地面球。
 bool RayIntersectsGround(
 	float r,
 	float mu
 	){
-		return mu < 0.0 && r * r * (mu * mu - 1.0) + atmosphereModel_bottom_radius * atmosphereModel_bottom_radius >= 0.0; // 朝下且判别式非负才相交。
+		return gfx_ray_intersects_ground(r, mu, atmosphereModel_bottom_radius); // 与地面球的相交判断在通用库。
 }
 // 瑞利与米氏密度剖面：以二为底的指数衰减，系数已经积分好。
 float GetProfileDensityRayleighMie(
 	float exp_scale,
 	float altitude
 	){
-		return exp2(exp_scale * altitude); // 高度越高密度越低。
+		return gfx_density_rayleigh_mie(exp_scale, altitude); // 指数密度剖面在通用库。
 }
 // 臭氧密度剖面：在转折高度以下是一段斜线，以上是另一段斜线。
 float GetProfileDensityAbsorption(
@@ -54,9 +52,7 @@ float GetProfileDensityAbsorption(
 	vec4 profile,
 	float altitude
 	){
-		return altitude < width ? // 转折高度以下用前两个系数。
-			profile.x * altitude + profile.y :
-			profile.z * altitude + profile.w; // 以上用后两个系数。
+		return gfx_density_absorption(width, profile, altitude); // 两段线性剖面在通用库。
 }
 // 把零到一的比例映射到贴图坐标的像素中心，避免采到子图交界。
 float GetTextureCoordFromUnitRange(float x, float texture_size) { return gfx_texture_coord(x, texture_size); }
