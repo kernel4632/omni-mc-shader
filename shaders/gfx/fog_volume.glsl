@@ -16,9 +16,15 @@
 #ifndef GFX_FOG_LPV_STEP
 #define GFX_FOG_LPV_STEP(fog_pos, integral, accum, done)
 #endif
+// 可选的水下手持光钩子：效果层把物品光采样接到这里，不定义时不加任何光。
+#ifndef GFX_UNDERWATER_HAND_LIGHT
+#define GFX_UNDERWATER_HAND_LIGHT(world_pos) vec3(0.0)
+#endif
 
 #include "/gfx/fog.glsl"
 #include "/gfx/weather.glsl"
+#include "/gfx/shadow.glsl"
+#include "/gfx/water.glsl"
 
 // 一帧体积雾需要的相机、光照与天气参数。
 struct gfx_fog_media {
@@ -243,6 +249,67 @@ void gfx_volumetric_fog(inout vec3 color, vec3 start_pos, vec3 end_pos, vec3 wor
 		transmittance = mix(1.0, transmittance, media.eye_skylight); // 透射率也按天空光拉回。
 	}
 	color = transmittance * color + fog_color + ray_color + lightning_fog + lpv_fog; // 场景色先被吸收，再叠上雾与散射。
+}
+
+// 水下焦散：从当前位置向上找水面，按波法线折射后取交点距离，距离越近光柱越强。
+// 为什么单独一份：它与水面焦散的三乘三采样用途不同，这里只要一份范围很窄的值来收窄光柱。
+float gfx_underwater_caustics(vec3 world_pos, vec3 shadow_light_vector, sampler2D normal_texture,
+		vec2 pixel_size, vec2 screen_size, float max_resolution, float refract_ior){
+	vec3 lookup_center = world_pos; // 从当前位置向上找波面。
+	lookup_center.y += 1.0; // 抬高一米到水面上方。
+	vec3 waves_normal = gfx_waves_normal_from_tex(lookup_center, shadow_light_vector, normal_texture,
+		pixel_size, screen_size, max_resolution, refract_ior).xzy; // 读波法线并换到竖直轴朝上的坐标。
+	vec3 refract_vector = refract(vec3(0.0, 1.0, 0.0), waves_normal, 1.0); // 竖直光线被波面折射后的方向。
+	vec3 collision_point = lookup_center - refract_vector / refract_vector.y; // 光线与水平面的交点。
+	float dist = distance(collision_point, world_pos); // 交点到当前点的距离。
+	return dist * 2.8 + 0.2; // 距离越近焦散越强，返回一个零到一附近的值。
+}
+
+// 水下体积雾：沿视线步进阴影可见性，乘焦散与水吸收，得到汇聚的蓝色光柱。
+// 输入是起点、终点、世界方向、云影、相机位置、阴影图与波法线图；返回光柱颜色。
+// 为什么限制四十米：光柱来自水面缝隙，远处既看不清又贵，截断到四十米内。
+vec3 gfx_underwater_fog(vec3 start_pos, vec3 end_pos, vec3 world_dir, float global_cloud_shadow,
+		vec3 camera_position, vec3 shadow_light_vector, sampler2D shadow_depth0, sampler2D shadow_depth1,
+		bool use_solid_shadow, mat4 shadow_view, mat4 shadow_projection, float shadow_bias,
+		sampler2D wave_normal_texture, vec2 pixel_size, vec2 screen_size, float caustics_resolution, float caustics_ior,
+		vec3 sun_color, float sun_intensity, float underwater_density, int steps, float dither,
+		bool water_absorption, float water_density, float hand_light_scale){
+	const float range = 40.0; // 光柱的累积范围。
+	float start_dist = length(start_pos); // 起点到相机的距离。
+	if (start_dist > range) return vec3(0.0); // 起点已经在范围外，不画光柱。
+	end_pos = mix(world_dir * range, end_pos, step(length(end_pos), range)); // 终点超过范围就截断到范围内。
+	float ray_dist = distance(start_pos, end_pos); // 这条射线在范围里的长度。
+	vec3 ray_dir = (end_pos - start_pos) / ray_dist; // 射线方向。
+	float step_length = range / float(steps); // 每段长度。
+	vec3 result = vec3(0.0); // 累加的光柱颜色。
+	vec3 hand_fog = vec3(0.0); // 累加的手持光颜色。
+	for (float i = 0.0; i < float(steps); i++){ // 沿视线逐步前进。
+		float ray_length = (i + dither) * step_length; // 当前位置，起点加抖动量。
+		vec3 ray_pos = start_pos + ray_dir * ray_length; // 相机相对世界位置。
+		if (start_dist + ray_length > range || ray_length > ray_dist) break; // 超出范围就停止。
+		vec3 shadow_pos = gfx_shadow_screen_pos_distorted(ray_pos + camera_position, shadow_view, shadow_projection, shadow_bias); // 投到阴影图，含边缘压缩。
+		float shadow_depth = use_solid_shadow ? textureLod(shadow_depth1, shadow_pos.xy, 0.0).x : textureLod(shadow_depth0, shadow_pos.xy, 0.0).x; // 按显卡能力选深度图。
+		vec3 shadow = vec3(step(shadow_pos.z + 1e-06, shadow_depth)); // 受光则由深度图判定。
+		ray_length += start_dist; // 距离补上起点偏移。
+		float caustics = gfx_underwater_caustics(ray_pos + camera_position, shadow_light_vector, wave_normal_texture,
+			pixel_size, screen_size, caustics_resolution, caustics_ior); // 该点焦散强度。
+		shadow *= caustics * caustics * caustics; // 三次方让焦散更集中。
+		shadow /= max(3.0, ray_length * 0.1); // 越远越弱。
+		if (water_absorption) shadow *= pow(vec3(0.1, 0.6, 1.0) * 0.99, vec3(ray_length * 0.04 * water_density)); // 红衰减最快，光柱因此偏蓝。
+		result += shadow; // 累加。
+		vec3 hand_light = GFX_UNDERWATER_HAND_LIGHT(ray_pos); // 手持光源在该点留下的光，由效果层注入。
+		if (water_absorption) hand_light *= pow(vec3(0.1, 0.6, 1.0) * 0.99, vec3(ray_length * 0.04 * water_density)); // 与光柱同一套分波段吸收，近处暖、远处青蓝。
+		hand_fog += hand_light; // 累加。
+	}
+	result *= range / float(steps); // 取平均。
+	vec3 light_vector = refract(shadow_light_vector, vec3(0.0, -1.0, 0.0), 1.0 / 1.2); // 阳光向下穿过水面时弯折。
+	float light_dot_view = dot(light_vector, world_dir); // 光方向与视线的夹角。
+	float phase = gfx_MiePhaseFunction(0.7, light_dot_view); // 前向相位，正对阳光时更亮。
+	result *= sun_color * (0.04 * phase * sun_intensity * underwater_density); // 乘直射光色、相位与强度。
+	if (water_absorption) result *= vec3(0.2, 0.65, 1.0); // 有水下雾时把光柱染成水色。
+	result *= global_cloud_shadow; // 按全局云影压暗。
+	result += hand_fog * (range / float(steps)) * hand_light_scale; // 手持光不随阳光相位与云影变化，最后叠上。
+	return result; // 返回光柱颜色。
 }
 
 #endif
