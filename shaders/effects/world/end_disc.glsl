@@ -11,6 +11,7 @@
   `noisetex`、`frameTimeCounter`、`Blackbody`、`BlueNoiseTemporal`、`InterleavedGradientNoise`、`OMNI_TAA`、
   `OMNI_STAR_TYPE` 由绘制主体与共享文件提供。
 关键设计原因与取舍：`EndCalculate3DNoise` 加 `End` 前缀与主世界 `effects/fog/fog.glsl` 的同名函数区分；
+  空间扭曲与云状分形噪声已经迁到 `shaders/gfx/math.glsl` 与 `shaders/gfx/fog.glsl`，本文件只做同名转发；
   吸积盘是屏幕空间积分，不改写几何。
 */
 #ifndef OMNI_END_DISC_INCLUDED // 只引入一次，避免选项与函数重复定义。
@@ -29,40 +30,17 @@ mat3 RotateMatrix(float x, float y, float z){
 
 // --- 空间扭曲：越靠近黑洞中心，光线被拉得越厉害 ---
 void WarpSpace(inout vec3 eyevec, inout vec3 raypos){
-	vec3 origin = vec3(0.0, 0.0, 0.0); // 黑洞中心。
-
-	float singularityDist = distance(raypos, origin); // 到中心的距离。
-	float warpFactor = 1.0 / (singularityDist * singularityDist + 0.000001); // 距离平方倒数，中心处极大。
-
-	vec3 singularityVector = normalize(origin - raypos); // 指向中心的方向。
-
-	float warpAmount = 0.06; // 扭曲强度。
-
-	eyevec = normalize(eyevec + singularityVector * warpFactor * warpAmount); // 光线方向被拉向中心。
+	gfx_warp_space(eyevec, raypos); // 转发到通用库。
 }
 
 // --- 三维噪声：和主世界那份同源，按合同加 `End` 前缀以区分同名 ---
 float EndCalculate3DNoise(vec3 position){
-	return gfx_end_3d_noise(position, noisetex); // 转发到通用库。
+	return gfx_end_3d_noise(position, noisetex, 64.0); // 转发到通用库，贴图边长与仓库噪声图一致。
 }
 
 // --- 云状分形噪声：四层不同频率叠加，供吸积盘细节使用 ---
 float CalculateCloudFBM(vec3 position, vec3 shift){
-	const int octaves = 4; // 层数。
-	const float octAlpha = 0.87; // 每层权重衰减。
-	const float octScale = 2.5; // 每层频率放大。
-	const float octShift = (octAlpha / octScale) / octaves; // 层间偏移。
-
-	float accum = 0.0; // 累积噪声。
-	float alpha = 0.5; // 当前层权重。
-
-	for (int i = 0; i < octaves; i++) { // 逐层叠加。
-		accum += alpha * EndCalculate3DNoise(position); // 加这一层。
-		position = (position + shift) * octScale; // 抬高频率并加位移。
-		alpha *= octAlpha; // 权重衰减。
-	}
-
-	return accum + octShift; // 返回归一化后的噪声。
+	return gfx_cloud_fbm(position, shift, noisetex, 64.0); // 转发到通用库，贴图边长与仓库噪声图一致。
 }
 
 float pcurve(float x){

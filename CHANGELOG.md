@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.33
+
+通用库第二十九批：吸积盘辅助计算。
+
+- `shaders/gfx/math.glsl` 增加黑洞空间扭曲；`shaders/gfx/fog.glsl` 增加云状分形噪声，噪声贴图边长改为参数。
+- `effects/world/end_disc.glsl` 的空间扭曲与分形噪声只保留同名转发，吸积盘步进与光照未动。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.32
 
 通用库第二十八批：暴风与每日天气。

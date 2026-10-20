@@ -111,5 +111,6 @@ shaders/
 - 已完成：`gfx/atmosphere.glsl` 增加星场与绕日轴对齐，`effects/sky/stars.glsl` 只保留颜色分支与入口转发。
 - 已完成：`gfx/atmosphere.glsl` 增加日月圆盘与月亮轨道，`effects/sky/sun_moon.glsl`、`moon_orbit.glsl` 只保留尺寸分支与入口转发。
 - 已完成：`gfx/weather.glsl` 增加暴风噪声、暴风颜色与每日天气哈希，`effects/weather/storm.glsl`、`dailyweather.glsl` 只保留选项与入口转发。
+- 已完成：`gfx/math.glsl` 增加黑洞空间扭曲、`gfx/fog.glsl` 增加云状分形噪声，`effects/world/end_disc.glsl` 只保留同名转发。
 - 下一步：建 `bind/`，把宿主数据整理成通用库参数，再整理菜单。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

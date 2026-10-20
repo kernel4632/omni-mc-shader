@@ -302,4 +302,15 @@ float gfx_planet_curvature_drop(vec2 horizontal, float amount){
 	return curvature * curvature * amount; // 平方后乘强度。
 }
 
+// 空间扭曲：越靠近原点，光线方向越被拉向原点，模拟黑洞附近的引力弯曲。
+// `eyevec` 是光线方向，`raypos` 是当前步进位置；两者都就地修改。
+void gfx_warp_space(inout vec3 eyevec, inout vec3 raypos){
+	vec3 origin = vec3(0.0, 0.0, 0.0); // 黑洞中心。
+	float singularityDist = distance(raypos, origin); // 到中心的距离。
+	float warpFactor = 1.0 / (singularityDist * singularityDist + 0.000001); // 距离平方倒数，中心处极大。
+	vec3 singularityVector = normalize(origin - raypos); // 指向中心的方向。
+	float warpAmount = 0.06; // 扭曲强度。
+	eyevec = normalize(eyevec + singularityVector * warpFactor * warpAmount); // 光线方向被拉向中心。
+}
+
 #endif

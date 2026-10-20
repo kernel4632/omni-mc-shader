@@ -223,13 +223,34 @@ float gfx_end_fog_density(vec3 worldDir, float dist, float VdotL, float angleX, 
 }
 
 // 末地三维噪声：把世界坐标折成三维格子，再查二维噪声图。
-float gfx_end_3d_noise(vec3 position, sampler2D noiseTexture){
+// `noiseResolution` 是噪声贴图边长，调用方可复用到不同尺寸的噪声图。
+float gfx_end_3d_noise(vec3 position, sampler2D noiseTexture, float noiseResolution){
 	vec3 p = floor(position); // 整数格。
 	vec3 b = fract(position); // 格内偏移。
 	b = b * b * (3.0 - 2.0 * b); // 平滑偏移。
 	vec2 uv = 17.0 * p.z + p.xy + b.xy; // 三维到二维的坐标分配。
-	vec2 rg = textureLod(noiseTexture, (uv + 0.5) / 64.0, 0.0).zx; // 读噪声两个通道。
+	vec2 rg = textureLod(noiseTexture, (uv + 0.5) / noiseResolution, 0.0).zx; // 读噪声两个通道。
 	return mix(rg.x, rg.y, b.z); // 按高度插值。
+}
+
+// 云状分形噪声：四层不同频率的三维噪声叠加，供吸积盘等体积细节使用。
+// `shift` 是每层之间的时间位移，`noiseResolution` 是噪声贴图边长。
+float gfx_cloud_fbm(vec3 position, vec3 shift, sampler2D noiseTexture, float noiseResolution){
+	const int octaves = 4; // 层数。
+	const float octAlpha = 0.87; // 每层权重衰减。
+	const float octScale = 2.5; // 每层频率放大。
+	const float octShift = (octAlpha / octScale) / octaves; // 层间偏移。
+
+	float accum = 0.0; // 累积噪声。
+	float alpha = 0.5; // 当前层权重。
+
+	for (int i = 0; i < octaves; i++){ // 逐层叠加。
+		accum += alpha * gfx_end_3d_noise(position, noiseTexture, noiseResolution); // 加这一层。
+		position = (position + shift) * octScale; // 抬高频率并加位移。
+		alpha *= octAlpha; // 权重衰减。
+	}
+
+	return accum + octShift; // 返回归一化后的噪声。
 }
 
 #endif
