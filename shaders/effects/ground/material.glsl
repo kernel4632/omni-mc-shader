@@ -1,8 +1,9 @@
 /*
-材质：把资源包的底色、法线、表面三张贴图解码成光照要用的表面数据，并给出材质编号掩码。
+材质：把资源包的底色、法线、表面三张贴图解码成光照要用的表面数据，并保留原调用名转发绑定层。
 来源：照 iterationT `Lib/GbufferData.glsl` 移植；视差取自 `Lib/IndividualFounctions/Parallax.glsl`，算法放在同目录的 `parallax.glsl`。
   `MaterialFromTex` 解码 labPBR 表面；`GetGbufferData` 从各号画面读回世界表面；`CalculateMasks` 把材质编号
   转成一堆零一掩码；`FixParticleMask`、`ApplyMaterial` 修补粒子与水玻璃冰。
+  G 缓冲读取、材质编号、掩码与手部/实体判断的实现都在 `bind/gbuffer.glsl`，本文件只保留选项与 PBR 解码。
 调用位置：
   合成阶段片元：`GbufferData gbuffer = GetGbufferData();` 后接 `CalculateMasks`、`FixParticleMask`、`ApplyMaterial`；
   几何阶段片元：地形、实体、方块、手、蜘蛛眼要视差时，用本文件末尾引入的 `ParallaxOcclusionMapping`；
@@ -13,7 +14,7 @@
 调用前提（iterationT 原样保留）：
   `GetGbufferData` 依赖调用方先声明整数像素坐标 `texelCoord`，并已引入画面与深度声明。
 设计原因与取舍：
-  材质编号 `MATID_*` 与粒子修正开关 `CORRECT_PARTICLE_NORMAL` 是内部常数，进菜单的选项只列在下方 `@option`。
+  材质编号 `MATID_*` 在 `bind/gbuffer.glsl`，粒子修正开关 `CORRECT_PARTICLE_NORMAL` 留在本文件；进菜单的选项只列在下方 `@option`。
   视差算法拆到 `effects/ground/parallax.glsl`：搜 `parallax` 就能直接找到算法主体，本文件末尾显式引入，
   原有调用点（地形、实体等）不用改。
   视差选项（`OMNI_PARALLAX_MODE` 等）与纹理分辨率、各向异性过滤一起留在本文件：合成阶段（`composite.glsl`）
@@ -92,35 +93,7 @@
 #define OMNI_GENERAL_GRASS_FIX 0 // [0 1]
 // @option {"label":{"zh_cn":"白色调试世界","en_us":"White Debug World"},"page":"about","description":{"zh_cn":"把所有几何的底色改写成纯白，用来检查光照与几何；仅供调试。","en_us":"Rewrites every geometry albedo to plain white for checking lighting and geometry; debug only."}}
 //#define OMNI_WHITE_DEBUG_WORLD
-// 内部常数：方块与实体材质编号，按 iterationT `Settings.glsl` 原值，几何与合成阶段共用一份。
-#define MATID_SKY 0.0 // 天空里没有几何的像素。
-#define MATID_LAND 1.0 // 普通不透明方块，默认材质编号。
-#define MATID_GRASS 2.0 // 草与植物类。
-#define MATID_LEAVES 3.0 // 树叶。
-#define MATID_HAND 4.0 // 手持物。
-#define MATID_WATER 6.0 // 水。
-#define MATID_STAINEDGLASS 7.0 // 染色玻璃。
-#define MATID_ICE 8.0 // 冰。
-#define MATID_ENTITIES_PLAYER 10.0 // 玩家自身。
-#define MATID_ENTITIES_LIT_HIGH 11.0 // 实体里高亮度自发光的一类。
-#define MATID_ENTITIES_LIT_MEDIUM 12.0 // 实体里中等亮度自发光的一类。
-#define MATID_ENTITIES_LIT_LOW 13.0 // 实体里低亮度自发光的一类。
-#define MATID_ENTITIES_SNOW 14.0 // 实体身上的雪层。
-#define MATID_LIGHTNING 15.0 // 闪电。
-#define MATID_BEACON_BEAM 16.0 // 信标光柱。
-#define MATID_GLOWSTONE 20.0 // 荧石。
-#define MATID_TORCH 21.0 // 火把。
-#define MATID_LAVA 22.0 // 岩浆。
-#define MATID_FIRE 23.0 // 火。
-#define MATID_REDSTONE_TORCH 24.0 // 红石火把。
-#define MATID_REDSTONE 25.0 // 红石线。
-#define MATID_SOULFIRE 26.0 // 灵魂火。
-#define MATID_AMETHYST 27.0 // 紫水晶。
-#define MATID_OXIDIZED_BULB 28.0 // 氧化的铜灯。
-#define MATID_PARTICLE 40.0 // 普通粒子。
-#define MATID_PARTICLE_LIT 41.0 // 受光粒子。
-#define MATID_END_PORTAL 50.0 // 末地传送门。
-#define MATID_SELECTION 200.0 // 选择框与线条。
+// 材质编号 `MATID_*` 已移到 `bind/gbuffer.glsl`，几何与合成阶段仍从本文件拿到同一套名字。
 // 内部常数：粒子法线修正开关。iterationT 原文声明了它但源码里没有引用，按合同原样保留在这里。
 #define CORRECT_PARTICLE_NORMAL
 // 解码、掩码与视差都用到共用数学，先引入加载器输入与共用计算。
@@ -128,38 +101,10 @@
 #include "/common/math.glsl"
 // 方块光曲线、材质法线与遮蔽算法放在通用库；这里只传入选项值。
 #include "/gfx/surface.glsl"
-// --- 方块光曲线：把原版方块光等级压成光照要用的亮度 ---
-// 天光曲线的形状：先抬高低等级，再整体压暗，等级越高越接近饱和。
-float CurveBlockLightSky(float blockLight){
-	return gfx_curve_block_light_sky(blockLight); // 转发到通用库。
-}
-// --- 表面数据结构：读回画面后一次装完光照要用的量 ---
-// 每次采样的表面材质参数：粗糙、金属、菲涅尔零点、自发光、散射与反射强度。
-struct Material{
-	float roughness; // 粗糙度，越大高光越散。
-	float metalness; // 金属度，越大底色越偏反射。
-	float f0; // 表面正射反射率，金属接近底色、非金属约零点零四。
-	float emissiveness; // 自发光强度。
-	float scattering; // 次表面散射强度。
-	float reflectionStrength; // 这份表面允许反射的强度。
-};
-// 一个像素读回的完整表面数据：底色、法线、深度、光照图、材质编号与材质参数。
-struct GbufferData{
-	vec3 albedo; // 不透明表面底色，已转线性。
-	vec4 albedoW; // 半透明表面底色与其透明度。
-	vec3 normalL; // 半透明表面的切线空间法线。
-	vec3 normalW; // 不透明表面的世界切线空间法线。
-	float depthL; // 半透明层深度。
-	float depthW; // 不透明层深度。
-	vec2 lightmapL; // 半透明层光照图，方块光与天光。
-	vec2 lightmapW; // 不透明层光照图。
-	float materialIDL; // 半透明层材质编号。
-	float materialIDW; // 不透明层材质编号。
-	float waterMask; // 水遮罩。
-	float rainAlpha; // 雨雪遮罩。
-	float parallaxShadow; // 视差自阴影透过率。
-	Material material; // 解码后的材质参数。
-};
+// G 缓冲读取、材质编号、掩码与手部判断在绑定层，本文件只保留材质选项与 PBR 解码。
+#include "/bind/gbuffer.glsl"
+// --- 几何结构：射线、平面与求交结果，供屏幕空间反射等使用 ---
+// 表面材质与 G 缓冲结构在 `bind/gbuffer.glsl`，本文件只负责按选项解码材质。
 // 一条射线，供屏幕空间反射等使用。
 struct Ray{
 	vec3 dir; // 方向。
@@ -176,14 +121,7 @@ struct Intersection{
 	float distance; // 沿射线的距离。
 	float angle; // 命中面的夹角。
 };
-// 空气材质：不做反射、粗糙度为一。
-const Material airMaterial = Material(1.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-// 水材质：光滑强反射。
-const Material material_water = Material(0.0, 0.0, 0.02, 0.0, 0.0, 1.0);
-// 玻璃材质：比水略高的固定反射率。
-const Material material_glass = Material(0.0, 0.0, 0.042, 0.0, 0.0, 1.0);
-// 冰材质：反射率介于水与玻璃之间。
-const Material material_ice = Material(0.0, 0.0, 0.018, 0.0, 0.0, 1.0);
+// 固定材质（空气、水、玻璃、冰）在 `bind/gbuffer.glsl`，与本文件共用同一套定义。
 // 水洼的湿面反射锐度（`OmniPuddleRoughness`）在 water/puddle.glsl：粗糙度只在本文件的 `MaterialFromTex` 解出，
 // 所以由本文件引入并在那里调用；水洼覆盖（`OmniPuddleCoverage`）仍由水效果自己引入，两边各取所需。
 // 为什么放在函数之前：GLSL 要求先声明后使用，放在文件末尾会报找不到函数。
@@ -241,34 +179,11 @@ Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
 // 调用前提：调用方必须先声明整数像素坐标 `texelCoord`。
 #if defined OMNI_COMPOSITE0_PASS || defined OMNI_COMPOSITE1_PASS || defined OMNI_COMPOSITE2_PASS || defined OMNI_COMPOSITE3_PASS || defined OMNI_COMPOSITE4_PASS || defined OMNI_COMPOSITE5_PASS
 GbufferData GetGbufferData(){
-	GbufferData data; // 逐项填入。
-	vec4 gbuffer0 = texelFetch(colortex0, texelCoord, 0); // 零号画面：不透明底色。
-	vec4 gbuffer3 = texelFetch(colortex3, texelCoord, 0); // 三号画面：不透明法线与光照图。
-	vec4 gbuffer4 = texelFetch(colortex4, texelCoord, 0); // 四号画面：半透明法线与光照图。
-	vec4 gbuffer5 = texelFetch(colortex5, texelCoord, 0); // 五号画面：不透明高光材质与湿润。
-	vec4 gbuffer6 = texelFetch(colortex6, texelCoord, 0); // 六号画面：半透明颜色材质与水遮罩。
-	data.albedo = GammaToLinear(gbuffer0.rgb); // 底色从伽马空间转回线性。
-	data.albedoW = vec4(Unpack2x8(gbuffer6.r), Unpack2x8(gbuffer6.g)); // 半透明底色打包在两个通道里，先拆开。
-	data.albedoW.rgb = GammaToLinear(data.albedoW.rgb); // 拆开后的底色同样转线性。
-	data.normalL = DecodeNormal(gbuffer3.rg); // 三号画面的两个通道是半透明法线。
-	data.normalW = DecodeNormal(gbuffer4.rg); // 四号画面的两个通道是不透明法线。
-	data.depthL = texelFetch(depthtex1, texelCoord, 0).x; // 不含半透明的深度。
-	data.depthW = texelFetch(depthtex0, texelCoord, 0).x; // 含半透明的深度。
-	data.lightmapL = gbuffer3.ba; // 三号画面的后两个通道是半透明光照图。
-	data.lightmapW = gbuffer4.ba; // 四号画面的后两个通道是不透明光照图。
-	data.lightmapL = vec2(data.lightmapL.r, CurveBlockLightSky(data.lightmapL.g)); // 天光分量按曲线重整。
-	data.lightmapW = vec2(data.lightmapW.r, CurveBlockLightSky(data.lightmapW.g)); // 不透明层同样处理。
-	data.materialIDL = gbuffer5.b; // 五号画面的蓝色通道是不透明材质编号。
-	data.materialIDW = gbuffer6.b; // 六号画面的蓝色通道是半透明材质编号。
-	data.waterMask = gbuffer6.a; // 六号画面的透明通道是水遮罩。
-	data.rainAlpha = 1.0 - gbuffer0.a; // 零号画面的透明度被雨雪乘过，取反得到雨量。
-	vec2 gbuffer5a = Unpack2x8(gbuffer5.a); // 五号画面的透明通道打包了湿润与视差阴影。
-	data.parallaxShadow = gbuffer5a.y; // 第二个是视差自阴影。
+	GbufferData data = bind_gbuffer(texelCoord, colortex0, colortex3, colortex4, colortex5, colortex6, depthtex1, depthtex0); // 画面通道含义在绑定层解释。
 	#ifdef OMNI_ENABLE_PBR // 开启物理光照时才解材质，否则当作空气。
-		vec4 specTex = vec4(Unpack2x8(gbuffer5.r), Unpack2x8(gbuffer5.g)); // 五号画面的红绿通道里是表面贴图。
-		data.material = MaterialFromTex(data.albedo, specTex, gbuffer5a.x); // 解出材质，同时压暗吸水底色。
+		data.material = MaterialFromTex(data.albedo, data.specTex, data.wet); // 解出材质，同时压暗吸水底色。
 		#if MC_VERSION < 11605
-			data.material.reflectionStrength *= float(data.depthW >= 0.7); // 旧版没有单独的半透明深度，天空像素不该反射。
+			data.material.reflectionStrength *= float(bind_is_world_depth(data.depthW)); // 旧版没有单独的半透明深度，天空像素不该反射。
 		#endif
 	#else
 		data.material = airMaterial; // 关闭物理光照时统一按空气处理。
@@ -276,109 +191,21 @@ GbufferData GetGbufferData(){
 	return data; // 交回读回的数据。
 }
 #endif // 合成阶段读回段结束。
-// --- 材质掩码：把材质编号拆成一组零一标记，后续按标记分效果 ---
-// 一份掩码里每个字段都是零或一，表示这个像素属于某类材质。
-struct MaterialMask{
-	float sky; // 天空像素。
-	float land; // 普通不透明方块。
-	float grass; // 草与植物。
-	float leaves; // 树叶。
-	float hand; // 手持物。
-	float entityPlayer; // 玩家。
-	float water; // 水。
-	float stainedGlass; // 染色玻璃。
-	float ice; // 冰。
-	float entitiesLitHigh; // 高亮自发光实体。
-	float entitiesLitMedium; // 中亮自发光实体。
-	float entitiesLitLow; // 低亮自发光实体。
-	float lightning; // 闪电。
-	float entitiesSnow; // 实体雪层。
-	float torch; // 火把。
-	float lava; // 岩浆。
-	float glowstone; // 荧石。
-	float fire; // 火。
-	float redstoneTorch; // 红石火把。
-	float redstone; // 红石线。
-	float soulFire; // 灵魂火。
-	float amethyst; // 紫水晶。
-	float oxidizedBulb; // 氧化铜灯。
-	float particle; // 普通粒子。
-	float particlelit; // 受光粒子。
-	float endPortal; // 末地传送门。
-	float selection; // 选择框。
-};
-// 把八位材质编号还原成类别，再逐项比对给出掩码。
+// --- 材质掩码：实现与手部/实体判断都在绑定层，这里保留原调用名做一次转发 ---
 MaterialMask CalculateMasks(float materialIDs){
-	MaterialMask mask; // 逐项填入。
-	materialIDs = floor(materialIDs * 255.0); // 画面里存的是编号除以二百五十五，先还原成编号。
-	mask.sky = float(materialIDs == MATID_SKY); // 天空。
-	mask.land = float(materialIDs == MATID_LAND); // 普通方块。
-	mask.grass = float(materialIDs == MATID_GRASS || materialIDs == MATID_BEACON_BEAM); // 草，信标光柱也当作草处理。
-	mask.leaves = float(materialIDs == MATID_LEAVES); // 树叶。
-	mask.hand = float(materialIDs == MATID_HAND); // 手持物。
-	mask.water = float(materialIDs == MATID_WATER); // 水。
-	mask.stainedGlass = float(materialIDs == MATID_STAINEDGLASS); // 染色玻璃。
-	mask.ice = float(materialIDs == MATID_ICE); // 冰。
-	mask.entityPlayer = float(materialIDs == MATID_ENTITIES_PLAYER); // 玩家。
-	mask.entitiesLitHigh = float(materialIDs == MATID_ENTITIES_LIT_HIGH || materialIDs == MATID_BEACON_BEAM); // 高亮实体。
-	mask.entitiesLitMedium = float(materialIDs == MATID_ENTITIES_LIT_MEDIUM); // 中亮实体。
-	mask.entitiesLitLow = float(materialIDs == MATID_ENTITIES_LIT_LOW); // 低亮实体。
-	mask.entitiesSnow = float(materialIDs == MATID_ENTITIES_SNOW || materialIDs == MATID_BEACON_BEAM); // 实体雪层。
-	mask.lightning = float(materialIDs == MATID_LIGHTNING); // 闪电。
-	mask.torch = float(materialIDs == MATID_TORCH); // 火把。
-	mask.lava = float(materialIDs == MATID_LAVA); // 岩浆。
-	mask.glowstone = float(materialIDs == MATID_GLOWSTONE); // 荧石。
-	mask.fire = float(materialIDs == MATID_FIRE); // 火。
-	mask.redstoneTorch = float(materialIDs == MATID_REDSTONE_TORCH); // 红石火把。
-	mask.redstone = float(materialIDs == MATID_REDSTONE); // 红石线。
-	mask.soulFire = float(materialIDs == MATID_SOULFIRE); // 灵魂火。
-	mask.amethyst = float(materialIDs == MATID_AMETHYST); // 紫水晶。
-	mask.oxidizedBulb = float(materialIDs == MATID_OXIDIZED_BULB); // 氧化铜灯。
-	mask.particle = float(materialIDs == MATID_PARTICLE); // 普通粒子。
-	mask.particlelit = float(materialIDs == MATID_PARTICLE_LIT); // 受光粒子。
-	mask.endPortal = float(materialIDs == MATID_END_PORTAL); // 末地传送门。
-	mask.selection = float(materialIDs == MATID_SELECTION); // 选择框。
-	return mask; // 交回掩码。
+	return bind_material_mask(materialIDs); // 材质编号到类别在绑定层解释。
 }
 // 粒子修正并带深度：粒子很薄，读回时会落到后面的几何上，所以把半透明层也标记成粒子并借用不透明深度。
-void FixParticleMask(inout MaterialMask materialMaskSoild, inout MaterialMask materialMask, inout float depthL, in float depthW){
-	#if MC_VERSION >= 11500 // 一点一五以后粒子单独一层，才需要这份修正。
-	if (materialMaskSoild.particle > 0.5 || materialMaskSoild.particlelit > 0.5){ // 不透明层出现粒子才修正。
-		materialMask.particle = 1.0; // 半透明层也当作粒子。
-		materialMask.water = 0.0; // 粒子不是水。
-		materialMask.stainedGlass = 0.0; // 也不是玻璃。
-		materialMask.ice = 0.0; // 也不是冰。
-		materialMask.sky = 0.0; // 也不是天空。
-		depthL = depthW; // 深度改用不透明层，避免粒子读到自己后面的方块。
-	}
-	#endif
+void FixParticleMask(inout MaterialMask solidMask, inout MaterialMask mask, inout float depthL, in float depthW){
+	bind_fix_particle_mask(solidMask, mask, depthL, depthW); // 修正规则在绑定层。
 }
 // 粒子修正：同上，但不改深度，供不需要深度的阶段使用。
-void FixParticleMask(inout MaterialMask materialMaskSoild, inout MaterialMask materialMask){
-	#if MC_VERSION >= 11500 // 同样只在一点一五以后生效。
-	if (materialMaskSoild.particle > 0.5 || materialMaskSoild.particlelit > 0.5){ // 不透明层出现粒子才修正。
-		materialMask.particle = 1.0; // 半透明层也当作粒子。
-		materialMask.water = 0.0; // 粒子不是水。
-		materialMask.stainedGlass = 0.0; // 也不是玻璃。
-		materialMask.ice = 0.0; // 也不是冰。
-		materialMask.sky = 0.0; // 也不是天空。
-	}
-	#endif
+void FixParticleMask(inout MaterialMask solidMask, inout MaterialMask mask){
+	bind_fix_particle_mask(solidMask, mask); // 修正规则在绑定层。
 }
 // 用固定材质覆盖解码材质：水、染色玻璃与冰用写死的参数，并标记为光滑面。
-void ApplyMaterial(inout Material material, in MaterialMask materialMask, inout bool isSmooth){
-	if (materialMask.water > 0.5){ // 水。
-		material = material_water; // 换成水材质。
-		isSmooth = true; // 标记为光滑。
-	}
-	if (materialMask.stainedGlass > 0.5){ // 染色玻璃。
-		material = material_glass; // 换成玻璃材质。
-		isSmooth = true; // 标记为光滑。
-	}
-	if (materialMask.ice > 0.5){ // 冰。
-		material = material_ice; // 换成冰材质。
-		isSmooth = true; // 标记为光滑。
-	}
+void ApplyMaterial(inout Material material, in MaterialMask mask, inout bool isSmooth){
+	bind_apply_material(material, mask, isSmooth); // 固定材质在绑定层。
 }
 // 资源包材质处理：把法线贴图的原始颜色解成切线空间法线，并按选项缩放起伏、导出材质遮蔽。
 // 对应 Eclipse `dimensions/all_solid.fsh:204-210`（`applyBump` 里的 `NORMAL_MAP_MULT`）与 `:743-745`（`MATERIAL_AO`）。

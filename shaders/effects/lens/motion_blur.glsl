@@ -12,6 +12,8 @@
 #define OMNI_MOTION_BLUR_INCLUDED // 置上标记，后续再次引用直接跳过。
 // 模糊取样循环放在通用后期库，本文件只判断哪些像素参与并传入位移。
 #include "/gfx/post.glsl"
+// 手部深度与玩家编号判断在绑定层，避免这里再写一份阈值。
+#include "/bind/gbuffer.glsl"
 // --- 相机动态模糊 ---
 // 用上一帧相机把当前表面重投影回屏幕，沿两帧之间的屏幕位移取几个历史位置做平均，模拟快门时间内相机的移动。
 // 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理相机移动造成的整屏位移。
@@ -19,7 +21,7 @@
 vec2 MotionBlurCameraVelocity(vec2 coord, float depth){
 	vec3 projection = vec3(coord, depth) * 2.0 - 1.0; // 转负一到一。
 	projection = (vec3(vec2(gbufferProjectionInverse[0].x, gbufferProjectionInverse[1].y) * projection.xy, 0.0) + gbufferProjectionInverse[3].xyz) / (gbufferProjectionInverse[2].w * projection.z + gbufferProjectionInverse[3].w); // 逆投影到视空间。
-	if (depth < 0.7){ // 手按固定深度偏移补偿相机位移。
+	if (bind_is_hand_depth(depth)){ // 手按固定深度偏移补偿相机位移。
 		projection += (gbufferPreviousModelView[3].xyz - gbufferModelView[3].xyz) * MC_HAND_DEPTH; // 手的固定偏移。
 	}else{ // 普通世界表面。
 		projection = mat3(gbufferModelViewInverse) * projection + gbufferModelViewInverse[3].xyz; // 视空间转世界。
@@ -42,9 +44,9 @@ vec3 MotionBlur(){
 	}
 	vec2 velocity = vec2(0.0); // 屏幕位移，默认零。
 	#ifdef OMNI_DISABLE_PLAYER_TAA_MOTION_BLUR // 关闭玩家动态模糊时玩家不参与。
-		bool blurPixel = depth > 0.7 && materialIDs != MATID_END_PORTAL && materialIDs != MATID_ENTITIES_PLAYER; // 手与玩家都排除。
+		bool blurPixel = bind_is_world_depth(depth) && materialIDs != MATID_END_PORTAL && !bind_is_player_id(materialIDs); // 手与玩家都排除。
 	#else // 默认只排除手和末地传送门。
-		bool blurPixel = depth > 0.7 && materialIDs != MATID_END_PORTAL; // 近处左手以外的世界表面参与。
+		bool blurPixel = bind_is_world_depth(depth) && materialIDs != MATID_END_PORTAL; // 近处左手以外的世界表面参与。
 	#endif
 	if (blurPixel){ // 先用宏决定是否参与，再走一条完整的 `if`，避免判断括号被预处理指令切开。
 		velocity = MotionBlurCameraVelocity(texCoord, depth); // 算屏幕位移。
