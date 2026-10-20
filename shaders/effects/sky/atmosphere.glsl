@@ -33,8 +33,10 @@
 #define OMNI_RAINBOW_STRENGTH 1.0 // [0.0 0.5 1.0 2.0]
 // @option {"label":{"zh_cn":"闪电强度","en_us":"Lightning Strength"},"description":{"zh_cn":"打雷时闪亮多强。","en_us":"How bright the lightning flash is."},"slider":true}
 #define OMNI_LIGHTNING_STRENGTH 1.0 // [0.0 0.5 1.0 1.5 2.0]
-// 归一化与噪声来自共用数学，天体方向来自加载器输入，显式引入而不依赖调用顺序。
-#include "/common/uniforms.glsl"
+// 归一化与噪声来自共用数学，天体方向由绑定层转成世界空间，显式引入而不依赖调用顺序。
+#include "/bind/time.glsl"
+#include "/bind/weather.glsl"
+#include "/bind/world.glsl"
 #include "/common/math.glsl"
 // 极光与彩虹的纯公式放在通用库。
 #include "/gfx/atmosphere.glsl"
@@ -47,16 +49,16 @@ uniform vec4 lightningBoltPosition; // 闪电的相机相对世界位置与强�
 // 极光：主世界夜晚高空的缓慢帘幕，雨天被云遮挡。
 vec3 omniAurora(vec3 color, vec3 direction) {
 #if OMNI_AURORA // 打开极光才生成采样。
-	vec3 sunDirection = omniNormalize(mat3(gbufferModelViewInverse) * sunPosition); // 太阳转到世界空间，决定夜色浓度。
-	color = gfx_aurora(color, direction, sunDirection, frameTimeCounter, wetness, OMNI_AURORA_TINT, OMNI_AURORA_STRENGTH); // 帘幕公式在通用库。
+	vec3 sunDirection = bind_world().sunDirection; // 太阳方向由绑定层转到世界空间。
+	color = gfx_aurora(color, direction, sunDirection, bind_time().seconds, bind_weather().wetness, OMNI_AURORA_TINT, OMNI_AURORA_STRENGTH); // 帘幕公式在通用库。
 #endif
 	return color; // 关闭时不改动颜色。
 }
 // 彩虹：雨后晴天的背太阳方向，出现一条窄彩色弧。
 vec3 omniRainbow(vec3 color, vec3 direction) {
 #if OMNI_RAINBOW // 打开彩虹才生成采样。
-	vec3 sunDirection = omniNormalize(mat3(gbufferModelViewInverse) * sunPosition); // 转到世界空间的太阳方向。
-	color = gfx_rainbow(color, direction, sunDirection, wetness, OMNI_RAINBOW_STRENGTH); // 窄带彩虹公式在通用库。
+	vec3 sunDirection = bind_world().sunDirection; // 世界空间的太阳方向。
+	color = gfx_rainbow(color, direction, sunDirection, bind_weather().wetness, OMNI_RAINBOW_STRENGTH); // 窄带彩虹公式在通用库。
 #endif
 	return color; // 关闭时不改动颜色。
 }

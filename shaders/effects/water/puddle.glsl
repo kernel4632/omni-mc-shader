@@ -25,6 +25,9 @@
 #define OMNI_PUDDLE_INCLUDED // 置上标记，后续再次引用直接跳过。
 // 水洼覆盖与湿面粗糙度的纯公式放在通用库，这里只传玩家选项。
 #include "/gfx/water.glsl"
+// 湿润度与相机位置由绑定层整理，水洼公式只接收普通数值。
+#include "/bind/camera.glsl"
+#include "/bind/weather.glsl"
 
 // @effect {"label":{"zh_cn":"水洼","en_us":"Puddles"}}
 // 菜单页放在「天气与季节」：积水由降雨产生，Eclipse 也把 `Puddle_Size`、`Puddle_Reflection_Sharpness` 放在天气一页；
@@ -56,14 +59,14 @@ float OmniPuddleRoughness(float roughness, float wetRoughness, float wetnessStag
 // 为什么压平拉向世界上方而不是几何法线：合成阶段只读回压平后的表面法线，拿不到单独的几何法线（Eclipse 里的 `flatNormals`）；
 //   Eclipse 的权重 `clamp(flatNormals.y,0,1)` 只让朝上的面被压平，此时几何法线就接近世界上方，拉向世界上方是这一情形下的等价近似。
 // 参数：`worldNormal`、`albedo` 与 `roughness` 会被改写；`f0` 用来跳过金属面、`skyLight` 是这天光等级；`worldPos` 是相机相对世界位置。
-// 全局依赖：`wetness`（加载器湿润度）、`noisetex`（水洼噪声贴图）、`cameraPosition`（换算绝对世界坐标），都由引入本文件前的阶段声明。
+// 全局依赖：湿润度与相机位置由 `bind/` 从加载器输入转换；`noisetex` 是水洼噪声贴图，由绘制主体声明。
 void OmniPuddleSurface(inout vec3 worldNormal, inout vec3 albedo, inout float roughness, float f0, float skyLight, vec3 worldPos){
-	vec3 absPos = worldPos + cameraPosition; // 水洼噪声要绝对世界坐标，用相机相对坐标会让水洼跟着相机跑。
-	float halfWet = min(wetness, 1.0); // 全局湿润度的低档，与 Eclipse 的 `halfWet` 同义。
+	vec3 absPos = worldPos + bind_camera().position; // 水洼噪声要绝对世界坐标，用相机相对坐标会让水洼跟着相机跑。
+	float halfWet = min(bind_weather().wetness, 1.0); // 全局湿润度的低档，与 Eclipse 的 `halfWet` 同义。
 	float noise = texture(noisetex, absPos.xz * 0.02).b; // 低洼形状噪声，值越低地势越低；朝上的面就是主要积水面，所以只取横纵坐标。
 	float puddles = OmniPuddleCoverage(halfWet, noise); // 积水覆盖，`OMNI_PUDDLE_SIZE` 已含在公式里，越大水洼越大越连片。
 	float wetnessStages = puddles * skyLight * smoothstep(0.85, 1.0, skyLight); // 积水权重：只有露天面才算，照 Eclipse 的 `lightmap` 与 `effectStrength`。
-	float wetnessDarkening = min(wetnessStages + OMNI_TEXTURE_DEFAULT_POROSITY * clamp(wetness - 2.0, 0.0, 1.0), 1.0); // 压暗权重，整体很湿时按孔隙率再补一点，照 Eclipse。
+	float wetnessDarkening = min(wetnessStages + OMNI_TEXTURE_DEFAULT_POROSITY * clamp(bind_weather().wetness - 2.0, 0.0, 1.0), 1.0); // 压暗权重，整体很湿时按孔隙率再补一点，照 Eclipse。
 
 	worldNormal = normalize(mix(worldNormal, vec3(0.0, 1.0, 0.0), wetnessStages * clamp(worldNormal.y, 0.0, 1.0))); // 水洼处法线拉平：朝上的面权重最大，照 Eclipse 的 `clamp(flatNormals.y,0,1)`。
 	roughness = OmniPuddleRoughness(roughness, 0.5, wetnessStages); // 积水处更光滑；`OMNI_PUDDLE_REFLECTION_SHARPNESS` 决定混合比例，默认零不改画面。

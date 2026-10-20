@@ -33,6 +33,8 @@
 #define OMNI_NETHER_INCLUDED // 置上标记，后续再次引用直接跳过。
 // 下界单格雾密度放在通用库，这里只传噪声纹理。
 #include "/gfx/fog.glsl"
+// 动画时间由绑定层提供，效果文件不直接读宿主时间。
+#include "/bind/time.glsl"
 // @effect {"label":{"zh_cn":"下界","en_us":"Nether"}}
 // @option {"label":{"zh_cn":"环境亮度","en_us":"Nether Ambient Brightness"},"description":{"zh_cn":"下界不等于无光，这里的整体亮度。","en_us":"Overall ambient brightness in the Nether, which is never fully dark."},"slider":true}
 #define OMNI_NETHER_BRIGHTNESS 1.0 // [0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
@@ -91,7 +93,7 @@ float NetherFogDensityAt(vec3 pos){
 // 体积雾原始密度：叠上被时间侵蚀的羽流形状、贴地烟与高度衰减，返回零附近的密度。
 // 为什么随高度变化：下界烟从地面升起、被天花板压住，越高越稀，密度必须带高度包络。
 float NetherFogCloudVolume(vec3 pos){
-	return gfx_nether_fog_cloud_volume(pos, frameTimeCounter, noisetex); // 时间与噪声纹理交给库。
+	return gfx_nether_fog_cloud_volume(pos, bind_time().seconds, noisetex); // 时间与噪声纹理交给库。
 }
 
 // 当前像素的视空间射线方向：屏幕上任意深度的点都在同一条从相机出发的射线上，归一后就是方向。

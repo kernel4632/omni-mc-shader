@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.44
+
+宿主绑定第一批：建立 `shaders/bind/`。
+
+- 新增 `bind/time.glsl`、`camera.glsl`、`weather.glsl`、`world.glsl`，把加载器的时间、相机、天气与维度输入整理成普通结构体。
+- `effects/water/waves.glsl`、`weather/weather.glsl`、`sky/atmosphere.glsl`、`clarity/grain.glsl`、`water/puddle.glsl` 与末地、下界、后期动态模糊改用绑定值，效果公式与默认画面不变。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.43
 
 通用库第三十九批：末地行星表面与环带。

@@ -18,7 +18,7 @@
   `Rain` 需要合成主程序的 `in vec3 colorShadowlight`、`in vec3 colorSkylight`；
   `RainWindOffset` 需要程序声明 `uniform float eyeBrightnessOneSmooth;`（该值在 `rendering/pipeline.properties` 里由加载器计算）；
   `OMNI_RAIN_SHADOW` 属于 `effects/cloud/cloud.glsl`，调用方需先引入该文件；
-  `OMNI_DISABLE_LOCAL_PRECIPITATION` 与 `wetness`、`eyeSnowySmooth`、`eyeNoPrecipitationSmooth` 由天气选项与加载器输入提供。
+  `RainWindOffset` 的相机位置、动画时间与露天标记由 `bind/` 绑定层从加载器输入转换。
 关键设计原因与取舍：
   雨雪几何只在顶点阶段水平推移，不引入顶点着色器的复杂运算；晴天不出雨是因为加载器已经不给雨遮罩值，这里不再额外判断；
   雨遮罩写进零号画面的透明通道，读取端靠它判断雨落在画面哪一层，而不是靠世界位置猜。
@@ -27,6 +27,10 @@
 #define OMNI_WEATHER_INCLUDED // 置上标记，后续再次引用直接跳过。
 // 雨雪随风偏移放在通用库，这里只传入相机、时间与选项。
 #include "/gfx/weather.glsl"
+// 宿主输入统一由绑定层整理：时间、相机位置与露天标记不再散落在效果里。
+#include "/bind/time.glsl"
+#include "/bind/camera.glsl"
+#include "/bind/weather.glsl"
 
 // @effect {"label":{"zh_cn":"天气","en_us":"Weather"}}
 // @option {"label":{"zh_cn":"雨可见度","en_us":"Rain visibility"},"description":{"zh_cn":"雨丝与雨中画面的强度；取零等于几乎看不到雨。","en_us":"Strength of rain streaks and the rainy look; zero makes rain almost invisible."},"slider":true}
@@ -60,13 +64,14 @@ const float drynessHalflife = 50.0; // [10.0 20.0 30.0 50.0 75.0 100.0 150.0 200
 // 为什么雨色由天光与阴影光组成：雨天光线更均匀，直接用天光加一点被雨云削弱的阳光最接近真实。
 // 为什么区分是否关闭局部降水：默认只在真的下雨的群系叠雨色，强制局部降水时不论群系都按整体降雨处理。
 void Rain(inout vec3 color, float rainMask, vec3 shadowlightColorInput, vec3 skylightColorInput){
+	OmniWeather weather = bind_weather(); // 本帧的降雨与环境数据只在入口读一次。
 	vec3 rainSunlight = shadowlightColorInput * (5.0 - OMNI_RAIN_SHADOW * 4.0); // 雨天阳光被雨云削弱，阴影越弱雨色越暗。
 	vec3 rainColor = skylightColorInput + rainSunlight * 0.1; // 雨天色以天光为主，掺一点阳光。
 
 	#ifndef OMNI_DISABLE_LOCAL_PRECIPITATION // 默认只在所在群系真的下雨时叠雨色。
-		color = mix(color, rainColor * (eyeSnowySmooth * 0.07 + 0.01), rainMask * (0.2 * eyeSnowySmooth + 0.15) * wetness * OMNI_RAIN_VISIBILITY); // 雪天雨色更亮，混合量随雨遮罩、湿润度与可见度增大。
+		color = mix(color, rainColor * (weather.snowy * 0.07 + 0.01), rainMask * (0.2 * weather.snowy + 0.15) * weather.wetness * OMNI_RAIN_VISIBILITY); // 雪天雨色更亮，混合量随雨遮罩、湿润度与可见度增大。
 	#else // 关闭局部降水时按整体降雨处理，不再看群系。
-		color = mix(color, rainColor * 0.01, saturate(rainMask * wetness * (OMNI_RAIN_VISIBILITY * 0.15))); // 一律用很淡的雨色。
+		color = mix(color, rainColor * 0.01, saturate(rainMask * weather.wetness * (OMNI_RAIN_VISIBILITY * 0.15))); // 一律用很淡的雨色。
 	#endif
 }
 
@@ -76,7 +81,9 @@ void Rain(inout vec3 color, float rainMask, vec3 shadowlightColorInput, vec3 sky
 // 为什么乘 `eyeBrightnessOneSmooth`：只有玩家真正露天时雨雪才该倾斜，洞穴里看到的雨雪不跟着动。
 // 说明：iterationT 把这段写在 `Weather_VS` 的主函数里，没有独立名字；这里按职责抽成函数，命名是 Omni 的补充。
 vec2 RainWindOffset(vec3 worldPos){
-	return gfx_rain_wind_offset(worldPos, cameraPosition, frameTimeCounter, vec2(OMNI_RAIN_WIND_X, OMNI_RAIN_WIND_Z), OMNI_RAIN_DISTURBANCE, eyeBrightnessOneSmooth); // 全局量与选项交给库。
+	OmniCamera camera = bind_camera(); // 相机位置从绑定结构取一次。
+	OmniTime time = bind_time(); // 动画时间从绑定结构取一次。
+	return gfx_rain_wind_offset(worldPos, camera.position, time.seconds, vec2(OMNI_RAIN_WIND_X, OMNI_RAIN_WIND_Z), OMNI_RAIN_DISTURBANCE, bind_weather().eyeBrightnessOne); // 全局量与选项交给库。
 }
 
 // --- 雨遮罩：读天气贴图的透明通道，空白纹素直接丢弃 ---

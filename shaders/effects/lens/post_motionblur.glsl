@@ -9,6 +9,8 @@
 */
 #ifndef OMNI_POST_MOTIONBLUR_INCLUDED // 只引入一次，避免函数重复定义。
 #define OMNI_POST_MOTIONBLUR_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 天空光亮度由绑定层整理，镜头光斑仍按同一亮度衰减。
+#include "/bind/weather.glsl"
 
 vec3 MotionBlurSceneColor(){
 	#if OMNI_MOTION_BLUR // 开启动态模糊时按相机位移沿快门方向平均。
@@ -19,7 +21,7 @@ vec3 MotionBlurSceneColor(){
 
 	#ifdef OMNI_OVERWORLD // 主世界把镜头光斑叠回场景。
 		#if OMNI_LENS_GLARE || OMNI_LENS_FLARE // 只在开了眩光或光斑时。
-			color += CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb) * eyeBrightnessSmoothCurved; // 三号画面的光斑按天空光衰减叠加。
+			color += CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb) * bind_weather().eyeBrightnessCurved; // 三号画面的光斑按天空光衰减叠加。
 		#endif
 	#endif
 

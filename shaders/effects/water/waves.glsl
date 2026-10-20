@@ -9,7 +9,9 @@
     物理解析波浪的顶点与片元两段靠 `PHYSICS_VS` / `PHYSICS_FS` 宏分派，保留 iterationT 原样。
 */
 #ifndef OMNI_WATER_WAVES_INCLUDED
+// 波浪公式在通用库，时间从绑定结构取，效果文件不再直接读宿主输入。
 #include "/gfx/water.glsl"
+#include "/bind/time.glsl"
 #define OMNI_WATER_WAVES_INCLUDED // 置上标记，后续再次引用直接跳过。
 // --- 波浪：多层噪声正弦叠成起伏 ---
 // 先用三次曲线把噪声采样平滑化，再逐层缩小频率、加快速度，得到自然且可重复的波浪。
@@ -20,14 +22,14 @@ vec4 textureSmooth(sampler2D texSampler, vec2 coord){ return gfx_texture_smooth(
 float AlmostIdentity(float x, float m, float n){ return gfx_almost_identity(x, m, n); }
 
 // 主波函数：把世界位置缩放后逐层累加噪声采样，每层频率与速度都不同。
-float GetWaves(vec3 position){ return gfx_waves(position, noisetex, frameTimeCounter, OMNI_WAVE_SCALE); }
+float GetWaves(vec3 position){ return gfx_waves(position, noisetex, bind_time().seconds, OMNI_WAVE_SCALE); }
 
 #define sampleDistance 12.0 // 法线差分采样距离，原程序取值，写死让每个程序代价一致。
 
 // 波法线：用高度差近似倾斜，中央差分取横纵两个方向。
 // 为什么乘 `WAVE_HEIGHT / sampleDistance`：高度差除以采样距离才是坡度，再乘波浪高度选项统一缩放。
 vec3 GetWavesNormal(vec3 position, const float waveHeight){
-	vec3 n = gfx_waves_normal(position, noisetex, frameTimeCounter, OMNI_WAVE_SCALE, waveHeight, OMNI_WAVE_HEIGHT);
+	vec3 n = gfx_waves_normal(position, noisetex, bind_time().seconds, OMNI_WAVE_SCALE, waveHeight, OMNI_WAVE_HEIGHT);
 	#if OMNI_PLAYER_WATER > 0
 		n.y = mix(n.y, 1.0, PlayerWaterRipple(position));
 	#endif
@@ -36,7 +38,7 @@ vec3 GetWavesNormal(vec3 position, const float waveHeight){
 
 // 水面视差：沿视线在波高场里一步步前进，找到真正可见的波面位置。
 // 为什么限制十二步：步数直接决定开销，写死让每个程序代价一致，也让画面表现稳定。
-vec3 GetWaterParallaxCoord(vec3 position, vec3 viewVector){ return gfx_water_parallax(position, viewVector, noisetex, frameTimeCounter, OMNI_WAVE_SCALE, OMNI_WAVE_HEIGHT); }
+vec3 GetWaterParallaxCoord(vec3 position, vec3 viewVector){ return gfx_water_parallax(position, viewVector, noisetex, bind_time().seconds, OMNI_WAVE_SCALE, OMNI_WAVE_HEIGHT); }
 
 // --- 海洋物理波：按迭代正弦合成海面，供外部海洋物理扩展使用 ---
 // 形状必须与原程序一致，因为实体偏移在中央处理器一侧也按同一套公式计算，两边不一致会让实体浮空或陷进水里。

@@ -20,6 +20,9 @@
 #define OMNI_END_FOG_INCLUDED // 置上标记，后续再次引用直接跳过。
 // 末地涡旋雾的纯计算放在通用库，这里只传时间、采样器与画质参数。
 #include "/gfx/fog.glsl"
+// 相机位置与动画时间由绑定层整理，效果文件不再直接读宿主输入。
+#include "/bind/camera.glsl"
+#include "/bind/time.glsl"
 
 #if OMNI_END_VORTEX_FOG // 开关关闭时整段不编译，默认画面与采样都省掉。
 
@@ -43,9 +46,9 @@ vec4 EndVortexFog(vec3 worldDir, float viewDist){
 	#endif
 	vec3 vortexColor = vec3(OMNI_END_VORTEX_LIGHT_R, OMNI_END_VORTEX_LIGHT_G, OMNI_END_VORTEX_LIGHT_B) * 0.25; // 光柱颜色，零点二五是原程序的缩放。
 	vec3 ambientColor = vec3(OMNI_END_VORTEX_AMBIENT_R, OMNI_END_VORTEX_AMBIENT_G, OMNI_END_VORTEX_AMBIENT_B); // 雾内环境光颜色。
-	return gfx_end_vortex_fog(cameraPosition, worldDir, viewDist, dither, SAMPLECOUNT, expFactor, maxDist,
+	return gfx_end_vortex_fog(bind_camera().position, worldDir, viewDist, dither, SAMPLECOUNT, expFactor, maxDist,
 		vortexColor, ambientColor, OMNI_END_VORTEX_STORM_DENSITY, 0.001 * OMNI_END_VORTEX_HAZE_DENSITY,
-		frameTimeCounter, noisetex, float(noiseTextureResolution), 1e-3 * OMNI_SUNLIGHT_INTENSITY); // 全部纯计算转交通用库。
+		bind_time().seconds, noisetex, float(noiseTextureResolution), 1e-3 * OMNI_SUNLIGHT_INTENSITY); // 全部纯计算转交通用库。
 }
 #endif // 体积涡旋雾结束。
 

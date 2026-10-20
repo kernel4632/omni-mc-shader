@@ -71,10 +71,12 @@
 
 // --- 时间因子：整颗末地天空按它旋转 ---
 // 手动相位时取固定角度，否则按累计时间除以公转周期循环。零点二八二是原程序的起始相位。
+// 累计秒数由绑定层提供，下面只做周期换算。
+#include "/bind/time.glsl"
 #ifdef OMNI_END_MANUAL_PLANET_CYCLE
 	const float timeFactor = fract(OMNI_END_MANUAL_PLANET_ANGLE / 360.0 + 0.282) * TAU; // 手动相位换算成弧度。
 #else
-	float timeFactor = fract(frameTimeCounter * ((1.0 / 60.0) / OMNI_END_PLANET_CYCLE) + 0.282) * TAU; // 由时间推进的相位。
+	float timeFactor = fract(bind_time().seconds * ((1.0 / 60.0) / OMNI_END_PLANET_CYCLE) + 0.282) * TAU; // 由时间推进的相位。
 #endif
 
 // 行星阴影：相位落在两段里时行星本体挡住光环，光环那一侧变暗。

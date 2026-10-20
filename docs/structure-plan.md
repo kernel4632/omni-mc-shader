@@ -122,5 +122,6 @@ shaders/
 - 已完成：`gfx/water.glsl` 增加雨雾高光与雨点动画法线，`effects/water/rain.glsl` 只保留调制与入口转发。
 - 已完成：`gfx/color.glsl` 增加 HSV 转颜色、sRGB 转线性与饱和度矩阵，`effects/lighting/lpv.glsl` 只保留转发。
 - 已完成：`gfx/atmosphere.glsl` 增加行星表面与环带公式，`effects/world/end_sky.glsl` 只保留同名转发。
-- 下一步：继续把地面与远景的纯计算迁入通用库，再建 `bind/` 与整理菜单。
-- 尚未开始：`bind/`、菜单合并、效果文件行数压缩。
+- 下一步：继续把地面与远景的纯计算迁入通用库，再整理菜单。
+- 已完成：`bind/` 建立；`time.glsl`、`camera.glsl`、`weather.glsl`、`world.glsl` 把宿主时间、相机、天气与维度转成普通结构体，水面、天气、氛围、胶片颗粒、水洼、末地与下界先接入。
+- 尚未开始：菜单合并、效果文件行数压缩。
