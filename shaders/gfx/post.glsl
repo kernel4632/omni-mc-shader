@@ -111,4 +111,51 @@ float gfx_vignette(vec2 coord, float falloff, float roundness, float aspect){
 	float rf = dot(p, p) * falloff * falloff + 1.0; // 距离平方乘强度。
 	return 1.0 / (rf * rf); // 二次衰减。
 }
+
+// --- 镜头眩光与光斑：纯形状计算，屏幕位置与太阳位置都由调用方传入 ---
+// 这一组函数不读取太阳颜色、雾密度或选项；可见度与亮度由效果层乘在结果上。
+
+// 求一个偏移向量在桶形畸变后的方向，用于把鬼影沿弧线排列。
+// `uv` 是相对画面中心的位置，`pxoffset` 是鬼影偏移，`barrel` 是畸变强度。
+vec2 gfx_glare_dist_offset(vec2 uv, vec2 pxoffset, float barrel){
+	vec2 tocenter = uv.xy; // 当前点到中心的方向。
+	vec3 prep = normalize(vec3(tocenter.y, -tocenter.x, 0.0)); // 与中心方向垂直的轴。
+	float angle = length(tocenter.xy) * 2.221 * barrel; // 旋转角随距离增大。
+	vec3 oldoffset = vec3(pxoffset, 0.0); // 把偏移抬到三维。
+	vec3 rotated = oldoffset * cos(angle) + cross(prep, oldoffset) * sin(angle) + prep * dot(prep, oldoffset) * (1.0 - cos(angle)); // 绕轴旋转。
+	return rotated.xy; // 取回二维偏移。
+}
+
+// 画一个带色散的软光点：红绿蓝三个通道沿鬼影方向错开一点，得到彩色边缘。
+vec3 gfx_glare_flare(vec2 uv, vec2 pos, float dist, float chromaOffset, float size, float barrel){
+	pos = gfx_glare_dist_offset(uv, pos, barrel); // 先对鬼影位置做桶形畸变。
+	float r = max(0.01 - pow(length(uv + (dist - chromaOffset) * pos), 2.4) *( 1.0 / (size * 2.0)), 0.0) * 0.85; // 红色通道。
+	float g = max(0.01 - pow(length(uv +  dist                 * pos), 2.4) * (1.0 / (size * 2.0)), 0.0) * 1.0; // 绿色通道。
+	float b = max(0.01 - pow(length(uv + (dist + chromaOffset) * pos), 2.4) * (1.0 / (size * 2.0)), 0.0) * 1.5; // 蓝色通道。
+	return vec3(r, g, b); // 返回带色散的光点颜色。
+}
+
+// 画一串沿鬼影方向排列的圆形光斑，颜色从暖到冷渐变。
+vec3 gfx_glare_orb(vec2 uv, vec2 pos, float dist, float size, float barrel){
+	const float orbCount = 6.0; // 一组鬼影包含几个圆形光斑。
+	vec3 c = vec3(0.0); // 累加结果。
+	for (float i = 0.0; i < orbCount; i++){ // 逐个光斑。
+		float j = i + 1; // 从一起数的序号。
+		float offset = j / (j + 0.1); // 这个光斑在鬼影方向上的位置。
+		float colOffset = j / orbCount * 0.5; // 颜色偏移。
+		float ss = size / (j + 1.0); // 越靠后的光斑越小。
+		c += gfx_glare_flare(uv, pos, dist + offset, ss * 2.0, ss, barrel) * vec3(1.0 - colOffset, 1.0, 0.5 + colOffset) * j; // 累加并染色放大。
+	}
+	c += gfx_glare_flare(uv, pos, dist + 0.8, 0.05, 3.0 * size, barrel) * 0.5; // 末尾再补一个大的柔和光斑。
+	return c; // 返回光斑颜色。
+}
+
+// 画一个环状光环，三个通道同样做色散。
+vec3 gfx_glare_ring(vec2 uv, vec2 pos, float dist, float chromaOffset, float blur){
+	vec2 uvd = uv * length(uv); // 把坐标按到中心距离放大，得到环而不是点。
+	float r = max(1.0 / (1.0 + 250.0 * pow(length(uvd + (dist - chromaOffset) * pos), blur)), 0.0) * 0.8; // 红色通道。
+	float g = max(1.0 / (1.0 + 250.0 * pow(length(uvd +  dist                 * pos), blur)), 0.0) * 1.0; // 绿色通道。
+	float b = max(1.0 / (1.0 + 250.0 * pow(length(uvd + (dist + chromaOffset) * pos), blur)), 0.0) * 1.5; // 蓝色通道。
+	return vec3(r, g, b); // 返回光环颜色。
+}
 #endif
