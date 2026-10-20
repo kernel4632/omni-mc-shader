@@ -7,7 +7,7 @@
 
 ## 一、目标
 
-- Minecraft 专属代码控制在约 2000 行非注释代码。
+- Minecraft 专属代码分两块统计：绑定与入口（`common/`、`bind/`、生成的入口文件）目标约 2000 行，当前 1991 行；绘制主体（`rendering/`）当前 3287 行，继续把算法搬进 `effects/` 与 `gfx/`，不把它算进前面的 2000 行来掩盖差距。
 - 通用图形算法放 `shaders/gfx/`，不读取任何 Minecraft、Iris 或全局 uniform，可单独发布。
 - 效果数量不减少，默认画面与现在一致；不能为了减行数删效果或改观感。
 - 选项可以精简，但必须归入所属页面，不设“高级”总入口。
@@ -126,7 +126,8 @@ shaders/
 - 已完成：`gfx/atmosphere.glsl` 增加行星表面与环带公式，`effects/world/end_sky.glsl` 只保留同名转发。
 - 已完成：`bind/` 建立；`time.glsl`、`camera.glsl`、`weather.glsl`、`world.glsl` 把宿主时间、相机、天气与维度转成普通结构体，水面、天气、氛围、天空渲染、云影、泛光、积雪、暴风、水洼、末地与下界已接入。
 - 已完成：顶层菜单合并为九页；`options.py` 用 `GROUP_PAGES` 把十五种效果文件夹归入九个入口，快速设置复用常用选项，关于页平铺调试开关，不设“高级”页；选项名、默认值与配置兼容未变。
-- 已完成：宿主层行数达标；`common/`、`bind/`、`rendering/` 与生成的入口文件合计 1887 行非注释代码（去掉空行与整行注释），低于约 2000 行目标。
+- 已完成：宿主层行数改为固定口径的实测值。口径：指定目录里的 `.glsl/.vsh/.fsh/.csh/.gsh`，用 `build._code_only` 去掉注释后数非空行；当前 `common/` 240、`bind/` 131、生成入口 `world0/` 608、`world1/` 530、`world-1/` 482，绑定与入口合计 1991 行；`rendering/` 3287 行单独统计。复现命令：
+  `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','world0','world1','world-1')})"`
 - 已完成：清理与文档；没有空目录，`gfx/` 没有未引用函数；新增通用库边界测试，检查通用库不出现宿主输入、选项宏、版本声明或宿主文件引用；更新 `gfx/README.md`、`docs/rendering.md` 与 `docs/parity.md`。
 - 已完成：`gfx/post.glsl` 增加景深深度换算、弥散范围搜索与散焦合成，`effects/lens/dof.glsl` 只保留选项换算与两次调用。
 - 已完成：`gfx/post.glsl` 增加五级泛光链的降采样、轴向高斯与三次升采样合并，`effects/color/bloom.glsl` 只保留程序分支、雨遮罩读取与合并泛光。
@@ -136,6 +137,7 @@ shaders/
 - 已完成：新增 `gfx/fog_volume.glsl`，体积雾的密度、光照吸收、步进、阴影、云影、闪电、暴风与群系迁入通用库；`effects/fog/volumetric.glsl` 只保留选项换算与一次调用，雾照明用 `GFX_FOG_LPV_STEP` 可选钩子接入。
 - 已完成：`gfx/reflection.glsl` 增加屏幕空间追踪的坐标换算、深度取样、远景转换、步进与二分细化；`effects/reflection/screenspace.glsl` 只保留深度图选择与质量选项换算。
 - 已完成：`gfx/reflection.glsl` 增加反射合并的菲涅耳、金属度、水吸收与亮度补正，`effects/reflection/screenspace.glsl` 的合成五号入口只做一次调用。
-- 后续可选：把屏幕空间反射的天空回退、体素反射与反射雾也迁入通用库；它们仍调用天空、雾与体素效果，需要显式参数接口。
+- 已完成：`gfx/reflection.glsl` 增加反射主流程与三个维度的合成结构；天空兜底、体素回退、命中深度、视空间还原与反射雾改用 `GFX_REFLECTION_*` 钩子注入。`effects/reflection/screenspace.glsl` 只保留维度差异与一次调用，非注释行 331 降到 242。
+- 后续可选：把 `effects/reflection/voxel.glsl` 的体素步进也迁入通用库；它依赖光传播体积的网格映射、方块编号与颜色图，需要先把网格原点和边长作为参数传入。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。

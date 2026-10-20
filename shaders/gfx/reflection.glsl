@@ -1,12 +1,15 @@
 /*
-通用图形库反射模块：可见法线分布的采样。
-调用位置：任何需要按粗糙度生成反射方向的程序；本仓库由 `effects/reflection/screenspace.glsl` 转发调用。
+通用图形库反射模块：可见法线采样、屏幕空间追踪、反射主流程与菲涅耳合并。
+调用位置：任何需要反射的程序；本仓库由 `effects/reflection/screenspace.glsl` 转发调用。
 可复制示例：
     vec3 d = gfx_sample_ggx_vndf(viewVector, roughness, noise); // 生成一条模糊反射方向。
+    vec4 r = gfx_specular_reflections(surface, trace, media, noise, depth1, depth2, dhDepth, scene); // 追踪并着色。
 设计原因与取舍：
-    只做纯数学，不读取深度、屏幕尺寸或反射画面；追踪与合成由调用方负责。
-    公式照原程序保留，只把圆周常数换成库内常数。
+    主流程不读取 Minecraft uniform：深度图、投影、光色与天空都由参数传入；
+    天空兜底、体素回退、命中深度与反射雾这些宿主细节用 `GFX_REFLECTION_*` 钩子注入，默认是中性操作。
+    公式照原程序保留，只把圆周常数换成库内常数；三个维度共用一条流程，差异写成 `gfx_reflection_media` 的开关。
 */
+
 #ifndef GFX_REFLECTION_INCLUDED
 #define GFX_REFLECTION_INCLUDED
 
@@ -114,6 +117,198 @@ bool gfx_screen_space_trace(vec3 view_ray_ori, vec3 view_ray_dir, float ndotv, f
 		depth = gfx_reflection_sample_depth(screen_pos.xy, false, hand_supported, depth_texture, hand_depth_texture, dh_depth_texture, has_dh, dh_ssr, dh_projection_inverse, projection_inverse); // 读新位置的深度。
 	}
 	return hit; // 返回是否命中。
+}
+
+// --- 反射主流程：追踪、天空与体素回退、反射雾 ---
+// 一次反射的输入几何：位置、方向与屏幕起点打包，主函数不必收一长串参数。
+struct gfx_reflection_surface {
+	vec3 view_pos;    // 视空间表面位置。
+	vec3 world_pos;   // 相机相对世界位置，供体素回退与反射雾使用。
+	vec3 view_dir;    // 由相机指向表面的单位视线。
+	vec3 normal;      // 视空间表面法线。
+	vec3 screen_pos;  // 起点屏幕坐标与深度。
+	float roughness;  // 材质粗糙度，粗糙面据此散开反射方向。
+	float normal_up;  // 法线朝上的分量，天空回退按它判断能接多少天光。
+	bool is_hand;     // 手部像素，深度图选择不同。
+	bool is_smooth;   // 光滑面走镜面反射。
+};
+
+// 屏幕追踪的固定输入：深度图、投影与质量档位只在这里出现一次。
+struct gfx_reflection_trace {
+	mat4 projection;               // 近景投影。
+	mat4 projection_inverse;       // 近景逆投影。
+	mat4 dh_projection_inverse;    // 远景逆投影，没有远景时传近景逆投影占位。
+	mat4 model_view;               // 视空间转相机相对世界空间。
+	mat4 model_view_inverse;       // 相机相对世界空间转视空间。
+	float near_plane;              // 近裁剪面距离。
+	bool hand_supported;           // 当前版本是否有手部深度。
+	bool has_dh;                   // 是否加载了远景模组。
+	bool dh_ssr;                   // 是否允许反射命中远景。
+	int quality;                   // 步进质量。
+	int refinement_steps;          // 命中后的细化步数。
+	float z_diff_threshold;        // 深度差阈值。
+};
+
+// 反射合成参数：把维度差异写成普通开关，主流程只有一条路径。
+// 为什么用开关而不是在通用库里分维度：通用库不认识下界、末地这些游戏概念，调用方把差异说明成数值。
+struct gfx_reflection_media {
+	vec3 current_color;           // 全反射像素直接使用的当前场景色。
+	vec3 highlight_color;         // 太阳或月光的高光颜色。
+	float skylight;               // 天光等级，零到一。
+	float highlight_strength;     // 高光提示强度，零表示不画。
+	float output_factor;          // 管线线性单位与曲线单位之间的换算。
+	float open_length;            // 没命中时射线到相机的总距离，雾按它估净空。
+	float far_distance;           // 反射雾的最远距离。
+	float cap_distance;           // 反射雾额外的绝对上限。
+	bool total_reflection;        // 这是全反射像素。
+	bool underwater;              // 相机在水里。
+	bool sky_enabled;             // 没命中时用天空兜底。
+	bool sky_uses_skylight;       // 天空兜底按天光衰减。
+	bool sky_uses_facing;         // 天空兜底按朝上程度衰减。
+	bool voxel_enabled;           // 屏幕没命中时再试体素回退。
+	bool hit_dist_uses_total;     // 命中距离把表面到相机的距离也算进去（下界）。
+	bool fog_color_enabled;       // 叠加解析雾色（下界、末地）。
+	bool fog_color_needs_length;  // 解析雾色只在空气段大于零时叠加。
+	bool fog_volume_enabled;      // 补地表散射与体积雾（主世界）。
+};
+
+// 以下六个宏是调用方注入的钩子，默认全部是中性操作；作用与 `gfx/fog_volume.glsl` 的雾照明钩子相同。
+// 为什么用宏：通用库不能引用效果函数与宿主 uniform，调用方在引入本文件前把宿主细节写进钩子。
+// 天空兜底：把反射方向换成天空颜色；默认没有天空。
+#ifndef GFX_REFLECTION_SKY
+#define GFX_REFLECTION_SKY(world_dir, is_smooth) vec3(0.0)
+#endif
+// 太阳高光：默认不亮，主世界用宿主光方向替换。
+#ifndef GFX_REFLECTION_SKY_HIGHLIGHT
+#define GFX_REFLECTION_SKY_HIGHLIGHT(normal, view_dir) 0.0
+#endif
+// 天空判定：默认把命中点当实心几何。
+#ifndef GFX_REFLECTION_IS_SKY
+#define GFX_REFLECTION_IS_SKY(screen_pos) false
+#endif
+// 体素回退：默认没命中，返回的 a 为负。
+#ifndef GFX_REFLECTION_VOXEL
+#define GFX_REFLECTION_VOXEL(world_pos, world_dir, normal, hit_world) vec4(0.0, 0.0, 0.0, -1.0)
+#endif
+// 命中点深度：默认用射线自己的深度，调用方可以改成读深度图。
+#ifndef GFX_REFLECTION_HIT_DEPTH
+#define GFX_REFLECTION_HIT_DEPTH(screen_pos) (screen_pos.z)
+#endif
+// 解析雾色：下界与末地按空气段长度返回散射色，默认没有雾。
+#ifndef GFX_REFLECTION_FOG_COLOR
+#define GFX_REFLECTION_FOG_COLOR(surface_dist, air_length, world_dir, is_sky) vec3(0.0)
+#endif
+// 体积雾与地表散射：主世界调用，默认原样返回。
+#ifndef GFX_REFLECTION_FOG_VOLUME
+#define GFX_REFLECTION_FOG_VOLUME(color, start_world, end_world, world_dir, air_length, is_sky) color
+#endif
+// 命中点视空间位置：默认用通用逆投影，调用方可改成会撤销时间抗锯齿抖动的版本。
+#ifndef GFX_REFLECTION_VIEW_POS
+#define GFX_REFLECTION_VIEW_POS(coord, depth, projection_inverse) gfx_reflection_view_pos(coord, depth, projection_inverse)
+#endif
+// 体素命中点投回屏幕：默认用不补抖动的原始投影，调用方可以补上时间抗锯齿抖动。
+#ifndef GFX_REFLECTION_SCREEN_POS
+#define GFX_REFLECTION_SCREEN_POS(view_pos, projection) gfx_reflection_screen_pos(view_pos, projection)
+#endif
+
+// 生成反射方向：光滑面直接反射，粗糙面先按可见法线抽样再反射。
+vec3 gfx_reflection_dir(vec3 view_dir, vec3 normal, float roughness, vec2 noise, bool is_smooth){
+	if (is_smooth) return reflect(view_dir, normal); // 镜面方向。
+	vec3 normal_up = normalize(vec3(0.0, normal.z, -normal.y)); // 用竖直参考轴构造一个切向。
+	mat3 to_tangent = mat3(cross(normal_up, normal), normal_up, normal); // 切线基，第三列是法线。
+	vec3 tangent_view = view_dir * to_tangent; // 视线转到切线空间。
+	vec3 visible_normal = to_tangent * gfx_sample_ggx_vndf(-tangent_view, roughness, noise); // 抽样一个可见法线。
+	return reflect(view_dir, visible_normal); // 沿可见法线反射。
+}
+
+// 读场景颜色并换回线性；反射颜色统一用这个入口，编码格式只有一处。
+vec3 gfx_reflection_scene_color(sampler2D scene_texture, vec2 coord){
+	return gfx_CurveToLinear(textureLod(scene_texture, coord, 0.0).rgb); // 曲线编码转线性。
+}
+
+// 天空回退的朝向权重：面越朝上，接收的天空越多；朝下时保留四分之一，避免全黑。
+float gfx_reflection_sky_facing(float normal_up){
+	return gfx_saturate((normal_up + 0.7) * 2.0) * 0.75 + 0.25; // 与天空光在地面的分布一致。
+}
+
+// 命中点到表面的距离：命中点深度从深度图或射线深度取，单位是米。
+float gfx_reflection_hit_length(vec3 view_pos, vec3 screen_pos, float hit_depth, mat4 projection_inverse){
+	vec3 hit_pos = GFX_REFLECTION_VIEW_POS(screen_pos.xy, hit_depth, projection_inverse); // 还原命中点视空间位置。
+	return distance(hit_pos, view_pos); // 命中点与表面之间隔着多少空气。
+}
+
+// 反射主流程：追踪一次反射，按开关补天空、体素与雾，最后返回曲线编码的颜色与命中距离。
+// `noise` 由调用方给，主世界用蓝噪声、其他维度用固定噪声；`output_factor` 是管线单位换算。
+// 深度图与场景颜色图单独作为采样器传入，避免把不透明类型塞进结构体。
+vec4 gfx_specular_reflections(gfx_reflection_surface surface, gfx_reflection_trace trace, gfx_reflection_media media, vec2 noise,
+		sampler2D depth_texture, sampler2D hand_depth_texture, sampler2D dh_depth_texture, sampler2D scene_texture){
+	float ndotv = gfx_saturate(dot(-surface.view_dir, surface.normal)); // 视线与法线的夹角余弦。
+	vec3 ray_dir = gfx_reflection_dir(surface.view_dir, surface.normal, surface.roughness, noise, surface.is_smooth); // 反射方向。
+	vec3 screen_pos = surface.screen_pos; // 起点屏幕坐标，追踪会就地更新。
+	float min_length = 0.015; // 粗糙面的最小步长。
+	if (surface.is_smooth) min_length = (3e-4 - surface.view_pos.z * 7e-6 * gfx_saturate(ndotv * 500.0 - 1.0)) * trace.projection[1][1]; // 光滑面最小步长随深度与视线倾斜收紧。
+	bool hit = gfx_screen_space_trace(surface.view_pos, ray_dir, ndotv, noise.x, min_length, surface.is_hand, screen_pos,
+		depth_texture, hand_depth_texture, dh_depth_texture, trace.projection, trace.projection_inverse,
+		trace.dh_projection_inverse, trace.near_plane, trace.hand_supported, trace.has_dh, trace.dh_ssr, trace.quality,
+		trace.refinement_steps, trace.z_diff_threshold); // 屏幕空间追踪。
+	vec3 ray_world_dir = mat3(trace.model_view_inverse) * ray_dir; // 反射方向转到世界空间，供天空、体素与雾使用。
+
+	vec3 reflection = vec3(0.0); // 反射颜色；没命中且没有天空时保持黑色，避免读到未定义值。
+	if (hit) reflection = gfx_reflection_scene_color(scene_texture, screen_pos.xy); // 命中几何时取该处场景色。
+
+	bool is_sky = true; // 命中点是不是天空；没命中时按天空处理，与高光判定一致。
+	float highlight = 0.0; // 太阳高光，只在光滑天空像素上出现。
+	if (hit) is_sky = GFX_REFLECTION_IS_SKY(screen_pos); // 主世界按材质编号区分天空，其他维度都算实心。
+	if (is_sky && surface.is_smooth && media.highlight_strength > 0.0) highlight = GFX_REFLECTION_SKY_HIGHLIGHT(surface.normal, surface.view_dir) * media.highlight_strength; // 光滑天空像素加一个太阳镜面高光。
+
+	if (!hit){ // 没命中时用天空回退。
+		if (media.total_reflection){ // 全反射时表面看不到外面的东西，直接取当前场景色。
+			reflection = media.current_color;
+		}else if (media.sky_enabled && !media.underwater && media.skylight > 0.0){ // 空中且有一定天光时才用天空。
+			reflection = GFX_REFLECTION_SKY(ray_world_dir, surface.is_smooth); // 取天空颜色。
+			float falloff = media.sky_uses_facing ? gfx_reflection_sky_facing(surface.normal_up) : 1.0; // 朝上的面接更多天空。
+			if (media.sky_uses_skylight) falloff *= media.skylight; // 按天光衰减。
+			reflection *= falloff; // 衰减天空反射。
+			highlight *= falloff; // 高光同样衰减。
+		}
+	}
+
+	reflection += media.highlight_color * highlight; // 叠加直射高光；没有高光时这一项为零。
+
+	float hit_dist = surface.is_smooth ? 0.0 : 1.0; // 光滑面视作镜面，命中距离记零；粗糙面命中后按空气段改写。
+
+	if (media.voxel_enabled && !hit && !media.total_reflection && !media.underwater){ // 屏幕空间没命中时再用体素补一次。
+		vec3 voxel_hit_world; // 体素命中的相机相对世界位置，用来把反射雾的雾段算到真实命中点。
+		vec4 voxel_hit = GFX_REFLECTION_VOXEL(surface.world_pos, ray_world_dir, surface.normal, voxel_hit_world); // 世界空间追踪体素图。
+		if (voxel_hit.a >= 0.0){ // `a` 不为负就是命中。
+			reflection = voxel_hit.rgb; // 用体素里存下的方块颜色作为反射。
+			hit = true; // 当作命中几何，后面的雾按命中处理。
+			is_sky = false; // 命中的不是天空。
+			hit_dist = voxel_hit.a; // 归一化命中距离；光滑面原样保留，粗糙面稍后按雾段改写。
+			screen_pos = GFX_REFLECTION_SCREEN_POS(mat3(trace.model_view) * voxel_hit_world, trace.projection); // 把命中点投回屏幕，反射雾按这段距离罩住体素反射。
+		}
+	}
+
+	float surface_dist = length(surface.view_pos); // 表面到相机的距离。
+	float air_length = media.open_length - surface_dist; // 没命中时按净空总距离减去表面距离估空气段。
+	if (hit && !is_sky) air_length = gfx_reflection_hit_length(surface.view_pos, screen_pos, GFX_REFLECTION_HIT_DEPTH(screen_pos), trace.projection_inverse); // 命中实心几何时按命中点算空气段。
+	if (hit && !surface.is_smooth){ // 粗糙面把空气段换成滤波用的命中距离。
+		float dist_for_hit = media.hit_dist_uses_total ? air_length + surface_dist : air_length; // 下界的命中距离把表面距离也算进去。
+		hit_dist = gfx_saturate(max(dist_for_hit * 2.0, 3.0 * surface.roughness)); // 距离越远、表面越粗糙，滤波半径越大。
+	}
+	float fog_air = max(min(min(air_length + surface_dist, media.far_distance), media.cap_distance) - surface_dist, 0.0); // 雾段裁到可视范围。
+
+	if (media.fog_color_enabled && (!media.fog_color_needs_length || fog_air > 0.0)) reflection += GFX_REFLECTION_FOG_COLOR(surface_dist, fog_air, ray_world_dir, is_sky) / media.output_factor; // 下界末地补解析雾。
+	if (media.fog_volume_enabled){ // 主世界补地表散射与体积雾。
+		float fog_skylight = media.underwater ? 1.0 : media.skylight; // 水下天光按满值，水下雾才能正常出现。
+		if (fog_skylight > 0.0 && fog_air > 0.0){ // 有天光且有空气段才补雾。
+			vec3 lit = reflection * media.output_factor; // 换到管线线性单位。
+			vec3 fogged = GFX_REFLECTION_FOG_VOLUME(lit, surface.world_pos, surface.world_pos + ray_world_dir * fog_air, ray_world_dir, fog_air, is_sky); // 在副本上补散射。
+			reflection = mix(reflection, fogged / media.output_factor, fog_skylight); // 按天光在原色与补雾色之间混合。
+		}
+	}
+
+	return vec4(gfx_LinearToCurve(reflection), hit_dist); // 曲线编码后与命中距离一起返回。
 }
 
 // 把反射颜色按菲涅耳、金属度与水吸收混进场景色；`not_total` 为假时是全反射像素，直接取反射色。
