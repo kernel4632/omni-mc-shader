@@ -49,6 +49,8 @@
 #include "/common/uniforms.glsl"
 // 共用数学：提供 `clamp`、`exp2`、`floor`、`fract`、`mix`、`texture` 等小工具，重复引入由守卫去重。
 #include "/common/math.glsl"
+// 暴风噪声与颜色、每日天气哈希的纯计算放在通用库。
+#include "/gfx/weather.glsl"
 // 每日天气：提供当天的云量与雾密度，逐日轮换；本文件是天气文件夹里已经接进体积雾程序的入口，
 // 所以在这里引入它，让每日匀雾能借暴风雾这条通道进入画面，同时让整个模块随雾程序一起编译。
 #include "/effects/weather/dailyweather.glsl"
@@ -92,14 +94,7 @@ float OmniDailyWeatherFog(){
 // 照 Eclipse `lib/overworld_fog.glsl:3-13` 的 `densityAtPosFog` 一比一搬运。
 // 为什么先除以十八再把横向缩一半：这是 Eclipse 的噪声格子尺度，直接照搬保证雾团大小一致。
 float OmniStormNoise(vec3 position){
-	position /= 18.0; // 噪声格子的基准边长。
-	position.xz *= 0.5; // 横向再缩一半，让雾团更扁更长，像被风拉过。
-	vec3 cell = floor(position); // 所在整数格，决定用噪声贴图的哪一块。
-	vec3 frac = fract(position); // 格内小数偏移，用来做插值。
-	frac = frac * frac * (3.0 - 2.0 * frac); // 三次平滑，插值不出现方块边界。
-	vec2 uv = cell.xz + frac.xz + cell.y * vec2(0.0, 193.0); // 三维格子映射到二维噪声坐标，纵轴加大偏移错开层。
-	vec2 sample2 = texture(noisetex, uv / 512.0).yx; // 读噪声贴图并取两个通道，渠道顺序照原程序。
-	return mix(sample2.r, sample2.g, frac.y); // 沿高度在两通道之间插值，得到零到一的密度。
+	return gfx_storm_noise(position, noisetex, 512.0); // 噪声公式在通用库，贴图边长照原程序。
 }
 
 // --- 暴风浓雾：照 Eclipse `lib/overworld_fog.glsl:42-47` 搬运 ---
@@ -120,10 +115,7 @@ float OmniStormFog(vec3 worldPos, float snowStorm){
 // 返回归一化后的雾色乘子，调用方按总强度在单位色与它之间混合。
 // 为什么按总强度归一：沙暴与雪暴互斥，任一单独出现时颜色不被另一个的零值拉暗。
 vec3 OmniStormColor(float snowStorm, float sandStorm){
-	float total = max(snowStorm + sandStorm, 1e-4); // 两份强度之和，加一个小量避免除零。
-	vec3 sandCol = vec3(1.0, 0.3, 0.1); // 沙暴的沙黄，照 Eclipse 的沙尘系数。
-	vec3 snowCol = vec3(0.6, 0.8, 1.0); // 雪暴的冷白，照 Eclipse 的雪系数。
-	return (sandStorm * sandCol + snowStorm * snowCol) / total; // 按强度加权后归一，得到最终染色乘子。
+	return gfx_storm_color(snowStorm, sandStorm); // 加权与归一化在通用库。
 }
 #endif // 暴风函数开关结束。
 #endif // 文件守卫结束。

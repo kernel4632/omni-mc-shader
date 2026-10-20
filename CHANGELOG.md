@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.32
+
+通用库第二十八批：暴风与每日天气。
+
+- `shaders/gfx/weather.glsl` 增加暴风噪声、暴风颜色与每日天气哈希，噪声贴图边长改为参数。
+- `effects/weather/storm.glsl` 与 `effects/weather/dailyweather.glsl` 只保留选项、强度与同名转发，公式与常数不变。
+- 更新 `docs/structure-plan.md` 进度。
+
+验证：`audit`、`verify` 与全量 `compile` 通过（280 组唯一程序，0 错误）。游戏内画面尚未复查。
+
+
 ## 0.1.31
 
 通用库第二十七批：日月圆盘与月亮轨道。

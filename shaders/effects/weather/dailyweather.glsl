@@ -46,6 +46,8 @@
 #include "/common/uniforms.glsl"
 // 共用数学：提供 `fract`、`mod`、`clamp` 等小工具，重复引入由守卫去重。
 #include "/common/math.glsl"
+// 每日天气哈希的纯计算放在通用库。
+#include "/gfx/weather.glsl"
 
 #if OMNI_DAILY_WEATHER // 关闭时下面整段不参与编译，默认画面与原来一致。
 
@@ -53,10 +55,7 @@
 // 照 Eclipse `dimensions/begin.csh:29-35` 的 `hash11` 一比一搬运，用于随机取档。
 // 为什么不用正弦哈希：原程序用这套乘加打散，逐位浮点结果与它一致，便于逐行对照。
 float omniWeatherHash(float p){
-	p = fract(p * 0.1031); // 先乘一个无理近似再取小数，打散相邻整数。
-	p *= p + 33.33; // 加偏移后再平方，让输入的小变化放大。
-	p *= p + p; // 再乘自身的两倍，进一步拉开分布。
-	return fract(p); // 取小数，得到零到一的哈希值。
+	return gfx_weather_hash11(p); // 乘加打散在通用库。
 }
 
 // --- 天气表：十天，每天四层云与两项雾 ---
