@@ -36,6 +36,8 @@
 // 归一化与噪声来自共用数学，天体方向来自加载器输入，显式引入而不依赖调用顺序。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
+// 极光与彩虹的纯公式放在通用库。
+#include "/gfx/atmosphere.glsl"
 // 太阳色与氛围同属天空光照的补充：由本文件引入后，凡引入氛围的天空与合成程序都直接拿到 `omniSunTint()`，
 // 太阳圆盘与直射光的接线点因此不必再各自引入；`suncolor.glsl` 自身带守卫，重复引入无副作用。
 #include "/effects/sky/suncolor.glsl"
@@ -45,23 +47,16 @@ uniform vec4 lightningBoltPosition; // 闪电的相机相对世界位置与强�
 // 极光：主世界夜晚高空的缓慢帘幕，雨天被云遮挡。
 vec3 omniAurora(vec3 color, vec3 direction) {
 #if OMNI_AURORA // 打开极光才生成采样。
-	float night = 1.0-smoothstep(-0.2,0.1,omniNormalize(mat3(gbufferModelViewInverse)*sunPosition).y); // 太阳越低夜色越浓，极光越亮。
-	float ripple = 0.5+0.5*sin(direction.x*6.0+frameTimeCounter*0.02)*sin(direction.z*5.0-frameTimeCounter*0.015); // 两个方向的正弦交叉出缓慢起伏，代替已移除的噪声。
-	float curtain = pow(max(0.0,sin(direction.x*18.0+ripple*3.0)),8.0); // 帘幕随位置起伏、随时间缓慢移动。
-	vec3 auroraColor = mix(vec3(0.12,0.16,0.50),vec3(0.08,0.35,0.20),0.5+0.5*OMNI_AURORA_TINT); // 极光颜色：正值偏绿、负值偏蓝紫，取零为中间绿。
-	color += auroraColor*curtain*smoothstep(0.1,0.5,direction.y)*(1.0-wetness)*night*OMNI_AURORA_STRENGTH; // 帘幕只露在高空，雨云之下熄灭；颜色与强度可调。
+	vec3 sunDirection = omniNormalize(mat3(gbufferModelViewInverse) * sunPosition); // 太阳转到世界空间，决定夜色浓度。
+	color = gfx_aurora(color, direction, sunDirection, frameTimeCounter, wetness, OMNI_AURORA_TINT, OMNI_AURORA_STRENGTH); // 帘幕公式在通用库。
 #endif
 	return color; // 关闭时不改动颜色。
 }
 // 彩虹：雨后晴天的背太阳方向，出现一条窄彩色弧。
 vec3 omniRainbow(vec3 color, vec3 direction) {
 #if OMNI_RAINBOW // 打开彩虹才生成采样。
-	vec3 sun = omniNormalize(mat3(gbufferModelViewInverse)*sunPosition); // 转到世界空间的太阳方向。
-	float angle = acos(clamp(dot(direction,-sun),-1.0,1.0)); // 与背太阳方向的夹角，先钳住取值范围。
-	float offset = (angle-0.733)/0.018; // 相对约四十二度彩虹角的偏移，单位是弧度。
-	float band = exp(-offset*offset); // 窄带：只用乘法构成，避开对负数取幂的未定义结果。
-	vec3 spectrum = 0.5+0.5*cos((angle-0.72)*120.0+vec3(0,2.1,4.2)); // 角度到红橙黄绿的彩色谱。
-	color += spectrum*band*wetness*(1.0-wetness)*smoothstep(0.0,0.1,direction.y)*OMNI_RAINBOW_STRENGTH; // 只在雨停后仍湿润时出现；强度可调。
+	vec3 sunDirection = omniNormalize(mat3(gbufferModelViewInverse) * sunPosition); // 转到世界空间的太阳方向。
+	color = gfx_rainbow(color, direction, sunDirection, wetness, OMNI_RAINBOW_STRENGTH); // 窄带彩虹公式在通用库。
 #endif
 	return color; // 关闭时不改动颜色。
 }

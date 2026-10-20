@@ -261,4 +261,25 @@ vec2 gfx_sky_project(vec3 dir, float tileSize){
 	return texel; // 返回纹素坐标，屏幕偏移由调用方追加。
 }
 
+// --- 天空氛围：极光与彩虹 ---
+// 两项都只改天空颜色，太阳方向、时间、湿润度与强度全部由调用方传入。
+
+// 极光：夜晚高空的缓慢帘幕，雨天被云遮挡；`tint` 为正偏绿、为负偏蓝紫。
+vec3 gfx_aurora(vec3 color, vec3 direction, vec3 sunDirection, float time, float wetness, float tint, float strength){
+	float night = 1.0 - smoothstep(-0.2, 0.1, sunDirection.y); // 太阳越低夜色越浓，极光越亮。
+	float ripple = 0.5 + 0.5 * sin(direction.x * 6.0 + time * 0.02) * sin(direction.z * 5.0 - time * 0.015); // 两个方向的正弦交叉出缓慢起伏。
+	float curtain = pow(max(0.0, sin(direction.x * 18.0 + ripple * 3.0)), 8.0); // 帘幕随位置起伏、随时间缓慢移动。
+	vec3 auroraColor = mix(vec3(0.12, 0.16, 0.50), vec3(0.08, 0.35, 0.20), 0.5 + 0.5 * tint); // 极光颜色：正值偏绿、负值偏蓝紫。
+	return color + auroraColor * curtain * smoothstep(0.1, 0.5, direction.y) * (1.0 - wetness) * night * strength; // 帘幕只露在高空，雨云之下熄灭。
+}
+
+// 彩虹：雨后晴天的背太阳方向，出现一条窄彩色弧。
+vec3 gfx_rainbow(vec3 color, vec3 direction, vec3 sunDirection, float wetness, float strength){
+	float angle = acos(clamp(dot(direction, -sunDirection), -1.0, 1.0)); // 与背太阳方向的夹角。
+	float offset = (angle - 0.733) / 0.018; // 相对约四十二度彩虹角的偏移。
+	float band = exp(-offset * offset); // 窄带：只用乘法构成，避开对负数取幂的未定义结果。
+	vec3 spectrum = 0.5 + 0.5 * cos((angle - 0.72) * 120.0 + vec3(0.0, 2.1, 4.2)); // 角度到红橙黄绿的彩色谱。
+	return color + spectrum * band * wetness * (1.0 - wetness) * smoothstep(0.0, 0.1, direction.y) * strength; // 只在雨停后仍湿润时出现。
+}
+
 #endif

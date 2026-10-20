@@ -118,5 +118,6 @@ shaders/
 - 已完成：`gfx/atmosphere.glsl` 增加天空盒双向投影，`effects/sky/skybox.glsl` 只保留屏幕偏移与入口转发。
 - 已完成：`gfx/surface.glsl` 增加矿石与纹饰发光，`effects/lighting/emissive.glsl` 只保留选项与入口转发。
 - 已完成：`effects/sky/atmosphere_model.glsl` 的球面几何与密度剖面改为转发通用库，预计算查表未动。
+- 已完成：`gfx/atmosphere.glsl` 增加极光与彩虹，`effects/sky/atmosphere.glsl` 只保留选项、太阳方向与闪电。
 - 下一步：继续把地面与远景的纯计算迁入通用库，再建 `bind/` 与整理菜单。
 - 尚未开始：`bind/`、菜单合并、效果文件行数压缩。

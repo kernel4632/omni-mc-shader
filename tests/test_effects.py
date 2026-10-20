@@ -350,7 +350,10 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniRainbow", atmosphere)  # 彩虹独立成函数。
         self.assertIn("omniLightning", atmosphere)  # 闪电独立成函数。
         self.assertIn("omniLightningVolume", atmosphere)  # 闪电对体积云与体积雾的照明也在这里定义。
-        self.assertIn("*OMNI_AURORA_STRENGTH", atmosphere)  # 极光强度参与着色。
+        self.assertIn("OMNI_AURORA_STRENGTH", atmosphere)  # 极光强度传入通用库。
+        self.assertIn("OMNI_RAINBOW_STRENGTH", atmosphere)  # 彩虹强度传入通用库。
+        sky_gfx = support.text("gfx/atmosphere.glsl")  # 天空通用库。
+        self.assertIn("* strength", sky_gfx)  # 极光与彩虹的强度参与着色。
         cloud = support.text("effects/cloud/volumetric.glsl")  # 体积云主体。
         self.assertIn("omniLightningVolume", cloud)  # 体积云接到闪电照明。
         self.assertIn("marchingPos - cameraPosition", cloud)  # 云采样点换成相机相对坐标后再比闪电距离。
