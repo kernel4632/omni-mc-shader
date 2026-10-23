@@ -16,10 +16,10 @@
 
 #if defined OMNI_NETHER // 下界：没有太阳，光照来自 `NetherLighting` 与雾色，不接收全局光与阴影。
 // 下界不透明表面光照在独立文件里。
-#include "/effects/lighting/composite_surface_nether.glsl"
+#include "/bind/lighting/composite_surface_nether.glsl"
 #elif defined OMNI_END // 末地：没有太阳贴图，光色用固定黑体色，天空像素画吸积盘与行星。
 // 末地不透明表面光照在独立文件里。
-#include "/effects/lighting/composite_surface_end.glsl"
+#include "/bind/lighting/composite_surface_end.glsl"
 #else // 主世界：完整光照，含全局光、可变半影阴影与屏幕空间阴影。
 // 无光底光与环境光：先给一点随法线朝向的无光底光，再叠天光照明与水体染色。
 vec3 CompositeAmbientLight(vec3 worldNormal, float skylight, float cloudShadow, vec3 waterTint){

@@ -4,7 +4,7 @@
 `build.expand()` 与读取效果文件。
 调用示例：
     `found, profiles, files = support.configuration()`
-    `text = support.text("effects/cloud/cloud.glsl")`
+    `text = support.code("effects/cloud/cloud.glsl")`
     `expanded = support.expand(build.SHADERS / "world0/composite.fsh")`
 为什么缓存：`python build.py verify` 只有十秒总预算，合成本体展开一次约零点四秒，
 逐条断言各展开一次会挤爆预算；这些源码在本轮测试期间不改动，所以可以安全共享。
@@ -51,6 +51,25 @@ def text(path: str) -> str:
     if path not in _texts:
         _texts[path] = (build.SHADERS / path).read_text(encoding="utf-8")  # 测试期间源码不变。
     return _texts[path]
+
+
+def code(path: str) -> str:
+    """返回一个效果的选项层与绑定层合并文本，供结构测试同时检查选项与实现。
+
+    结构重构后 `effects/` 只保留菜单选项，宿主接线在 `bind/` 的同名路径；
+    测试仍按“一个效果”阅读两层源码，避免把选项与算法拆成两套断言。
+    """
+    if not path.startswith("effects/"):
+        return text(path)  # 其它层仍按单个文件读取。
+    relative = path.removeprefix("effects/")  # 效果内的相对路径在两层里保持一致。
+    parts = []
+    for prefix in ("effects/", "bind/"):
+        candidate = build.SHADERS / (prefix + relative)
+        if candidate.is_file():  # 只合并真实存在的层。
+            parts.append(candidate.read_text(encoding="utf-8"))  # 选项层与绑定层各读一次。
+    if not parts:
+        raise FileNotFoundError(f"找不到效果层或绑定层：{path}")  # 两层都不存在说明路径写错。
+    return "\n".join(parts)  # 合并后供关键字断言同时检查选项与实现。
 
 
 def programs() -> dict:

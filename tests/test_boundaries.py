@@ -187,12 +187,12 @@ class BoundaryTests(unittest.TestCase):
     def test_water_and_lens_combination_contract(self):
         """水面法线供折射与雾共用同一来源，镜头各步骤各由自己的开关控制，互不覆盖。"""
         found,_,_ = support.configuration()  # 真实选项供逐项核对。
-        self.assertIn("GetWavesNormal",support.text("effects/water/waves.glsl"))  # 波浪法线独立成函数。
-        self.assertIn("GetWaterParallaxCoord",support.text("effects/water/waves.glsl"))  # 视差坐标独立成函数。
-        self.assertIn("WaterFog",support.text("effects/water/waterfog.glsl"))  # 水雾复用同一份波高与吸收。
-        self.assertIn("RefractSampleOnce",support.text("effects/water/refraction.glsl"))  # 折射独立成函数。
+        self.assertIn("GetWavesNormal",support.code("effects/water/waves.glsl"))  # 波浪法线独立成函数。
+        self.assertIn("GetWaterParallaxCoord",support.code("effects/water/waves.glsl"))  # 视差坐标独立成函数。
+        self.assertIn("WaterFog",support.code("effects/water/waterfog.glsl"))  # 水雾复用同一份波高与吸收。
+        self.assertIn("RefractSampleOnce",support.code("effects/water/refraction.glsl"))  # 折射独立成函数。
         for path,name in (("effects/lens/dof.glsl","DepthOfField"),("effects/lens/glare.glsl","LensFlare"),
                           ("effects/lens/motion_blur.glsl","MotionBlur"),("effects/lens/lens.glsl","Vignette")):
-            self.assertIn(name,support.text(path))  # 景深、光斑、运动模糊与暗角各自独立成函数，暗角留在入口。
+            self.assertIn(name,support.code(path))  # 景深、光斑、运动模糊与暗角各自独立成函数，暗角留在入口。
         for option in ("OMNI_DOF","OMNI_LENS_FLARE","OMNI_MOTION_BLUR","OMNI_VIGNETTE"):
             self.assertIn(option,found)  # 四个镜头步骤各由自己的开关控制，不会互相覆盖。

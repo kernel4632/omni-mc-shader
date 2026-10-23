@@ -73,9 +73,9 @@
 	#include "/common/uniforms.glsl"
 	#include "/common/math.glsl"
 	// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
-	#include "/effects/ground/material.glsl"
+	#include "/bind/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算按它决定是否撤销抖动。
-	#include "/effects/clarity/antialiasing.glsl"
+	#include "/bind/clarity/antialiasing.glsl"
 	// 以下方向与光色量只在效果文件里合成阶段才会调用的函数中用到；本程序一起编译整个文件，所以先声明。
 	ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
 	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
@@ -102,9 +102,9 @@
 	#include "/common/coordinates.glsl"
 	#include "/common/noise.glsl"
 	// 体积雾选项供丢弃判断，并带入水面、阴影、天空、云与光照依赖。
-	#include "/effects/fog/fog.glsl"
+	#include "/bind/fog/fog.glsl"
 	// 焦散法线的算法在效果文件里，这里只调用并写七号。
-	#include "/effects/water/caustics.glsl"
+	#include "/bind/water/caustics.glsl"
 	void main(){
 		RenderCaustics(); // 算波法线并写七号；不开焦散与水下体积雾时由效果文件整片丢弃。
 	}

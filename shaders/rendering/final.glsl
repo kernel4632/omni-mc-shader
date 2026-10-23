@@ -43,19 +43,19 @@
 	// 共用数学：亮度、颜色曲线与交错梯度噪声。
 	#include "/common/math.glsl"
 	// 提供材质编号 `MATID_*`，手与玩家的排除判断用它。
-	#include "/effects/ground/material.glsl"
+	#include "/bind/ground/material.glsl"
 	// 边缘抗锯齿 `Fxaa`；内部再引入坐标换算。
-	#include "/effects/clarity/antialiasing.glsl"
+	#include "/bind/clarity/antialiasing.glsl"
 	// 黑边 `BlackBar`。
-	#include "/effects/color/color.glsl"
+	#include "/bind/color/color.glsl"
 	// 对比度自适应锐化与放大。
-	#include "/effects/clarity/upscale.glsl"
+	#include "/bind/clarity/upscale.glsl"
 	// 调试画面与耗时条；原程序一并引入，这里把 `debugColor`、`omniProfiler` 真正接到最终屏幕颜色上。
-	#include "/effects/dev/debug.glsl"
+	#include "/bind/dev/debug.glsl"
 	// 屏幕空间镜头形变：色差、鱼眼与像素化，默认全关时原样返回画面。
-	#include "/effects/lens/distortion.glsl"
+	#include "/bind/lens/distortion.glsl"
 	// 受伤与低血量画面表现：受击闪红、低血量红边心跳与死亡暗红，默认关闭时原样返回画面。
-	#include "/effects/lens/hurt.glsl"
+	#include "/bind/lens/hurt.glsl"
 
 	void main(){
 		vec3 color = vec3(0.0); // 最终要写的屏幕颜色。

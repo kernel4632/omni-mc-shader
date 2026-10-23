@@ -22,11 +22,11 @@
 // 共用纯计算：曲线、法线编解码、打包与波浪辅助。
 #include "/common/math.glsl"
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
-#include "/effects/clarity/antialiasing.glsl"
+#include "/bind/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*` 与材质选项。
-#include "/effects/ground/material.glsl"
+#include "/bind/ground/material.glsl"
 // 区块淡入：`omniChunkFade*` 一组纯计算，水面顶点取进度、片元按进度压透明度并丢弃。
-#include "/effects/clarity/chunkfade.glsl"
+#include "/bind/clarity/chunkfade.glsl"
 // 时间噪声：片元抖动丢弃要读蓝噪声，顶点阶段只编译不调用。
 #include "/common/noise.glsl"
 // 水面与水雾：片元算波浪、视差与雨点，只在片元引入。
@@ -43,22 +43,22 @@
 		#define PHYSICS_FS 1 // 请求水文件声明物理海浪的片元输入。
 	#endif
 	// 波浪、涟漪、物理海浪、湿润调制与水体光学。
-	#include "/effects/water/water.glsl"
+	#include "/bind/water/water.glsl"
 	// 波浪模拟：提供 `omniWaveSimNormal` 与两张模拟场采样器，把玩家带起的波纹混进波法线；默认关闭。
-	#include "/effects/water/wavesim.glsl"
+	#include "/bind/water/wavesim.glsl"
 #endif
 // 海洋物理扩展存在时顶点需要同一个文件里的波高函数。
 #ifdef OMNI_VERTEX
 	#ifdef PHYSICS_OCEAN
 		#define PHYSICS_VS 1 // 请求水文件声明物理海浪的顶点输出。
 		// 波浪与物理海浪。
-		#include "/effects/water/water.glsl"
+		#include "/bind/water/water.glsl"
 	#endif
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 // 行星曲率：顶点阶段按相机相对水平距离把远处顶点下沉，选项与算法都在该文件。
-#include "/effects/world/planet.glsl"
+#include "/bind/world/planet.glsl"
 
 #ifdef OMNI_VERTEX // 顶点阶段：水面与手持水分开写。
 #if defined OMNI_WATER_PASS // 水面顶点着色器。

@@ -25,13 +25,13 @@
 // 共用纯计算：三次模糊、曲线与法线编解码。
 #include "/common/math.glsl"
 // 时间抗锯齿选项：`effects/shadow/shadow.glsl` 的屏幕空间阴影要用。
-#include "/effects/clarity/antialiasing.glsl"
+#include "/bind/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MaterialMask`，阴影采样函数要用。
-#include "/effects/ground/material.glsl"
+#include "/bind/ground/material.glsl"
 // 植物摆动：提供 `WavingPlants` 与阴影摆动开关。
-#include "/effects/ground/vegetation.glsl"
+#include "/bind/ground/vegetation.glsl"
 // 行星曲率：阴影顶点要与画面做同一次下沉，选项与算法都在该文件。
-#include "/effects/world/planet.glsl"
+#include "/bind/world/planet.glsl"
 // `effects/shadow/shadow.glsl` 的采样函数读取这两个方向，本节不调用采样函数，按调用前提给空全局。
 vec3 worldShadowVector; // 世界空间阳光方向。
 vec3 shadowVector; // 视空间阳光方向。
@@ -44,16 +44,16 @@ vec3 shadowVector; // 视空间阳光方向。
 	#define DH_BLOCK_WATER 13 // 远景水编号。
 #endif
 // 阴影：提供全部阴影选项、`shadowDistance`、`shadowMapResolution` 与末地阴影相机矩阵。
-#include "/effects/shadow/shadow.glsl"
+#include "/bind/shadow/shadow.glsl"
 // 末地主岛光源：提供选项与主岛阴影相机矩阵，末地阴影顶点在开启它时改用这套竖直向下的相机投几何。
-#include "/effects/world/end_island_light.glsl"
+#include "/bind/world/end_island_light.glsl"
 // 光传播体积：提供体素编号映射与写体素图的函数，选项关闭或缺能力时整段不编译。
-#include "/effects/lighting/lpv.glsl"
+#include "/bind/lighting/lpv.glsl"
 // 体素反射：提供把方块底色写进体素颜色图的函数，选项关闭或缺能力时整段不编译；它复用上面的体积坐标。
-#include "/effects/reflection/voxel.glsl"
+#include "/bind/reflection/voxel.glsl"
 #ifdef OMNI_FRAGMENT
 	// 远景阴影淡入要用的 `DHShadowChunkFading`；它用到片元专用的 `discard` 与蓝噪声，所以只在片元阶段引入。
-	#include "/effects/world/world.glsl"
+	#include "/bind/world/world.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：阴影顶点着色器。

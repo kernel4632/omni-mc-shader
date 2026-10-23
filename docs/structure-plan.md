@@ -7,7 +7,7 @@
 
 ## 一、目标
 
-- Minecraft 专属代码分两块统计：绑定与入口（`common/`、`bind/`、生成的入口文件）目标约 2000 行，当前 1973 行；绘制主体（`rendering/`）当前 3142 行，继续把算法搬进 `effects/` 与 `gfx/`，不把它算进前面的 2000 行来掩盖差距。
+- 效果层（`effects/`）只保留菜单选项，目标约 1000 行非注释代码；宿主输入、画面读写与维度分支放 `bind/` 与 `rendering/`，通用算法放 `shaders/gfx/`。
 - 通用图形算法放 `shaders/gfx/`，不读取任何 Minecraft、Iris 或全局 uniform，可单独发布。
 - 效果数量不减少，默认画面与现在一致；不能为了减行数删效果或改观感。
 - 选项可以精简，但必须归入所属页面，不设“高级”总入口。
@@ -160,6 +160,8 @@ shaders/
 - 后续可选：`effects/` 里仍有几处成段的步进循环，按风险从低到高依次是海洋物理波与若干采样循环；它们各自带一组游戏选项或多张输入图，迁移前要先定参数接口，不能只搬循环。
 - 后续可选：`rendering/deferred_pass0.glsl`、`deferred_pass1.glsl`、`deferred_pass2.glsl` 仍有相似的全局声明块，但每支程序的声明子集与顺序不同，抽模板前要先核对每个阶段的采样器类型，暂不动。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
-- 当前固定口径（0.1.77）：`bind/` 353 行、`gfx/` 3542 行、`effects/` 6572 行、`rendering/` 3142 行；绑定与入口合计 1973 行。复现命令：
+- 已完成：`effects/` 全部宿主接线迁出。51 个不带选项的效果文件整体迁到 `bind/` 同名分类目录；46 个带选项的文件拆成“选项层 + 绑定层”，选项层只保留 `@effect`、`@option` 与原生声明，绑定层保留原函数、画面读写和维度分支。`effects/` 非注释代码从 6572 行降到 628 行，519 个选项的名称、默认值、取值与菜单分组未变。
+- 后续可选：把 `bind/` 里仍可独立的纯计算继续抽到 `gfx/`；优先对象是末地行星表面、海洋物理波高、体积雾单次散射与屏幕空间反射介质。抽离时只改函数名与参数，保持公式不变。
+- 当前固定口径（0.1.78）：`bind/` 6481 行、`gfx/` 3542 行、`effects/` 628 行、`rendering/` 3142 行；生成入口 `world0/` 608、`world1/` 530、`world-1/` 482。复现命令：
   `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','gfx','effects','world0','world1','world-1')})"`
-- 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。
+- 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。另用 8 个代表入口比较重构前后的展开代码，去注释、引用与声明后语句集合完全一致。

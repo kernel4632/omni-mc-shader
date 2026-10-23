@@ -23,7 +23,7 @@
 		// 云影模糊只作用在画面右上角的方贴图上，顶点把整屏四边形缩到那块方贴图的范围。
 		vec3 worldShadowVector; // 云影效果文件里合成专用函数引用它；顶点阶段不调用那些函数。
 		vec3 worldSunVector; // 云带入的天空效果文件里星空函数引用它；本阶段不调用，仅让文件可编译。
-		#include "/effects/cloud/cloud.glsl"
+		#include "/bind/cloud/cloud.glsl"
 		void main(){
 			vec2 shadowTexSize = pixelSize * floor(min(screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)); // 方贴图占屏幕的比例。
 			vec2 shadowTexCoord = gl_Vertex.xy; // 加载器顶点在零到一的方块上。
@@ -43,9 +43,9 @@
 		#include "/common/uniforms.glsl"
 		#include "/common/math.glsl"
 		// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
-		#include "/effects/ground/material.glsl"
+		#include "/bind/ground/material.glsl"
 		// 先定义 `OMNI_TAA`，坐标换算与遮蔽抖动要用。
-		#include "/effects/clarity/antialiasing.glsl"
+		#include "/bind/clarity/antialiasing.glsl"
 		ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
 		vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
 		vec3 worldShadowVector; // 阴影与天空文件引用它。
@@ -68,7 +68,7 @@
 		#include "/common/coordinates.glsl"
 		#include "/common/noise.glsl"
 		// 提供阳光泄漏修正选项，并带入环境光与阴影文件（末地版阴影相机由 `OMNI_END` 选择）。
-		#include "/effects/lighting/sunlight.glsl"
+		#include "/bind/lighting/sunlight.glsl"
 	// 全局光空间滤波的算法在 `effects/lighting/ambient.glsl`（上面经 `effects/lighting/sunlight.glsl` 引入），这里只取深度并写一号。
 		void main(){
 			deferredOutput1 = RenderGISpatialFilter(texelFetch(depthtex0, texelCoord, 0).x); // 末地用含半透明的深度做遮蔽与空间滤波。
@@ -81,7 +81,7 @@
 	vec3 worldShadowVector; // 云影效果文件里合成专用函数引用它；本程序不调用那些函数。
 	vec3 worldSunVector; // 云带入的天空效果文件里星空函数引用它；本程序不调用，仅让文件可编译。
 	// 提供 `CloudShadowAxialBlur`。
-	#include "/effects/cloud/cloud.glsl"
+	#include "/bind/cloud/cloud.glsl"
 	void main(){
 			deferredOutput2 = CloudShadowAxialBlur(texelCoord, CLOUD_SHADOW_BLUR_AXIS); // 按调用方给的方向做高斯模糊。
 	}

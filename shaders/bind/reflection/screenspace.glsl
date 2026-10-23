@@ -16,10 +16,10 @@
 #ifdef OMNI_COMPOSITE2_PASS
 // 蓝噪声给追踪与体积反射抖动，材质提供解码材质，天空云提供假天空反射与云影开关，雾提供反射里的体积雾与地表散射。
 #include "/common/noise.glsl"
-#include "/effects/ground/material.glsl"
-#include "/effects/sky/sky.glsl"
-#include "/effects/cloud/cloud.glsl"
-#include "/effects/fog/fog.glsl"
+#include "/bind/ground/material.glsl"
+#include "/bind/sky/sky.glsl"
+#include "/bind/cloud/cloud.glsl"
+#include "/bind/fog/fog.glsl"
 
 // 远景深度图选择：没有远景模组时用近景深度占位，通用库按开关决定是否读取。
 #ifdef DISTANT_HORIZONS
@@ -30,7 +30,7 @@
 
 #if !defined OMNI_NETHER && !defined OMNI_END // 主世界才用天空盒回退；下界用 `NetherFog`，末地用末地天空。
 // 体素反射：屏幕空间没命中时改在体素图上追踪，提供选项、体素颜色图取样与 `omniVoxelReflection`。
-#include "/effects/reflection/voxel.glsl"
+#include "/bind/reflection/voxel.glsl"
 // 如果屏幕追踪没命中，就用上半屏的天空盒图当反射：把反射方向投到天空盒坐标再取色。
 // 为什么单列一个函数：屏幕内没有内容时天空是唯一的反射源，缺了它反射处会变成黑洞。
 // 调用前提：`colortex2`、`worldMoonVector`、`colorMoonlight`、`isEyeInWater` 已由合成主程序声明。
@@ -276,7 +276,7 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 // --- composite5：把三号画面的反射合并进场景色 ---
 #ifdef OMNI_COMPOSITE5_PASS
 // 材质提供 `Material` 结构，反射合并要读它的金属度与反射强度。
-#include "/effects/ground/material.glsl"
+#include "/bind/ground/material.glsl"
 // 反射合并使用通用库的菲涅耳与水吸收。
 #include "/gfx/reflection.glsl"
 
