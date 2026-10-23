@@ -10,6 +10,19 @@
 */
 #ifndef OMNI_WATER_REFRACTION_INCLUDED
 #define OMNI_WATER_REFRACTION_INCLUDED // 置上标记，后续再次引用直接跳过。
+// 折射屏幕坐标：水面先取波法线，再交给通用库算偏移；玻璃直接按折射方向投影。
+// 为什么把波法线采样留在本文件：它要读噪声贴图与选项，通用库只接收算好的方向。
+vec2 RefractionScreenCoord(MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist, vec2 screenInput){
+	float waterDeep = opaqueDist - waterDist; // 水面到水底的厚度，越厚折射越强。
+	vec3 waveNormal = vec3(0.0); // 玻璃不需要波法线。
+	if (mask.water > 0.5){ // 只有水面才采样波浪。
+		float NdotU = dot(normal, gbufferModelView[1].xyz) + float(isEyeInWater == 1) * 2.0; // 法线朝向与水下判断。
+		waveNormal = GetWavesNormal(worldPos + cameraPosition, step(0.05, NdotU) * 18.0).xzy; // 波法线换到竖直轴朝上。
+	}
+	// 相机矩阵、投影与厚度显式传入，公式在通用库。
+	return gfx_water_refraction_coord(mask.water > 0.5, normal, viewPos, waveNormal, mat3(gbufferModelView), gbufferProjection, waterDeep, waterDist, screenInput);
+}
+
 // --- 水面折射：把采样坐标偏移一次再读回场景色 ---
 // 调用位置：`rendering/composite.glsl`；先把采样点按水面法线偏移，再读一号画面的颜色。
 // 对应 iterationT `composite5.fsh` 的 `WaterRefractionLite`，移植后改名以说明它只采样一次，避免含糊的 `Lite`。
@@ -18,32 +31,7 @@
 // 为什么像素坐标由调用方传 `texelCoord`：渲染缩放或放大链下 `screenCoordInput` 与 `screenSize` 的口径可能不同，
 //   用传入的整数像素坐标直接读深度，才与原程序一致，不会差出一个像素。
 void RefractSampleOnce(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist, float fogTimeFactor, float cloudShadow, vec2 screenCoordInput, ivec2 texelCoord){
-	vec2 refractCoord = screenCoordInput; // 默认不折射，用原屏幕坐标。
-
-	float waterDeep = opaqueDist - waterDist; // 水面到水底的厚度，越厚折射越强。
-
-	if (mask.water > 0.5){ // 水面本身：用波法线偏移。
-		float NdotU = dot(normal, gbufferModelView[1].xyz) + float(isEyeInWater == 1) * 2.0; // 法线朝向与水下判断。
-		vec3 wavesNormal = GetWavesNormal(worldPos + cameraPosition, step(0.05, NdotU) * 18.0).xzy; // 求波法线并换到竖直轴朝上的坐标。
-		vec4 wnv = gbufferModelView * vec4(wavesNormal.xyz, 0.0); // 波法线转到视空间。
-		vec3 wavesNormalView = normalize(wnv.xyz); // 归一化。
-
-		vec4 nv = gbufferModelView * vec4(0.0, 1.0, 0.0, 0.0); // 平水面法线转到视空间。
-		nv.xyz = normalize(nv.xyz); // 归一化。
-
-		refractCoord = nv.xy - wavesNormalView.xy; // 两种法线的差就是折射偏移方向。
-		refractCoord *= saturate(waterDeep) * 0.5 / (waterDist + 0.0001); // 越深折射越强，除以距离避免远处偏移过大。
-		refractCoord += screenCoordInput; // 加到原坐标上。
-	}else{ // 玻璃等透明面：用整段折射方向。
-		vec3 refractDir = refract(normalize(viewPos), normal, 0.66); // 视空间折射方向。
-		refractDir = refractDir / saturate(dot(refractDir, -normal)); // 归一化到视线方向。
-		refractDir *= saturate(waterDeep * 2.0) * 0.125; // 按厚度缩放。
-
-		vec4 refractPos = vec4(viewPos + refractDir, 0.0); // 折射后的视空间位置。
-		refractPos = gbufferProjection * refractPos; // 投影到裁剪空间。
-
-		refractCoord = refractPos.xy / refractPos.w * 0.5 + 0.5; // 转成屏幕坐标。
-	}
+	vec2 refractCoord = RefractionScreenCoord(mask, normal, worldPos, viewPos, waterDist, opaqueDist, screenCoordInput); // 一次算出折射后的屏幕坐标。
 
 	float currentDepth = texelFetch(depthtex0, texelCoord, 0).x; // 当前像素的深度，直接用调用方传入的整数像素坐标，不靠屏幕坐标反推。
 	float refractDepth = textureLod(depthtex1, refractCoord, 0.0).x; // 折射采样点的深度。

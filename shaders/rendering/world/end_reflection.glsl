@@ -29,32 +29,7 @@ vec3 ComputeFakeSkyReflectionEnd(vec3 reflectWorldDir, bool isSmooth){
 // 与主世界版的差别：末地用 `EndFog` 补雾，不再走体积雾与地表散射，也不带时间因子与云影参数。
 // 调用前提：`texCoord`、`texelCoord`、水面波法线与坐标换算已由绘制主体引入。
 void RefractSampleOnceEnd(inout vec3 color, MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist){
-	vec2 refractCoord = texCoord; // 默认不折射，用原屏幕坐标。
-
-	float waterDeep = opaqueDist - waterDist; // 水面到水底的厚度。
-
-	if (mask.water > 0.5){ // 水面本身：用波法线偏移。
-		float NdotU = dot(normal, gbufferModelView[1].xyz) + float(isEyeInWater == 1) * 2.0; // 法线朝向与水下判断。
-		vec3 wavesNormal = GetWavesNormal(worldPos + cameraPosition, step(0.05, NdotU) * 18.0).xzy; // 求波法线并换到竖直轴朝上的坐标。
-		vec4 wnv = gbufferModelView * vec4(wavesNormal.xyz, 0.0); // 波法线转到视空间。
-		vec3 wavesNormalView = normalize(wnv.xyz); // 归一化。
-
-		vec4 nv = gbufferModelView * vec4(0.0, 1.0, 0.0, 0.0); // 平水面法线转到视空间。
-		nv.xyz = normalize(nv.xyz); // 归一化。
-
-		refractCoord = nv.xy - wavesNormalView.xy; // 两种法线的差就是折射偏移方向。
-		refractCoord *= saturate(waterDeep) * 0.5 / (waterDist + 0.0001); // 越深折射越强。
-		refractCoord += texCoord; // 加到原坐标上。
-	}else{ // 玻璃等透明面：用整段折射方向。
-		vec3 refractDir = refract(normalize(viewPos), normal, 0.66); // 视空间折射方向。
-		refractDir = refractDir / saturate(dot(refractDir, -normal)); // 归一化到视线方向。
-		refractDir *= saturate(waterDeep * 2.0) * 0.125; // 按厚度缩放。
-
-		vec4 refractPos = vec4(viewPos + refractDir, 0.0); // 折射后的视空间位置。
-		refractPos = gbufferProjection * refractPos; // 投影到裁剪空间。
-
-		refractCoord = refractPos.xy / refractPos.w * 0.5 + 0.5; // 转成屏幕坐标。
-	}
+	vec2 refractCoord = RefractionScreenCoord(mask, normal, worldPos, viewPos, waterDist, opaqueDist, texCoord); // 与主世界共用折射坐标。
 
 	float currentDepth = texelFetch(depthtex0, texelCoord, 0).x; // 当前像素深度。
 	float refractDepth = textureLod(depthtex1, refractCoord, 0.0).x; // 折射采样点深度。

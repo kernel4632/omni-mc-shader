@@ -97,6 +97,28 @@ vec3 gfx_water_parallax(vec3 position, vec3 viewVector, sampler2D noiseTexture, 
 	return position + vec3(pCoord.x, 0.0, pCoord.y); // 返回偏移后的采样坐标。
 }
 
+// 水面折射坐标：把水面波法线或玻璃折射方向换成一次屏幕采样坐标。
+// 为什么水面与玻璃分开：水面用平水面与波面的法线差近似偏移，玻璃用整段折射方向投影，公式不同。
+// 参数里的 `model_view` 与 `projection` 由调用方传入，库不假设任何相机约定；`wave_normal` 只在水面时使用。
+vec2 gfx_water_refraction_coord(bool is_water, vec3 normal, vec3 view_pos, vec3 wave_normal,
+		mat3 model_view, mat4 projection, float water_deep, float water_dist, vec2 screen_input){
+	vec2 coord = screen_input; // 默认不折射，退回原屏幕坐标。
+	if (is_water){ // 水面：用波面相对平水面的倾斜决定偏移方向。
+		vec3 wave_view = normalize(model_view * wave_normal); // 波法线转到视空间。
+		vec3 flat_view = normalize(model_view * vec3(0.0, 1.0, 0.0)); // 平水面法线转到视空间。
+		coord = flat_view.xy - wave_view.xy; // 两种法线的差就是折射偏移方向。
+		coord *= gfx_saturate(water_deep) * 0.5 / (water_dist + 0.0001); // 越深偏移越大，远处按距离收小。
+		coord += screen_input; // 加到原坐标上。
+	}else{ // 玻璃等透明面：把整段折射方向投影回屏幕。
+		vec3 direction = refract(normalize(view_pos), normal, 0.66); // 视空间折射方向。
+		direction /= gfx_saturate(dot(direction, -normal)); // 归一化到视线方向，避免掠射角爆炸。
+		direction *= gfx_saturate(water_deep * 2.0) * 0.125; // 按厚度缩放。
+		vec4 position = projection * vec4(view_pos + direction, 0.0); // 投影到裁剪空间。
+		coord = position.xy / position.w * 0.5 + 0.5; // 转成屏幕坐标。
+	}
+	return coord; // 返回待采样的屏幕坐标。
+}
+
 // 水洼覆盖：湿润度高于低洼噪声处的面积才积水，尺寸参数放大水洼范围。
 float gfx_puddle_coverage(float halfWet, float noise, float size){
 	float puddles = max(halfWet - noise, 0.0); // 只有湿润高于噪声阈值的低洼处才开始积水。

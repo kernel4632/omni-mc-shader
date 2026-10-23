@@ -8,7 +8,7 @@
 ## 一、口径
 
 - 行数只数去注释后的非空代码行，命令与 `docs/structure-plan.md` 相同。
-- 当前（0.1.85）：`bind/` 460、`rendering/` 8577、`gfx/` 4039、`effects/` 628，四层合计 13704 行。
+- 当前（0.1.86）：`bind/` 460、`rendering/` 8524、`gfx/` 4057、`effects/` 628，四层合计 13669 行。
 - 分类只有三种：
   - **阶段胶水**：安排绘制顺序、声明本程序的输入输出、调用一次效果入口；保留在 `rendering/`。
   - **算法核**：仍有成段公式、循环、采样或合成流程；目标是参数化后进 `gfx/`。
@@ -41,8 +41,8 @@
 | `rendering/deferred_pass4.glsl` | 5 | 延迟四号转发。 |
 | `rendering/deferred_pass5.glsl` | 5 | 延迟五号转发。 |
 | `rendering/deferred_pass6.glsl` | 20 | 延迟六号复制。 |
-| `rendering/deferred_pass7.glsl` | 59 | 低分辨率体积云总图。 |
-| `rendering/deferred_pass8.glsl` | 73 | 云贴回天空。 |
+| `rendering/deferred_pass7.glsl` | 51 | 低分辨率体积云总图。 |
+| `rendering/deferred_pass8.glsl` | 65 | 云贴回天空。 |
 | `rendering/deferred_shared.glsl` | 31 | 延迟程序共用片元声明。 |
 | `rendering/distant.glsl` | 219 | 远景地形与水主体。 |
 | `rendering/entities.glsl` | 441 | 实体、方块实体、手持物、蜘蛛眼主体。 |
@@ -59,6 +59,7 @@
 | `rendering/post_pass16.glsl` | 21 | 放大。 |
 | `rendering/post_vertex.glsl` | 12 | 后期整屏顶点。 |
 | `rendering/shadow.glsl` | 229 | 阴影主体。 |
+| `rendering/sky/cloud_stage.glsl` | 21 | 低分辨率云阶段共用参数。 |
 | `rendering/terrain.glsl` | 252 | 地形顶点、几何、片元主体。 |
 | `rendering/translucent.glsl` | 302 | 水面与手持水主体。 |
 | `rendering/watersim.glsl` | 104 | 波浪模拟三个计算阶段。 |
@@ -91,11 +92,11 @@
 | `rendering/sky/skyrender.glsl` | 149 | 天空、云与天空盒合成，可进 `gfx/atmosphere.glsl`。 |
 | `rendering/water/composite_waterfog.glsl` | 54 | 合成一号水雾，参数化后进 `gfx/water.glsl`。 |
 | `rendering/water/playerwater.glsl` | 21 | 玩家涟漪可进 `gfx/water.glsl`。 |
-| `rendering/water/refraction.glsl` | 74 | 与末地、下界两份折射重复，先合并成一份参数化实现。 |
+| `rendering/water/refraction.glsl` | 64 | 与末地、下界两份折射重复，先合并成一份参数化实现。 |
 | `rendering/water/waves.glsl` | 146 | 物理波与视差坐标，解析波公式进 `gfx/water.glsl`。 |
 | `rendering/world/composite_scene.glsl` | 172 | 场景最终合成，分段进 `gfx/post.glsl` 与 `gfx/reflection.glsl`。 |
 | `rendering/world/end_reflection.glsl` | 43 | 末地折射与反射兜底，与折射合并。 |
-| `rendering/world/nether.glsl` | 143 | 下界雾、折射与光照，雾公式进 `gfx/fog.glsl`，折射并入共用实现。 |
+| `rendering/world/nether.glsl` | 124 | 下界雾、折射与光照，雾公式进 `gfx/fog.glsl`，折射并入共用实现。 |
 
 ## 四、MC 数据适配
 
@@ -175,3 +176,4 @@
 ## 五、已完成的合批
 
 - 0.1.85：删除延迟零号到二号重复的片元声明，集中到 `deferred_shared.glsl`；焦散顶点集中到 `caustics_vertex.glsl`；合成三号与四号合并为 `composite_filter_pass.glsl`；景深与五级泛光六支程序合并为 `post_effect_pass.glsl`；时间抗锯齿的重复深度取样只留一份。`rendering/` 从 8711 行降到 8577 行，四层合计从 13838 行降到 13704 行。
+- 0.1.86：`gfx/water.glsl` 增加折射坐标纯函数，主世界、末地、下界三份重复折射改为一次调用；延迟七号与八号共用 `sky/cloud_stage.glsl`；手电筒指向平滑只留一份。`rendering/` 降到 8524 行，四层合计降到 13669 行。

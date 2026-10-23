@@ -73,6 +73,8 @@
 	#include "/common/noise.glsl"
 	#include "/rendering/sky/sky.glsl"
 	#include "/rendering/cloud/cloud.glsl"
+	// 云高度、风与可见判据由两个低分辨率云阶段共用。
+	#include "/rendering/sky/cloud_stage.glsl"
 	#include "/rendering/lighting/sunlight.glsl"
 	#include "/rendering/sky/atmosphere.glsl"
 	void main(){
@@ -85,22 +87,12 @@
 		vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos; // 视空间转相机相对世界空间。
 		vec3 worldDir = normalize(worldPos); // 世界方向。
 
-		#ifdef OMNI_ATMO_HORIZON // 与延迟三号主天空同一套相机高度与地平线开关。
-			vec3 camera = vec3(0.0, max(cameraPosition.y, ATMO_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0);
-			bool horizon = true;
-		#else
-			vec3 camera = vec3(0.0, max(cameraPosition.y, 63.0) * 0.001 + atmosphereModel_bottom_radius, 0.0);
-			bool horizon = false;
-#endif
-		vec2 noise = BlueNoiseTemporal().xy; // 主画面用的逐帧蓝噪声。
-		vec2 cloudAltitude = vec2(mix(OMNI_CLOUD_CLEAR_ALTITUDE, OMNI_CLOUD_RAIN_ALTITUDE, wetness)); // 晴雨两档云底高度。
-		cloudAltitude.y += mix(OMNI_CLOUD_CLEAR_THICKNESS, OMNI_CLOUD_RAIN_THICKNESS, wetness); // 加上层厚得到云顶高度。
-		float wind = 0.0005 * (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_CLOUD_TIME_OFFSET); // 云漂动的时间量。
-		vec3 windDirection = vec3(1.0, wetness * 0.1 - 0.05, -0.4) * wind; // 云漂动的方向与位移。
-
-		vec3 atmoTransmittance; // 大气透过率，本阶段不用，仅取云可见判据。
+		vec2 cloudAltitude; // 云底与云顶高度。
+		vec3 windDirection; // 云的漂移方向与位移。
+		vec2 noise; // 逐帧蓝噪声。
+		vec3 camera; // 大气查表用的高空相机。
 		bool intersectsGround; // 视线是否打到地面。
-		GetSkyRadiance(camera, worldDir, worldSunVector, worldMoonVector, horizon, atmoTransmittance, intersectsGround); // 查表取可见判据。
+		CloudStageParameters(worldDir, cloudAltitude, windDirection, noise, camera, intersectsGround); // 两个阶段共用同一套云参数。
 
 		vec4 cloudImage = textureLod(colortex10, texCoord, 0.0); // 双线性放大低分辨率体积云。
 		vec3 color = CurveToLinear(base.rgb) * MAIN_OUTPUT_FACTOR; // 一号画面解回管线亮度单位。

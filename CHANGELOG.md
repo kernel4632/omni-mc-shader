@@ -1,4 +1,16 @@
 # 更新记录
+## 0.1.86
+
+结构重构：折射坐标进通用库，低分辨率云与手电指向去重。
+
+- `gfx/water.glsl` 新增 `gfx_water_refraction_coord`：水面法线与玻璃折射方向的屏幕坐标换算改为纯函数，相机矩阵、投影、厚度与屏幕坐标全部由调用方传入。
+- `rendering/water/refraction.glsl` 增加 `RefractionScreenCoord`，负责采样波法线；主世界、末地与下界三份重复的折射坐标段改为一次调用。
+- 新增 `rendering/sky/cloud_stage.glsl`，延迟七号与八号共用云高度、风、噪声、相机高度与可见判据；两支主体各删一份相同推导。
+- `rendering/lighting/held_light.glsl` 的手电筒指向平滑抽成 `FlashlightAimDirection`，光照与高光两处共用。
+- 四层非注释行：`bind/` 460、`rendering/` 8524、`gfx/` 4057、`effects/` 628，合计 13669 行，比 0.1.85 的 13704 行减少 35 行。
+
+验证：`audit`、`verify`（130 个测试、519 个选项、269 个入口）与全量 `compile`（280 组唯一程序）通过；本轮未启动 Minecraft，游戏内画面尚未复查。
+
 ## 0.1.85
 
 结构重构：合并重复阶段声明与后期变体，四层行数首次实际下降。

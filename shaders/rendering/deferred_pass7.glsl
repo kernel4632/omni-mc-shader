@@ -75,6 +75,8 @@
 	#include "/rendering/sky/sky.glsl"
 	// 体积云密度、光照与总图；分辨率选项也在这一步定义。
 	#include "/rendering/cloud/cloud.glsl"
+	// 云高度、风与可见判据由两个低分辨率云阶段共用。
+	#include "/rendering/sky/cloud_stage.glsl"
 	// 这一阶段在更低的分辨率上运行，坐标按分辨率除数换回全分辨率口径；被引入文件整体会一起编译，需要这两个量。
 	ivec2 texelCoord = ivec2(gl_FragCoord.xy * float(OMNI_CLOUD_RENDER_SCALE)); // 对应的全分辨率像素坐标。
 	vec2 texCoord = gl_FragCoord.xy * pixelSize * float(OMNI_CLOUD_RENDER_SCALE); // 对应的全分辨率零到一屏幕坐标。
@@ -88,22 +90,12 @@
 		vec3 worldPos = mat3(gbufferModelViewInverse) * viewPos; // 视空间转相机相对世界空间。
 		vec3 worldDir = normalize(worldPos); // 世界方向。
 
-		#ifdef OMNI_ATMO_HORIZON // 与延迟三号主天空同一套相机高度与地平线开关。
-			vec3 camera = vec3(0.0, max(cameraPosition.y, ATMO_MIN_ALTITUDE) * 0.001 + atmosphereModel_bottom_radius, 0.0);
-			bool horizon = true;
-		#else
-			vec3 camera = vec3(0.0, max(cameraPosition.y, 63.0) * 0.001 + atmosphereModel_bottom_radius, 0.0);
-			bool horizon = false;
-#endif
-		vec2 noise = BlueNoiseTemporal().xy; // 主画面用的逐帧蓝噪声。
-		vec2 cloudAltitude = vec2(mix(OMNI_CLOUD_CLEAR_ALTITUDE, OMNI_CLOUD_RAIN_ALTITUDE, wetness)); // 晴雨两档云底高度。
-		cloudAltitude.y += mix(OMNI_CLOUD_CLEAR_THICKNESS, OMNI_CLOUD_RAIN_THICKNESS, wetness); // 加上层厚得到云顶高度。
-		float wind = 0.0005 * (frameTimeCounter * OMNI_CLOUD_SPEED + 10.0 * OMNI_CLOUD_TIME_OFFSET); // 云漂动的时间量。
-		vec3 windDirection = vec3(1.0, wetness * 0.1 - 0.05, -0.4) * wind; // 云漂动的方向与位移。
-
-		vec3 atmoTransmittance; // 大气透过率，本阶段不用，仅取云可见判据。
+		vec2 cloudAltitude; // 云底与云顶高度。
+		vec3 windDirection; // 云的漂移方向与位移。
+		vec2 noise; // 逐帧蓝噪声。
+		vec3 camera; // 大气查表用的高空相机。
 		bool intersectsGround; // 视线是否打到地面。
-		GetSkyRadiance(camera, worldDir, worldSunVector, worldMoonVector, horizon, atmoTransmittance, intersectsGround); // 查表取可见判据。
+		CloudStageParameters(worldDir, cloudAltitude, windDirection, noise, camera, intersectsGround); // 两个阶段共用同一套云参数。
 
 		deferredOutput10 = omniCloudImage(worldDir, camera, noise, cloudAltitude, windDirection, intersectsGround, worldDir.y < 0.0); // 算基础体积云并写十号。
 	}

@@ -53,6 +53,24 @@ float TorchScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shado
 	#endif
 }
 
+// 手电筒指向：打开相机平滑时按两个平滑角度滞后于视角，否则始终朝相机正前方。
+// 为什么单独成函数：光照与高光两处要同一个方向，分开写容易在改动时只改到一处。
+vec3 FlashlightAimDirection(){
+	#if OMNI_FLASHLIGHT_CAMERA_SMOOTH // 打开指向平滑时，光束方向滞后于视角。
+		float angleRx = eyeRxSmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 俯仰角按过渡时长滞后。
+		mat3 Rx = mat3(1.0,  0.0,          0.0,
+					   0.0,  cos(angleRx), sin(angleRx),
+					   0.0, -sin(angleRx), cos(angleRx)); // 俯仰旋转矩阵。
+		float angleRy = eyeRySmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 偏航角按过渡时长滞后。
+		mat3 Ry = mat3(cos(angleRy), 0.0, -sin(angleRy),
+					   0.0,          1.0,  0.0,
+					   sin(angleRy), 0.0,  cos(angleRy)); // 偏航旋转矩阵。
+		return Ry * Rx * vec3(0.0, 0.0, -1.0); // 平滑后的光束指向。
+	#else
+		return vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
+	#endif
+}
+
 // --- 手持光源：火把球形光与手电筒一束光 ---
 // 输入是视空间表面位置、视线方向、法线、粗糙度、遮蔽项与是否手部；输出该像素收到的手持光颜色。
 // 为什么手部单独处理：手持物离光源最近，直接用发光等级当亮度，不再做方向与衰减，避免手被自己的光源照出条纹。
@@ -64,21 +82,7 @@ vec3 HeldLighting(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3
 		if (isHand){ // 手部直接按发光等级给亮度。
 			heldLightFalloff = 0.01 * max(heldBlockLightValue, heldBlockLightValue2); // 取两只手里较大的发光等级。
 		}else{
-			#if OMNI_FLASHLIGHT_CAMERA_SMOOTH // 打开指向平滑时，光束方向滞后于视角。
-				float angleRx = eyeRxSmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 俯仰角按过渡时长滞后。
-				mat3 Rx = mat3(1.0,  0.0,          0.0,
-							   0.0,  cos(angleRx), sin(angleRx),
-							   0.0, -sin(angleRx), cos(angleRx)); // 俯仰旋转矩阵。
-
-				float angleRy = eyeRySmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 偏航角按过渡时长滞后。
-				mat3 Ry = mat3(cos(angleRy), 0.0, -sin(angleRy),
-							   0.0,          1.0,  0.0,
-							   sin(angleRy), 0.0,  cos(angleRy)); // 偏航旋转矩阵。
-
-				vec3 aimDir = Ry * Rx * vec3(0.0, 0.0, -1.0); // 平滑后的光束指向。
-			#else
-				vec3 aimDir = vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
-			#endif
+			vec3 aimDir = FlashlightAimDirection(); // 光照与高光共用同一套指向。
 
 			if (heldBlockLightValue > 0.0){ // 右手灯源。
 				vec3 spotPosR = viewPos - vec3(OMNI_FLASHLIGHT_POS_R_X, OMNI_FLASHLIGHT_POS_R_Y, 0.0); // 灯源到表面的矢量。
@@ -180,21 +184,7 @@ vec3 HeldLighting(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3
 void TorchSpecularHighlight(inout vec3 color, vec3 viewPos, vec3 viewDir, float dist, vec3 albedo, vec3 normal, Material material){
 	material.roughness = max(material.roughness, 0.002); // 粗糙度给一个下限，避免高光被压成无限细的线。
 	#if OMNI_HELDLIGHT_MODE > 0 // 手电筒模式：高光只落在光束里。
-		#if OMNI_FLASHLIGHT_CAMERA_SMOOTH // 与手持光一致地处理光束指向平滑。
-			float angleRx = eyeRxSmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 俯仰角按过渡时长滞后。
-			mat3 Rx = mat3(1.0,  0.0,          0.0,
-							0.0,  cos(angleRx), sin(angleRx),
-							0.0, -sin(angleRx), cos(angleRx));
-
-			float angleRy = eyeRySmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 偏航角按过渡时长滞后。
-			mat3 Ry = mat3(cos(angleRy), 0.0, -sin(angleRy),
-							0.0,          1.0,  0.0,
-							sin(angleRy), 0.0,  cos(angleRy));
-
-			vec3 aimDir = Ry * Rx * vec3(0.0, 0.0, -1.0); // 平滑后的光束指向。
-		#else
-			vec3 aimDir = vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
-		#endif
+		vec3 aimDir = FlashlightAimDirection(); // 与手持光共用同一套指向。
 
 		float heldHighlight = 0.0; // 高光累计量。
 
