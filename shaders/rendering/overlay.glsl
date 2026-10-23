@@ -402,13 +402,7 @@ void main(){
 
 	if (albedo.a < 0.122) discard; // 光束边缘丢弃，阈值照原程序。
 
-	vec3 N = normalize(cross(dp1, dp2)); // 法线由叉乘得到。
-	vec3 dp2perp = cross(dp2, N); // 与法线正交的纵向切向。
-	vec3 dp1perp = cross(N, dp1); // 与法线正交的横向切向。
-	vec3 T = normalize(dp2perp * duv1.x + dp1perp * duv2.x); // 解出切线。
-	vec3 B = normalize(dp2perp * duv1.y + dp1perp * duv2.y); // 解出副切线。
-	float invmax = inversesqrt(max(dot(T, T), dot(B, B))); // 归一化因子。
-	mat3 tbn = mat3(T * invmax, B * invmax, N); // 组装切线基。
+	mat3 tbn = gfx_tangent_basis(dp1, dp2, duv1, duv2); // 由已经算好的屏幕导数构造切线基。
 
 
 // 法线：原程序把法线强制朝外。

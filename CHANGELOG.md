@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.87
+
+结构重构：切线基进通用库，延迟三号与八号复用共用声明。
+
+- `gfx/math.glsl` 新增 `gfx_tangent_basis`：由视空间位置导数与纹理导数构造切线基，返回切线、副切线与法线。
+- `rendering/entities.glsl`、`ground/terrain_surface.glsl`、`translucent.glsl`（水面与手持水两段）与 `overlay.glsl` 删除各自的九行切线基推导，改为一次调用；`overlay` 仍在丢弃前先取导数，避免非一致控制流。
+- `rendering/deferred_pass3.glsl` 与 `deferred_pass8.glsl` 改用 `deferred_shared.glsl`，删除两份重复的光色输入与阴影纹理声明。
+- 四层非注释行：`bind/` 460、`rendering/` 8446、`gfx/` 4066、`effects/` 628，合计 13600 行，比 0.1.86 的 13669 行减少 69 行。
+
+验证：`audit`、`verify`（130 个测试、519 个选项、269 个入口）与全量 `compile`（280 组唯一程序）通过；本轮未启动 Minecraft，游戏内画面尚未复查。
+
 ## 0.1.86
 
 结构重构：折射坐标进通用库，低分辨率云与手电指向去重。

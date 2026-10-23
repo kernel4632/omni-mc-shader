@@ -205,17 +205,7 @@ void omniTerrainFragment(){
 	vec2 duv2 = dFdy(texCoord); // 纹理坐标纵向屏幕变化。
 	
 	#ifndef OMNI_TERRAIN_VS_TBN // 顶点没提供切线基时现场构造。
-		vec3 dp1 = dFdx(viewPos); // 视空间位置横向变化。
-		vec3 dp2 = dFdy(viewPos); // 视空间位置纵向变化。
-
-		vec3 N = normalize(cross(dp1, dp2)); // 法线由两条切向叉乘得到。
-		vec3 dp2perp = cross(dp2, N); // 与法线正交的纵向切向。
-		vec3 dp1perp = cross(N, dp1); // 与法线正交的横向切向。
-
-		vec3 T = normalize(dp2perp * duv1.x + dp1perp * duv2.x); // 由纹理导数解出切线。
-		vec3 B = normalize(dp2perp * duv1.y + dp1perp * duv2.y); // 解出副切线。
-		float invmax = inversesqrt(max(dot(T, T), dot(B, B))); // 归一化因子。
-		mat3 tbn = mat3(T * invmax, B * invmax, N); // 组装切线基。
+		mat3 tbn = gfx_tangent_basis(dFdx(viewPos), dFdy(viewPos), duv1, duv2); // 由屏幕导数构造切线基。
 	#endif
 
 	#if OMNI_DIRECTIONAL_BLOCKLIGHT // 指向性方块光要用方块光的屏幕梯度。

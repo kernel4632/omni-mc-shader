@@ -313,4 +313,17 @@ void gfx_warp_space(inout vec3 eyevec, inout vec3 raypos){
 	eyevec = normalize(eyevec + singularityVector * warpFactor * warpAmount); // 光线方向被拉向中心。
 }
 
+// 由屏幕导数构造切线基：位置横向、纵向变化叉乘得到法线，再解出切线与副切线。
+// 输入是视空间位置的两个方向导数与纹理坐标的两个导数；返回列向量为切线、副切线、法线的矩阵。
+// 为什么用导数：模型没有提供切线时，只能从相邻像素的位置与纹理变化里反推表面方向。
+mat3 gfx_tangent_basis(vec3 dp1, vec3 dp2, vec2 duv1, vec2 duv2){
+	vec3 normal = normalize(cross(dp1, dp2)); // 两个位置导数叉乘得到面法线。
+	vec3 dp2perp = cross(dp2, normal); // 与法线正交的纵向切向。
+	vec3 dp1perp = cross(normal, dp1); // 与法线正交的横向切向。
+	vec3 tangent = normalize(dp2perp * duv1.x + dp1perp * duv2.x); // 解出切线。
+	vec3 bitangent = normalize(dp2perp * duv1.y + dp1perp * duv2.y); // 解出副切线。
+	float invmax = inversesqrt(max(dot(tangent, tangent), dot(bitangent, bitangent))); // 两个方向的归一化因子。
+	return mat3(tangent * invmax, bitangent * invmax, normal); // 组装成切线基。
+}
+
 #endif

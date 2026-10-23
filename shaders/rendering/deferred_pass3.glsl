@@ -55,28 +55,8 @@
 	#include "/bind/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算要用。
 	#include "/rendering/clarity/antialiasing.glsl"
-	// 光色与方向由顶点阶段（`rendering/lights.glsl`）算出，这里用同名 `in` 接收。
-	in vec3 worldShadowVector; // 阴影相机对应的世界光方向。
-	in vec3 shadowVector; // 上面那个方向在视空间的值。
-	in vec3 worldSunVector; // 太阳的世界方向。
-	in vec3 worldMoonVector; // 月亮的世界方向。
-	in vec3 colorShadowlight; // 日月直射光色之和。
-	in vec3 colorSunlight; // 太阳直射光色。
-	in vec3 colorMoonlight; // 月亮直射光色。
-	in vec3 colorSkylight; // 日月环境光色之和。
-	in vec3 colorSunSkylight; // 太阳一侧的环境光色。
-	in vec3 colorMoonSkylight; // 月亮一侧的环境光色。
-	in vec3 colorTorchlight; // 火把光色。
-	in float timeNoon; // 太阳高度因子。
-	in float timeMidnight; // 月亮高度因子。
-	// 被引入的阴影与环境光效果文件整体会一起编译，它们的查询函数引用下列输入。
-	uniform sampler2D shadowtex0; // 阴影遮挡图。
-	uniform sampler2D shadowtex1; // 阴影实心图。
-	uniform sampler2D shadowcolor0; // 阴影颜色图。
-	ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
-	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
-	#include "/common/coordinates.glsl"
-	#include "/common/noise.glsl"
+	// 光色、方向与阴影纹理由延迟程序共用声明提供。
+	#include "/rendering/deferred_shared.glsl"
 	// 预计算大气、日月圆盘、星空与天空盒投影。
 	#include "/rendering/sky/sky.glsl"
 	// 体积云、平面云与云影贴图。

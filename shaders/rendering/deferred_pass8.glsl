@@ -49,28 +49,8 @@
 	// 只在主世界、且体积云渲染分辨率大于一时执行；写一号画面。
 	/* DRAWBUFFERS:1 */
 	layout(location = 0) out vec4 deferredOutput1; // 一号：贴好云的天空颜色。
-	#include "/common/uniforms.glsl"
-	#include "/common/math.glsl"
-	in vec3 worldShadowVector; // 阴影相机对应的世界光方向，平面云与附加层光照引用它。
-	in vec3 shadowVector; // 上面那个方向在视空间的值。
-	in vec3 worldSunVector; // 太阳的世界方向，大气查表与云引用它。
-	in vec3 worldMoonVector; // 月亮的世界方向，大气查表与云引用它。
-	in vec3 colorShadowlight; // 日月直射光色之和，云引用它。
-	in vec3 colorSunlight; // 太阳直射光色。
-	in vec3 colorMoonlight; // 月亮直射光色。
-	in vec3 colorSkylight; // 日月环境光色之和，云引用它。
-	in vec3 colorSunSkylight; // 太阳一侧的环境光色。
-	in vec3 colorMoonSkylight; // 月亮一侧的环境光色。
-	in vec3 colorTorchlight; // 火把光色。
-	in float timeNoon; // 太阳高度因子，天空文件引用它。
-	in float timeMidnight; // 月亮高度因子，天空文件引用它。
-	uniform sampler2D shadowtex0; // 阴影遮挡图。
-	uniform sampler2D shadowtex1; // 阴影实心图。
-	uniform sampler2D shadowcolor0; // 阴影颜色图。
-	ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
-	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
-	#include "/common/coordinates.glsl"
-	#include "/common/noise.glsl"
+	// 光色、方向与阴影纹理由延迟程序共用声明提供。
+	#include "/rendering/deferred_shared.glsl"
 	#include "/rendering/sky/sky.glsl"
 	#include "/rendering/cloud/cloud.glsl"
 	// 云高度、风与可见判据由两个低分辨率云阶段共用。

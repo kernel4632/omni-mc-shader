@@ -290,16 +290,7 @@ vec2 DecodeEntityMaterial(){
 // 切线基：顶点给了就用顶点的，否则用屏幕导数推出来。
 mat3 BuildEntityTangentBasis(vec2 duv1, vec2 duv2){
 	#if (!OMNI_ENTITIES_VS_TBN || (!defined OMNI_ENTITIES_PASS && !defined OMNI_SPIDEREYES_PASS) || (MC_VERSION >= 11500 && MC_VERSION <= 11604)) && (!defined OMNI_HAND_PASS || MC_VERSION >= 11300)
-		vec3 dp1 = dFdx(viewPos); // 视空间位置横向变化。
-		vec3 dp2 = dFdy(viewPos); // 视空间位置纵向变化。
-
-		vec3 N = normalize(cross(dp1, dp2)); // 法线由叉乘得到。
-		vec3 dp2perp = cross(dp2, N); // 与法线正交的纵向切向。
-		vec3 dp1perp = cross(N, dp1); // 与法线正交的横向切向。
-		vec3 T = normalize(dp2perp * duv1.x + dp1perp * duv2.x); // 解出切线。
-		vec3 B = normalize(dp2perp * duv1.y + dp1perp * duv2.y); // 解出副切线。
-		float invmax = inversesqrt(max(dot(T, T), dot(B, B))); // 归一化因子。
-		return mat3(T * invmax, B * invmax, N); // 组装切线基。
+		return gfx_tangent_basis(dFdx(viewPos), dFdy(viewPos), duv1, duv2); // 由屏幕导数构造切线基。
 	#else
 		mat3 tbnMat = tbn; // 用顶点传来的切线基。
 		if(!gl_FrontFacing) tbnMat[2] = -tbnMat[2]; // 背面翻转法线。

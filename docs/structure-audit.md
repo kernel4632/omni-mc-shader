@@ -37,19 +37,19 @@
 | `rendering/deferred_pass0.glsl` | 29 | 延迟零号主体。 |
 | `rendering/deferred_pass1.glsl` | 28 | 延迟一号主体。 |
 | `rendering/deferred_pass2.glsl` | 29 | 延迟二号主体。 |
-| `rendering/deferred_pass3.glsl` | 44 | 延迟三号主体。 |
+| `rendering/deferred_pass3.glsl` | 25 | 延迟三号主体。 |
 | `rendering/deferred_pass4.glsl` | 5 | 延迟四号转发。 |
 | `rendering/deferred_pass5.glsl` | 5 | 延迟五号转发。 |
 | `rendering/deferred_pass6.glsl` | 20 | 延迟六号复制。 |
 | `rendering/deferred_pass7.glsl` | 51 | 低分辨率体积云总图。 |
-| `rendering/deferred_pass8.glsl` | 65 | 云贴回天空。 |
+| `rendering/deferred_pass8.glsl` | 44 | 云贴回天空。 |
 | `rendering/deferred_shared.glsl` | 31 | 延迟程序共用片元声明。 |
 | `rendering/distant.glsl` | 219 | 远景地形与水主体。 |
-| `rendering/entities.glsl` | 441 | 实体、方块实体、手持物、蜘蛛眼主体。 |
+| `rendering/entities.glsl` | 433 | 实体、方块实体、手持物、蜘蛛眼主体。 |
 | `rendering/final.glsl` | 73 | 最终输出主体。 |
 | `rendering/lights.glsl` | 99 | 合成与延迟顶点光色。 |
 | `rendering/lpv.glsl` | 102 | 光传播计算入口。 |
-| `rendering/overlay.glsl` | 306 | 覆盖层七组程序主体。 |
+| `rendering/overlay.glsl` | 300 | 覆盖层七组程序主体。 |
 | `rendering/post_effect_pass.glsl` | 40 | 景深与泛光链共用主体。 |
 | `rendering/post_fragment_deps.glsl` | 14 | 后期片元依赖顺序。 |
 | `rendering/post_pass7.glsl` | 12 | 时间抗锯齿历史。 |
@@ -59,9 +59,9 @@
 | `rendering/post_pass16.glsl` | 21 | 放大。 |
 | `rendering/post_vertex.glsl` | 12 | 后期整屏顶点。 |
 | `rendering/shadow.glsl` | 229 | 阴影主体。 |
-| `rendering/sky/cloud_stage.glsl` | 21 | 低分辨率云阶段共用参数。 |
+| `rendering/sky/cloud_stage.glsl` | 20 | 低分辨率云阶段共用参数。 |
 | `rendering/terrain.glsl` | 252 | 地形顶点、几何、片元主体。 |
-| `rendering/translucent.glsl` | 302 | 水面与手持水主体。 |
+| `rendering/translucent.glsl` | 286 | 水面与手持水主体。 |
 | `rendering/watersim.glsl` | 104 | 波浪模拟三个计算阶段。 |
 | `rendering/water/caustics_vertex.glsl` | 13 | 延迟焦散共用顶点。 |
 
@@ -79,11 +79,11 @@
 | `rendering/fog/landscattering.glsl` | 57 | 地表散射积分可进 `gfx/fog.glsl`。 |
 | `rendering/fog/underwater_fog.glsl` | 25 | 水下光柱步进可进 `gfx/fog_volume.glsl`。 |
 | `rendering/ground/grass_geometry.glsl` | 103 | 草丛顶点生成可进 `gfx/` 的新草模块。 |
-| `rendering/ground/terrain_surface.glsl` | 257 | 各向异性采样与表面写出分开，采样核进 `gfx/`。 |
+| `rendering/ground/terrain_surface.glsl` | 249 | 各向异性采样与表面写出分开，采样核进 `gfx/`。 |
 | `rendering/lighting/composite_surface.glsl` | 188 | 主世界表面光照合成，参数化后进 `gfx/surface.glsl`。 |
 | `rendering/lighting/composite_surface_end.glsl` | 131 | 末地表面光照，与主世界共用合成参数后合并。 |
 | `rendering/lighting/composite_surface_nether.glsl` | 49 | 下界表面光照，同上。 |
-| `rendering/lighting/held_light.glsl` | 177 | 光斑、屏幕阴影与高光，先合并重复的相机旋转段。 |
+| `rendering/lighting/held_light.glsl` | 168 | 光斑、屏幕阴影与高光，先合并重复的相机旋转段。 |
 | `rendering/lighting/lpv.glsl` | 229 | 体素编码与采样公式可进 `gfx/gi.glsl`。 |
 | `rendering/reflection/composite_filter.glsl` | 31 | 两段滤波只差半径与噪声，先合并成一次参数化调用。 |
 | `rendering/reflection/composite_specular.glsl` | 24 | 反射合成流程，参数化后进 `gfx/reflection.glsl`。 |
@@ -95,7 +95,7 @@
 | `rendering/water/refraction.glsl` | 64 | 与末地、下界两份折射重复，先合并成一份参数化实现。 |
 | `rendering/water/waves.glsl` | 146 | 物理波与视差坐标，解析波公式进 `gfx/water.glsl`。 |
 | `rendering/world/composite_scene.glsl` | 172 | 场景最终合成，分段进 `gfx/post.glsl` 与 `gfx/reflection.glsl`。 |
-| `rendering/world/end_reflection.glsl` | 43 | 末地折射与反射兜底，与折射合并。 |
+| `rendering/world/end_reflection.glsl` | 24 | 末地折射与反射兜底，与折射合并。 |
 | `rendering/world/nether.glsl` | 124 | 下界雾、折射与光照，雾公式进 `gfx/fog.glsl`，折射并入共用实现。 |
 
 ## 四、MC 数据适配
