@@ -41,6 +41,8 @@ uniform int renderStage; // 当前原版绘制阶段，用来区分实体方块�
 #include "/rendering/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与材质相关选项。
 #include "/bind/ground/material.glsl"
+// 视差算法只在地形片元阶段用到，由本主体显式引入。
+#include "/rendering/parallax.glsl"
 // 自发光矿石：提供矿石自发光选项与 `omniOreEmission`，片元按矿石标记补一份自发光。
 #include "/rendering/lighting/emissive.glsl"
 // 区块淡入：`omniChunkFade*` 一组纯计算，顶点取进度、几何转发、片元按进度抖动丢弃。

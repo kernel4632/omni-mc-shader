@@ -60,10 +60,8 @@ struct Intersection{
 	float angle; // 命中面的夹角。
 };
 // 固定材质（空气、水、玻璃、冰）在 `bind/gbuffer.glsl`，与本文件共用同一套定义。
-// 水洼的湿面反射锐度（`OmniPuddleRoughness`）在 water/puddle.glsl：粗糙度只在本文件的 `MaterialFromTex` 解出，
-// 所以由本文件引入并在那里调用；水洼覆盖（`OmniPuddleCoverage`）仍由水效果自己引入，两边各取所需。
-// 为什么放在函数之前：GLSL 要求先声明后使用，放在文件末尾会报找不到函数。
-#include "/rendering/water/puddle.glsl"
+// 湿面反射锐度是材质解码的输入参数，选项定义在效果层，这里按输入读取一次。
+#include "/effects/water/puddle.glsl"
 // 从表面贴图解出材质：孔隙率、金属、自发光与散射的通道解释在绑定层，本文件只把选项接进去。
 // 参数 `wet` 是这一处的湿润度，`baseTex` 会被吸水压暗，所以是 `inout`。
 Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
@@ -122,7 +120,5 @@ vec3 omniMaterialNormalScale(vec3 tangentNormal){
 vec4 omniMaterialNormal(vec3 normalTexRGB){
 	return gfx_material_normal(normalTexRGB, bool(OMNI_MATERIAL_AO), OMNI_NORMAL_MAP_MULT); // 解码、缩放与遮蔽一次完成。
 }
-// 视差算法（`ParallaxOcclusionMapping`）在 ground/parallax.glsl：它只服务地表材质，且只在地形、实体等几何片元阶段编译。
-// 为什么放在这里引入：任何引入本文件的阶段都靠这一行拿到视差算法，原有调用点（地形、实体）一个都不用改。
-#include "/rendering/parallax.glsl"
+// 视差由使用它的几何阶段显式引入，本文件只提供材质解码与选项，不反向依赖渲染层。
 #endif // OMNI_BIND_GROUND_MATERIAL_INCLUDED

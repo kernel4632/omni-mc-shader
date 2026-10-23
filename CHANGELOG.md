@@ -1,4 +1,15 @@
 # 更新记录
+## 0.1.84
+
+结构修复：绑定层不再反向依赖渲染层。
+
+- `bind/ground/material.glsl` 不再引入 `rendering/water/puddle.glsl` 与 `rendering/parallax.glsl`，改为直接读取材质解码所需的湿面锐度选项。
+- `rendering/terrain.glsl` 与 `rendering/entities.glsl` 在真正调用 `ParallaxOcclusionMapping` 的地方显式引入 `rendering/parallax.glsl`。
+- 绑定层现在只引用 `common/`、`gfx/` 与 `effects/`，不再出现到某个绘制阶段的依赖；`bind/README.md` 补上这条约束。
+- 四层非注释行：`bind/` 460、`rendering/` 8711、`gfx/` 4039、`effects/` 628，合计 13838 行。
+
+验证：`audit`、`verify`（130 个测试）与全量 `compile`（280 组唯一程序）通过；本轮未启动 Minecraft，游戏内画面尚未复查。
+
 ## 0.1.83
 
 结构重构：放大与锐化核迁入通用库。

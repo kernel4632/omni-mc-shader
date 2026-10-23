@@ -47,6 +47,8 @@ vec3 colorSkylight; // 天光颜色。
 #include "/rendering/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与实体材质选项。
 #include "/bind/ground/material.glsl"
+// 视差算法只服务几何片元阶段，由真正调用的阶段显式引入。
+#include "/rendering/parallax.glsl"
 // 自发光纹饰：提供纹饰自发光选项与 `omniTrimEmission`，实体片元按盔甲纹饰编号补一份自发光。
 #include "/rendering/lighting/emissive.glsl"
 // 生物与玩家：提供 `EntityStatusColor` 与 `HandFovProjection`。
