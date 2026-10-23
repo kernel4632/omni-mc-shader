@@ -1,4 +1,16 @@
 # 更新记录
+## 0.1.82
+
+结构重构：预计算大气查表迁入通用库。
+
+- 新增 `gfx/atmosphere_model.glsl`：预计算大气的球面坐标映射、透过率、组合散射、单次米氏散射还原、辐照度与天空辐射全部改为纯函数。
+- 大气常数打包成 `gfx_atmosphere_model` 结构体，预计算贴图、夜间亮度、散射倍率、湿润度与天空亮度全部由调用方传入；色适应矩阵 `GFX_ATMO_LMS` 改为通用库常量。
+- `rendering/sky/atmosphere_model.glsl` 保留原函数名与签名，只填参数并按 `MC_VERSION` 选采样器；天空、云与地表散射的调用点无需改动。
+- `rendering/fog/landscattering.glsl` 与 `rendering/sky/skyscatter.glsl` 改用 `GFX_ATMO_LMS`，公式与默认画面不变。
+- 四层非注释行：`bind/` 461、`rendering/` 8836、`gfx/` 3916、`effects/` 628，合计 13841 行。
+
+验证：`audit`、`verify`（130 个测试，通用库边界测试覆盖新文件）与全量 `compile`（280 组唯一程序）通过；本轮未启动 Minecraft，游戏内画面尚未复查。
+
 ## 0.1.81
 
 结构重构：按角色重新划分输入层、阶段层与效果层。

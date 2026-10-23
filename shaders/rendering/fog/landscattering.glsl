@@ -37,7 +37,7 @@ vec3 simpleScattering(vec3 camera, vec3 worldDir, float dist, float shadowDist, 
 	vec3 scattering = RayleighPhaseFunction(nu) * atmosphereModel_rayleigh_scattering * (dist * 0.25 + shadowDist * 0.75) // 瑞利散射，四分之一取距离、四分之三取受光距离。
 					+ MiePhaseFunction(0.6, nu) * atmosphereModel_mie_scattering * shadowDist; // 米氏散射只算受光的部分。
 
-	return scattering * atmosphereModel_solar_irradiance * attenuation * LMS; // 乘太阳辐照度、透过率与色适应矩阵。
+	return scattering * atmosphereModel_solar_irradiance * attenuation * GFX_ATMO_LMS; // 乘太阳辐照度、透过率与色适应矩阵。
 }
 
 // 地面大气散射：给地表方向的视线补一层空气散射，阴影区按选项削弱。

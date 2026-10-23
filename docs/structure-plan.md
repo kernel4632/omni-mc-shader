@@ -166,7 +166,8 @@ shaders/
 - 已完成：新增 `gfx/planet.glsl`，末地行星本体、光环与大气从绑定层迁入通用库，行星半径、时间、阴影强度与噪声贴图改为参数；`bind/world/end_sky.glsl` 只保留同名转发。`gfx/reflection.glsl` 增加中性反射合成参数，三个维度的默认结构只维护一份。
 - 后续可选：把 `rendering/` 里仍可独立的纯计算继续抽到 `gfx/`；优先对象是预计算大气查表、地形各向异性采样、海洋物理波高、体积雾单次散射与抗锯齿采样核。抽离时只改函数名与参数，保持公式不变。
 - 已完成（0.1.81）：按角色重新划分四层。`bind/` 只留 7 个输入适配文件（相机、时间、天气、世界、G 缓冲、材质解码、群系）；其余 95 个文件整体移到 `rendering/` 的同名相对路径，作为阶段片段，不改函数体、调用顺序与选项；引入标记同步改为 `OMNI_RENDER_*`。四层非注释行：`bind/` 461、`rendering/` 9054、`gfx/` 3655、`effects/` 628，合计 13798 行，与迁移前完全相同（只移动，不删代码）。`effects/` 46 个文件、519 个选项名称与默认值未变。
+- 已完成（0.1.82）：`gfx/atmosphere_model.glsl` 建立；预计算大气的坐标映射、透过率、组合散射、辐照度与天空辐射从 `rendering/sky/atmosphere_model.glsl` 迁入，常数打包成 `gfx_atmosphere_model`，预计算贴图与色适应矩阵改为参数；阶段文件保留原函数名与签名，只做参数填充与采样器选择。天空公式、调用点与默认画面未变。
 - 当前判断：`bind/` 已经从“效果实现存放处”收敛为输入适配层；`rendering/` 承担了阶段片段，体积偏大但每个文件都能说明它在哪个阶段被调用。下一步按域把阶段片段里的纯公式抽到 `gfx/`，并从 `rendering/` 的扁平程序主体里删掉重复声明。
-- 当前固定口径（0.1.81）：`bind/` 461 行（7 个文件）、`rendering/` 9054 行（140 个文件）、`gfx/` 3655 行（20 个文件）、`effects/` 628 行（46 个文件），四层合计 13798 行；生成入口 `world0/` 608、`world1/` 530、`world-1/` 482。复现命令：
+- 当前固定口径（0.1.82）：`bind/` 461 行（7 个文件）、`rendering/` 8836 行（140 个文件）、`gfx/` 3916 行（21 个文件）、`effects/` 628 行（46 个文件），四层合计 13841 行；生成入口 `world0/` 608、`world1/` 530、`world-1/` 482。复现命令：
   `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','gfx','effects','world0','world1','world-1')})"`
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。另用 8 个代表入口比较重构前后的展开代码，去注释、引用与声明后语句集合完全一致。
