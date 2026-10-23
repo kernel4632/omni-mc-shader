@@ -49,7 +49,7 @@ vec2 texCoord; // 零到一屏幕坐标，环境遮蔽与时间抗锯齿引用�
 
 // 火把色温、冷色月光等选项分别属于块光与光照效果文件，引入它们即一并带入天空、云与环境光依赖。
 #include "/bind/ground/material.glsl"
-#include "/bind/lighting/sunlight.glsl"
+#include "/rendering/lighting/sunlight.glsl"
 
 // 太阳可见度只在镜头光晕或眩光开启时才有意义，与 iterationT 一致按这两个选项分派。
 #ifdef VS_SUN_VISIBILITY

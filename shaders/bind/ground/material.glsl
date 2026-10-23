@@ -63,7 +63,7 @@ struct Intersection{
 // 水洼的湿面反射锐度（`OmniPuddleRoughness`）在 water/puddle.glsl：粗糙度只在本文件的 `MaterialFromTex` 解出，
 // 所以由本文件引入并在那里调用；水洼覆盖（`OmniPuddleCoverage`）仍由水效果自己引入，两边各取所需。
 // 为什么放在函数之前：GLSL 要求先声明后使用，放在文件末尾会报找不到函数。
-#include "/bind/water/puddle.glsl"
+#include "/rendering/water/puddle.glsl"
 // 从表面贴图解出材质：孔隙率、金属、自发光与散射的通道解释在绑定层，本文件只把选项接进去。
 // 参数 `wet` 是这一处的湿润度，`baseTex` 会被吸水压暗，所以是 `inout`。
 Material MaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet){
@@ -124,5 +124,5 @@ vec4 omniMaterialNormal(vec3 normalTexRGB){
 }
 // 视差算法（`ParallaxOcclusionMapping`）在 ground/parallax.glsl：它只服务地表材质，且只在地形、实体等几何片元阶段编译。
 // 为什么放在这里引入：任何引入本文件的阶段都靠这一行拿到视差算法，原有调用点（地形、实体）一个都不用改。
-#include "/bind/parallax.glsl"
+#include "/rendering/parallax.glsl"
 #endif // OMNI_BIND_GROUND_MATERIAL_INCLUDED

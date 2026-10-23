@@ -72,16 +72,16 @@
 	#include "/common/coordinates.glsl"
 	#include "/common/noise.glsl"
 	// 预计算大气：取云可见判据里的「视线是否打到地面」。
-	#include "/bind/sky/sky.glsl"
+	#include "/rendering/sky/sky.glsl"
 	// 体积云密度、光照与总图；分辨率选项也在这一步定义。
-	#include "/bind/cloud/cloud.glsl"
+	#include "/rendering/cloud/cloud.glsl"
 	// 这一阶段在更低的分辨率上运行，坐标按分辨率除数换回全分辨率口径；被引入文件整体会一起编译，需要这两个量。
 	ivec2 texelCoord = ivec2(gl_FragCoord.xy * float(OMNI_CLOUD_RENDER_SCALE)); // 对应的全分辨率像素坐标。
 	vec2 texCoord = gl_FragCoord.xy * pixelSize * float(OMNI_CLOUD_RENDER_SCALE); // 对应的全分辨率零到一屏幕坐标。
 	// 提供洞穴模式等选项，并带入光色计算依赖。
-	#include "/bind/lighting/sunlight.glsl"
+	#include "/rendering/lighting/sunlight.glsl"
 	// Omni 额外功能：极光与彩虹，默认关闭；公告牌与云内闪电一并带入。
-	#include "/bind/sky/atmosphere.glsl"
+	#include "/rendering/sky/atmosphere.glsl"
 	void main(){
 		float depth = texelFetch(depthtex1, texelCoord, 0).x; // 不含半透明的深度，坐标已换回全分辨率。
 		vec3 viewPos = ViewPos_From_ScreenPos(texCoord, depth); // 还原视空间位置。

@@ -12,7 +12,7 @@ import build  # 读取真实流程表、原生选项与编译器位置。
 import options  # 核对菜单分类与流程设置解析。
 import support  # 共享扫描、展开与效果原文缓存。
 
-DESCENDING_EDGES = {"end.glsl": "末地行星阴影与大气米散射用下降遮罩，照 iterationT 原样保留", "end_sky.glsl": "末地大气米散射的下降遮罩随算法体拆到该文件，照 iterationT 原样保留", "snow.glsl": "积雪融化阶段用下降遮罩判断雪量区间，照 Eclipse 原样保留"}  # 允许反序阈值的文件，值写明原因。
+DESCENDING_EDGES = {"end.glsl": "末地行星阴影与大气米散射用下降遮罩，照 iterationT 原样保留", "end_sky.glsl": "末地大气米散射的下降遮罩随算法体拆到该文件，照 iterationT 原样保留", "snow.glsl": "积雪融化阶段用下降遮罩判断雪量区间，照 Eclipse 原样保留", "planet.glsl": "末地行星大气按视线掠过地面的角度衰减，边缘用下降遮罩，照原式保留"}  # 允许反序阈值的文件，值写明原因。
 
 
 class EffectTests(unittest.TestCase):
@@ -21,8 +21,10 @@ class EffectTests(unittest.TestCase):
     # --- 单源、结构与生成协议 ---
     def test_fixed_smoothstep_edges_are_ordered(self):
         """效果目录里的固定阈值必须严格递增；`end.glsl` 的下降遮罩按 iterationT 保留并在此登记。"""
-        files = sorted((build.SHADERS / "bind").rglob("*.glsl"))  # 效果实现已迁到绑定层，遍历子目录才不会空跑。
-        self.assertGreaterEqual(len(files), 20, f"绑定文件只有 {len(files)} 个，遍历范围可能写错")  # 少于下限说明匹配规则失效，直接失败而不是假通过。
+        files = sorted((build.SHADERS / "bind").rglob("*.glsl"))  # 输入适配层全部检查。
+        files += sorted((build.SHADERS / "gfx").rglob("*.glsl"))  # 通用库全部检查。
+        files += sorted(path for path in (build.SHADERS / "rendering").rglob("*.glsl") if path.parent != build.SHADERS / "rendering")  # 只查按效果分组的阶段片段，程序主体不在此列。
+        self.assertGreaterEqual(len(files), 20, f"效果阶段与通用文件只有 {len(files)} 个，遍历范围可能写错")  # 少于下限说明匹配规则失效，直接失败而不是假通过。
         checked = 0  # 统计真正读到公式的文件数，佐证不是空跑。
         for path in files:  # 只检查自有效果，不改第三方源码。
             text = path.read_text(encoding="utf-8")  # 每个效果原文。
@@ -629,7 +631,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_GRASS_DETECT_INV_FALLOFF", geometry)  # 侧向检测参与高度。
         self.assertIn("OMNI_SHORT_GRASS_BLOCK_ID", geometry)  # 仅矮草档按矮草方块生长。
         terrain = support.text("rendering/terrain.glsl")  # 地形主体。
-        self.assertIn('/bind/ground/grass.glsl"', terrain)  # 地形引入草效果的绑定层。
+        self.assertIn('/rendering/ground/grass.glsl"', terrain)  # 地形引入草效果的阶段片段。
         self.assertIn("#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD", terrain)  # ????????????
         self.assertIn("DRAWBUFFERS:0359", terrain)  # 地形多写九号方块编号画面。
         self.assertIn("colortex9Clear = false", support.text("rendering/buffers.glsl"))  # 方块编号跨帧保留。

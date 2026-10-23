@@ -54,13 +54,13 @@
 #if defined OMNI_FRAGMENT
 
 	// 后期共享声明，全项目只声明一次。
-	#include "/bind/clarity/post_shared.glsl"
+	#include "/rendering/clarity/post_shared.glsl"
 	// 提供材质编号，被抗锯齿文件引用。
 	#include "/bind/ground/material.glsl"
 	// 提供 `OMNI_TAA`，锐化的开启条件读它。
-	#include "/bind/clarity/antialiasing.glsl"
+	#include "/rendering/clarity/antialiasing.glsl"
 	// 对比度自适应锐化与放大。
-	#include "/bind/clarity/upscale.glsl"
+	#include "/rendering/clarity/upscale.glsl"
 
 	/* DRAWBUFFERS:1 */
 	layout(location = 0) out vec4 compositeOutput1; // 一号锐化后的场景颜色。

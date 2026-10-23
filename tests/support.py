@@ -54,21 +54,22 @@ def text(path: str) -> str:
 
 
 def code(path: str) -> str:
-    """返回一个效果的选项层与绑定层合并文本，供结构测试同时检查选项与实现。
+    """返回一个效果的选项层与实现层合并文本，供结构测试同时检查选项与实现。
 
-    结构重构后 `effects/` 只保留菜单选项，宿主接线在 `bind/` 的同名路径；
-    测试仍按“一个效果”阅读两层源码，避免把选项与算法拆成两套断言。
+    结构重构后 `effects/` 只保留菜单选项，宿主输入适配在 `bind/`，
+    阶段片段在 `rendering/` 的同名相对路径；测试仍按“一个效果”阅读多层源码，
+    避免把选项、输入与算法拆成多套断言。
     """
     if not path.startswith("effects/"):
         return text(path)  # 其它层仍按单个文件读取。
-    relative = path.removeprefix("effects/")  # 效果内的相对路径在两层里保持一致。
+    relative = path.removeprefix("effects/")  # 效果内的相对路径在多层里保持一致。
     parts = []
-    for prefix in ("effects/", "bind/"):
+    for prefix in ("effects/", "bind/", "rendering/"):
         candidate = build.SHADERS / (prefix + relative)
         if candidate.is_file():  # 只合并真实存在的层。
-            parts.append(candidate.read_text(encoding="utf-8"))  # 选项层与绑定层各读一次。
+            parts.append(candidate.read_text(encoding="utf-8"))  # 选项层、输入层与阶段层各读一次。
     if not parts:
-        raise FileNotFoundError(f"找不到效果层或绑定层：{path}")  # 两层都不存在说明路径写错。
+        raise FileNotFoundError(f"找不到效果层、绑定层或渲染层：{path}")  # 三层都不存在说明路径写错。
     return "\n".join(parts)  # 合并后供关键字断言同时检查选项与实现。
 
 

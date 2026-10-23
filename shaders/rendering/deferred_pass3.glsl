@@ -54,7 +54,7 @@
 	// 提供材质编号，被引入的环境光速度重投影引用它。
 	#include "/bind/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算要用。
-	#include "/bind/clarity/antialiasing.glsl"
+	#include "/rendering/clarity/antialiasing.glsl"
 	// 光色与方向由顶点阶段（`rendering/lights.glsl`）算出，这里用同名 `in` 接收。
 	in vec3 worldShadowVector; // 阴影相机对应的世界光方向。
 	in vec3 shadowVector; // 上面那个方向在视空间的值。
@@ -78,15 +78,15 @@
 	#include "/common/coordinates.glsl"
 	#include "/common/noise.glsl"
 	// 预计算大气、日月圆盘、星空与天空盒投影。
-	#include "/bind/sky/sky.glsl"
+	#include "/rendering/sky/sky.glsl"
 	// 体积云、平面云与云影贴图。
-	#include "/bind/cloud/cloud.glsl"
+	#include "/rendering/cloud/cloud.glsl"
 	// 提供洞穴模式与无光亮度选项，并带入光色计算依赖。
-	#include "/bind/lighting/sunlight.glsl"
+	#include "/rendering/lighting/sunlight.glsl"
 	// Omni 额外功能：极光与彩虹，默认关闭。
-	#include "/bind/sky/atmosphere.glsl"
+	#include "/rendering/sky/atmosphere.glsl"
 	// 天空、云、日月星与天空盒的算法在效果文件里，这里只调用并写一号与二号。
-	#include "/bind/sky/skyrender.glsl"
+	#include "/rendering/sky/skyrender.glsl"
 	void main(){
 		RenderDeferredSky(); // 画天空像素、天空盒图与右上角云影贴图。
 	}

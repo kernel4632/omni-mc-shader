@@ -53,9 +53,9 @@
 /* DRAWBUFFERS:3 */
 layout(location = 0) out vec4 compositeOutput3; // 三号画面：滤波后的反射数据。
 // 反射小波滤波 `AtrousWaveletFilter`。
-#include "/bind/reflection/reflection.glsl"
+#include "/rendering/reflection/reflection.glsl"
 // 反射滤波算法在效果文件里。
-#include "/bind/reflection/composite_filter.glsl"
+#include "/rendering/reflection/composite_filter.glsl"
 void main(){ CompositeReflectionFilter(); } // 做半径四十的小波滤波并写回三号画面。
 #endif
 

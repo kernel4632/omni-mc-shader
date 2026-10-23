@@ -71,10 +71,10 @@
 	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
 	#include "/common/coordinates.glsl"
 	#include "/common/noise.glsl"
-	#include "/bind/sky/sky.glsl"
-	#include "/bind/cloud/cloud.glsl"
-	#include "/bind/lighting/sunlight.glsl"
-	#include "/bind/sky/atmosphere.glsl"
+	#include "/rendering/sky/sky.glsl"
+	#include "/rendering/cloud/cloud.glsl"
+	#include "/rendering/lighting/sunlight.glsl"
+	#include "/rendering/sky/atmosphere.glsl"
 	void main(){
 		vec4 base = texelFetch(colortex1, texelCoord, 0); // 延迟三号画好的天空。
 		deferredOutput1 = base; // 默认原样保留，几何像素不动。
