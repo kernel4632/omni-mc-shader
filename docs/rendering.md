@@ -18,7 +18,7 @@
 
 `rendering/` 的绘制主体按绘制阶段分组，不按效果分组：地形、实体、半透明、覆盖层、天体、远景、阴影、光照顶点、延迟、合成、后期、最终，再加计算主体 `lpv` 与 `watersim`。同一个主体里的多个程序靠程序宏区分，例如 `composite` 与 `composite1`–`composite5` 都在 `rendering/composite.glsl`。
 
-`rendering/` 分两层：扁平的文件是绘制主体，按绘制阶段组织，例如 `terrain.glsl`、`composite.glsl`、`post_pass6.glsl`；按效果命名的子目录是该效果被多个阶段共用的阶段片段，例如 `rendering/sky/skyrender.glsl`、`rendering/lighting/composite_surface.glsl`、`rendering/water/water.glsl`。阶段片段可以读中间画面、读加载器输入并写出结果，但公式本身优先放 `gfx/`。
+`rendering/` 分两层：扁平的文件是绘制主体，按绘制阶段组织，例如 `terrain.glsl`、`composite_pass0.glsl`、`post_effect_pass.glsl`；按效果命名的子目录是该效果被多个阶段共用的阶段片段，例如 `rendering/sky/skyrender.glsl`、`rendering/lighting/composite_surface.glsl`、`rendering/water/water.glsl`。阶段片段可以读中间画面、读加载器输入并写出结果，但公式本身优先放 `gfx/`。
 
 调用方向固定为：入口 → `rendering/` 绘制主体 → `bind/` 输入适配与 `rendering/` 阶段片段 → `gfx/` 通用算法。`effects/` 只保留菜单选项与选项到参数的换算；`bind/` 只把加载器输入解成普通数值或结构体，不保存效果算法；`gfx/` 只接收参数，不读宿主量。
 

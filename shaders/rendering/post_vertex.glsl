@@ -1,6 +1,6 @@
 /*
 后期程序的整屏顶点：把加载器给的零到一四边形按程序需要的比例缩放。
-调用位置：由 `rendering/post_pass6.glsl` 到 `post_pass15.glsl` 的顶点阶段引入；本文件不写 `#version`，语言版本由入口声明。
+调用位置：由 `rendering/post_effect_pass.glsl` 到 `post_pass15.glsl` 的顶点阶段引入；本文件不写 `#version`，语言版本由入口声明。
 可复制示例：
     入口先写 `#define POST_VERTEX_SCALE 0.51` 再引入本文件，得到半分辨率整屏四边形；
     不写缩放宏时默认铺满屏幕。

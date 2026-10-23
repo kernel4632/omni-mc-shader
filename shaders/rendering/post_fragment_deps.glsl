@@ -1,6 +1,6 @@
 /*
 后期程序的共用片元依赖：按固定顺序引入景深、动态模糊、泛光与合并泛光需要的效果文件。
-调用位置：由 `rendering/post_pass6.glsl`、`post_pass8.glsl` 到 `post_pass14.glsl` 的片元阶段引入。
+调用位置：由 `rendering/post_effect_pass.glsl`、`post_pass8.glsl` 到 `post_pass14.glsl` 的片元阶段引入。
 可复制示例：在 `#if defined OMNI_FRAGMENT` 里写一行 `#include "/rendering/post_fragment_deps.glsl"`。
 设计原因与取舍：这九个程序原来各抄一份十一行引入表，顺序错一处就会看到未定义的选项宏；
     集中到本文件后顺序只有一份，程序文件只保留自己的输出声明与一次效果调用。
