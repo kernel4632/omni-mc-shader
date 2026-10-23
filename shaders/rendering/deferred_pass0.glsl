@@ -37,15 +37,8 @@
 #ifdef OMNI_VERTEX
 
 		// 焦散法线只需要一个被拉长的整屏四边形，缩放让波法线方块与分辨率无关。
-		// 主世界在延迟零号算焦散，末地把同一段放到延迟一号，所以两支共用这段顶点。
-		#include "/common/uniforms.glsl"
-		#include "/common/math.glsl"
-		void main(){
-			const float maxCausticsNormalHeight = CAUSTICS_TEX_RESOLUTION; // 方块边长上限，来自内部常数。
-			vec2 causticsTexCoord = gl_Vertex.xy; // 加载器顶点在零到一的方块上。
-			causticsTexCoord *= screenSize * (1.0 / min(screenSize.y, maxCausticsNormalHeight)); // 按屏幕高度与方块上限缩放。
-			gl_Position = vec4(causticsTexCoord * 2.0 - 1.0, 0.0, 1.0); // 铺满屏幕并超出边界，保证全屏被覆盖。
-		}
+		// 主世界在延迟零号算焦散，末地把同一段放到延迟一号，所以两支共用同一份顶点。
+		#include "/rendering/water/caustics_vertex.glsl"
 
 #endif
 
@@ -58,8 +51,7 @@
 		/* DRAWBUFFERS:46 */
 		layout(location = 0) out vec4 deferredOutput4; // 四号半透明法线光照图。
 		layout(location = 1) out vec4 deferredOutput6; // 六号半透明材质编号。
-		#include "/common/uniforms.glsl"
-		ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
+		#include "/rendering/deferred_shared.glsl"
 		void main(){
 			vec4 data3 = texelFetch(colortex3, texelCoord, 0); // 读不透明法线光照图。
 			vec4 data5 = texelFetch(colortex5, texelCoord, 0); // 读不透明高光材质。
@@ -69,38 +61,12 @@
 	#else // 主世界：水面波法线方块。
 	/* DRAWBUFFERS:7 */
 	layout(location = 0) out vec4 deferredOutput7; // 七号焦散法线方块。
-	// 加载器画面与共用数学先引入；再按依赖顺序引入效果文件。
-	#include "/common/uniforms.glsl"
-	#include "/common/math.glsl"
+	// 延迟程序的共用输入与光色量集中在共享文件里。
+	#include "/rendering/deferred_shared.glsl"
 	// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
 	#include "/bind/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算按它决定是否撤销抖动。
 	#include "/rendering/clarity/antialiasing.glsl"
-	// 以下方向与光色量只在效果文件里合成阶段才会调用的函数中用到；本程序一起编译整个文件，所以先声明。
-	ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
-	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
-	vec3 worldShadowVector; // 阴影相机对应的世界光方向。
-	vec3 shadowVector; // 上面那个方向在视空间的值。
-	vec3 worldSunVector; // 太阳的世界方向。
-	vec3 worldMoonVector; // 月亮的世界方向。
-	vec3 colorShadowlight; // 日月直射光色之和。
-	vec3 colorSunlight; // 太阳直射光色。
-	vec3 colorMoonlight; // 月亮直射光色。
-	vec3 colorSkylight; // 日月环境光色之和。
-	vec3 colorSunSkylight; // 太阳一侧的环境光色。
-	vec3 colorMoonSkylight; // 月亮一侧的环境光色。
-	vec3 colorTorchlight; // 火把光色。
-	float timeNoon; // 太阳高度因子。
-	float timeMidnight; // 月亮高度因子。
-	uniform sampler2D shadowtex0; // 阴影遮挡图，供阴影查询函数引用。
-	uniform sampler2D shadowtex1; // 阴影实心图。
-	uniform sampler2D shadowcolor0; // 阴影颜色图。
-	uniform sampler2D shadowcolor1; // 阴影法线天光图，原程序一并声明。
-	uniform sampler2D gaux1; // 第一张涟漪动画贴图，雨点涟漪函数引用它。
-	uniform sampler2D gaux2; // 第二张涟漪动画贴图。
-	uniform sampler2D gaux3; // 第三张涟漪动画贴图。
-	#include "/common/coordinates.glsl"
-	#include "/common/noise.glsl"
 	// 体积雾选项供丢弃判断，并带入水面、阴影、天空、云与光照依赖。
 	#include "/rendering/fog/fog.glsl"
 	// 焦散法线的算法在效果文件里，这里只调用并写七号。

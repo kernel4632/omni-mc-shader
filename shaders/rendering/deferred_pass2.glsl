@@ -50,33 +50,12 @@
 		// 末地把全局光时间滤波放到延迟二号（来自 `world1/deferred2.fsh`），主体与主世界的延迟一号一致，只是程序位置不同。
 		/* DRAWBUFFERS:2 */
 		layout(location = 0) out vec4 deferredOutput2; // 二号全局光历史。
-		#include "/common/uniforms.glsl"
-		#include "/common/math.glsl"
+		// 延迟程序的共用输入与光色量集中在共享文件里。
+		#include "/rendering/deferred_shared.glsl"
 		// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
 		#include "/bind/ground/material.glsl"
 		// 先定义 `OMNI_TAA`，坐标换算要用。
 		#include "/rendering/clarity/antialiasing.glsl"
-		ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
-		vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
-		vec3 worldShadowVector; // 阴影与天空文件引用它。
-		vec3 shadowVector; // 屏幕空间阴影引用它。
-		vec3 worldSunVector; // 天空与光照文件引用它。
-		vec3 worldMoonVector; // 天空与光照文件引用它。
-		vec3 colorShadowlight; // 日月直射光色之和。
-		vec3 colorSunlight; // 太阳直射光色。
-		vec3 colorMoonlight; // 月亮直射光色。
-		vec3 colorSkylight; // 日月环境光色之和。
-		vec3 colorSunSkylight; // 太阳一侧的环境光色。
-		vec3 colorMoonSkylight; // 月亮一侧的环境光色。
-		vec3 colorTorchlight; // 火把光色。
-		float timeNoon; // 太阳高度因子。
-		float timeMidnight; // 月亮高度因子。
-		uniform sampler2D shadowtex0; // 阴影遮挡图，全局光反弹与阴影函数引用它。
-		uniform sampler2D shadowtex1; // 阴影实心图。
-		uniform sampler2D shadowcolor0; // 阴影颜色图。
-		uniform sampler2D shadowcolor1; // 阴影法线天光图。
-		#include "/common/coordinates.glsl"
-		#include "/common/noise.glsl"
 		// 提供阳光泄漏修正选项，并带入环境光与阴影文件（末地版阴影相机由 `OMNI_END` 选择）。
 		#include "/rendering/lighting/sunlight.glsl"
 		void main(){
@@ -85,34 +64,12 @@
 	#else // 主世界：空间滤波与地平线遮蔽。
 	/* DRAWBUFFERS:1 */
 	layout(location = 0) out vec4 deferredOutput1; // 一号全局光与遮蔽。
-	#include "/common/uniforms.glsl"
-	#include "/common/math.glsl"
+	// 延迟程序的共用输入与光色量集中在共享文件里。
+	#include "/rendering/deferred_shared.glsl"
 	// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
 	#include "/bind/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算与遮蔽抖动要用。
 	#include "/rendering/clarity/antialiasing.glsl"
-	// 环境光效果文件引用阳光泄漏修正等选项，并带入天空、云与光照文件，所以这里先声明它们需要的量。
-	ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
-	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
-	vec3 worldShadowVector; // 阴影与天空文件引用它。
-	vec3 shadowVector; // 屏幕空间阴影引用它。
-	vec3 worldSunVector; // 天空与光照文件引用它。
-	vec3 worldMoonVector; // 天空与光照文件引用它。
-	vec3 colorShadowlight; // 日月直射光色之和。
-	vec3 colorSunlight; // 太阳直射光色。
-	vec3 colorMoonlight; // 月亮直射光色。
-	vec3 colorSkylight; // 日月环境光色之和。
-	vec3 colorSunSkylight; // 太阳一侧的环境光色。
-	vec3 colorMoonSkylight; // 月亮一侧的环境光色。
-	vec3 colorTorchlight; // 火把光色。
-	float timeNoon; // 太阳高度因子。
-	float timeMidnight; // 月亮高度因子。
-	uniform sampler2D shadowtex0; // 阴影遮挡图，供被引入的阴影函数引用。
-	uniform sampler2D shadowtex1; // 阴影实心图。
-	uniform sampler2D shadowcolor0; // 阴影颜色图。
-	uniform sampler2D shadowcolor1; // 阴影法线天光图。
-	#include "/common/coordinates.glsl"
-	#include "/common/noise.glsl"
 	// 提供阳光泄漏修正选项，并带入环境光与阴影文件。
 	#include "/rendering/lighting/sunlight.glsl"
 		// 全局光空间滤波的算法在 `effects/lighting/ambient.glsl`（上面经 `effects/lighting/sunlight.glsl` 引入），这里只取深度并写一号。

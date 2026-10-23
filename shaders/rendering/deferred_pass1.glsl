@@ -36,16 +36,8 @@
 // ================================ 顶点阶段 ================================
 #ifdef OMNI_VERTEX
 
-		// 焦散法线只需要一个被拉长的整屏四边形，缩放让波法线方块与分辨率无关。
-		// 主世界在延迟零号算焦散，末地把同一段放到延迟一号，所以两支共用这段顶点。
-		#include "/common/uniforms.glsl"
-		#include "/common/math.glsl"
-		void main(){
-			const float maxCausticsNormalHeight = CAUSTICS_TEX_RESOLUTION; // 方块边长上限，来自内部常数。
-			vec2 causticsTexCoord = gl_Vertex.xy; // 加载器顶点在零到一的方块上。
-			causticsTexCoord *= screenSize * (1.0 / min(screenSize.y, maxCausticsNormalHeight)); // 按屏幕高度与方块上限缩放。
-			gl_Position = vec4(causticsTexCoord * 2.0 - 1.0, 0.0, 1.0); // 铺满屏幕并超出边界，保证全屏被覆盖。
-		}
+		// 焦散法线只需要一个被拉长的整屏四边形，与延迟零号共用同一份顶点。
+		#include "/rendering/water/caustics_vertex.glsl"
 
 #endif
 
@@ -56,35 +48,12 @@
 		// 末地把焦散法线放到延迟一号（来自 `world1/deferred1.fsh`）：比主世界少一个丢弃判断，总是写七号画面。
 		/* DRAWBUFFERS:7 */
 		layout(location = 0) out vec4 deferredOutput7; // 七号焦散法线方块。
-		#include "/common/uniforms.glsl"
-		#include "/common/math.glsl"
+		// 延迟程序的共用输入与光色量集中在共享文件里。
+		#include "/rendering/deferred_shared.glsl"
 		// 提供材质编号，水面文件与坐标换算引用它。
 		#include "/bind/ground/material.glsl"
 		// 先定义 `OMNI_TAA`，坐标换算要用。
 		#include "/rendering/clarity/antialiasing.glsl"
-		ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
-		vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
-		vec3 worldShadowVector; // 水面与雾文件引用它。
-		vec3 shadowVector; // 屏幕空间阴影引用它。
-		vec3 worldSunVector; // 光照与天空文件引用它。
-		vec3 worldMoonVector; // 天空与光照文件引用它。
-		vec3 colorShadowlight; // 雾与光照文件引用它。
-		vec3 colorSunlight; // 光照与天空文件引用它。
-		vec3 colorMoonlight; // 天空与光照文件引用它。
-		vec3 colorSkylight; // 雾文件引用它。
-		vec3 colorSunSkylight; // 天空与光照文件引用它。
-		vec3 colorMoonSkylight; // 天空与光照文件引用它。
-		vec3 colorTorchlight; // 方块光文件引用它。
-		float timeNoon; // 光照与雾文件引用它。
-		float timeMidnight; // 光照与雾文件引用它。
-		uniform sampler2D gaux1; // 第一张涟漪动画贴图，雨点函数引用。
-		uniform sampler2D gaux2; // 第二张涟漪动画贴图。
-		uniform sampler2D gaux3; // 第三张涟漪动画贴图。
-		uniform sampler2D shadowtex0; // 阴影遮挡图，雾文件引用。
-		uniform sampler2D shadowtex1; // 阴影实心图，雾文件引用。
-		uniform sampler2D shadowcolor0; // 阴影颜色图，雾文件引用。
-		#include "/common/coordinates.glsl"
-		#include "/common/noise.glsl"
 		// 雾文件带入水面、阴影、天空、云与光照依赖，也提供 `GetWavesNormal`。
 		#include "/rendering/fog/fog.glsl"
 		// 焦散法线的算法在效果文件里，这里只调用并写七号。
@@ -95,34 +64,12 @@
 	#else // 主世界与下界：全局光时间滤波。
 	/* DRAWBUFFERS:2 */
 	layout(location = 0) out vec4 deferredOutput2; // 二号全局光历史。
-	#include "/common/uniforms.glsl"
-	#include "/common/math.glsl"
+	// 延迟程序的共用输入与光色量集中在共享文件里。
+	#include "/rendering/deferred_shared.glsl"
 	// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
 	#include "/bind/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算要用。
 	#include "/rendering/clarity/antialiasing.glsl"
-	// 环境光效果文件引用阳光泄漏修正等选项，并带入天空、云与光照文件，所以这里先声明它们需要的量。
-	ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
-	vec2 texCoord = gl_FragCoord.xy * pixelSize; // 零到一屏幕坐标。
-	vec3 worldShadowVector; // 阴影与天空文件引用它。
-	vec3 shadowVector; // 屏幕空间阴影引用它。
-	vec3 worldSunVector; // 天空与光照文件引用它。
-	vec3 worldMoonVector; // 天空与光照文件引用它。
-	vec3 colorShadowlight; // 日月直射光色之和。
-	vec3 colorSunlight; // 太阳直射光色。
-	vec3 colorMoonlight; // 月亮直射光色。
-	vec3 colorSkylight; // 日月环境光色之和。
-	vec3 colorSunSkylight; // 太阳一侧的环境光色。
-	vec3 colorMoonSkylight; // 月亮一侧的环境光色。
-	vec3 colorTorchlight; // 火把光色。
-	float timeNoon; // 太阳高度因子。
-	float timeMidnight; // 月亮高度因子。
-	uniform sampler2D shadowtex0; // 阴影遮挡图，全局光反弹与阴影函数引用它。
-	uniform sampler2D shadowtex1; // 阴影实心图。
-	uniform sampler2D shadowcolor0; // 阴影颜色图。
-	uniform sampler2D shadowcolor1; // 阴影法线天光图，全局光反弹引用它。
-	#include "/common/coordinates.glsl"
-	#include "/common/noise.glsl"
 	// 提供阳光泄漏修正选项，并带入环境光与阴影文件。
 	#include "/rendering/lighting/sunlight.glsl"
 	void main(){

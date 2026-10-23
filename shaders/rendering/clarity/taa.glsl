@@ -16,6 +16,15 @@ vec3 RGB_To_YCoCg(vec3 color) { return gfx_rgb_to_ycocg(color); }
 vec3 YCoCg_To_RGB(vec3 color) { return gfx_ycocg_to_rgb(color); }
 
 // --- 深度取样与相机速度：宿主矩阵、深度图和材质编号在这里换成屏幕位移 ---
+// 近景深度直接读零号深度图；有远景与没有远景都使用同一张，所以只写一次。
+float SampleDepthFetch(ivec2 coord){ return texelFetch(depthtex0, coord, 0).x; }
+// 近景三乘三邻域取最近深度，避免边缘把更远的深度带进来。
+float SampleCurrDepthFetchClosest3x3(ivec2 coord){
+	return min9(SampleDepthFetch(coord + ivec2(-1, -1)), SampleDepthFetch(coord + ivec2(0, -1)), SampleDepthFetch(coord + ivec2(1, -1)),
+		SampleDepthFetch(coord + ivec2(-1, 0)), SampleDepthFetch(coord), SampleDepthFetch(coord + ivec2(1, 0)),
+		SampleDepthFetch(coord + ivec2(-1, 1)), SampleDepthFetch(coord + ivec2(0, 1)), SampleDepthFetch(coord + ivec2(1, 1))); // 九点最小。
+}
+
 #ifdef DISTANT_HORIZONS // 有远景模组时区分远景。
 // 直接读该像素的远景深度。
 float SampleDepthDHFetch(ivec2 coord){ return texelFetch(dhDepthTex0, coord, 0).x; }
@@ -31,14 +40,6 @@ float SampleCurrDepthDHFetchClosest3x3(ivec2 coord){
 	float depth7 = SampleDepthDHFetch(coord + ivec2( 0,  1)); // 下方。
 	float depth8 = SampleDepthDHFetch(coord + ivec2( 1,  1)); // 右下。
 	return min9(depth0, depth1, depth2, depth3, depth4, depth5, depth6, depth7, depth8); // 取九个里的最近。
-}
-// 近景深度直接读一号深度图。
-float SampleDepthFetch(ivec2 coord){ return texelFetch(depthtex0, coord, 0).x; }
-// 近景三乘三邻域取最近深度。
-float SampleCurrDepthFetchClosest3x3(ivec2 coord){
-	return min9(SampleDepthFetch(coord + ivec2(-1, -1)), SampleDepthFetch(coord + ivec2(0, -1)), SampleDepthFetch(coord + ivec2(1, -1)),
-		SampleDepthFetch(coord + ivec2(-1, 0)), SampleDepthFetch(coord), SampleDepthFetch(coord + ivec2(1, 0)),
-		SampleDepthFetch(coord + ivec2(-1, 1)), SampleDepthFetch(coord + ivec2(0, 1)), SampleDepthFetch(coord + ivec2(1, 1))); // 九点最小。
 }
 vec3 TaaCameraVelocity(out float depth, float materialIDs){
 	if (materialIDs == MATID_STAINEDGLASS || materialIDs == MATID_ICE) depth = texelFetch(depthtex1, taaTexelCoord, 0).x; // 玻璃和冰用不含半透明的深度。
@@ -84,12 +85,6 @@ vec3 TaaCameraVelocity(out float depth, float materialIDs){
 	return velocity; // 返回屏幕位移。
 }
 #else // 没有远景模组时的简化版。
-float SampleDepthFetch(ivec2 coord){ return texelFetch(depthtex0, coord, 0).x; }
-float SampleCurrDepthFetchClosest3x3(ivec2 coord){
-	return min9(SampleDepthFetch(coord + ivec2(-1, -1)), SampleDepthFetch(coord + ivec2(0, -1)), SampleDepthFetch(coord + ivec2(1, -1)),
-		SampleDepthFetch(coord + ivec2(-1, 0)), SampleDepthFetch(coord), SampleDepthFetch(coord + ivec2(1, 0)),
-		SampleDepthFetch(coord + ivec2(-1, 1)), SampleDepthFetch(coord + ivec2(0, 1)), SampleDepthFetch(coord + ivec2(1, 1))); // 九点最小。
-}
 vec3 TaaCameraVelocity(out float depth, float materialIDs){
 	if (materialIDs == MATID_STAINEDGLASS || materialIDs == MATID_ICE) depth = texelFetch(depthtex1, taaTexelCoord, 0).x; // 玻璃和冰用不含半透明的深度。
 	else{ // 其他表面按选项取最近邻或单点深度。

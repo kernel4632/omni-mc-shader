@@ -1,4 +1,17 @@
 # 更新记录
+## 0.1.85
+
+结构重构：合并重复阶段声明与后期变体，四层行数首次实际下降。
+
+- 新增 `rendering/deferred_shared.glsl`，把延迟零号到二号重复的像素坐标、光色输入与阴影纹理声明集中一份；三个程序只保留各自的效果文件引用。
+- 新增 `rendering/water/caustics_vertex.glsl`，延迟零号与一号的焦散顶点共用同一份屏幕比例换算。
+- 合成三号与四号合并为 `rendering/composite_filter_pass.glsl`；景深、两级降采样、横纵模糊与合并泛光六支程序合并为 `rendering/post_effect_pass.glsl`，每支仍由自己的程序宏选择分支。
+- `rendering/clarity/taa.glsl` 的近景深度取样与三乘三最近深度只保留一份，远景分支不再重复定义。
+- 更新 `tests/test_effects.py` 的景深源码路径；新增 `docs/structure-audit.md`，逐个标注 136 个渲染文件的角色与下一步。
+- 四层非注释行：`bind/` 460、`rendering/` 8577、`gfx/` 4039、`effects/` 628，合计 13704 行，比 0.1.84 的 13838 行减少 134 行。
+
+验证：`audit`、`verify`（130 个测试、519 个选项、269 个入口）与全量 `compile`（280 组唯一程序）通过；本轮未启动 Minecraft，游戏内画面尚未复查。
+
 ## 0.1.84
 
 结构修复：绑定层不再反向依赖渲染层。

@@ -170,6 +170,7 @@ shaders/
 - 当前判断：`bind/` 已经从“效果实现存放处”收敛为输入适配层；`rendering/` 承担了阶段片段，体积偏大但每个文件都能说明它在哪个阶段被调用。下一步按域把阶段片段里的纯公式抽到 `gfx/`，并从 `rendering/` 的扁平程序主体里删掉重复声明。
 - 已完成（0.1.83）：`gfx/upscale.glsl` 建立；边缘方向重采样、十字对比度锐化与放大后锐化从 `rendering/clarity/upscale.glsl` 迁入，采样器、画面尺寸、锐化量与降噪开关全部改为参数；阶段文件保留 `FsrEasu`、`FidelityFX_CAS`、`FidelityFX_FSR1` 三个名字，只选画面与选项。
 - 已完成（0.1.84）：`bind/` 去掉对 `rendering/` 的反向引用。视差与材质水洼锐度所需的选项改为在绑定文件里直接读效果层定义；`rendering/terrain.glsl` 与 `rendering/entities.glsl` 在真正调用 `ParallaxOcclusionMapping` 的地方显式引入视差片段。绑定层现在只引用 `common/`、`gfx/` 与 `effects/`。
-- 当前固定口径（0.1.84）：`bind/` 460 行（7 个文件）、`rendering/` 8711 行（140 个文件）、`gfx/` 4039 行（22 个文件）、`effects/` 628 行（46 个文件），四层合计 13838 行；生成入口 `world0/` 608、`world1/` 530、`world-1/` 482。复现命令：
+- 已完成（0.1.85）：新增 `rendering/deferred_shared.glsl` 合并延迟零号到二号的重复片元声明，新增 `rendering/water/caustics_vertex.glsl` 合并焦散顶点；合成三号与四号合并为 `rendering/composite_filter_pass.glsl`，景深与泛光六支程序合并为 `rendering/post_effect_pass.glsl`；`rendering/clarity/taa.glsl` 删除重复的近景深度取样。新增 `docs/structure-audit.md` 逐个标注 136 个渲染文件的角色。`rendering/` 从 8711 行降到 8577 行，四层合计从 13838 行降到 13704 行。
+- 当前固定口径（0.1.85）：`bind/` 460 行（7 个文件）、`rendering/` 8577 行（136 个文件）、`gfx/` 4039 行（22 个文件）、`effects/` 628 行（46 个文件），四层合计 13704 行；生成入口 `world0/` 608、`world1/` 530、`world-1/` 482。复现命令：
   `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','gfx','effects','world0','world1','world-1')})"`
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。另用 8 个代表入口比较重构前后的展开代码，去注释、引用与声明后语句集合完全一致。

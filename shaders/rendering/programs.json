@@ -174,11 +174,11 @@
       "OMNI_COMPOSITE2_PASS"
     ],
     "composite3": [
-      "composite_pass3",
+      "composite_filter_pass",
       "OMNI_COMPOSITE3_PASS"
     ],
     "composite4": [
-      "composite_pass4",
+      "composite_filter_pass",
       "OMNI_COMPOSITE4_PASS"
     ],
     "composite5": [
@@ -186,7 +186,7 @@
       "OMNI_COMPOSITE5_PASS"
     ],
     "composite6": [
-      "post_pass6",
+      "post_effect_pass",
       "OMNI_COMPOSITE6_PASS"
     ],
     "composite7": [
@@ -198,23 +198,23 @@
       "OMNI_COMPOSITE8_PASS"
     ],
     "composite9": [
-      "post_pass9",
+      "post_effect_pass",
       "OMNI_COMPOSITE9_PASS"
     ],
     "composite10": [
-      "post_pass10",
+      "post_effect_pass",
       "OMNI_COMPOSITE10_PASS"
     ],
     "composite11": [
-      "post_pass11",
+      "post_effect_pass",
       "OMNI_COMPOSITE11_PASS"
     ],
     "composite12": [
-      "post_pass12",
+      "post_effect_pass",
       "OMNI_COMPOSITE12_PASS"
     ],
     "composite13": [
-      "post_pass13",
+      "post_effect_pass",
       "OMNI_COMPOSITE13_PASS"
     ],
     "composite14": [

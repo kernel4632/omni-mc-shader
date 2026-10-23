@@ -593,7 +593,7 @@ class EffectTests(unittest.TestCase):
         dof = support.code("effects/lens/dof.glsl")  # 景深主体（按算法从入口拆出）。
         self.assertIn("DepthOfField", dof)  # 景深独立成函数。
         self.assertIn("OMNI_DOF_QUALITY", dof)  # 质量参与采样数。
-        self.assertRegex(support.text("rendering/post_pass6.glsl"), r"#\s*(ifdef|if)\s+OMNI_DOF\b")  # 后期阶段按选项执行景深。
+        self.assertRegex(support.text("rendering/post_effect_pass.glsl"), r"#\s*(ifdef|if)\s+OMNI_DOF\b")  # 后期阶段按选项执行景深。
 
     def test_motion_blur_and_vignette(self):
         """运动模糊与暗角都可开关，快门角与暗角参数可调。"""
