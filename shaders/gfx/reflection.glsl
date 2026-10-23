@@ -173,6 +173,32 @@ struct gfx_reflection_media {
 	bool fog_volume_enabled;      // 补地表散射与体积雾（主世界）。
 };
 
+// 反射合成参数的中性默认值：先关掉所有可选路径，再由各维度打开自己需要的项。
+// 为什么把默认值放通用库：三个维度只是开关不同，默认结构只维护一份，避免抄错某个字段。
+gfx_reflection_media gfx_reflection_media_default(vec3 current_color, vec3 highlight_color, float skylight,
+		float highlight_strength, bool total_reflection, bool underwater, float output_factor){
+	gfx_reflection_media media; // 待填的合成参数。
+	media.current_color = current_color; // 全反射时直接用当前场景色。
+	media.highlight_color = highlight_color; // 直射高光颜色。
+	media.skylight = skylight; // 天光等级。
+	media.highlight_strength = highlight_strength; // 高光提示强度。
+	media.output_factor = output_factor; // 管线单位换算由调用方给出。
+	media.open_length = 1e10; // 没命中时射线默认极远。
+	media.far_distance = 1e10; // 雾最远距离默认不裁。
+	media.cap_distance = 1e10; // 雾绝对上限默认不裁。
+	media.total_reflection = total_reflection; // 全反射标记。
+	media.underwater = underwater; // 相机是否在水里。
+	media.sky_enabled = false; // 默认没有天空兜底。
+	media.sky_uses_skylight = false; // 默认不按天光衰减。
+	media.sky_uses_facing = false; // 默认不按朝向衰减。
+	media.voxel_enabled = false; // 默认不追体素。
+	media.hit_dist_uses_total = false; // 命中距离默认从表面量起。
+	media.fog_color_enabled = false; // 默认没有解析雾。
+	media.fog_color_needs_length = false; // 解析雾默认总是叠加。
+	media.fog_volume_enabled = false; // 默认没有体积雾与地表散射。
+	return media; // 交回中性参数。
+}
+
 // 以下六个宏是调用方注入的钩子，默认全部是中性操作；作用与 `gfx/fog_volume.glsl` 的雾照明钩子相同。
 // 为什么用宏：通用库不能引用效果函数与宿主 uniform，调用方在引入本文件前把宿主细节写进钩子。
 // 天空兜底：把反射方向换成天空颜色；默认没有天空。

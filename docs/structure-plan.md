@@ -161,7 +161,8 @@ shaders/
 - 后续可选：`rendering/deferred_pass0.glsl`、`deferred_pass1.glsl`、`deferred_pass2.glsl` 仍有相似的全局声明块，但每支程序的声明子集与顺序不同，抽模板前要先核对每个阶段的采样器类型，暂不动。
 - 后续可选：把 `bind/` 覆盖到其余仍直接读宿主量的效果；已接入的模块已经能独立验证绑定接口，剩余迁移不改变画面，按实际修改需要再做。
 - 已完成：`effects/` 全部宿主接线迁出。51 个不带选项的效果文件整体迁到 `bind/` 同名分类目录；46 个带选项的文件拆成“选项层 + 绑定层”，选项层只保留 `@effect`、`@option` 与原生声明，绑定层保留原函数、画面读写和维度分支。`effects/` 非注释代码从 6572 行降到 628 行，519 个选项的名称、默认值、取值与菜单分组未变。
-- 后续可选：把 `bind/` 里仍可独立的纯计算继续抽到 `gfx/`；优先对象是末地行星表面、海洋物理波高、体积雾单次散射与屏幕空间反射介质。抽离时只改函数名与参数，保持公式不变。
-- 当前固定口径（0.1.78）：`bind/` 6481 行、`gfx/` 3542 行、`effects/` 628 行、`rendering/` 3142 行；生成入口 `world0/` 608、`world1/` 530、`world-1/` 482。复现命令：
+- 已完成：新增 `gfx/planet.glsl`，末地行星本体、光环与大气从绑定层迁入通用库，行星半径、时间、阴影强度与噪声贴图改为参数；`bind/world/end_sky.glsl` 只保留同名转发。`gfx/reflection.glsl` 增加中性反射合成参数，三个维度的默认结构只维护一份。
+- 后续可选：把 `bind/` 里仍可独立的纯计算继续抽到 `gfx/`；优先对象是海洋物理波高、体积雾单次散射与抗锯齿采样核。抽离时只改函数名与参数，保持公式不变。
+- 当前固定口径（0.1.79）：`bind/` 6373 行、`gfx/` 3655 行、`effects/` 628 行、`rendering/` 3142 行；生成入口 `world0/` 608、`world1/` 530、`world-1/` 482。复现命令：
   `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','gfx','effects','world0','world1','world-1')})"`
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。另用 8 个代表入口比较重构前后的展开代码，去注释、引用与声明后语句集合完全一致。

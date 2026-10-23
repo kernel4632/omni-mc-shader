@@ -170,28 +170,9 @@ gfx_reflection_surface OmniReflectionSurface(vec3 viewPos, vec3 worldPos, vec3 v
 	return surface;
 }
 
-// 反射合成参数：先填中性默认值，再由各维度覆盖自己的天空、雾与体素差异。
+// 反射合成参数：通用库给出中性默认值，本函数只把管线换算接过去。
 gfx_reflection_media OmniReflectionMedia(vec3 currentColor, vec3 highlightColor, float skylight, float highlightStrength, bool totalReflection, bool underwater){
-	gfx_reflection_media media; // 待填的合成参数。
-	media.current_color = currentColor; // 全反射时直接用当前场景色。
-	media.highlight_color = highlightColor; // 直射高光颜色。
-	media.skylight = skylight; // 天光等级。
-	media.highlight_strength = highlightStrength; // 高光提示强度。
-	media.output_factor = MAIN_OUTPUT_FACTOR; // 管线单位换算。
-	media.open_length = 1e10; // 没命中时射线默认极远。
-	media.far_distance = 1e10; // 雾最远距离默认不裁。
-	media.cap_distance = 1e10; // 雾绝对上限默认不裁。
-	media.total_reflection = totalReflection; // 全反射标记。
-	media.underwater = underwater; // 相机是否在水里。
-	media.sky_enabled = false; // 默认没有天空兜底。
-	media.sky_uses_skylight = false; // 默认不按天光衰减。
-	media.sky_uses_facing = false; // 默认不按朝向衰减。
-	media.voxel_enabled = false; // 默认不追体素。
-	media.hit_dist_uses_total = false; // 命中距离默认从表面量起。
-	media.fog_color_enabled = false; // 默认没有解析雾。
-	media.fog_color_needs_length = false; // 解析雾默认总是叠加。
-	media.fog_volume_enabled = false; // 默认没有体积雾与地表散射。
-	return media;
+	return gfx_reflection_media_default(currentColor, highlightColor, skylight, highlightStrength, totalReflection, underwater, MAIN_OUTPUT_FACTOR); // 默认结构在通用库。
 }
 
 // --- 三个维度的反射入口：只填结构并调用一次通用流程，算法都在 `gfx/reflection.glsl` ---
