@@ -42,7 +42,7 @@ uv pip sync requirements-dev.lock
 
 | 要做什么 | 打开哪里 |
 | --- | --- |
-| 改阴影、水面、云等效果 | `shaders/effects/` 中同名文件 |
+| 改阴影、水面、云等效果 | 选项在 `shaders/effects/`，宿主接线在 `shaders/bind/` 的同名文件 |
 | 改绘制顺序或程序入口 | `shaders/rendering/` 中对应流程与 `programs.json` |
 | 改中间画面约定 | `shaders/rendering/buffers.glsl` |
 | 改加载器设置 | `shaders/rendering/pipeline.properties` |
