@@ -1,7 +1,10 @@
 #version 330 core
-// 地形片元阶段：太阳直射、天空环境光、软高度图阴影、云影、空气透视与低空雾。
-// 调用位置：测试世界的地形绘制；不依赖 Minecraft 的任何输入。
-// 设计原因与取舍：阴影直接在高度图上步进，用遮挡深度估计半影，省掉阴影贴图也能看到柔和边缘。
+// 地形片元阶段：方向光阴影贴图、云影、天空环境光、空气透视与低空雾。
+// 调用位置：测试世界的地形绘制，顶点数据由 Python 侧按高度图生成。
+// 设计原因与取舍：阴影改成一张覆盖全岛的方向光阴影贴图。原来沿高度图步进二十四次，
+// 每像素要做二十四次纹理取样，而且只能得到整体遮挡，方块之间没有互相投影；
+// 现在每像素只比较三乘三邻域，快得多，也能看到墙根的暗部和山脊投到地面上的影子。
+// 环境光直接取天空立方体贴图的高层多级纹理，省掉每像素重新积分大气。
 #include "world_shared.glsl"
 
 in vec3 vWorldPosition; // 世界坐标。
@@ -11,45 +14,46 @@ in float vOcclusion; // 预计算的环境光遮蔽。
 
 uniform vec3 uCameraPos; // 相机位置。
 uniform vec3 uSunDirection; // 太阳方向。
-uniform sampler2D uHeight; // 高度图，横向与纵向都按地形尺寸归一化。
-uniform float uTerrainSize; // 地形边长，用来把世界坐标换成高度图坐标。
+uniform mat4 uShadowMatrix; // 方向光视图投影矩阵，把世界坐标换到阴影贴图坐标。
+uniform sampler2D uShadowMap; // 方向光深度图。
+uniform float uShadowTexel; // 阴影贴图一个纹素的跨度，用于邻域采样。
+uniform samplerCube uSkyCube; // 天空立方体贴图，用来取环境光。
 uniform float uTime; // 场景时间，推动云与雾。
-uniform float uFrame; // 帧号，给抖动换相位。
+uniform float uFrame; // 帧号，给雾抖动换相位。
 uniform float uCloudCover; // 云量。
+uniform float uSunStrength; // 太阳直射倍率。
+uniform float uSkyStrength; // 天空环境光倍率。
 
 out vec4 fragColor; // 线性高动态范围颜色。
 
-// 高度图软阴影：朝太阳步进，遇到更高的地形就按高出量估计半影。
-float terrainShadow(vec3 position, float jitter)
+// 方向光阴影：把世界点换到阴影贴图坐标，用三乘三邻域比较得到柔和边缘。
+float shadowMapVisibility(vec3 worldPosition, vec3 normal)
 {
     vec3 sunDirection = normalize(uSunDirection); // 太阳方向。
-    float result = 1.0; // 剩余可见度。
-    float distanceAlong = 0.8 + jitter * 0.6; // 起点略抬高，避免自遮挡；抖动打散台阶。
-    for (int i = 0; i < 24; i++) // 固定步数，保证不同显卡的耗时接近。
+    // 沿法线抬起一点再投影，平面上的掠射光不会和自己比较出条纹。
+    vec4 lightPosition = uShadowMatrix * vec4(worldPosition + normal * 0.35, 1.0);
+    vec3 coordinate = lightPosition.xyz / lightPosition.w * 0.5 + 0.5; // 换到零到一的贴图坐标。
+    if (coordinate.z < 0.0 || coordinate.z > 1.0) // 超出深度范围说明点在阴影范围外。
     {
-        vec3 samplePosition = position + sunDirection * distanceAlong; // 沿太阳方向前进。
-        vec2 uv = samplePosition.xz / uTerrainSize; // 换成高度图坐标。
-        if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) // 出了地形范围就没有遮挡。
-        {
-            break; // 提前结束。
-        }
-        float height = texture(uHeight, uv).r; // 该位置的地形高度。
-        float above = height - samplePosition.y; // 地形高于光线的量。
-        if (above > 0.0) // 光线穿进地形。
-        {
-            float softness = max(0.25, distanceAlong * 0.08); // 越远的遮挡物半影越宽。
-            result = min(result, 1.0 - smoothstep(0.0, softness, above)); // 刚接触时半透明，深入后全黑。
-        }
-        distanceAlong += 1.5 + distanceAlong * 0.08; // 逐步拉大步长，覆盖更远。
+        return 1.0; // 范围外一律算受光。
     }
-    return result; // 零为全遮挡，一为全亮。
-}
-
-// 天空环境光：取天顶方向的单次散射，给背光面一个偏蓝的底色。
-vec3 skyAmbient(OgxAtmosphere air, float altitude, vec3 sunDirection)
-{
-    vec3 zenith = normalize(vec3(0.0, 1.0, 0.0) + sunDirection * 0.25); // 稍微朝太阳偏，环境光更暖。
-    return ogxAtmosphereSky(air, altitude, zenith, sunDirection, 4); // 四段足够做环境底色。
+    if (coordinate.x < 0.0 || coordinate.x > 1.0 || coordinate.y < 0.0 || coordinate.y > 1.0) // 超出横向范围。
+    {
+        return 1.0; // 岛外没有投影物。
+    }
+    // 掠射时深度变化最快，偏置要更大，否则同一块顶面会把自己投成条纹。
+    float bias = 0.0016 + 0.0030 * (1.0 - max(dot(normal, sunDirection), 0.0));
+    float visibility = 0.0; // 九次比较里有多少次是受光的。
+    for (int y = -1; y <= 1; y++) // 三乘三邻域，等效于小半径百分比过滤。
+    {
+        for (int x = -1; x <= 1; x++)
+        {
+            vec2 offset = vec2(float(x), float(y)) * uShadowTexel; // 邻域偏移。
+            float depth = texture(uShadowMap, coordinate.xy + offset).r; // 该纹素记录的最近深度。
+            visibility += (coordinate.z - bias <= depth) ? 1.0 : 0.0; // 比较得到受光或遮挡。
+        }
+    }
+    return visibility / 9.0; // 平均成零到一的可见度。
 }
 
 void main()
@@ -57,27 +61,29 @@ void main()
     vec3 normal = normalize(vNormal); // 方块面法线。
     vec3 sunDirection = normalize(uSunDirection); // 太阳方向。
     vec3 sunColor = worldSunColor(); // 太阳色度。
-    float altitude = max(uCameraPos.y, 0.0) * 0.001; // 相机高度，公里。
-    OgxAtmosphere air = ogxAtmosphereEarth(); // 大气常数。
-    float jitter = ogxBayer8(gl_FragCoord.xy); // 稳定的八乘八抖动，避免静态噪点。
-    float shadow = terrainShadow(vWorldPosition, 0.5); // 高度图软阴影，固定起点避免逐像素噪点。
+    float shadow = shadowMapVisibility(vWorldPosition, normal); // 方向光阴影。
     OgxCloudLayer layer = worldCloudLayer(uTime, uCloudCover); // 本帧云层。
-    float cloudShadow = ogxCloudShadow(layer, vWorldPosition * 0.001, sunDirection); // 云影。
+    float cloudShadow = ogxCloudShadow(layer, vWorldPosition * 0.001, sunDirection); // 云影，保留整体的明暗块。
     float diffuse = max(dot(normal, sunDirection), 0.0); // 直射余弦。
-    vec3 sun = sunColor * (6.0 * diffuse * shadow * cloudShadow); // 太阳直射。
-    vec3 sky = skyAmbient(air, altitude, sunDirection) * (0.55 + 0.45 * normal.y) * 2.2; // 天空环境光。
-    sky += vec3(0.080, 0.095, 0.120); // 多次散射的底光，避免背光墙全黑。
-    vec3 ground = vec3(0.16, 0.14, 0.12) * max(-normal.y, 0.0) * 0.9; // 地面反弹光。
+    vec3 sun = sunColor * (uSunStrength * diffuse * shadow * cloudShadow); // 太阳直射。
+    // 天空环境光：天顶偏蓝、地平线偏白，墙面的法线接近水平，颜色因此接近地平线。
+    vec3 zenith = textureLod(uSkyCube, vec3(0.0, 1.0, 0.0), 4.0).rgb; // 天顶颜色。
+    vec3 horizon = textureLod(uSkyCube, normalize(vec3(sunDirection.x, 0.12, sunDirection.z)), 4.0).rgb; // 向阳侧的地平线颜色。
+    vec3 ambient = mix(horizon, zenith, normal.y * 0.5 + 0.5) * uSkyStrength; // 按朝向混合的环境光。
+    vec3 ground = vec3(0.20, 0.17, 0.13) * max(-normal.y, 0.0) * 0.6; // 地面反弹光，只影响朝下的面。
     float fill = max(dot(normal, normalize(vec3(-sunDirection.x, 0.35, -sunDirection.z))), 0.0); // 背光面的补光方向。
-    vec3 fillLight = sunColor * fill * 0.90; // 模拟天空与海面的反弹，避免侧墙死黑。
-    float grain = 0.86 + 0.28 * ogxValueNoise2(vWorldPosition.xz * 1.1 + vec2(vWorldPosition.y * 0.3)); // 细颗粒打散整片纯色。
-    vec3 color = vColor * grain * (sun + sky + ground + fillLight) * vOcclusion; // 合成光照。
+    vec3 fillLight = sunColor * (fill * uSunStrength * 0.28); // 天空与海面的反弹，避免侧墙死黑。
+    float grain = 0.90 + 0.20 * ogxValueNoise2(vWorldPosition.xz * 1.1 + vec2(vWorldPosition.y * 0.3)); // 细颗粒打散整片纯色。
+    vec3 color = vColor * grain * (sun + ambient + ground + fillLight) * vOcclusion; // 合成光照。
     float distanceToCamera = length(vWorldPosition - uCameraPos); // 到相机的距离，米。
     vec3 viewDirection = normalize(vWorldPosition - uCameraPos); // 从相机指向地形。
+    OgxAtmosphere air = worldAtmosphere(); // 本场景的大气常数。
+    float altitude = max(uCameraPos.y, 0.0) * 0.001; // 相机高度，公里。
     vec3 transmittance; // 空气透视的剩余透过率。
-    vec3 haze = ogxAerialPerspective(air, altitude, viewDirection, distanceToCamera * 0.001, sunDirection, 5, transmittance); // 远景空气散射。
+    vec3 haze = ogxAerialPerspective(air, altitude, viewDirection, distanceToCamera * 0.001, sunDirection, 3, transmittance); // 远景空气散射。
     color = color * transmittance + haze; // 先做空气透视。
-    vec4 fog = ogxFogMarch(worldFog(uTime), uCameraPos * 0.001, vWorldPosition * 0.001, sunDirection, sunColor * 2.0, jitter, 6); // 低空体积雾。
+    float jitter = ogxBayer8(gl_FragCoord.xy + vec2(uFrame * 0.37, uFrame * 0.71)); // 稳定的雾抖动，避免静态噪点。
+    vec4 fog = ogxFogMarch(worldFog(uTime), uCameraPos * 0.001, vWorldPosition * 0.001, sunDirection, sunColor * 2.0, jitter, 3); // 低空体积雾。
     color = ogxFogApply(color, fog); // 再叠贴地雾。
     fragColor = vec4(color, 1.0); // 写入场景颜色。
 }

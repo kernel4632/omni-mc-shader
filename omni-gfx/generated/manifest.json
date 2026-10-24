@@ -50,20 +50,20 @@
     {
       "module": "cloud",
       "source": "omni-gfx/src/cloud.slang",
-      "sourceSha256": "7f620ae219d80fe32da29417de0cc2756a83ffe0f4e82ab3fdb42b2e9ce34d4f",
+      "sourceSha256": "27a353544ab87fb7904c731d63153fd6a39c51b806af9e592ac5f32eec613ff2",
       "shader": "shaders/omni-gfx/cloud.glsl",
       "generated": "omni-gfx/generated/glsl/cloud.glsl",
-      "glslSha256": "5b7de0c59c834163728665e6fe3584058f499359a9ed16aeaed24a92150b45f6",
-      "glslLines": 185
+      "glslSha256": "2e4fd6127d491952ba9954c2e98a7a93fda2baefa7638366021fe075cefae910",
+      "glslLines": 195
     },
     {
       "module": "water",
       "source": "omni-gfx/src/water.slang",
-      "sourceSha256": "a98a7b39610f317fcc3d2ee7edd926283ec47ce36b8b9aa91c49437d6a67e949",
+      "sourceSha256": "9a29cbbe0abc68c79b7245cf07b6ccedeaf5d6c8eb89c92d143dd9f56b1e656a",
       "shader": "shaders/omni-gfx/water.glsl",
       "generated": "omni-gfx/generated/glsl/water.glsl",
-      "glslSha256": "7a725aff00fe4bd0e18c1f988d5a24df705cc446a605c637c494d0cc00ffb298",
-      "glslLines": 115
+      "glslSha256": "eda696ff6c082d1dcf0737287800545c9d21824e38405385942c36c192cc83e0",
+      "glslLines": 117
     },
     {
       "module": "fog",

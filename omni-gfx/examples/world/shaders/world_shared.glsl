@@ -1,11 +1,14 @@
-#ifndef WORLD_SHARED_INCLUDED // 只引入一次，避免三个阶段重复定义同一批函数。
+#ifndef WORLD_SHARED_INCLUDED // 只引入一次，避免多个阶段重复定义同一批函数。
 #define WORLD_SHARED_INCLUDED // 置上标记，后续再次引用直接跳过。
 // 测试世界共用：把生成的通用库一次引入，并给出场景统一的太阳、云与雾参数。
-// 调用位置：天空、地形与水面三个着色器都在文件开头引入本文件。
-// 设计原因与取舍：参数只写一份，三个阶段的太阳颜色与云层位置不会互相错开。
-// 数学：黑体、亮度与抖动。
+// 调用位置：天空、累积、合成、地形与水面五个阶段都在文件开头引入本文件。
+// 设计原因与取舍：太阳颜色、云层与雾只写一份，各阶段的色温与云位置不会互相错开；
+// 像素到世界方向的换算也只写一份，升采样与时间累积才能逐像素对齐，不会出现接缝。
+// 数学：黑体、亮度、抖动与矩阵。
 #include "/omni-gfx/math.glsl"
-// 噪声：地形颗粒与水波细节。
+// 采样：蓝噪声与按帧平移的抖动。
+#include "/omni-gfx/sampling.glsl"
+// 噪声：云、雾与水面细节。
 #include "/omni-gfx/noise.glsl"
 // 大气：天空与空气透视。
 #include "/omni-gfx/atmosphere.glsl"
@@ -38,6 +41,36 @@ OgxFog worldFog(float time) // 返回本帧的雾参数。
     OgxFog fog = ogxFogDefault(); // 先取默认密度与高度。
     fog.wind = vec3(time * 0.0040, 0.0, time * 0.0015); // 每秒约四米的水平风。
     return fog; // 返回本帧使用的雾。
+}
+
+// 场景大气：地球常数，只把整体太阳强度降到与测试世界曝光相配的量级。
+// 天空、空气透视与水面雾必须用同一组常数，否则远处海面会比天空亮一截，接缝立刻可见。
+OgxAtmosphere worldAtmosphere() // 返回本场景使用的大气参数。
+{
+    OgxAtmosphere air = ogxAtmosphereEarth(); // 先取库里的地球常数。
+    air.sunIntensity = 8.0; // 比库默认值低，留出高光余量，画面不容易整片过曝。
+    air.mieScattering = vec3(0.55e-3, 0.55e-3, 0.55e-3); // 气溶胶再淡一些，地平线保持淡蓝而不是发白。
+    air.mieG = 0.55; // 前向散射略收，太阳附近的白晕不会糊成一片。
+    return air; // 返回可直接使用的参数。
+}
+
+// 像素坐标到世界方向：主画面、时间累积与双边升采样共用，三者才能逐像素对齐。
+// `pixel` 用片元坐标而不是归一化坐标，是因为半分辨率阶段也要用同一套公式。
+vec3 worldRayDirection(vec2 pixel, vec2 resolution, vec3 forward, vec3 right, vec3 up, float tanHalfFov, float aspect)
+{
+    vec2 ndc = pixel / resolution * 2.0 - 1.0; // 零到一映射到负一到一。
+    return normalize(forward + right * ndc.x * tanHalfFov * aspect + up * ndc.y * tanHalfFov); // 针孔相机光线。
+}
+
+// 立方体贴图六个面的方向：`uv` 是负一到一的局部坐标。
+vec3 worldCubeDirection(int face, vec2 uv)
+{
+    if (face == 0) return vec3(1.0, -uv.y, -uv.x); // 正 X 面。
+    if (face == 1) return vec3(-1.0, -uv.y, uv.x); // 负 X 面。
+    if (face == 2) return vec3(uv.x, 1.0, uv.y); // 正 Y 面。
+    if (face == 3) return vec3(uv.x, -1.0, -uv.y); // 负 Y 面。
+    if (face == 4) return vec3(uv.x, -uv.y, 1.0); // 正 Z 面。
+    return vec3(-uv.x, -uv.y, -1.0); // 负 Z 面。
 }
 
 #endif // 共用参数结束。

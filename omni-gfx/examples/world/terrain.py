@@ -1,13 +1,15 @@
-"""程序化体素地形：高度图、方块网格与高度纹理数据。
+"""程序化体素地形：高度图、方块网格与水面圆盘。
 
 调用位置：`omni-gfx/examples/world/render.py` 在启动时生成一次，之后每帧只绘制。
 设计原因与取舍：
     不读取任何外部资源，地形完全由固定种子生成，截图可以重复。
     网格只生成看得见的面：每个方块柱的顶面，以及比邻居高出来的侧墙。
     颜色与遮蔽在 CPU 侧算好，片元阶段只做光照，减少测试世界的着色器分支。
+    水面用等比放大的圆盘，近处细、远处覆盖到肉眼地平线之外，天与海不会留下空带。
 """
 from __future__ import annotations
 
+import math  # 圆盘环带的三角函数。
 from array import array  # 顶点数据用紧凑浮点数组，上传显卡更快。
 
 SEA_LEVEL = 6.0  # 海平面高度，水面平面也放在这里。
@@ -78,12 +80,32 @@ def heightmap(size: int, seed: int = 7) -> list[float]:
     return heights  # 长度为尺寸的平方。
 
 
-def height_texture(heights: list[float]) -> bytes:
-    """把高度图打包成显卡可直接读取的 R32F 字节。
+def water_disc(radius: float, rings: int, segments: int) -> tuple[array, int]:
+    """生成一直铺到远处的水面圆盘，返回顶点数组与三角形数量。
 
-    单通道浮点纹理在片元里用 `texture` 取高度，阴影步进不需要再做解码。
+    为什么用圆盘而不是方格：方格平面要么近处太粗，要么顶点数暴涨；
+    圆盘的环半径按等比增长，近处几米一格、远处几百米一格，肉眼地平线之外的
+    海面只占几个像素，却必须存在，否则天与海之间会露出一条空带。
+    每顶点只有横向与纵向两个坐标，高度由顶点着色器按海平面填。
     """
-    return array("f", heights).tobytes()  # 小端浮点，与 OpenGL 默认一致。
+    vertices = array("f")  # 每顶点两个浮点。
+    inner = 2.0  # 最内圈半径，米。
+    ratio = (radius / inner) ** (1.0 / rings)  # 每圈放大的倍数。
+    for ring in range(rings):  # 逐圈生成环带。
+        near_radius = inner * (ratio ** ring)  # 内圈半径。
+        far_radius = near_radius * ratio  # 外圈半径。
+        for segment in range(segments):  # 环向分段。
+            angle0 = 2.0 * math.pi * segment / segments  # 当前角度。
+            angle1 = 2.0 * math.pi * (segment + 1) / segments  # 下一个角度。
+            corners = (
+                (math.cos(angle0) * near_radius, math.sin(angle0) * near_radius),  # 内圈起点。
+                (math.cos(angle1) * near_radius, math.sin(angle1) * near_radius),  # 内圈终点。
+                (math.cos(angle1) * far_radius, math.sin(angle1) * far_radius),  # 外圈终点。
+                (math.cos(angle0) * far_radius, math.sin(angle0) * far_radius),  # 外圈起点。
+            )
+            for index in (0, 1, 2, 0, 2, 3):  # 两个三角形共六个顶点。
+                vertices.extend(corners[index])  # 写入横向与纵向坐标。
+    return vertices, rings * segments * 2  # 三角形数量。
 
 
 def _top_color(height: float, variation: float, slope: float) -> tuple[float, float, float]:
@@ -160,18 +182,4 @@ def build_mesh(heights: list[float], size: int) -> tuple[array, int]:
     return vertices, triangles  # 顶点与三角形统计。
 
 
-def water_plane(half_extent: float, divisions: int) -> tuple[array, int]:
-    """生成海面平面的顶点数组，返回顶点与三角形数量。
-
-    平面在横向与纵向都覆盖到远处，分格只影响顶点数量，波形在片元里计算。
-    """
-    vertices = array("f")  # 每顶点两个浮点。
-    step = (half_extent * 2.0) / divisions  # 每格边长。
-    for z in range(divisions):  # 逐格生成两个三角形。
-        for x in range(divisions):  # 当前格子。
-            x0 = -half_extent + x * step  # 左下角。
-            z0 = -half_extent + z * step
-            x1 = x0 + step  # 右上角。
-            z1 = z0 + step
-            vertices.extend((x0, z0, x0, z1, x1, z1, x0, z0, x1, z1, x1, z0))  # 两个三角形。
-    return vertices, divisions * divisions * 2  # 三角形数量。
+    return vertices, rings * segments * 2  # 三角形数量。

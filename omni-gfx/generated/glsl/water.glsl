@@ -104,6 +104,8 @@ vec3 ogxWaterShade(OgxWater water, vec3 normal, vec3 viewDirection, vec3 sunDire
     float facing = ogxSaturate(dot(normal, viewDirection)); // 正对程度。
     float fresnel = ogxWaterFresnel(facing, 0.02); // 水的菲涅尔基础反射率约零点零二。
     vec3 transmitted = refractionColor * ogxWaterAbsorption(water, depth); // 水下颜色被水吸收。
+    // 深水会彻底吸收掉水底的颜色，只剩水本身的体色；不补这一步，深海会变成一块黑。
+    transmitted = mix(water.deepColor, transmitted, exp(-depth * 0.32)); // 越深越接近深水体色。
     transmitted = mix(water.shallowColor, transmitted, ogxSaturate(depth * 0.25)); // 浅水保留更多水色。
     vec3 color = mix(transmitted, reflectionColor, fresnel); // 折射与反射按菲涅尔混合。
     color += ogxSpecularGGX(normal, viewDirection, sunDirection, water.roughness, 0.02) * sunColor * 1.5; // 太阳高光。
