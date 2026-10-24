@@ -2,7 +2,7 @@
 
 Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Minecraft 光影可直接 `#include` 的 GLSL 330，并用同一份源生成 SPIR-V 作为编译验证产物。
 
-当前完成阶段 0–2：骨架与构建、`math` / `color` / `sampling` 三个核心模块、程序化测试世界（天空、地形、水面、云）。阶段 3 的效果迁移尚未开始。
+当前完成阶段 0–3 的核心部分：构建链、`math` / `color` / `sampling` 三个基础模块，以及 `noise` / `atmosphere` / `cloud` / `water` / `fog` 五个效果模块。测试世界已经改为直接使用生成的 GLSL，能在不启动 Minecraft 的情况下出图、截图和记录帧时。阶段 3 的阴影、GI、反射与抗锯齿仍按计划继续迁移。
 
 ## 目录
 
@@ -26,10 +26,10 @@ python omni-gfx/build.py check
 `generate` 写入两处：`omni-gfx/generated/glsl/` 和 `shaders/omni-gfx/`。Iris 只读取后者：
 
 ```glsl
-// 通用库颜色模块：强光压缩曲线由 Slang 源生成。
-#include "/omni-gfx/color.glsl"
+// 通用库大气模块：天空散射与空气透视由 Slang 源生成。
+#include "/omni-gfx/atmosphere.glsl"
 
-vec3 display = ogxAgx(linearColor, 13.0, true);
+vec3 sky = ogxAtmosphereSky(ogxAtmosphereEarth(), 0.03, viewDir, sunDir, 8);
 ```
 
 ## 生成 SPIR-V
@@ -48,13 +48,13 @@ python omni-gfx/build.py spirv --download
 
 ```powershell
 # 固定机位，渲染 120 帧，保存截图与帧时
-.venv\Scripts\python.exe omni-gfx\examples\world\render.py --frames 120 --screenshot .dev\omni-gfx\world.png
+.venv\Scripts\python.exe omni-gfx\examples\world\render.py --frames 120 --screenshot .dev\omni-gfx\world-phase3.png
 
 # 可移动相机：WASD 移动，空格与左 Ctrl 升降，鼠标转向，退出键结束，截图键保存
 .venv\Scripts\python.exe omni-gfx\examples\world\render.py --window
 ```
 
-输出默认放在 `.dev/omni-gfx/`：`world.png` 与 `perf.json`。帧时记录包含设备、分辨率、地形与水面三角形数、云层步数。
+输出默认放在 `.dev/omni-gfx/`：`world-phase3.png` 与 `perf-phase3.json`。帧时记录包含设备、分辨率、地形与水面三角形数、云层步数、高度图阴影步数与大气段数。
 
 ## GPU 等值测试
 
@@ -74,8 +74,9 @@ python omni-gfx/build.py count
 
 ## 已知边界
 
-- 贴图过滤函数（双三次采样）仍留在旧 `shaders/gfx/`，当前库只收纯计算与显式取像素。
-- 测试世界是风格化近似，不是物理正确的大气、云或水体。
+- 贴图过滤函数（双三次采样）仍留在旧 `shaders/gfx/`；阶段 3 的效果模块只用程序化噪声与纯计算，不接受纹理参数。
+- 测试世界是风格化近似，不是物理正确的大气、云或水体；大气是单次散射，云是单层程序化体积云。
+- 本机 1280×720 的 120 帧记录为平均 73.76 毫秒；还没有做距离场、半分辨率云或时间累积优化。
 - SPIR-V 只是模块探针，Vulkan/Aperture 的实际管线接入在阶段 5。
 - 本机没有 C++ 工具链，演示程序使用 Python + GLFW + PyOpenGL；没有引入无法验证的 CMake 工程。
 - Minecraft 内只验证了离线编译；新库接入后的游戏画面尚未验证。

@@ -1,4 +1,18 @@
 # 更新记录
+## 0.3.0
+
+阶段三第一批效果迁移：噪声、大气、体积云、水面与雾进入 `omni-gfx`，测试世界改用生成的 GLSL，并再接一个 Minecraft 程序。
+
+- 新增 `noise`、`atmosphere`、`cloud`、`water`、`fog` 五个 Slang 模块；生成器同步输出 8 个模块的 GLSL 330，`shaders/omni-gfx/` 与 `omni-gfx/generated/glsl/` 逐字节一致。
+- 测试世界重写天空、地形与水面着色器：单次散射大气、太阳圆盘、程序化体积云、软高度图阴影、云影、天空环境光、背光补光、空气透视、低空体积雾、方向波水面、菲涅尔反射、屏幕折射、水体吸收、太阳高光与岸线泡沫。
+- 云层用二维大形状与三维团块噪声、域扭曲和高度剪切消除平面重复条纹；沿视线 24 步，反射立方体贴图 12 步，朝太阳 5 次短步进。
+- 生成库接入 `shaders/rendering/fog/landscattering.glsl`：合成程序的瑞利与米氏相函数改为 `ogxRayleighPhase` 与 `ogxMiePhase`，公式和常数与旧实现一致；`python build.py compile` 覆盖 280 组唯一程序。
+- 阶段三测试世界在 1280×720 下 120 帧平均 73.76 毫秒、中位 78.00、95 分位 103.90，约 13.6 帧每秒；截图在 `.dev/omni-gfx/world-phase3.png`。
+- 新增 5 个 Slang 编译探针，`python omni-gfx/build.py spirv` 生成 8 个 SPIR-V；生成 GLSL 2526 非空行，手写核心 2444 行，低于 3000 行上限。
+- 构建工具做两处等价加速：审计的英文词判断与路径解析加缓存；`python build.py check` 从约 10 秒降到约 5 秒，`verify` 重新落在十秒预算内。
+
+验证：`python omni-gfx/build.py check`、`python build.py audit`、`python build.py verify`（144 个测试、9 组编译探针）、`python build.py compile`（280 组唯一程序，0 错误）通过；GPU 等值测试 26/26，最大绝对差 0。未启动 Minecraft；游戏内画面、Vulkan 运行时、其他显卡与阶段三效果在 MC 中的实际替换尚未验证。
+
 ## 0.2.1
 
 补充 omni-gfx 阶段 0–2 的交互冒烟记录，并调整库的审计边界。

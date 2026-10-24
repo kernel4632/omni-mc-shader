@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib  # 清单记录源文件与产物摘要，便于核对是否过期。
 import re  # 只替换完整单词，避免把更长标识符拆坏。
+from functools import lru_cache  # 同一次构建里重复读取同一模块时复用转换结果。
 from pathlib import Path  # 项目内路径统一按相对位置计算。
 
 LIB = Path(__file__).resolve().parent.parent  # omni-gfx 根目录。
@@ -21,10 +22,19 @@ SRC = LIB / "src"  # Slang 源文件目录，唯一手写算法来源。
 SHADER_OUT = ROOT / "shaders" / "omni-gfx"  # Minecraft 直接引入的位置。
 GENERATED_OUT = LIB / "generated" / "glsl"  # 独立库查看与分发的副本。
 MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳。
-MODULES = ("math", "color", "sampling")  # 阶段一迁移的三个核心模块。
+MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog")  # 阶段一二的核心模块与阶段三的五个效果模块。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
-DISPLAY = {"math": "数学", "color": "颜色", "sampling": "采样"}
+DISPLAY = {
+    "math": "数学",
+    "color": "颜色",
+    "sampling": "采样",
+    "noise": "噪声",
+    "atmosphere": "大气",
+    "cloud": "云",
+    "water": "水面",
+    "fog": "雾",
+}
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。
 TYPE_WORDS = {
@@ -114,6 +124,8 @@ def _header(name: str) -> str:
     )
 
 
+# 每个模块只保留一份转换实现，清单与写入共用同一份结果，避免两处产物不同。
+@lru_cache(maxsize=None)  # 同一进程里每个模块只读取和转换一次，测试与清单共用结果。
 def module_text(name: str) -> str:
     """返回一个模块完整的 GLSL 文本，包含生成说明与源文件原有内容。
 

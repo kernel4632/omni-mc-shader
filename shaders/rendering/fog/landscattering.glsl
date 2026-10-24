@@ -8,9 +8,14 @@
 调用前提：由 `effects/fog/fog.glsl` 引入，且已先引入 `common/math.glsl`、`effects/shadow/shadow.glsl`、
   `effects/sky/sky.glsl` 并声明相机与阴影相关全局量；本文件不重复引入。
 关键设计原因与取舍：`LandAtmosphericScattering` 的调用点是加色，所以它就地改画面；阴影遮蔽与室内衰减都按开关折叠。
+    瑞利与米氏相函数来自 `/omni-gfx/atmosphere.glsl`（由 Slang 源生成），公式和常数与旧 `gfx_` 实现一致；
+    引入生成库不改变数值，只把公共算法收回唯一来源。
 */
 #ifndef OMNI_LANDSCATTERING_INCLUDED // 只引入一次，避免选项与函数重复定义。
 #define OMNI_LANDSCATTERING_INCLUDED // 置上标记，后续再次引用直接跳过。
+
+// 生成库大气：相函数与密度剖面由 Slang 源生成，下面的散射计算改用同一份实现。
+#include "/omni-gfx/atmosphere.glsl"
 
 // 简化的单次散射：沿阳光方向取几段估光学厚度，算出这段空气加到视线上的散射色。
 // 输入是相机、视线方向、散射距离、受光距离与光源方向；返回叠加的散射颜色。
@@ -34,8 +39,8 @@ vec3 simpleScattering(vec3 camera, vec3 worldDir, float dist, float shadowDist, 
 		 			   	    -opticalDepth.z * atmosphereModel_absorption_extinction); // 臭氧吸收。
 
 	float nu = dot(worldDir, lightVector); // 视线与阳光的夹角。
-	vec3 scattering = RayleighPhaseFunction(nu) * atmosphereModel_rayleigh_scattering * (dist * 0.25 + shadowDist * 0.75) // 瑞利散射，四分之一取距离、四分之三取受光距离。
-					+ MiePhaseFunction(0.6, nu) * atmosphereModel_mie_scattering * shadowDist; // 米氏散射只算受光的部分。
+	vec3 scattering = ogxRayleighPhase(nu) * atmosphereModel_rayleigh_scattering * (dist * 0.25 + shadowDist * 0.75) // 瑞利散射，四分之一取距离、四分之三取受光距离。
+					+ ogxMiePhase(0.6, nu) * atmosphereModel_mie_scattering * shadowDist; // 米氏散射只算受光的部分。
 
 	return scattering * atmosphereModel_solar_irradiance * attenuation * GFX_ATMO_LMS; // 乘太阳辐照度、透过率与色适应矩阵。
 }

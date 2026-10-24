@@ -95,7 +95,7 @@ def _top_color(height: float, variation: float, slope: float) -> tuple[float, fl
         return (0.70 + variation * 0.08, 0.60 + variation * 0.07, 0.40 + variation * 0.05)
     if height > 17.0 or slope >= 3.0:  # 高山与陡坡露出岩石。
         return (0.38 + variation * 0.08, 0.38 + variation * 0.08, 0.40 + variation * 0.08)
-    return (0.12 + variation * 0.05, 0.34 + variation * 0.09, 0.09 + variation * 0.04)  # 草地。
+    return (0.19 + variation * 0.06, 0.35 + variation * 0.09, 0.15 + variation * 0.05)  # 草地。
 
 
 def _add_quad(vertices: array, corners: list[tuple[float, float, float]], normal: tuple[float, float, float],
@@ -138,7 +138,7 @@ def build_mesh(heights: list[float], size: int) -> tuple[array, int]:
                 (x + 1, height, z),
             ], (0.0, 1.0, 0.0), color, occlusion)
             triangles += 2  # 顶面两个三角形。
-            wall_color = (color[0] * 0.72, color[1] * 0.72, color[2] * 0.72)  # 侧墙比顶面暗，模拟竖直面。
+            wall_color = (color[0] * 0.50 + 0.16, color[1] * 0.50 + 0.14, color[2] * 0.50 + 0.11)  # 侧墙混入泥土与岩石色。
             for direction, neighbor in enumerate(neighbors):  # 四个方向分别补侧墙。
                 if neighbor >= height:  # 邻居不低就没有露出的墙。
                     continue

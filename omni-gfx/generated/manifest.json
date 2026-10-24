@@ -28,6 +28,51 @@
       "generated": "omni-gfx/generated/glsl/sampling.glsl",
       "glslSha256": "8d1d11fedc5ed516aff30b5586a7c5e2a44eb9fcf523c90314ece1c926926782",
       "glslLines": 49
+    },
+    {
+      "module": "noise",
+      "source": "omni-gfx/src/noise.slang",
+      "sourceSha256": "0c91c51424a0f6f5a454387a60e7c7dfcdfa985b06b15eec1ea0f0a2a94fb51a",
+      "shader": "shaders/omni-gfx/noise.glsl",
+      "generated": "omni-gfx/generated/glsl/noise.glsl",
+      "glslSha256": "e166b218ce2685b6b0638acc2378bab5e3bf880d63f5bc5d12c17a00110bc6ca",
+      "glslLines": 112
+    },
+    {
+      "module": "atmosphere",
+      "source": "omni-gfx/src/atmosphere.slang",
+      "sourceSha256": "36a640ae8f30e5c19b8e430ff3f66dc42627a2fd50c5d8d2a2e47ea36d0d9ea9",
+      "shader": "shaders/omni-gfx/atmosphere.glsl",
+      "generated": "omni-gfx/generated/glsl/atmosphere.glsl",
+      "glslSha256": "8cc214916c21d4b322a284cd70c93ccab307d05f410b740d5882dfba5631228d",
+      "glslLines": 271
+    },
+    {
+      "module": "cloud",
+      "source": "omni-gfx/src/cloud.slang",
+      "sourceSha256": "7f620ae219d80fe32da29417de0cc2756a83ffe0f4e82ab3fdb42b2e9ce34d4f",
+      "shader": "shaders/omni-gfx/cloud.glsl",
+      "generated": "omni-gfx/generated/glsl/cloud.glsl",
+      "glslSha256": "5b7de0c59c834163728665e6fe3584058f499359a9ed16aeaed24a92150b45f6",
+      "glslLines": 185
+    },
+    {
+      "module": "water",
+      "source": "omni-gfx/src/water.slang",
+      "sourceSha256": "a98a7b39610f317fcc3d2ee7edd926283ec47ce36b8b9aa91c49437d6a67e949",
+      "shader": "shaders/omni-gfx/water.glsl",
+      "generated": "omni-gfx/generated/glsl/water.glsl",
+      "glslSha256": "7a725aff00fe4bd0e18c1f988d5a24df705cc446a605c637c494d0cc00ffb298",
+      "glslLines": 115
+    },
+    {
+      "module": "fog",
+      "source": "omni-gfx/src/fog.slang",
+      "sourceSha256": "ef682ed764d808725166d901df53e47882cd31be84acba5dac30b064521759d3",
+      "shader": "shaders/omni-gfx/fog.glsl",
+      "generated": "omni-gfx/generated/glsl/fog.glsl",
+      "glslSha256": "aeacbd864b8016720df604915733376ce6542716f56a216299be8a13af7d601f",
+      "glslLines": 128
     }
   ]
 }

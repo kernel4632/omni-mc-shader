@@ -4,7 +4,7 @@
 调用示例：
     python omni-gfx/build.py generate
     python omni-gfx/build.py spirv
-    python omni-gfx/build.py demo --frames 240 --screenshot .dev/omni-gfx/world.png
+    python omni-gfx/build.py demo --frames 240 --screenshot .dev/omni-gfx/world-phase3.png
     python omni-gfx/build.py test-gpu
     python omni-gfx/build.py count
 设计原因与取舍：

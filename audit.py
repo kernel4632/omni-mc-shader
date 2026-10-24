@@ -15,6 +15,7 @@ import io  # 把源码交给标准词法扫描器，保持 Python 的注释边�
 import json  # 机器菜单说明必须按真实结构读取，不能靠文字前缀绕过审计。
 import re  # 识别中文、文件示例、机器字段和未实现标记。
 import tokenize  # 让字符串中的井号不会被误判为注释。
+from functools import lru_cache  # 大量重复英文词只判断一次，避免审计随注释量线性变慢。
 from pathlib import Path  # 用项目相对路径固定审计范围并隐藏本机绝对路径。
 
 CHINESE = re.compile(r"[\u3400-\u9fff]")  # 只有汉字能证明说明不是纯英文标识符。
@@ -43,6 +44,7 @@ def _strip_code(text: str) -> str:
     return re.sub(r"\b[A-Za-z_]\w*\([^\n]*?\)", "", text)  # 函数调用示例是代码。
 
 
+@lru_cache(maxsize=8192)  # 术语判断是纯函数，重复词直接复用结果。
 def _unknown_word(word: str) -> bool:
     """判断一个英文词是否是必须报出的未知自然语言。
 

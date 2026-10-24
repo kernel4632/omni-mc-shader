@@ -177,11 +177,11 @@ MC 光影编译 + 同场景对比
 - 当前版本以 `VERSION` 为准；MC 光影包已有九页菜单、519 个选项、280 组程序和 4 套预设。
 - `shaders/gfx/` 是旧 GLSL 原型，约 4k 行，迁移完成前保留。
 - 2026-10-24 完成阶段 0–2：根目录 `omni-gfx/` 骨架、Slang 源、GLSL 330 生成、SPIR-V 探针、`math` / `color` / `sampling` 迁移、程序化测试世界（天空、地形、水面、云、可移动相机、截图与帧时）。
-- 生成库已接入 `shaders/rendering/color/post_tonemap.glsl`，`composite14` 的 ACES / AgX / 无压缩三条曲线改为调用 `ogx` 函数；离线全量编译 280 组程序通过。
-- GPU 等值测试 26/26 通过，最大绝对差 0；测试世界截图与帧时记录在 `.dev/omni-gfx/`，详见 `omni-gfx/docs/verification.md`。
-- 未验证：Minecraft 游戏内画面、Vulkan/Aperture 运行时、其他显卡、交互窗口逐项手动操作。
-- 下一步：阶段 3，按效果模块迁移大气、云、雾、水、阴影、GI、反射、后期与抗锯齿，逐项用同一测试世界固定机位与旧实现比较。
-- 阶段 1 的贴图过滤函数（双三次采样）仍留在旧 `shaders/gfx/`，需要先设计显式纹理接口再迁移。
+- 2026-10-24 完成阶段 3 的第一批效果迁移：`noise`、`atmosphere`、`cloud`、`water`、`fog` 五个 Slang 模块；测试世界改用生成的 GLSL，加入单次散射大气、24 步程序化体积云、方向波水面、软高度图阴影、云影、空气透视与低空雾。
+- 生成库已接入 `shaders/rendering/color/post_tonemap.glsl`（`composite14` 的色调映射）与 `shaders/rendering/fog/landscattering.glsl`（合成程序的瑞利与米氏相函数）；离线全量编译 280 组程序通过。
+- GPU 等值测试 26/26 通过，最大绝对差 0；阶段三测试世界在 1280×720 下 120 帧平均 73.76 毫秒，截图在 `.dev/omni-gfx/world-phase3.png`，详见 `omni-gfx/docs/verification.md`。
+- 未验证：Minecraft 游戏内画面、Vulkan/Aperture 运行时、其他显卡、交互窗口逐项手动操作、阶段三效果替换到 MC 后的画面与性能。
+- 下一步：继续阶段 3 的阴影、GI、屏幕空间反射、后期与抗锯齿模块；把大气、云、水、雾从测试世界推进到 MC 的实际绘制通路，并用同一场景对比旧实现。
 
 ## 十四、决策记录
 
@@ -195,3 +195,4 @@ MC 光影编译 + 同场景对比
 | 2026-10-24 | 本机没有 C++ 工具链，测试世界改用 Python + GLFW + PyOpenGL；不创建无法验证的 CMake 工程 |
 | 2026-10-24 | GLSL 由固定降级表生成，不用 Slang 的 GLSL 后端；原因是后端输出 `#version 450`、函数改名并附带 `main()`，不能作为库引入 |
 | 2026-10-24 | SPIR-V 由每模块探针生成，二进制不入仓库；`generated/spirv/manifest.json` 只在本机保留 |
+| 2026-10-24 | 阶段三效果模块用程序化噪声替代参考实现的噪声贴图；大气长度单位用公里，保证 `float` 精度，调用方负责米到公里的换算 |

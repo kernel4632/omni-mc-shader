@@ -2,7 +2,7 @@
 
 调用位置：`python omni-gfx/build.py demo` 或直接运行本文件。
 调用示例：
-    python omni-gfx/examples/world/render.py --frames 120 --screenshot .dev/omni-gfx/world.png
+    python omni-gfx/examples/world/render.py --frames 120 --screenshot .dev/omni-gfx/world-phase3.png
     python omni-gfx/examples/world/render.py --window
 设计原因与取舍：
     测试世界是独立消费者：它只读取 `shaders/omni-gfx` 里生成的 GLSL，
@@ -35,10 +35,10 @@ import png  # 无依赖图片写入。
 import terrain  # 高度图与网格。
 
 TERRAIN_SIZE = 96  # 地形边长，单位为方块。
-SKY_CUBE_SIZE = 80  # 反射立方体贴图的边长，越小越省时间。
+SKY_CUBE_SIZE = 128  # 反射立方体贴图的边长，越大云与太阳高光越清楚。
 NEAR = 0.2  # 投影近平面。
 FAR = 2600.0  # 投影远平面。
-DEFAULT_SUN = [0.30, 0.20, -0.93]  # 默认太阳方向，斜射能看清地形阴影。
+DEFAULT_SUN = [0.45, 0.32, -0.83]  # 默认太阳方向，侧逆光能同时看清地形明暗与太阳光晕。
 
 
 def make_program(name: str, vertex: str, fragment: str) -> int:
@@ -88,7 +88,7 @@ def make_sky_cube() -> tuple[int, int]:
     for face in range(6):  # 逐个分配。
         GL.glTexImage2D(GL.GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, 0, GL.GL_RGBA16F, SKY_CUBE_SIZE, SKY_CUBE_SIZE,
                         0, GL.GL_RGBA, GL.GL_FLOAT, None)  # 十六位浮点，保留太阳高光。
-    GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)  # 反射采样要平滑。
+    GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR)  # 反射采样按距离选低分辨率层级，远处不闪烁。
     GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)  # 放大也平滑。
     GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)  # 接缝处不重复。
     GL.glTexParameteri(GL.GL_TEXTURE_CUBE_MAP, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)  # 接缝处不重复。
@@ -129,8 +129,8 @@ class World:
         self.scene_fbo, self.scene_color, self.scene_depth = gl.color_depth_target(width, height)  # 天空与地形。
         self.water_fbo, self.water_color, self.water_depth = gl.color_depth_target(width, height)  # 水面合成结果。
         self.sky_cube, self.sky_fbo = make_sky_cube()  # 反射用天空。
-        self.camera = camera.Camera([48.0, 30.0, 100.0], fov=55.0)  # 初始相机。
-        self.camera.look_at([48.0, 16.0, 40.0])  # 看向岛屿中心。
+        self.camera = camera.Camera([48.0, 26.0, 100.0], fov=55.0)  # 初始相机。
+        self.camera.look_at([48.0, 33.0, 40.0])  # 略微仰视，让天空、云层与岛屿都进入画面。
         self.keys: set[int] = set()  # 交互模式按下的键。
         self.first_mouse = True  # 第一帧鼠标位置只记录不转向。
         self.last_mouse = (0.0, 0.0)  # 上一帧鼠标位置。
@@ -184,6 +184,8 @@ class World:
                                       GL.GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, self.sky_cube, 0)  # 换到当前面。
             GL.glUniform1i(location(self.sky_program, "uFace"), face)  # 告诉着色器当前是哪个面。
             GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 画满整个面。
+        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.sky_cube)  # 六个面都画完后生成多级纹理。
+        GL.glGenerateMipmap(GL.GL_TEXTURE_CUBE_MAP)  # 远处水面按低分辨率层级采样，减少闪烁与条纹。
         GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, 0)  # 回到默认帧缓冲。
 
     def render_scene(self, frame: int, scene_time: float) -> None:
@@ -221,13 +223,16 @@ class World:
         GL.glUniform3f(location(self.terrain_program, "uCameraPos"), *self.camera.position)  # 雾与视线。
         GL.glUniform3f(location(self.terrain_program, "uSunDirection"), *self.sun)  # 直射与阴影方向。
         GL.glUniform1f(location(self.terrain_program, "uTerrainSize"), float(TERRAIN_SIZE))  # 高度图范围。
+        GL.glUniform1f(location(self.terrain_program, "uTime"), scene_time)  # 云与雾随时间移动。
+        GL.glUniform1f(location(self.terrain_program, "uFrame"), float(frame))  # 抖动相位。
+        GL.glUniform1f(location(self.terrain_program, "uCloudCover"), self.cloud_cover)  # 云影强度随云量变化。
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 高度图固定零号单元。
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.height_texture)  # 绑定高度图。
         GL.glUniform1i(location(self.terrain_program, "uHeight"), 0)  # 着色器采样零号单元。
         GL.glBindVertexArray(self.terrain_vao)  # 地形顶点数组。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.terrain_triangles * 3)  # 全部三角形一次画完。
 
-    def render_water(self, scene_time: float) -> None:
+    def render_water(self, frame: int, scene_time: float) -> None:
         """把场景复制到水面目标，再叠加水面，避免读写的画面是同一张。"""
         GL.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, self.scene_fbo)  # 读取天空与地形。
         GL.glBindFramebuffer(GL.GL_DRAW_FRAMEBUFFER, self.water_fbo)  # 写到水面目标。
@@ -247,6 +252,7 @@ class World:
         GL.glUniform3f(location(self.water_program, "uCameraPos"), *self.camera.position)  # 视线方向。
         GL.glUniform3f(location(self.water_program, "uSunDirection"), *self.sun)  # 太阳高光。
         GL.glUniform1f(location(self.water_program, "uTime"), scene_time)  # 波浪动画。
+        GL.glUniform1f(location(self.water_program, "uFrame"), float(frame))  # 雾抖动相位。
         GL.glUniform1f(location(self.water_program, "uWaterLevel"), terrain.SEA_LEVEL)  # 海平面高度。
         GL.glUniform2f(location(self.water_program, "uResolution"), self.width, self.height)  # 屏幕坐标。
         GL.glUniform1f(location(self.water_program, "uNear"), NEAR)  # 深度反解用近平面。
@@ -275,7 +281,7 @@ class World:
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.water_color)  # 线性场景颜色。
         GL.glUniform1i(location(self.post_program, "uColor"), 0)  # 采样器指向零号单元。
         GL.glUniform2f(location(self.post_program, "uResolution"), self.width, self.height)  # 画面尺寸。
-        GL.glUniform1f(location(self.post_program, "uExposure"), 0.85)  # 曝光倍率。
+        GL.glUniform1f(location(self.post_program, "uExposure"), 0.72)  # 曝光倍率。
         GL.glUniform1i(location(self.post_program, "uTonemap"), self.tonemap)  # 曲线编号。
         GL.glUniform1f(location(self.post_program, "uFrame"), float(frame))  # 抖动相位。
         GL.glBindVertexArray(self.fullscreen)  # 全屏三角形。
@@ -285,7 +291,7 @@ class World:
         """按固定顺序绘制一帧：反射、天空与地形、水面、后期。"""
         self.render_sky_cube(frame, scene_time)
         self.render_scene(frame, scene_time)
-        self.render_water(scene_time)
+        self.render_water(frame, scene_time)
         self.render_post(frame)
 
     def screenshot(self, path: Path) -> None:
@@ -385,7 +391,11 @@ def run(args) -> None:
             "device": world.device,
             "terrainTriangles": world.terrain_triangles,
             "waterTriangles": world.water_triangles,
-            "cloudSteps": 14,
+            "cloudSteps": 24,  # 主画面云的沿视线步数。
+            "cloudCubeSteps": 12,  # 反射立方体贴图的云步数。
+            "terrainShadowSteps": 24,  # 高度图软阴影步数。
+            "atmosphereSteps": 8,  # 主画面天空的单次散射段数。
+            "fogSteps": 6,  # 地形低空雾步数。
             "camera": args.camera,
             "target": args.target,
             "sun": args.sun,
@@ -410,14 +420,14 @@ def main() -> None:
     parser.add_argument("--height", type=int, default=720, help="画面高度")
     parser.add_argument("--frames", type=int, default=120, help="计时帧数")
     parser.add_argument("--warmup", type=int, default=20, help="预热帧数")
-    parser.add_argument("--screenshot", default=str(ROOT / ".dev/omni-gfx/world.png"), help="截图路径")
-    parser.add_argument("--perf", default=str(ROOT / ".dev/omni-gfx/perf.json"), help="性能记录路径")
+    parser.add_argument("--screenshot", default=str(ROOT / ".dev/omni-gfx/world-phase3.png"), help="截图路径")
+    parser.add_argument("--perf", default=str(ROOT / ".dev/omni-gfx/perf-phase3.json"), help="性能记录路径")
     parser.add_argument("--window", action="store_true", help="打开可交互窗口")
-    parser.add_argument("--camera", type=float, nargs=3, default=[48.0, 30.0, 100.0], help="相机位置")
-    parser.add_argument("--target", type=float, nargs=3, default=[48.0, 16.0, 40.0], help="看向的目标")
+    parser.add_argument("--camera", type=float, nargs=3, default=[48.0, 26.0, 100.0], help="相机位置")
+    parser.add_argument("--target", type=float, nargs=3, default=[48.0, 33.0, 40.0], help="看向的目标")
     parser.add_argument("--sun", type=float, nargs=3, default=DEFAULT_SUN, help="太阳方向")
     parser.add_argument("--time", type=float, default=12.0, help="固定场景时间")
-    parser.add_argument("--cloud-cover", type=float, default=0.35, help="云量零到一")
+    parser.add_argument("--cloud-cover", type=float, default=0.40, help="云量零到一")
     parser.add_argument("--tonemap", type=int, default=0, choices=(0, 1, 2), help="零 ACES，一 AgX，二无压缩")
     args = parser.parse_args()
     run(args)

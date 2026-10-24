@@ -29,12 +29,20 @@ import tempfile  # 离线编译不污染源码。
 import time  # 总预算按真实经过时间计算，包含进程创建与系统初始化。
 import zipfile  # 生成玩家使用的光影包。
 from concurrent.futures import ThreadPoolExecutor  # 并行等待多个编译器进程。
+from functools import lru_cache  # 同一路径在一次检查里反复解析时复用真实路径。
 from pathlib import Path  # 路径相对项目定位。
 import options as menu  # 原生选项与预设是配置唯一来源。
 import config  # 版本号格式、分享格式编号与版本比较只在这里定义一处。
 import audit  # 审计自有代码注释与未实现标记。
 
 ROOT = Path(__file__).resolve().parent  # 换工作目录不改变数据位置。
+
+@lru_cache(maxsize=None)  # 真实路径只算一次；一次检查会重复访问同一批引用目标。
+def resolved(path: Path) -> Path:
+    """返回规范化后的真实路径，供引用边界检查与展开共用。"""
+    return path.resolve()  # 解析目录链接后再比较，避免越界检查被本机链接绕过。
+
+
 SHADERS = ROOT / "shaders"  # 游戏资源根目录。
 INCLUDE = re.compile(r'^[ \t]*#include[ \t]+"([^"\n]+)"[ \t]*$', re.MULTILINE)  # 加载器要求引用独占一行，尾随说明会被拒绝。
 STAGES = {".vsh": ".vert", ".fsh": ".frag", ".gsh": ".geom", ".csh": ".comp", ".tcs": ".tesc", ".tes": ".tese"}  # 把游戏入口后缀映射到编译器认识的阶段名。
@@ -146,8 +154,8 @@ def source_path(reference: str, parent: Path, shaders: Path) -> Path:
     """
     if "\\" in reference or "\x00" in reference:  # 源码路径须遵守加载器语法，不能带本机分隔符或空字符。
         raise ValueError(f"{parent}：引用必须使用正斜杠")
-    source = ((shaders / reference[1:]) if reference.startswith("/") else parent.parent / reference).resolve()  # 支持加载器根引用。
-    if not source.is_relative_to(shaders.resolve()) or not source.is_file():  # 解析真实路径后再检查，目录链接也不能逃逸。
+    source = resolved((shaders / reference[1:]) if reference.startswith("/") else parent.parent / reference)  # 支持加载器根引用。
+    if not source.is_relative_to(resolved(shaders)) or not source.is_file():  # 解析真实路径后再检查，目录链接也不能逃逸。
         raise ValueError(f"{parent}：引用越界或文件不存在：{reference}")
     return source  # 后续展开信任这个已经检查过的引用目标。
 
@@ -160,7 +168,7 @@ def numbered_sources(shaders: Path | None = None) -> dict[Path, int]:
     `shaders` 省略时在调用时取当前项目光影目录，测试替换目录后仍指向替换值。
     """
     shaders = SHADERS if shaders is None else shaders  # 在调用时读取，不能在函数定义时固定。
-    return {path.resolve(): index + 1 for index, path in enumerate(sorted(shaders.rglob("*"))) if path.is_file()}  # 一次排序生成全部编号。
+    return {resolved(path): index + 1 for index, path in enumerate(sorted(shaders.rglob("*"))) if path.is_file()}  # 一次排序生成全部编号。
 
 # --- 展开引用：编译一份完整源码，同时保留每段原文的位置 ---
 def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), sourceNumbers: dict | None = None, cache: dict | None = None) -> str:
@@ -170,7 +178,7 @@ def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), 
     `sourceNumbers` 是路径到数字编号的共享表；`cache` 保存本轮已展开文本，二者可省略。
     共用缓存时必须共用编号表，并且期间不修改源码；缓存不跨构建保存，不用于证明编译成功。
     """
-    source = source.resolve()  # 规范化后识别循环。
+    source = resolved(source)  # 规范化后识别循环。
     if source in stack:  # 先检查当前路径，不能让缓存掩盖循环引用。
         raise ValueError("循环引用：" + " → ".join(path.name for path in (*stack, source)))  # 展开前拒绝无限递归。
     if cache is None:  # 独立调用也能复用同一引用树中的重复文件。
@@ -216,7 +224,7 @@ def check_references(source: Path, shaders: Path = SHADERS, stack: tuple[Path, .
     但只访问每个文件一次，不拼接文本。253 个入口逐个展开会把整棵引用树重复读取，检查时间远超十秒预算；
     入口校验只需要确认引用合法，所以用这条轻量路径。
     """
-    source = source.resolve()  # 规范化后识别循环。
+    source = resolved(source)  # 规范化后识别循环。
     if source in stack:  # 循环引用必须报出完整路径。
         raise ValueError("循环引用：" + " → ".join(path.name for path in (*stack, source)))
     if seen is None:  # 本次校验共享已访问集合。

@@ -101,11 +101,25 @@ class OmniGfxTests(unittest.TestCase):
         self.assertLessEqual(data["handwrittenTotal"], data["handwrittenBudget"])  # 超限时先删重复实现或改口径并说明。
 
     def test_test_world_assets_exist(self):
-        """测试世界的入口与四个阶段文件必须齐全。"""
+        """测试世界的入口与各阶段文件必须齐全。"""
         for name in ("render.py", "terrain.py", "camera.py", "png.py"):  # Python 侧入口。
             self.assertTrue((LIB / "examples" / "world" / name).is_file(), name)
-        for name in ("sky.frag", "terrain.frag", "water.frag", "post.frag", "fullscreen.vert"):  # 着色器阶段。
+        for name in ("sky.frag", "terrain.frag", "water.frag", "post.frag", "fullscreen.vert", "world_shared.glsl"):  # 着色器阶段与共用参数。
             self.assertTrue((LIB / "examples" / "world" / "shaders" / name).is_file(), name)
+
+    def test_phase3_effects_are_generated(self):
+        """阶段三的大气、云、水面与雾必须真的进入生成产物。"""
+        expected = {"atmosphere": "ogxAtmosphereSky", "cloud": "ogxCloudMarch", "water": "ogxWaterShade", "fog": "ogxFogMarch"}  # 每个效果一个入口函数。
+        for name, symbol in expected.items():
+            with self.subTest(module=name):
+                self.assertIn(symbol, generate.module_text(name))  # 生成文本缺少入口函数说明模块没有接入。
+
+    def test_minecraft_program_uses_generated_atmosphere(self):
+        """合成程序的相函数必须调用生成库，避免两套公式各自漂移。"""
+        text = (ROOT / "shaders" / "rendering" / "fog" / "landscattering.glsl").read_text(encoding="utf-8")  # 真实消费者。
+        self.assertIn('#include "/omni-gfx/atmosphere.glsl"', text)  # 生成库必须在引用边界内。
+        self.assertIn("ogxRayleighPhase(", text)  # 瑞利相函数来自生成库。
+        self.assertIn("ogxMiePhase(", text)  # 米氏相函数来自生成库。
 
 
 if __name__ == "__main__":
