@@ -67,6 +67,7 @@ uv pip sync requirements-dev.lock
 - [性能测量方法](docs/performance.md)
 - [性能与重载优化执行计划](docs/performance-plan.md)
 - [文件结构与共用层重构计划](docs/structure-plan.md)
+- [omni-gfx 通用图形库计划](docs/omni-gfx-plan.md)
 - [可复用库与框架](docs/libraries.md)
 - [算法参考与可复用实现](docs/references.md)
 - [项目开发约定](AGENTS.md)

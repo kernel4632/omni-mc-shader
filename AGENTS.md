@@ -20,7 +20,8 @@ Eclipse 的部分能力已按 `docs/eclipse-parity.md` 合并（月亮与星空�
 用户已允许直接移植 iterationT 的代码、常数、贴图与数据，许可先不考虑，仓库保持私有；公开发布前必须重新评估许可。
 用户已指定 `references/iterationT/` 与 `references/Eclipse/` 为参考，无需重复询问参考对象。重载光影在游戏里连按两次 `K`。
 
-阅读顺序：`README.md` → `docs/parity.md`（移植合同与分片状态）→ 要修改的主体文件 → `docs/rendering.md`。
+阅读顺序：`README.md` → `docs/omni-gfx-plan.md`（通用库目标与验收）→ `docs/parity.md`（移植合同与分片状态）→ 要修改的主体文件 → `docs/rendering.md`。
+下一阶段以 `docs/omni-gfx-plan.md` 为准：Slang 写 `omni-gfx`，生成 GLSL 给 Iris；`shaders/gfx/` 是旧原型，迁移完成前保留。
 计划按依赖顺序执行；用户最新要求可以调整当前任务。
 移植期间以 iterationT 原程序为事实来源；代码审查逐行对照原程序，不以“看起来像”或编译通过当作完成。
 
