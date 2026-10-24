@@ -1,4 +1,21 @@
 # 更新记录
+## 0.2.0
+
+新增独立图形库 `omni-gfx` 的阶段 0–2：Slang 核心模块、生成的 GLSL 330、SPIR-V 探针与不启动 Minecraft 的程序化测试世界。
+
+- 根目录新增 `omni-gfx/`：`src/` 维护 `math`、`color`、`sampling` 三个 Slang 模块，`tools/generate.py` 生成 GLSL 330，`tools/slang.py` 调用本机 Slang 编译器生成 SPIR-V 探针。
+- 生成的 GLSL 写入 `shaders/omni-gfx/` 与 `omni-gfx/generated/glsl/`，Iris 可直接 `#include "/omni-gfx/color.glsl"`；生成清单记录源与产物摘要，构建检查会拒绝过期文件。
+- `shaders/rendering/color/post_tonemap.glsl` 接入生成库，`composite14` 的 ACES、AgX 与无压缩曲线改为调用 `ogxAces`、`ogxAgx`、`ogxTonemapNone`。
+- 新增 GPU 等值测试：同一个着色器同时调用旧 `gfx_` 与新 `ogx_` 函数，26 个用例逐通道比较，最大绝对差 0。
+- 新增测试世界 `omni-gfx/examples/world/`：程序化体素地形、天空与云、水面反射与折射、后期色调映射；支持可移动相机、PNG 截图与帧时 JSON。
+- 本机 Intel Arc、1280×720、120 帧：平均 10.46 毫秒，中位 10.34，95 分位 11.49，约 95.6 帧每秒。
+- 手写核心（源、工具、测试）1567 行，低于 3000 行上限；测试世界 1076 行单列，生成 GLSL 996 行，第三方代码 0 行。
+- 新增 `omni-gfx/README.md`、`omni-gfx/docs/architecture.md`、`omni-gfx/docs/verification.md`；更新计划状态、项目说明与审计术语表。
+- 本机没有 C++ 工具链，测试世界使用 Python + GLFW + PyOpenGL，不创建无法验证的 CMake 工程。
+
+验证：`audit` 通过 131 个代码文件；`verify` 通过 142 个测试、9 组编译探针；全量 `compile` 通过 280 组唯一程序；GPU 等值测试 26/26；测试世界截图与帧时记录在 `.dev/omni-gfx/`。Minecraft 游戏内画面、Vulkan 运行时与其他显卡尚未验证。
+
+
 ## 0.1.89
 
 记录 omni-gfx 通用图形库计划。

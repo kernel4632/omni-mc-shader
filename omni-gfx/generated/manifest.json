@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "tool": "omni-gfx/tools/generate.py",
+  "modules": [
+    {
+      "module": "math",
+      "source": "omni-gfx/src/math.slang",
+      "sourceSha256": "3b7c874b241a3556cc3ee64d3c12070fde1747ba7ee29682542160fe08a0f911",
+      "shader": "shaders/omni-gfx/math.glsl",
+      "generated": "omni-gfx/generated/glsl/math.glsl",
+      "glslSha256": "b3359f6a48ab8132842a637e33156d3b1fde2372dc9b483e81c28dfe6ec586f8",
+      "glslLines": 357
+    },
+    {
+      "module": "color",
+      "source": "omni-gfx/src/color.slang",
+      "sourceSha256": "f106ac8967e28c22c9941a06b30f3c464ef96b3da659d847448ba7e0cdc35fb9",
+      "shader": "shaders/omni-gfx/color.glsl",
+      "generated": "omni-gfx/generated/glsl/color.glsl",
+      "glslSha256": "9221821c5ff78f87772572952d1d25fba970ac3e4c1bb2923fe1b48820842c27",
+      "glslLines": 164
+    },
+    {
+      "module": "sampling",
+      "source": "omni-gfx/src/sampling.slang",
+      "sourceSha256": "5b051676330a57091d5989a681a6a010eedda0a1714d3359f53280c9a5daa9fa",
+      "shader": "shaders/omni-gfx/sampling.glsl",
+      "generated": "omni-gfx/generated/glsl/sampling.glsl",
+      "glslSha256": "8d1d11fedc5ed516aff30b5586a7c5e2a44eb9fcf523c90314ece1c926926782",
+      "glslLines": 49
+    }
+  ]
+}

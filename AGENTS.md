@@ -14,13 +14,14 @@ Omni 是一个通过共享配置呈现多种风格的 Minecraft Java 光影项�
 iterationT 3.2.0 的全部算法与渲染流程已按 `docs/parity.md` 整体移植进本项目结构（用户 2026-10-16 决定）；管线是整体替换；移植已在本地分支 `itt-port` 分片完成，并于 2026-10-17 以合并提交 `c23eb0a` 合入 `main` 推送，当前 `main` 即移植后的完整管线。子任务不提交，主助手统一提交。
 Eclipse 的部分能力已按 `docs/eclipse-parity.md` 合并（月亮与星空选项、积雪覆盖、水洼模式、白平衡、散景变形与色散、末地主岛光照、下界与末地雾密度、远景淡入、卷云与积雨云附加层等），该文件逐项记录对照与未合并项。
 验证状态：离线 `python build.py audit` 通过；`python build.py compile` 的离线编译记录为 0 错误（见 `docs/parity.md` 覆盖核对）；**游戏内画面、性能与兼容性均未验证**。不能把目录、离线编译或加载成功当作效果完成。
-验证流程：`python build.py verify` 在十秒预算内先生成，再用两个并行任务跑工具测试与关键光影检查，最后打包。关键光影检查包含全树「选项是否接入计算」硬检查（未接线直接报错）、中文注释审计、全部入口的来源与引用边界检查，以及一小组编译探针（主世界 5 个轻量程序 `gbuffers_terrain`、`shadow`、`final`、`setup`、`shadowcomp` 编默认配置与基础环境，其中 `gbuffers_terrain`、`shadow`、`setup`、`shadowcomp` 另编全高配置与开远景环境，共 9 组唯一程序，约 7 秒），测试全跑（当前 129 个、0 跳过）。
+2026-10-24 完成 `omni-gfx` 阶段 0–2：Slang 核心模块（math、color、sampling）、生成的 GLSL 330、SPIR-V 探针与不启动 Minecraft 的程序化测试世界。生成库已接入 `shaders/rendering/color/post_tonemap.glsl`，GPU 等值测试 26/26 逐位一致，测试世界在本机 Intel Arc 上以 1280×720 约 10.5 毫秒每帧出图；游戏内画面、Vulkan 运行时与其他显卡仍未验证。阶段 3 按 `omni-gfx/docs/architecture.md` 的扩展点继续迁移效果模块。
+验证流程：`python build.py verify` 在十秒预算内先生成，再用两个并行任务跑工具测试与关键光影检查，最后打包。关键光影检查包含全树「选项是否接入计算」硬检查（未接线直接报错）、中文注释审计、全部入口的来源与引用边界检查，以及一小组编译探针（主世界 5 个轻量程序 `gbuffers_terrain`、`shadow`、`final`、`setup`、`shadowcomp` 编默认配置与基础环境，其中 `gbuffers_terrain`、`shadow`、`setup`、`shadowcomp` 另编全高配置与开远景环境，共 9 组唯一程序，约 7 秒），测试全跑（当前 142 个、0 跳过）。
 `python build.py check` 做同样的只读检查（含编译探针），不跑测试、不打包；完整离线编译用 `python build.py compile`（放宽到 300 秒）：全部程序 × 两种代表配置 × 基础与开远景两组环境，约两分钟。
 编译失败时一次只显示前五条错误，方便定位；不再有移植期临时开关。
 用户已允许直接移植 iterationT 的代码、常数、贴图与数据，许可先不考虑，仓库保持私有；公开发布前必须重新评估许可。
 用户已指定 `references/iterationT/` 与 `references/Eclipse/` 为参考，无需重复询问参考对象。重载光影在游戏里连按两次 `K`。
 
-阅读顺序：`README.md` → `docs/omni-gfx-plan.md`（通用库目标与验收）→ `docs/parity.md`（移植合同与分片状态）→ 要修改的主体文件 → `docs/rendering.md`。
+阅读顺序：`README.md` → `docs/omni-gfx-plan.md`（通用库目标与验收）→ `omni-gfx/docs/architecture.md`（实现边界）→ `docs/parity.md`（移植合同与分片状态）→ 要修改的主体文件 → `docs/rendering.md`。
 下一阶段以 `docs/omni-gfx-plan.md` 为准：Slang 写 `omni-gfx`，生成 GLSL 给 Iris；`shaders/gfx/` 是旧原型，迁移完成前保留。
 计划按依赖顺序执行；用户最新要求可以调整当前任务。
 移植期间以 iterationT 原程序为事实来源；代码审查逐行对照原程序，不以“看起来像”或编译通过当作完成。

@@ -5,6 +5,7 @@
 **当前为开发代码审查阶段，版本以 `VERSION` 为准。** 已接入基础世界绘制与完整效果流程、四套预设、配置分享及开发自动化。
 本轮只执行离线编译与 Python 测试，没有启动 Minecraft 或运行显卡视觉测试。
 代码接入不等于画面正确，世界显示、性能和兼容性均未验证。先前“只有天空”的游戏异常不能因离线通过就认定已修复。
+独立图形库 `omni-gfx/` 已完成阶段 0–2：Slang 核心模块、生成的 GLSL、SPIR-V 探针与不启动 Minecraft 的程序化测试世界；当前只在独立 OpenGL 环境验证，游戏内画面仍未验证。
 
 ## 开始开发
 
@@ -43,6 +44,9 @@ uv pip sync requirements-dev.lock
 | 要做什么 | 打开哪里 |
 | --- | --- |
 | 改阴影、水面、云等效果 | 选项在 `shaders/effects/`，阶段片段在 `shaders/rendering/` 的同名文件，纯公式在 `shaders/gfx/` |
+| 改通用库算法 | `omni-gfx/src/` 的 Slang 源；生成物在 `shaders/omni-gfx/`，不手改 |
+| 改不启动 Minecraft 的测试世界 | `omni-gfx/examples/world/` |
+| 生成 GLSL、SPIR-V 或跑等值测试 | `python omni-gfx/build.py` |
 | 接入新的加载器输入 | `shaders/bind/` 只做输入到普通数值的适配 |
 | 改绘制顺序或程序入口 | `shaders/rendering/` 中对应流程与 `programs.json` |
 | 改中间画面约定 | `shaders/rendering/buffers.glsl` |
@@ -68,6 +72,9 @@ uv pip sync requirements-dev.lock
 - [性能与重载优化执行计划](docs/performance-plan.md)
 - [文件结构与共用层重构计划](docs/structure-plan.md)
 - [omni-gfx 通用图形库计划](docs/omni-gfx-plan.md)
+- [omni-gfx 使用与构建](omni-gfx/README.md)
+- [omni-gfx 架构](omni-gfx/docs/architecture.md)
+- [omni-gfx 验证记录](omni-gfx/docs/verification.md)
 - [可复用库与框架](docs/libraries.md)
 - [算法参考与可复用实现](docs/references.md)
 - [项目开发约定](AGENTS.md)

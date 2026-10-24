@@ -20,3 +20,7 @@ shaders/lang/*.lang
 
 # 浏览器工具的本机输出，不属于项目源码。
 .playwright-mcp/
+
+# omni-gfx 的 SPIR-V 与清单是本机可复现产物，二进制不入仓库。
+omni-gfx/generated/spirv/*.spv
+omni-gfx/generated/spirv/manifest.json

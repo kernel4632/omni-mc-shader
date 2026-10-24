@@ -176,8 +176,12 @@ MC 光影编译 + 同场景对比
 
 - 当前版本以 `VERSION` 为准；MC 光影包已有九页菜单、519 个选项、280 组程序和 4 套预设。
 - `shaders/gfx/` 是旧 GLSL 原型，约 4k 行，迁移完成前保留。
-- 下一步：阶段 0，创建 `omni-gfx/` 骨架、CMake、Slang 编译和 SDL3 全屏三角形。
-- 阶段 0 通过后，再迁 `math`、`color`、`sampling`，不要一次改完所有模块。
+- 2026-10-24 完成阶段 0–2：根目录 `omni-gfx/` 骨架、Slang 源、GLSL 330 生成、SPIR-V 探针、`math` / `color` / `sampling` 迁移、程序化测试世界（天空、地形、水面、云、可移动相机、截图与帧时）。
+- 生成库已接入 `shaders/rendering/color/post_tonemap.glsl`，`composite14` 的 ACES / AgX / 无压缩三条曲线改为调用 `ogx` 函数；离线全量编译 280 组程序通过。
+- GPU 等值测试 26/26 通过，最大绝对差 0；测试世界截图与帧时记录在 `.dev/omni-gfx/`，详见 `omni-gfx/docs/verification.md`。
+- 未验证：Minecraft 游戏内画面、Vulkan/Aperture 运行时、其他显卡、交互窗口逐项手动操作。
+- 下一步：阶段 3，按效果模块迁移大气、云、雾、水、阴影、GI、反射、后期与抗锯齿，逐项用同一测试世界固定机位与旧实现比较。
+- 阶段 1 的贴图过滤函数（双三次采样）仍留在旧 `shaders/gfx/`，需要先设计显式纹理接口再迁移。
 
 ## 十四、决策记录
 
@@ -188,3 +192,6 @@ MC 光影编译 + 同场景对比
 | 2026-10-24 | 复用优先，手写只做适配、组合、生成器 |
 | 2026-10-24 | Iris 第一优先，Aperture/Vulkan 第二，其他引擎按需 |
 | 2026-10-24 | 手写核心目标 ≤3000 行，冲刺 2000 行；生成/第三方不计 |
+| 2026-10-24 | 本机没有 C++ 工具链，测试世界改用 Python + GLFW + PyOpenGL；不创建无法验证的 CMake 工程 |
+| 2026-10-24 | GLSL 由固定降级表生成，不用 Slang 的 GLSL 后端；原因是后端输出 `#version 450`、函数改名并附带 `main()`，不能作为库引入 |
+| 2026-10-24 | SPIR-V 由每模块探针生成，二进制不入仓库；`generated/spirv/manifest.json` 只在本机保留 |
