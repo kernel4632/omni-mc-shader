@@ -9,10 +9,11 @@
 | 命令 | 结果 |
 | --- | --- |
 | `python omni-gfx/build.py generate` | 3 个模块，7 个文件；GLSL 共 1140 行（含镜像副本） |
+| `python omni-gfx/build.py check` | 生成文件与源一致；库内 18 个文件通过中文说明审计 |
 | `python omni-gfx/build.py spirv` | 3 个 SPIR-V，编译器 2026.20；math 15520 字节、color 9152、sampling 2604 |
 | `.venv\Scripts\python.exe omni-gfx\tests\equivalence.py` | 26/26 用例通过，最大绝对差 0 |
 | `.venv\Scripts\python.exe omni-gfx\examples\world\render.py --frames 120 --warmup 20` | 1280×720，平均 10.46 毫秒，中位 10.34，95 分位 11.49，最小 8.76，最大 16.03，约 95.6 帧每秒 |
-| `python build.py audit` | 131 个代码文件通过中文说明与实现审计 |
+| `python build.py audit` | 110 个光影代码文件通过中文说明与实现审计 |
 | `python build.py verify` | 142 个测试通过；9 组编译探针通过；269 个入口、519 个选项、4 套预设 |
 | `python build.py compile` | 280 组唯一程序 × 两种代表配置 × 基础与开远景环境，0 错误 |
 
@@ -41,11 +42,13 @@
 - 80 像素见方的天空立方体贴图，六个面；云层 14 次主步进、2 次光照步进。
 - 后期曝光、暗角、抖动与 PNG 输出。
 
+交互冒烟：窗口显示、`W` 键前进六米、一帧完整绘制与交换缓冲通过；鼠标转向与组合键没有逐项手动验证。
+
 ## 四、尚未验证
 
 - Minecraft 游戏内画面：只验证了生成的 GLSL 能被 Iris 程序编译，没有启动游戏看效果。
 - Vulkan/Aperture 运行时：SPIR-V 只是模块探针，没有实际创建 Vulkan 管线。
 - 其他显卡与驱动：只有本机 Intel Arc 的数据。
-- 交互窗口的键鼠操作：代码路径已实现，本轮没有逐项手动操作记录。
+- 鼠标转向与组合键：移动逻辑和窗口显示已做冒烟测试，鼠标转向没有逐项手动验证。
 - 长时间稳定性、显存变化、不同分辨率下的帧时：本轮未测。
 - 云、水、雾的物理正确性：当前是风格化近似，不是物理模型。

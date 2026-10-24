@@ -40,12 +40,16 @@ def command_generate() -> None:
 
 
 def command_check() -> None:
-    """只读检查生成文件是否与源一致，不写文件也不调用编译器。
+    """只读检查生成文件是否与源一致，并审计库自己的中文说明。
 
     这条命令适合提交前快速确认，和项目根目录的完整验证互不替代。
+    库是独立目录，项目根审计不重复扫描它，因此这里单独跑一次。
     """
     generate.check_modules()  # 过期或缺失都会列出具体路径。
-    print(f"生成文件与源一致：{len(generate.MODULES)} 个模块")
+    sys.path.insert(0, str(ROOT))  # 复用项目根的中文说明审计器。
+    import audit  # 审计规则只有一份，库不另写一套。
+    audited = audit.check(LIB)  # 只扫描 omni-gfx 目录。
+    print(f"生成文件与源一致：{len(generate.MODULES)} 个模块；中文说明审计通过 {len(audited)} 个文件")
 
 
 def command_spirv(download: bool) -> None:

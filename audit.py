@@ -20,8 +20,8 @@ from pathlib import Path  # 用项目相对路径固定审计范围并隐藏本�
 CHINESE = re.compile(r"[\u3400-\u9fff]")  # 只有汉字能证明说明不是纯英文标识符。
 DIRECTIVE = re.compile(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b")  # 属性文件里的条件指令是机器语句，加载器按选项宏挑选分支。
 MACHINE = re.compile(r"\s*(?:#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include)\b|const\s+\w+\s+\w+\s*=)")  # 注释里成行的机器语句（预处理指令、常量声明）不是给接手者的自然语言说明；普通注释仍按中文检查。
-EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__"}  # 环境、参考和第三方内容不是本项目的维护边界。
-GENERATED = ("omni-gfx/generated/", "shaders/omni-gfx/")  # 自动生成的库文件只检查说明语言，不要求达到手写文件的比例。
+EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__", "omni-gfx"}  # 环境、参考和第三方内容不是本项目的维护边界；omni-gfx 由自己的检查命令审计。
+GENERATED = ("omni-gfx/generated/", "shaders/omni-gfx/", "generated/glsl/")  # 自动生成的库文件只检查说明语言，不要求达到手写文件的比例；最后一项用于库内单独审计。
 MACHINE_FILES = {"shaders/shaders.properties", "shaders/block.properties", "shaders/entity.properties", "shaders/item.properties"}  # 生成菜单和从 iterationT 原样移植的方块、实体、物品编号表是逐行可对照的机器数据，加中文说明会破坏对照；它们是数据不是业务代码。
 SUFFIXES = {".py", ".glsl", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除。
 TERMS = set("GLSL glsl Slang slang slangc omni gfx ogx PNG zlib CRC GLFW PyOpenGL SPIR-V SPIRV SPIR Vulkan GitHub Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup prepare SSBO AgX ACES Filmic Uncharted Narkowicz PCSS Omni iterationT Eclipse shadowcomp floodfill HSV".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。

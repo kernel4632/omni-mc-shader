@@ -1,4 +1,17 @@
 # 更新记录
+## 0.2.1
+
+补充 omni-gfx 阶段 0–2 的交互冒烟记录，并调整库的审计边界。
+
+- `omni-gfx/docs/verification.md` 增加窗口显示、`W` 键前进与一帧完整绘制的冒烟结果；明确鼠标转向与组合键尚未逐项手动验证。
+- 项目根审计不再重复扫描独立的 `omni-gfx/`，该目录由 `python omni-gfx/build.py check` 单独审计中文说明与生成文件。
+- 生成目录在库内审计时只检查说明语言，不要求达到手写文件比例；生成文件仍由离线测试核对摘要。
+- 根 `audit` 现在报告 110 个光影代码文件，库内检查报告 18 个文件。
+- `verify` 实测约 8.7 秒，重新通过 142 个测试与 9 组编译探针。
+
+验证：`python omni-gfx/build.py check`、`python build.py audit`、`python build.py verify` 通过；本轮未启动 Minecraft。
+
+
 ## 0.2.0
 
 新增独立图形库 `omni-gfx` 的阶段 0–2：Slang 核心模块、生成的 GLSL 330、SPIR-V 探针与不启动 Minecraft 的程序化测试世界。
