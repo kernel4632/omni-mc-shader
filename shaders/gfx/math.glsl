@@ -268,8 +268,8 @@ vec4 gfx_BicubicBlurTexture(sampler2D texSampler, vec2 coord){
 	c *= texPixelSize; // 换回零到一坐标。
 
 	vec2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
-	return mix(mix(textureLod(noisetex, c.yw, 0.0), textureLod(noisetex, c.xw, 0.0), m.x),
-			   mix(textureLod(noisetex, c.yz, 0.0), textureLod(noisetex, c.xz, 0.0), m.x),
+	return mix(mix(textureLod(texSampler, c.yw, 0.0), textureLod(texSampler, c.xw, 0.0), m.x),
+			   mix(textureLod(texSampler, c.yz, 0.0), textureLod(texSampler, c.xz, 0.0), m.x),
 			   m.y); // 四次双线性采样得到十六像素的三次模糊。
 }
 vec3 gfx_omniNormalize(vec3 vector) { return vector * inversesqrt(max(dot(vector, vector), 1e-10)); }
