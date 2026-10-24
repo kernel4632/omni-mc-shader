@@ -125,4 +125,54 @@ vec3 ogxFogApply(vec3 color, vec4 fog)
     return color * fog.a + fog.rgb; // 预乘散射色直接相加。
 }
 
+// 粉末效应：背光时气溶胶把光往前推，边缘因此更亮，正对时补偿回去。
+float ogxLegacyPowder(float absorption, float lightingAbsorption, float VdotL)
+{
+    return mix((1.0 - absorption) * (1.0 - lightingAbsorption), 1.0, VdotL * 0.5 + 0.5); // 吸收越强效果越强。
+}
+
+// 混合相位：后向与前向两个米氏相位加权，雾的轮廓在逆光时仍有层次。
+float ogxLegacyFogPhase(float VdotL)
+{
+    return ogxMiePhase(-0.4, VdotL) * 0.3 + ogxMiePhase(0.5, VdotL) * 0.7; // 前向占七成。
+}
+
+// 多次散射相位：四个衰减档各给一个相位，用来叠出体积雾的多层散射。
+// 返回四分量的原因是 GLSL 的数组参数在 Slang 里没有等价写法，四档直接装进一个向量。
+vec4 ogxMultiScatteringPhases(float VdotL)
+{
+    return vec4(ogxLegacyFogPhase(VdotL), ogxLegacyFogPhase(VdotL * 0.5),
+                  ogxLegacyFogPhase(VdotL * 0.25), ogxLegacyFogPhase(VdotL * 0.125)); // 四档角度逐次减半，与旧实现的循环一致。
+}
+
+// 雾密度的高度剖面：两层高度之间的空气最浓，离开这段距离按指数下降，夜间更浓。
+float ogxFogDensityHeight(vec3 fogPos, float heightA, float heightB, float falloff, float timeMidnight)
+{
+    float maxHeight = max(heightA, heightB); // 两层里较高的。
+    float minHeight = min(heightA, heightB); // 两层里较低的。
+    float dh = max(fogPos.y - maxHeight, 0.0) + max(minHeight - fogPos.y, 0.0); // 到浓度层的距离。
+    dh *= 2.0 / falloff; // 按衰减距离归一化。
+    float density = exp2(-dh * (1.0 - timeMidnight * 0.5)); // 指数下降，夜里衰减更慢。
+    return density * 0.1; // 乘基础密度。
+}
+
+// 噪声雾密度：高度包络乘四层噪声，平方两次让雾团边界清楚。
+float ogxFogDensityNoise(vec3 fogPos, vec3 wind, float heightA, float heightB, float falloff,
+    float timeMidnight, sampler2D noiseTexture)
+{
+    float dh = abs(fogPos.y - max(heightA, heightB)); // 到浓度层的距离。
+    dh *= 1.0 / falloff; // 按衰减距离归一化。
+    float envelope = exp2(-dh * (1.0 - timeMidnight * 0.5)); // 高度衰减包络。
+    float density = 0.0; // 累积的雾密度。
+    fogPos = fogPos * 0.02 + wind; // 缩放坐标并叠加风向。
+    for (float alpha = 0.5; alpha >= 0.125; alpha *= 0.5) // 四层不同频率的噪声。
+    {
+        density += alpha * ogxFogNoise(fogPos, noiseTexture); // 按权重累加。
+        fogPos = (fogPos + wind) * 3.5; // 抬高频率并再叠一次风。
+    }
+    density *= envelope; // 乘高度衰减。
+    density = density * density; // 平方让雾团更实。
+    return density * density * 3.0; // 再平方并放大，得到清楚的边界。
+}
+
 #endif

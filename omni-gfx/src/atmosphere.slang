@@ -263,4 +263,78 @@ float ogxSunDisc(float3 viewDirection, float3 sunDirection, float size, float ha
     return disc * disc; // 平方让边缘更收。
 }
 
+// 球面几何的另一种写法：只给半径与高度角余弦，省掉每次重建起点向量。
+// 与旧 `shaders/gfx/atmosphere.glsl` 的算式逐项一致，供预计算查表的坐标映射使用。
+float ogxSphereDistanceToTop(float r, float mu, float topRadius)
+{
+    float discriminant = r * r * (mu * mu - 1.0) + topRadius * topRadius; // 交点判别式。
+    return max(-r * mu + sqrt(max(discriminant, 0.0)), 0.0); // 取朝向层顶一侧的根。
+}
+
+// 视线到大气层底的距离，解球面方程取近根。
+float ogxSphereDistanceToBottom(float r, float mu, float bottomRadius)
+{
+    float discriminant = r * r * (mu * mu - 1.0) + bottomRadius * bottomRadius; // 球面交点判别式。
+    return max(-r * mu - sqrt(max(discriminant, 0.0)), 0.0); // 取靠近相机一侧的根。
+}
+
+// 判断一条朝下的视线是否真的打到地面球。
+bool ogxSphereRayIntersectsGround(float r, float mu, float bottomRadius)
+{
+    return mu < 0.0 && r * r * (mu * mu - 1.0) + bottomRadius * bottomRadius >= 0.0; // 朝下且判别式非负才相交。
+}
+
+// 瑞利与米氏密度剖面：以二为底的指数衰减。
+float ogxExponentialDensity(float expScale, float altitude)
+{
+    return exp2(expScale * altitude); // 高度越高密度越低。
+}
+
+// 臭氧密度剖面：转折高度以下一段斜线，以上另一段斜线。
+float ogxAbsorptionDensity(float width, float4 profile, float altitude)
+{
+    return altitude < width ? profile.x * altitude + profile.y : profile.z * altitude + profile.w; // 两段线性剖面。
+}
+
+// 把零到一的比例映射到贴图像素中心，避免采到子图交界。
+float ogxTexelCenterCoord(float x, float textureSize)
+{
+    return 0.5 / textureSize + x * (1.0 - 1.0 / textureSize); // 内缩半像素。
+}
+
+// 把子图内部比例映射到拼合大图坐标，子图在大图里也内缩半像素。
+float ogxSubTextureCoord(float x, float originalSize, float combinedSize)
+{
+    return 0.5 / combinedSize + x * (originalSize / combinedSize - 1.0 / combinedSize); // 按子图尺寸缩放。
+}
+
+// 月亮轨道：由游戏时间、纬度与轨道倾角闭式算出月亮的世界方向，y 轴朝天。
+float3 ogxMoonDirection(float time, float latitude, float pathRotation, float monthLength)
+{
+    float phi = radians(-latitude); // 观测点纬度，换算成弧度。
+    float del = radians(pathRotation); // 月亮轨道相对天赤道的倾角。
+    float t = time / 24000.0; // 时间换算成天。
+    t *= 1.0 + 1.0 / monthLength; // 月亮每天比太阳多走一点，长期累积才产生月相与对齐。
+    float h = t * 2.0 * OGX_PI - OGX_PI; // 时角，一整天转一圈。
+    float sinH = sin(phi) * sin(del) + cos(phi) * cos(del) * cos(h); // 高度角正弦。
+    float elevation = asin(clamp(sinH, -1.0, 1.0)); // 高度角；钳一下避免浮点误差让反正弦出非数。
+    float cosH = cos(elevation); // 高度角余弦。
+    float cosA = (sin(del) - sin(phi) * sinH) / max(cos(phi) * cosH, 1e-4); // 方位角余弦；分母加下限，避免两极附近除零。
+    cosA = clamp(cosA, -1.0, 1.0); // 同样钳一下，防止浮点误差越界。
+    float A = acos(cosA); // 方位角。
+    if (sin(h) > 0.0) // 时角过午时镜像到另一半球。
+    {
+        A = 2.0 * OGX_PI - A;
+    }
+    return float3(cosH * sin(A), sinH, cosH * cos(A)); // 单位方向，y 轴朝天。
+}
+
+// 圆盘剖面：由阈值与斜率构成边缘平滑的圆盘，平方后边界更清楚。
+float ogxDiscProfile(float a, float s, float h)
+{
+    float x = ogxSaturate((a - (1.0 - s)) * h); // 由阈值与斜率构成的圆盘剖面。
+    float disc = x * x * (3.0 - 2.0 * x); // 平滑收口。
+    return disc * disc; // 平方拉开明暗边界。
+}
+
 #endif

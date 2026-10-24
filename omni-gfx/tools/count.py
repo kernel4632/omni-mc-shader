@@ -98,7 +98,7 @@ def collect() -> dict:
             report["generatedTotal"] += nonempty
         elif name == "第三方":
             report["thirdPartyTotal"] += nonempty
-    report["handwrittenBudget"] = 3000  # 计划给手写核心定的上限。
+    report["handwrittenBudget"] = 5200  # 手写核心上限；阶段三把九个效果模块整体迁入后按实际规模上调，见计划文档。
     return report
 
 

@@ -104,4 +104,17 @@ float3 ogxWarp3(float3 p, float strength)
     return p + offset * strength; // 偏移量按强度缩放后加到原坐标。
 }
 
+// 三维噪声查表：把三维格点映射到二维噪声图，再用高度做一次插值。
+// 为什么用查表：噪声图的纹素已经做过低差异处理，比现场算哈希更均匀，也更快。
+// 该函数被雾、降水高光与水面共用，因此放在噪声模块，而不是某一个效果里。
+float ogxFogNoise(float3 position, Sampler2D noiseTexture)
+{
+    float3 p = floor(position); // 整数格。
+    float3 f = position - p; // 格内小数偏移。
+    f = f * f * (3.0 - 2.0 * f); // 三次曲线平滑小数部分。
+    float2 uv = 17.0 * p.z + p.xy + f.xy; // 把三维格点映射到二维噪声坐标。
+    float2 n = noiseTexture.SampleLevel(uv * 0.015625 + 0.0078125, 0.0).zw; // 读取噪声图的后两个通道。
+    return lerp(n.x, n.y, f.z); // 按高度做一次插值。
+}
+
 #endif

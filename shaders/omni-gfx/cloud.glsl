@@ -192,4 +192,114 @@ float ogxCloudShadow(OgxCloudLayer layer, vec3 groundPosition, vec3 sunDirection
     return mix(1.0, exp(-density * 1.5), 0.35); // 密度换成柔和云影，避免地面全黑。
 }
 
+// 亨耶-格林斯坦相函数：`g` 越大越向前集中，云的向阳边缘因此更亮。
+// 与旧 `shaders/gfx/cloud.glsl` 的算式一致，供平面云与体积云共用。
+float ogxHenyeyGreenstein(float cosAngle, float g)
+{
+    float num = 1.0 - g * g; // 分子，决定整体强度。
+    float denom = 1.0 + g * g - 2.0 * g * cosAngle; // 分母，越靠前越小。
+    float inverse = inversesqrt(denom); // 分母的平方根倒数。
+    return num * inverse * inverse * inverse * (0.25 * OGX_INV_PI); // 合成一次散射的相函数。
+}
+
+// 云顶曲线：把归一化高度换成边缘压低的圆顶，用来让云的顶部看起来是弧面。
+float ogxCloudTopCurve(float x)
+{
+    x = x - 1.0; // 平移到零点。
+    return 1.0 - x * x; // 开口向下的抛物线。
+}
+
+// 双线性噪声取样：平面云用同一张噪声图，按世界尺度的万分之一缩放。
+float ogxBilinearNoise(vec2 position, sampler2D noiseTexture)
+{
+    return textureLod(noiseTexture, position * 1.2e-4, 0.0).w; // 第四个通道当同一张图。
+}
+
+// 三次模糊噪声取样：先算十六像素的三次核，再做四次双线性采样，云团边缘因此更软。
+float ogxBicubicBlurNoise(vec2 coord, sampler2D noiseTexture)
+{
+    coord = coord * (1.2e-4 * 64.0) - 0.5; // 噪声图每个纹素对应一万二千分之一的尺度。
+    vec2 p = floor(coord); // 整数纹素。
+    vec2 f = coord - p; // 小数偏移。
+    vec2 ff = f * f; // 偏移平方。
+    vec4 w0; // 前两个权重。
+    vec4 w1; // 后两个权重。
+    w0.xz = 1.0 - f; w0.xz *= w0.xz * w0.xz; // 第一个权重是反向偏移的三次方。
+    w1.yw = ff * f; // 第四个权重是偏移的三次方。
+    w1.xz = 3.0 * w1.yw + 4.0 - 6.0 * ff; // 第三个权重。
+    w0.yw = 6.0 - w1.xz - w1.yw - w0.xz; // 第二个权重由总和为一推出。
+    vec4 s = w0 + w1; // 每对权重和。
+    vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy + w1 / s; // 每对合并成一次双线性采样的位置。
+    c *= 1.0 / 64.0; // 换算到零到一坐标。
+    vec2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
+    return mix(mix(textureLod(noiseTexture, vec2(c.y, c.w), 0.0).w, textureLod(noiseTexture, vec2(c.x, c.w), 0.0).w, m.x),
+                mix(textureLod(noiseTexture, vec2(c.y, c.z), 0.0).w, textureLod(noiseTexture, vec2(c.x, c.z), 0.0).w, m.x), m.y); // 四次采样合成一层模糊噪声。
+}
+
+// 平面云扭曲：三层不同频率的噪声叠出大尺度扭曲量，云团因此不是规整的圆。
+float ogxPlanarDistortion(vec2 position, vec2 windDirection, sampler2D noiseTexture)
+{
+    float density = ogxBilinearNoise(position - windDirection, noiseTexture); // 第一层。
+    float scale = 4.0; // 起始频率。
+    for (int i = 0; i < 3; i++, scale *= 3.0) // 三层，频率逐级乘三。
+    {
+        density += ogxBilinearNoise(scale * (position - windDirection * ogxFastSqrt(scale)), noiseTexture) * pow(scale, -1.3); // 高频层衰减后叠加。
+    }
+    return density; // 返回扭曲量。
+}
+
+// 平面云密度：扭曲后的位置叠六层噪声，再按云量抬阈值并压边缘。
+float ogxPlanarDensity(vec2 position, vec2 windDirection, sampler2D noiseTexture, float noiseScale, float coverage)
+{
+    position *= noiseScale; // 按调用方给的空间尺度缩放。
+    float distortion = ogxPlanarDistortion(position, windDirection, noiseTexture); // 取扭曲量。
+    position += distortion * 50.0; // 用扭曲量偏移位置。
+    float octScale = 2.8; // 每层频率倍数。
+    float density = ogxBicubicBlurNoise(position - windDirection, noiseTexture); // 第一层密度。
+    float weights = 1.0; // 权重和。
+    for (float i = 1.0; i <= 6.0; i++) // 六层。
+    {
+        float scale = ogxFastSqrt(i); // 每层频率取平方根。
+        float turn = -2.39996322973 * i; // 累积旋转角：每层再转一个黄金角，方向为负。
+        float grow = pow(octScale, i); // 累积缩放：层间矩阵每次都乘上频率倍数。
+        vec2 v = position - windDirection * scale; // 本层的偏移位置。
+        vec2 noisePosition = grow * vec2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大，与逐层乘矩阵的结果一致。
+        noisePosition *= vec2(1.0 - 0.35 * scale, 1.0 + 0.05 * scale); // 横向压扁，纵向拉伸。
+        float weight = pow(octScale, -0.85 * i); // 每层权重按频率衰减。
+        density += ogxBicubicBlurNoise(noisePosition, noiseTexture) * weight; // 累加这一层。
+        weights += weight; // 累加权重。
+    }
+    density /= weights; // 平均到零到一。
+    density = clamp(density + coverage - 1.0, 0.0, 1.0); // 按云量抬高阈值。
+    density *= exp(-distortion); // 扭曲强的地方压暗。
+    return density * density; // 平方让边缘收口。
+}
+
+// 平面云光照密度：层数更少，供云影与光照估计使用，便宜但不改变形状。
+float ogxPlanarLightingDensity(vec2 position, vec2 windDirection, sampler2D noiseTexture, float noiseScale, float coverage)
+{
+    position *= noiseScale; // 按空间尺度缩放。
+    float distortion = ogxPlanarDistortion(position, windDirection, noiseTexture); // 取扭曲量。
+    position += distortion * 50.0; // 用扭曲量偏移位置。
+    float octScale = 2.8; // 每层频率倍数。
+    float density = ogxBicubicBlurNoise(position - windDirection, noiseTexture); // 第一层。
+    float weights = 1.0; // 权重和。
+    for (float i = 1.0; i <= 3.0; i++) // 三层。
+    {
+        float scale = ogxFastSqrt(i); // 每层频率。
+        float turn = -2.39996322973 * i; // 累积旋转角。
+        float grow = pow(octScale, i); // 累积缩放。
+        vec2 v = position - windDirection * scale; // 本层的偏移位置。
+        vec2 noisePosition = grow * vec2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大。
+        noisePosition *= vec2(1.0 - 0.35 * scale, 1.0 + 0.05 * scale); // 横向压扁，纵向拉伸。
+        float weight = pow(octScale, -0.85 * i); // 每层权重。
+        density += ogxBilinearNoise(noisePosition, noiseTexture) * weight; // 用更便宜的取样累加。
+        weights += weight; // 累加权重。
+    }
+    density /= weights; // 平均。
+    density = clamp(density + coverage - 1.0, 0.0, 1.0); // 按云量抬高阈值。
+    density *= exp(-distortion); // 扭曲强的地方压暗。
+    return density * density; // 平方收口。
+}
+
 #endif

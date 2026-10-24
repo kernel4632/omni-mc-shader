@@ -108,11 +108,23 @@ class OmniGfxTests(unittest.TestCase):
             self.assertTrue((LIB / "examples" / "world" / "shaders" / name).is_file(), name)
 
     def test_phase3_effects_are_generated(self):
-        """阶段三的大气、云、水面与雾必须真的进入生成产物。"""
-        expected = {"atmosphere": "ogxAtmosphereSky", "cloud": "ogxCloudMarch", "water": "ogxWaterShade", "fog": "ogxFogMarch"}  # 每个效果一个入口函数。
+        """阶段三的九个效果模块都要有真正被调用的入口函数。"""
+        expected = {
+            "atmosphere": "ogxAtmosphereSky", "cloud": "ogxCloudMarch", "water": "ogxWaterShade", "fog": "ogxFogMarch",
+            "shadow": "ogxVariablePenumbraShadow", "gi": "ogxGroundTruthAo", "reflection": "ogxScreenSpaceTrace",
+            "post": "ogxBloomDownsample", "antialias": "ogxTaaReproject",
+        }  # 每个效果一个入口函数。
         for name, symbol in expected.items():
             with self.subTest(module=name):
                 self.assertIn(symbol, generate.module_text(name))  # 生成文本缺少入口函数说明模块没有接入。
+
+    def test_minecraft_uses_generated_effect_modules(self):
+        """光影包的九个适配层都要引用生成的库，避免旧实现继续各写一套。"""
+        adapters = ("shadow", "gi", "reflection", "post", "antialias", "atmosphere", "cloud", "water", "fog")  # 每个效果一个适配层。
+        for name in adapters:
+            path = ROOT / "shaders" / "gfx" / f"{name}.glsl"  # 光影侧的适配层。
+            with self.subTest(module=name):
+                self.assertIn(f'#include "/omni-gfx/{name}.glsl"', path.read_text(encoding="utf-8"))  # 实现必须来自生成库。
 
     def test_minecraft_program_uses_generated_atmosphere(self):
         """合成程序的相函数必须调用生成库，避免两套公式各自漂移。"""

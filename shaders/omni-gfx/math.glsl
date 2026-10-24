@@ -50,6 +50,31 @@ float ogxFastSqrt(float x) { return uintBitsToFloat(uint(0x1fbd1df5 + (floatBits
 // 把值从一段区间线性映射到零到一，再夹紧；区间外不会越界。
 float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); }
 
+// GLSL 取模的语义：结果始终落在零到除数之间，负数也一样。
+// 为什么不用机器附带的余数函数：它的符号跟随被除数，负数会得到负值，跟 GLSL 的取模不同。
+float ogxMod(float x, float y) { return x - y * floor(x / y); }
+
+// 逐分量判断两个向量是否完全相等。
+// 为什么不用 `==` 加聚合函数：GLSL 的向量相等本来就返回一个布尔值，Slang 返回布尔向量，
+// 两边写在一起会有一边报错；显式逐分量写，两种语言的语义完全相同。
+bool ogxEqual(vec2 a, vec2 b) { return a.x == b.x && a.y == b.y; }
+bool ogxEqual(vec3 a, vec3 b) { return a.x == b.x && a.y == b.y && a.z == b.z; }
+bool ogxEqual(vec4 a, vec4 b) { return a.x == b.x && a.y == b.y && a.z == b.z && a.w == b.w; }
+
+// 四乘四矩阵乘四维向量：按四列加权求和。
+// 为什么不用 `*`：Slang 与 GLSL 对矩阵乘法的行列解释不同，显式展开后两边结果一定相同。
+vec4 ogxMatrixMul(mat4 m, vec4 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3] * v.w; }
+
+// 四乘四矩阵的左上三阶乘以三维向量，等价于 GLSL 里的 `mat3(m) * v`。
+// 只用来做旋转与缩放，平移由调用方单独加上，读代码时能一眼看出有没有平移。
+vec3 ogxMatrixMulPoint(mat4 m, vec3 v) { return m[0].xyz * v.x + m[1].xyz * v.y + m[2].xyz * v.z; }
+
+// 四乘四矩阵的平移列：GLSL 的第四列存放平移，Slang 与 GLSL 的下标指向同一块内存。
+vec3 ogxMatrixTranslation(mat4 m) { return m[3].xyz; }
+
+// 三乘三矩阵乘三维向量，展开成三列的加权和，与 GLSL 的 `mat3 * vec3` 完全一致。
+vec3 ogxMatrix3MulPoint(mat3 m, vec3 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z; }
+
 // 两参数反正切：先处理竖直方向，再对左半平面补一个圆周率。
 float ogxAtan2(vec2 v)
 {

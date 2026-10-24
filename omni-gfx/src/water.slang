@@ -109,4 +109,181 @@ float3 ogxWaterShade(OgxWater water, float3 normal, float3 viewDirection, float3
     return color; // 返回线性水面颜色。
 }
 
+// 平滑噪声取样：先把坐标吸到最近的纹素中心，再用三次曲线改写小数部分，得到不会闪的平滑噪声。
+// 与旧 `shaders/gfx/water.glsl` 的算式一致，波纹形状因此不变。
+float4 ogxTextureSmooth(Sampler2D noiseTexture, float2 coord)
+{
+    coord *= 64.0; // 放大到六十四格，再按格取平滑。
+    coord += 0.5; // 移到格子中心。
+    float2 whole = floor(coord); // 整数格。
+    float2 part = coord - whole; // 小数部分。
+    coord = whole + part * part * (3.0 - 2.0 * part); // 三次曲线改写小数部分。
+    coord -= 0.5; // 移回格子角。
+    coord *= 0.015625; // 缩回六十四分之一，换算到零到一坐标。
+    return noiseTexture.SampleLevel(coord, 0.0); // 读取平滑后的噪声通道。
+}
+
+// 几乎恒等函数：只在靠近中间的一段把值重写成更平的曲线，用来压掉最亮和最暗的水波。
+float ogxAlmostIdentity(float x, float m, float n)
+{
+    x = abs(x * 2.0 - 1.0); // 折回零到一并取绝对值。
+    if (x <= m) // 只在该区间中间改写。
+    {
+        float a = 2.0 * n - m; // 三次项系数。
+        float b = 2.0 * m - 3.0 * n; // 二次项系数。
+        float t = x / m; // 归一化到零到一。
+        x = (a * t + b) * t * t + n; // 三次多项式保持端点连续。
+    }
+    return 1.0 - x; // 再翻转回来。
+}
+
+// 水面高度：六层不同尺度与速度的噪声叠加，按权重和归一化。
+float ogxWaves(float3 position, Sampler2D noiseTexture, float time, float waveScale)
+{
+    float wavesTime = time * 0.0035; // 波浪时间比真实时间慢很多。
+    position *= waveScale; // 按波浪尺度缩放空间坐标。
+    float2 p = position.xz - position.y; // 取水平坐标，减去高度让波浪跟着高度错动。
+    p += -3.875 * wavesTime; // 整片波浪一起平移。
+    p.x = -p.x; // 翻转一个轴，打散方向。
+    float waves = 0.0; // 累积高度。
+    float weight = 0.0; // 累积权重。
+    waves += ogxTextureSmooth(noiseTexture, p * float2(2.0, 1.2) + float2(0.0, p.x * 2.1)).w; weight += 1.0; // 第一层大浪。
+    p = p * 0.475; // 缩小坐标，频率升高。
+    p += float2(-5.16, -7.75) * wavesTime; // 这一层被风推着走。
+    waves += ogxTextureSmooth(noiseTexture, p * float2(2.0, 1.4) + float2(0.0, -p.x * 2.1)).w * 4.0; weight += 4.0; // 第二层。
+    p *= 0.67; // 再抬高频率。
+    p.x += 7.75 * wavesTime; // 反向移动。
+    waves += ogxTextureSmooth(noiseTexture, p + float2(0.0, p.x * 1.1)).z * 8.0; weight += 8.0; // 第三层。
+    p *= 0.7; // 继续抬高频率。
+    p.x += -2.82 * wavesTime; // 顺风移动。
+    waves += ogxTextureSmooth(noiseTexture, p * float2(1.0, 0.75) + float2(0.0, -p.x * 1.7)).w * 16.0; weight += 16.0; // 第四层。
+    p *= 0.45; // 高频细节。
+    p.x += wavesTime; // 顺风移动。
+    waves += ogxAlmostIdentity(ogxTextureSmooth(noiseTexture, p * float2(1.0, 0.8) + float2(0.0, -p.x * 1.7)).z, 0.2, 0.1) * 30.0; weight += 30.0; // 第五层。
+    p *= 0.5; // 最高频一层。
+    p.x += wavesTime; // 顺风移动。
+    waves += ogxAlmostIdentity(ogxTextureSmooth(noiseTexture, p * float2(1.0, 0.8) + float2(0.0, p.x * 1.7)).w, 0.2, 0.1) * 20.0; weight += 20.0; // 第六层。
+    return waves / weight; // 高度除以权重和，归一化到零到一。
+}
+
+// 波法线：用中心与两个邻点的高度差构成法线，再按波高与陡度缩放。
+float3 ogxWavesNormal(float3 position, Sampler2D noiseTexture, float time, float waveScale, float waveHeight, float heightScale)
+{
+    float sampleDistance = 12.0; // 切线差分采样的距离。
+    position.xz -= 0.005 * sampleDistance; // 把采样点整体挪一点，让差分落在波浪内部。
+    float center = ogxWaves(position, noiseTexture, time, waveScale); // 中心高度。
+    float left = ogxWaves(position + float3(0.01 * sampleDistance, 0.0, 0.0), noiseTexture, time, waveScale); // 横向偏移。
+    float up = ogxWaves(position + float3(0.0, 0.0, 0.01 * sampleDistance), noiseTexture, time, waveScale); // 纵向偏移。
+    float3 normal = float3(center - left, center - up, 1.0); // 用两个方向的高度差构成法线。
+    normal.xy *= waveHeight * (heightScale / sampleDistance); // 乘波高与陡度，控制倾斜。
+    return normal; // 返回未归一化的法线。
+}
+
+// 水面视差：沿视线在波浪高度场里步进，找到视线与浪面的交点。
+float3 ogxWaterParallax(float3 position, float3 viewVector, Sampler2D noiseTexture, float time, float waveScale, float heightScale)
+{
+    float3 stepSize = float3(heightScale * 0.8, heightScale * 0.8, 0.6); // 每步大小，按波高缩放。
+    float waveHeight = ogxWaves(position, noiseTexture, time, waveScale); // 起点波高。
+    float3 pCoord = float3(0.0, 0.0, 1.0); // 以当前点为参考向前推进的距离。
+    float3 steps = viewVector * stepSize; // 每步步进。
+    float sampleHeight = waveHeight; // 当前步的波高。
+    for (int i = 0; sampleHeight < pCoord.z && i < 12; ++i) // 最多十二步。
+    {
+        pCoord.xy += steps.xy * clamp((pCoord.z - sampleHeight) * (-viewVector.z + 0.05) / (stepSize.z * 0.2), 0.0, 1.0); // 按剩余深度推进水平偏移。
+        pCoord.z += steps.z; // 步进向前。
+        sampleHeight = ogxWaves(position + float3(pCoord.x, 0.0, pCoord.y), noiseTexture, time, waveScale); // 读取新位置的波高。
+    }
+    return position + float3(pCoord.x, 0.0, pCoord.y); // 返回偏移后的采样坐标。
+}
+
+// 折射坐标：水面按两种法线的差做偏移，玻璃与冰按折射方向投影到屏幕。
+float2 ogxWaterRefractionCoord(bool isWater, float3 normal, float3 viewPos, float3 waveNormal,
+    float3x3 modelView, float4x4 projection, float waterDeep, float waterDist, float2 screenInput)
+{
+    float2 coord = screenInput; // 默认不变，返回原屏幕坐标。
+    if (isWater) // 水面：用波法线与平水面法线的差做偏移。
+    {
+        float3 waveView = normalize(ogxMatrix3MulPoint(modelView, waveNormal)); // 波法线转到视空间。
+        float3 flatView = normalize(ogxMatrix3MulPoint(modelView, float3(0.0, 1.0, 0.0))); // 平水面法线转到视空间。
+        coord = flatView.xy - waveView.xy; // 两种法线的差就是偏移方向。
+        coord *= ogxSaturate(waterDeep) * 0.5 / (waterDist + 0.0001); // 越深偏得越远，远处收敛到零。
+        coord += screenInput; // 叠到原坐标上。
+    }
+    else // 玻璃与冰：按折射方向投影到屏幕。
+    {
+        float3 direction = refract(normalize(viewPos), normal, 0.66); // 视空间折射方向。
+        direction /= ogxSaturate(dot(direction, -normal)); // 归一化到视线方向，避免分母让角度爆炸。
+        direction *= ogxSaturate(waterDeep * 2.0) * 0.125; // 按深度缩放。
+        float4 position = ogxMatrixMul(projection, float4(viewPos + direction, 0.0)); // 投影到裁剪空间。
+        coord = position.xy / position.w * 0.5 + 0.5; // 转到屏幕坐标。
+    }
+    return coord; // 返回采样用的屏幕坐标。
+}
+
+// 水洼覆盖：只有湿度超过噪声阈值的地方才积水，五次方让边缘收得很快。
+float ogxPuddleCoverage(float halfWet, float noise, float size)
+{
+    float puddles = max(halfWet - noise, 0.0); // 只算湿度超过噪声阈值的部分。
+    puddles = clamp(halfWet - exp(-25.0 * puddles * puddles * puddles * puddles * puddles * size), 0.0, 1.0); // 指数衰减得到积水比例。
+    return puddles; // 返回零到一的积水覆盖。
+}
+
+// 水洼粗糙度：湿润阶段按锐度在干湿之间插值。
+float ogxPuddleRoughness(float roughness, float wetRoughness, float wetnessStages, float sharpness)
+{
+    return lerp(roughness, wetRoughness, wetnessStages * sharpness); // 湿润阶段乘锐度作为混合比例。
+}
+
+// 降水高光：三层噪声叠出雨点打在物体表面的细碎高光。
+float ogxRainSpecular(float3 pos, Sampler2D noiseTexture)
+{
+    pos.y *= 0.2; // 压扁竖直方向，让高光沿竖直变化更慢。
+    float n = 0.0; // 累积噪声。
+    n += ogxFogNoise(pos, noiseTexture); // 第一层。
+    n += ogxFogNoise(pos * 0.5, noiseTexture) * 2.0; // 第二层，缩小坐标并放大权重。
+    n += ogxFogNoise(pos * 0.25, noiseTexture) * 4.0; // 第三层，更细的权重更高。
+    n /= 7.0; // 平均到零到一。
+    return clamp(n, 0.0, 1.0) * 0.7 + 0.3; // 留一个下限，避免完全没有高光。
+}
+
+// 水体雾：把水下的吸收、散射与全反射合成一段颜色，再按可见度混回场景。
+float3 ogxWaterFog(float3 color, float3 viewDir, float opaqueDist, float waterDist, float3 normal,
+    float ice, float stainedGlass, float hand, float occludedWater, float waterSkylight, float totalInternal,
+    float3 lightDir, float3 lightColor, float3 skyColor, float3 upView, float eyeWaterDepth, float wetness,
+    float refractIor, float fogDensityOption, bool underwater)
+{
+    float distDiff = opaqueDist - waterDist; // 水面到水底的真实距离。
+    waterDist = underwater ? lerp(waterDist, opaqueDist, stainedGlass) : lerp(distDiff, min(distDiff * 0.3, 6.0), occludedWater); // 按遮挡与玻璃修正厚度。
+    waterDist = max(waterDist, totalInternal * eyeWaterDepth * 50.0); // 全反射时按眼睛水深拉长光程。
+    float3 shadowRefracted = refract(-lightDir, upView, 1.0 / refractIor); // 太阳经过水面的折射方向。
+    float3 fogColor = lerp(float3(0.05, 0.6, 1.0), float3(0.3, 0.9, 1.5), ice); // 冰偏青，普通水偏蓝。
+    fogColor = lerp(fogColor, float3(0.5), wetness * 0.6); // 越湿颜色越灰。
+    fogColor *= dot(float3(0.33333), skyColor); // 水雾颜色随环境色变化。
+    if (!underwater) // 水面之上看水下。
+    {
+        fogColor *= 0.04 - wetness * 0.032; // 水面之上的散射只占很小一部分。
+        fogColor *= waterSkylight; // 再乘该处水面的天光。
+        float3 l = normalize(reflect(viewDir, normal)); // 视线在水面的反射方向。
+        float3 h = normalize(l - viewDir); // 反射方向与视线的半程。
+        float fresnel = ogxSaturate(dot(normal, l)) * ogxSaturate(dot(l, h) * 1.5 - 0.5); // 简化的反射权重。
+        float scatter = 3.0 * fresnel * pow(dot(shadowRefracted, viewDir) * 5.0 + 5.2, -1.4); // 逆光时的散射强度。
+        fogColor = lerp(fogColor, lightColor * fogColor * 3.0, scatter * ogxSaturate(1.0 - wetness - occludedWater)); // 按散射叠进光色。
+    }
+    else // 眼睛在水里。
+    {
+        fogColor *= 0.02 - wetness * 0.012; // 水下的散射更暗。
+        float scatter = 1.0 / (dot(shadowRefracted, viewDir) * 5.0 + 5.1); // 水下的前向散射。
+        float3 sunScatter = lightColor * scatter * fogColor * 2.0; // 太阳在水下的散射色。
+        fogColor *= dot(viewDir, upView) * 0.4 + 0.6; // 向上看更亮。
+        fogColor += sunScatter * (eyeWaterDepth * (1.0 - wetness * 0.6)); // 加上太阳散射。
+    }
+    float density = underwater ? ice * 0.96 + 0.04 : 0.29; // 水下密度更高。
+    float visibility = exp2(-waterDist * density * fogDensityOption); // 按光程指数衰减得到可见度。
+    visibility = clamp(visibility, 0.35 * ice, 1.0); // 冰给出一个可见度下限。
+    visibility = lerp(visibility, 0.7, hand); // 手里的东西只受轻微影响。
+    float3 attenuation = underwater ? float3(0.1, 0.6, 1.0) : float3(0.2, 0.5, 0.7); // 分通道衰减色，水底偏蓝。
+    color *= pow(attenuation * 0.99, float3(waterDist * (0.21 * float(!underwater) + 0.04) * fogDensityOption)); // 按光程衰减，长波先掉。
+    return lerp(fogColor, color, visibility); // 用可见度在水雾色与场景色之间混合。
+}
+
 #endif

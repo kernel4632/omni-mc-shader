@@ -180,6 +180,42 @@ def color_depth_target(width: int, height: int) -> tuple[int, int, int]:
     return fbo, color, depth  # 调用方负责释放三个对象。
 
 
+def multi_color_depth_target(width: int, height: int, count: int) -> tuple[int, list[int], int]:
+    """创建带多张颜色附件与一张深度的离屏目标，返回帧缓冲、颜色纹理列表与深度纹理。
+
+    为什么需要多张颜色：测试世界的场景阶段要同时写颜色与法线，后面的遮蔽与反射降噪
+    都按法线和深度判断邻域，只有颜色的话拿不到几何信息。
+    """
+    fbo = GL.glGenFramebuffers(1)  # 绘制时挂载。
+    GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, fbo)  # 之后的附件设置作用于它。
+    colors = []  # 颜色纹理按附件顺序保存。
+    attachments = []  # 绘制缓冲列表与附件一一对应。
+    for index in range(count):  # 每张附件单独一张纹理。
+        texture = GL.glGenTextures(1)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, texture)
+        GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_RGBA16F, width, height, 0, GL.GL_RGBA, GL.GL_FLOAT, None)  # 十六位浮点保留高动态范围。
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_NEAREST)  # 法线与深度不能插值，取样必须精确到纹素。
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_NEAREST)  # 放大同样用最近值。
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)  # 屏幕外不重复。
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)  # 屏幕外不重复。
+        attachment = GL.GL_COLOR_ATTACHMENT0 + index  # 这个附件的枚举值。
+        GL.glFramebufferTexture2D(GL.GL_FRAMEBUFFER, attachment, GL.GL_TEXTURE_2D, texture, 0)  # 挂上颜色。
+        colors.append(texture)  # 保存纹理编号。
+        attachments.append(attachment)  # 保存附件编号。
+    depth = GL.glGenTextures(1)  # 深度纹理。
+    GL.glBindTexture(GL.GL_TEXTURE_2D, depth)
+    GL.glTexImage2D(GL.GL_TEXTURE_2D, 0, GL.GL_DEPTH_COMPONENT24, width, height, 0, GL.GL_DEPTH_COMPONENT, GL.GL_FLOAT, None)  # 二十四位深度。
+    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_NEAREST)  # 深度只做精确比较。
+    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_NEAREST)  # 放大也用最近值。
+    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)  # 屏幕外不重复。
+    GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)  # 屏幕外不重复。
+    GL.glFramebufferTexture2D(GL.GL_FRAMEBUFFER, GL.GL_DEPTH_ATTACHMENT, GL.GL_TEXTURE_2D, depth, 0)  # 挂深度。
+    GL.glDrawBuffers(len(attachments), attachments)  # 一次写全部颜色附件。
+    if GL.glCheckFramebufferStatus(GL.GL_FRAMEBUFFER) != GL.GL_FRAMEBUFFER_COMPLETE:  # 驱动不支持时尽早报错。
+        raise RuntimeError("多附件帧缓冲不完整")
+    return fbo, colors, depth  # 调用方负责释放。
+
+
 def read_float(texture: int, width: int, height: int) -> list[float]:
     """从浮点纹理读回全部像素，返回按行排列的通道列表。
 

@@ -13,6 +13,8 @@
 #define GFX_ATMOSPHERE_INCLUDED
 
 #include "/gfx/math.glsl"
+// 迁移后的效果实现在生成库里。
+#include "/omni-gfx/atmosphere.glsl"
 
 // 把半径夹进大气层范围内。
 float gfx_clamp_radius(float r, float bottomRadius, float topRadius){
@@ -25,40 +27,38 @@ float gfx_safe_sqrt(float a){
 }
 
 // 视线到大气层顶的距离，解球面方程取远根。
-float gfx_distance_to_top(float r, float mu, float topRadius){
-	float discriminant = r * r * (mu * mu - 1.0) + topRadius * topRadius; // 交点判别式。
-	return max(-r * mu + gfx_safe_sqrt(discriminant), 0.0); // 取朝向层顶一侧的根。
+float gfx_distance_to_top(float r, float mu, float top_radius){
+	return ogxSphereDistanceToTop(r, mu, top_radius); // 实现在生成库。
 }
 
 // 视线到大气层底的距离，解球面方程取近根。
-float gfx_distance_to_bottom(float r, float mu, float bottomRadius){
-	float discriminant = r * r * (mu * mu - 1.0) + bottomRadius * bottomRadius; // 球面交点判别式。
-	return max(-r * mu - gfx_safe_sqrt(discriminant), 0.0); // 取靠近相机一侧的根。
+float gfx_distance_to_bottom(float r, float mu, float bottom_radius){
+	return ogxSphereDistanceToBottom(r, mu, bottom_radius); // 实现在生成库。
 }
 
 // 判断一条朝下的视线是否真的打到地面球。
-bool gfx_ray_intersects_ground(float r, float mu, float bottomRadius){
-	return mu < 0.0 && r * r * (mu * mu - 1.0) + bottomRadius * bottomRadius >= 0.0; // 朝下且判别式非负才相交。
+bool gfx_ray_intersects_ground(float r, float mu, float bottom_radius){
+	return ogxSphereRayIntersectsGround(r, mu, bottom_radius); // 实现在生成库。
 }
 
 // 瑞利与米氏密度剖面：以二为底的指数衰减。
-float gfx_density_rayleigh_mie(float expScale, float altitude){
-	return exp2(expScale * altitude); // 高度越高密度越低。
+float gfx_density_rayleigh_mie(float exp_scale, float altitude){
+	return ogxExponentialDensity(exp_scale, altitude); // 实现在生成库。
 }
 
 // 臭氧密度剖面：转折高度以下一段斜线，以上另一段斜线。
 float gfx_density_absorption(float width, vec4 profile, float altitude){
-	return altitude < width ? profile.x * altitude + profile.y : profile.z * altitude + profile.w; // 两段线性剖面。
+	return ogxAbsorptionDensity(width, profile, altitude); // 实现在生成库。
 }
 
 // 把零到一的比例映射到贴图像素中心，避免采到子图交界。
-float gfx_texture_coord(float x, float textureSize){
-	return 0.5 / textureSize + x * (1.0 - 1.0 / textureSize); // 内缩半像素。
+float gfx_texture_coord(float x, float texture_size){
+	return ogxTexelCenterCoord(x, texture_size); // 实现在生成库。
 }
 
 // 把子图内部比例映射到拼合大图坐标，子图在大图里也内缩半像素。
-float gfx_combined_texture_coord(float x, float originalSize, float combinedSize){
-	return 0.5 / combinedSize + x * (originalSize / combinedSize - 1.0 / combinedSize); // 按子图尺寸缩放。
+float gfx_combined_texture_coord(float x, float original_size, float combined_size){
+	return ogxSubTextureCoord(x, original_size, combined_size); // 实现在生成库。
 }
 
 // --- 星场：把视线方向化成星点亮度与星色，算法照 Eclipse `lib/stars.glsl` ---
@@ -160,61 +160,31 @@ vec3 gfx_align_to_sun_axis(vec3 worldDir, vec3 sunVector){
 // 圆盘不是几何，而是方向夹角的遮罩；角半径与硬度属于形体参数，由调用方给出。
 
 // 太阳圆盘遮罩：返回零到一的亮度，太阳颜色与辐照倍率由调用方乘上。
-float gfx_sun_disc(vec3 worldDir, vec3 sunDir){
-	float d = dot(worldDir, sunDir); // 视线与太阳方向的夹角余弦。
-	float size = 5e-5; // 圆盘角半径，越小圆盘越细。
-	float hardness = 4e4; // 边缘硬度，越大边缘越陡。
-	float x = clamp((d - (1.0 - size)) * hardness, 0.0, 1.0); // 从中心到边缘的平滑遮罩。
-	float disc = x * x * (3.0 - 2.0 * x); // 三次平滑曲线收口。
-	return disc * disc; // 平方让边缘更收。
+float gfx_sun_disc(vec3 world_dir, vec3 sun_dir){
+	return ogxSunDisc(world_dir, sun_dir, 5e-5, 4e4); // 圆盘角半径与硬度是太阳的固定值。
 }
 
 // 真实月亮圆盘：角半径由尺寸档位换算，档位越大圆盘越大。
-float gfx_moon_disc_real(vec3 worldDir, vec3 moonDir, float sizeSetting){
-	float d = dot(worldDir, moonDir); // 视线与月亮方向的夹角余弦。
-	float moonSize = 0.999 + (10.0 - sizeSetting) * 0.0001; // 档位越大圆盘越大。
-	float x = clamp((d - moonSize) / (1.0 - moonSize), 0.0, 1.0); // 从圆盘中心到边缘的遮罩。
-	float disc = x * x * (3.0 - 2.0 * x); // 平滑曲线。
-	return disc * disc; // 平方收口后返回零到一的亮度。
+float gfx_moon_disc_real(vec3 world_dir, vec3 moon_dir, float size_setting){
+	float moon_size = 0.999 + (10.0 - size_setting) * 0.0001; // 档位越大圆盘越大。
+	return ogxDiscProfile(dot(world_dir, moon_dir), 1.0 - moon_size, 1.0 / (1.0 - moon_size)); // 实现在生成库。
 }
 
 // 默认月亮圆盘：比太阳更硬、更小的圆盘。
-float gfx_moon_disc_default(vec3 worldDir, vec3 moonDir){
-	float d = dot(worldDir, moonDir); // 视线与月亮方向的夹角余弦。
-	float size = 5e-5; // 圆盘角半径。
-	float hardness = 1e5; // 边缘硬度，比太阳更硬。
-	float x = clamp((d - (1.0 - size)) * hardness, 0.0, 1.0); // 月亮遮罩。
-	float disc = x * x * (3.0 - 2.0 * x); // 平滑曲线。
-	return disc * disc; // 平方收口后返回零到一的亮度。
+float gfx_moon_disc_default(vec3 world_dir, vec3 moon_dir){
+	return ogxSunDisc(world_dir, moon_dir, 5e-5, 1e5); // 默认月亮更硬更小。
 }
 
 // 反射里的月亮圆盘：反射天空盒分辨率低，用更大的角半径换取可见。
-float gfx_moon_disc_reflection(vec3 worldDir, vec3 moonDir){
-	float d = dot(worldDir, moonDir); // 夹角余弦。
-	float size = 0.0025; // 反射用更大的角半径。
-	float hardness = 300.0; // 边缘更软。
-	float x = clamp((d - (1.0 - size)) * hardness, 0.0, 1.0); // 反射月亮遮罩。
-	float disc = x * x * (3.0 - 2.0 * x); // 平滑曲线。
-	return disc * disc; // 返回零到一亮度。
+float gfx_moon_disc_reflection(vec3 world_dir, vec3 moon_dir){
+	return ogxSunDisc(world_dir, moon_dir, 0.0025, 300.0); // 反射用更大的角半径与更软的边缘。
 }
 
 // --- 月亮轨道：由游戏时间、纬度与轨道倾角闭式算出月亮的世界方向 ---
 // `time` 是累计世界刻，`latitude` 与 `pathRotation` 是角度，`monthLength` 是月亮绕一圈的游戏日数。
 // 返回单位方向，y 轴朝天；数学步骤照 Eclipse `dimensions/begin.csh:73-95`。
-vec3 gfx_moon_direction(float time, float latitude, float pathRotation, float monthLength){
-	float phi = radians(-latitude); // 观测点纬度，换算成弧度。
-	float del = radians(pathRotation); // 月亮轨道相对天赤道的倾角。
-	float t = time / 24000.0; // 时间换算成天。
-	t *= 1.0 + 1.0 / monthLength; // 月亮每天比太阳多走一点，长期累积才产生月相与对齐。
-	float H = t * 2.0 * GFX_PI - GFX_PI; // 时角，一整天转一圈。
-	float sin_h = sin(phi) * sin(del) + cos(phi) * cos(del) * cos(H); // 高度角正弦。
-	float h = asin(clamp(sin_h, -1.0, 1.0)); // 高度角；钳一下避免浮点误差让反正弦出非数。
-	float cos_h = cos(h); // 高度角余弦。
-	float cosA = (sin(del) - sin(phi) * sin_h) / max(cos(phi) * cos_h, 1e-4); // 方位角余弦；分母加下限，避免两极附近除零。
-	cosA = clamp(cosA, -1.0, 1.0); // 同样钳一下，防止浮点误差越界。
-	float A = acos(cosA); // 方位角。
-	if (sin(H) > 0.0) A = 2.0 * GFX_PI - A; // 时角过午时镜像到另一半球。
-	return vec3(cos_h * sin(A), sin_h, cos_h * cos(A)); // 单位方向，y 轴朝天。
+vec3 gfx_moon_direction(float time, float latitude, float path_rotation, float month_length){
+	return ogxMoonDirection(time, latitude, path_rotation, month_length); // 实现在生成库。
 }
 
 // --- 天空盒投影：世界方向与三乘二天空盒贴图的纹素坐标互相换算 ---

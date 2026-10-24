@@ -22,7 +22,8 @@ SRC = LIB / "src"  # Slang 源文件目录，唯一手写算法来源。
 SHADER_OUT = ROOT / "shaders" / "omni-gfx"  # Minecraft 直接引入的位置。
 GENERATED_OUT = LIB / "generated" / "glsl"  # 独立库查看与分发的副本。
 MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳。
-MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog")  # 阶段一二的核心模块与阶段三的五个效果模块。
+MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog",
+           "shadow", "gi", "reflection", "post", "antialias")  # 阶段一二的核心模块与阶段三的九个效果模块。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
 DISPLAY = {
@@ -34,7 +35,12 @@ DISPLAY = {
     "cloud": "云",
     "water": "水面",
     "fog": "雾",
-}
+    "shadow": "阴影",
+    "gi": "全局光",
+    "reflection": "反射",
+    "post": "后期",
+    "antialias": "抗锯齿",
+}  # 每个生成文件头里的中文模块名，顺序与模块表一致。
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。
 TYPE_WORDS = {
@@ -47,7 +53,9 @@ TYPE_WORDS = {
 # 逐项替换的语法差异；每项都配一条原因，方便新会话判断能不能扩展。
 LOWERINGS = (
     (re.compile(r"\bstatic\s+const\b"), "const", "GLSL 全局常量不需要 static，写成 static 会编译失败。"),
+    (re.compile(r"\bSampler2DShadow\b"), "sampler2DShadow", "阴影比较采样的句柄名与 GLSL 不同，必须先换更长的名字。"),
     (re.compile(r"\bSampler2D\b"), "sampler2D", "Slang 的纹理句柄类型名与 GLSL 不同。"),
+    (re.compile(r"\brsqrt\s*\("), "inversesqrt(", "Slang 的平方根倒数在 GLSL 里叫 inversesqrt。"),
     (re.compile(r"\blerp\s*\("), "mix(", "Slang 的线性插值函数在 GLSL 里叫 mix。"),
     (re.compile(r"\basfloat\s*\("), "uintBitsToFloat(", "Slang 的按位重解释对应 GLSL 的 uintBitsToFloat。"),
     (re.compile(r"\basuint\s*\("), "floatBitsToUint(", "Slang 的取位对应 GLSL 的 floatBitsToUint。"),
@@ -55,10 +63,16 @@ LOWERINGS = (
 )
 
 # 纹理取像素的写法：`tex.Load(int3(pixel, level))` 与 GLSL 的 `texelFetch` 一一对应。
-LOAD = re.compile(r"(\w+)\.Load\(\s*int3\(\s*([^,]+?)\s*,\s*([^)]+?)\s*\)\s*\)")
+LOAD = re.compile(r"(\w+)\.Load\(\s*int3\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 坐标参数允许再套一层构造函数。
+
+# 带细节层级的采样：Slang 用成员方法，GLSL 用自由函数；参数里允许一层括号，够放构造函数。
+SAMPLE_LEVEL = re.compile(r"(\w+)\.SampleLevel\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 参数里允许一层括号，够放构造函数。
+
+# 阴影比较采样：GLSL 把比较值塞进第三个分量，Slang 单独作为参数。
+SAMPLE_CMP = re.compile(r"(\w+)\.SampleCmpLevelZero\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 两参数是纹理坐标与比较值。
 
 # 生成文件里不能残留的 Slang 写法；漏掉一种就说明转换表需要补充。
-LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(")
+LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(|\.SampleLevel\s*\(|\.SampleCmpLevelZero\s*\(")  # 成员采样与残留类型名都要拦住。
 
 # 光影会把库嵌进自己的程序，库文件不能再声明语言版本。
 VERSION = re.compile(r"(?m)^\s*#version\b")
@@ -96,6 +110,8 @@ def _lower_text(text: str) -> str:
     一旦源文件用了转换表以外的新语法，这里直接失败，避免生成看似成功但编译不过的文件。
     """
     text = LOAD.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 先换取像素，此时 `int3` 还没改名。
+    text = SAMPLE_CMP.sub(lambda m: f"textureLod({m[1]}, vec3({m[2]}, {m[3]}), 0.0)", text)  # 比较采样先展开成三分量坐标。
+    text = SAMPLE_LEVEL.sub(lambda m: f"textureLod({m[1]}, {m[2]}, {m[3]})", text)  # 带层级采样换成 GLSL 自由函数。
     text = _replace_types(text)  # 类型名随后统一。
     for pattern, replacement, _reason in LOWERINGS:  # 逐项处理函数名与关键字。
         text = pattern.sub(replacement, text)

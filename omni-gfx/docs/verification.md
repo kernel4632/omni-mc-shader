@@ -1,5 +1,41 @@
 # omni-gfx 验证记录
 
+## 一、2026-10-24 阶段三收尾（0.4.1）
+
+设备：Intel(R) Arc(TM) Graphics，OpenGL 3.3.0 - Build 32.0.101.8531，Windows。本轮没有启动 Minecraft。
+
+| 命令 | 结果 |
+| --- | --- |
+| `python omni-gfx/build.py generate` | 13 个模块，27 个文件；生成 GLSL 共 7442 行 |
+| `python omni-gfx/build.py check` | 生成文件与源一致；库内 27 个文件通过中文说明审计 |
+| `python build.py audit` | 光影与库的代码文件全部通过中文说明与实现审计 |
+| `python build.py verify` | 测试、关键光影检查、编译探针与打包通过 |
+| `python build.py compile` | 全部程序 × 两种代表配置 × 基础与开远景环境，280 组唯一程序，0 错误 |
+| `python omni-gfx/build.py count` | 手写核心 4870 行（上限 5200），生成 GLSL 6970 行，第三方 0 行 |
+| `omni-gfx/examples/world/render.py --frames 120 --warmup 20` | 1280×720，平均 11.86 毫秒，中位 11.85，95 分位 13.29，最小 9.82，最大 14.51，约 84 帧每秒 |
+
+截图：`.dev/omni-gfx/world-complete.png`（本机文件，按项目规则不提交）。帧时记录：`.dev/omni-gfx/perf-complete.json`。
+上一版对照：平均 28.96 毫秒、约 34.5 帧每秒；本轮把反射与遮蔽降到半分辨率，并让地形只画到水面以上，帧时降到约三分之一。
+
+### 本轮验证到的内容
+
+- 五个新模块与四个扩展模块都进入生成产物，并被真实程序引用：`shaders/gfx/` 下九个适配层各有一行 `/omni-gfx/<模块>.glsl` 引用，`shaders/omni-gfx/` 与 `omni-gfx/generated/glsl/` 逐字节一致。
+- 280 组光影程序离线编译通过，说明 Slang 降级后的 GLSL 330 在真实入口（含选项宏、两种配置与开远景环境）里能编译链接。
+- 测试世界的新阶段都实际出图：三级级联 PCSS、半分辨率遮蔽与多弹射、半分辨率反射与九点降噪、时间抗锯齿、两级泛光。
+- 画面检查：默认机位截图里没有黑边、没有重复条纹、没有成片过曝；水面有岛与岸线的倒影，地形投影是软边，云边没有方块状放大。
+
+### 仍未验证
+
+- Minecraft 游戏内画面、性能与兼容性；离线编译不能代替世界内效果。
+- Vulkan / Aperture 运行时；本轮没有重新跑 SPIR-V 探针。
+- 其他显卡与驱动；帧时只代表这台 Intel Arc 与这一个机位。
+- `ogxScreenSpaceTrace` 在测试世界没有被调用：测试世界的反射用世界空间步进，纯屏幕空间步进仍在 Minecraft 的反射路径里，未在独立场景中单独验证。
+- 抗锯齿的移动画面表现：截图模式机位固定，重投影位移为零，移动时的残影与鬼影没有逐帧检查。
+
+## 二、2026-10-24 阶段三画面与性能（0.4.0）
+
+设备与上一轮相同。
+
 日期：2026-10-24。设备：Intel(R) Arc(TM) Graphics，OpenGL 3.3.0 - Build 32.0.101.8531，Windows。
 
 这份记录区分“已经跑过并看到结果”和“只做了离线检查”。没有启动 Minecraft。

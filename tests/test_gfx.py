@@ -23,7 +23,7 @@ class GfxBoundaryTests(unittest.TestCase):
         for path in (build.SHADERS / "gfx").glob("*.glsl"):
             for reference in re.findall(r'#include\s+"([^"]+)"', code_only(path.read_text(encoding="utf-8"))):
                 with self.subTest(file=path.name, include=reference):
-                    self.assertTrue(reference.startswith("/gfx/"))  # 不允许回头引用公共声明、效果文件或绘制层。
+                    self.assertTrue(reference.startswith(("/gfx/", "/omni-gfx/")))  # 允许指向生成库，但仍禁止引用效果层。
 
     def test_gfx_has_no_host_symbols(self):
         """通用库里不能出现宿主符号或全局噪声纹理。"""

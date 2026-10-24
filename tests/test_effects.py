@@ -495,7 +495,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("screenspace.glsl", reflection)  # 入口按引入顺序展开屏幕空间反射算法。
         screenspace = support.code("effects/reflection/screenspace.glsl")  # 屏幕空间反射算法（按算法从入口拆出）。
         reflection_library = support.text("gfx/reflection.glsl")  # 通用库里的反射主流程。
-        self.assertIn("gfx_screen_space_trace", reflection_library)  # 屏幕空间追踪主循环在通用库。
+        self.assertIn("ogxScreenSpaceTrace", reflection_library)  # 屏幕空间追踪的循环已迁到生成库。
         self.assertIn("gfx_specular_reflections", screenspace)  # 反射主流程由通用库提供，效果文件只填参数。
         self.assertIn("CalculateSpecularReflections", screenspace)  # 镜面反射独立成函数。
         self.assertIn("OMNI_RAYTRACE_QUALITY", screenspace)  # 质量参与采样数。

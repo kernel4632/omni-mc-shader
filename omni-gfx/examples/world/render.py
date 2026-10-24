@@ -39,7 +39,11 @@ import png  # 无依赖图片写入。
 import terrain  # 高度图与网格。
 
 TERRAIN_SIZE = 96  # 地形边长，单位为方块。
-SHADOW_SIZE = 2048  # 方向光阴影贴图边长，覆盖全岛约每米二十一个纹素。
+CASCADE_COUNT = 3  # 方向光级联数，近景一级、整岛一级、远景一级。
+CASCADE_SIZE = 1024  # 每级阴影贴图边长，三级合计与原来一张两千零四十八相当。
+CASCADE_EXTENTS = (40.0, 80.0, 160.0)  # 每级正交视锥的半边长，米。
+CASCADE_SPLITS = (38.0, 95.0, 260.0)  # 按视深度选级的分界，米。
+CASCADE_BLEND = 8.0  # 级联交界的过渡宽度，米。
 SKY_CUBE_SIZE = 160  # 反射立方体贴图的边长，越大云与太阳高光越清楚。
 WATER_RADIUS = 80000.0  # 水面半径，米；远大于肉眼地平线，天与海的接缝因此不会露出黑带。
 WATER_RINGS = 88  # 水面径向分格，越靠外格越宽。
@@ -49,6 +53,9 @@ FAR = 120000.0  # 投影远平面要盖住水面远端，否则远处海面会�
 DEFAULT_SUN = [0.58, 0.42, 0.32]  # 默认太阳方向，侧上方来光，地形有清楚的投影和受光面。
 BLUE_NOISE_SIZE = 64  # 蓝噪声贴图边长，必须与生成库里的平铺周期一致。
 LUMINANCE_SIZE = (64, 36)  # 曝光统计第一级的尺寸，十六比九的小图。
+BLOOM_SIZE = (320, 180)  # 泛光最细一级的尺寸，四分之一分辨率。
+BLOOM_COARSE_SIZE = (160, 90)  # 泛光最粗一级的尺寸。
+GI_BLEND = 0.25  # 遮蔽时间累积里本帧的权重，其余来自历史。
 SKY_STEPS = 6  # 半分辨率天空的大气积分段数。
 CLOUD_STEPS = 12  # 半分辨率体积云的沿视线步数，时间累积会把台阶抹平。
 CUBE_SKY_STEPS = 4  # 反射立方体贴图的大气段数，反射看不出这么多细节。
@@ -219,6 +226,23 @@ def orthographic(left: float, right: float, bottom: float, top: float, near: flo
     ]
 
 
+def perspective_inverse(fov: float, aspect: float, near: float, far: float) -> list[float]:
+    """列主序透视逆投影矩阵，用来把屏幕深度还原成视空间位置。
+
+    只按解析式填写非零项：生成库的深度反解只读第二列第三行与第三列第三行，
+    视空间位置还原读第一、二列的对角与第四列的平移，其他项本来就不参与。
+    """
+    f = 1.0 / math.tan(math.radians(fov) * 0.5)  # 视场角一半的正切倒数。
+    depth_scale = (near - far) / (2.0 * far * near)  # 深度反解的斜率项。
+    depth_bias = (far + near) / (2.0 * far * near)  # 深度反解的常数项。
+    return [
+        aspect / f, 0.0, 0.0, 0.0,  # 第一列。
+        0.0, 1.0 / f, 0.0, 0.0,  # 第二列。
+        0.0, 0.0, 0.0, depth_scale,  # 第三列，只有第四行参与深度反解。
+        0.0, 0.0, -1.0, depth_bias,  # 第四列，平移与深度常数。
+    ]
+
+
 def percentile(values: list[float], fraction: float) -> float:
     """返回排序后指定分位的值，用于报告慢帧。"""
     ordered = sorted(values)  # 不改动原列表。
@@ -250,6 +274,11 @@ class World:
         self.terrain_program = make_program("地形", "terrain.vert", "terrain.frag")
         self.shadow_program = make_program("阴影", "shadow.vert", "shadow.frag")
         self.water_program = make_program("水面", "water.vert", "water.frag")
+        self.reflection_program = make_program("反射", "water.vert", "reflection.frag")
+        self.denoise_program = make_program("反射降噪", "fullscreen.vert", "reflection_denoise.frag")
+        self.gi_program = make_program("全局光", "fullscreen.vert", "gi.frag")
+        self.taa_program = make_program("时间抗锯齿", "fullscreen.vert", "taa.frag")
+        self.bloom_program = make_program("泛光", "fullscreen.vert", "bloom.frag")
         self.exposure_program = make_program("曝光", "fullscreen.vert", "exposure.frag")
         self.post_program = make_program("后期", "fullscreen.vert", "post.frag")
         heights = terrain.heightmap(TERRAIN_SIZE)  # 固定种子，画面可重复。
@@ -258,9 +287,33 @@ class World:
         water_vertices, self.water_triangles = terrain.water_disc(WATER_RADIUS, WATER_RINGS, WATER_SEGMENTS)  # 一直铺到地平线之外。
         self.water_vao, self.water_vbo = upload_mesh(water_vertices, [(0, 2, 0)])
         self.blue_noise = make_blue_noise()  # 云步进与雾的抖动来源。
-        self.shadow_fbo, self.shadow_depth = make_depth_target(SHADOW_SIZE)  # 方向光阴影。
-        self.scene_fbo, self.scene_color, self.scene_depth = gl.color_depth_target(width, height)  # 天空与地形。
+        self.shadow_fbos = []  # 三级阴影各一个帧缓冲。
+        self.shadow_depths = []  # 三级阴影各一张深度纹理。
+        for _ in range(CASCADE_COUNT):  # 每级单独一张贴图，采样时只能按分支选择。
+            fbo, depth = make_depth_target(CASCADE_SIZE)
+            self.shadow_fbos.append(fbo)
+            self.shadow_depths.append(depth)
+        self.scene_fbo, scene_colors, self.scene_depth = gl.multi_color_depth_target(width, height, 2)  # 颜色与法线两张附件。
+        self.scene_color, self.scene_normal = scene_colors[0], scene_colors[1]  # 分开保存便于绑定。
         self.water_fbo, self.water_color, self.water_depth = gl.color_depth_target(width, height)  # 水面合成结果。
+        self.reflection_fbo, reflection_colors, _ = gl.multi_color_depth_target(self.half_width, self.half_height, 3)  # 反射颜色、深度、法线。
+        self.reflection_color, self.reflection_depth, self.reflection_normal = reflection_colors  # 三个附件分开保存。
+        self.denoised_fbo, self.denoised_color = make_color_target(self.half_width, self.half_height)  # 降噪后的反射。
+        self.gi_fbo = []  # 两张遮蔽历史交替读写。
+        self.gi_color = []  # 遮蔽纹理。
+        for _ in range(2):  # 乒乓缓冲避免读写同一张纹理。
+            fbo, texture = make_color_target(self.half_width, self.half_height)
+            self.gi_fbo.append(fbo)
+            self.gi_color.append(texture)
+        self.taa_fbo = []  # 两张抗锯齿历史交替读写。
+        self.taa_color = []  # 抗锯齿纹理。
+        for _ in range(2):  # 本帧写一张、读另一张。
+            fbo, texture = make_color_target(width, height)  # 抗锯齿只要颜色，不需要深度附件。
+            self.taa_fbo.append(fbo)
+            self.taa_color.append(texture)
+        self.bloom_fbo, self.bloom_color = make_color_target(BLOOM_SIZE[0], BLOOM_SIZE[1])  # 泛光较细一级。
+        self.bloom_coarse_fbo, self.bloom_coarse_color = make_color_target(BLOOM_COARSE_SIZE[0], BLOOM_COARSE_SIZE[1])  # 泛光较粗一级。
+        self.bloom_combine_fbo, self.bloom_combine_color = make_color_target(BLOOM_SIZE[0], BLOOM_SIZE[1])  # 合并结果，避免读写同一张。
         self.sky_sample_fbo, self.sky_sample = make_color_target(self.half_width, self.half_height)  # 本帧天空样本。
         self.sky_history_fbo = []  # 两张历史缓冲交替读写。
         self.sky_history = []  # 历史纹理编号。
@@ -272,34 +325,48 @@ class World:
         self.lum_final_fbo, self.lum_final = make_color_target(1, 1)  # 一个像素的平均对数亮度。
         self.sky_cube, self.sky_fbo = make_sky_cube()  # 反射用天空。
         self.history_index = 0  # 当前可读的历史缓冲。
+        self.gi_index = 0  # 当前可读的遮蔽历史。
+        self.taa_index = 0  # 当前可读的抗锯齿历史。
+        self.velocity = [0.0, 0.0]  # 整屏位移，静止机位下为零。
         self.prev_basis = None  # 上一帧相机基向量，重投影用。
         self.camera = camera.Camera([48.0, 17.0, 140.0], fov=55.0)  # 初始相机，站在岛外一百米的水面上方。
         self.camera.look_at([48.0, 16.0, 40.0])  # 略微平视，岛与它的倒影都进入画面。
-        self.light_matrix = self.build_light_matrix()  # 方向光矩阵只与太阳有关，建一次即可。
+        self.light_matrices = self.build_light_matrix()  # 三级方向光矩阵只与太阳有关，建一次即可。
+        self.previous_view_projection = self.view_projection()  # 上一帧视图投影，第一帧用当前值。
+        self.display_color = self.water_color  # 抗锯齿前的画面来源，第一帧先指向水面结果。
         self.keys: set[int] = set()  # 交互模式按下的键。
         self.first_mouse = True  # 第一帧鼠标位置只记录不转向。
         self.last_mouse = (0.0, 0.0)  # 上一帧鼠标位置。
         self.screenshot_request = False  # 交互模式按 F12 时置位。
 
-    def build_light_matrix(self) -> list[float]:
-        """构造方向光的视图投影矩阵，覆盖整座岛与它周围的水面。
+    def build_light_matrix(self) -> list[list[float]]:
+        """构造三级方向光的视图投影矩阵，每一级覆盖不同大小的区域。
 
-        岛只有九十六米见方，一个正交视锥就够，不需要多级级联：
-        多级只在大世界里有收益，这里反而会让阴影贴图的分辨率被浪费。
+        为什么用级联：近景那级只覆盖四十米，每米有二十五个纹素，墙根与树叶的投影才清楚；
+        远景那级覆盖一百六十米，纹素变粗但只用于远处，近处不会浪费分辨率。
+        三级都以岛中心为原点：测试世界里唯一的投影物就是这座岛，跟着相机移动不会带来额外细节。
         """
         center = [TERRAIN_SIZE * 0.5, 8.0, TERRAIN_SIZE * 0.5]  # 阴影覆盖的中心。
         eye = [center[i] + self.sun[i] * 260.0 for i in range(3)]  # 光源放在太阳方向两百六十米外。
         light_camera = camera.Camera(eye)  # 借相机算视图矩阵。
         light_camera.look_at(center)  # 看向岛中心。
-        view = light_camera.view_matrix()  # 光源视图矩阵。
-        # 深度范围只包住岛：范围越窄，深度精度越高，自遮挡条纹越少。
-        projection = orthographic(-72.0, 72.0, -72.0, 72.0, 215.0, 300.0)  # 一百四十四米见方、八十五米深的视锥。
-        return multiply(projection, view)  # 上传给阴影与地形两段着色器。
+        view = light_camera.view_matrix()  # 光源视图矩阵，三级共用。
+        matrices = []  # 每级一个视图投影矩阵。
+        for extent in CASCADE_EXTENTS:  # 逐级放大正交视锥。
+            projection = orthographic(-extent, extent, -extent, extent, 200.0, 320.0)  # 深度范围只要能包住岛。
+            matrices.append(multiply(projection, view))  # 投影乘视图。
+        return matrices  # 顺序从近到远。
 
     def basis(self) -> tuple[list[float], list[float], list[float], float, float]:
         """返回当前相机的前、右、上方向与视场参数，天空相关阶段共用。"""
         return (self.camera.forward(), self.camera.right(), self.camera.up(),
                 math.tan(math.radians(self.camera.fov) * 0.5), self.width / self.height)
+
+    def view_projection(self) -> list[float]:
+        """返回当前相机的视图投影矩阵，用来给下一帧做屏幕重投影。"""
+        view = self.camera.view_matrix()  # 视图矩阵。
+        projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 投影矩阵。
+        return multiply(projection, view)  # 先视图后投影。
 
     def install_input(self) -> None:
         """把窗口设为可见并安装键盘与鼠标回调。"""
@@ -331,18 +398,19 @@ class World:
         self.camera.turn(delta_x, delta_y)  # 俯仰限制在相机内部处理。
 
     def render_shadow(self) -> None:
-        """从太阳方向渲染地形深度，得到方向光阴影贴图。"""
-        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.shadow_fbo)  # 只写深度。
-        GL.glViewport(0, 0, SHADOW_SIZE, SHADOW_SIZE)  # 使用阴影贴图分辨率。
+        """从太阳方向渲染三级地形深度，得到方向光级联阴影贴图。"""
         GL.glEnable(GL.GL_DEPTH_TEST)  # 深度测试决定最终写入哪一个深度。
         GL.glDepthMask(GL.GL_TRUE)  # 允许写深度。
-        GL.glClear(GL.GL_DEPTH_BUFFER_BIT)  # 每帧重建。
         GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)  # 抬一点深度，减少自遮挡条纹。
         GL.glPolygonOffset(2.0, 4.0)  # 斜率与常量偏置同时生效。
         GL.glUseProgram(self.shadow_program)  # 切到阴影程序。
-        set_uniform(self.shadow_program, "uLightViewProjection", self.light_matrix)  # 光源矩阵。
         GL.glBindVertexArray(self.terrain_vao)  # 复用地形顶点数据。
-        GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.terrain_triangles * 3)  # 全部三角形一次画完。
+        for index, matrix in enumerate(self.light_matrices):  # 每级画一次。
+            GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.shadow_fbos[index])  # 只写深度。
+            GL.glViewport(0, 0, CASCADE_SIZE, CASCADE_SIZE)  # 使用该级的阴影贴图分辨率。
+            GL.glClear(GL.GL_DEPTH_BUFFER_BIT)  # 每帧重建。
+            set_uniform(self.shadow_program, "uLightViewProjection", matrix)  # 该级的光源矩阵。
+            GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.terrain_triangles * 3)  # 全部三角形一次画完。
         GL.glDisable(GL.GL_POLYGON_OFFSET_FILL)  # 后续阶段不需要偏置。
 
     def render_sky_cube(self, frame: int, scene_time: float) -> None:
@@ -440,25 +508,187 @@ class World:
         GL.glUniform1i(location(self.composite_program, "uSky"), 0)
         GL.glBindVertexArray(self.fullscreen)  # 全屏三角形。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 铺满背景。
-        GL.glEnable(GL.GL_DEPTH_TEST)  # 地形开始写深度。
-        GL.glDepthMask(GL.GL_TRUE)  # 允许写深度。
+        # 背景的法线附件也要有定义值，否则后面的遮蔽会读到未初始化的内容。
         GL.glUseProgram(self.terrain_program)  # 切到地形程序。
         view = self.camera.view_matrix()  # 视图矩阵。
         projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 投影矩阵。
+        view_projection = multiply(projection, view)  # 视图投影，调试与拾取要用。
         set_uniforms(self.terrain_program, {
-            "uViewProjection": multiply(projection, view), "uCameraPos": self.camera.position,
-            "uSunDirection": self.sun, "uShadowMatrix": self.light_matrix, "uShadowTexel": 1.0 / SHADOW_SIZE,
-            "uTime": scene_time, "uFrame": float(frame), "uCloudCover": self.cloud_cover,
-            "uSunStrength": SUN_STRENGTH, "uSkyStrength": SKY_STRENGTH,
-        })  # 光照、阴影与雾的参数。
-        GL.glActiveTexture(GL.GL_TEXTURE0)  # 阴影贴图。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.shadow_depth)
-        GL.glUniform1i(location(self.terrain_program, "uShadowMap"), 0)
-        GL.glActiveTexture(GL.GL_TEXTURE1)  # 天空立方体贴图，用作环境光。
+            "uViewProjection": view_projection, "uCameraPos": self.camera.position,
+            "uSunDirection": self.sun, "uCascadeSplits": list(CASCADE_SPLITS),
+            "uCascadeBlend": CASCADE_BLEND, "uWaterLevel": terrain.SEA_LEVEL, "uTime": scene_time, "uFrame": float(frame),
+            "uCloudCover": self.cloud_cover, "uSunStrength": SUN_STRENGTH, "uSkyStrength": SKY_STRENGTH,
+        })  # 光照、级联与雾的参数。
+        for index in range(CASCADE_COUNT):  # 三级阴影矩阵与贴图逐级绑定。
+            set_uniform(self.terrain_program, f"uShadowMatrix{index}", self.light_matrices[index])
+            GL.glActiveTexture(GL.GL_TEXTURE0 + index)  # 三级各占一个纹理单元。
+            GL.glBindTexture(GL.GL_TEXTURE_2D, self.shadow_depths[index])
+            GL.glUniform1i(location(self.terrain_program, f"uShadowMap{index}"), index)
+        GL.glActiveTexture(GL.GL_TEXTURE3)  # 天空立方体贴图，用作环境光。
         GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.sky_cube)
-        GL.glUniform1i(location(self.terrain_program, "uSkyCube"), 1)
+        GL.glUniform1i(location(self.terrain_program, "uSkyCube"), 3)
+        GL.glEnable(GL.GL_DEPTH_TEST)  # 地形开始写深度。
+        GL.glDepthMask(GL.GL_TRUE)  # 允许写深度。
         GL.glBindVertexArray(self.terrain_vao)  # 地形顶点数组。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.terrain_triangles * 3)  # 全部三角形一次画完。
+
+    def render_reflection(self, frame: int, scene_time: float) -> None:
+        """在半分辨率上追踪水面反射，写入颜色、深度与法线三张附件。"""
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.reflection_fbo)  # 反射目标。
+        GL.glViewport(0, 0, self.half_width, self.half_height)  # 半分辨率，追踪成本降到四分之一。
+        GL.glDisable(GL.GL_DEPTH_TEST)  # 反射目标是单层水面，不需要深度测试，也不读上一帧残留的深度。
+        GL.glDepthMask(GL.GL_FALSE)  # 不写深度。
+        GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)  # 每帧清空三张附件，避免读到上一帧内容。
+        GL.glDisable(GL.GL_BLEND)  # 反射阶段直接覆盖，不混合。
+        GL.glUseProgram(self.reflection_program)  # 反射程序。
+        view = self.camera.view_matrix()  # 视图矩阵。
+        projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 投影矩阵。
+        inverse = perspective_inverse(self.camera.fov, self.width / self.height, NEAR, FAR)  # 逆投影。
+        set_uniforms(self.reflection_program, {
+            "uViewProjection": multiply(projection, view), "uProjectionInverse": inverse,
+            "uCameraPos": self.camera.position, "uSunDirection": self.sun, "uTime": scene_time,
+            "uForward": self.camera.forward(), "uResolution": [float(self.half_width), float(self.half_height)],
+            "uNear": NEAR, "uFar": FAR, "uSunStrength": SUN_STRENGTH,
+        })  # 追踪需要的矩阵与场景参数。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 天空兜底。
+        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.sky_cube)
+        GL.glUniform1i(location(self.reflection_program, "uSky"), 0)
+        GL.glActiveTexture(GL.GL_TEXTURE1)  # 场景颜色。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_color)
+        GL.glUniform1i(location(self.reflection_program, "uSceneColor"), 1)
+        GL.glActiveTexture(GL.GL_TEXTURE2)  # 场景深度。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_depth)
+        GL.glUniform1i(location(self.reflection_program, "uSceneDepth"), 2)
+        GL.glBindVertexArray(self.water_vao)  # 海面顶点数组。
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.water_triangles * 3)  # 画一遍海面，只为了取水面像素。
+
+    def denoise_reflection(self, frame: int) -> None:
+        """在反射图上做九点邻域滤波，按法线与深度剔除不属于同一水面的邻居。"""
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.denoised_fbo)  # 降噪目标。
+        GL.glViewport(0, 0, self.half_width, self.half_height)  # 半分辨率。
+        GL.glDisable(GL.GL_DEPTH_TEST)  # 二维处理。
+        GL.glUseProgram(self.denoise_program)  # 降噪程序。
+        inverse = perspective_inverse(self.camera.fov, self.width / self.height, NEAR, FAR)  # 逆投影。
+        set_uniforms(self.denoise_program, {
+            "uResolution": [float(self.half_width), float(self.half_height)],
+            "uProjectionInverse": inverse, "uFrame": float(frame),
+        })  # 降噪参数。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 反射颜色与可信度。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.reflection_color)
+        GL.glUniform1i(location(self.denoise_program, "uReflection"), 0)
+        GL.glActiveTexture(GL.GL_TEXTURE1)  # 反射阶段写下的深度。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.reflection_depth)
+        GL.glUniform1i(location(self.denoise_program, "uReflectionDepth"), 1)
+        GL.glActiveTexture(GL.GL_TEXTURE2)  # 反射阶段写下的法线。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.reflection_normal)
+        GL.glUniform1i(location(self.denoise_program, "uReflectionNormal"), 2)
+        GL.glBindVertexArray(self.fullscreen)  # 全屏三角形。
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 一次写满。
+
+    def render_global_illumination(self, frame: int) -> None:
+        """在半分辨率上算地平线遮蔽与多弹射，并与历史混合。"""
+        target = 1 - self.gi_index  # 写另一张，读当前这张。
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.gi_fbo[target])  # 遮蔽目标。
+        GL.glViewport(0, 0, self.half_width, self.half_height)  # 半分辨率。
+        GL.glDisable(GL.GL_DEPTH_TEST)  # 二维处理。
+        GL.glUseProgram(self.gi_program)  # 遮蔽程序。
+        forward, right, up, tan_half, aspect = self.basis()  # 相机基向量。
+        projection = self.camera.projection_matrix(aspect, NEAR, FAR)  # 投影矩阵。
+        inverse = perspective_inverse(self.camera.fov, aspect, NEAR, FAR)  # 逆投影。
+        blend = 1.0 if frame == 0 else GI_BLEND  # 第一帧没有历史，直接采用本帧。
+        set_uniforms(self.gi_program, {
+            "uResolution": [float(self.half_width), float(self.half_height)],
+            "uFullResolution": [float(self.width), float(self.height)],
+            "uProjection": projection, "uProjectionInverse": inverse, "uForward": forward,
+            "uAspect": aspect, "uFrame": float(frame), "uBlend": blend,
+        })  # 遮蔽参数。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 场景深度。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_depth)
+        GL.glUniform1i(location(self.gi_program, "uDepth"), 0)
+        GL.glActiveTexture(GL.GL_TEXTURE1)  # 法线与线性深度。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_normal)
+        GL.glUniform1i(location(self.gi_program, "uNormalDepth"), 1)
+        GL.glActiveTexture(GL.GL_TEXTURE2)  # 场景颜色，用来估计底色。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_color)
+        GL.glUniform1i(location(self.gi_program, "uColor"), 2)
+        GL.glActiveTexture(GL.GL_TEXTURE3)  # 上一帧遮蔽。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.gi_color[self.gi_index])
+        GL.glUniform1i(location(self.gi_program, "uHistory"), 3)
+        GL.glBindVertexArray(self.fullscreen)  # 全屏三角形。
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 一次写满。
+        self.gi_index = target  # 下一帧读这一张。
+
+    def render_taa(self, frame: int) -> None:
+        """把本帧画面与历史混合，并乘上全局光遮蔽。"""
+        target = 1 - self.taa_index  # 写另一张，读当前这张。
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.taa_fbo[target])  # 抗锯齿目标。
+        GL.glViewport(0, 0, self.width, self.height)  # 完整分辨率。
+        GL.glDisable(GL.GL_DEPTH_TEST)  # 二维处理。
+        GL.glUseProgram(self.taa_program)  # 抗锯齿程序。
+        inverse = perspective_inverse(self.camera.fov, self.width / self.height, NEAR, FAR)  # 逆投影。
+        forward, right, up, _tan_half, _aspect = self.basis()  # 重投影需要相机基向量。
+        blend = 1.0 if frame < 2 else 0.12  # 前两帧快速收敛，之后用较小权重抑制噪点。
+        set_uniforms(self.taa_program, {
+            "uResolution": [float(self.width), float(self.height)],
+            "uAOTexel": [1.0 / self.half_width, 1.0 / self.half_height],
+            "uProjectionInverse": inverse, "uBlend": blend, "uFar": FAR,
+            "uPreviousViewProjection": self.previous_view_projection,
+            "uCameraPos": self.camera.position, "uRight": right, "uUp": up, "uForward": forward,
+        })  # 抗锯齿参数与重投影用的相机基向量。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 本帧颜色。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.water_color)
+        GL.glUniform1i(location(self.taa_program, "uCurrent"), 0)
+        GL.glActiveTexture(GL.GL_TEXTURE1)  # 上一帧结果。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.taa_color[self.taa_index])
+        GL.glUniform1i(location(self.taa_program, "uHistory"), 1)
+        GL.glActiveTexture(GL.GL_TEXTURE2)  # 本帧深度。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.water_depth)
+        GL.glUniform1i(location(self.taa_program, "uDepth"), 2)
+        GL.glActiveTexture(GL.GL_TEXTURE3)  # 遮蔽图。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.gi_color[self.gi_index])
+        GL.glUniform1i(location(self.taa_program, "uAO"), 3)
+        GL.glBindVertexArray(self.fullscreen)  # 全屏三角形。
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 一次写满。
+        self.taa_index = target  # 下一帧读这一张。
+        self.display_color = self.taa_color[target]  # 后续阶段读本帧结果。
+
+    def render_bloom(self) -> None:
+        """三遍泛光：亮度筛选降采样、再降一级、升采样合并。"""
+        GL.glDisable(GL.GL_DEPTH_TEST)  # 二维处理。
+        GL.glUseProgram(self.bloom_program)  # 泛光程序。
+        GL.glBindVertexArray(self.fullscreen)  # 全屏三角形。
+        # 第一遍：从抗锯齿结果筛出亮部并降到四分之一。
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.bloom_fbo)
+        GL.glViewport(0, 0, BLOOM_SIZE[0], BLOOM_SIZE[1])
+        set_uniforms(self.bloom_program, {"uResolution": [float(BLOOM_SIZE[0]), float(BLOOM_SIZE[1])],
+                                          "uSourceResolution": [float(self.width), float(self.height)],
+                                          "uMode": 0, "uThreshold": 1.8})  # 亮度阈值只让太阳与亮云发光。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 来源纹理。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.display_color)
+        GL.glUniform1i(location(self.bloom_program, "uSource"), 0)
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)
+        # 第二遍：再降一级。
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.bloom_coarse_fbo)
+        GL.glViewport(0, 0, BLOOM_COARSE_SIZE[0], BLOOM_COARSE_SIZE[1])
+        set_uniforms(self.bloom_program, {"uResolution": [float(BLOOM_COARSE_SIZE[0]), float(BLOOM_COARSE_SIZE[1])],
+                                          "uSourceResolution": [float(BLOOM_SIZE[0]), float(BLOOM_SIZE[1])],
+                                          "uMode": 1})  # 只降采样。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 上一级泛光。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.bloom_color)
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)
+        # 第三遍：粗一级升回来，与细一级相加。
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.bloom_combine_fbo)
+        GL.glViewport(0, 0, BLOOM_SIZE[0], BLOOM_SIZE[1])
+        set_uniforms(self.bloom_program, {"uResolution": [float(BLOOM_SIZE[0]), float(BLOOM_SIZE[1])],
+                                          "uSourceResolution": [float(BLOOM_COARSE_SIZE[0]), float(BLOOM_COARSE_SIZE[1])],
+                                          "uMode": 2})  # 升采样合并。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 本级来源。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.bloom_color)
+        GL.glUniform1i(location(self.bloom_program, "uSource"), 0)
+        GL.glActiveTexture(GL.GL_TEXTURE1)  # 更粗一级。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.bloom_coarse_color)
+        GL.glUniform1i(location(self.bloom_program, "uSmall"), 1)
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)
 
     def render_water(self, frame: int, scene_time: float) -> None:
         """把场景复制到水面目标，再叠加水面，避免读写的画面是同一张。"""
@@ -475,22 +705,24 @@ class World:
         GL.glUseProgram(self.water_program)  # 切到水面程序。
         view = self.camera.view_matrix()  # 视图矩阵。
         projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 投影矩阵。
-        forward = self.camera.forward()  # 屏幕空间步进要按视线方向算深度。
         set_uniforms(self.water_program, {
             "uViewProjection": multiply(projection, view), "uCameraPos": self.camera.position,
-            "uSunDirection": self.sun, "uForward": forward, "uTime": scene_time, "uFrame": float(frame),
+            "uSunDirection": self.sun, "uTime": scene_time, "uFrame": float(frame),
             "uWaterLevel": terrain.SEA_LEVEL, "uResolution": [float(self.width), float(self.height)],
             "uNear": NEAR, "uFar": FAR, "uSunStrength": SUN_STRENGTH,
         })  # 水面参数。
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 零号单元放天空。
-        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.sky_cube)  # 反射纹理。
+        GL.glBindTexture(GL.GL_TEXTURE_CUBE_MAP, self.sky_cube)  # 兜底反射纹理。
         GL.glUniform1i(location(self.water_program, "uSky"), 0)
-        GL.glActiveTexture(GL.GL_TEXTURE1)  # 一号单元放场景颜色。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_color)  # 反射命中与折射颜色。
-        GL.glUniform1i(location(self.water_program, "uSceneColor"), 1)
-        GL.glActiveTexture(GL.GL_TEXTURE2)  # 二号单元放场景深度。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_depth)  # 反射步进与水深计算。
-        GL.glUniform1i(location(self.water_program, "uSceneDepth"), 2)
+        GL.glActiveTexture(GL.GL_TEXTURE1)  # 一号单元放降噪后的反射。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.denoised_color)
+        GL.glUniform1i(location(self.water_program, "uReflection"), 1)
+        GL.glActiveTexture(GL.GL_TEXTURE2)  # 二号单元放场景颜色。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_color)  # 折射颜色。
+        GL.glUniform1i(location(self.water_program, "uSceneColor"), 2)
+        GL.glActiveTexture(GL.GL_TEXTURE3)  # 三号单元放场景深度。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_depth)  # 水深计算。
+        GL.glUniform1i(location(self.water_program, "uSceneDepth"), 3)
         GL.glBindVertexArray(self.water_vao)  # 海面顶点数组。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.water_triangles * 3)  # 一次画完海面。
         GL.glDisable(GL.GL_BLEND)  # 后续阶段不需要混合。
@@ -502,7 +734,7 @@ class World:
         GL.glDepthMask(GL.GL_FALSE)  # 不写深度。
         GL.glUseProgram(self.exposure_program)  # 曝光统计程序。
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 来源纹理。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.water_color)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.display_color)
         GL.glUniform1i(location(self.exposure_program, "uSource"), 0)
         GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.lum_tile_fbo)  # 第一级目标。
         GL.glViewport(0, 0, LUMINANCE_SIZE[0], LUMINANCE_SIZE[1])  # 六十四乘三十六。
@@ -519,37 +751,47 @@ class World:
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 得到一个像素。
         GL.glDepthMask(GL.GL_TRUE)  # 恢复默认状态。
 
-    def render_post(self, frame: int) -> None:
-        """把水面结果压到屏幕，完成一帧。"""
+    def render_post(self, frame: int, scene_time: float) -> None:
+        """把抗锯齿结果压到屏幕，完成一帧。"""
         GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, 0)  # 最后输出到窗口。
         GL.glViewport(0, 0, self.width, self.height)  # 完整分辨率。
         GL.glDisable(GL.GL_DEPTH_TEST)  # 后期是二维处理。
         GL.glUseProgram(self.post_program)  # 后期程序。
-        GL.glActiveTexture(GL.GL_TEXTURE0)  # 零号单元放水面结果。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.water_color)  # 线性场景颜色。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 零号单元放抗锯齿结果。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.display_color)  # 线性场景颜色。
         GL.glUniform1i(location(self.post_program, "uColor"), 0)
         GL.glActiveTexture(GL.GL_TEXTURE1)  # 一号单元放曝光统计。
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.lum_final)  # 一个像素。
         GL.glUniform1i(location(self.post_program, "uExposure"), 1)
+        GL.glActiveTexture(GL.GL_TEXTURE2)  # 二号单元放泛光。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.bloom_combine_color)
+        GL.glUniform1i(location(self.post_program, "uBloom"), 2)
         set_uniforms(self.post_program, {
             "uResolution": [float(self.width), float(self.height)], "uExposureKey": self.exposure_key,
-            "uTonemap": self.tonemap, "uFrame": float(frame),
-        })  # 曝光与曲线参数。
+            "uTonemap": self.tonemap, "uFrame": float(frame), "uTime": scene_time,
+            "uAspect": self.width / self.height, "uBloomStrength": 0.35,
+        })  # 曝光、曲线、泛光与颗粒参数。
         GL.glBindVertexArray(self.fullscreen)  # 全屏三角形。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 输出最终画面。
 
     def draw(self, frame: int, scene_time: float) -> None:
-        """按固定顺序绘制一帧：阴影、反射、天空、累积、场景、水面、曝光、后期。"""
-        self.render_shadow()  # 方向光阴影贴图。
+        """按固定顺序绘制一帧：阴影、反射、天空、场景、遮蔽、水面、抗锯齿、泛光、曝光、后期。"""
+        self.render_shadow()  # 三级方向光阴影贴图。
         self.render_sky_cube(frame, scene_time)  # 反射与环境光用的天空。
         self.render_sky_sample(frame, scene_time)  # 半分辨率天空与云。
         self.accumulate_sky(frame)  # 时间累积。
         self.render_scene(frame, scene_time)  # 背景与地形。
-        self.render_water(frame, scene_time)  # 水面。
+        self.render_global_illumination(frame)  # 半分辨率遮蔽与多弹射。
+        self.render_reflection(frame, scene_time)  # 半分辨率反射追踪。
+        self.denoise_reflection(frame)  # 反射九点降噪。
+        self.render_water(frame, scene_time)  # 水面合成。
+        self.render_taa(frame)  # 时间抗锯齿。
+        self.render_bloom()  # 两级泛光。
         self.render_exposure()  # 曝光统计。
-        self.render_post(frame)  # 输出到窗口。
+        self.render_post(frame, scene_time)  # 输出到窗口。
+        self.previous_view_projection = self.view_projection()  # 下一帧重投影使用。
         forward, right, up, tan_half, aspect = self.basis()  # 记录本帧基向量。
-        self.prev_basis = (forward, right, up, tan_half, aspect)  # 下一帧重投影使用。
+        self.prev_basis = (forward, right, up, tan_half, aspect)  # 下一帧天空累积使用。
 
     def exposure_value(self) -> float:
         """读回一个像素的平均对数亮度，写进性能记录方便核对曝光。"""
@@ -575,21 +817,30 @@ class World:
     def close(self) -> None:
         """释放显卡对象与窗口。"""
         for program in (self.sky_program, self.accum_program, self.composite_program, self.terrain_program,
-                        self.shadow_program, self.water_program, self.exposure_program, self.post_program):
+                        self.shadow_program, self.water_program, self.reflection_program, self.denoise_program,
+                        self.gi_program, self.taa_program, self.bloom_program, self.exposure_program,
+                        self.post_program):
             GL.glDeleteProgram(program)  # 逐个删除程序。
         GL.glDeleteVertexArrays(3, [self.fullscreen, self.terrain_vao, self.water_vao])  # 顶点数组。
         GL.glDeleteBuffers(2, [self.terrain_vbo, self.water_vbo])  # 顶点缓冲。
-        textures = [self.blue_noise, self.shadow_depth, self.scene_color, self.scene_depth, self.water_color,
-                    self.water_depth, self.sky_cube, self.sky_sample, self.lum_tile, self.lum_final]
-        textures.extend(self.sky_history)  # 两张历史缓冲。
+        textures = [self.blue_noise, self.scene_color, self.scene_normal, self.scene_depth, self.water_color,
+                    self.water_depth, self.sky_cube, self.sky_sample, self.lum_tile, self.lum_final,
+                    self.reflection_color, self.reflection_depth, self.reflection_normal, self.denoised_color,
+                    self.bloom_color, self.bloom_coarse_color, self.bloom_combine_color]
+        textures.extend(self.shadow_depths)  # 三级阴影深度。
+        textures.extend(self.sky_history)  # 两张天空历史缓冲。
+        textures.extend(self.gi_color)  # 两张遮蔽历史。
+        textures.extend(self.taa_color)  # 两张抗锯齿历史。
         GL.glDeleteTextures(textures)  # 纹理一次性删除。
-        fbos = [self.shadow_fbo, self.scene_fbo, self.water_fbo, self.sky_fbo, self.sky_sample_fbo,
-                self.lum_tile_fbo, self.lum_final_fbo]
-        fbos.extend(self.sky_history_fbo)  # 历史缓冲的帧缓冲。
+        fbos = [self.scene_fbo, self.water_fbo, self.sky_fbo, self.sky_sample_fbo, self.lum_tile_fbo,
+                self.lum_final_fbo, self.reflection_fbo, self.denoised_fbo, self.bloom_fbo, self.bloom_coarse_fbo, self.bloom_combine_fbo]
+        fbos.extend(self.shadow_fbos)  # 三级阴影帧缓冲。
+        fbos.extend(self.sky_history_fbo)  # 天空历史的帧缓冲。
+        fbos.extend(self.gi_fbo)  # 遮蔽帧缓冲。
+        fbos.extend(self.taa_fbo)  # 抗锯齿帧缓冲。
         GL.glDeleteFramebuffers(len(fbos), fbos)  # 帧缓冲一次性删除。
         glfw.destroy_window(self.window)  # 关闭窗口。
         glfw.terminate()  # 反初始化 GLFW。
-
 
 def run(args) -> None:
     """按参数运行截图或交互模式，并写出性能记录。"""
@@ -642,7 +893,8 @@ def run(args) -> None:
             "device": world.device,
             "terrainTriangles": world.terrain_triangles,
             "waterTriangles": world.water_triangles,
-            "shadowMapSize": SHADOW_SIZE,
+            "shadowMapSize": CASCADE_SIZE,
+            "shadowCascades": CASCADE_COUNT,
             "cloudSteps": CLOUD_STEPS,
             "cloudResolution": [world.half_width, world.half_height],
             "cloudCubeSteps": CUBE_CLOUD_STEPS,
@@ -674,8 +926,8 @@ def main() -> None:
     parser.add_argument("--height", type=int, default=720, help="画面高度")
     parser.add_argument("--frames", type=int, default=120, help="计时帧数")
     parser.add_argument("--warmup", type=int, default=20, help="预热帧数")
-    parser.add_argument("--screenshot", default=str(ROOT / ".dev/omni-gfx/world-final.png"), help="截图路径")
-    parser.add_argument("--perf", default=str(ROOT / ".dev/omni-gfx/perf-final.json"), help="性能记录路径")
+    parser.add_argument("--screenshot", default=str(ROOT / ".dev/omni-gfx/world-complete.png"), help="截图路径")
+    parser.add_argument("--perf", default=str(ROOT / ".dev/omni-gfx/perf-complete.json"), help="性能记录路径")
     parser.add_argument("--window", action="store_true", help="打开可交互窗口")
     parser.add_argument("--camera", type=float, nargs=3, default=[48.0, 17.0, 140.0], help="相机位置")
     parser.add_argument("--target", type=float, nargs=3, default=[48.0, 16.0, 40.0], help="看向的目标")

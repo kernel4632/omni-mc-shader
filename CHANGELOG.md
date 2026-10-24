@@ -1,4 +1,20 @@
 # 更新记录
+## 0.4.1
+
+阶段三收尾与整包接入：阴影、全局光、反射、后期与抗锯齿迁入 `omni-gfx`，九项效果在光影包里全部改为调用生成库。
+
+- 新增 `shadow`、`gi`、`reflection`、`post`、`antialias` 五个 Slang 模块；生成器同步输出 13 个模块的 GLSL 330，`shaders/omni-gfx/` 与 `omni-gfx/generated/glsl/` 逐字节一致。
+- 阴影模块新增级联选择 `ogxSelectCascade` 与百分比过滤软阴影 `ogxPcssVisibility`：先按螺旋采样估计遮挡物平均深度，再按遮挡距离决定半影宽度，同时保留可变半影、彩色半透明阴影与次表面散射。
+- 全局光模块提供地平线遮蔽、反射阴影图反弹、相机重投影、时间滤波与七乘七空间滤波；反射模块提供可见法线采样、屏幕空间追踪与九点小波降噪；后期模块提供十三样本降采样、一维高斯、三次升采样、亮度曲线、暗角、颗粒、景深、动态模糊与分块测光；抗锯齿模块提供 YCoCg 裁剪与时间重投影。
+- 迁移保留数值：模块算式与旧 `shaders/gfx/` 逐项一致，光影侧的九个文件变成适配层（`shaders/gfx/{shadow,gi,reflection,post,antialias,atmosphere,cloud,water,fog}.glsl`），调用点、519 个选项、九页菜单与默认画面都不变。
+- 生成器补齐 Slang 与 GLSL 的语法差异：`Sampler2DShadow`、`SampleLevel`、`SampleCmpLevelZero`、`rsqrt`、带一层括号的取像素坐标；矩阵乘法统一走 `ogxMatrixMul` / `ogxMatrixMulPoint` / `ogxMatrix3MulPoint`，避免两种语言的行列解释不同造成转置错误。
+- 测试世界新增三级级联 PCSS、半分辨率地平线遮蔽与多弹射、半分辨率反射加九点降噪、时间抗锯齿、两级泛光与法线深度附件；地形只画到水面以上，海底不再透出没有光照的岛体。
+- 1280×720 在 Intel Arc 上 120 帧记录为平均 11.86 毫秒、中位 11.85、95 分位 13.29（约 84 帧每秒），比上一版的 28.96 毫秒快一倍多：反射与遮蔽都降到半分辨率，冲击最大的云与天空本来就在半分辨率累积。
+- 截图：`.dev/omni-gfx/world-complete.png`（本机文件，按项目规则不提交）；帧时记录：`.dev/omni-gfx/perf-complete.json`。
+- 手写核心（源、工具、测试）从 2456 行增加到 4870 行，上限相应从 3000 调到 5200：本轮把九个效果模块的实现整体迁入，属于计划允许的范围扩张，不是删效果凑数。
+
+验证：`python omni-gfx/build.py check`、`python build.py audit`、`python build.py verify`、`python build.py compile`（280 组唯一程序）通过。未启动 Minecraft；游戏内画面、Vulkan 运行时与其他显卡仍未验证。
+
 ## 0.4.0
 
 阶段三画面与性能：体积云改为半分辨率加时间累积，地形改用方向光阴影贴图，水面补上地形反射，后期加入自动曝光。
