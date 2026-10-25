@@ -8,6 +8,7 @@
 - 矩阵写法统一：矩阵乘向量改用 `ogxMatrix3MulPoint`，向量乘矩阵改用 `ogxApplyRows`，不再依赖两种语言不同的行列顺序；生成 GLSL 的数值不变。
 - 新增十个模块探针；`python omni-gfx/build.py spirv` 22 个模块通过，整数三维纹理的 `voxel` 暂缺探针，命令会列出并跳过。
 - 测试改为扫描 `shaders/gfx/*.glsl` 全部 23 个适配层，要求每个都引用同名生成模块；`docs/rendering.md` 增加十二个循环的归属表，只有大气光学厚度迁进库。
+- `fog` 适配层补齐下界雾与末地涡旋雾的转发；`shaders/gfx/` 现在没有任何循环与本地算式，只剩 1768 行转发和已说明的宿主布局。
 - 手写核心 7626 行，低于 8000 行上限；生成 GLSL 23 个模块共 12000 行。
 
 验证：`python omni-gfx/build.py check`、`python omni-gfx/build.py spirv`（22/23）、`python build.py verify`（145 个测试、9 组编译探针）、`python build.py compile`（280 组唯一程序）通过。未启动 Minecraft；游戏内画面、Vulkan 运行时与其他显卡仍未验证。
