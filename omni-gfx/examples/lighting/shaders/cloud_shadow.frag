@@ -15,7 +15,20 @@ void main()
 {
     vec2 coord = gl_FragCoord.xy / uResolution; // 贴图坐标。
     OgxCumulusMedia media = lightingCloudMedia(); // 与主画面同一套云参数。
-    float shadow = ogxCumulusShadowTex(coord, media, normalize(uSunDirection), uRange, uCloudBase, uCloudCurl,
+    vec3 sunDirection = normalize(uSunDirection); // 太阳方向。
+    // 地面点沿太阳方向投到云层中部，用同一份大尺度遮罩决定这里是否真的有云。
+    // 不做这一步时，云影会使用平均覆盖率，出现“天上没云、地上仍有阴影”的悬空感。
+    vec2 ground = (coord - 0.5) * uRange + uCameraPosition.xz; // 贴图覆盖的地面范围。
+    float midAltitude = (media.altitude.x + media.altitude.y) * 0.5; // 云层中部高度。
+    vec2 plane = ground + sunDirection.xz * ((midAltitude - uCameraPosition.y) / max(sunDirection.y, 0.05)); // 云层平面落点。
+    if (length(plane - lightingSunCloudPlane()) < 300.0) // 与主画面同一个太阳云洞。
+    {
+        fragColor = vec4(1.0, 1.0, 1.0, 1.0); // 洞里完全受光，雾与地面出现亮柱。
+        return;
+    }
+    float shadeMask = texture(uCloudCurl, plane * 8.0e-5 + vec2(uTime * 0.000003, -uTime * 0.000002)).g; // 十公里尺度厚薄。
+    media.coverage = mix(1.00, 1.20, smoothstep(0.35, 0.65, shadeMask)); // 厚处过门槛成影，薄处仍透光。
+    float shadow = ogxCumulusShadowTex(coord, media, sunDirection, uRange, uCloudBase, uCloudCurl,
                                        1.0, 0.0, 3.0, 1.0); // 库的云影投影。
-    fragColor = vec4(shadow, shadow, shadow, 1.0); // 一受光，零全影。
+    fragColor = vec4(vec3(mix(1.0, shadow, 0.70)), 1.0); // 保留三成底光，云影清晰但不把地面压成黑块。
 }

@@ -194,11 +194,11 @@
     {
       "module": "cloud_volume",
       "source": "omni-gfx/src/cloud_volume.slang",
-      "sourceSha256": "c7404c6a316c958f40c2f0ce8a729b1c091eb09f2bbf7e4b2472344a3150c417",
+      "sourceSha256": "f5575f07374bc71d2b623db8bff8f62c387b2901022b67f8827f27e93e522a86",
       "shader": "shaders/omni-gfx/cloud_volume.glsl",
       "generated": "omni-gfx/generated/glsl/cloud_volume.glsl",
-      "glslSha256": "e11b442732295b9e9c55ffc2e01e2bd6156616f28c0331f1d1ba64f86222cd69",
-      "glslLines": 202
+      "glslSha256": "51b2861d39402c0bb20ee9738087ff0044aeb3c57d880d51a5efc4e31f793f81",
+      "glslLines": 232
     },
     {
       "module": "fog_volume",

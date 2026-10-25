@@ -23,7 +23,7 @@ void main()
     vec3 color = texture(uColor, uv).rgb; // 线性场景颜色。
     color += texture(uBloom, uv).rgb * uBloomStrength; // 泛光与场景同为线性，直接相加。
     float averageLog = texture(uExposure, vec2(0.5)).r; // 几何画面平均对数亮度。
-    float exposure = clamp(uExposureKey / max(exp2(averageLog), 1e-4), 0.18, 4.0); // 自动曝光倍率。
+    float exposure = clamp(uExposureKey / max(exp2(averageLog), 1e-4), 0.02, 64.0); // 自动曝光倍率；不再用四倍上限，逆光场景也能提亮暗部。
     color *= exposure; // 应用曝光。
     color *= ogxVignette(uv, 0.42, 0.72, uAspect); // 轻微暗角，边缘只压两成。
     color = ogxFilmGrain(color, gl_FragCoord.xy, uTime, 0.0025); // 极轻颗粒，打散渐变色带。

@@ -49,7 +49,8 @@ void main()
         return; // 不再步进云。
     }
     float altitudeKm = max(uCameraPosition.y, 0.0) * 0.001; // 相机高度，公里。
-    vec3 sky = lightingSky(direction, altitudeKm, uSkyMode == 1 ? 6 : 9); // 主画面多两段，贴图省一点。
+    float sunDisk = (uSkyMode == 0) ? 1.0 : 0.0; // 只有主画面画太阳；环境光与水面的天空贴图不含圆盘，高光另算。
+    vec3 sky = lightingSky(direction, altitudeKm, uSkyMode == 1 ? 6 : 9, sunDisk); // 主画面多两段，贴图省一点。
     // 把云叠到天空上：主画面用累积纹理，贴图按方向重新步进。
     if (uUseCloudTexture == 1)
     {
@@ -72,7 +73,7 @@ void main()
     if (direction.y < 0.0)
     {
         vec3 lifted = normalize(vec3(direction.x, 0.002, direction.z)); // 抬到地平线上方。
-        vec3 horizon = lightingSky(lifted, altitudeKm, 4); // 更便宜的地平线色。
+        vec3 horizon = lightingSky(lifted, altitudeKm, 4, 0.0); // 更便宜的地平线色。
         sky = mix(horizon, sky, smoothstep(-0.25, 0.0, direction.y)); // 越低越接近地平线色。
     }
     if (uSceneTarget == 1) // 主场景：天空写进间接光附件，直射光为零。

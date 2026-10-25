@@ -88,7 +88,8 @@ void main()
         return;
     }
     float cloudShadow = lightingCloudShadow(vWorldPosition); // 大块云影。
-    float visibility = shadow * mix(1.0, cloudShadow, 0.20); // 云影只轻轻压暗，避免地面出现硬块。
+    float cloudWeight = smoothstep(35.0, 95.0, distance) * 0.65; // 近景保持阳光，云影落在中远景，避免整块前景被压黑。
+    float visibility = shadow * mix(1.0, cloudShadow, cloudWeight); // 云影压暗地面，但保留太阳方向感。
     float NdotL = max(dot(normal, sunDirection), 0.0); // 太阳入射角。
     float NdotV = max(dot(normal, view), 0.0); // 视线与法线夹角。
     float fresnel = ogxFresnelSchlick(NdotV, 0.04, 1.0); // 电介质菲涅尔，用于漫反射能量守恒。

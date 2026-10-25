@@ -44,10 +44,10 @@ NEAR = 0.2  # 近平面。
 FAR = 2600.0  # 远平面，覆盖地形圆盘与远景。
 FOV = 44.0  # 竖直视场角，略宽于五十毫米镜头，让整排球与湖面同时入镜。
 EYE_HEIGHT = 1.72  # 站立视高，米。
-SUN_DIRECTION = (-0.55, 0.50, 0.67)  # 太阳方向：西南方，仰角约三十度；正面受光，影子向右后方落下。
+SUN_DIRECTION = (0.50, 0.33, -0.80)  # 太阳方向：湖对岸偏右，仰角约二十五度；高于云底、低于云顶，云顶受光、云底留影。
 SUN_COLOR = (1.0, 0.975, 0.945)  # 五千八百开左右的太阳色度倾向，最终颜色再乘大气透过率。
 SUN_IRRADIANCE = 12.0  # 太阳辐照度倍率。
-SKY_INTENSITY = 0.45  # 天空整体倍率；压低天光，阴影更深、更蓝。
+SKY_INTENSITY = 0.62  # 天空整体倍率；抬到肉眼可见的亮度，背光地面仍保留蓝灰天光。
 CASCADE_SIZE = 1024  # 每级阴影贴图边长。
 CASCADE_COUNT = 3  # 三级级联。
 CASCADE_EXTENTS = (26.0, 90.0, 300.0)  # 每级正交视锥半边长，米。
@@ -56,9 +56,9 @@ CASCADE_BLEND = 10.0  # 级联交界过渡宽度。
 SKY_MAP_SIZE = (256, 128)  # 环境光与反射用的等距柱状天空贴图尺寸。
 SKY_MAP_INTERVAL = 8  # 天空贴图每八帧更新一次，云移动很慢。
 CLOUD_SIZE = (WIDTH, HEIGHT)  # 体积云与主画面同分辨率；云边不再被半分辨率放大成方块。
-CLOUD_STEPS = 16  # 云沿视线步进数；厚云需要多一点步数，仍控制在十六步。
+CLOUD_STEPS = 30  # 云沿视线步进数；积雨云塔身很厚，需要更多步数保住竖向层次。
 CLOUD_SHADOW_SIZE = 256  # 云影贴图边长。
-CLOUD_SHADOW_RANGE = 620.0  # 云影覆盖范围，米。
+CLOUD_SHADOW_RANGE = 900.0  # 云影覆盖范围，米；低阳把云影投到更远的地面。
 CLOUD_SHADOW_INTERVAL = 2  # 云影每两帧更新一次。
 REFLECTION_SCALE = 2  # 平面反射每边缩小的倍数。
 REFLECTION_INTERVAL = 5  # 反射每五帧更新一次；水面波纹会掩盖延迟。
@@ -68,12 +68,12 @@ CLOUD_BLEND = 0.10  # 云时间累积里本帧权重。
 BLOOM_SIZE = (320, 180)  # 泛光最细一级。
 BLOOM_COARSE_SIZE = (160, 90)  # 泛光最粗一级。
 LUMINANCE_SIZE = (64, 36)  # 曝光统计第一级。
-EXPOSURE_KEY = 0.20  # 自动曝光目标中间亮度。
-BLOOM_STRENGTH = 0.16  # 泛光强度。
-FOG_DENSITY = 0.0040  # 近地面雾密度倍率；薄雾给远景空气感，也让光柱有介质。
-FOG_HEIGHT = 60.0  # 雾的高层衰减高度；让远山也带一点空气透视。
-FOG_SCATTER = 0.45  # 雾中阳光散射强度。
-FOG_AMBIENT = 0.20  # 雾中天光。
+EXPOSURE_KEY = 0.18  # 自动曝光目标中间亮度；曝光只统计不透明场景，水面再亮也不会把地面压黑。
+BLOOM_STRENGTH = 0.10  # 泛光强度；压低一点，太阳附近不会糊成一片白。
+FOG_DENSITY = 0.020  # 近地面雾密度倍率；贴水薄雾给光柱足够介质，又不盖住近景。
+FOG_HEIGHT = 24.0  # 雾的高层衰减高度；让远山也带一点空气透视。
+FOG_SCATTER = 1.30  # 雾中阳光散射强度。
+FOG_AMBIENT = 0.04  # 雾中天光。
 AO_STRENGTH = 1.15  # 环境光遮蔽强度。
 CONTACT_STRENGTH = 1.1  # 接触阴影强度。
 BOUNCE_STRENGTH = 1.2  # 颜色反弹强度。
@@ -302,8 +302,8 @@ class World:
         self.height = max(1, int(round(height * RENDER_SCALE)))  # 内部渲染高度。
         self.half_width = max(1, self.width // 2)  # 半分辨率宽度，用于全局光。
         self.half_height = max(1, self.height // 2)  # 半分辨率高度。
-        self.cloud_width = self.half_width  # 体积云半分辨率；模糊后看不出分辨率。
-        self.cloud_height = self.half_height  # 体积云半分辨率。
+        self.cloud_width = self.width  # 体积云全分辨率；云边与塔身细节不再被二倍放大抹平。
+        self.cloud_height = self.height  # 体积云全分辨率。
         self.reflection_width = max(1, width // REFLECTION_SCALE)  # 反射宽度。
         self.reflection_height = max(1, height // REFLECTION_SCALE)  # 反射高度。
         self.tonemap = tonemap  # 色调映射。
@@ -864,10 +864,10 @@ class World:
         GL.glDepthMask(GL.GL_FALSE)  # 不写深度。
         GL.glUseProgram(self.exposure_program)  # 曝光程序。
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 来源。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.display_color)  # 当前颜色。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.lit_color)  # 不透明场景颜色；水面不参与曝光，亮湖面不会把地面压黑。
         GL.glUniform1i(location(self.exposure_program, "uSource"), 0)  # 采样器。
         GL.glActiveTexture(GL.GL_TEXTURE1)  # 深度。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.water_depth)  # 水面深度。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_depth)  # 不透明场景深度；天空仍被排除。
         GL.glUniform1i(location(self.exposure_program, "uDepth"), 1)  # 采样器。
         GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.lum_tile_fbo)  # 第一级。
         GL.glViewport(0, 0, *LUMINANCE_SIZE)  # 视口。
@@ -1033,7 +1033,7 @@ def run(args) -> None:
             "device": world.device, "terrainTriangles": world.terrain_triangles,
             "objectTriangles": world.object_triangles, "waterTriangles": world.water_triangles,
             "shadowMapSize": CASCADE_SIZE, "shadowCascades": CASCADE_COUNT,
-            "cloudResolution": [world.half_width, world.half_height], "cloudSteps": CLOUD_STEPS,
+            "cloudResolution": [world.cloud_width, world.cloud_height], "cloudSteps": CLOUD_STEPS,
             "averageLogLuminance": average_log, "averageLuminance": 2.0 ** average_log,
             "camera": world.camera.position, "target": list(geometry.LOOK_TARGET),
             "sun": world.sun, "time": args.time, "tonemap": args.tonemap,
