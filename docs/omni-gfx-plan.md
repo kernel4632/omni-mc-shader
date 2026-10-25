@@ -195,6 +195,7 @@ MC 光影编译 + 同场景对比
 - 只服务 Minecraft 的部分逐条给出参考行号与宿主声明位置，写在 `docs/gfx-parity.md` 第六节：手持光源与高光、材质编号掩码、手部屏幕阴影与手电筒、屏幕追踪与双边升采样、体素写入、调试叠加与编号表。
 - 手写核心从 8153 行增加到 8717 行，上限按决策记录上调到 8800 行。
 - 2026-10-26 测试世界重建为连续山谷湖盆场景：`assets/` 增加 CC0 草甸/泥土/岩石/湿沙/腐殖土/树皮贴图与 1K 全景天空，`terrain.py` 改为连续高度场，`vegetation.py` 生成树线、灌木、草丛、野花与岩石，`render.py` 使用三级 CSM、平面反射、TAA、自动曝光、景深、泛光与调色。1280×720 本机 Intel Arc 120 帧平均 23.2 毫秒（约 43.1 帧每秒），截图 `.dev/omni-gfx/world-photoreal.png`，与 NPS 公共领域照片的并排图 `.dev/omni-gfx/world-comparison.png`。**画面仍未达到照片级**：树冠是程序化团块、岸线与远山偏规整、水体反射低分辨率；体积云模块保留在库中，但测试世界改用 HDR 天空，理由与差距写入 `omni-gfx/docs/verification.md`。
+- 2026-10-26 新增光影验证场景 `omni-gfx/examples/lighting`：简单湖盆、两种金属与三种电介质球、方块、石台、立石、水面、体积雾与体积云；太阳颜色取大气透过率，三级 CSM/PCSS 与接触阴影、半分辨率遮蔽与颜色反弹、平面反射与吸收/泡沫、六步阴影雾、TAA、泛光与 ACES/AgX。1280×720 本机 Intel Arc 120 帧平均 28.02 毫秒（约 35.7 帧每秒），截图 `.dev/omni-gfx/world-lighting.png`，与 Bierstadt Lake（CC0）和 Moraine Lake（Public Domain）的并排图 `.dev/omni-gfx/world-lighting-comparison.png`。云仍偏扁平的层积云，光柱很弱，详见 `omni-gfx/docs/verification.md`。
 - 2026-10-26 验证边界：`omni-gfx/build.py check` 只审计测试世界实际编译的 GLSL；Python 示例与资源准备脚本不进入光影 ZIP，也不参与库注释比例。手写核心 9267 行，低于 9400 上限。
 - 下一步：把库内的 Eclipse 程序化雨点、阴影修补、水面高度/焦散与四季函数接到光影选项（需要先定默认画面与选项命名）；为 `voxel` 补整数三维纹理探针；阶段 5（完整 SPIR-V 演示管线）与阶段 6（文档、许可证、示例与发布）。
 

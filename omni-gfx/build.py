@@ -40,7 +40,7 @@ def command_generate() -> None:
 
 
 def command_check() -> None:
-    """只读检查生成文件是否与源一致，并审计测试世界着色器的中文说明。
+    """只读检查生成文件是否与源一致，并审计两个测试世界的着色器中文说明。
 
     这条命令适合提交前快速确认，和项目根目录的完整验证互不替代。
     测试世界的 Python 是开发期消费者，不进入光影 ZIP，也不参与库注释比例；
@@ -49,8 +49,10 @@ def command_check() -> None:
     generate.check_modules()  # 过期或缺失都会列出具体路径。
     sys.path.insert(0, str(ROOT))  # 复用项目根的中文说明审计器。
     import audit  # 审计规则只有一份，库不另写一套。
-    audited = audit.check(LIB / "examples" / "world" / "shaders")  # 只审计会进入测试世界编译的着色器。
-    print(f"生成文件与源一致：{len(generate.MODULES)} 个模块；测试世界着色器中文说明审计通过 {len(audited)} 个文件")
+    world = audit.check(LIB / "examples" / "world" / "shaders")  # 户外测试世界。
+    lighting = audit.check(LIB / "examples" / "lighting" / "shaders")  # 光影验证场景。
+    print(f"生成文件与源一致：{len(generate.MODULES)} 个模块；"
+          f"测试世界着色器中文说明审计通过 {len(world)} 个文件，光影验证场景 {len(lighting)} 个文件")
 
 
 def command_spirv(download: bool) -> None:
@@ -89,6 +91,16 @@ def command_demo(extra: list[str]) -> None:
     """
     render = LIB / "examples" / "world" / "render.py"  # 测试世界入口。
     subprocess.run([sys.executable, str(render), *extra], cwd=ROOT, check=True)  # 参数和退出码直接透传。
+
+
+def command_lighting(extra: list[str]) -> None:
+    """运行光影验证场景：简单地形、材质球、水面、雾与体积云。
+
+    与 `demo` 分开是因为两者验收目标不同：`demo` 追求户外照片氛围，
+    这里只检验太阳、天空、阴影、环境光、雾、云与水面是否各自成立。
+    """
+    render = LIB / "examples" / "lighting" / "render.py"  # 光影验证场景入口。
+    subprocess.run([sys.executable, str(render), *extra], cwd=ROOT, check=True)  # 参数透传。
 
 
 def command_gpu() -> None:
@@ -131,6 +143,8 @@ def main() -> None:
     spirv.add_argument("--download", action="store_true", help="缺少编译器时从官方发布页下载")  # 显式联网。
     demo = sub.add_parser("demo", help="运行程序化测试世界并截图")  # 需要显卡与窗口系统。
     demo.add_argument("rest", nargs=argparse.REMAINDER, help="传给测试世界的参数")  # 不在两层重复定义参数。
+    lighting = sub.add_parser("lighting", help="运行光影验证场景并截图")  # 需要显卡与窗口系统。
+    lighting.add_argument("rest", nargs=argparse.REMAINDER, help="传给光影验证场景的参数")  # 参数透传。
     sub.add_parser("test-gpu", help="运行旧库与新库的 GPU 等值测试")  # 需要显卡。
     counter = sub.add_parser("count", help="统计各类代码行数")  # 只读统计。
     counter.add_argument("--json", action="store_true", help="输出机器可读结果")  # 方便写入记录。
@@ -144,6 +158,8 @@ def main() -> None:
         command_spirv(args.download)
     elif args.command == "demo":
         command_demo(args.rest)
+    elif args.command == "lighting":
+        command_lighting(args.rest)
     elif args.command == "test-gpu":
         command_gpu()
     elif args.command == "count":
