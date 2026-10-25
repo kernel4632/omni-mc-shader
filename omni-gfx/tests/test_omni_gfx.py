@@ -95,6 +95,12 @@ class OmniGfxTests(unittest.TestCase):
                 self.assertEqual(hashlib.sha256(source).hexdigest(), item["sourceSha256"])  # 源摘要。
                 self.assertEqual(hashlib.sha256(shader).hexdigest(), item["glslSha256"])  # 产物摘要。
 
+    def test_every_module_has_probe(self):
+        """每个模块都要有 SPIR-V 探针，缺口不能被当成通过。"""
+        for name in generate.MODULES:
+            with self.subTest(module=name):
+                self.assertTrue((LIB / "tests" / "probes" / f"{name}.slang").is_file())  # 缺一个就说明有写法从未过编译器。
+
     def test_handwritten_budget(self):
         """手写核心（源、工具、测试）不超过计划给的三千行。"""
         data = count.collect()  # 统计口径来自构建工具，不在测试里另写一份。

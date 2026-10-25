@@ -50,20 +50,20 @@
     {
       "module": "cloud",
       "source": "omni-gfx/src/cloud.slang",
-      "sourceSha256": "937cb3aed009e556bf88f49b12665dc7b1b454830d20c17dcd8e800a230a25b6",
+      "sourceSha256": "3c148c23fad458b29119d88860d40a79a7b22d7da05936ffccf0d454f0794e5c",
       "shader": "shaders/omni-gfx/cloud.glsl",
       "generated": "omni-gfx/generated/glsl/cloud.glsl",
-      "glslSha256": "c5b404e0f435cad97cebab5171c0f7afc0241061a24437380ce0bba3411ade2f",
-      "glslLines": 387
+      "glslSha256": "07b2ef729833dfed65f0fa713a426edc5b591a4ef599c77e39f202085e104ff3",
+      "glslLines": 406
     },
     {
       "module": "water",
       "source": "omni-gfx/src/water.slang",
-      "sourceSha256": "e44a8e31c3425602f12784074607549976d1818e490633aaf65dd38b42158620",
+      "sourceSha256": "30969151e0bd13863a6105cbeb4c26ebd3edc51f468f803429a4207a016cce46",
       "shader": "shaders/omni-gfx/water.glsl",
       "generated": "omni-gfx/generated/glsl/water.glsl",
-      "glslSha256": "90945df543fd120c1cb4611d733cc50c973b7efda005af9f70ab13ae3ae43f59",
-      "glslLines": 349
+      "glslSha256": "69f20fc06e20c5873b9d21bba277e40a6f2ff94e17922212eb9f79a798ecb6a4",
+      "glslLines": 437
     },
     {
       "module": "fog",
@@ -104,11 +104,11 @@
     {
       "module": "post",
       "source": "omni-gfx/src/post.slang",
-      "sourceSha256": "cce14d267d390f6e2ee9da443d9b639f1929186c3156cceb6edf0643ffa76515",
+      "sourceSha256": "bc4522f5555cc198284cc834534972f473177f294789c07961d205d29289cd6e",
       "shader": "shaders/omni-gfx/post.glsl",
       "generated": "omni-gfx/generated/glsl/post.glsl",
-      "glslSha256": "be88488ebe35c504d64ad7f41830c539a56af785e48caebc210b7aa594691add",
-      "glslLines": 481
+      "glslSha256": "42fe8b7588b346e07d4d25600179178278b26bdb3263693a7e98c220862c9b9c",
+      "glslLines": 491
     },
     {
       "module": "antialias",
@@ -140,11 +140,11 @@
     {
       "module": "voxel",
       "source": "omni-gfx/src/voxel.slang",
-      "sourceSha256": "14448c9bb9e91eb17f9b1051b5a4487c6c799cfe7ce4259c4b0345dfd34a9ef3",
+      "sourceSha256": "21faf202f02e3c68955eefbbe1fa8df246bdc0c73252f9af5fcf62e92aa2ab3a",
       "shader": "shaders/omni-gfx/voxel.glsl",
       "generated": "omni-gfx/generated/glsl/voxel.glsl",
-      "glslSha256": "5e4b47196082d4ce6dab3cf10373cb60dd938cebd1140797fe462c3b459fbecc",
-      "glslLines": 137
+      "glslSha256": "92b606e0f384103481229b319d08cf0515d986f05ea5f614d31145389538843f",
+      "glslLines": 139
     },
     {
       "module": "upscale",

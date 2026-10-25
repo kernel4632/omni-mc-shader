@@ -8,6 +8,8 @@ Omni 通用图形库体素追踪模块：在规则三维网格里沿射线逐格
     水、冰、玻璃按半透明处理，只给后面的画面染色后继续走；铁块按镜面弹射，最多弹四次，
     防止两面镜子互相拖满循环。追踪用标准的三维逐格步进：每步选最近的一根格子边界，撞到实心方块就停。
     方块编号是方块的业务数据，用 `uint` 直接传入，库不假设它来自哪张方块表。
+    三维纹理取格写成 `Load(int4(cell, level))`：Slang 把细节层级放在坐标的第四个分量，
+    生成器再把它还原成 GLSL 的 `texelFetch(tex, cell, level)`，两边算式不变。
 */
 #ifndef OGX_VOXEL_INCLUDED
 #define OGX_VOXEL_INCLUDED
@@ -104,10 +106,10 @@ float4 ogxVoxelReflection(float3 originWorld, float3 rayDirWorld, float3 surface
             else if (tMax.y <= tMin) { cell.y += stepDir.y; tMax.y += tDelta.y; faceNormal.y = -float(stepDir.y); } // 走纵轴这一格。
             else { cell.z += stepDir.z; tMax.z += tDelta.z; faceNormal.z = -float(stepDir.z); } // 走深度轴这一格。
             if (!ogxVoxelInside(cell, side)) return float4(0.0, 0.0, 0.0, -1.0); // 走出体积，后面的格子没有编号。
-            uint voxelId = voxelIdTexture.Load(int3(cell, 0)).r; // 读这一格的方块编号。
+            uint voxelId = voxelIdTexture.Load(int4(cell, 0)).r; // 读这一格的方块编号。
             if (voxelId == 0u) continue; // 空气，继续走。
             if (ogxVoxelIsPlant(voxelId)) continue; // 植物不挡光，继续走。
-            float4 stored = voxelColorTexture.Load(int3(cell, 0)); // 读这一格的颜色与光照。
+            float4 stored = voxelColorTexture.Load(int4(cell, 0)); // 读这一格的颜色与光照。
             float3 albedo = ogxSrgbToLinear(stored.rgb); // 贴图色从 sRGB 换回线性，与场景单位一致。
             if (ogxVoxelIsTranslucent(voxelId)) { accumTint *= ogxVoxelTranslucentTint(voxelId, albedo); continue; } // 水冰玻璃按彩色水染色后继续。
             float3 hitPoint = posWorld + dir * tMin; // 本次刚跨进来的边界点，就是命中面所在位置。

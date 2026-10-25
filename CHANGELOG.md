@@ -1,4 +1,17 @@
 # 更新记录
+## 0.5.4
+
+第六批迁移：体素探针补齐、适配层算式清零、十二个循环归位与效果对照表。
+
+- `omni-gfx` 的 SPIR-V 探针补齐到 23/23：体素模块的整数三维纹理改为 `Load(int4(cell, 0))` 取格（Slang 把细节层级放在坐标的第四分量），生成器新增对应转换，生成的 `texelFetch` 与改动前逐字节相同；探针用一行类型别名接上无符号三维纹理类型。构建脚本删掉“缺探针就跳过”的路径，缺一个直接失败，测试也加了同名检查。
+- `shaders/gfx/*.glsl` 不再有本地 `texture()`、`textureLod()` 与 `texelFetch()` 调用：泛光链第二级那两处重复的“夹紧后读零号层级”改成 `ogxBloomChainCopy`，库与适配层各只有一份。
+- 十二个渲染循环逐个审查：平面云的云内遮挡迁为 `ogxPlanarCloudLightingDepth`，水面两处重复的迭代正弦合并为 `ogxOceanWaveSum` 与 `ogxOceanWaveHeight`，算法常数一并进库；其余八处是几何装配、图集采样或维度专用，依据逐项写进 `docs/rendering.md`。
+- 新增 `docs/gfx-parity.md`：76 行覆盖 iterationT 31 个算法文件与 Eclipse 45 个文件，按已覆盖、部分、库内、未覆盖、MC 专用五种状态记录，并列出库内暂无调用方的函数。
+- 删除平面云光照密度的适配转发：实现被新的遮挡函数内部调用，旧入口已无调用方，避免同一算式两个入口。
+- `docs/rendering.md` 的循环表重写为十二行逐项归属，并修掉上一版表里的两个控制字符。
+
+验证：`python omni-gfx/build.py check`、`python omni-gfx/build.py spirv`（23/23，编译器 2026.20）、`python build.py verify`（146 个测试、9 组编译探针）、`python build.py compile`（280 组唯一程序，0 错误）通过。未启动 Minecraft；游戏内画面、性能与其他显卡仍未验证。
+
 ## 0.5.3
 
 第五批迁移：数学、颜色与采样也变成适配层，光影侧的 `shaders/gfx/` 不再保存任何算法实现。

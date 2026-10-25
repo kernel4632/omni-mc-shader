@@ -48,9 +48,9 @@ float gfx_planar_density(vec2 position, vec2 wind_direction, sampler2D noise_tex
 	return ogxPlanarDensity(position, wind_direction, noise_texture, noise_scale, coverage); // 实现在生成库。
 }
 
-// 平面云的光照密度：用便宜的噪声和更少层数，专供光照估计。
-float gfx_planar_lighting_density(vec2 position, vec2 wind_direction, sampler2D noise_texture, float noise_scale, float coverage){
-	return ogxPlanarLightingDensity(position, wind_direction, noise_texture, noise_scale, coverage); // 实现在生成库。
+// 平面云的光照遮挡：沿光方向按放大步长走几步，累加光照密度乘步长。
+float gfx_planar_cloud_lighting_depth(vec2 sample_position, vec2 light_direction, vec2 wind_direction, float dither, float first_step, float step_growth, int steps, sampler2D noise_texture, float noise_scale, float coverage){
+	return ogxPlanarCloudLightingDepth(sample_position, light_direction, wind_direction, dither, first_step, step_growth, steps, noise_texture, noise_scale, coverage); // 实现在生成库。
 }
 
 // --- 云影：把地表点投到云影贴图并取遮蔽 ---

@@ -7,6 +7,8 @@
     `vec4 wave = physics_wavePixel(position, factor, iterations, time, ...);`
 设计原因与取舍：基础波浪与物理解析波浪共用同一套噪声与缩放约定，放一起能看清两者关系；
     物理解析波浪的顶点与片元两段靠 `PHYSICS_VS` / `PHYSICS_FS` 宏分派，保留 iterationT 原样。
+    两段共用的迭代正弦循环和归一化换算式在生成库 `omni-gfx/src/water.slang`，
+    这里只做波形空间换算、涟漪贴图采样与泡沫贴图取样，算式的唯一来源仍在库里。
 */
 #ifndef OMNI_WATER_WAVES_INCLUDED
 // 波浪公式在通用库，时间从绑定结构取，效果文件不再直接读宿主输入。
@@ -44,17 +46,11 @@ vec3 GetWaterParallaxCoord(vec3 position, vec3 viewVector){ return gfx_water_par
 // 形状必须与原程序一致，因为实体偏移在中央处理器一侧也按同一套公式计算，两边不一致会让实体浮空或陷进水里。
 // 下面这些输入由外部海洋物理扩展提供；扩展缺失时不会调用这些函数，基础水面不受影响。
 const int PHYSICS_ITERATIONS_OFFSET = 13; // 迭代次数的基础偏移，原程序取值。
-const float PHYSICS_DRAG_MULT = 0.048; // 每层波形对采样点的拖拽量。
 const float PHYSICS_XZ_SCALE = 0.035; // 水平坐标缩放。
-const float PHYSICS_TIME_MULTIPLICATOR = 0.45; // 时间缩放。
-const float PHYSICS_W_DETAIL = 0.75; // 细节权重指数。
-const float PHYSICS_FREQUENCY = 6.0; // 起始频率。
-const float PHYSICS_SPEED = 2.0; // 起始速度。
-const float PHYSICS_WEIGHT = 0.8; // 每层权重衰减。
-const float PHYSICS_FREQUENCY_MULT = 1.18; // 每层频率放大。
-const float PHYSICS_SPEED_MULT = 1.07; // 每层速度放大。
-const float PHYSICS_ITER_INC = 12.0; // 每层方向角增量。
+const float PHYSICS_W_DETAIL = 0.75; // 细节权重指数，方向累加的分母要用。
 const float PHYSICS_NORMAL_STRENGTH = 0.6; // 法线竖直分量的强度。
+// 每层的拖拽、时间缩放、频率、速度与权重衰减都是算法常数，已经在库的 `ogxOceanWavesDefault()` 里，
+// 这里不再重复一份，避免两处数值各改各的。
 
 uniform int physics_iterationsNormal; // 表面细节迭代次数，来自扩展。
 uniform vec2 physics_waveOffset; // 波形原点偏移，保持网格改变时波形不变。
@@ -81,34 +77,18 @@ uniform sampler2D physics_lightmap; // 原版光照图。
 	in float physics_localWaviness; // 顶点处的水深。
 #endif
 
+// 海洋波循环用的参数：常数取库的默认值，只有层数随外部海洋扩展变化。
+OgxOceanWaves physics_ocean_waves(int iterations) {
+	OgxOceanWaves waves = ogxOceanWavesDefault(); // 默认值就是原程序的那一组常数。
+	waves.iterations = iterations; // 层数由调用方给。
+	return waves;
+}
+
 // 按迭代正弦求某点波高：每层频率与速度都放大，权重衰减，最后归一化并居中。
 float physics_waveHeight(vec2 position, int iterations, float factor, float time) {
 	position = (position - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale; // 换到波形空间。
-	float iter = 0.0; // 每层方向角。
-	float frequency = PHYSICS_FREQUENCY; // 当前层频率。
-	float speed = PHYSICS_SPEED; // 当前层速度。
-	float weight = 1.0; // 当前层权重。
-	float height = 0.0; // 累加高度。
-	float waveSum = 0.0; // 累加权重。
-	float modifiedTime = time * PHYSICS_TIME_MULTIPLICATOR; // 缩放后的时间。
-
-	for (int i = 0; i < iterations; i++) { // 逐层叠加。
-		vec2 direction = vec2(sin(iter), cos(iter)); // 当前层方向。
-		float x = dot(direction, position) * frequency + modifiedTime * speed; // 当前层的相位。
-		float wave = exp(sin(x) - 1.0); // 波峰更尖的包络。
-		float result = wave * cos(x); // 波形值。
-		vec2 force = result * weight * direction; // 对采样点的拖拽力。
-
-		position -= force * PHYSICS_DRAG_MULT; // 采样点被拖拽，形成剪切。
-		height += wave * weight; // 累加高度。
-		iter += PHYSICS_ITER_INC; // 方向角前进。
-		waveSum += weight; // 累加权重。
-		weight *= PHYSICS_WEIGHT; // 权重衰减。
-		frequency *= PHYSICS_FREQUENCY_MULT; // 频率放大。
-		speed *= PHYSICS_SPEED_MULT; // 速度放大。
-	}
-
-	return height / waveSum * physics_oceanHeight * factor - physics_oceanHeight * factor * 0.5; // 归一化并按海面高度缩放、居中。
+	OgxOceanWaveSum sum = ogxOceanWaveSum(position, time, physics_ocean_waves(iterations)); // 逐层累加在生成库里完成。
+	return ogxOceanWaveHeight(sum, physics_oceanHeight, factor); // 归一化并按海面高度缩放、居中。
 }
 
 // 合成海面法线：波形法线再混入涟漪贴图的凹凸，涟漪越强权重越大。
@@ -144,36 +124,12 @@ struct WavePixelData {
 // 一次算出海面像素的全部数据，内部把波高、方向与泡沫合成，避免片元阶段重复迭代。
 WavePixelData physics_wavePixel(const in vec2 position, const in float factor, const in float iterations, const in float time) {
 	vec2 wavePos = (position.xy - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale; // 换到波形空间。
-	float iter = 0.0; // 每层方向角。
-	float frequency = PHYSICS_FREQUENCY; // 当前层频率。
-	float speed = PHYSICS_SPEED; // 当前层速度。
-	float weight = 1.0; // 当前层权重。
-	float height = 0.0; // 累加高度。
-	float waveSum = 0.0; // 累加权重。
-	float modifiedTime = time * PHYSICS_TIME_MULTIPLICATOR; // 缩放后的时间。
-	vec2 dx = vec2(0.0); // 累加方向。
-
-	for (int i = 0; i < iterations; i++) { // 逐层叠加。
-		vec2 direction = vec2(sin(iter), cos(iter)); // 当前层方向。
-		float x = dot(direction, wavePos) * frequency + modifiedTime * speed; // 当前层的相位。
-		float wave = exp(sin(x) - 1.0); // 波峰更尖的包络。
-		float result = wave * cos(x); // 波形值。
-		vec2 force = result * weight * direction; // 对采样点的拖拽力。
-
-		dx += force / pow(weight, PHYSICS_W_DETAIL); // 按细节指数累加方向。
-		wavePos -= force * PHYSICS_DRAG_MULT; // 采样点被拖拽。
-		height += wave * weight; // 累加高度。
-		iter += PHYSICS_ITER_INC; // 方向角前进。
-		waveSum += weight; // 累加权重。
-		weight *= PHYSICS_WEIGHT; // 权重衰减。
-		frequency *= PHYSICS_FREQUENCY_MULT; // 频率放大。
-		speed *= PHYSICS_SPEED_MULT; // 速度放大。
-	}
+	OgxOceanWaveSum sum = ogxOceanWaveSum(wavePos, time, physics_ocean_waves(int(ceil(iterations)))); // 逐层累加在生成库里完成；向上取整与原来的整数比较等价。
 
 	WavePixelData data; // 待填充的数据。
-	data.direction = -vec2(dx / pow(waveSum, 1.0 - PHYSICS_W_DETAIL)); // 方向取负，朝向波前进方向。
-	data.worldPos = wavePos / physics_oceanWaveHorizontalScale / PHYSICS_XZ_SCALE; // 还原世界位置。
-	data.height = height / waveSum * physics_oceanHeight * factor - physics_oceanHeight * factor * 0.5; // 归一化并按海面高度缩放、居中。
+	data.direction = -vec2(sum.detail / pow(sum.weightSum, 1.0 - PHYSICS_W_DETAIL)); // 方向取负，朝向波前进方向。
+	data.worldPos = sum.position / physics_oceanWaveHorizontalScale / PHYSICS_XZ_SCALE; // 还原世界位置。
+	data.height = ogxOceanWaveHeight(sum, physics_oceanHeight, factor); // 归一化并按海面高度缩放、居中。
 
 	data.normal = physics_waveNormal(position, data.direction, factor, time); // 复用上面的法线合成。
 

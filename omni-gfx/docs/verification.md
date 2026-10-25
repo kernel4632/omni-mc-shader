@@ -115,10 +115,20 @@
 - 生成：python omni-gfx/build.py generate 输出 23 个模块、47 个文件，GLSL 共 12754 行；shaders/omni-gfx/ 与 generated/glsl/ 逐字节一致。
 - 库检查：python omni-gfx/build.py check 通过；src/*.slang 的中文说明比例在 26% 到 81% 之间，新迁模块均超过 50%，math、color 等早期核心模块仍低于 50%，按现有审计口径只对 GLSL 与薄入口强制。
 - 光影检查：python build.py verify 145 个测试通过，9 组编译探针通过，8.4 到 8.9 秒；全量编译 python build.py compile 280 组唯一程序通过。
-- SPIR-V：python omni-gfx/build.py spirv 22 个模块通过，oxel 因整数三维纹理 usampler3D 暂无探针，命令会列出并跳过；这不是 GLSL 路径的失败。
+- SPIR-V：python omni-gfx/build.py spirv 22 个模块通过，voxel 因整数三维纹理 usampler3D 暂无探针，命令会列出并跳过；这不是 GLSL 路径的失败。
 - 适配层约束：测试改为扫描 shaders/gfx/*.glsl 全部文件，要求每个都引用同名生成模块；纯宿主布局（五级泛光子图、反射主流程的天空与体素钩子）留在适配层。
 - GPU 对照：omni-gfx/tests/equivalence.py 在本机 Intel Arc 上 26/26、最大差 0。第二次迁移后它比较的是“适配层入口”和“生成库函数”，证明转发接对了，但不再证明与迁移前的旧算式一致；迁移前的同项记录是本文件上一节的 26/26。
 - 数值一致性：新迁模块按旧文件逐行搬运，常数、分支与运算顺序不变；矩阵方向用显式点乘固定，避免两种语言行列顺序不同。没有逐模块的 GPU 截图对比，这一项仍未验证。
-- 循环分类：shaders/rendering/ 的十二个循环已逐个归类，只有大气光学厚度迁进库，其余十一处是几何装配、材质采样或依赖宿主选项的阶段胶水，详见 docs/rendering.md。
+- 循环分类：shaders/rendering/ 的十二个循环已逐个归类；这一轮之前的记录只有大气光学厚度迁进库，其余十一处按几何装配、材质采样或宿主选项留在阶段层。
 
-未验证项与上一节相同：没有启动 Minecraft，没有看游戏内画面、Vulkan 运行时与其他显卡；Voxel 的 SPIR-V 探针与水面迭代波的参数化仍是待办。
+未验证项与上一节相同：没有启动 Minecraft，没有看游戏内画面、Vulkan 运行时与其他显卡。Voxel 的 SPIR-V 探针与水面迭代波的参数化已在下一节处理。
+
+## 七、第三批补齐（2026-10-25）
+
+- SPIR-V：补上体素模块探针，`python omni-gfx/build.py spirv` 23 个模块全部通过，编译器 2026.20，输出里不再有跳过项。构建脚本同时改成缺一个探针就失败，测试新增“每个模块都要有探针”，缺口不会再被当成通过。
+- 三维取格写法：Slang 把细节层级放在坐标的第四个分量，体素源改成 `Load(int4(cell, 0))`，生成器新增 `int4` 取格的等价转换。生成的 `texelFetch` 与改动前完全一致，`voxel.glsl` 只多了两行说明；无符号三维纹理靠探针里的一行类型别名接上，算式与常数没有改动。
+- 适配层算式：`shaders/gfx/*.glsl` 现在已经没有 `texture()`、`textureLod()` 与 `texelFetch()` 的本地调用。泛光链第二级那两处重复的“夹紧后读零号层级”改成 `ogxBloomChainCopy`，库和适配层各只一份。
+- 循环：`shaders/rendering/` 的十二个循环逐个看过，平面云的云内遮挡与水面迭代正弦搬进库（新增 `ogxPlanarCloudLightingDepth`、`ogxOceanWaveSum`、`ogxOceanWaveHeight`），还剩八个是几何装配、图集采样或维度专用，依据逐项写进 `docs/rendering.md`。
+- 对照表：新增 `docs/gfx-parity.md`，76 行覆盖 iterationT 31 个算法文件与 Eclipse 45 个文件，按已覆盖、部分、库内、未覆盖、MC 专用五种状态记录，并列出库里暂时没有调用方的函数。
+- 命令结果：`generate` 输出 23 个模块、47 个文件、GLSL 12988 行；`check` 通过，库内 37 个文件通过中文说明审计；`verify` 146 个测试通过、9 组编译探针通过；`compile` 280 组唯一程序 0 错误。
+- 本轮仍没有启动 Minecraft：水面迭代正弦、平面云遮挡与泛光链拷贝只证明能编译、算式与常数逐行对应，游戏内画面与帧时未验证。

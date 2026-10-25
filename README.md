@@ -66,6 +66,7 @@ uv pip sync requirements-dev.lock
 - [开发、调试与发布](docs/development.md)
 - [移植合同与分片状态](docs/parity.md)
 - [Eclipse 效果对照](docs/eclipse-parity.md)
+- [效果到 omni-gfx 函数的对照表](docs/gfx-parity.md)
 - [绘制流程](docs/rendering.md)
 - [兼容性与验证状态](docs/compatibility.md)
 - [性能测量方法](docs/performance.md)

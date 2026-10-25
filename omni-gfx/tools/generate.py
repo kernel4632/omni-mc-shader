@@ -78,8 +78,10 @@ LOWERINGS = (
 )
 
 # 纹理取像素的写法：`tex.Load(int3(pixel, level))` 与 GLSL 的 `texelFetch` 一一对应。
-# 生成器只认这一种取格写法，换别的形式会落到残留检查里报错。
+# 生成器只认这两种取格写法，换别的形式会落到残留检查里报错。
 LOAD = re.compile(r"(\w+)\.Load\(\s*int3\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 坐标参数允许再套一层构造函数。
+# 三维纹理的层级是坐标的第四个分量，所以源码写 `int4`；GLSL 仍然把层级当独立参数。
+LOAD3D = re.compile(r"(\w+)\.Load\(\s*int4\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 只有体素追踪用三维取格。
 
 # 带细节层级的采样：Slang 用成员方法，GLSL 用自由函数；参数里允许一层括号，够放构造函数。
 SAMPLE_LEVEL = re.compile(r"(\w+)\.SampleLevel\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 参数里允许一层括号，够放构造函数。
@@ -127,7 +129,8 @@ def _lower_text(text: str) -> str:
     顺序有讲究：先换类型与关键字，再换纹理取像素，最后检查残留。
     一旦源文件用了转换表以外的新语法，这里直接失败，避免生成看似成功但编译不过的文件。
     """
-    text = LOAD.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 先换取像素，此时 `int3` 还没改名。
+    text = LOAD3D.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 三维取格先换，避免 `int4` 被当成残留写法。
+    text = LOAD.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 再换二维取格，此时 `int3` 还没改名。
     text = SAMPLE_CMP.sub(lambda m: f"textureLod({m[1]}, vec3({m[2]}, {m[3]}), 0.0)", text)  # 比较采样先展开成三分量坐标。
     text = SAMPLE_LEVEL.sub(lambda m: f"textureLod({m[1]}, {m[2]}, {m[3]})", text)  # 带层级采样换成 GLSL 自由函数。
     text = _replace_types(text)  # 类型名随后统一。

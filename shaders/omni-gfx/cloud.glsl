@@ -302,6 +302,25 @@ float ogxPlanarLightingDensity(vec2 position, vec2 windDirection, sampler2D nois
     return density * density; // 平方收口。
 }
 
+// 平面云的光照遮挡：沿光方向按逐步放大的步长走几步，累加光照密度乘步长。
+// 为什么步长逐次放大：离采样点越远云越稀，放大步长能用同样多的样本覆盖更远，
+// 原程序用四步、每步乘一点五；步数与增长交给调用方，库不预设画质档位。
+float ogxPlanarCloudLightingDepth(vec2 samplePosition, vec2 lightDirection, vec2 windDirection,
+    float dither, float firstStep, float stepGrowth, int steps,
+    sampler2D noiseTexture, float noiseScale, float coverage)
+{
+    vec2 position = samplePosition + firstStep * dither * lightDirection; // 起点先沿光方向抖一下，打散条带。
+    float stepLength = firstStep; // 当前步长。
+    float depth = 0.0; // 沿光方向累积的遮挡密度。
+    for (int i = 0; i < steps; i++) // 逐步前进。
+    {
+        depth += ogxPlanarLightingDensity(position, windDirection, noiseTexture, noiseScale, coverage) * stepLength; // 这一段的密度乘长度才是遮挡量。
+        position += lightDirection * stepLength; // 前进一整步。
+        stepLength *= stepGrowth; // 下一步更长。
+    }
+    return depth; // 交回累积遮挡，调用方取倒数得到阳光能量。
+}
+
 // 云影投影坐标：把世界点沿光方向投到云影所在的水平面，再换成零到一贴图坐标。
 // 为什么先加相机高度：云影贴图跟着相机平移，投影必须用相机相对的高度，否则走动时影子会漂。
 vec2 ogxCloudShadowCoord(vec3 worldPos, vec3 lightDir, float cameraY, float range)

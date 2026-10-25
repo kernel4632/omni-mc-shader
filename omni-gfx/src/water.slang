@@ -5,6 +5,8 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
     OgxWater w = ogxWaterDefault(); // 取默认水体。
     float3 n = ogxWaterNormal(p.xz, t, d, 1.0, 1.0); // 算波法线。
     float3 c = ogxWaterShade(w, n, viewDir, sunDir, sunColor, r1, r2, depthM, foamAmt, alphaOut); // 算水面颜色。
+    `OgxOceanWaveSum sum = ogxOceanWaveSum(float2(0.0), t, ogxOceanWavesDefault());` 迭代正弦海洋。
+    `float h = ogxOceanWaveHeight(sum, 13.0, 1.0);` 归一化后的波高。
 设计原因与取舍：
     波形来自旧 `shaders/gfx/water.glsl` 的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
     只做单层水面，但保留长波、斜波、短波与细波纹四级，远处自动淡出高频，避免闪烁。
@@ -339,6 +341,92 @@ float ogxWaterCaustics(float3 worldPos, float3 lightDir, float3 cameraOffset, Sa
     }
     float finalCaustics = lerp(caustics * 0.16 + 0.2, 1.0, 0.3 - 0.3 * float(underwater)); // 拼成焦散亮度，水下再往全亮靠一点。
     return pow(finalCaustics * brightness, power); // 按亮度倍率与对比指数重整。
+}
+
+// 迭代正弦海洋的参数：换水体只改字段，不必再抄一遍循环。
+// 这些数就是 iterationT 海洋扩展的取值，举个例子：每层频率乘一点一八、权重乘零点八，
+// 于是低频波大而慢、高频波小而快，叠出来才是海面而不是规则条纹。
+struct OgxOceanWaves
+{
+    int iterations; // 叠几层波形，层数越多越细也越贵。
+    float drag; // 每层把采样点往波前进方向拖多少，形成剪切与卷曲。
+    float timeScale; // 时间缩放，让相位推进速度跟上原程序。
+    float detail; // 细节权重指数，只影响累加出来的方向。
+    float frequency; // 起始频率。
+    float speed; // 起始相位速度。
+    float weightFalloff; // 每层权重衰减，越高越偏向低频波。
+    float frequencyGain; // 每层频率放大。
+    float speedGain; // 每层相位速度放大。
+    float angleStep; // 每层方向角增量，让各层方向错开。
+};
+
+// 默认参数：iterationT 海洋扩展的常数，调用方只改真正要变的那几个字段。
+OgxOceanWaves ogxOceanWavesDefault()
+{
+    OgxOceanWaves waves;
+    waves.iterations = 13; // 层数的基础值，原程序的迭代偏移量。
+    waves.drag = 0.048; // 拖拽量小一点，避免波形自己卷起来。
+    waves.timeScale = 0.45; // 时间放慢，海面起伏看起来更沉。
+    waves.detail = 0.75; // 细节指数，原程序取值。
+    waves.frequency = 6.0; // 起始频率。
+    waves.speed = 2.0; // 起始相位速度。
+    waves.weightFalloff = 0.8; // 每层权重乘零点八，低频占主导。
+    waves.frequencyGain = 1.18; // 每层频率乘一点一八。
+    waves.speedGain = 1.07; // 每层速度乘一点零七。
+    waves.angleStep = 12.0; // 每层方向转十二弧度，等效于错开一圈多，视觉上方向不重复。
+    return waves;
+}
+
+// 逐层叠加的结果：都是未归一化的和，调用方按自己的用法再除权重和。
+struct OgxOceanWaveSum
+{
+    float height; // 波高和，未除权重。
+    float weightSum; // 权重和，用来归一化。
+    float2 detail; // 按细节指数累加的方向，泡沫与法线要用。
+    float2 position; // 被波形拖拽后的采样点。
+};
+
+// 迭代正弦：每层的频率、速度都放大，权重衰减，采样点被波形拖着走。
+// 为什么方向累加也放在同一个循环里：一处调用只取波高、另一处还要方向，
+// 多算一次加法不影响波高，却省掉第二份一模一样的循环，两边不会再各自漂移。
+OgxOceanWaveSum ogxOceanWaveSum(float2 position, float time, OgxOceanWaves waves)
+{
+    float iter = 0.0; // 每层方向角。
+    float frequency = waves.frequency; // 当前层频率。
+    float speed = waves.speed; // 当前层速度。
+    float weight = 1.0; // 当前层权重，从一整份开始衰减。
+    float height = 0.0; // 累加波高。
+    float weightSum = 0.0; // 累加权重。
+    float2 detail = float2(0.0); // 累加方向。
+    float modifiedTime = time * waves.timeScale; // 缩放后的时间。
+    for (int i = 0; i < waves.iterations; i++) // 逐层叠加。
+    {
+        float2 direction = float2(sin(iter), cos(iter)); // 当前层方向。
+        float x = dot(direction, position) * frequency + modifiedTime * speed; // 当前层的相位。
+        float wave = exp(sin(x) - 1.0); // 波峰更尖的包络，海面才有尖顶。
+        float result = wave * cos(x); // 波形值。
+        float2 force = result * weight * direction; // 对采样点的拖拽力。
+        detail += force / pow(weight, waves.detail); // 权重越小的层贡献越大，细节层因此不会被低频淹没。
+        position -= force * waves.drag; // 采样点被拖拽，形成剪切。
+        height += wave * weight; // 累加波高。
+        iter += waves.angleStep; // 方向角前进。
+        weightSum += weight; // 累加权重。
+        weight *= waves.weightFalloff; // 权重衰减。
+        frequency *= waves.frequencyGain; // 频率放大。
+        speed *= waves.speedGain; // 速度放大。
+    }
+    OgxOceanWaveSum sum;
+    sum.height = height; // 交回未归一化的波高。
+    sum.weightSum = weightSum; // 交回权重和。
+    sum.detail = detail; // 交回方向累加。
+    sum.position = position; // 交回拖拽后的位置。
+    return sum;
+}
+
+// 归一化波高并按海面高度缩放、居中：两处调用共用这一条换算式。
+float ogxOceanWaveHeight(OgxOceanWaveSum sum, float oceanHeight, float factor)
+{
+    return sum.height / sum.weightSum * oceanHeight * factor - oceanHeight * factor * 0.5; // 居中让海面在基准高度上下对称。
 }
 
 #endif

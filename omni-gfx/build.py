@@ -57,28 +57,27 @@ def command_spirv(download: bool) -> None:
 
     `download` 为真时才联网获取编译器；普通构建不会自动下载。
     产物放在 `generated/spirv`，二进制由忽略规则排除，不入仓库。
+    模块缺少探针时直接失败：探针缺口会让某类写法从未经过编译器，
+    这种“跳过”看起来像通过，所以不保留跳过路径。
     """
     generate.check_modules()  # 先确保 GLSL 与源一致，避免两套产物来自不同源。
+    missing = [name for name in generate.MODULES if not (slang.PROBES / f"{name}.slang").is_file()]  # 每个模块都要有探针。
+    if missing:  # 缺口一次报全，避免补一个又冒出下一个。
+        raise ValueError("缺少模块探针，请补齐后再编译：" + "、".join(missing))
     if download:
         print("下载 Slang 编译器到本机工具目录……")
         print("编译器位置：" + str(slang.download()))
     entries = []  # 每个模块一条记录，写进清单。
-    skipped = []  # 还没有探针的模块：明确列出，不冒充已覆盖。
     for module in generate.MODULES:  # 逐模块编译，互不影响。
-        if not (slang.PROBES / f"{module}.slang").is_file():  # 探针未补齐时跳过，而不是让整条命令失败。
-            skipped.append(module)  # 记录待补的模块。
-            continue
         output = slang.SPIRV_OUT / f"{module}.spv"  # 输出与模块同名。
         slang.compile_probe(module, output)  # 失败时带回编译器前几行错误。
         data = output.read_bytes()  # 读回实际产物计算大小与摘要。
         entries.append({"module": module, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})  # 清单只记录可复现信息。
     import json  # 清单格式简单，局部导入保持顶部依赖精简。
-    manifest = {"schemaVersion": 1, "compiler": slang.version(), "probes": entries, "skipped": skipped}  # 版本号是复现条件之一。
+    manifest = {"schemaVersion": 1, "compiler": slang.version(), "probes": entries}  # 版本号是复现条件之一。
     slang.SPIRV_OUT.mkdir(parents=True, exist_ok=True)
     (slang.SPIRV_OUT / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")  # 固定换行与缩进。
     print(f"SPIR-V 生成完成：{len(entries)} 个模块，编译器 {manifest['compiler']}")
-    if skipped:  # 待补探针不影响已有产物，但必须在输出里可见。
-        print("未补齐探针、本次跳过：" + "、".join(skipped))
 
 
 def command_demo(extra: list[str]) -> None:

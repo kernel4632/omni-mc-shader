@@ -35,6 +35,11 @@ vec3 gfx_bloom_downsample(sampler2D source, vec2 coord, vec2 texel) { // 泛光�
 	return ogxBloomDownsample(source, coord, texel); // 实现在生成库。
 }
 
+// 泛光链某一级的原样拷贝：坐标夹在本级子图范围内再读零号层级。
+vec3 gfx_bloom_chain_copy(sampler2D chain_texture, vec2 local, vec2 origin_size) { // 链上单级拷贝。
+	return ogxBloomChainCopy(chain_texture, local, origin_size); // 实现在生成库。
+}
+
 // 沿一个方向做长条高斯，横竖各一次等价于二维高斯。
 vec3 gfx_axial_gaussian_blur(sampler2D source, vec2 coord, vec2 coord_scale, float sample_origin, vec2 sample_size, vec2 axis, float alpha, float steps, vec2 texel) { // 轴向高斯核。
 	return ogxAxialGaussianBlur(source, coord, coord_scale, sample_origin, sample_size, axis, alpha, steps, texel); // 实现在生成库。
@@ -156,7 +161,7 @@ vec4 gfx_bloom_blur_horizontal(sampler2D chain_texture, vec2 coord, vec2 texel) 
 	vec2 axis = vec2(1.0, 0.0); // 横向模糊。
 	vec3 blur = vec3(0.0); // 累积颜色。
 	vec2 local = coord; // 在本级内推进的坐标。
-	if (local.x <= border.x && local.y <= border.y) blur = gfx_curve_to_linear(textureLod(chain_texture, clamp(local, vec2(0.0), origin_size), 0.0).rgb); // 第二级直接抄。
+	if (local.x <= border.x && local.y <= border.y) blur = gfx_bloom_chain_copy(chain_texture, local, origin_size); // 第二级直接抄。
 	local.x -= origin_size.x + texel.x * interval_width; // 移到下一级。
 	origin_size.x *= 0.5; // 下一级宽度减半。
 	border = origin_size + border_width; // 更新边界。
@@ -193,7 +198,7 @@ vec4 gfx_bloom_blur_vertical(sampler2D chain_texture, vec2 coord, vec2 texel) { 
 	vec2 axis = vec2(0.0, 1.0); // 纵向模糊。
 	vec3 blur = vec3(0.0); // 累积颜色。
 	vec2 local = coord; // 用于判断落在哪一级的坐标。
-	if (local.x <= border.x && local.y <= border.y) blur = gfx_curve_to_linear(textureLod(chain_texture, clamp(local, vec2(0.0), origin_size), 0.0).rgb); // 第二级直接抄。
+	if (local.x <= border.x && local.y <= border.y) blur = gfx_bloom_chain_copy(chain_texture, local, origin_size); // 第二级直接抄。
 	float curr_interval = origin_size.x + texel.x * interval_width; // 当前级宽度加间隔。
 	local.x -= curr_interval; // 移到下一级。
 	float sample_origin = curr_interval; // 当前级在图里的起始横坐标。

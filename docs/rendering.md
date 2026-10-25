@@ -1,6 +1,6 @@
 # 绘制流程
 
-本文件描述移植 iterationT 3.2.0 之后的实际绘制顺序、程序清单与中间画面协议，只讲代码怎么接线，算法本身留在各效果文件里。
+本文件描述移植 iterationT 3.2.0 之后的实际绘制顺序、程序清单与中间画面协议，只讲代码怎么接线，算法本身留在各效果文件里。每个效果现在对应 `omni-gfx` 的哪个函数，见 `docs/gfx-parity.md`。
 
 事实来源分别是：程序登记看 `shaders/rendering/programs.json`，加载器设置看 `shaders/rendering/pipeline.properties`，中间画面的编号、格式与清除看 `shaders/rendering/buffers.glsl` 与三个维度的 `buffers_main.glsl`、`buffers_nether.glsl`、`buffers_end.glsl`。移植合同、分片状态和逐条偏离记录见 `docs/parity.md`。
 
@@ -88,18 +88,29 @@ Iris 的执行顺序是：阴影 → 不透明几何 → deferred 0–8 → 半�
 
 ## 渲染阶段里的十二个循环
 
-把 shaders/rendering/ 里的每个循环按“能参数化的算法”和“阶段胶水”分开，避免把宿主选项、纹理布局或几何装配塞进通用库。
+`shaders/rendering/` 原来有十二处循环。逐个看过之后按“换一个宿主还要不要这段逻辑”分类：只搬运顶点、只按图集取样、只给某个维度专用的留在阶段层；算法、常数和参数都在循环体里、换宿主仍成立的迁进生成库。现在还剩八处循环，全部是阶段胶水；四处已经迁走。
 
-| 位置 | 循环做什么 | 归属 | 理由 |
+| 序号 | 位置 | 循环做什么 | 归属 |
 | --- | --- | --- | --- |
-| cloud/planar.glsl | 四步估云内光照遮挡 | 留阶段层 | 循环体只有加权累加，云密度本身已由 cloud 模块提供；需要宿主选项与规划云包装。 |
-| og/landscattering.glsl | 四段估大气光学厚度 | 已迁库 | 纯几何与密度计算，入口是 tmosphere_model 的 ogxAtmoSimpleScattering。 |
-| ground/grass_geometry.glsl | 三处：草叶实例、三角形、三个顶点 | 留阶段层 | 纯几何装配，没有可复用算法。 |
-| ground/terrain_surface.glsl | 各向异性材质采样 | 留阶段层 | 依赖图集纹理、材质宏与 LOD，属于材质采样阶段。 |
-| water/waves.glsl | 两处：迭代正弦波高与海面像素 | 留阶段层 | 依赖十二个宿主物理常数与涟漪贴图；两份循环重复，后续可抽成一个库函数。 |
-| world/nether.glsl | 下界体积雾步进 | 留阶段层 | 与三个下界选项、雾色和远裁剪面绑定。 |
-| celestial.glsl | 三个顶点输出 | 留阶段层 | 几何着色器阶段胶水。 |
-| 	errain.glsl | 三个顶点输出 | 留阶段层 | 同上。 |
-| entities.glsl | 十六层末地传送门叠加 | 留阶段层 | 需要宿主的层纹理、颜色表与投影坐标。 |
+| 1 | `cloud/planar.glsl` 的 `PlanarClouds` | 沿光方向四步估计云内光照遮挡 | 已迁库：`ogxPlanarCloudLightingDepth`（`omni-gfx/src/cloud.slang`） |
+| 2 | `fog/landscattering.glsl` | 四段估大气光学厚度 | 已迁库：`ogxAtmoSimpleScattering`（`atmosphere_model.slang`） |
+| 3 | `water/waves.glsl` 的 `physics_waveHeight` | 迭代正弦叠出波高 | 已迁库：`ogxOceanWaveSum` 与 `ogxOceanWaveHeight`（`water.slang`） |
+| 4 | `water/waves.glsl` 的 `physics_wavePixel` | 同一套迭代正弦，另外累加方向 | 已迁库：与第 3 项共用同一个函数 |
+| 5 | `ground/grass_geometry.glsl` 的 `b` 循环 | 同一处摊开若干片草 | 留阶段层 |
+| 6 | `ground/grass_geometry.glsl` 的 `j` 循环 | 一片草叶分成几段 | 留阶段层 |
+| 7 | `ground/grass_geometry.glsl` 的 `i` 循环 | 每段三个顶点 | 留阶段层 |
+| 8 | `ground/terrain_surface.glsl` 的 `SampleAnisotropic` | 沿特征向量在方块图集上取样 | 留阶段层 |
+| 9 | `world/nether.glsl` 的 `NetherVolumetricFog` | 下界体积雾沿视线步进 | 留阶段层 |
+| 10 | `celestial.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
+| 11 | `terrain.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
+| 12 | `entities.glsl` 的 `main` | 末地传送门叠十六层 | 留阶段层 |
 
-结论：本轮只把大气光学厚度这一段纯计算迁进库；其余十一处要么是几何与阶段装配，要么把宿主选项直接写进循环条件，迁进通用库会把宿主布局写死。水面两处重复循环是下一批的首选迁移对象。
+阶段胶水的具体依据，逐项说明为什么不能参数化：
+
+- 第 5 到 7 项是几何着色器的顶点生成。循环体每个顶点都调 `EmitVertex()`，并原样搬 `v_color`、`v_texCoord`、`v_blockLight` 这些加载器给的顶点属性。通用库拿不到几何着色器的输出流，也不该认识 Minecraft 的顶点格式，所以只把每片草的形状交给 `ground/grass.glsl` 的 `omniGrassBladeVertex` 与 `omniGrassBladeBarycentric`，循环留在阶段层。
+- 第 8 项是材质采样阶段。循环体里 `fract(tilesCoord)` 回绕、`atlasTiles` 换算、`MC_NORMAL_MAP` 与 `MC_SPECULAR_MAP` 决定读哪几张图，都是资源包与光影图集的约定。把这些搬进库，等于把图集布局写进通用代码。
+- 第 9 项只有下界一个使用者。羽流、雾霭、顶烟三段分别读 `OMNI_NETHER_PLUME_DENSITY`、`OMNI_NETHER_HAZE_DENSITY`、`OMNI_NETHER_CEILING_SMOKE_DENSITY`，还直接用 `NetherFogColor()`、`far`、`cameraPosition` 与固定颜色 `vec3(1.0, 0.4, 0.2)`。参数化要传十多个宿主值，库会把一个维度的美术决定写死，换宿主也没有第二处能复用。
+- 第 10、11 项只有 `gl_in[i]` 到 `gl_Position` 的转发和 `EmitVertex()`，没有可抽取的计算。
+- 第 12 项是末地传送门方块：十六层靠 `end_portal_layer()` 生成的层矩阵与 `COLORS` 十六项常量表叠出颜色，是 Minecraft 独有的渲染约定。循环依赖那张常量表和投影坐标，迁进库只会多一层转发。
+
+迁进库的四处循环满足同一条标准：循环体只有算术，需要的输入都能当参数传，常数属于算法而不是宿主选项。水面那两处原本是同一段循环抄了两遍，迁走后共享一个函数与一份常数，以后改波形不会再改漏一处。

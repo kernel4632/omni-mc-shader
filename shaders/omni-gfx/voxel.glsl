@@ -14,6 +14,8 @@ Omni 通用图形库体素追踪模块：在规则三维网格里沿射线逐格
     水、冰、玻璃按半透明处理，只给后面的画面染色后继续走；铁块按镜面弹射，最多弹四次，
     防止两面镜子互相拖满循环。追踪用标准的三维逐格步进：每步选最近的一根格子边界，撞到实心方块就停。
     方块编号是方块的业务数据，用 `uint` 直接传入，库不假设它来自哪张方块表。
+    三维纹理取格写成 `Load(ivec4(cell, level))`：Slang 把细节层级放在坐标的第四个分量，
+    生成器再把它还原成 GLSL 的 `texelFetch(tex, cell, level)`，两边算式不变。
 */
 #ifndef OGX_VOXEL_INCLUDED
 #define OGX_VOXEL_INCLUDED

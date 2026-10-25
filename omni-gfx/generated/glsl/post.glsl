@@ -9,6 +9,7 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 调用位置：任何需要多级泛光、景深或最终画面处理的程序；Minecraft 光影由 `/omni-gfx/post.glsl` 引入。
 可复制示例：
     `vec3 c = ogxBloomDownsample(source, uv, texel);` 十三样本降采样。
+    `vec3 c = ogxBloomChainCopy(chain, uv, size);` 链上某级原样拷贝。
     `vec3 b = ogxAxialGaussianBlur(source, uv, scale, origin, size, axis, 0.12, 6.0, texel);` 一维高斯。
     `float r = ogxCocRadius(focus, depth, aperture);` 薄透镜弥散圆半径。
     `float avg = ogxExposureTileAverage(sceneTexture, params);` 加权平均亮度。
@@ -39,6 +40,15 @@ vec3 ogxBloomDownsample(sampler2D source, vec2 coord, vec2 texel)
     blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(-texel.x, texel.y), 0.0).rgb) * 0.125; // 远处左下。
     blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(-texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处左上。
     return ogxLinearToCurve3(blur * 0.25); // 权重和为四，乘四分之一保持亮度。
+}
+
+// 泛光链某一级的原样拷贝：坐标夹在这级子图范围里，零号层级读取后换回线性。
+// 为什么单独成一个函数：链上第二级的边界判断由宿主决定，但“夹紧后读一次”是纯计算，
+// 原程序在每个方向上各写一遍，迁进库后只保留一份。
+vec3 ogxBloomChainCopy(sampler2D chain, vec2 local, vec2 originSize)
+{
+    vec2 coord = clamp(local, vec2(0.0), originSize); // 先夹紧，再把结果交给取样。
+    return ogxCurveToLinear3(textureLod(chain, coord, 0.0).rgb); // 零号层级读取后换回线性。
 }
 
 // 沿一个方向做长条高斯，横竖各一次等价于二维高斯，样本数从平方降到线性。
