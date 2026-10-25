@@ -91,20 +91,22 @@ void main()
     OgxAtmosphere air = worldAtmosphere(); // 本场景的大气常数。
     float altitude = max(uCameraPos.y, 0.0) * 0.001; // 相机高度，公里。
     float horizonBlend = smoothstep(70.0, 1800.0, distanceToCamera); // 距离淡出，远处收敛到天空色。
-    // 远处直接按大气模型算同方向的天空色：立方体贴图在地平线附近有一圈取不到可靠值，
-    // 用解析值既省一次采样，又能和上方天空逐像素对齐。
+    // 天空方向抬到地平线以上三度：贴近水平时视线会与地面相交，单次散射会退化成零。
     vec3 toSky = normalize(vec3(-viewDirection.x, max(-viewDirection.y, 0.055), -viewDirection.z));
-    vec3 horizonSky = ogxAtmosphereSky(air, altitude, toSky, sunDirection, 6);
+    // 直接取天空立方体贴图：它每帧由同一份六步大气算法渲染，地平线附近也抬高三度，
+    // 因此和画面上方的天空同源。采样一次纹理比逐像素再积一遍大气便宜，两边算式也不会各自漂移。
+    vec3 horizonSky = textureLod(uSky, toSky, 1.0).rgb; // 一级层级足够平滑，又不会像二级把地平线压暗。
     vec3 color = mix(waterColor, horizonSky, horizonBlend);
     vec3 transmittance; // 空气透视的剩余透过率。
-    vec3 haze = ogxAerialPerspective(air, altitude, -viewDirection, distanceToCamera * 0.001, sunDirection, 3, transmittance); // 水面到相机的空气散射。
+    vec3 haze = ogxAerialPerspective(air, altitude, -viewDirection, distanceToCamera * 0.001, sunDirection, 2, transmittance); // 水面到相机的空气散射；远景已由天空色接手，两段足够。
     // 远处水面已经收敛到天空色；再叠一次向下看的空气透视会得到接近零的散射，
     // 在海天交界压出一条黑线，所以只在还没收敛到天空的像素上应用。
     color = mix(color * transmittance + haze, color, horizonBlend); // 空气散射只作用于中近景。
     float jitter = ogxBayer8(gl_FragCoord.xy + vec2(uFrame * 0.37, uFrame * 0.71)); // 稳定的雾抖动。
-    vec4 fog = ogxFogMarch(worldFog(uTime), uCameraPos * 0.001, vWorldPosition * 0.001, sunDirection, sunColor * 2.0, jitter, 3); // 低空体积雾。
-    fog *= 1.0 - horizonBlend; // 远处水面已经收敛到天空色，再叠地面雾会比天空亮，海天交界就会出现一条亮线。
-    color = ogxFogApply(color, fog); // 再叠贴地雾。
+    vec4 fog = ogxFogMarch(worldFog(uTime), uCameraPos * 0.001, vWorldPosition * 0.001, sunDirection, sunColor * 2.0, jitter, 2); // 低空体积雾；抖动加时间抗锯齿把两段的台阶抹平。
+    // 远处水面已经收敛到天空色，再叠地面雾会比天空亮，海天交界就会出现一条亮线。
+    // 淡出时只缩小雾的散射与遮挡：若连透过率一起乘小，水面的天空色会被乘没，反而压出一条黑线。
+    color = ogxFogApply(color, ogxFogFade(fog, 1.0 - horizonBlend)); // 再叠贴地雾。
     // 远处圆盘三角形被拉得极扁，个别像素会算出非有限值；这类像素直接丢弃，让天空补上。
     if (any(isnan(color)) || any(isinf(color))) { discard; }
     fragColor = vec4(color, 0.0); // 透明通道为零，标记这里是水面。

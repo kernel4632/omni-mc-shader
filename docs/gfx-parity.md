@@ -11,8 +11,8 @@
 
 - `omni-gfx/src` 现有 24 个 Slang 模块。
 - `shaders/gfx/` 的 22 个旧 GLSL 文件已变成转发层，循环 0、纹理采样 0。
-- 模块级覆盖已完成；函数级逐条明细见 `docs/gfx-functions.md`（2026-10-25 由 `python omni-gfx/build.py parity` 从源码重建，505 个参考函数：已迁入 294、MC 专用 154、缺失 36、调试输出 21）。
-- 本轮把 11 个纯计算函数补进库：`ogxHalton2`、`ogxHalton3`、`ogxRayBoxRange`、`ogxRayBoxIntersection`、`ogxSquare`、`ogxLengthSquared`、`ogxSafeInvLength`、`ogxTriangleWave`、`ogxFma2`、`ogxSinCos`、`ogxRotate2`。
+- 模块级覆盖已完成；函数级逐条明细见 `docs/gfx-functions.md`（2026-10-25 由 `python omni-gfx/build.py parity` 从源码重建，505 个参考函数：已迁入 329、MC 专用 176、缺失 0、调试输出 0）。
+- 第五批把函数级缺口清零：20 个函数新进库（拜尔 16/32/128、月亮与天空盒双线性取像素、天空经纬投影与云图两级采样、双边升采样、Xonk 曲线、十六位分量解码、整数哈希、球面求交哨兵版、三次 B 样条权重八件），15 个按算法逐项对照到库内已有实现，1 个（`GetCloudShadow`）按宿主符号留在光影侧；采样器一律改为显式参数，不再以“库不绑定采样器”为由排除。
 - 没有启动 Minecraft，游戏内画面、性能与维度切换仍未验证。
 
 ## 模块对照
@@ -76,5 +76,5 @@
 
 ## 待补
 
-- 函数级明细由 `python omni-gfx/build.py parity` 生成到 `docs/gfx-functions.md`；还剩 36 个缺失项，主要是天空贴图采样（库按约定不绑定采样器）、镜头光斑辅助、量化抖动与 16/32/128 拜尔矩阵。
-- 游戏内验证必须由玩家启动 Minecraft 后完成。
+- 函数级缺口已清零（`docs/gfx-functions.md`：缺失 0、调试输出 0）。通用库承接 329 条、MC 专用 176 条；宿主依赖逐条列出符号，调试叠加逐条写明机制（`gl_FragCoord`、`text.`、`printChar` 链）。
+- 剩余未验证项只有实机：Minecraft 世界内画面、菜单、性能、Vulkan/Aperture 运行时与其他显卡；测试世界只能证明产物能编译、能出图、能在本机达到目标帧率。

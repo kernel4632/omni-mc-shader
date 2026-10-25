@@ -48,6 +48,29 @@ float3 ogxAoMultiBounce(float ao, float3 albedo)
     return max(float3(ao), ((ao * a + b) * ao + c) * ao); // 取多项式与原始遮蔽的较大值。
 }
 
+// 双边升采样：把半分辨率的遮蔽（或任何四通道画面）放大到全分辨率。
+// 四个相邻纹素先按深度筛一次：只有与参考深度相差不超过阈值的样本参与，物体边界不会被糊开。
+// 为什么不用普通双线性：半分辨率的一格盖住全分辨率两格，边界处会把前景与背景混成一条灰边。
+// `pixel` 是全分辨率像素坐标，`upscale` 是遮蔽图相对全分辨率的倍数（通常为二）；
+// `referenceDepth` 与 `sourceDepth` 必须用同一套深度单位，阈值也按这套单位给出。
+float4 ogxBilateralUpscale(Sampler2D source, Sampler2D sourceDepth, int2 pixel, int upscale,
+    float referenceDepth, float depthThreshold)
+{
+    int2 base = pixel / upscale; // 当前像素落在遮蔽图的哪一格。
+    float4 result = float4(0.0); // 加权颜色。
+    float sum = 0.0; // 权重和。
+    for (int i = 0; i < 4; i++) // 四个相邻格，正好围住这一格。
+    {
+        int2 offset = int2(i < 2 ? -1 : 0, (i == 0 || i == 3) ? -1 : 0); // 四个格子的相对位置。
+        int2 cell = base + offset; // 邻格坐标。
+        float sampleDepth = sourceDepth.Load(int3(cell, 0)).r; // 邻格的深度。
+        float weight = abs(sampleDepth - referenceDepth) < depthThreshold ? 1.0 : 1e-5; // 深度相近才参与。
+        result += source.Load(int3(cell, 0)) * weight; // 累加颜色。
+        sum += weight; // 累加权重。
+    }
+    return result / sum; // 归一化；四个样本全被拒绝时权重和仍然大于零。
+}
+
 // 屏幕坐标与深度还原视空间位置，不撤销抖动；重投影需要原始位置。
 float3 ogxGiViewPos(float2 coord, float depth, float4x4 projection_inverse)
 {

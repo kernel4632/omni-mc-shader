@@ -96,6 +96,17 @@ float ogxTriangleNoise(vec2 coord, float time)
     return shaped - sign(center);
 }
 
+// 整数哈希：三次“右移异或再乘常数”，把整数格打散成不相关的三个分量。
+// 写法来自 `Inigo Quilez` 的整数哈希；末地雾按整数格重复取样，需要每个显卡逐位一致的结果。
+uvec3 ogxIntegerHash3(uvec3 x)
+{
+    const uint k = 1103515245u; // 线性同余发生器常用的乘数，异或后能把相邻格彻底打散。
+    x = ((x >> 8u) ^ x.yzx) * k; // 第一次：每个分量掺入下一个分量的高二十四位。
+    x = ((x >> 8u) ^ x.yzx) * k; // 第二次：再打散一轮，消除一轮不够时的相关性。
+    x = ((x >> 8u) ^ x.yzx) * k; // 第三次：三轮之后三个分量的每一位都互相影响。
+    return x; // 返回三个独立的整数随机值。
+}
+
 // 三维值噪声：八个格点各取哈希，再按平滑曲线插值。
 float ogxValueNoise3(vec3 p)
 {

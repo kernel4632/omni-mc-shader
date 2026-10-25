@@ -196,7 +196,10 @@
     "skyFromTex": "atmosphere_model.ogxAtmoSkyRadiance",
     "sphereMap": "atmosphere.ogxSkyProject",
     "sphereToCart": "atmosphere.ogxSkyUnproject",
-    "sphereToCarte": "atmosphere.ogxSkyUnproject",
+    "sphereToCarte": {
+      "target": "atmosphere.ogxSkyEquirect",
+      "evidence": "同一经纬投影：方向转零到一的贴图坐标"
+    },
     "starTemp": "atmosphere.ogxStarTemperature",
     "stars": "atmosphere.ogxStarsStable",
     "texture_bicubic": "math.ogxBicubicTexture",
@@ -270,100 +273,204 @@
     "rotate": "math.ogxRotate2",
     "mm2": "math.ogxRotate2",
     "reinhard_jodie": "color.ogxTonemapReinhard",
-    "curve": "color.ogxAgxContrast"
+    "curve": "color.ogxAgxContrast",
+    "BilateralUpscale_SSAO": {
+      "target": "gi.ogxBilateralUpscale",
+      "evidence": "四邻域按深度差剔除后升采样；参考实现的固定步长换成分辨率倍数参数"
+    },
+    "Tonemap_Xonk": {
+      "target": "color.ogxTonemapXonk",
+      "evidence": "同名曲线：先抬 1.3 次幂，再除以自身加 0.333"
+    },
+    "decodeVec2_16": {
+      "target": "color.ogxDecodeVec2x16",
+      "evidence": "同一组常数把打包值拆成两个十六位分量，不依赖浮点位模式"
+    },
+    "rsi": {
+      "target": "math.ogxRaySphereHit",
+      "evidence": "同一球面求交算式，未命中时同样返回两个负一"
+    },
+    "iqint2": {
+      "target": "noise.ogxIntegerHash3",
+      "evidence": "同一 Inigo Quilez 整数哈希：三轮右移异或再乘 1103515245"
+    },
+    "w0": {
+      "target": "math.ogxCubicWeight0",
+      "evidence": "同一三次 B 样条权重，常数逐项相同"
+    },
+    "w1": {
+      "target": "math.ogxCubicWeight1",
+      "evidence": "同一三次 B 样条权重，常数逐项相同"
+    },
+    "w2": {
+      "target": "math.ogxCubicWeight2",
+      "evidence": "同一三次 B 样条权重，常数逐项相同"
+    },
+    "w3": {
+      "target": "math.ogxCubicWeight3",
+      "evidence": "同一三次 B 样条权重，常数逐项相同"
+    },
+    "g0": {
+      "target": "math.ogxCubicWeightLow",
+      "evidence": "同一左侧两个权重之和"
+    },
+    "g1": {
+      "target": "math.ogxCubicWeightHigh",
+      "evidence": "同一右侧两个权重之和"
+    },
+    "h0": {
+      "target": "math.ogxCubicOffsetLow",
+      "evidence": "同一合并采样点的左偏移"
+    },
+    "h1": {
+      "target": "math.ogxCubicOffsetHigh",
+      "evidence": "同一合并采样点的右偏移"
+    },
+    "D_Walter": {
+      "target": "math.ogxDistributionGGX",
+      "evidence": "同一 GGX 分布公式与同一组常数，库里按行业名命名"
+    },
+    "R2_samples": {
+      "target": "math.ogxR2Sample",
+      "evidence": "同一 R2 低差异序列与同一组黄金比例常数"
+    },
+    "CalculateCoCRadius": {
+      "target": "post.ogxCocRadius",
+      "evidence": "同一薄透镜弥散圆公式，参数顺序一致"
+    },
+    "fp10Dither": {
+      "target": "post.ogxDitherFloat",
+      "evidence": "同一浮点抖动；调用时尾数位数取 (6,6,5)"
+    },
+    "fp16Dither": {
+      "target": "post.ogxDitherFloat",
+      "evidence": "同一浮点抖动；调用时尾数位数取 10"
+    },
+    "int8Dither": {
+      "target": "post.ogxDitherFixed",
+      "evidence": "同一定点抖动；调用时位数取 8"
+    },
+    "int10Dither": {
+      "target": "post.ogxDitherFixed",
+      "evidence": "同一定点抖动；调用时位数取 10"
+    },
+    "int16Dither": {
+      "target": "post.ogxDitherFixed",
+      "evidence": "同一定点抖动；调用时位数取 16"
+    },
+    "GetDistOffset": {
+      "target": "post.ogxGlareDistOffset",
+      "evidence": "同一桶形畸变偏移，桶形强度改为显式参数"
+    },
+    "flare": {
+      "target": "post.ogxGlareFlare",
+      "evidence": "同一带色散的软光斑，桶形强度改为显式参数"
+    },
+    "orb": {
+      "target": "post.ogxGlareOrb",
+      "evidence": "同一六连圆形光斑与末尾大光斑，桶形强度改为显式参数"
+    },
+    "ring": {
+      "target": "post.ogxGlareRing",
+      "evidence": "同一环状光环与三通道色散"
+    },
+    "H": {
+      "target": "atmosphere.ogxChandrasekharH",
+      "evidence": "同一钱德拉塞卡近似，算式逐项相同"
+    },
+    "ppss": {
+      "target": "atmosphere.ogxPlanetBrdf",
+      "evidence": "同一行星表面 BRDF：入射角曲线、两侧近似与相函数分母相同"
+    },
+    "skyCloudsFromTexBLUR": {
+      "target": "atmosphere.ogxSkyCloudsFromTex",
+      "evidence": "参考实现的 scaler 参数未参与计算，函数体与 skyCloudsFromTex 相同，库只保留一份"
+    }
   },
   "manual": {
     "PrintFloat": {
-      "status": "调试输出",
-      "evidence": "只在屏幕上逐位打印浮点数（SevenSegment 拼数字），不参与任何画面效果"
+      "status": "MC 专用",
+      "evidence": "调试叠加：按 `gl_FragCoord` 定位，用七段码表逐位拼出数字，只输出到屏幕"
     },
     "PrintUintBinary": {
-      "status": "调试输出",
-      "evidence": "把整数按二进制画成方块，仅调试用"
+      "status": "MC 专用",
+      "evidence": "调试叠加：按 `gl_FragCoord` 定位，把 32 位逐格画成七段数字"
     },
     "SevenSegment": {
-      "status": "调试输出",
-      "evidence": "七段数码管形状的调试数字"
+      "status": "MC 专用",
+      "evidence": "调试叠加：按格子查七段码表，只给 `PrintFloat` 提供字形"
     },
     "DecimalPoint": {
-      "status": "调试输出",
-      "evidence": "调试数字的小数点"
+      "status": "MC 专用",
+      "evidence": "调试叠加：返回小数点所在格子，只给 `PrintFloat` 提供字形"
     },
     "printChar": {
-      "status": "调试输出",
-      "evidence": "依赖游戏字体贴图的字符打印，属于宿主资源"
+      "status": "MC 专用",
+      "evidence": "调试叠加：按 `text` 的字符位置与位图点亮单个字符的像素"
     },
     "beginText": {
-      "status": "调试输出",
-      "evidence": "文字渲染的起始状态，依赖游戏字体与屏幕叠加"
+      "status": "MC 专用",
+      "evidence": "调试叠加：初始化 `text` 叠加对象的位置、颜色与进制，不参与画面效果"
     },
     "endText": {
-      "status": "调试输出",
-      "evidence": "文字渲染的结束状态，依赖游戏字体与屏幕叠加"
-    },
-    "SixthSurge": {
-      "status": "调试输出",
-      "evidence": "游戏内调试文字的字形拼装"
+      "status": "MC 专用",
+      "evidence": "调试叠加：把 `text.result` 混进片元颜色，只在屏幕上叠字"
     },
     "printFloat": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：拆出整数与小数位后调用打印链，精度来自 `text.fpPrecision`"
     },
     "printVec2": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
     },
     "printVec3": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
     },
     "printVec4": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
     },
     "printInt": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
-    },
-    "printUint": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：带负号地调用 `printUnsignedInt`"
     },
     "printBool": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：按真假打印 true 或 false 字符"
     },
     "printLine": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：把 `text.charPos` 移到下一行，只影响屏幕上文字的排版"
     },
     "printIvec2": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
     },
     "printIvec3": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
     },
     "printIvec4": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
     },
     "printUvec2": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
     },
     "printUvec3": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
     },
     "printUvec4": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
     },
     "printUnsignedInt": {
-      "status": "调试输出",
-      "evidence": "调试文字打印"
+      "status": "MC 专用",
+      "evidence": "调试叠加：按 `text.base` 逐位拆数字并调用 `printChar`"
     },
     "trace_wsr": {
       "status": "MC 专用",
@@ -420,10 +527,6 @@
     "getReflectionVisibility": {
       "status": "MC 专用",
       "evidence": "读取阴影与深度缓冲判断反射可见度，依赖 shadowtex/depthtex"
-    },
-    "GetCloudShadow": {
-      "status": "缺失",
-      "evidence": "Eclipse 的体积云影贴图采样，需要云影贴图坐标与天气状态"
     },
     "CalculateMasks": {
       "status": "MC 专用",
@@ -517,93 +620,9 @@
       "status": "MC 专用",
       "evidence": "末地雾的遮挡，采样宿主的阴影与末地主岛数据"
     },
-    "skyCloudsFromTex": {
-      "status": "缺失",
-      "evidence": "读取天空贴图并合成云，需要采样器；库按架构约定不绑定采样器"
-    },
-    "skyCloudsFromTexBLUR": {
-      "status": "缺失",
-      "evidence": "天空贴图的模糊采样，需要采样器；库不绑定采样器"
-    },
-    "skyCloudsFromTexLOD": {
-      "status": "缺失",
-      "evidence": "按距离选择天空贴图层级，需要采样器；库不绑定采样器"
-    },
-    "bayer16": {
-      "status": "缺失",
-      "evidence": "16×16 拜尔矩阵常数，库目前只到 8×8 与 64 级"
-    },
-    "bayer32": {
-      "status": "缺失",
-      "evidence": "32×32 拜尔矩阵常数，库目前只到 8×8 与 64 级"
-    },
-    "bayer128": {
-      "status": "缺失",
-      "evidence": "128×128 拜尔矩阵常数，库目前只到 8×8 与 64 级"
-    },
-    "BilateralUpscale_SSAO": {
-      "status": "缺失",
-      "evidence": "半分辨率遮蔽的双边上采样，库里用时间抗锯齿阶段的四邻域加权替代，尚未独立成函数"
-    },
-    "decodeVec2_16": {
-      "status": "缺失",
-      "evidence": "把十六位打包值拆成二维法线，库用八位版本 ogxUnpack2x8"
-    },
-    "Tonemap_Xonk": {
-      "status": "缺失",
-      "evidence": "Xonk 曲线是一条独立拟合，库里没有同一条曲线"
-    },
-    "GetDistOffset": {
-      "status": "缺失",
-      "evidence": "镜头光斑的距离偏移，属于眩光光斑辅助函数"
-    },
-    "orb": {
-      "status": "缺失",
-      "evidence": "镜头光斑的圆盘形状，属于眩光辅助函数"
-    },
-    "flare": {
-      "status": "缺失",
-      "evidence": "镜头光斑的十字星芒，属于眩光辅助函数"
-    },
-    "ring": {
-      "status": "缺失",
-      "evidence": "镜头光斑的圆环，属于眩光辅助函数"
-    },
-    "CalculateCoCRadius": {
-      "status": "缺失",
-      "evidence": "按深度与焦距求弥散圆半径，库在 ogxCocRadius 里做了同类计算但接口不同"
-    },
-    "iqint2": {
-      "status": "缺失",
-      "evidence": "整数二维坐标的快速取整，属于末地雾的噪声辅助"
-    },
-    "fp10Dither": {
-      "status": "缺失",
-      "evidence": "十位浮点的量化抖动，库的 ogxDitherFloat 覆盖八位与十六位"
-    },
-    "fp16Dither": {
-      "status": "缺失",
-      "evidence": "十六位浮点的量化抖动，库的 ogxDitherFixed 覆盖八位"
-    },
-    "int8Dither": {
-      "status": "缺失",
-      "evidence": "八位整数的量化抖动辅助"
-    },
-    "int10Dither": {
-      "status": "缺失",
-      "evidence": "十位整数的量化抖动辅助"
-    },
-    "int16Dither": {
-      "status": "缺失",
-      "evidence": "十六位整数的量化抖动辅助"
-    },
-    "rsi": {
-      "status": "缺失",
-      "evidence": "球面坐标变换的快捷实现，库用 ogxCircleMap 与 ogxSkyProject 覆盖"
-    },
-    "D_Walter": {
-      "status": "缺失",
-      "evidence": "Walter 粗糙度重映射，库使用 GGX 的标准 alpha 定义"
+    "GetCloudShadow": {
+      "status": "MC 专用",
+      "evidence": "函数体直接读取宿主符号：lightningBoltPosition、sunElevation；云层高度来自编译期配置 CloudLayer0_height 等"
     }
   },
   "modules": {

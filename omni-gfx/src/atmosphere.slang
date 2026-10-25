@@ -527,6 +527,48 @@ float2 ogxSkyProject(float3 dir, float tileSize)
     return texel; // 返回纹素坐标，屏幕偏移由调用方追加。
 }
 
+// 等距圆柱投影：把世界方向换成经纬度贴图坐标。
+// 与 `ogxSkyProject` 的差别是贴图布局不同：这里是左右铺经度、上下铺纬度的整张天球图，
+// 六面天空盒用的是 3×2 的瓦片图集；两套布局不能混用。`y` 零在正下方、一在正上方。
+float2 ogxSkyEquirect(float3 direction)
+{
+    float longitude = clamp(ogxAtan2(float2(-direction.z, -direction.x)), -OGX_PI, OGX_PI); // 绕竖直轴的角度，正面为零。
+    float latitude = asin(clamp(direction.y, -1.0, 1.0)); // 高度角，正上为正。
+    return float2(longitude * (0.5 / OGX_PI) + 0.5, latitude * (1.0 / OGX_PI) + 0.5); // 归一到零到一。
+}
+
+// 天空云图坐标：经纬坐标先夹进贴图，再按调用方给的子图布局换成纹素坐标。
+// 为什么布局要显式传入：参考光影把云图塞在整屏缓冲的一个小角落里，位置与边长随分辨率变化；
+// 库里只保留“方向到子图坐标”的换算，具体放在哪由宿主决定，换布局不必改算法。
+// `texelSize` 是整张贴图的纹素大小，`origin` 是子图左上角的纹素坐标，`tile` 是子图边长。
+float2 ogxSkyCloudAtlasCoord(float3 direction, float2 texelSize, float2 origin, float tile)
+{
+    float2 p = clamp(ogxSkyEquirect(direction), float2(0.0), float2(1.0)); // 经纬坐标夹进子图范围。
+    return p * tile * texelSize + origin * texelSize; // 子图内部按纹素换算到整图坐标。
+}
+
+// 读天空云图：按方向取对应经纬度的云颜色与覆盖率，四个通道原样返回。
+// `skyTex` 是显式传入的采样器，库不绑定任何宿主纹理；过滤方式由调用方设置。
+float4 ogxSkyCloudsFromTex(Sampler2D skyTex, float3 direction, float2 texelSize, float2 origin, float tile)
+{
+    float2 uv = ogxSkyCloudAtlasCoord(direction, texelSize, origin, tile); // 方向换成子图内的纹理坐标。
+    return skyTex.SampleLevel(uv, 0.0); // 零号层级，不做各向异性过滤。
+}
+
+// 按粗糙度收拢的天空云图采样：粗糙度越大，靠近天顶的云越向观测方向压缩。
+// 为什么按高度分界：地平线附近的云本来就叠在一起，粗糙度只该影响头顶那片，
+// 否则远处的云会被整片抹平。`roughness` 零到一，由材质粗糙度或模糊强度给出。
+float4 ogxSkyCloudsFromTexLod(Sampler2D skyTex, float3 direction, float2 texelSize, float2 origin, float tile,
+    float roughness)
+{
+    float2 p = ogxSkyEquirect(direction); // 经纬坐标。
+    roughness = 1.0 - pow(1.0 - roughness, 3.0); // 三次曲线让低粗糙度变化更细。
+    float high = min(max(p.y - 0.5, 0.0) * 50.0, 1.0); // 只有天顶那半边的云参与收拢。
+    p = lerp(p, (p - 0.5) * (1.0 - roughness) + 0.5, high); // 按粗糙度把坐标朝中心压缩。
+    p = clamp(p * 2.0 - 1.0, float2(-1.0), float2(1.0)) * 0.5 + 0.5; // 压缩后再夹一次，边缘不越界。
+    return skyTex.SampleLevel(p * tile * texelSize + origin * texelSize, 0.0); // 取子图内的颜色。
+}
+
 // 极光：夜晚高空的缓慢帘幕，雨天被云遮挡；`tint` 为正偏绿、为负偏蓝紫。
 float3 ogxAurora(float3 color, float3 direction, float3 sunDirection, float time, float wetness, float tint, float strength)
 {

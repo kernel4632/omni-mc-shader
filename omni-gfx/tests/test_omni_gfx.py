@@ -101,6 +101,16 @@ class OmniGfxTests(unittest.TestCase):
             with self.subTest(module=name):
                 self.assertTrue((LIB / "tests" / "probes" / f"{name}.slang").is_file())  # 缺一个就说明有写法从未过编译器。
 
+    def test_parity_has_no_missing_functions(self):
+        """函数级对照的缺口必须为零，且人工对照不能指向不存在的函数。"""
+        import parity  # 生成文档与测试共用同一份判定，避免测试另写一套规则。
+        index = parity.library_index()  # 当前库里的函数索引。
+        rows = parity.collect_reference()  # 两份参考包的函数。
+        mapping = json.loads(parity.MAP.read_text(encoding="utf-8"))  # 人工对照与状态覆盖。
+        parity.classify(rows, index, mapping)  # 判定时会把坏目标直接抛错。
+        missing = [row["name"] for row in rows if row["status"] == "缺失"]  # 真正缺口。
+        self.assertEqual(missing, [])  # 有缺口说明对照表需要重新处理，不能只改文档。
+
     def test_handwritten_budget(self):
         """手写核心（源、工具、测试）不超过计划给的三千行。"""
         data = count.collect()  # 统计口径来自构建工具，不在测试里另写一份。

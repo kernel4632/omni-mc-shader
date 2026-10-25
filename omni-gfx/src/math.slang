@@ -374,6 +374,23 @@ float2 ogxRaySphereIntersection(float3 origin, float3 direction, float radius){
     return intersection;
 }
 
+// 射线与球求交的另一种约定：没打中时返回两个负一，命中时返回进入与离开的距离。
+// 为什么保留两个版本：`ogxRaySphereIntersection` 用极大值表示未命中，适合直接取近交点；
+// 这个版本照参考实现用负一当哨兵，调用方可以只判断一个分量就知道要不要继续算。
+// 球心固定在原点，`position` 是射线的起点，`direction` 必须已经归一化。
+float2 ogxRaySphereHit(float3 position, float3 direction, float radius)
+{
+    float PoD = dot(position, direction); // 起点在射线方向上的投影。
+    float radiusSquared = radius * radius; // 半径平方。
+    float delta = PoD * PoD + radiusSquared - dot(position, position); // 球面方程的判别式。
+    if (delta < 0.0) // 判别式为负说明射线擦不到球。
+    {
+        return float2(-1.0); // 两个负一表示未命中。
+    }
+    delta = sqrt(delta); // 判别式开方，得到两个交点相对最近点的偏移。
+    return -PoD + float2(-delta, delta); // 先减投影再加减偏移，得到两个距离。
+}
+
 // 射线与轴对齐包围盒求交：返回进入与离开的距离。
 // 三个轴分别解一次区间，再把区间求交集；无交点时返回一正一负的极值。
 // `boxSize` 是盒子的半边长，盒子以 `origin` 所在坐标系的原点为中心。
@@ -429,8 +446,17 @@ float ogxBayer4(float2 a) { return ogxBayer2(0.5 * a) * 0.25 + ogxBayer2(a); }
 // 八乘八拜尔矩阵。
 float ogxBayer8(float2 a) { return ogxBayer4(0.5 * a) * 0.25 + ogxBayer2(a); }
 
-// 六十四乘六十四拜尔矩阵：范围最大，适合时间累积前的初始偏移。
+// 十六乘十六拜尔矩阵：四层二乘二矩阵嵌套，抖动级别比八乘八细四倍。
+float ogxBayer16(float2 a) { return ogxBayer4(0.25 * a) * 0.0625 + ogxBayer4(a); }
+
+// 三十二乘三十二拜尔矩阵：低频一档换成八乘八，级别再细四倍。
+float ogxBayer32(float2 a) { return ogxBayer8(0.25 * a) * 0.0625 + ogxBayer4(a); }
+
+// 六十四乘六十四拜尔矩阵：范围大，适合时间累积前的初始偏移。
 float ogxBayer64(float2 a) { return ogxBayer8(0.125 * a) * 0.015625 + ogxBayer8(a); }
+
+// 一百二十八乘一百二十八拜尔矩阵：目前最细的一档，给低步数光追分摊首帧噪点。
+float ogxBayer128(float2 a) { return ogxBayer16(0.125 * a) * 0.015625 + ogxBayer8(a); }
 
 // 切线基的三个方向；用结构体而不是矩阵，避免两种语言的行列顺序不同造成转置错误。
 struct OgxTangentBasis
@@ -510,6 +536,69 @@ void ogxDoNightEye(inout float3 color)
     float luma = ogxLuminance(color); // 原色亮度。
     color = lerp(color, luma * float3(0.7771, 1.0038, 1.6190), float3(0.5)); // 偏蓝亮度与原色各占一半。
 }
+
+// 双线性取像素：自己取四个相邻纹素再插值，不依赖硬件的线性过滤。
+// 为什么不用 `SampleLevel`：像素画风格的月亮贴图会把硬件过滤设成最近邻，画面上出现锯齿；
+// 按纹素中心取四次再按小数偏移插值，既保留最近邻的锐利，又能随屏幕坐标平滑移动。
+// `coord` 是零到一的贴图坐标，`texSize` 是贴图边长（纹素）。
+float4 ogxBilinearTexture(Sampler2D tex, float2 coord, float2 texSize)
+{
+    coord = coord * texSize - 0.5; // 换成以纹素中心为原点的坐标。
+    float2 p = floor(coord); // 左下最近纹素。
+    float2 f = coord - p; // 到该纹素的小数偏移，就是插值权重。
+    int2 texelX = int2(p); // 四个纹素里左下的整数坐标。
+    int2 texelW = texelX + int2(1); // 右上的整数坐标。
+    float4 bottom = lerp(tex.Load(int3(texelX, 0)), tex.Load(int3(int2(texelW.x, texelX.y), 0)), f.x); // 先横向插值下排。
+    float4 top = lerp(tex.Load(int3(int2(texelX.x, texelW.y), 0)), tex.Load(int3(texelW, 0)), f.x); // 再横向插值上排。
+    return lerp(bottom, top, f.y); // 最后纵向插值。
+}
+
+// 天空盒图集的双线性取像素：与上一函数相同，但每个采样都夹在自己那一格里。
+// 为什么需要夹紧：天空盒把六张面拼成 3×2 的大图，横跨格边取样会读到隔壁面的像素，
+// 地平线附近就会出现一条颜色突变的接缝。`coord` 是零到一的图集坐标。
+float4 ogxBilinearTextureSkybox(Sampler2D tex, float2 coord, float2 texSize)
+{
+    int2 grid = int2(floor(coord * float2(3.0, 2.0))); // 当前落在 3×2 图集的哪一格。
+    int gridSize = int(floor(texSize.y * 0.5)); // 每格是正方形，边长取总高的一半。
+    grid *= gridSize; // 格号换成格子的左上角纹素坐标。
+    int4 border = int4(grid, grid + gridSize - 1); // 该格的闭区间边界，左下与右上。
+    coord = coord * texSize - 0.5; // 换成以纹素中心为原点的坐标。
+    float2 p = floor(coord); // 左下最近纹素。
+    float2 f = coord - p; // 插值权重。
+    int2 texelX = clamp(int2(p), border.xy, border.zw); // 左下纹素夹进本格。
+    int2 texelW = clamp(texelX + int2(1), border.xy, border.zw); // 右上纹素同样夹紧。
+    float4 bottom = lerp(tex.Load(int3(texelX, 0)), tex.Load(int3(int2(texelW.x, texelX.y), 0)), f.x); // 下排横向插值。
+    float4 top = lerp(tex.Load(int3(int2(texelX.x, texelW.y), 0)), tex.Load(int3(texelW, 0)), f.x); // 上排横向插值。
+    return lerp(bottom, top, f.y); // 纵向插值得到最终像素。
+}
+
+// 三次 B 样条的第零个权重；四个权重之和恒为一，单独取用才不会有亮度漂移。
+// 为什么和库里已有的双三次采样不同：这里是一点五阶核，放大后更柔，参考包的天空贴图用它，
+// 而 `ogxBicubicTexture` 用的是更锐的卡特穆尔-罗姆核；两条曲线不能互相替代。
+// `a` 是采样点到纹素的小数偏移，取值零到一。
+float ogxCubicWeight0(float a) { return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0); }
+
+// 三次 B 样条的第二个权重：离采样点向右一个纹素。
+float ogxCubicWeight1(float a) { return (1.0 / 6.0) * (a * a * (3.0 * a - 6.0) + 4.0); }
+
+// 三次 B 样条的第三个权重：离采样点向右两个纹素。
+float ogxCubicWeight2(float a) { return (1.0 / 6.0) * (a * (a * (-3.0 * a + 3.0) + 3.0) + 1.0); }
+
+// 三次 B 样条的第四个权重：离采样点向右三个纹素，偏移越远权重越小。
+float ogxCubicWeight3(float a) { return (1.0 / 6.0) * (a * a * a); }
+
+// 左侧两个权重的和：把两次采样合并成一次双线性采样时用它做分母。
+float ogxCubicWeightLow(float a) { return ogxCubicWeight0(a) + ogxCubicWeight1(a); }
+
+// 右侧两个权重的和，与上一函数配对。
+float ogxCubicWeightHigh(float a) { return ogxCubicWeight2(a) + ogxCubicWeight3(a); }
+
+// 合并后左采样点在像素坐标里的位置：负一为左端，零为像素中心。
+// 两个采样点不对称，必须按右权重占总权重的比例往左挪，画面才不会整体偏移半像素。
+float ogxCubicOffsetLow(float a) { return -1.0 + ogxCubicWeight1(a) / (ogxCubicWeight0(a) + ogxCubicWeight1(a)); }
+
+// 合并后右采样点的位置：正一为右端，按左权重占比往右挪。
+float ogxCubicOffsetHigh(float a) { return 1.0 + ogxCubicWeight3(a) / (ogxCubicWeight2(a) + ogxCubicWeight3(a)); }
 
 // 卡特穆尔-罗姆双三次采样：五次采样拼出十六像素的平滑放大，权重总和归一。
 // 中间两个像素先合并成一次双线性采样，省掉四次纹理读取，画面与逐像素版本一致。

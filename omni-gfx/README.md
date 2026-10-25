@@ -80,13 +80,13 @@ python omni-gfx/build.py count
 python omni-gfx/build.py parity
 ```
 
-从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 294、MC 专用 154、缺失 36、调试输出 21。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。
+从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 329、MC 专用 176、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。
 
 ## 已知边界
 
 - 测试世界是风格化近似，不是物理正确的大气、云或水体；大气是单次散射，云是单层程序化体积云，水面反射是屏幕空间近似。
-- 本机 1280×720 的 120 帧记录为平均 24.1 毫秒、中位 23.8、95 分位 27.9；帧时波动受本机同时运行的其他程序影响。
-- 时间抗锯齿已经接入次像素抖动与历史重投影；海天交界仍有一条断续暗线，来自水面圆盘最外缘的三角形，未彻底解决。
+- 本机 1280×720 的 120 帧记录为平均 23.0 毫秒、中位 23.2、95 分位 29.5，约 43.5 帧每秒；帧时随本机同时运行的其他程序波动，同一天从 21 到 34 毫秒都出现过。
+- 时间抗锯齿已经接入次像素抖动与历史重投影；海天交界那条断续暗线已修掉，根因是淡出雾时把透过率一起乘小，现在只淡出散射与遮挡。
 - 还没做：完整级联阴影跟随相机、屏幕空间全局光的颜色渗透、真实贴图与法线贴图。
 - SPIR-V 只是模块探针，Vulkan/Aperture 的实际管线接入在阶段 5。
 - 本机没有 C++ 工具链，演示程序使用 Python + GLFW + PyOpenGL；没有引入无法验证的 CMake 工程。

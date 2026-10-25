@@ -120,6 +120,16 @@ float3 ogxFogApply(float3 color, float4 fog)
     return color * fog.a + fog.rgb; // 预乘散射色直接相加。
 }
 
+// 按比例淡出一层预乘雾：只缩放散射色，并把透过率朝一插值。
+// 为什么不能直接把四个分量一起乘小：透过率被乘小以后，颜色会被一起抹掉，
+// 在“远处收敛到天空色、同时淡出雾”的接缝处就会压出一条黑线。
+// `amount` 零表示完全不要这层雾，一表示保留原样。
+float4 ogxFogFade(float4 fog, float amount)
+{
+    amount = ogxSaturate(amount); // 比例夹在零到一。
+    return float4(fog.rgb * amount, lerp(1.0, fog.a, amount)); // 散射按比例缩放，透过率朝完全透明靠近。
+}
+
 // 粉末效应：背光时气溶胶把光往前推，边缘因此更亮，正对时补偿回去。
 float ogxLegacyPowder(float absorption, float lightingAbsorption, float VdotL)
 {

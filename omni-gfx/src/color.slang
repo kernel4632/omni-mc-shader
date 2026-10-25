@@ -189,6 +189,24 @@ float3 ogxTonemapUchimura(float3 color)
     return clamp(toe * w0 + linear * w1 + shoulder * w2, float3(0.0), float3(1.0)); // 三段按权重拼接并夹紧。
 }
 
+// `Xonk` 曲线：先抬高三成伽马，再用一条有理式压肩部，暗部比 `Reinhard` 更亮。
+// 它是一条独立拟合，和 `ACES`、`AgX`、`Reinhard` 都不是同一条曲线，不能互相替代。
+float3 ogxTonemapXonk(float3 color)
+{
+    color = pow(color, float3(1.3)); // 先抬伽马，暗部细节更容易看见。
+    return color / (0.333 + color); // 有理式软肩，最亮处趋近于一。
+}
+
+// 十六位打包值拆成两个分量：按整数与小数部分各取一次，绕开位运算。
+// 参考实现用它存放方块贴图坐标；与 `ogxUnpack2x16` 的区别是这里不依赖浮点位模式，
+// 因此数值可以跨后端逐位复现。`value` 必须落在零到一之间。
+float2 ogxDecodeVec2x16(float value)
+{
+    const float2 constant1 = 4294967294.0 / float2(65536.0, 4294967295.0); // 两个分量的步长倒数。
+    const float constant2 = 65536.0 / 65535.0; // 补回零到一的上界误差。
+    return fract(value * constant1) * constant2; // 先取小数部分再缩放。
+}
+
 // 黑边：按目标宽高比在画面上下或左右画黑边，返回该像素是否落在画面内。
 float ogxBlackBar(float2 coord, float aspect, float targetRatio)
 {

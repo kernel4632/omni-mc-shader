@@ -5,7 +5,8 @@
 产物是审查覆盖范围的唯一入口，对照表的第一行结论直接引用这里的统计。
 
 判定顺序：
-    1. `parity_map.json` 的人工对照优先，键是参考函数名，值是 `模块.函数`；
+    1. `parity_map.json` 的人工对照优先，键是参考函数名，值是 `模块.函数`，
+       或写成 `{"target": ..., "evidence": ...}` 并附一条可复核的算法对应说明；
     2. 去掉 `ogx` 前缀后完全同名，视为已迁入；
     3. 函数体里出现 Minecraft 或 Iris 专有符号，视为宿主专用，并把符号逐个写进表；
     4. 其余记为缺失，进入缺口清单，按参考实现的行数排序。
@@ -49,6 +50,8 @@ GAPS = ROOT / ".dev" / "omni-gfx" / "gaps.txt"  # 缺口清单。
 MAP = LIB / "tools" / "parity_map.json"  # 人工对照数据。
 
 # 只服务 Minecraft 或 Iris 的符号：缓冲名、材质与实体属性、游戏时间与阶段变量。
+# `gl_FragCoord` 与 `text.` 属于屏幕叠加：调试打印函数用它们定位并写字符，
+# 不是通用库能承接的算法，但证据必须落到具体符号，不能只写“调试用”。
 HOST_SYMBOLS = (
     "colortex", "gaux", "shadowtex", "shadowcolor", "depthtex", "noisetex", "normals",
     "mc_Entity", "mc_midTexCoord", "entityId", "blockEntityId", "entityColor",
@@ -61,6 +64,7 @@ HOST_SYMBOLS = (
     "gl_ModelViewMatrix", "gl_ProjectionMatrix", "gl_ModelViewProjectionMatrix",
     "gl_NormalMatrix", "gl_MultiTexCoord", "gl_Vertex", "gl_Color", "gl_Normal",
     "atlasSize", "shadowMapResolution", "viewWidth", "viewHeight", "blockEntity",
+    "lightningBoltPosition", "sunElevation", "gl_FragCoord", "text.",
 )
 
 # 返回类型白名单：库里的函数还会返回自定义结构体，另按大写开头放行。
@@ -187,13 +191,15 @@ def classify(rows: list[dict], index: dict[str, str], mapping: dict) -> None:
             row["evidence"] = manual[name]["evidence"]  # 人工写的证据。
             continue
         if name in mapped:  # 人工对照。
-            target = mapped[name]  # 目标函数。
+            entry = mapped[name]  # 目标可以带一条证据：同名算法在库里换了名字时，必须写清为什么仍是同一算法。
+            target = entry["target"] if isinstance(entry, dict) else entry  # 两种写法都接受，旧条目不必重写。
             module, function = target.split(".")  # 拆成模块与函数名。
             if f"{module}.{function}" not in set(index.values()):  # 目标必须真实存在。
                 missing_targets.append(f"{name} → {target}")  # 记下错误，最后统一退出。
             row["status"] = "已迁入"  # 有承接函数。
             row["target"] = target  # 写进表里。
-            row["evidence"] = f"承接算法：{notes.get(module, module)}"  # 说明这个模块管什么。
+            row["evidence"] = entry.get("evidence", f"承接算法：{notes.get(module, module)}") if isinstance(entry, dict) \
+                else f"承接算法：{notes.get(module, module)}"  # 人工证据优先，没有就按模块说明。
             continue
         if name.lower() in index:  # 去掉前缀后同名。
             target = index[name.lower()]  # 目标函数。
@@ -246,7 +252,8 @@ def render(rows: list[dict]) -> str:
         "",  # 空行。
         "- **已迁入**：`omni-gfx/src` 里存在承接同一算法的函数，表里写出 `模块.函数`。",  # 第一种状态。
         "- **MC 专用**：函数体直接读取 Minecraft 或 Iris 的缓冲、实体、选项、阶段变量；",  # 第二种状态。
-        "  表里逐个列出命中的符号，符号名可以在参考源码里直接搜到。",  # 证据要求。
+        "  表里逐个列出命中的符号，符号名可以在参考源码里直接搜到。屏幕叠加的调试打印也记在这里：",  # 调试叠加归入宿主专用。
+        "  证据写明它用 `gl_FragCoord` 或 `text.` 定位并输出字符，不参与任何画面效果。",  # 证据要求。
         "- **缺失**：库里还没有对应实现，进入文末缺口清单。",  # 第三种状态。
         "- **调试输出**：只在屏幕上打印数字或文字，不参与任何画面效果，也不进入通用库。",  # 第四种状态。
         "- 名字相似但曲线不同的函数（例如 `ACES` 与 `ogxTonemapAcesFilm`）按实际算法判断，不按名字。",  # 反例。

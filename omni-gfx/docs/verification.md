@@ -183,3 +183,29 @@
 ```
 
 未验证：没有参考光影的实机截图可比，画面只做了目测；海天交界仍有一条断续暗线，来自水面圆盘最外缘的三角形，未彻底解决；其他显卡与水洼、下界、末地场景未测。
+
+## 十一、函数级缺口清零与海天交界修复（2026-10-25）
+
+函数级对照：
+- 505 个参考函数：已迁入 329、MC 专用 176、缺失 0、调试输出 0；上一版是 294/154/36/21。`docs/gfx-functions.md` 由 `python omni-gfx/build.py parity` 重新生成，`.dev/omni-gfx/gaps.txt` 为空。
+- 20 个承接函数进库：`math` 的 `ogxBayer16/32/128`、`ogxBilinearTexture`、`ogxBilinearTextureSkybox`、`ogxRaySphereHit`、三次 B 样条八件；`atmosphere` 的 `ogxSkyCloudsFromTex`、`ogxSkyCloudsFromTexLod`；`gi` 的 `ogxBilateralUpscale`；`color` 的 `ogxTonemapXonk`、`ogxDecodeVec2x16`；`noise` 的 `ogxIntegerHash3`。另有 `ogxSkyEquirect`、`ogxSkyCloudAtlasCoord` 两个配套函数，把经纬投影与子图布局从采样里拆出来。
+- 采样器不再是排除理由：参考里的 `sampler2D` 全部改成显式参数，贴图尺寸、子图原点与边长由调用方传入；库不读取 `texelSize`，也不绑定任何宿主纹理。
+- 15 个函数按算法对照到库内已有实现并写进人工对照：`D_Walter`→`ogxDistributionGGX`、`H`→`ogxChandrasekharH`、`ppss`→`ogxPlanetBrdf`、`R2_samples`→`ogxR2Sample`、`CalculateCoCRadius`→`ogxCocRadius`、镜头光斑四件→`ogxGlare*`、抖动五件→`ogxDitherFloat/Fixed`、`skyCloudsFromTexBLUR`→`ogxSkyCloudsFromTex`（参考实现的 `scaler` 参数没有参与计算）。`GetCloudShadow` 读取 `lightningBoltPosition` 与 `sunElevation`，按宿主专用记录。
+- 调试叠加的 21 条从“调试输出”改判为 MC 专用，并逐条写证据：`PrintFloat`、`PrintUintBinary` 用 `gl_FragCoord` 定位；`beginText`、`endText`、`printChar`、`printUnsignedInt`、`printFloat`、`printLine` 读写 `text` 叠加对象；其余逐分量打印函数只调用打印链。判定口径写进 `docs/gfx-functions.md`。
+- 回归：`test_parity_has_no_missing_functions` 重新判定并断言缺失为空，人工对照指向不存在的函数也会失败。
+
+海天交界：
+- 根因是测试世界水面把 `ogxFogMarch` 返回的四个分量整体乘 `1 - horizonBlend`：透过率被一起乘小，远处已经收敛到天空色的水面被乘成近黑，最外圈三角形跨过混合阈值的行就出现断续黑线。
+- 修复：`fog` 新增 `ogxFogFade`，只缩放散射色并把透过率朝一插值；水面改为 `ogxFogApply(color, ogxFogFade(fog, 1 - horizonBlend))`。截图同一行左右取五列，天空到水面的差都在三个色阶以内，没有黑线。
+- 顺带把远处的天空色改成采样天空立方体贴图（与画面上方同一份六步大气、同样的三度抬升），不再逐像素重算大气；空气透视 3→2 段、水面地面雾 3→2 段、云 14→12 步、立方体天空 4→6 步。
+
+帧时（1280×720，本机 Intel Arc 集显，120 帧、预热 30 帧）：
+
+```text
+平均 23.0 毫秒，中位 23.2，95 分位 29.5，最小 11.7，最大 35.1，约 43.5 帧每秒
+水面 30720 三角形，阴影 1024²×3，云 640×360×12 步
+截图 .dev/omni-gfx/world-realistic.png，记录 .dev/omni-gfx/world-realistic.json
+```
+
+未验证：没有启动 Minecraft；游戏内画面、菜单、维度切换、Vulkan/Aperture 运行时与其他显卡仍未验证；帧时会随本机同时运行的程序波动，同一天测到过 21 到 34 毫秒。
+

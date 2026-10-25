@@ -1,4 +1,17 @@
 # 更新记录
+## 0.7.0
+
+函数级缺口清零：36 个参考函数全部有承接或逐条证据，采样器改为显式参数，海天交界断续暗线修复。
+
+- 函数级对照：505 个参考函数，已迁入 329、MC 专用 176、缺失 0、调试输出 0（上一版缺失 36、调试输出 21）。21 条调试叠加改判为 MC 专用并逐条写明机制：`gl_FragCoord` 定位、`text.result` 叠加、`printChar` 打印链。
+- 新进库 20 个承接函数：`math` 补 `ogxBayer16`、`ogxBayer32`、`ogxBayer128`、`ogxBilinearTexture`、`ogxBilinearTextureSkybox`、`ogxRaySphereHit` 与三次 B 样条权重八件（`ogxCubicWeight0..3`、`ogxCubicWeightLow/High`、`ogxCubicOffsetLow/High`）；`atmosphere` 补 `ogxSkyCloudsFromTex`、`ogxSkyCloudsFromTexLod`；`gi` 补 `ogxBilateralUpscale`；`color` 补 `ogxTonemapXonk`、`ogxDecodeVec2x16`；`noise` 补 `ogxIntegerHash3`。
+- 采样器一律作为显式参数：天空云图、月亮双线性、天空盒图集取像素都接收 `Sampler2D` 与贴图尺寸或子图布局，不再以“库不绑定采样器”为由排除，也不再读取 `texelSize` 等宿主全局量；配套新增 `ogxSkyEquirect` 与 `ogxSkyCloudAtlasCoord`，把经纬投影和子图布局拆开。
+- 15 个函数按算法逐项对照到库内已有实现，表里写清理由：`D_Walter`→`ogxDistributionGGX`、`H`→`ogxChandrasekharH`、`ppss`→`ogxPlanetBrdf`、`R2_samples`→`ogxR2Sample`、`CalculateCoCRadius`→`ogxCocRadius`、镜头光斑四件→`ogxGlare*`、浮点与定点抖动五件→`ogxDitherFloat/Fixed`、`skyCloudsFromTexBLUR`→`ogxSkyCloudsFromTex`（参考实现的 `scaler` 未参与计算）。`GetCloudShadow` 读取 `lightningBoltPosition` 与 `sunElevation`，按宿主专用记录。
+- `fog` 新增 `ogxFogFade`：淡出预乘雾时只缩放散射色、把透过率朝一插值。测试世界水面原先直接乘 `1-horizonBlend`，把透过率一起乘没，海天交界因此压出一条断续黑线；现在只淡出雾的散射与遮挡，接缝连续。
+- 测试世界水面远处的天空色改取天空立方体贴图（与水面上方同一份六步大气渲染，地平线同样抬高三度），省掉逐像素重算大气；空气透视降到两段、水面地面雾降到两段、云步数 14→12、立方体天空 4→6 步。1280×720 本机 Intel Arc 集显 120 帧：平均 23.0 毫秒、中位 23.2、95 分位 29.5，约 43.5 帧每秒；截图 `.dev/omni-gfx/world-realistic.png`。
+- 新增回归 `test_parity_has_no_missing_functions`：出现新的缺失或人工对照指向不存在的函数时直接失败。
+
+验证：`python omni-gfx/build.py generate`（24 个模块、49 个文件）、`parity`（缺失 0）、`check`、`spirv`（24/24，编译器 2026.20）、`python build.py audit`、`python build.py verify`（148 个测试、9 组编译探针）、`python build.py compile`（280 组唯一程序、0 错误）通过。未启动 Minecraft；游戏内画面、性能与其他显卡仍未验证。
 ## 0.6.0
 
 函数级覆盖对照重建，通用库补齐十一项纯计算，测试世界改为接近参考光影的完整场景。

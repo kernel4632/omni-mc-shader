@@ -6,21 +6,22 @@
 ## 结论
 
 - 参考函数共 505 个（同名跨包只算一次）：iterationT 240 个，Eclipse 265 个。
-- 已迁入：294 个。
-- MC 专用：154 个。
-- 缺失：36 个。
-- 调试输出：21 个。
+- 已迁入：329 个。
+- MC 专用：176 个。
+- 缺失：0 个。
+- 调试输出：0 个。
 
 | 参考包 | 已迁入 | MC 专用 | 缺失 | 调试输出 |
 | --- | --- | --- | --- | --- |
-| iterationT | 156 | 67 | 13 | 4 |
-| Eclipse | 138 | 87 | 23 | 17 |
+| iterationT | 169 | 71 | 0 | 0 |
+| Eclipse | 160 | 105 | 0 | 0 |
 
 ## 判定口径
 
 - **已迁入**：`omni-gfx/src` 里存在承接同一算法的函数，表里写出 `模块.函数`。
 - **MC 专用**：函数体直接读取 Minecraft 或 Iris 的缓冲、实体、选项、阶段变量；
-  表里逐个列出命中的符号，符号名可以在参考源码里直接搜到。
+  表里逐个列出命中的符号，符号名可以在参考源码里直接搜到。屏幕叠加的调试打印也记在这里：
+  证据写明它用 `gl_FragCoord` 或 `text.` 定位并输出字符，不参与任何画面效果。
 - **缺失**：库里还没有对应实现，进入文末缺口清单。
 - **调试输出**：只在屏幕上打印数字或文字，不参与任何画面效果，也不进入通用库。
 - 名字相似但曲线不同的函数（例如 `ACES` 与 `ogxTonemapAcesFilm`）按实际算法判断，不按名字。
@@ -180,7 +181,7 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `CalculateCoCRadius` | 3 | — | 缺失 | 按深度与焦距求弥散圆半径，库在 ogxCocRadius 里做了同类计算但接口不同 |
+| `CalculateCoCRadius` | 3 | `post.ogxCocRadius` | 已迁入 | 同一薄透镜弥散圆公式，参数顺序一致 |
 | `GetLinearDepth` | 7 | — | MC 专用 | 函数体直接读取宿主符号：`depthtex` |
 | `GetFocus` | 19 | — | MC 专用 | 函数体直接读取宿主符号：`colortex` |
 | `CoCSpread` | 29 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
@@ -191,8 +192,8 @@
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
 | `CalculateStars` | 12 | `atmosphere.ogxStarsStable` | 已迁入 | 承接算法：天空散射与日月星 |
-| `H` | 48 | — | 缺失 | 参考实现 7 行，库里没有对应算法 |
-| `ppss` | 57 | — | 缺失 | 参考实现 7 行，库里没有对应算法 |
+| `H` | 48 | `atmosphere.ogxChandrasekharH` | 已迁入 | 同一钱德拉塞卡近似，算式逐项相同 |
+| `ppss` | 57 | `atmosphere.ogxPlanetBrdf` | 已迁入 | 同一行星表面 BRDF：入射角曲线、两侧近似与相函数分母相同 |
 | `Disc` | 67 | `atmosphere.ogxDiscProfile` | 已迁入 | 承接算法：天空散射与日月星 |
 | `PlanetEnd2` | 72 | — | MC 专用 | 函数体直接读取宿主符号：`noisetex` |
 | `RotateMatrix` | 239 | `math.ogxRotateMatrix` | 已迁入 | 承接算法：数学与通用工具 |
@@ -232,10 +233,10 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `GetDistOffset` | 10 | — | 缺失 | 镜头光斑的距离偏移，属于眩光光斑辅助函数 |
-| `flare` | 22 | — | 缺失 | 镜头光斑的十字星芒，属于眩光辅助函数 |
-| `orb` | 33 | — | 缺失 | 镜头光斑的圆盘形状，属于眩光辅助函数 |
-| `ring` | 51 | — | 缺失 | 镜头光斑的圆环，属于眩光辅助函数 |
+| `GetDistOffset` | 10 | `post.ogxGlareDistOffset` | 已迁入 | 同一桶形畸变偏移，桶形强度改为显式参数 |
+| `flare` | 22 | `post.ogxGlareFlare` | 已迁入 | 同一带色散的软光斑，桶形强度改为显式参数 |
+| `orb` | 33 | `post.ogxGlareOrb` | 已迁入 | 同一六连圆形光斑与末尾大光斑，桶形强度改为显式参数 |
+| `ring` | 51 | `post.ogxGlareRing` | 已迁入 | 同一环状光环与三通道色散 |
 | `LensFlare` | 61 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/MotionBlur.glsl`
@@ -290,10 +291,10 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `SevenSegment` | 48 | — | 调试输出 | 七段数码管形状的调试数字 |
-| `DecimalPoint` | 93 | — | 调试输出 | 调试数字的小数点 |
-| `PrintFloat` | 99 | — | 调试输出 | 只在屏幕上逐位打印浮点数（SevenSegment 拼数字），不参与任何画面效果 |
-| `PrintUintBinary` | 218 | — | 调试输出 | 把整数按二进制画成方块，仅调试用 |
+| `SevenSegment` | 48 | — | MC 专用 | 调试叠加：按格子查七段码表，只给 `PrintFloat` 提供字形 |
+| `DecimalPoint` | 93 | — | MC 专用 | 调试叠加：返回小数点所在格子，只给 `PrintFloat` 提供字形 |
+| `PrintFloat` | 99 | — | MC 专用 | 调试叠加：按 `gl_FragCoord` 定位，用七段码表逐位拼出数字，只输出到屏幕 |
+| `PrintUintBinary` | 218 | — | MC 专用 | 调试叠加：按 `gl_FragCoord` 定位，把 32 位逐格画成七段数字 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/Reflections/ReflectionFilter.glsl`
 
@@ -334,7 +335,7 @@
 | `FogDensity` | 34 | `fog.ogxFogDensity` | 已迁入 | 承接算法：雾与空气透视 |
 | `VolumetricFog` | 69 | `fog_volume.ogxVolumetricFog` | 已迁入 | 同名迁移：体积雾 |
 | `simpleScattering` | 275 | `atmosphere.ogxAtmosphereSky` | 已迁入 | 承接算法：天空散射与日月星 |
-| `LandAtmosphericScattering` | 300 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`isEyeInWater`、`wetness`、`eyeBrightness`、`cameraPosition`、`gbufferModelView` |
+| `LandAtmosphericScattering` | 300 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`isEyeInWater`、`wetness`、`eyeBrightness`、`cameraPosition`、`gbufferModelView`、`gl_FragCoord` |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/WaterWaves.glsl`
 
@@ -386,8 +387,8 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `BilinearTexture` | 21 | — | 缺失 | 参考实现 10 行，库里没有对应算法 |
-| `BilinearTextureSkybox` | 35 | — | 缺失 | 参考实现 14 行，库里没有对应算法 |
+| `BilinearTexture` | 21 | `math.ogxBilinearTexture` | 已迁入 | 同名迁移：数学与通用工具 |
+| `BilinearTextureSkybox` | 35 | `math.ogxBilinearTextureSkybox` | 已迁入 | 同名迁移：数学与通用工具 |
 
 `references/iterationT/shaders/Lib/Programs/Gbuffers/Terrain_FS.glsl`
 
@@ -444,7 +445,7 @@
 | `OctWrap` | 139 | `math.ogxOctWrap` | 已迁入 | 承接算法：数学与通用工具 |
 | `EncodeNormal` | 143 | `math.ogxEncodeNormal` | 已迁入 | 承接算法：数学与通用工具 |
 | `DecodeNormal` | 150 | `math.ogxDecodeNormal` | 已迁入 | 承接算法：数学与通用工具 |
-| `D_Walter` | 158 | — | 缺失 | Walter 粗糙度重映射，库使用 GGX 的标准 alpha 定义 |
+| `D_Walter` | 158 | `math.ogxDistributionGGX` | 已迁入 | 同一 GGX 分布公式与同一组常数，库里按行业名命名 |
 | `F_Schlick` | 164 | `math.ogxFresnelSchlick` | 已迁入 | 承接算法：数学与通用工具 |
 | `V_Schlick` | 170 | `math.ogxVisibilitySchlick` | 已迁入 | 承接算法：数学与通用工具 |
 | `Fd_Burley` | 176 | `math.ogxDiffuseBurley` | 已迁入 | 承接算法：数学与通用工具 |
@@ -458,10 +459,10 @@
 | `bayer2` | 280 | `math.ogxBayer2` | 已迁入 | 承接算法：数学与通用工具 |
 | `bayer4` | 286 | `math.ogxBayer4` | 已迁入 | 承接算法：数学与通用工具 |
 | `bayer8` | 287 | `math.ogxBayer8` | 已迁入 | 承接算法：数学与通用工具 |
-| `bayer16` | 288 | — | 缺失 | 16×16 拜尔矩阵常数，库目前只到 8×8 与 64 级 |
-| `bayer32` | 289 | — | 缺失 | 32×32 拜尔矩阵常数，库目前只到 8×8 与 64 级 |
+| `bayer16` | 288 | `math.ogxBayer16` | 已迁入 | 同名迁移：数学与通用工具 |
+| `bayer32` | 289 | `math.ogxBayer32` | 已迁入 | 同名迁移：数学与通用工具 |
 | `bayer64` | 290 | `math.ogxBayer64` | 已迁入 | 承接算法：数学与通用工具 |
-| `bayer128` | 291 | — | 缺失 | 128×128 拜尔矩阵常数，库目前只到 8×8 与 64 级 |
+| `bayer128` | 291 | `math.ogxBayer128` | 已迁入 | 同名迁移：数学与通用工具 |
 | `Sequences_R1` | 294 | `math.ogxR2Sample` | 已迁入 | 承接算法：数学与通用工具 |
 | `Sequences_R2` | 299 | `math.ogxR2Sample` | 已迁入 | 承接算法：数学与通用工具 |
 
@@ -562,11 +563,11 @@
 | --- | --- | --- | --- | --- |
 | `nrand` | 2 | `noise.ogxWhiteNoise` | 已迁入 | 承接算法：程序化噪声 |
 | `triangWhiteNoise` | 7 | — | MC 专用 | 函数体直接读取宿主符号：`frameTimeCounter` |
-| `fp10Dither` | 19 | — | 缺失 | 十位浮点的量化抖动，库的 ogxDitherFloat 覆盖八位与十六位 |
-| `fp16Dither` | 26 | — | 缺失 | 十六位浮点的量化抖动，库的 ogxDitherFixed 覆盖八位 |
-| `int8Dither` | 33 | — | 缺失 | 八位整数的量化抖动辅助 |
-| `int10Dither` | 38 | — | 缺失 | 十位整数的量化抖动辅助 |
-| `int16Dither` | 43 | — | 缺失 | 十六位整数的量化抖动辅助 |
+| `fp10Dither` | 19 | `post.ogxDitherFloat` | 已迁入 | 同一浮点抖动；调用时尾数位数取 (6,6,5) |
+| `fp16Dither` | 26 | `post.ogxDitherFloat` | 已迁入 | 同一浮点抖动；调用时尾数位数取 10 |
+| `int8Dither` | 33 | `post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 8 |
+| `int10Dither` | 38 | `post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 10 |
+| `int16Dither` | 43 | `post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 16 |
 
 `references/Eclipse/shaders/lib/color_transforms.glsl`
 
@@ -583,7 +584,7 @@
 | `curve` | 106 | `color.ogxAgxContrast` | 已迁入 | 承接算法：颜色与色调映射 |
 | `Tonemap_Uchimura_Modified` | 109 | `color.ogxTonemapUchimura` | 已迁入 | 承接算法：颜色与色调映射 |
 | `Tonemap_Uchimura` | 132 | `color.ogxTonemapUchimura` | 已迁入 | 承接算法：颜色与色调映射 |
-| `Tonemap_Xonk` | 166 | — | 缺失 | Xonk 曲线是一条独立拟合，库里没有同一条曲线 |
+| `Tonemap_Xonk` | 166 | `color.ogxTonemapXonk` | 已迁入 | 同名曲线：先抬 1.3 次幂，再除以自身加 0.333 |
 | `Tonemap_Full_Reinhard` | 174 | `color.ogxTonemapReinhard` | 已迁入 | 承接算法：颜色与色调映射 |
 | `Full_Reinhard_Edit` | 182 | `color.ogxTonemapReinhard` | 已迁入 | 承接算法：颜色与色调映射 |
 | `agxDefaultContrastApprox` | 228 | `color.ogxAgxContrast` | 已迁入 | 承接算法：颜色与色调映射 |
@@ -601,7 +602,7 @@
 | `swapperlinZ2` | 2 | — | MC 专用 | 交换两个线性深度的辅助函数，输入来自宿主深度缓冲 |
 | `SSRT_Handlight_Shadows` | 6 | — | MC 专用 | 函数体直接读取宿主符号：`depthtex`、`normals`、`gbufferModelView` |
 | `GetHandLight` | 74 | — | MC 专用 | 函数体直接读取宿主符号：`lightColor` |
-| `doBlockLightLighting` | 104 | — | MC 专用 | 函数体直接读取宿主符号：`normals`、`heldItemId`、`lightColor` |
+| `doBlockLightLighting` | 104 | — | MC 专用 | 函数体直接读取宿主符号：`normals`、`heldItemId`、`lightColor`、`gl_FragCoord` |
 | `doIndirectLighting` | 282 | `surface.ogxDoIndirectLighting` | 已迁入 | 同名迁移：方块光与材质 |
 | `calculateFlashlight` | 304 | — | MC 专用 | 函数体直接读取宿主符号：`noisetex`、`cameraPosition`、`previousCameraPosition`、`gbufferModelView`、`gbufferPreviousModelView` |
 
@@ -611,7 +612,7 @@
 | --- | --- | --- | --- | --- |
 | `hash31` | 23 | `noise.ogxHash13` | 已迁入 | 承接算法：程序化噪声 |
 | `hash11` | 30 | `noise.ogxHash13` | 已迁入 | 承接算法：程序化噪声 |
-| `iqint2` | 45 | — | 缺失 | 整数二维坐标的快速取整，属于末地雾的噪声辅助 |
+| `iqint2` | 45 | `noise.ogxIntegerHash3` | 已迁入 | 同一 Inigo Quilez 整数哈希：三轮右移异或再乘 1103515245 |
 | `hash` | 56 | `noise.ogxHash13` | 已迁入 | 承接算法：程序化噪声 |
 | `LightSourcePosition` | 69 | — | MC 专用 | 函数体直接读取宿主符号：`colortex` |
 | `densityAtPosFog` | 95 | — | MC 专用 | 函数体直接读取宿主符号：`noisetex` |
@@ -642,11 +643,11 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `R2_samples` | 1 | — | 缺失 | 参考实现 4 行，库里没有对应算法 |
+| `R2_samples` | 1 | `math.ogxR2Sample` | 已迁入 | 同一 R2 低差异序列与同一组黄金比例常数 |
 | `cosineHemisphereSample` | 6 | `math.ogxCosineHemisphere` | 已迁入 | 承接算法：数学与通用工具 |
 | `TangentToWorld` | 16 | `math.ogxTangentBasis` | 已迁入 | 承接算法：数学与通用工具 |
 | `SpiralSample` | 23 | `math.ogxSpiralSample` | 已迁入 | 承接算法：数学与通用工具 |
-| `BilateralUpscale_SSAO` | 43 | — | 缺失 | 半分辨率遮蔽的双边上采样，库里用时间抗锯齿阶段的四邻域加权替代，尚未独立成函数 |
+| `BilateralUpscale_SSAO` | 43 | `gi.ogxBilateralUpscale` | 已迁入 | 四邻域按深度差剔除后升采样；参考实现的固定步长换成分辨率倍数参数 |
 | `rayTrace_GI` | 99 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex` |
 | `convertHandDepth_3` | 145 | `math.ogxConvertHandDepth3` | 已迁入 | 承接算法：数学与通用工具 |
 | `RT_alternate` | 153 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex`、`gbufferModelView`、`viewWidth`、`viewHeight` |
@@ -722,21 +723,21 @@
 | `sphereMap` | 10 | `atmosphere.ogxSkyProject` | 已迁入 | 承接算法：天空散射与日月星 |
 | `drawMoon` | 27 | `atmosphere.ogxMoonDiscDefault` | 已迁入 | 承接算法：天空散射与日月星 |
 | `drawRealMoon` | 58 | `atmosphere.ogxMoonDiscReal` | 已迁入 | 承接算法：天空散射与日月星 |
-| `w0` | 69 | — | 缺失 | 参考实现 3 行，库里没有对应算法 |
-| `w1` | 74 | — | 缺失 | 参考实现 3 行，库里没有对应算法 |
-| `w2` | 79 | — | 缺失 | 参考实现 3 行，库里没有对应算法 |
-| `w3` | 84 | — | 缺失 | 参考实现 3 行，库里没有对应算法 |
-| `g0` | 89 | — | 缺失 | 参考实现 3 行，库里没有对应算法 |
-| `g1` | 94 | — | 缺失 | 参考实现 3 行，库里没有对应算法 |
-| `h0` | 99 | — | 缺失 | 参考实现 3 行，库里没有对应算法 |
-| `h1` | 104 | — | 缺失 | 参考实现 3 行，库里没有对应算法 |
+| `w0` | 69 | `math.ogxCubicWeight0` | 已迁入 | 同一三次 B 样条权重，常数逐项相同 |
+| `w1` | 74 | `math.ogxCubicWeight1` | 已迁入 | 同一三次 B 样条权重，常数逐项相同 |
+| `w2` | 79 | `math.ogxCubicWeight2` | 已迁入 | 同一三次 B 样条权重，常数逐项相同 |
+| `w3` | 84 | `math.ogxCubicWeight3` | 已迁入 | 同一三次 B 样条权重，常数逐项相同 |
+| `g0` | 89 | `math.ogxCubicWeightLow` | 已迁入 | 同一左侧两个权重之和 |
+| `g1` | 94 | `math.ogxCubicWeightHigh` | 已迁入 | 同一右侧两个权重之和 |
+| `h0` | 99 | `math.ogxCubicOffsetLow` | 已迁入 | 同一合并采样点的左偏移 |
+| `h1` | 104 | `math.ogxCubicOffsetHigh` | 已迁入 | 同一合并采样点的右偏移 |
 | `texture_bicubic` | 109 | `math.ogxBicubicTexture` | 已迁入 | 承接算法：数学与通用工具 |
 | `texture_bicubic_offset` | 133 | `math.ogxBicubicTexture` | 已迁入 | 承接算法：数学与通用工具 |
-| `sphereToCarte` | 166 | `atmosphere.ogxSkyUnproject` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sphereToCarte` | 166 | `atmosphere.ogxSkyEquirect` | 已迁入 | 同一经纬投影：方向转零到一的贴图坐标 |
 | `skyFromTex` | 171 | `atmosphere_model.ogxAtmoSkyRadiance` | 已迁入 | 承接算法：预计算大气查表 |
-| `skyCloudsFromTex` | 186 | — | 缺失 | 读取天空贴图并合成云，需要采样器；库按架构约定不绑定采样器 |
-| `skyCloudsFromTexBLUR` | 195 | — | 缺失 | 天空贴图的模糊采样，需要采样器；库不绑定采样器 |
-| `skyCloudsFromTexLOD` | 210 | — | 缺失 | 按距离选择天空贴图层级，需要采样器；库不绑定采样器 |
+| `skyCloudsFromTex` | 186 | `atmosphere.ogxSkyCloudsFromTex` | 已迁入 | 同名迁移：天空散射与日月星 |
+| `skyCloudsFromTexBLUR` | 195 | `atmosphere.ogxSkyCloudsFromTex` | 已迁入 | 参考实现的 scaler 参数未参与计算，函数体与 skyCloudsFromTex 相同，库只保留一份 |
+| `skyCloudsFromTexLOD` | 210 | `atmosphere.ogxSkyCloudsFromTexLod` | 已迁入 | 同名迁移：天空散射与日月星 |
 | `volumetricsFromTex` | 229 | `fog_volume.ogxFogCloudBicubic` | 已迁入 | 承接算法：体积雾 |
 
 `references/Eclipse/shaders/lib/specular.glsl`
@@ -760,7 +761,7 @@
 | `GetVoxelBlock` | 262 | — | MC 专用 | 按坐标读取体素方块编号，依赖 Iris 自定义图像 |
 | `voxelIndex` | 266 | `voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
 | `voxelNormalIndex` | 270 | — | MC 专用 | 体素法线索引，依赖方块面表与影像编码 |
-| `decodeVec2_16` | 274 | — | 缺失 | 把十六位打包值拆成二维法线，库用八位版本 ogxUnpack2x8 |
+| `decodeVec2_16` | 274 | `color.ogxDecodeVec2x16` | 已迁入 | 同一组常数把打包值拆成两个十六位分量，不依赖浮点位模式 |
 | `GetVoxelData` | 280 | — | MC 专用 | 读体素影像数据，依赖自定义图像布局 |
 | `GetTexCoord` | 290 | — | MC 专用 | 体素影像的纹理坐标换算，依赖自定义图像布局 |
 | `getVoxelEmission` | 294 | — | MC 专用 | 从体素影像读取发光，依赖自定义图像与方块映射 |
@@ -782,7 +783,7 @@
 | `doBlockLightLightingVoxel` | 1404 | — | MC 专用 | 函数体直接读取宿主符号：`heldItemId`、`lightColor` |
 | `raymarchWSR_LPV` | 1464 | — | MC 专用 | 函数体直接读取宿主符号：`heldItemId`、`cameraPosition`、`gbufferModelView` |
 | `raymarchWSRfog` | 1604 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`shadowcolor`、`biome`、`eyeBrightness`、`cameraPosition`、`gbufferModelView`、`shadowModelView` |
-| `WSRwaterVolumetrics` | 1798 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`shadowcolor`、`heldItemId`、`cameraPosition`、`gbufferModelView`、`shadowModelView` |
+| `WSRwaterVolumetrics` | 1798 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`shadowcolor`、`heldItemId`、`cameraPosition`、`gbufferModelView`、`shadowModelView`、`lightningBoltPosition`、`sunElevation` |
 | `getPhotonicsEmission` | 1923 | — | MC 专用 | 从 photonics 缓冲读取发光数据，依赖 SSBO 布局 |
 | `photonicsEmission` | 1929 | — | MC 专用 | 同上，photonics 缓冲读出 |
 | `photonicsReflectionShading` | 1937 | — | MC 专用 | 函数体直接读取宿主符号：`eyeBrightness`、`cameraPosition` |
@@ -815,23 +816,23 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `beginText` | 161 | — | 调试输出 | 文字渲染的起始状态，依赖游戏字体与屏幕叠加 |
-| `endText` | 175 | — | 调试输出 | 文字渲染的结束状态，依赖游戏字体与屏幕叠加 |
-| `printChar` | 179 | — | 调试输出 | 依赖游戏字体贴图的字符打印，属于宿主资源 |
-| `printUnsignedInt` | 212 | — | 调试输出 | 调试文字打印 |
-| `printInt` | 244 | — | 调试输出 | 调试文字打印 |
-| `printFloat` | 249 | — | 调试输出 | 调试文字打印 |
-| `printBool` | 269 | — | 调试输出 | 调试文字打印 |
-| `printVec2` | 277 | — | 调试输出 | 调试文字打印 |
-| `printVec3` | 282 | — | 调试输出 | 调试文字打印 |
-| `printVec4` | 289 | — | 调试输出 | 调试文字打印 |
-| `printIvec2` | 299 | — | 调试输出 | 调试文字打印 |
-| `printIvec3` | 304 | — | 调试输出 | 调试文字打印 |
-| `printIvec4` | 311 | — | 调试输出 | 调试文字打印 |
-| `printUvec2` | 321 | — | 调试输出 | 调试文字打印 |
-| `printUvec3` | 326 | — | 调试输出 | 调试文字打印 |
-| `printUvec4` | 333 | — | 调试输出 | 调试文字打印 |
-| `printLine` | 343 | — | 调试输出 | 调试文字打印 |
+| `beginText` | 161 | — | MC 专用 | 调试叠加：初始化 `text` 叠加对象的位置、颜色与进制，不参与画面效果 |
+| `endText` | 175 | — | MC 专用 | 调试叠加：把 `text.result` 混进片元颜色，只在屏幕上叠字 |
+| `printChar` | 179 | — | MC 专用 | 调试叠加：按 `text` 的字符位置与位图点亮单个字符的像素 |
+| `printUnsignedInt` | 212 | — | MC 专用 | 调试叠加：按 `text.base` 逐位拆数字并调用 `printChar` |
+| `printInt` | 244 | — | MC 专用 | 调试叠加：带负号地调用 `printUnsignedInt` |
+| `printFloat` | 249 | — | MC 专用 | 调试叠加：拆出整数与小数位后调用打印链，精度来自 `text.fpPrecision` |
+| `printBool` | 269 | — | MC 专用 | 调试叠加：按真假打印 true 或 false 字符 |
+| `printVec2` | 277 | — | MC 专用 | 调试叠加：逐分量调用 `printFloat`，用逗号分隔 |
+| `printVec3` | 282 | — | MC 专用 | 调试叠加：逐分量调用 `printFloat`，用逗号分隔 |
+| `printVec4` | 289 | — | MC 专用 | 调试叠加：逐分量调用 `printFloat`，用逗号分隔 |
+| `printIvec2` | 299 | — | MC 专用 | 调试叠加：逐分量调用 `printInt`，用逗号分隔 |
+| `printIvec3` | 304 | — | MC 专用 | 调试叠加：逐分量调用 `printInt`，用逗号分隔 |
+| `printIvec4` | 311 | — | MC 专用 | 调试叠加：逐分量调用 `printInt`，用逗号分隔 |
+| `printUvec2` | 321 | — | MC 专用 | 调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔 |
+| `printUvec3` | 326 | — | MC 专用 | 调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔 |
+| `printUvec4` | 333 | — | MC 专用 | 调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔 |
+| `printLine` | 343 | — | MC 专用 | 调试叠加：把 `text.charPos` 移到下一行，只影响屏幕上文字的排版 |
 
 `references/Eclipse/shaders/lib/texture_filtering.glsl`
 
@@ -857,7 +858,7 @@
 | `cartToSphere` | 127 | `math.ogxCircleMap` | 已迁入 | 承接算法：数学与通用工具 |
 | `sphereToCart` | 134 | `atmosphere.ogxSkyUnproject` | 已迁入 | 承接算法：天空散射与日月星 |
 | `getRotMat` | 139 | `math.ogxRotateMatrix` | 已迁入 | 承接算法：数学与通用工具 |
-| `rsi` | 162 | — | 缺失 | 球面坐标变换的快捷实现，库用 ogxCircleMap 与 ogxSkyProject 覆盖 |
+| `rsi` | 162 | `math.ogxRaySphereHit` | 已迁入 | 同一球面求交算式，未命中时同样返回两个负一 |
 | `HaltonSeq3` | 172 | `sampling.ogxHalton3` | 已迁入 | 承接算法：采样与抖动 |
 | `HaltonSeq2` | 185 | `sampling.ogxHalton2` | 已迁入 | 承接算法：采样与抖动 |
 | `customRotation` | 199 | — | MC 专用 | 函数体直接读取宿主符号：`worldTime` |
@@ -877,13 +878,13 @@
 | `getCumulonimbusShape` | 288 | — | MC 专用 | 函数体直接读取宿主符号：`noisetex`、`cameraPosition` |
 | `getLightningPosition` | 377 | — | MC 专用 | 函数体直接读取宿主符号：`cameraPosition` |
 | `getPlanetShadow` | 404 | `planet.ogxPlanetEnd` | 已迁入 | 承接算法：末地行星 |
-| `GetCloudShadow` | 412 | — | 缺失 | Eclipse 的体积云影贴图采样，需要云影贴图坐标与天气状态 |
+| `GetCloudShadow` | 412 | — | MC 专用 | 函数体直接读取宿主符号：lightningBoltPosition、sunElevation；云层高度来自编译期配置 CloudLayer0_height 等 |
 | `getRayOrigin` | 464 | — | MC 专用 | 体积云光线起点，依赖相机位置与视场内插 |
 | `phaseCloud` | 491 | `cloud.ogxHenyeyGreenstein` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `getCloudScattering` | 512 | `cloud.ogxCloudMarch` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `getCloudLighting` | 578 | `cloud.ogxCloudLight` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `raymarchCloud` | 628 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`shadowcolor`、`cameraPosition`、`shadowModelView` |
-| `GetVolumetricClouds` | 960 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`cameraPosition`、`gbufferModelView` |
+| `raymarchCloud` | 628 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`shadowcolor`、`cameraPosition`、`shadowModelView`、`lightningBoltPosition`、`sunElevation` |
+| `GetVolumetricClouds` | 960 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`cameraPosition`、`gbufferModelView`、`sunElevation` |
 | `raymarchCloudSimple` | 1385 | `cloud.ogxCloudMarch` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `GetVolumetricCloudsSimple` | 1493 | — | MC 专用 | 函数体直接读取宿主符号：`cameraPosition` |
 
@@ -905,46 +906,10 @@
 
 ## 缺口清单
 
-共 36 个，按参考实现的行数从多到少排列。
+共 0 个，按参考实现的行数从多到少排列。
 
 | 函数 | 参考位置 | 行数 | 参考做什么 |
 | --- | --- | --- | --- |
-| `GetCloudShadow` | `references/Eclipse/shaders/lib/volumetricClouds.glsl:412` | 40 | Eclipse 的体积云影贴图采样，需要云影贴图坐标与天气状态 |
-| `BilateralUpscale_SSAO` | `references/Eclipse/shaders/lib/indirect_lighting_effects.glsl:43` | 31 | 半分辨率遮蔽的双边上采样，库里用时间抗锯齿阶段的四邻域加权替代，尚未独立成函数 |
-| `BilinearTextureSkybox` | `references/iterationT/shaders/Lib/Programs/Gbuffers/Skytextured_FS.glsl:35` | 14 | 参考实现 14 行，库里没有对应算法 |
-| `orb` | `references/iterationT/shaders/Lib/IndividualFounctions/LensGlareFlare.glsl:33` | 12 | 镜头光斑的圆盘形状，属于眩光辅助函数 |
-| `BilinearTexture` | `references/iterationT/shaders/Lib/Programs/Gbuffers/Skytextured_FS.glsl:21` | 10 | 参考实现 10 行，库里没有对应算法 |
-| `skyCloudsFromTexLOD` | `references/Eclipse/shaders/lib/sky_gradient.glsl:210` | 10 | 按距离选择天空贴图层级，需要采样器；库不绑定采样器 |
-| `skyCloudsFromTexBLUR` | `references/Eclipse/shaders/lib/sky_gradient.glsl:195` | 9 | 天空贴图的模糊采样，需要采样器；库不绑定采样器 |
-| `GetDistOffset` | `references/iterationT/shaders/Lib/IndividualFounctions/LensGlareFlare.glsl:10` | 8 | 镜头光斑的距离偏移，属于眩光光斑辅助函数 |
-| `rsi` | `references/Eclipse/shaders/lib/util.glsl:162` | 8 | 球面坐标变换的快捷实现，库用 ogxCircleMap 与 ogxSkyProject 覆盖 |
-| `H` | `references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:48` | 7 | 参考实现 7 行，库里没有对应算法 |
-| `ppss` | `references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:57` | 7 | 参考实现 7 行，库里没有对应算法 |
-| `flare` | `references/iterationT/shaders/Lib/IndividualFounctions/LensGlareFlare.glsl:22` | 7 | 镜头光斑的十字星芒，属于眩光辅助函数 |
-| `ring` | `references/iterationT/shaders/Lib/IndividualFounctions/LensGlareFlare.glsl:51` | 7 | 镜头光斑的圆环，属于眩光辅助函数 |
-| `iqint2` | `references/Eclipse/shaders/lib/end_fog.glsl:45` | 7 | 整数二维坐标的快速取整，属于末地雾的噪声辅助 |
-| `fp10Dither` | `references/Eclipse/shaders/lib/color_dither.glsl:19` | 6 | 十位浮点的量化抖动，库的 ogxDitherFloat 覆盖八位与十六位 |
-| `fp16Dither` | `references/Eclipse/shaders/lib/color_dither.glsl:26` | 6 | 十六位浮点的量化抖动，库的 ogxDitherFixed 覆盖八位 |
-| `D_Walter` | `references/iterationT/shaders/Lib/Utilities.glsl:158` | 5 | Walter 粗糙度重映射，库使用 GGX 的标准 alpha 定义 |
-| `skyCloudsFromTex` | `references/Eclipse/shaders/lib/sky_gradient.glsl:186` | 5 | 读取天空贴图并合成云，需要采样器；库按架构约定不绑定采样器 |
-| `decodeVec2_16` | `references/Eclipse/shaders/lib/specular.glsl:274` | 5 | 把十六位打包值拆成二维法线，库用八位版本 ogxUnpack2x8 |
-| `int8Dither` | `references/Eclipse/shaders/lib/color_dither.glsl:33` | 4 | 八位整数的量化抖动辅助 |
-| `int10Dither` | `references/Eclipse/shaders/lib/color_dither.glsl:38` | 4 | 十位整数的量化抖动辅助 |
-| `int16Dither` | `references/Eclipse/shaders/lib/color_dither.glsl:43` | 4 | 十六位整数的量化抖动辅助 |
-| `Tonemap_Xonk` | `references/Eclipse/shaders/lib/color_transforms.glsl:166` | 4 | Xonk 曲线是一条独立拟合，库里没有同一条曲线 |
-| `R2_samples` | `references/Eclipse/shaders/lib/indirect_lighting_effects.glsl:1` | 4 | 参考实现 4 行，库里没有对应算法 |
-| `CalculateCoCRadius` | `references/iterationT/shaders/Lib/IndividualFounctions/DOF.glsl:3` | 3 | 按深度与焦距求弥散圆半径，库在 ogxCocRadius 里做了同类计算但接口不同 |
-| `w0` | `references/Eclipse/shaders/lib/sky_gradient.glsl:69` | 3 | 参考实现 3 行，库里没有对应算法 |
-| `w1` | `references/Eclipse/shaders/lib/sky_gradient.glsl:74` | 3 | 参考实现 3 行，库里没有对应算法 |
-| `w2` | `references/Eclipse/shaders/lib/sky_gradient.glsl:79` | 3 | 参考实现 3 行，库里没有对应算法 |
-| `w3` | `references/Eclipse/shaders/lib/sky_gradient.glsl:84` | 3 | 参考实现 3 行，库里没有对应算法 |
-| `g0` | `references/Eclipse/shaders/lib/sky_gradient.glsl:89` | 3 | 参考实现 3 行，库里没有对应算法 |
-| `g1` | `references/Eclipse/shaders/lib/sky_gradient.glsl:94` | 3 | 参考实现 3 行，库里没有对应算法 |
-| `h0` | `references/Eclipse/shaders/lib/sky_gradient.glsl:99` | 3 | 参考实现 3 行，库里没有对应算法 |
-| `h1` | `references/Eclipse/shaders/lib/sky_gradient.glsl:104` | 3 | 参考实现 3 行，库里没有对应算法 |
-| `bayer16` | `references/iterationT/shaders/Lib/Utilities.glsl:288` | 1 | 16×16 拜尔矩阵常数，库目前只到 8×8 与 64 级 |
-| `bayer32` | `references/iterationT/shaders/Lib/Utilities.glsl:289` | 1 | 32×32 拜尔矩阵常数，库目前只到 8×8 与 64 级 |
-| `bayer128` | `references/iterationT/shaders/Lib/Utilities.glsl:291` | 1 | 128×128 拜尔矩阵常数，库目前只到 8×8 与 64 级 |
 
 ## 重新生成
 
