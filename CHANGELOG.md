@@ -1,4 +1,20 @@
 # 更新记录
+## 0.6.0
+
+函数级覆盖对照重建，通用库补齐十一项纯计算，测试世界改为接近参考光影的完整场景。
+
+- 新增 `python omni-gfx/build.py parity`：从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数解析，输出 `docs/gfx-functions.md`（UTF-8）与 `.dev/omni-gfx/gaps.txt`。判定顺序为人工对照、同名、宿主符号、缺失；人工对照指向不存在的函数时命令直接失败。
+- 函数级结果：505 个参考函数，已迁入 294、MC 专用 154、缺失 36、调试输出 21；MC 专用逐条写命中的宿主符号，缺失逐条写参考实现行数与原因。上一版把函数级明细标为“需要重新生成”，本版补上。
+- `math` 新增 `ogxSquare`、`ogxLengthSquared`、`ogxSafeInvLength`、`ogxTriangleWave`、`ogxFma2`、`ogxSinCos`、`ogxRotate2`、`ogxRayBoxRange`、`ogxRayBoxIntersection`；`sampling` 新增 `ogxHalton2`、`ogxHalton3`，SPIR-V 探针同步覆盖。
+- 测试世界地形改为 128×128、半格台阶，新增逐角遮蔽与八种材质（草地、泥土、石头、沙子、树叶、树干、草叶、花），并生成树、灌木、草丛、花与散落岩石；顶点数据十三个浮点，含材质编号与风摆权重，阴影阶段用同一套风摆公式。
+- 地形着色按材质给粗糙度、高光与透光，用三层世界坐标噪声扰动法线并调制底色，天空环境光按朝向取立方体贴图。
+- 云密度改为两层尺度加高度剪切、域扭曲、平底圆顶包络与三维侵蚀，噪声调用从十七次降到九次；天空合成给云加空气透视。
+- 水面加强波形坡度、反射按法线偏移、太阳闪光与岸线泡沫，并在远处收敛到天空色后跳过地面雾与向下看的空气透视。
+- 时间抗锯齿接入八相位次像素抖动与历史重投影，遮蔽改成按深度加权的四邻域升采样；场景颜色改用全屏着色器拷进水面目标，修掉海天交界漏像素的黑带。
+- 1280×720 本机 Intel Arc 集显 120 帧：平均 24.1 毫秒、中位 23.8、95 分位 27.9，约 41 帧每秒；截图 `.dev/omni-gfx/world-realistic.png`。
+
+验证：`python omni-gfx/build.py generate`（24 个模块、50 个文件）、`parity`、`check`、`python build.py audit`、`python build.py verify`、`python build.py compile` 通过。未启动 Minecraft；游戏内画面、性能与其他显卡仍未验证。
+
 ## 0.5.7
 
 重建可读的覆盖对照表。

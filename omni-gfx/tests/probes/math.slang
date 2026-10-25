@@ -36,6 +36,9 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     acc += ogxBlackbody(6500.0);  // 黑体色温。
     acc += ogxRayPlaneIntersection(float3(0.0, 1.0, 0.0), l, float3(0.0, 1.0, 0.0));  // 平面求交。
     acc += float3(ogxRaySphereIntersection(float3(0.0), l, 1.0), 0.0);  // 球求交。
+    acc += float3(ogxRayBoxRange(float3(0.0), l, float3(1.0)), ogxRayBoxIntersection(float3(0.0), l, float3(1.0)));  // 包围盒求交。
+    acc += float3(ogxSquare(t), ogxLengthSquared(n), ogxSafeInvLength(n));  // 平方、长度平方与安全倒数长度。
+    acc += float3(ogxTriangleWave(t), ogxFma2(uv, uv, uv).x, ogxSinCos(t).y) + float3(ogxRotate2(uv, t), 0.0);  // 三角波、乘加、正弦余弦与二维旋转。
     acc += ogxRayleighPhase(t) * n + ogxMiePhase(0.6, t) * n;  // 两种相函数。
     acc += ogxInterleavedGradientNoise(uv) + ogxBayer2(uv) + ogxBayer4(uv) + ogxBayer8(uv) + ogxBayer64(uv);  // 抖动。
     OgxTangentBasis basis = ogxTangentBasis(float3(1.0, 0.0, 0.0), float3(0.0, 1.0, 0.0), float2(1.0, 0.0), float2(0.0, 1.0));  // 切线基。

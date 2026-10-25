@@ -61,8 +61,8 @@ OgxAtmosphere worldAtmosphere() // 返回本场景使用的大气参数。
 {
     OgxAtmosphere air = ogxAtmosphereEarth(); // 先取库里的地球常数。
     air.sunIntensity = 8.0; // 比库默认值低，留出高光余量，画面不容易整片过曝。
-    air.mieScattering = vec3(0.55e-3, 0.55e-3, 0.55e-3); // 气溶胶再淡一些，地平线保持淡蓝而不是发白。
-    air.mieG = 0.55; // 前向散射略收，太阳附近的白晕不会糊成一片。
+    air.mieScattering = vec3(0.25e-3, 0.25e-3, 0.25e-3); // 气溶胶淡一些，地平线保持淡蓝而不是一条白带。
+    air.mieG = 0.45; // 前向散射略收，太阳附近的白晕不会糊成一片。
     return air; // 返回可直接使用的参数。
 }
 

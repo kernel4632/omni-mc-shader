@@ -39,11 +39,11 @@ struct OgxCloudLayer
 OgxCloudLayer ogxCloudLayerDefault()
 {
     OgxCloudLayer layer; // 先声明再填写字段。
-    layer.bottom = 0.16; // 云底一百六十米，能从岛上看清云层。
-    layer.top = 0.62; // 云顶六百二十米，厚度四百六十米，云有足够的竖向结构。
+    layer.bottom = 0.75; // 云底七百五十米，从岛上仰望时云在头顶，不压住地平线。
+    layer.top = 2.20; // 云顶两千二百米，厚一千四百多米，积云有足够的竖向结构。
     layer.planetRadius = 6360.0; // 与大气模块使用同一颗行星。
-    layer.coverage = 0.38; // 中等云量，保留清晰的蓝天缝隙。
-    layer.density = 3.2; // 密度倍率，让云在逆光时仍有厚度。
+    layer.coverage = 0.30; // 中等云量，保留清晰的蓝天缝隙。
+    layer.density = 1.5; // 密度倍率：太厚会让整层云变成灰色的天花板。
     layer.detail = 1.0; // 默认开启边缘侵蚀。
     layer.wind = vec3(0.0, 0.0, 0.0); // 风由调用方按时间填写。
     return layer; // 返回可直接修改的默认值。
@@ -61,35 +61,39 @@ float ogxCloudDensity(OgxCloudLayer layer, vec3 position, bool withDetail)
 {
     float curvature = dot(position.xz, position.xz) / (2.0 * layer.planetRadius); // 球面相对切面的高度亏损。
     float altitude = position.y - curvature; // 修正后的真实高度。
-    float height = (altitude - layer.bottom) / max(layer.top - layer.bottom, 1e-4); // 层内归一化高度。
+    // 云底高度用低频噪声起伏几十米：云底因此不是一条笔直的水平线，远看更像真实的积云底。
+    float baseWobble = (ogxFbm2(position.xz * 0.42 + layer.wind.xz, 2) - 0.5) * 0.16;
+    float bottom = layer.bottom + baseWobble; // 本列的云底高度。
+    float height = (altitude - bottom) / max(layer.top - bottom, 1e-4); // 层内归一化高度。
     if (height <= 0.0 || height >= 1.0) // 云层外没有密度。
     {
         return 0.0; // 直接跳过，省掉后面的噪声。
     }
     vec2 wind = layer.wind.xz; // 只取水平风。
-    vec2 warp = vec2(ogxFbm2(position.xz * 1.3 + wind * 1.7 + vec2(3.0, 7.0), 2), // 横向扭曲。
-                         ogxFbm2(position.xz * 1.3 + wind * 1.7 + vec2(11.0, 5.0), 2)) - 0.5; // 纵向扭曲。
-    vec2 cloudUv = position.xz + warp * 1.2; // 扭曲后的平面坐标。
-    cloudUv += vec2(height * 0.35, -height * 0.22); // 随高度剪切，云看起来有斜向层次。
-    // 把采样坐标旋转三十度再取形状：值噪声的格子与坐标轴对齐，直接沿风向铺开会
-    // 看到一排排同向的云块，转一个角度后网格方向与视线、风向都不重合，重复感明显降低。
-    vec2 rotatedUv = vec2(cloudUv.x * 0.8660 + cloudUv.y * 0.5000, -cloudUv.x * 0.5000 + cloudUv.y * 0.8660);
-    float shape2D = ogxFbm2(rotatedUv * 4.2 + wind * 3.0, 4); // 四层二维形状，最细一层约五十米，云团边缘因此不再是一团棉花。
-    float shape3D = ogxFbm3(vec3(rotatedUv.x * 3.2, position.y * 14.0, rotatedUv.y * 3.2) + vec3(wind.x * 2.0, 0.0, wind.y * 2.0), 2); // 三维团块，给云竖向结构。
-    float shape = shape2D * 0.40 + shape3D * 0.60; // 平面大形状与三维团块合在一起。
-    float billow = abs(shape - 0.5) * 2.0; // 离平均越远越鼓，用来做积云那种圆顶。
-    shape += billow * 0.10; // 只加一点点，太多会变成硬边气泡。
-    float coverageNoise = ogxFbm2(position.xz * 0.16 + wind * 2.0, 2); // 几公里尺度的云量变化。
-    float threshold = mix(0.58, 0.30, ogxSaturate(layer.coverage)); // 云量越大，阈值越低。
-    float density = smoothstep(threshold, threshold + 0.09, shape * (0.80 + coverageNoise * 0.45)); // 云块边缘，阈值宽度决定过渡。
-    float vertical = smoothstep(0.0, 0.05, height) * smoothstep(1.0, 0.72, height); // 底部收口更硬，云底因此是平的。
-    density *= vertical * (0.72 + 0.28 * smoothstep(0.10, 0.55, height)); // 中上层更密，云顶看起来更厚实。
-    if (withDetail && layer.detail > 0.0 && density > 0.001) // 只有确实有云时才叠细节。
+    vec2 base = position.xz + wind; // 随风平移的平面坐标。
+    // 域扭曲：一层次级噪声把值噪声的方格打散，云团边缘不再沿着坐标轴。
+    // 只用两层目的是一次密度取样控制在十次噪声以内：云的代价主要在密度函数里。
+    vec2 warp = vec2(ogxFbm2(base * 1.05 + vec2(3.7, 1.9), 2),
+                         ogxFbm2(base * 1.05 + vec2(9.2, 5.4), 2)) - 0.5;
+    vec2 plane = base + warp * 2.4; // 扭曲后的平面坐标。
+    plane += vec2(height * 0.62, -height * 0.38); // 随高度剪切，云有斜向层次而不是竖直柱子。
+    // 两个尺度定形状：六百米级的大团决定云块位置，一百八十米级的中团给圆顶。
+    float large = ogxFbm2(plane * 1.55, 3); // 大团块。
+    float medium = ogxFbm3(vec3(plane * 5.0, altitude * 5.0), 2); // 中团块；纵向用同一频率，否则会出现横向薄片。
+    float shape = large * 0.55 + medium * 0.45; // 合在一起。
+    shape = pow(ogxSaturate(shape), 0.85); // 略微推高亮的部位，圆顶更鼓。
+    float coverageNoise = ogxValueNoise2(base * 0.085); // 几公里尺度的云量变化，一层就够。
+    float threshold = mix(0.62, 0.40, ogxSaturate(layer.coverage)); // 云量越大，阈值越低。
+    threshold -= (coverageNoise - 0.5) * 0.14; // 成片与空窗交替。
+    float density = smoothstep(threshold, threshold + 0.05, shape); // 边缘过渡收窄，云块轮廓更清楚。
+    // 竖向轮廓：底部收得快、顶部慢慢收，形成平底圆顶的积云形状。
+    float vertical = smoothstep(0.0, 0.12, height) * (1.0 - smoothstep(0.55, 1.0, height) * 0.85);
+    density *= vertical; // 竖向包络。
+    if (withDetail && layer.detail > 0.0 && density > 0.002) // 只有确实有云时才叠细节。
     {
-        // 细节噪声保持各方向格距接近：垂直方向与水平方向用同一个尺度，
-        // 否则竖向格距过密，逆光时会出现一丝丝的细线，看起来像划痕。
-        float detailNoise = ogxFbm3(vec3(cloudUv.x * 15.0, position.y * 16.0, cloudUv.y * 15.0) + vec3(wind.x * 8.0, 0.0, wind.y * 8.0), 2); // 七十米级细节。
-        density *= mix(1.0, smoothstep(0.12, 0.62, detailNoise), ogxSaturate(layer.detail) * 0.58); // 侵蚀云边，避免硬块。
+        // 高频侵蚀：三个方向同尺度，否则竖向格距过密，逆光时会出现一丝丝划痕。
+        float erosion = ogxFbm3(vec3(plane * 14.0, altitude * 14.0) + vec3(wind * 6.0, 0.0), 1);
+        density *= mix(1.0, smoothstep(0.18, 0.68, erosion), ogxSaturate(layer.detail) * 0.72); // 只在边缘削薄。
     }
     return ogxSaturate(density) * layer.density; // 乘以密度倍率后返回。
 }
@@ -97,10 +101,10 @@ float ogxCloudDensity(OgxCloudLayer layer, vec3 position, bool withDetail)
 // 朝太阳方向在云里短步进，估计还有多少阳光能到当前点。
 float ogxCloudLight(OgxCloudLayer layer, vec3 position, vec3 sunDirection, int steps)
 {
-    const int maxSteps = 5; // 固定循环上限。
+    const int maxSteps = 6; // 固定循环上限。
     int count = min(max(steps, 1), maxSteps); // 调用方可以降低质量。
     float opticalDepth = 0.0; // 沿阳光累积的云密度。
-    float stepLength = 0.015; // 起始步长，公里。
+    float stepLength = 0.012; // 起始步长，公里。
     vec3 samplePosition = position; // 从当前点出发。
     for (int i = 0; i < maxSteps; i++) // 逐步朝太阳前进。
     {
@@ -110,9 +114,13 @@ float ogxCloudLight(OgxCloudLayer layer, vec3 position, vec3 sunDirection, int s
         }
         samplePosition += sunDirection * stepLength; // 前进一段。
         opticalDepth += ogxCloudDensity(layer, samplePosition, false) * stepLength; // 累加路径上的云。
-        stepLength *= 1.7; // 越远步长越大，覆盖更厚的云。
+        stepLength *= 1.75; // 越远步长越大，覆盖更厚的云。
     }
-    return exp(-opticalDepth * 12.0); // 比尔-朗伯透射率。
+    float direct = exp(-opticalDepth * 11.0); // 直接的比尔-朗伯透射率。
+    // 多次散射：光子会在云滴之间反复弹射，真实的厚云背光面是灰色而不是黑色。
+    // 用一个更慢衰减的指数近似这部分能量，系数偏小，只负责把暗部托起来。
+    float multiple = exp(-opticalDepth * 2.2) * 0.34;
+    return direct + multiple; // 两者相加，上限交给调用方压。
 }
 
 // 沿视线步进云层：返回云的普通颜色与覆盖率，供天空合成。
@@ -143,7 +151,7 @@ vec4 ogxCloudMarch(OgxCloudLayer layer, vec3 camera, vec3 viewDirection, vec3 su
     {
         return vec4(0.0, 0.0, 0.0, 0.0); // 完全透明。
     }
-    endDistance = min(endDistance, 4.0); // 远处云淡出，避免无限步进。
+    endDistance = min(endDistance, 2.8); // 远处云淡出：步长在掠射方向拉得很长，再远也只会被空气透视洗掉。
     const int maxSteps = 32; // 固定循环上限。
     int count = min(max(steps, 4), maxSteps); // 至少四步，最多三十二步。
     float stepLength = (endDistance - startDistance) / float(count); // 每步长度。
@@ -151,7 +159,10 @@ vec4 ogxCloudMarch(OgxCloudLayer layer, vec3 camera, vec3 viewDirection, vec3 su
     vec3 scattered = vec3(0.0); // 累积散射光。
     float transmittance = 1.0; // 还剩多少背景光能穿过。
     float nu = dot(viewDirection, sunDirection); // 视线与阳光夹角。
-    float phase = ogxMiePhase(0.65, nu); // 前向散射相位，逆光时云边更亮。
+    // 双瓣相函数：前向散射给银边，瑞利项托住侧光。前向峰值必须夹住，
+    // 否则正对低阳的云会被推到几十倍亮度，泛光一开就成一片白斑。
+    float phase = ogxMiePhase(0.62, nu) * 0.85 + ogxRayleighPhase(nu) * 0.30;
+    phase = min(phase, 3.2);
     for (int i = 0; i < maxSteps; i++) // 逐步穿过云层。
     {
         if (i >= count) // 超过质量设置就停止。
@@ -162,15 +173,15 @@ vec4 ogxCloudMarch(OgxCloudLayer layer, vec3 camera, vec3 viewDirection, vec3 su
         float density = ogxCloudDensity(layer, position, true); // 当前密度。
         if (density > 0.002) // 空区域跳过光照步进。
         {
-            float light = ogxCloudLight(layer, position, sunDirection, 3); // 朝太阳的透射率。
-            light = mix(light, 0.55, 0.35); // 多次散射近似：真正的云背光面不会全黑。
+            float light = min(ogxCloudLight(layer, position, sunDirection, 4), 1.20); // 朝太阳的透射率，厚云也保留多次散射。
             float height = ogxSaturate((position.y - layer.bottom) / max(layer.top - layer.bottom, 1e-4)); // 层内高度。
-            float powder = 1.0 - exp(-density * 6.0); // 薄处更亮的粉末效应。
-            vec3 sun = sunColor * light * (phase * 1.1 + 0.55) * (0.35 + 0.65 * powder); // 太阳直射。
+            // 粉末效应：正对阳光看薄云边缘时，能看到云滴把光散回来，边缘因此发亮。
+            float powder = 1.0 - exp(-density * 7.0);
+            vec3 sun = sunColor * light * (phase * 0.95 + 0.50) * (0.40 + 0.60 * powder); // 太阳直射。
             // 环境光按高度与密度变化：云底比云顶暗，薄处比厚处亮。
             // 强度要足够，否则背光面会发灰发脏，看起来像一层烟。
-            vec3 ambient = skyColor * (0.30 + 0.30 * (1.0 - ogxSaturate(density))) * (0.45 + 0.55 * height); // 天空环境光。
-            float extinction = exp(-density * stepLength * 24.0); // 这一段的透过率。
+            vec3 ambient = skyColor * (0.26 + 0.34 * (1.0 - ogxSaturate(density * 0.5))) * (0.42 + 0.58 * height); // 天空环境光。
+            float extinction = exp(-density * stepLength * 26.0); // 这一段的透过率。
             scattered += (sun + ambient) * transmittance * (1.0 - extinction); // 按剩余透过率累加。
             transmittance *= extinction; // 更新剩余透过率。
         }

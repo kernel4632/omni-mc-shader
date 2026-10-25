@@ -118,6 +118,7 @@ void main()
     vec3 reflection = traceReflection(vWorldPosition + normal * 0.05, reflectionDirection, confidence); // 世界空间追踪。
     if (confidence <= 0.001) // 没命中时退回天空，远处与掠射角不会出现空洞。
     {
+        reflectionDirection.y = max(reflectionDirection.y, 0.02); // 压到水平面以上，避免采到天空盒底部的黑面。
         reflection = textureLod(uSky, reflectionDirection, 2.0).rgb; // 天空立方体贴图。
     }
     vec3 viewPos = ogxReflectionViewPos(gl_FragCoord.xy / uResolution, gl_FragCoord.z, uProjectionInverse); // 视空间位置。

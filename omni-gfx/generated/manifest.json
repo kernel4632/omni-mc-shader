@@ -5,11 +5,11 @@
     {
       "module": "math",
       "source": "omni-gfx/src/math.slang",
-      "sourceSha256": "d86a185c7a625dcdbf995ffa6ff19bd25886a5dcc8f816e88bc207601acbb72d",
+      "sourceSha256": "0f97d28e703e05d637362581cf85ddbd252017005e51ba9d9c43fa6f30575608",
       "shader": "shaders/omni-gfx/math.glsl",
       "generated": "omni-gfx/generated/glsl/math.glsl",
-      "glslSha256": "98c2b5b3bc938bd3b2539ceef86bf381142d5e8cf1f8d1c22ebf53735f4fa614",
-      "glslLines": 547
+      "glslSha256": "060d0f0413573433ba91dbec5411daf048f89eaf45cebd1fc88cc68cffb3e2b8",
+      "glslLines": 596
     },
     {
       "module": "color",
@@ -23,11 +23,11 @@
     {
       "module": "sampling",
       "source": "omni-gfx/src/sampling.slang",
-      "sourceSha256": "1a4ad0f3384c566353e11eccbc55f565d224c96e45527167f5f963fc265a2849",
+      "sourceSha256": "4c9b37307d5427a68472a9071232d3607c6ab2d730307f43018949ec9fb7b3f9",
       "shader": "shaders/omni-gfx/sampling.glsl",
       "generated": "omni-gfx/generated/glsl/sampling.glsl",
-      "glslSha256": "2a092048ee3c9d7e1410a0793d3b3b113bb100531a44d2bd72881e2a614d669e",
-      "glslLines": 145
+      "glslSha256": "7d3db2dad6106b67bba4ac7e26daf64138531632ab9c2a9d351cfaa75467243a",
+      "glslLines": 175
     },
     {
       "module": "noise",
@@ -50,11 +50,11 @@
     {
       "module": "cloud",
       "source": "omni-gfx/src/cloud.slang",
-      "sourceSha256": "aae8f7c23b1bd1b2982d701d12692691eeb1072d47043c9001ff6591fedf902a",
+      "sourceSha256": "fd13ac482ccdb4e378fa34a1e7415c945ec79f4992ba9f9bb64039306736fa5b",
       "shader": "shaders/omni-gfx/cloud.glsl",
       "generated": "omni-gfx/generated/glsl/cloud.glsl",
-      "glslSha256": "6596c32f0d63ba098d5814a510e2459ee01906f9ed4c33836ad841d3cf8745fc",
-      "glslLines": 413
+      "glslSha256": "51ffb1bfd13102a3594dc396e6a2b9600b1f966624389abe4b939b5193995c2c",
+      "glslLines": 424
     },
     {
       "module": "water",

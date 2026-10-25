@@ -37,33 +37,41 @@ import camera  # 相机与矩阵。
 import gl  # OpenGL 小工具。
 import png  # 无依赖图片写入。
 import terrain  # 高度图与网格。
+import vegetation  # 树、草叶、花与散落岩石。
 
-TERRAIN_SIZE = 96  # 地形边长，单位为方块。
+TERRAIN_SIZE = 128  # 地形边长，单位为方块。
 CASCADE_COUNT = 3  # 方向光级联数，近景一级、整岛一级、远景一级。
 CASCADE_SIZE = 1024  # 每级阴影贴图边长，三级合计与原来一张两千零四十八相当。
-CASCADE_EXTENTS = (40.0, 80.0, 160.0)  # 每级正交视锥的半边长，米。
-CASCADE_SPLITS = (38.0, 95.0, 260.0)  # 按视深度选级的分界，米。
+CASCADE_EXTENTS = (46.0, 92.0, 184.0)  # 每级正交视锥的半边长，米。
+CASCADE_SPLITS = (42.0, 105.0, 280.0)  # 按视深度选级的分界，米。
 CASCADE_BLEND = 8.0  # 级联交界的过渡宽度，米。
-SKY_CUBE_SIZE = 160  # 反射立方体贴图的边长，越大云与太阳高光越清楚。
-WATER_RADIUS = 80000.0  # 水面半径，米；远大于肉眼地平线，天与海的接缝因此不会露出黑带。
-WATER_RINGS = 88  # 水面径向分格，越靠外格越宽。
-WATER_SEGMENTS = 144  # 水面环向分格，决定岸边弧线的圆滑程度。
-NEAR = 0.2  # 投影近平面。
-FAR = 120000.0  # 投影远平面要盖住水面远端，否则远处海面会被裁掉。
-DEFAULT_SUN = [0.58, 0.42, 0.32]  # 默认太阳方向，侧上方来光，地形有清楚的投影和受光面。
+SKY_CUBE_SIZE = 128  # 反射立方体贴图的边长；反射本身会被波纹打散，一百二十八已经够。
+WATER_RADIUS = 1800.0  # 水面半径，米；肉眼地平线在五公里内，两万米足够，还能保住深度精度。
+WATER_RINGS = 96  # 水面径向分格，越靠外格越宽。
+WATER_SEGMENTS = 160  # 水面环向分格，决定岸边弧线的圆滑程度。
+NEAR = 0.3  # 投影近平面；再小会浪费远处的深度精度，岸边容易与水面闪烁。
+FAR = 30000.0  # 投影远平面要盖住水面远端，太远会牺牲深度精度。
+DEFAULT_SUN = [0.72, 0.52, 0.46]  # 默认太阳方向：右前方三十一度，岛正面受光，树影落在左侧地面上。
+DEFAULT_CAMERA = [126.0, 31.0, 142.0]  # 固定机位：岛外水面上方一百米，前景留下反光水面与倒影。
+DEFAULT_TARGET = [58.0, 16.0, 58.0]  # 看向岛的中心偏上，树线与天空各占一半。
 BLUE_NOISE_SIZE = 64  # 蓝噪声贴图边长，必须与生成库里的平铺周期一致。
 LUMINANCE_SIZE = (64, 36)  # 曝光统计第一级的尺寸，十六比九的小图。
 BLOOM_SIZE = (320, 180)  # 泛光最细一级的尺寸，四分之一分辨率。
 BLOOM_COARSE_SIZE = (160, 90)  # 泛光最粗一级的尺寸。
-GI_BLEND = 0.25  # 遮蔽时间累积里本帧的权重，其余来自历史。
+GI_BLEND = 0.20  # 遮蔽时间累积里本帧的权重，其余来自历史。
 SKY_STEPS = 6  # 半分辨率天空的大气积分段数。
-CLOUD_STEPS = 12  # 半分辨率体积云的沿视线步数，时间累积会把台阶抹平。
+CLOUD_STEPS = 14  # 半分辨率体积云的沿视线步数，时间累积会把台阶抹平。
 CUBE_SKY_STEPS = 4  # 反射立方体贴图的大气段数，反射看不出这么多细节。
-CUBE_CLOUD_STEPS = 8  # 反射立方体贴图的云步数。
-SKY_HISTORY_BLEND = 0.10  # 时间累积里本帧样本的权重，其余来自历史。
-SUN_STRENGTH = 3.2  # 太阳辐照度倍率，地面与水面使用。
-CLOUD_SUN_STRENGTH = 1.8  # 云的太阳强度比地面低，逆光云才不会整片死白。
-SKY_STRENGTH = 0.75  # 天空环境光的整体倍率。
+CUBE_CLOUD_STEPS = 4  # 反射立方体贴图的云步数，反射里只看到模糊团块。
+SKY_HISTORY_BLEND = 0.14  # 时间累积里本帧样本的权重，其余来自历史。
+SUN_STRENGTH = 2.8  # 太阳辐照度倍率，地面与水面使用；再高叶绿会被压成黄白。
+CLOUD_SUN_STRENGTH = 1.35  # 云的太阳强度比地面低，逆光云才不会整片死白。
+SKY_STRENGTH = 0.62  # 天空环境光的整体倍率。
+WIND_STRENGTH = 1.0  # 风摆幅度倍率，零可以完全关掉动画。
+WETNESS = 0.85  # 近水沙地的湿润程度，影响反光与颜色深浅。
+WATER_LEVEL = terrain.SEA_LEVEL + 0.035  # 水面比整格沙滩高一点，避免和方块顶面同高产生闪烁。
+JITTER_SEQUENCE = ((0.5, 0.5), (0.25, 0.75), (0.75, 0.25), (0.125, 0.375), (0.625, 0.875),
+                   (0.375, 0.125), (0.875, 0.625), (0.0625, 0.5625))  # 八相位的次像素抖动，按帧循环。
 
 
 def make_program(name: str, vertex: str, fragment: str) -> int:
@@ -281,9 +289,12 @@ class World:
         self.bloom_program = make_program("泛光", "fullscreen.vert", "bloom.frag")
         self.exposure_program = make_program("曝光", "fullscreen.vert", "exposure.frag")
         self.post_program = make_program("后期", "fullscreen.vert", "post.frag")
+        self.copy_program = make_program("场景拷贝", "fullscreen.vert", "copy.frag")  # 水面之前复制场景颜色。
         heights = terrain.heightmap(TERRAIN_SIZE)  # 固定种子，画面可重复。
         vertices, self.terrain_triangles = terrain.build_mesh(heights, TERRAIN_SIZE)  # 顶面与侧墙。
-        self.terrain_vao, self.terrain_vbo = upload_mesh(vertices, [(0, 3, 0), (1, 3, 12), (2, 3, 24), (3, 1, 36)])
+        self.terrain_triangles += vegetation.add_vegetation(vertices, heights, TERRAIN_SIZE)  # 树、草、花与石块。
+        self.terrain_vao, self.terrain_vbo = upload_mesh(  # 位置、法线、颜色、遮蔽、材质、风摆。
+            vertices, [(0, 3, 0), (1, 3, 12), (2, 3, 24), (3, 1, 36), (4, 1, 40), (5, 1, 44)])
         water_vertices, self.water_triangles = terrain.water_disc(WATER_RADIUS, WATER_RINGS, WATER_SEGMENTS)  # 一直铺到地平线之外。
         self.water_vao, self.water_vbo = upload_mesh(water_vertices, [(0, 2, 0)])
         self.blue_noise = make_blue_noise()  # 云步进与雾的抖动来源。
@@ -329,8 +340,9 @@ class World:
         self.taa_index = 0  # 当前可读的抗锯齿历史。
         self.velocity = [0.0, 0.0]  # 整屏位移，静止机位下为零。
         self.prev_basis = None  # 上一帧相机基向量，重投影用。
-        self.camera = camera.Camera([48.0, 17.0, 140.0], fov=55.0)  # 初始相机，站在岛外一百米的水面上方。
-        self.camera.look_at([48.0, 16.0, 40.0])  # 略微平视，岛与它的倒影都进入画面。
+        self.jitter = (0.0, 0.0)  # 本帧次像素抖动，单位是像素。
+        self.camera = camera.Camera(list(DEFAULT_CAMERA), fov=55.0)  # 初始相机，站在岛外水面上方。
+        self.camera.look_at(list(DEFAULT_TARGET))  # 略微俯视，岛、树线与倒影都进入画面。
         self.light_matrices = self.build_light_matrix()  # 三级方向光矩阵只与太阳有关，建一次即可。
         self.previous_view_projection = self.view_projection()  # 上一帧视图投影，第一帧用当前值。
         self.display_color = self.water_color  # 抗锯齿前的画面来源，第一帧先指向水面结果。
@@ -347,13 +359,13 @@ class World:
         三级都以岛中心为原点：测试世界里唯一的投影物就是这座岛，跟着相机移动不会带来额外细节。
         """
         center = [TERRAIN_SIZE * 0.5, 8.0, TERRAIN_SIZE * 0.5]  # 阴影覆盖的中心。
-        eye = [center[i] + self.sun[i] * 260.0 for i in range(3)]  # 光源放在太阳方向两百六十米外。
+        eye = [center[i] + self.sun[i] * 300.0 for i in range(3)]  # 光源放在太阳方向三百米外。
         light_camera = camera.Camera(eye)  # 借相机算视图矩阵。
         light_camera.look_at(center)  # 看向岛中心。
         view = light_camera.view_matrix()  # 光源视图矩阵，三级共用。
         matrices = []  # 每级一个视图投影矩阵。
         for extent in CASCADE_EXTENTS:  # 逐级放大正交视锥。
-            projection = orthographic(-extent, extent, -extent, extent, 200.0, 320.0)  # 深度范围只要能包住岛。
+            projection = orthographic(-extent, extent, -extent, extent, 1.0, 700.0)  # 深度范围要包住整岛，包括山脊与树冠。
             matrices.append(multiply(projection, view))  # 投影乘视图。
         return matrices  # 顺序从近到远。
 
@@ -363,10 +375,26 @@ class World:
                 math.tan(math.radians(self.camera.fov) * 0.5), self.width / self.height)
 
     def view_projection(self) -> list[float]:
-        """返回当前相机的视图投影矩阵，用来给下一帧做屏幕重投影。"""
+        """返回当前相机带次像素抖动的视图投影矩阵，用来给下一帧做屏幕重投影。"""
         view = self.camera.view_matrix()  # 视图矩阵。
-        projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 投影矩阵。
+        projection = self.projection()  # 带抖动的投影矩阵。
         return multiply(projection, view)  # 先视图后投影。
+
+    def projection(self) -> list[float]:
+        """返回带次像素抖动的投影矩阵。
+
+        为什么要在投影矩阵里抖动：时间抗锯齿需要每一帧的采样点落在像素内的不同位置，
+        历史帧叠起来才能把边缘锯齿抹平。抖动只加在横向与纵向的平移项上，
+        深度的解析反解只读第三、四列，因此不受影响。
+        """
+        projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 基础投影。
+        projection[8] += self.jitter[0] * 2.0 / self.width  # 次像素换算成裁剪空间平移。
+        projection[9] += self.jitter[1] * 2.0 / self.height  # 纵向同理。
+        return projection  # 可直接上传。
+
+    def jitter_uv(self) -> list[float]:
+        """返回本帧抖动在纹理坐标上的偏移，供还原视空间位置时减掉。"""
+        return [self.jitter[0] / self.width, self.jitter[1] / self.height]  # 半像素以内的偏移。
 
     def install_input(self) -> None:
         """把窗口设为可见并安装键盘与鼠标回调。"""
@@ -397,13 +425,14 @@ class World:
         self.last_mouse = (x, y)
         self.camera.turn(delta_x, delta_y)  # 俯仰限制在相机内部处理。
 
-    def render_shadow(self) -> None:
+    def render_shadow(self, scene_time: float) -> None:
         """从太阳方向渲染三级地形深度，得到方向光级联阴影贴图。"""
         GL.glEnable(GL.GL_DEPTH_TEST)  # 深度测试决定最终写入哪一个深度。
         GL.glDepthMask(GL.GL_TRUE)  # 允许写深度。
         GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)  # 抬一点深度，减少自遮挡条纹。
         GL.glPolygonOffset(2.0, 4.0)  # 斜率与常量偏置同时生效。
         GL.glUseProgram(self.shadow_program)  # 切到阴影程序。
+        set_uniforms(self.shadow_program, {"uTime": scene_time, "uWind": WIND_STRENGTH})  # 树冠摆动要与主画面一致。
         GL.glBindVertexArray(self.terrain_vao)  # 复用地形顶点数据。
         for index, matrix in enumerate(self.light_matrices):  # 每级画一次。
             GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.shadow_fbos[index])  # 只写深度。
@@ -511,14 +540,15 @@ class World:
         # 背景的法线附件也要有定义值，否则后面的遮蔽会读到未初始化的内容。
         GL.glUseProgram(self.terrain_program)  # 切到地形程序。
         view = self.camera.view_matrix()  # 视图矩阵。
-        projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 投影矩阵。
+        projection = self.projection()  # 带次像素抖动的投影矩阵，时间抗锯齿靠它采样不同位置。
         view_projection = multiply(projection, view)  # 视图投影，调试与拾取要用。
         set_uniforms(self.terrain_program, {
             "uViewProjection": view_projection, "uCameraPos": self.camera.position,
             "uSunDirection": self.sun, "uCascadeSplits": list(CASCADE_SPLITS),
-            "uCascadeBlend": CASCADE_BLEND, "uWaterLevel": terrain.SEA_LEVEL, "uTime": scene_time, "uFrame": float(frame),
+            "uCascadeBlend": CASCADE_BLEND, "uWaterLevel": WATER_LEVEL, "uTime": scene_time, "uFrame": float(frame),
             "uCloudCover": self.cloud_cover, "uSunStrength": SUN_STRENGTH, "uSkyStrength": SKY_STRENGTH,
-        })  # 光照、级联与雾的参数。
+            "uWind": WIND_STRENGTH, "uWetness": WETNESS,
+        })  # 光照、级联、风与雾的参数。
         for index in range(CASCADE_COUNT):  # 三级阴影矩阵与贴图逐级绑定。
             set_uniform(self.terrain_program, f"uShadowMatrix{index}", self.light_matrices[index])
             GL.glActiveTexture(GL.GL_TEXTURE0 + index)  # 三级各占一个纹理单元。
@@ -538,11 +568,12 @@ class World:
         GL.glViewport(0, 0, self.half_width, self.half_height)  # 半分辨率，追踪成本降到四分之一。
         GL.glDisable(GL.GL_DEPTH_TEST)  # 反射目标是单层水面，不需要深度测试，也不读上一帧残留的深度。
         GL.glDepthMask(GL.GL_FALSE)  # 不写深度。
+        GL.glClearColor(0.0, 0.0, 0.0, 0.0)  # 反射目标清成零，未写到的像素可信度为零，水面会退回天空反射。
         GL.glClear(GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT)  # 每帧清空三张附件，避免读到上一帧内容。
         GL.glDisable(GL.GL_BLEND)  # 反射阶段直接覆盖，不混合。
         GL.glUseProgram(self.reflection_program)  # 反射程序。
         view = self.camera.view_matrix()  # 视图矩阵。
-        projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 投影矩阵。
+        projection = self.projection()  # 与场景同一份抖动投影，命中点才能对到同一个像素。
         inverse = perspective_inverse(self.camera.fov, self.width / self.height, NEAR, FAR)  # 逆投影。
         set_uniforms(self.reflection_program, {
             "uViewProjection": multiply(projection, view), "uProjectionInverse": inverse,
@@ -593,14 +624,14 @@ class World:
         GL.glDisable(GL.GL_DEPTH_TEST)  # 二维处理。
         GL.glUseProgram(self.gi_program)  # 遮蔽程序。
         forward, right, up, tan_half, aspect = self.basis()  # 相机基向量。
-        projection = self.camera.projection_matrix(aspect, NEAR, FAR)  # 投影矩阵。
+        projection = self.projection()  # 带抖动的投影矩阵。
         inverse = perspective_inverse(self.camera.fov, aspect, NEAR, FAR)  # 逆投影。
         blend = 1.0 if frame == 0 else GI_BLEND  # 第一帧没有历史，直接采用本帧。
         set_uniforms(self.gi_program, {
             "uResolution": [float(self.half_width), float(self.half_height)],
             "uFullResolution": [float(self.width), float(self.height)],
             "uProjection": projection, "uProjectionInverse": inverse, "uForward": forward,
-            "uAspect": aspect, "uFrame": float(frame), "uBlend": blend,
+            "uAspect": aspect, "uFrame": float(frame), "uBlend": blend, "uJitter": self.jitter_uv(),
         })  # 遮蔽参数。
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 场景深度。
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_depth)
@@ -634,7 +665,8 @@ class World:
             "uProjectionInverse": inverse, "uBlend": blend, "uFar": FAR,
             "uPreviousViewProjection": self.previous_view_projection,
             "uCameraPos": self.camera.position, "uRight": right, "uUp": up, "uForward": forward,
-        })  # 抗锯齿参数与重投影用的相机基向量。
+            "uJitter": self.jitter_uv(),
+        })  # 抗锯齿参数、重投影用的相机基向量与次像素抖动。
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 本帧颜色。
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.water_color)
         GL.glUniform1i(location(self.taa_program, "uCurrent"), 0)
@@ -642,8 +674,8 @@ class World:
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.taa_color[self.taa_index])
         GL.glUniform1i(location(self.taa_program, "uHistory"), 1)
         GL.glActiveTexture(GL.GL_TEXTURE2)  # 本帧深度。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.water_depth)
-        GL.glUniform1i(location(self.taa_program, "uDepth"), 2)
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_depth)
+        GL.glUniform1i(location(self.taa_program, "uDepth"), 2)  # 水面不写深度，直接用场景深度。
         GL.glActiveTexture(GL.GL_TEXTURE3)  # 遮蔽图。
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.gi_color[self.gi_index])
         GL.glUniform1i(location(self.taa_program, "uAO"), 3)
@@ -691,24 +723,34 @@ class World:
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)
 
     def render_water(self, frame: int, scene_time: float) -> None:
-        """把场景复制到水面目标，再叠加水面，避免读写的画面是同一张。"""
-        GL.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, self.scene_fbo)  # 读取天空与地形。
+        """把场景深度与颜色拷进水面目标，再叠加水面，避免读写的画面是同一张。"""
+        GL.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, self.scene_fbo)  # 读取场景深度。
         GL.glBindFramebuffer(GL.GL_DRAW_FRAMEBUFFER, self.water_fbo)  # 写到水面目标。
         GL.glBlitFramebuffer(0, 0, self.width, self.height, 0, 0, self.width, self.height,
-                             GL.GL_COLOR_BUFFER_BIT | GL.GL_DEPTH_BUFFER_BIT, GL.GL_NEAREST)  # 颜色与深度一起复制。
+                             GL.GL_DEPTH_BUFFER_BIT, GL.GL_NEAREST)  # 只拷深度，水面靠它被地形遮挡。
         GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.water_fbo)  # 之后都在水面目标上绘制。
         GL.glViewport(0, 0, self.width, self.height)  # 完整分辨率。
+        GL.glDisable(GL.GL_DEPTH_TEST)  # 拷贝阶段不参与深度。
+        GL.glDepthMask(GL.GL_FALSE)  # 拷贝不写深度。
+        GL.glDisable(GL.GL_BLEND)  # 直接覆盖。
+        GL.glUseProgram(self.copy_program)  # 拷贝程序。
+        set_uniforms(self.copy_program, {"uResolution": [float(self.width), float(self.height)]})  # 目标尺寸。
+        GL.glActiveTexture(GL.GL_TEXTURE0)  # 零号单元放场景颜色。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.scene_color)
+        GL.glUniform1i(location(self.copy_program, "uSource"), 0)
+        GL.glBindVertexArray(self.fullscreen)  # 全屏三角形。
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 一次写满整个目标。
         GL.glEnable(GL.GL_DEPTH_TEST)  # 水面仍要被地形遮挡。
         GL.glDepthMask(GL.GL_FALSE)  # 水面不写深度，避免遮住后面的水面。
-        GL.glEnable(GL.GL_BLEND)  # 半透明水面与场景混合。
-        GL.glBlendFunc(GL.GL_SRC_ALPHA, GL.GL_ONE_MINUS_SRC_ALPHA)  # 标准透明度混合。
+        GL.glEnable(GL.GL_BLEND)  # 水面完全不透明：折射色已经在着色器里取过，再混一次会重复计亮度。
+        GL.glBlendFuncSeparate(GL.GL_ONE, GL.GL_ZERO, GL.GL_ONE, GL.GL_ZERO)  # 颜色直接覆盖，透明通道写成水面标记零。
         GL.glUseProgram(self.water_program)  # 切到水面程序。
         view = self.camera.view_matrix()  # 视图矩阵。
         projection = self.camera.projection_matrix(self.width / self.height, NEAR, FAR)  # 投影矩阵。
         set_uniforms(self.water_program, {
             "uViewProjection": multiply(projection, view), "uCameraPos": self.camera.position,
             "uSunDirection": self.sun, "uTime": scene_time, "uFrame": float(frame),
-            "uWaterLevel": terrain.SEA_LEVEL, "uResolution": [float(self.width), float(self.height)],
+            "uWaterLevel": WATER_LEVEL, "uResolution": [float(self.width), float(self.height)],
             "uNear": NEAR, "uFar": FAR, "uSunStrength": SUN_STRENGTH,
         })  # 水面参数。
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 零号单元放天空。
@@ -776,7 +818,9 @@ class World:
 
     def draw(self, frame: int, scene_time: float) -> None:
         """按固定顺序绘制一帧：阴影、反射、天空、场景、遮蔽、水面、抗锯齿、泛光、曝光、后期。"""
-        self.render_shadow()  # 三级方向光阴影贴图。
+        pattern = JITTER_SEQUENCE[frame % len(JITTER_SEQUENCE)]  # 八相位循环，覆盖像素内的不同位置。
+        self.jitter = (pattern[0] - 0.5, pattern[1] - 0.5)  # 换算成像素偏移，最大半像素。
+        self.render_shadow(scene_time)  # 三级方向光阴影贴图。
         self.render_sky_cube(frame, scene_time)  # 反射与环境光用的天空。
         self.render_sky_sample(frame, scene_time)  # 半分辨率天空与云。
         self.accumulate_sky(frame)  # 时间累积。
@@ -789,7 +833,7 @@ class World:
         self.render_bloom()  # 两级泛光。
         self.render_exposure()  # 曝光统计。
         self.render_post(frame, scene_time)  # 输出到窗口。
-        self.previous_view_projection = self.view_projection()  # 下一帧重投影使用。
+        self.previous_view_projection = self.view_projection()  # 下一帧重投影使用，含本帧抖动。
         forward, right, up, tan_half, aspect = self.basis()  # 记录本帧基向量。
         self.prev_basis = (forward, right, up, tan_half, aspect)  # 下一帧天空累积使用。
 
@@ -819,7 +863,7 @@ class World:
         for program in (self.sky_program, self.accum_program, self.composite_program, self.terrain_program,
                         self.shadow_program, self.water_program, self.reflection_program, self.denoise_program,
                         self.gi_program, self.taa_program, self.bloom_program, self.exposure_program,
-                        self.post_program):
+                        self.post_program, self.copy_program):
             GL.glDeleteProgram(program)  # 逐个删除程序。
         GL.glDeleteVertexArrays(3, [self.fullscreen, self.terrain_vao, self.water_vao])  # 顶点数组。
         GL.glDeleteBuffers(2, [self.terrain_vbo, self.water_vbo])  # 顶点缓冲。
@@ -929,12 +973,12 @@ def main() -> None:
     parser.add_argument("--screenshot", default=str(ROOT / ".dev/omni-gfx/world-complete.png"), help="截图路径")
     parser.add_argument("--perf", default=str(ROOT / ".dev/omni-gfx/perf-complete.json"), help="性能记录路径")
     parser.add_argument("--window", action="store_true", help="打开可交互窗口")
-    parser.add_argument("--camera", type=float, nargs=3, default=[48.0, 17.0, 140.0], help="相机位置")
-    parser.add_argument("--target", type=float, nargs=3, default=[48.0, 16.0, 40.0], help="看向的目标")
+    parser.add_argument("--camera", type=float, nargs=3, default=DEFAULT_CAMERA, help="相机位置")
+    parser.add_argument("--target", type=float, nargs=3, default=DEFAULT_TARGET, help="看向的目标")
     parser.add_argument("--sun", type=float, nargs=3, default=DEFAULT_SUN, help="太阳方向")
     parser.add_argument("--time", type=float, default=12.0, help="固定场景时间")
-    parser.add_argument("--cloud-cover", type=float, default=0.40, help="云量零到一")
-    parser.add_argument("--exposure-key", type=float, default=0.22, help="自动曝光的目标亮度")
+    parser.add_argument("--cloud-cover", type=float, default=0.52, help="云量零到一")
+    parser.add_argument("--exposure-key", type=float, default=0.30, help="自动曝光的目标亮度")
     parser.add_argument("--tonemap", type=int, default=0, choices=(0, 1, 2), help="零 ACES，一 AgX，二无压缩")
     args = parser.parse_args()  # 解析失败时参数解析器自行退出。
     run(args)

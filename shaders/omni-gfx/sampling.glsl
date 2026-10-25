@@ -141,5 +141,35 @@ vec2 ogxTaaJitter(int frame, bool responsive)
     if (index == 6) return vec2(3.0, 7.0) / 8.0; // 第七点。
     return vec2(7.0, 7.0) / 8.0; // 第八点。
 }
+// 两个互质基数：二与三，和参考包的低差异序列一致。
+// 哈尔顿序列：把序号写成给定基数的小数，逐位排在小数点之后，得到低差异采样。
+// 用途与蓝噪声相同，但不需要贴图；二分与三分基数的二维版本分布最均匀。
+float ogxHalton2(int index)
+{
+    float result = 0.0;
+    float fraction = 0.5;
+    int i = max(index, 1);
+    while (i > 0)
+    {
+        result += fraction * float(i & 1);
+        i >>= 1;
+        fraction *= 0.5;
+    }
+    return result;
+}
+
+float ogxHalton3(int index)
+{
+    float result = 0.0;
+    float fraction = 1.0 / 3.0;
+    int i = max(index, 1);
+    while (i > 0)
+    {
+        result += fraction * float(i % 3);
+        i /= 3;
+        fraction /= 3.0;
+    }
+    return result;
+}
 
 #endif

@@ -2,7 +2,9 @@
 
 Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Minecraft 光影可直接 `#include` 的 GLSL 330，并用同一份源生成 SPIR-V 作为编译验证产物。
 
-当前完成阶段 0–3 的核心部分：构建链、`math` / `color` / `sampling` 三个基础模块，以及 `noise` / `atmosphere` / `cloud` / `water` / `fog` 五个效果模块。测试世界已经改为直接使用生成的 GLSL，能在不启动 Minecraft 的情况下出图、截图和记录帧时；体积云用半分辨率加时间累积，地形有方向光阴影贴图，水面有屏幕空间地形反射，后期按画面亮度自动曝光。阶段 3 的 GI、完整级联阴影与抗锯齿仍按计划继续迁移。
+当前完成阶段 0–3 的核心部分：构建链、`math` / `color` / `sampling` 三个基础模块，以及 `noise` / `atmosphere` / `cloud` / `water` / `fog` 五个效果模块。测试世界已经改为直接使用生成的 GLSL，能在不启动 Minecraft 的情况下出图、截图和记录帧时；场景包含带材质与逐角遮蔽的体素地形、树木与草叶、三级方向光 PCSS 阴影、体积云与时间累积、屏幕空间反射与折射、空气透视与时间抗锯齿。函数级覆盖对照见 `docs/gfx-functions.md`。
+
+最近一次 1280×720 固定机位：平均 24.1 毫秒（约 41 帧每秒），截图 `.dev/omni-gfx/world-realistic.png`，帧时 `.dev/omni-gfx/perf-realistic.json`。
 
 ## 目录
 
@@ -48,13 +50,13 @@ python omni-gfx/build.py spirv --download
 
 ```powershell
 # 固定机位，渲染 120 帧，保存截图与帧时
-.venv\Scripts\python.exe omni-gfx\examples\world\render.py --frames 120 --warmup 30
+.venv\Scripts\python.exe omni-gfx\examples\world\render.py --frames 120 --warmup 30 --screenshot .dev/omni-gfx/world-realistic.png --perf .dev/omni-gfx/perf-realistic.json
 
 # 可移动相机：WASD 移动，空格与左 Ctrl 升降，鼠标转向，退出键结束，截图键保存
 .venv\Scripts\python.exe omni-gfx\examples\world\render.py --window
 ```
 
-输出默认放在 `.dev/omni-gfx/`：`world-final.png` 与 `perf-final.json`。帧时记录包含设备、分辨率、地形与水面三角形数、阴影贴图尺寸、云的步数与分辨率、时间累积权重与平均亮度。
+输出默认放在 `.dev/omni-gfx/`。帧时记录包含设备、分辨率、地形与水面三角形数、阴影贴图尺寸、云的步数与分辨率、时间累积权重与平均亮度。
 
 ## GPU 等值测试
 
@@ -72,12 +74,20 @@ python omni-gfx/build.py count
 
 手写核心只统计 `src/`、`tools/` 与 `tests/`，上限 3000 行；测试世界单列，生成 GLSL 与第三方代码分开统计。
 
+## 函数级覆盖对照
+
+```powershell
+python omni-gfx/build.py parity
+```
+
+从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 294、MC 专用 154、缺失 36、调试输出 21。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。
+
 ## 已知边界
 
-- 贴图过滤函数（双三次采样）仍留在旧 `shaders/gfx/`；阶段 3 的效果模块只用程序化噪声与纯计算，不接受纹理参数。
 - 测试世界是风格化近似，不是物理正确的大气、云或水体；大气是单次散射，云是单层程序化体积云，水面反射是屏幕空间近似。
-- 本机 1280×720 的 120 帧记录为平均 28.96 毫秒、中位 29.09；帧时波动受本机同时运行的其他程序影响。
-- 时间累积目前只服务天空与云，地形与水面还没有时域抗锯齿。
+- 本机 1280×720 的 120 帧记录为平均 24.1 毫秒、中位 23.8、95 分位 27.9；帧时波动受本机同时运行的其他程序影响。
+- 时间抗锯齿已经接入次像素抖动与历史重投影；海天交界仍有一条断续暗线，来自水面圆盘最外缘的三角形，未彻底解决。
+- 还没做：完整级联阴影跟随相机、屏幕空间全局光的颜色渗透、真实贴图与法线贴图。
 - SPIR-V 只是模块探针，Vulkan/Aperture 的实际管线接入在阶段 5。
 - 本机没有 C++ 工具链，演示程序使用 Python + GLFW + PyOpenGL；没有引入无法验证的 CMake 工程。
 - Minecraft 内只验证了离线编译；新库接入后的游戏画面尚未验证。

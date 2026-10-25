@@ -18,6 +18,7 @@ uniform vec3 uForward; // 相机前方向。
 uniform float uAspect; // 画面宽高比。
 uniform float uFrame; // 帧号，给噪声换相位。
 uniform float uBlend; // 本帧权重，越大收敛越快、噪点越多。
+uniform vec2 uJitter; // 本帧次像素抖动（纹理坐标单位），还原视空间位置时要减掉。
 
 out vec4 fragColor; // 红通道是最终遮蔽系数。
 
@@ -32,7 +33,7 @@ void main()
         return;
     }
     vec3 normal = ogxDecodeNormal(normalDepth.xy); // 还原世界法线。
-    vec3 viewPos = ogxGiViewPos(uv, depth, uProjectionInverse); // 还原视空间位置。
+    vec3 viewPos = ogxGiViewPos(uv - uJitter, depth, uProjectionInverse); // 还原视空间位置；减掉抖动才是这个像素对应的真实位置。
     vec3 viewDir = normalize(viewPos); // 从相机指向表面。
     OgxGtaoParams params; // 遮蔽参数。
     params.steps = 4.0; // 环绕视线的切片数。

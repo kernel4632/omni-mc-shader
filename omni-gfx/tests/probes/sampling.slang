@@ -30,5 +30,6 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     float4 rgss = ogxRgssSample(probeNoise, float2(0.5, 0.5), 1.0 / resolution, du, dv);  // 旋转网格超采样。
     float2 jitter = ogxTaaJitter(int(position.x), true);  // 抗锯齿抖动。
     float2 jitterLong = ogxTaaJitter(int(position.y), false);  // 八帧序列。
+    float halton = ogxHalton2(int(position.x)) + ogxHalton3(int(position.y));  // Halton 低差异序列。
     return float4(center.rgb + float3(blue, temporal.x) + bayer + smooth.rgb + nearest.rgb + rgss.rgb + float3(shadow, jitter.x + jitterLong.y, jitter.y), 1.0);  // 汇总全部结果。
 }

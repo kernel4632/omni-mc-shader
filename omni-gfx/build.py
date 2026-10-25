@@ -108,6 +108,15 @@ def command_count(as_json: bool) -> None:
     count.report(as_json=as_json)  # 统计规则只在统计模块维护一份。
 
 
+def command_parity() -> None:
+    """重新生成函数级覆盖对照表，并打印一行统计。
+
+    这一步只读参考源码与库源码，不联网、不改生成物，因此可以随时运行。
+    """
+    script = LIB / "tools" / "parity.py"  # 对照表生成器。
+    subprocess.run([sys.executable, str(script)], cwd=ROOT, check=True)  # 失败由脚本以非零状态报告。
+
+
 def main() -> None:
     """解析子命令并执行，未知参数由参数解析器统一拒绝。
 
@@ -124,6 +133,7 @@ def main() -> None:
     sub.add_parser("test-gpu", help="运行旧库与新库的 GPU 等值测试")  # 需要显卡。
     counter = sub.add_parser("count", help="统计各类代码行数")  # 只读统计。
     counter.add_argument("--json", action="store_true", help="输出机器可读结果")  # 方便写入记录。
+    sub.add_parser("parity", help="重新生成函数级覆盖对照表")  # 只读参考源码与库源码。
     args = parser.parse_args()  # 解析失败时参数解析器自行退出。
     if args.command == "generate":
         command_generate()
@@ -137,6 +147,8 @@ def main() -> None:
         command_gpu()
     elif args.command == "count":
         command_count(args.json)
+    elif args.command == "parity":
+        command_parity()
     else:
         parser.print_help()  # 没有子命令时只显示帮助，不执行任何动作。
 

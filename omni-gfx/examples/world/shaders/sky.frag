@@ -43,21 +43,22 @@ void main()
     vec3 sunColor = worldSunColor(); // 太阳色度，亮度另乘倍率。
     float altitude = max(uCameraPos.y, 0.0) * 0.001; // 米换成公里。
     OgxAtmosphere air = worldAtmosphere(); // 本场景的大气常数。
-    vec3 sky = ogxAtmosphereSky(air, altitude, direction, sunDirection, uSkySteps); // 单次散射天空。
-    // 地平线以下用海面方向的空气色兜底。水面圆盘一直铺到肉眼地平线之外，
-    // 正常情况下看不到这一段，但视角切换或接缝错半像素时不能突然露出纯黑。
-    if (direction.y < 0.03) // 只在地平线下方的少量像素做这次额外积分。
-    {
-        vec3 horizonDirection = normalize(vec3(direction.x, 0.004, direction.z)); // 贴着海平面的方向。
-        vec3 haze = ogxAtmosphereSky(air, altitude, horizonDirection, sunDirection, 3); // 海平面的空气色。
-        sky = mix(haze * 0.94, sky, smoothstep(-0.025, 0.03, direction.y)); // 向下逐渐换成海面雾色。
-    }
+    // 天空积分只在水平面以上有意义：把方向抬到地平线以上三度再算。
+    // 太贴近水平时视线会与地面相交，单次散射退化成零，海天交界会出现一条黑带。
+    vec3 skyDirection = normalize(vec3(direction.x, max(direction.y, 0.055), direction.z)); // 抬到地平线以上。
+    vec3 sky = ogxAtmosphereSky(air, altitude, skyDirection, sunDirection, uSkySteps); // 单次散射天空。
     // 蓝噪声抖动：同一个像素每帧拿到不同的起点，时间累积后把十几步的台阶抹平。
     float jitter = ogxBlueNoiseTemporal(uBlueNoise, ivec2(pixel), int(uFrame)).x;
     OgxCloudLayer layer = worldCloudLayer(uTime, uCloudCover); // 本帧云层。
     vec4 clouds = ogxCloudMarch(layer, uCameraPos * 0.001, direction, sunDirection, sunColor * uCloudSun,
                                 sky * 0.45, jitter, uCloudSteps); // 体积云，返回普通颜色与覆盖率。
-    float horizonFade = smoothstep(0.005, 0.10, direction.y); // 云在地平线附近淡出，避免远处云被压成一堵墙。
+    // 云也在大气里：沿视线走到云层的路程越长，云越被空气散射洗淡。
+    // 不做这一步，地平线附近的云会比天空更饱和，看起来像贴上去的一块板。
+    float pathKm = min(max((layer.bottom + layer.top) * 0.5 - altitude, 0.0) / max(direction.y, 0.02), 24.0); // 到云层的近似路程。
+    vec3 cloudTransmittance; // 云层的剩余透过率。
+    vec3 cloudHaze = ogxAerialPerspective(air, altitude, direction, pathKm, sunDirection, 2, cloudTransmittance); // 云到相机之间的空气散射。
+    clouds.rgb = clouds.rgb * cloudTransmittance + cloudHaze; // 云被空气透视洗淡。
+    float horizonFade = smoothstep(0.08, 0.30, direction.y); // 低空云在地平线附近淡出，掠射方向步长太长会碎成白点。
     float coverage = clouds.a * horizonFade; // 实际覆盖率。
     vec3 color = mix(sky, clouds.rgb, coverage); // 按覆盖率合成。
     fragColor = vec4(color, coverage); // 覆盖率单独留在透明度通道，升采样时用它保护云边。

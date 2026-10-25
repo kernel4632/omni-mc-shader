@@ -52,6 +52,31 @@ vec4 ogxSign(vec4 x) { return uintBitsToFloat((floatBitsToUint(x) & uvec4(0x8000
 // 位运算近似平方根，误差约百分之三，只用在不在乎精度的形状计算。
 float ogxFastSqrt(float x) { return uintBitsToFloat(uint(0x1fbd1df5 + (floatBitsToInt(x) >> 1))); }
 
+// 平方：把乘方写成函数，几何求交与距离比较的公式能和参考源码逐行对上。
+float ogxSquare(float x) { return x * x; }
+
+// 长度的平方：比较远近时不需要开方，省掉一次 sqrt。
+float ogxLengthSquared(vec3 v) { return dot(v, v); }
+
+// 取倒数长度的安全版本：零向量返回零，避免除零产生 NaN 污染整条管线。
+float ogxSafeInvLength(vec3 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
+
+// 三角波：把任意输入折回零到一，周期二；噪声与条纹图案常用它代替正弦。
+float ogxTriangleWave(float x) { return 1.0 - abs((x * 0.5 - floor(x * 0.5)) * 2.0 - 1.0); }
+
+// 二维乘加：常数项的写法与参考源码一致，便于逐行核对。
+vec2 ogxFma2(vec2 a, vec2 b, vec2 c) { return a * b + c; }
+
+// 同时给出正弦与余弦：极坐标采样需要两者，一次算出省掉一次三角函数。
+vec2 ogxSinCos(float angle) { return vec2(sin(angle), cos(angle)); }
+
+// 二维旋转：把点按角度绕原点转动，光斑与暗角图案用得到。
+vec2 ogxRotate2(vec2 p, float angle)
+{
+    vec2 sc = ogxSinCos(angle);
+    return vec2(p.x * sc.y - p.y * sc.x, p.x * sc.x + p.y * sc.y);
+}
+
 // 把值从一段区间线性映射到零到一，再夹紧；区间外不会越界。
 float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); }
 
@@ -342,8 +367,7 @@ vec3 ogxRayPlaneIntersection(vec3 origin, vec3 direction, vec3 normal)
 }
 
 // 射线与球求交：返回进入和离开两个距离，无交点时返回一正一负的极值。
-vec2 ogxRaySphereIntersection(vec3 origin, vec3 direction, float radius)
-{
+vec2 ogxRaySphereIntersection(vec3 origin, vec3 direction, float radius){
     float b = dot(origin, direction);
     float c = -radius * radius + dot(origin, origin);
     float d = b * b - c;
@@ -354,6 +378,31 @@ vec2 ogxRaySphereIntersection(vec3 origin, vec3 direction, float radius)
         intersection = vec2(-b - d, -b + d);
     }
     return intersection;
+}
+
+// 射线与轴对齐包围盒求交：返回进入与离开的距离。
+// 三个轴分别解一次区间，再把区间求交集；无交点时返回一正一负的极值。
+// `boxSize` 是盒子的半边长，盒子以 `origin` 所在坐标系的原点为中心。
+vec2 ogxRayBoxRange(vec3 origin, vec3 direction, vec3 boxSize)
+{
+    vec3 safeDirection = vec3(abs(direction.x) < 1e-6 ? 1e-6 : direction.x,
+                                  abs(direction.y) < 1e-6 ? 1e-6 : direction.y,
+                                  abs(direction.z) < 1e-6 ? 1e-6 : direction.z);
+    vec3 inverseDirection = 1.0 / safeDirection;
+    vec3 t0 = (-boxSize - origin) * inverseDirection;
+    vec3 t1 = (boxSize - origin) * inverseDirection;
+    vec3 near = min(t0, t1);
+    vec3 far = max(t0, t1);
+    float enter = max(max(near.x, near.y), near.z);
+    float leave = min(min(far.x, far.y), far.z);
+    return leave >= enter ? vec2(enter, leave) : vec2(1e10, -1e10);
+}
+
+// 射线与包围盒求交的便捷版：命中时返回进入距离，未命中返回负一。
+float ogxRayBoxIntersection(vec3 origin, vec3 direction, vec3 boxSize)
+{
+    vec2 range = ogxRayBoxRange(origin, direction, boxSize);
+    return range.x <= range.y && range.y > 0.0 ? range.x : -1.0;
 }
 
 // 瑞利相函数：天空散射近似各向同性，常数是十六分之三除以圆周率。
