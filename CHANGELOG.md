@@ -3,7 +3,7 @@
 
 对照表重建：24 个模块逐项核对，15 条部分覆盖清零，海洋、下界雾与材质解码迁入库。
 
-- 重建 `docs/gfx-parity.md`：按 `omni-gfx/src`、iterationT `Lib/` 与 Eclipse `lib/` 的实际源码逐项重判，新增 24 个模块与参考来源表、15 条部分覆盖处理表、只服务 Minecraft 的逐条证据；76 行参考对照中已覆盖 56 条、库内 5 条、MC 专用 15 条、部分与未覆盖均为 0 条。上一版把下界抗锯齿误记为“打包不能搬”，本版改为已覆盖，代码早已在库里。
+- 重建 `docs/gfx-parity.md`：按 `omni-gfx/src`、iterationT `Lib/` 与 Eclipse `lib/` 的实际源码逐项重判，新增 24 个模块与参考来源表、15 条部分覆盖处理表、只服务 Minecraft 的逐条证据；76 行参考对照中已覆盖 55 条、库内 6 条、MC 专用 15 条、部分与未覆盖均为 0 条。上一版把下界抗锯齿误记为“打包不能搬”，本版改为已覆盖，代码早已在库里。
 - `water` 补齐海洋：波形空间、方向、波形法线、涟漪法线混合、三层泡沫与整像素函数进库，`waves.glsl` 只传贴图、纹素大小与选项；iterationT `PhysicsOceans.glsl` 与 Eclipse `oceans.glsl` 两条同时从部分变为已覆盖。另补 Eclipse `ripples.glsl` 的九格雨点与 `waterBump.glsl` 的焦散、水面高度、波法线，三条为库内，光影侧仍用原水面路径。
 - `fog` 补下界五群系光照与雾色加权，`fog_volume` 补 Eclipse 羽流、雾霭、顶烟三段步进；`rendering/world/nether.glsl` 只保留射线、雾色与选项接线。`NetherColor.glsl` 与 `nether_fog.glsl` 从部分变为已覆盖。
 - `surface` 补 labPBR 材质解码 `ogxPbrMaterialFromTex`、Eclipse 方块光曲线、间接光、光斑、光束指向与手持光衰减；`bind/gbuffer.glsl` 只复制六个材质字段，LPV 手持光与手电筒光斑改为调用库。材质编号掩码表、手持光源分支、手部屏幕阴影与手电筒仍标为 MC 专用，逐条写在对照表第六节。

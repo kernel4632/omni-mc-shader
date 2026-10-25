@@ -62,14 +62,14 @@
 | iterationT `GbufferData.glsl` | 材质解码与掩码表留在宿主 | `ogxPbrMaterialFromTex` 进 `surface`，`bind_material_from_tex` 只复制六个字段；掩码表保留在 `bind/gbuffer.glsl` | 已覆盖材质解码；掩码表标为 MC 专用，证据见第六节第 2 条 |
 | iterationT `IndividualFounctions/PhysicsOceans.glsl` | 波形空间换算、涟漪贴图、三层泡沫留在宿主 | `ogxOceanWaveSpace`、`ogxOceanWaveDirection`、`ogxOceanWaveNormal`、`ogxOceanNormalWithRipple`、`ogxOceanFoam`、`ogxOceanPixel` 进 `water`；`waves.glsl` 只传贴图、纹素大小与选项 | 已覆盖 |
 | Eclipse `climate_settings.glsl` | 群系雾密度、雾色与时段雾留在宿主 | `ogxBiomeFogColor`、`ogxBiomeFogDensity` 进 `fog` 并由 `bind/world/biome.glsl` 调用；`ogxYearCycleColor`、`ogxFogDensities` 进 `weather` | 已覆盖群系部分；四季与时段函数库内，宿主仍用自己的季节与时段选项 |
-| Eclipse `diffuse_lighting.glsl` | 方块光曲线、间接光、手持光、手部阴影与手电筒 | `ogxBlockLightCurveEclipse`、`ogxDoIndirectLighting`、`ogxHandLight` 进 `surface`；LPV 手持光已调用；手部屏幕阴影与手电筒保留 | 已覆盖纯算式；手部屏幕阴影与手电筒标为 MC 专用，证据见第六节第 3 条 |
-| Eclipse `indirect_lighting_effects.glsl` | 螺旋采样以外的屏幕追踪与双边升采样 | `ogxR2Sample`、`ogxCosineHemisphere`、`ogxConvertHandDepth3`、`ogxSpiralSample` 进 `math`；`rayTrace_GI`、`RT_alternate`、`ApplySSRT`、`BilateralUpscale_SSAO` 保留 | 已覆盖采样与深度换算；屏幕追踪与双边升采样标为 MC 专用，证据见第六节第 4 条 |
+| Eclipse `diffuse_lighting.glsl` | 方块光曲线、间接光、手持光、手部阴影与手电筒 | `ogxBlockLightCurveEclipse`、`ogxDoIndirectLighting`、`ogxHandLight` 进 `surface`；LPV 手持光已调用；手部屏幕阴影与手电筒保留 | 手持光已由 LPV 调用；方块光曲线与间接光库内；手部屏幕阴影与手电筒标为 MC 专用，证据见第六节第 3 条 |
+| Eclipse `indirect_lighting_effects.glsl` | 螺旋采样以外的屏幕追踪与双边升采样 | `ogxR2Sample`、`ogxCosineHemisphere`、`ogxConvertHandDepth3`、`ogxSpiralSample` 进 `math`；`rayTrace_GI`、`RT_alternate`、`ApplySSRT`、`BilateralUpscale_SSAO` 保留 | 现有全局光滤波已覆盖；R2、余弦半球与手部深度库内；屏幕追踪与双边升采样标为 MC 专用，证据见第六节第 4 条 |
 | Eclipse `nether_fog.glsl` | 羽流、雾霭、顶部烟三段步进留在宿主 | `ogxNetherVolumetricFog` 进 `fog_volume`，复用库里的 `ogxNetherFogCloudVolume`；`NetherVolumetricFog` 只算射线、雾色与选项 | 已覆盖 |
 | Eclipse `oceans.glsl` | 与 iterationT 同一套波浪，涟漪与泡沫读宿主贴图 | 与 `PhysicsOceans` 共用 `ogxOceanPixel` 与辅助函数；`waves.glsl` 已调用 | 已覆盖 |
 | Eclipse `ripples.glsl` | 参考里的程序化雨点涟漪没有对应实现 | `ogxRainRipples` 与专用哈希 `ogxRippleHash12` 进 `water`，九个格子的扩散、中心差分与归一化照原式 | 库内：光影侧仍用 iterationT 的三层动画贴图雨点 |
 | Eclipse `Shadows.glsl` | `GriAndEminShadowFix`、`applyShadowBias` 没有对应实现 | 两条函数进 `shadow`，参数改为显式相机位置、水下标记、阴影法线与分辨率 | 库内：光影侧已有自己的阴影偏差路径 |
-| Eclipse `volumetricClouds.glsl` | `curl2D` 依赖参考包自己的梯度噪声 | `ogxPerlinGradient2`、`ogxCurl2D` 进 `noise`；云形状、步进与光照继续映射到 `cloud_volume` 的 NUBIS 路径 | 已覆盖形状与步进；旋度函数库内 |
-| Eclipse `voxel_write.glsl` | 写入侧依赖 `imageStore`、渲染阶段宏与实体编号 | `ogxVoxelWriteIndex`、`ogxVoxelWriteInBounds` 进 `voxel`；`imageStore` 与编号选择保留在 `rendering/lighting/lpv.glsl` | 已覆盖索引与边界；写入标为 MC 专用，证据见第六节第 5 条 |
+| Eclipse `volumetricClouds.glsl` | `curl2D` 依赖参考包自己的梯度噪声 | `ogxPerlinGradient2`、`ogxCurl2D` 进 `noise`；云形状、步进与光照继续映射到 `cloud_volume` 的 NUBIS 路径 | 已覆盖（形状、步进）+ 库内（旋度） |
+| Eclipse `voxel_write.glsl` | 写入侧依赖 `imageStore`、渲染阶段宏与实体编号 | `ogxVoxelWriteIndex`、`ogxVoxelWriteInBounds` 进 `voxel`；`imageStore` 与编号选择保留在 `rendering/lighting/lpv.glsl` | 索引与边界库内；写入标为 MC 专用，证据见第六节第 5 条 |
 | Eclipse `waterBump.glsl` | 焦散、水面高度与波法线读噪声图 | `ogxWaterBumpCaustics`、`ogxWaterBumpHeightmap`、`ogxWaterBumpNormal` 进 `water`，噪声图与纹素参数由调用方给 | 库内：光影侧仍用 iterationT 的水面波浪与焦散路径 |
 
 ## 四、iterationT 3.2.0
@@ -135,16 +135,16 @@ Eclipse 的 `shaders/lib/` 共 45 个文件，程序文件 594 个只作阶段�
 | `bayer_matrix.glsl` | `bayerDither` | `math`：`ogxBayer2`、`ogxBayer4`、`ogxBayer8`、`ogxBayer64` | 已覆盖 |
 | `blocks.glsl` | 方块编号与属性表 | 无 | MC 专用：编号表由资源包与 `block.properties` 决定 |
 | `bokeh.glsl` | `rotate` 与光圈形状 | `post`：`ogxBokehAperture`；散焦核在 `ogxDepthOfField` | 已覆盖：多边形光圈的形状与旋转进库；采样点偏移表是数据，光影侧用圆形核 |
-| `climate_settings.glsl` | `YearCycleColor`、`BiomeFogDensity`、`BiomeVLFogColors`、`FogDensities` | `fog`：`ogxBiomeFogColor`、`ogxBiomeFogDensity`；`weather`：`ogxYearCycleColor`、`ogxFogDensities` | 已覆盖群系雾并由宿主调用；四季与时段函数库内，宿主沿用本项目自己的季节与时段选项 |
+| `climate_settings.glsl` | `YearCycleColor`、`BiomeFogDensity`、`BiomeVLFogColors`、`FogDensities` | `fog`：`ogxBiomeFogColor`、`ogxBiomeFogDensity`；`weather`：`ogxYearCycleColor`、`ogxFogDensities` | 已覆盖（群系雾，宿主调用）+ 库内（四季、时段雾），宿主沿用本项目自己的季节与时段选项 |
 | `color_dither.glsl` | `fp10Dither`、`fp16Dither`、`int8Dither`、`int10Dither`、`int16Dither` | `noise`：白噪声与三角噪声；`post`：`ogxDitherFloat`、`ogxDitherFixed` | 已覆盖：五条入口按浮点尾数与定点位数合并成两个核心函数 |
 | `color_transforms.glsl` | 七条色调映射入口 | `color`：`ogxTonemapHejl`、`ogxTonemapHable`、`ogxTonemapReinhard`、`ogxTonemapAcesFilm`、`ogxTonemapLottes`、`ogxTonemapUchimura`、`ogxLinearToSrgb` | 已覆盖；界面仍只提供 ACES、AgX 与无压缩三档 |
-| `diffuse_lighting.glsl` | `doBlockLightLighting`、`doIndirectLighting`、`GetHandLight`、`SSRT_Handlight_Shadows`、`calculateFlashlight` | `surface`：`ogxBlockLightCurveEclipse`、`ogxDoIndirectLighting`、`ogxHandLight` | 已覆盖曲线、间接光与手持光；手部屏幕阴影与手电光标为 MC 专用，见第六节第 3 条 |
+| `diffuse_lighting.glsl` | `doBlockLightLighting`、`doIndirectLighting`、`GetHandLight`、`SSRT_Handlight_Shadows`、`calculateFlashlight` | `surface`：`ogxBlockLightCurveEclipse`、`ogxDoIndirectLighting`、`ogxHandLight` | 已覆盖（手持光，LPV 调用）+ 库内（方块光曲线、间接光）+ MC 专用（手部屏幕阴影、手电筒），见第六节第 3 条 |
 | `DistantHorizons_projections.glsl` | `toScreenSpace_DH`、`toClipSpace3_DH` | 无 | MC 专用：远景模组的投影约定，只在加载器提供远景深度时才有意义 |
 | `end_fog.glsl` | `fogShape`、`SwirlAroundOrigin`、`VolumeBounds`、`densityAtPosFog` | `fog`：`ogxEndVortex*` 与 `ogxEndFogDensity` | 已覆盖 |
 | `entities.glsl` | 实体材质表 | `surface`：材质法线与自发光换算 | MC 专用：实体编号与材质位由 `entity.properties` 决定 |
 | `gameplay_effects.glsl` | `applyGameplayEffects` | `math`：`ogxDoNightEye` | MC 专用：药水与受伤状态由游戏给，光影只做画面换算 |
 | `hsv.glsl` | `RgbToHsv`、`HsvToRgb` | `math`：`ogxRgbToHsv`；`color`：`ogxHsvToRgb` | 已覆盖 |
-| `indirect_lighting_effects.glsl` | `rayTrace_GI`、`BilateralUpscale_SSAO`、`SpiralSample`、`R2_samples`、`cosineHemisphereSample`、`convertHandDepth_3` | `math`：`ogxSpiralSample`、`ogxR2Sample`、`ogxCosineHemisphere`、`ogxConvertHandDepth3` | 已覆盖采样与深度换算；屏幕追踪与双边升采样标为 MC 专用，见第六节第 4 条 |
+| `indirect_lighting_effects.glsl` | `rayTrace_GI`、`BilateralUpscale_SSAO`、`SpiralSample`、`R2_samples`、`cosineHemisphereSample`、`convertHandDepth_3` | `math`：`ogxSpiralSample`、`ogxR2Sample`、`ogxCosineHemisphere`、`ogxConvertHandDepth3` | 已覆盖（现有全局光滤波）+ 库内（R2、余弦半球、手部深度）+ MC 专用（屏幕追踪、双边升采样），见第六节第 4 条 |
 | `items.glsl` | 物品编号表 | 无 | MC 专用：编号来自 `item.properties` |
 | `lightning_stuff.glsl` | `Iris_Lightningflash`、`Iris_Lightningflash_VLcloud`、`Iris_Lightningflash_VLfog` | `fog_volume`：`ogxFogLightning`；`cloud_volume`：`ogxCumulusLightning` | 已覆盖 |
 | `lpv_blocks.glsl` | LPV 方块表 | 无 | MC 专用：与 `block.properties` 的编号一一对应 |
@@ -172,9 +172,9 @@ Eclipse 的 `shaders/lib/` 共 45 个文件，程序文件 594 个只作阶段�
 | `text_rendering.glsl` | `beginText`、`printFloat` 等 | 无 | MC 专用（调试叠加）：唯一使用位置是 `dimensions/final.fsh` 第 255 到 292 行，整段在 `#if DEBUG_VIEW` 内 |
 | `texture_filtering.glsl` | `sampleNearest`、`sampleRGSS` | `sampling`：`ogxSampleNearest`、`ogxRgssSample`、`ogxTexelFetch` | 已覆盖：最近点取样与旋转网格超采样进库；光影侧没有贴图过滤模式选项 |
 | `util.glsl` | `facos`、`circlemap`、`calculateRoughSpecular`、`srgbToLinear`、`linearToSRGB` | `math`：`ogxFastAcos`、`ogxCircleMap`、`ogxRoughSpecularDirection`、`ogxSrgbToLinear`、`ogxLinearToSrgb`、`ogxTangentBasis` | 已覆盖 |
-| `volumetricClouds.glsl` | `getCloudShape`、`densityAtPos`、`curl2D`、`getRainDensity` | `cloud_volume`：云形状、步进、光照与雨密度；`noise`：`ogxPerlinGradient2`、`ogxCurl2D`、`ogxWarp3`、`ogxFbm3` | 已覆盖形状与步进；旋度函数库内 |
+| `volumetricClouds.glsl` | `getCloudShape`、`densityAtPos`、`curl2D`、`getRainDensity` | `cloud_volume`：云形状、步进、光照与雨密度；`noise`：`ogxPerlinGradient2`、`ogxCurl2D`、`ogxWarp3`、`ogxFbm3` | 已覆盖（形状、步进）+ 库内（旋度） |
 | `voxel_common.glsl` | 体素索引与读取 | `voxel`：`ogxVoxelInside`、`ogxVoxelReflection` 等 | 已覆盖 |
-| `voxel_write.glsl` | `GetVoxelIndex`、`SetVoxelBlock`、`PopulateShadowVoxel` | `voxel`：`ogxVoxelWriteIndex`、`ogxVoxelWriteInBounds`；`lpv`：`ogxLpvPosition` | 已覆盖索引与边界；`imageStore` 与实体编号保留在宿主，见第六节第 5 条 |
+| `voxel_write.glsl` | `GetVoxelIndex`、`SetVoxelBlock`、`PopulateShadowVoxel` | `voxel`：`ogxVoxelWriteIndex`、`ogxVoxelWriteInBounds`；`lpv`：`ogxLpvPosition` | 库内（索引、边界）+ MC 专用（写入），`imageStore` 与实体编号保留在宿主，见第六节第 5 条 |
 | `waterBump.glsl` | `waterCaustics`、`getWaterHeightmap`、`getWaveNormal` | `water`：`ogxWaterBumpCaustics`、`ogxWaterBumpHeightmap`、`ogxWaterBumpNormal` | 库内：三条水面函数已进库，光影侧仍用 iterationT 的水面路径 |
 
 ### 有意偏离
@@ -206,18 +206,18 @@ Eclipse 的 `shaders/lib/` 共 45 个文件，程序文件 594 个只作阶段�
 
 | 状态 | iterationT | Eclipse | 合计 |
 | --- | --- | --- | --- |
-| 已覆盖 | 29 | 27 | 56 |
-| 库内 | 0 | 5 | 5 |
+| 已覆盖 | 29 | 26 | 55 |
+| 库内 | 0 | 6 | 6 |
 | MC 专用 | 2 | 13 | 15 |
 | 部分 | 0 | 0 | 0 |
 | 未覆盖 | 0 | 0 | 0 |
 
 说明：
 
-- iterationT 的 29 条已覆盖里有 2 条同时含 MC 专用剩余（Blocklight 的手持光、GbufferData 的掩码表）；Eclipse 的 27 条里有 5 条同时含库内或 MC 专用子项（climate、diffuse、indirect、volumetricClouds、voxel_write 中的若干子函数）。主状态按光影实际使用的那部分计，子项在表格与第六节逐条标明。
+- iterationT 的 29 条已覆盖里有 2 条同时含 MC 专用剩余（Blocklight 的手持光、GbufferData 的掩码表）；Eclipse 的 26 条里有 5 条同时含库内或 MC 专用子项（climate、diffuse、indirect、volumetricClouds、voxel_write 中的若干子函数）。主状态按光影实际使用的那部分计，子项在表格与第六节逐条标明。
 - iterationT 另有 6 个宿主文件，全部只服务 MC，已在上文单列，不计入这 31 行。
-- Eclipse 的 5 条库内是：`ripples`、`ROBOBO_sky`、`Shadows`、`texFiltering`、`waterBump`。它们的算式已在库里，光影侧没有对应调用点；这不是缺口，是两套参考的路径选择不同。
-- 原先的 15 条部分覆盖已全部处理：12 条变成已覆盖，3 条变成库内（`ripples`、`Shadows`、`waterBump`）。这 12 条里有 5 条保留 MC 专用子项（Blocklight 的手持光、GbufferData 的掩码、diffuse 的手部阴影与手电筒、indirect 的屏幕追踪、voxel_write 的写入），2 条保留库内子项（climate 的四季与时段雾、volumetricClouds 的旋度）。没有新增未覆盖项。
+- Eclipse 的 6 条库内是：`ripples`、`ROBOBO_sky`、`Shadows`、`texFiltering`、`voxel_write`、`waterBump`。它们的算式已在库里，光影侧没有对应调用点；这不是缺口，是两套参考的路径选择不同。
+- 原先的 15 条部分覆盖已全部处理：11 条变成已覆盖，4 条变成库内（`ripples`、`Shadows`、`voxel_write`、`waterBump`）。这 11 条里有 4 条保留 MC 专用子项（Blocklight 的手持光、GbufferData 的掩码、diffuse 的手部阴影与手电筒、indirect 的屏幕追踪），2 条保留库内子项（climate 的四季与时段雾、volumetricClouds 的旋度）。没有新增未覆盖项。
 
 ## 八、未验证
 
