@@ -36,7 +36,7 @@ void main()
     vec2 screenUv = gl_FragCoord.xy / uResolution; // 当前像素坐标。
     // Gerstner 波法线：五组不同波长与方向的解析波，叠加一层细碎风纹。
     // 远处自动压平高频，避免一个像素跨过多个波长时闪成噪点。
-    vec3 wave = ogxGerstnerNormal(vWorldPosition.xz, uTime, surfaceDepth, 1.0, 0.82);
+    vec3 wave = ogxGerstnerNormal(vWorldPosition.xz, uTime, surfaceDepth, 1.0, 0.32);
     if (uWaterDebug == 1) // 开发用：直接看法线，检查波纹是否过强。
     {
         fragColor = vec4(wave * 0.5 + 0.5, 1.0);
@@ -45,9 +45,9 @@ void main()
     vec3 sunChroma = lightingSunChroma(); // 太阳色度。
     // 平面反射按法线在屏幕上偏移，再用九点旋转核模糊；粗糙水面不会是一面完美镜子。
     // 偏移随距离收小，倒影不会被拉成横条；模糊半径随距离与粗糙度一起增大。
-    vec2 reflectionUv = screenUv + wave.xz * (0.020 / (1.0 + surfaceDepth * 0.018));
-    float lod = mix(0.4, 3.4, smoothstep(12.0, 650.0, surfaceDepth)); // 远处取更高的 mip，滤掉地平线附近的高频明暗。
-    vec2 texel = uReflectionTexel * 1.6;
+    vec2 reflectionUv = screenUv + wave.xz * (0.004 / (1.0 + surfaceDepth * 0.018));
+    float lod = mix(1.8, 4.8, smoothstep(12.0, 1600.0, surfaceDepth)); // 远处取更高的 mip，滤掉地平线附近的高频明暗。
+    vec2 texel = uReflectionTexel * 3.6;
     vec3 reflection = textureLod(uReflection, clamp(reflectionUv, vec2(0.001), vec2(0.999)), lod).rgb * 0.44;
     vec2 diagonal = vec2(0.72, 0.69); // 斜向采样，避免十字核把高光拉成横竖亮线。
     reflection += textureLod(uReflection, clamp(reflectionUv + texel * diagonal, vec2(0.001), vec2(0.999)), lod).rgb * 0.14;
@@ -56,8 +56,8 @@ void main()
     reflection += textureLod(uReflection, clamp(reflectionUv - texel * vec2(-diagonal.x, diagonal.y), vec2(0.001), vec2(0.999)), lod).rgb * 0.14;
     // 天空只补倒影出屏的边缘；平面倒影本身已经包含山体、天空与云，不能再被一块蓝天覆盖。
     vec3 reflectedDir = reflect(-view, wave);
-    reflectedDir.y = max(reflectedDir.y, 0.015);
-    vec3 skyReflection = lightingSampleSky(reflectedDir, mix(1.0, 3.5, lod * 0.25)) * vec3(0.86, 0.92, 1.0);
+    reflectedDir.y = max(reflectedDir.y, 0.008);
+    vec3 skyReflection = lightingSampleSky(reflectedDir, mix(1.0, 4.2, lod * 0.25)) * vec3(0.88, 0.94, 1.0);
     vec2 edgeUv = smoothstep(vec2(0.0), vec2(0.035), reflectionUv) * (1.0 - smoothstep(vec2(0.965), vec2(1.0), reflectionUv));
     reflection = mix(skyReflection, reflection, edgeUv.x * edgeUv.y);
     // 反射高光压缩：太阳附近的云和天空可以很亮，但湖面不应该整片过曝成白纸。
@@ -87,20 +87,22 @@ void main()
     if (uWaterDebug == 3) { fragColor = vec4(transmitted, 1.0); return; } // 开发用：只看折射与吸收。
     // 菲涅尔：正对时几乎全透，掠射时接近镜面；这是水面最重要的物理线索。
     float NdotV = max(dot(wave, view), 0.0); // 视线与水面法线。
-    float fresnel = min(ogxWaterFresnel(NdotV, 0.02), 0.82); // 粗糙水面在极限掠射时也不会完全镜面。
-    // 掠射角压反射：真实湖面在这个角度主要映出对岸的暗色山体，而不是整片亮天空；
-    // 再叠一层冷色水体倾向，避免反射被太阳附近的白色雾霾推成一条白带。
-    reflection *= vec3(0.78, 0.88, 1.0) * mix(0.62, 1.0, smoothstep(0.02, 0.42, NdotV));
+    // 掠射角保留高反射：真实湖面在这个角度会把对岸树线、云和天空完整映出来。
+    // 不再额外乘零点六二压暗反射，改为让倒影内容本身承担明暗；否则远处水面会变成一条灰带。
+    float fresnel = min(ogxWaterFresnel(NdotV, 0.02), 0.92); // 粗糙水面在极限掠射时接近镜面。
+    // 反射整体略压暗并偏冷：天空在低阳时很亮，完全不压会让整片湖面变成白纸；
+    // 这里只压一成，保留云、树线和石门的完整倒影。
+    reflection *= vec3(0.86, 0.93, 1.0) * 0.90;
     vec3 color = mix(transmitted, reflection, fresnel); // 折射与反射按菲涅尔混合。
     // 太阳闪光：用只保留大尺度坡度的法线算一个宽高光，再乘一块低频亮斑。
     // 直接用五组解析波的法线算锐高光，波峰会在湖面排成规则的白格；粗糙水面上的太阳路径
-    // 应该是一条断续的碎金带，而不是整片棋盘。
-    vec3 glintNormal = normalize(mix(vec3(0.0, 1.0, 0.0), wave, 0.45));
-    float glint = min(ogxSpecularGGX(glintNormal, view, sunDirection, 0.42, 0.02), 1.0);
-    float glitterMask = texture(uCloudCurl, vWorldPosition.xz * 0.012 + vec2(uTime * 0.0020, -uTime * 0.0011)).r;
-    glint *= smoothstep(0.42, 0.70, glitterMask) * smoothstep(0.04, 0.20, NdotV);
+    // 应该是一条断续的碎金带，而不是整片棋盘。高光强度和频率都压到最低，避免水面出现静电噪点。
+    vec3 glintNormal = normalize(mix(vec3(0.0, 1.0, 0.0), wave, 0.18));
+    float glint = min(ogxSpecularGGX(glintNormal, view, sunDirection, 0.60, 0.02), 0.50);
+    float glitterMask = texture(uCloudCurl, vWorldPosition.xz * 0.0025 + vec2(uTime * 0.0020, -uTime * 0.0011)).r;
+    glint *= smoothstep(0.40, 0.68, glitterMask) * smoothstep(0.06, 0.24, NdotV);
     if (uWaterDebug == 4) { fragColor = vec4(vec3(glint * 0.3), 1.0); return; } // 开发用：只看太阳高光。
-    color += sunChroma * (glint * uSunIrradiance * 0.18);
+    color += sunChroma * (glint * uSunIrradiance * 0.045);
     // 岸线泡沫：只用很浅的水与岸坡梯度两个条件，泡沫贴着岸线出现，不会铺满整片浅湖。
     // 噪声取自三维 Worley 细节图，气泡是圆的；旧的方形值噪声会在水面上印出规则的白色网格。
     float foamNoise = texture(uCloudDetail, vec3(vWorldPosition.xz * 0.060, uTime * 0.006)).x;
@@ -116,14 +118,18 @@ void main()
     foam *= 1.0 - smoothstep(25.0, 110.0, surfaceDepth); // 远处泡沫只有几像素，淡出避免锯齿。
     vec3 foamColor = vec3(0.52, 0.56, 0.55) * (0.48 + 0.52 * max(dot(wave, sunDirection), 0.0)); // 泡沫受太阳照亮。
     color = mix(color, foamColor, foam * 0.62); // 泡沫是覆盖，不是叠加白光。
-    // 远处水面在屏幕上只剩几像素，逐渐收敛到同方向的天空色，与地平线接上。
-    // 收敛权重比上一版低得多，远景湖面保留自己的深蓝色，不再被白色地平线洗掉。
-    vec3 horizonDir = normalize(vec3(-view.x, 0.02, -view.z));
-    vec3 horizon = lightingSampleSky(horizonDir, 2.5) * vec3(0.72, 0.82, 0.95);
-    color = mix(color, horizon, smoothstep(700.0, 2600.0, surfaceDepth) * 0.35);
-    // 云影也落在湖面上：水面的反射与高光都来自同一颗太阳，云挡住太阳时湖水应该一起变暗。
-    // 只压暗，不加灰；阴影里的湖水仍保留深蓝色与波纹层次。
+    // 岸边地形与树冠也在水面投影：没有这一步，树和拱门像漂在水上，倒影再完整也缺接触。
+    // 用完整阴影查询而不是只看云影，树冠的窄影才能从岸线伸到水面。
+    float dither = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy)).x;
+    float terrainShadow = lightingShadow(vWorldPosition, vec3(0.0, 1.0, 0.0), surfaceDepth, dither);
     float waterCloudShadow = lightingCloudShadow(vWorldPosition);
-    color *= mix(0.58, 1.0, waterCloudShadow);
+    float sunVisibility = terrainShadow * mix(1.0, waterCloudShadow, 0.82);
+    glint *= mix(0.15, 1.0, sunVisibility); // 云影与树影只留下被遮挡的阳光高光。
+    color *= mix(0.78, 1.0, sunVisibility); // 只在阴影里压暗，反射内容与深水色仍然保留。
+    // 远处水面在屏幕上只剩几像素，逐渐收敛到同方向的天空色，与地平线接上。
+    // 收敛距离拉到九公里，十二公里远平面处已经接近真实地平线，不再出现一条浅色横带。
+    vec3 horizonDir = normalize(vec3(-view.x, 0.02, -view.z));
+    vec3 horizon = lightingSampleSky(horizonDir, 3.0) * vec3(0.82, 0.90, 1.0);
+    color = mix(color, horizon, smoothstep(1500.0, 9000.0, surfaceDepth) * 0.45);
     fragColor = vec4(color, 1.0); // 水面不透明写入，深度随后覆盖。
 }

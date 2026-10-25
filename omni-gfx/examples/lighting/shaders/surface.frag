@@ -111,7 +111,9 @@ void main()
         return;
     }
     float cloudShadow = lightingCloudShadow(vWorldPosition); // 大块云影。
-    float cloudWeight = smoothstep(22.0, 70.0, distance) * 0.70; // 近景保持阳光，云影落在中远景，避免整块前景被压黑。
+    // 近景也接收云影：云影贴图与天上的云对应，近处草地、岸坡与球体都会出现大块明暗。
+    // 距离权重从六米开始，避免脚下一小块地面突然变黑；最大只压到零点七八，保留天光。
+    float cloudWeight = smoothstep(6.0, 35.0, distance) * 0.90; // 云影压到接近九成，草地能看到云块投下的明暗。
     float visibility = shadow * mix(1.0, cloudShadow, cloudWeight); // 云影压暗地面，但保留太阳方向感。
     float NdotL = max(dot(normal, sunDirection), 0.0); // 太阳入射角。
     float NdotV = max(dot(normal, view), 0.0); // 视线与法线夹角。
@@ -124,13 +126,19 @@ void main()
     // 直射高光：GGX 微表面，粗糙度决定高光是一条细线还是一片柔亮。
     // 最小粗糙度抬到零点一，避免太阳这种极小光源在低模球面上退化成方块状的单像素亮点。
     float specular = ogxSpecularGGX(normal, view, sunDirection, max(roughness, 0.10), f0); // 标量高光。
-    vec3 direct = sunChroma * (diffuse + specularTint * (specular * uSunIrradiance * visibility)); // 直射光颜色。
+    // 草地与泥土的太阳高光要压到两成以下：低阳时相机和太阳都在地平线上方，
+    // 半向量几乎竖直，平滑地面会得到一大片白色镜面反射，像雪而不是草。
+    // 石块、球与方块保留完整高光，材质差异才看得出来。
+    float specularWeight = uIsTerrain == 1 ? 0.16 : 1.0;
+    vec3 direct = sunChroma * (diffuse + specularTint * (specular * uSunIrradiance * visibility * specularWeight)); // 直射光颜色。
     // 天空环境光：法线方向取天空贴图，漫反射项乘一减菲涅尔，粗糙表面平均更大一片天空。
     vec3 skyDiffuse = lightingSkyAmbient(normal, roughness) * diffuseAlbedo * (1.0 - fresnel); // 漫反射天光。
     vec3 reflection = reflect(-view, normal); // 反射方向。
     float lod = mix(1.0, 5.5, roughness); // 粗糙表面取更模糊的层级。
     float envFresnel = ogxFresnelSchlick(NdotV, f0, 1.0); // 环境反射的菲涅尔。
-    vec3 skySpecular = lightingSampleSky(reflection, lod) * (envFresnel * mix(0.18, 1.0, metallic) * specularTint); // 环境高光；绝缘体很弱，金属明显。
+    // 天空环境高光：绝缘体本来就弱；地面再乘零点二五，避免整片草坡泛出蓝白镜面。
+    vec3 skySpecular = lightingSampleSky(reflection, lod) * (envFresnel * mix(0.18, 1.0, metallic) * specularTint
+                       * (uIsTerrain == 1 ? 0.25 : 1.0)); // 环境高光。
     // 地面反弹：朝下的面接收草地反射的阳光，颜色偏绿；这是屏幕空间反弹之前的基础一层。
     vec3 ground = vec3(0.050, 0.075, 0.030) * sunChroma * (uSunIrradiance * 0.020 * max(-normal.y, 0.0)) * (1.0 - metallic); // 草地反弹。
     vec3 indirect = skyDiffuse + skySpecular + ground; // 间接光。

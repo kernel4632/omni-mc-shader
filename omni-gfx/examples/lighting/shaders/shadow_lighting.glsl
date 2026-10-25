@@ -214,7 +214,7 @@ float lightingShadowCheap(vec3 worldPosition, vec3 normal, float viewDepth, floa
     {
         return 1.0; // 受光。
     }
-    float bias = 0.0006; // 雾点通常在半空，深度偏置取中间值。
+    float bias = 0.0002; // 雾点通常在半空，深度偏置取中间值；偏置过大会让近树影子消失。
     float texel = uShadowTexel * 1.5; // 略宽的核。
     vec2 offset = vec2(cos(dither * 6.28318530718), sin(dither * 6.28318530718)) * texel; // 每次步进取不同方向。
     float visible; // 可见度。

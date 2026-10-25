@@ -76,18 +76,26 @@ float2 ogxCumulusSampleDensity(float4 cloudPos, OgxCumulusMedia media, bool samp
     float4 baseSample = baseNoise.SampleLevel(cloudPos.xyz * baseScale + media.wind * 10.0, 0.0);
     float baseDensity = baseSample.y * 0.4 + baseSample.z * 0.4 + baseSample.w * 0.2;
     baseDensity = ogxRemapSaturate(baseSample.x, baseDensity - 1.0, 1.0);
-    float shapeCurve = ogxCloudTopCurve(ogxSaturate(1.0 - cloudPos.w)) * 0.5;
-    shapeCurve += ogxCumulusCurve(ogxSaturate(1.15 - cloudPos.w * 1.43)) * 0.5;
-    baseDensity *= shapeCurve;
-    baseDensity *= ogxFastSqrt(ogxSaturate(cloudPos.w * 2.5)) * 0.2 + 0.8;
-    baseDensity *= lerp(1.0, ogxCloudTopCurve(ogxSaturate(cloudPos.w * 3.0)), media.wetness);
-    // 大尺度云量：二维天气噪声决定哪一片天空长云。同一纵列从云底到云顶共享同一份覆盖，
-    // 积云才会从平底往上长；左右分块来自天气图，不是按视线角度切出来的柱子。
-    float coverageNoise = curlNoise.SampleLevel(cloudPos.xz * 1.8e-5 + media.wind.xz * 0.002 + vec2(coverageOffset), 0.0).r;
-    coverage = ogxRemapSaturate(1.0 - coverageNoise, coverage * 0.2, coverage);
-    baseDensity = ogxRemapSaturate(baseDensity, coverage, 1.0);
-    baseDensity *= ogxCumulusCurve(ogxSaturate(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
-    baseDensity *= ogxCloudTopCurve(ogxSaturate(cloudPos.w * 1.8));
+    // 天气图分两个尺度：低频先圈出几公里宽的大云团，高频再把同一片天空打碎成大小不一的云泡。
+    // 只用一层五十五公里周期的低频噪声时，整片天空只会长出一朵巨大的云，看起来像蘑菇。
+    float coverageLow = curlNoise.SampleLevel(cloudPos.xz * 1.0e-5 + media.wind.xz * 0.002
+        + vec2(coverageOffset), 0.0).r;
+    float coverageHigh = curlNoise.SampleLevel(cloudPos.xz * 3.2e-5 + media.wind.xz * 0.006
+        + vec2(coverageOffset * 1.7 + 0.37), 0.0).g;
+    float coverageNoise = coverageLow * 0.75 + coverageHigh * 0.25;
+    // 云顶收口高度随高频天气变化：有的云长到接近云层顶，有的只到中段，云的体量因此不同。
+    float topStart = lerp(0.58, 0.84, ogxSaturate(coverageHigh * 1.25));    // 竖直包络：底部在很短的高度内到达满密度，形成平底；顶部慢慢收圆。
+    // 旧版把底部密度从零慢慢抬起，侧面看会变成上宽下窄的蘑菇柄；同时去掉顶部过强的曲线。
+    float bottomShape = smoothstep(0.0, 0.045, cloudPos.w);
+    float topShape = 1.0 - smoothstep(topStart, 1.0, cloudPos.w);
+    baseDensity *= bottomShape * topShape;
+    baseDensity *= 0.82 + 0.18 * ogxFastSqrt(ogxSaturate(cloudPos.w * 2.5));
+    // 大尺度云量：同一纵列从云底到云顶共享同一份覆盖，积云才会从平底往上长。
+    // 把天气噪声换成“云量”再当密度阈值：噪声低的地方阈值接近一，整列都是蓝天；
+    // 噪声高的地方阈值下降，只留下被三维噪声填满的云块。这样天空既有清楚的云团，也有蓝天缝。
+    float cloudField = ogxSaturate((coverageNoise - (1.0 - coverage)) / max(coverage, 0.05));
+    float densityThreshold = lerp(1.0, 0.04, cloudField);
+    baseDensity = ogxRemapSaturate(baseDensity, densityThreshold, 1.0);
     baseDensity = ogxSaturate(baseDensity);
     float detailedDensity = 0.0; // 高频侵蚀后的密度。
     if (baseDensity > 1.0e-6 && sampleDetail) // 只有基础密度存在才付细节成本。

@@ -41,7 +41,7 @@ void main()
     // 反射背景只需要已有天空贴图，不再步进一遍云；水面不会为倒影付第二次体积云成本。
     if (uSkyMode == 2)
     {
-        vec3 reflected = lightingSampleSky(direction, 0.6); // 带云与太阳的反射天空。
+        vec3 reflected = lightingSampleSky(direction, 2.2); // 带云与太阳的反射天空；取较高 mip，水面不会继承天空贴图的步进噪点。
         outDirect = vec4(reflected, 1.0); // 普通颜色目标的第一个附件。
         outIndirect = vec4(reflected, 1.0); // 主场景模式不会用到这一路。
         outNormalDepth = vec4(0.5, 0.5, 1.0, 0.0); // 天空没有几何。
@@ -66,7 +66,7 @@ void main()
     else
     {
         vec2 noise = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy)); // 蓝噪声抖动起点。
-        vec4 cloud = lightingCloudMarch(direction, noise, uSkyMode == 1 ? 20 : 26); // 贴图二十步，主画面二十六步。
+        vec4 cloud = lightingCloudMarch(direction, noise, uSkyMode == 1 ? 32 : 26); // 贴图三十二步，主画面二十六步。
         sky = sky * (1.0 - cloud.a) + cloud.rgb; // 合成云。
     }
     // 地平线以下没有地形时避免纯黑：用略抬高的视线再取一次天空，远处水面会自然融进去。

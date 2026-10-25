@@ -41,19 +41,19 @@ import png  # 无依赖图片写入。
 WIDTH = 1280  # 截图宽度。
 HEIGHT = 720  # 截图高度。
 NEAR = 0.2  # 近平面。
-FAR = 2600.0  # 远平面，覆盖地形圆盘与远景。
+FAR = 12000.0  # 远平面，覆盖到真实地平线；水面在十二公里处与天空接上。
 FOV = 44.0  # 竖直视场角，略宽于五十毫米镜头，让整排球与湖面同时入镜。
 EYE_HEIGHT = 1.72  # 站立视高，米。
-SUN_DIRECTION = (0.32, 0.28, -0.90)  # 太阳方向：湖对岸偏右，仰角约十六度，落在画面右上方；云与水面高光都能看到。
+SUN_DIRECTION = (0.34, 0.15, -0.94)  # 太阳方向：湖对岸偏右，仰角约九度；低阳从石门中间穿过，形成长光柱。
 SUN_COLOR = (1.0, 0.975, 0.945)  # 五千八百开左右的太阳色度倾向，最终颜色再乘大气透过率。
 SUN_IRRADIANCE = 4.5  # 太阳辐照度倍率。
-SKY_INTENSITY = 0.85  # 天空整体倍率；抬到肉眼可见的亮度，背光地面仍保留蓝灰天光。
+SKY_INTENSITY = 0.85  # 天空整体倍率；低阳场景保留可见的天光与云层亮度。
 CASCADE_SIZE = 1024  # 每级阴影贴图边长。
 CASCADE_COUNT = 3  # 三级级联。
 CASCADE_EXTENTS = (26.0, 90.0, 300.0)  # 每级正交视锥半边长，米。
 CASCADE_SPLITS = (32.0, 115.0, 380.0)  # 按视深度选级的分界。
 CASCADE_BLEND = 10.0  # 级联交界过渡宽度。
-SKY_MAP_SIZE = (256, 128)  # 环境光与反射用的等距柱状天空贴图尺寸。
+SKY_MAP_SIZE = (512, 256)  # 环境光与反射用的等距柱状天空贴图尺寸；反射里的云噪点会随分辨率下降。
 SKY_MAP_INTERVAL = 8  # 天空贴图每八帧更新一次，云移动很慢。
 CLOUD_STEPS = 40  # 云沿视线步进数；半分辨率下可以多走几步保住云内层次。
 CLOUD_SHADOW_SIZE = 512  # 云影贴图边长。
@@ -67,12 +67,12 @@ CLOUD_BLEND = 0.14  # 云时间累积里本帧权重。
 BLOOM_SIZE = (320, 180)  # 泛光最细一级。
 BLOOM_COARSE_SIZE = (160, 90)  # 泛光最粗一级。
 LUMINANCE_SIZE = (64, 36)  # 曝光统计第一级。
-EXPOSURE_KEY = 0.15  # 自动曝光目标中间亮度；曝光只统计不透明场景，水面再亮也不会把地面压黑。
+EXPOSURE_KEY = 0.09  # 自动曝光目标中间亮度；低阳逆光场景下压低，天空、水面与草地都保留层次。
 BLOOM_STRENGTH = 0.08  # 泛光强度；压低一点，太阳附近不会糊成一片白。
-FOG_DENSITY = 0.016  # 近地面雾密度倍率；贴水薄雾给光柱足够介质，又不盖住近景。
-FOG_HEIGHT = 26.0  # 雾的高层衰减高度；让远山也带一点空气透视。
-FOG_SCATTER = 2.40  # 雾中阳光散射强度。
-FOG_AMBIENT = 0.022  # 雾中天光。
+FOG_DENSITY = 0.060  # 贴水薄雾密度倍率；雾层只抬高一点四米，光柱贴在水面上，岸坡不被打白。
+FOG_HEIGHT = 26.0  # 雾的高层衰减高度；只留很淡的一层，远处空气透视由解析散射负责。
+FOG_SCATTER = 2.20  # 雾中阳光散射强度；让光柱有可见亮核，同时靠雾层高度压住近岸。
+FOG_AMBIENT = 0.008  # 雾中天光；压低后阴影里的雾接近深蓝，光柱边界才清楚。
 AO_STRENGTH = 1.15  # 环境光遮蔽强度。
 CONTACT_STRENGTH = 1.1  # 接触阴影强度。
 BOUNCE_STRENGTH = 1.2  # 颜色反弹强度。
@@ -397,6 +397,7 @@ class World:
         self.profile = False  # 是否输出每阶段耗时。
         self.water_debug = 0  # 水面调试模式，零正常，一法线，二反射，三折射，四高光。
         self.surface_debug = 0  # 地表调试模式，零正常，一反照率。
+        self.fog_debug = 0  # 雾调试模式，零正常，一太阳可见度，二只输出雾散射。
         self.scene_time = 0.0  # 场景时间。
         self.last_sky_map = -1000  # 上次更新天空立方体的帧。
         self.camera = camera.Camera([geometry.CAMERA_START[0], self.camera_ground + EYE_HEIGHT, geometry.CAMERA_START[1]], fov=FOV)  # 站立相机。
@@ -515,7 +516,7 @@ class World:
         GL.glDepthMask(GL.GL_TRUE)  # 写深度。
         GL.glDisable(GL.GL_CULL_FACE)  # 地形与盒子都按朝外绕序，关闭剔除更稳。
         GL.glEnable(GL.GL_POLYGON_OFFSET_FILL)  # 减少自阴影条纹。
-        GL.glPolygonOffset(2.0, 6.0)  # 阴影贴图向远处推一点，远处斜坡不会出现自阴影条纹。
+        GL.glPolygonOffset(0.5, 1.5)  # 低阳时阴影贴图的深度斜率很大，偏移过大会让树影落不到地面；只留很小的偏移。
         for index, matrix in enumerate(self.light_matrices):  # 每级。
             if index == 2 and frame % 2 == 1:  # 最远一级每两帧更新，远景阴影滞后一帧看不出来。
                 continue  # 保留上一帧深度。
@@ -777,6 +778,7 @@ class World:
         GL.glDisable(GL.GL_BLEND)  # 水面不透明写入。
         GL.glUseProgram(self.water_program)  # 水面程序。
         self.bind_common(self.water_program, frame, scene_time)  # 通用参数。
+        self.bind_shadows(self.water_program)  # 地形与树冠也会在水面投下影子。
         self.bind_sky_map(self.water_program)  # 天空反射兜底。
         self.bind_noise(self.water_program)  # 泡沫用的二维扰动图。
         set_uniforms(self.water_program, {"uViewProjection": self.view_projection(),
@@ -804,7 +806,8 @@ class World:
                                         "uForward": forward, "uRight": right, "uUp": up,
                                         "uTanHalfFov": tan_half, "uAspect": aspect, "uNear": NEAR, "uFar": FAR,
                                         "uFogDensity": FOG_DENSITY, "uFogHeight": FOG_HEIGHT,
-                                        "uFogScatter": FOG_SCATTER, "uFogAmbient": FOG_AMBIENT})  # 雾参数。
+                                        "uFogScatter": FOG_SCATTER, "uFogAmbient": FOG_AMBIENT,
+                                        "uFogDebug": self.fog_debug})  # 雾参数。
         self.bind_shadows(self.fog_program)  # 阴影，用于光柱；先绑，避免覆盖场景颜色与深度。
         self.bind_sky_map(self.fog_program)  # 天光。
         self.bind_noise(self.fog_program)  # 雾噪声。
@@ -1015,6 +1018,7 @@ def run(args) -> None:
     world.profile = args.profile  # 性能分析。
     world.water_debug = args.water_debug  # 水面调试模式。
     world.surface_debug = args.surface_debug  # 地表调试模式。
+    world.fog_debug = args.fog_debug  # 雾调试模式。
     output = Path(args.screenshot)  # 截图路径。
     perf_path = Path(args.perf)  # 性能记录路径。
     try:
@@ -1090,6 +1094,7 @@ def main() -> None:
     parser.add_argument("--bloom", type=float, default=BLOOM_STRENGTH, help="泛光强度")  # 泛光。
     parser.add_argument("--water-debug", type=int, default=0, help="水面调试：零正常，一法线，二反射，三折射，四高光")  # 水面调试。
     parser.add_argument("--surface-debug", type=int, default=0, help="地表调试：零正常，二反照率")  # 地表调试。
+    parser.add_argument("--fog-debug", type=int, default=0, choices=(0, 1, 2), help="雾调试：零正常，一可见度，二散射")  # 雾调试。
     parser.add_argument("--profile", action="store_true", help="输出每阶段耗时，仅用于性能分析")  # 分析。
     args = parser.parse_args()  # 解析。
     run(args)  # 运行。
