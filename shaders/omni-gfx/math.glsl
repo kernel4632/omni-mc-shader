@@ -50,6 +50,10 @@ float ogxFastSqrt(float x) { return uintBitsToFloat(uint(0x1fbd1df5 + (floatBits
 // 把值从一段区间线性映射到零到一，再夹紧；区间外不会越界。
 float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); }
 
+// 单位化向量，长度极小时用一个小分母兜底，避免着色点出现除零后的无穷值。
+// 比直接除以长度多一点开销，但水面与反射会在掠射角读到极短向量，必须兜底。
+vec3 ogxNormalize(vec3 vector) { return vector * inversesqrt(max(dot(vector, vector), 1e-10)); }
+
 // GLSL 取模的语义：结果始终落在零到除数之间，负数也一样。
 // 为什么不用机器附带的余数函数：它的符号跟随被除数，负数会得到负值，跟 GLSL 的取模不同。
 float ogxMod(float x, float y) { return x - y * floor(x / y); }
@@ -353,9 +357,19 @@ vec3 ogxRgbToHsv(vec3 color)
     return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
-// 环形径向轮廓：中心亮、边缘按四次方乘线性衰减，用于光晕。
-float ogxRadialCurve(float x)
+// 三个轴的旋转合成：先俯仰、再偏航、最后滚转，供吸积盘与末地行星摆正自己的坐标系。
+// 这里保留原程序的扁平构造参数顺序：生成 GLSL 后由 GLSL 的列主序规则解释，
+// 因此运行时矩阵与旧实现完全相同；不要在 Slang 侧改成按列传入，否则生成文本会换序。
+mat3 ogxRotateMatrix(float x, float y, float z)
 {
+    mat3 matx = mat3(1.0, 0.0, 0.0, 0.0, cos(x), sin(x), 0.0, -sin(x), cos(x)); // 绕横轴俯仰。
+    mat3 maty = mat3(cos(y), 0.0, -sin(y), 0.0, 1.0, 0.0, sin(y), 0.0, cos(y)); // 绕纵轴偏航。
+    mat3 matz = mat3(cos(z), sin(z), 0.0, -sin(z), cos(z), 0.0, 0.0, 0.0, 1.0); // 绕前后轴滚转。
+    return maty * matx * matz; // 三个旋转按原程序的顺序合成。
+}
+
+// 环形径向轮廓：中心亮、边缘按四次方乘线性衰减，用于光晕。
+float ogxRadialCurve(float x){
     float x2 = x * x;
     return 12.207 * x2 * x2 * (1.0 - x);
 }

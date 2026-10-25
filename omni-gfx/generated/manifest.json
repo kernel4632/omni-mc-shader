@@ -5,11 +5,11 @@
     {
       "module": "math",
       "source": "omni-gfx/src/math.slang",
-      "sourceSha256": "7b3f1b6bdf0fda1ca07d8ca9c423f387069387f0227e62b7d679e384f0e25491",
+      "sourceSha256": "6d22bd981943dfc9f0e598784af8ee7f9e755769e42450990ba0e7205aa7d380",
       "shader": "shaders/omni-gfx/math.glsl",
       "generated": "omni-gfx/generated/glsl/math.glsl",
-      "glslSha256": "ad4c524dd6f2de7f2deaec89ec2abd44b445b48dd3e3c80071e72b7e93607461",
-      "glslLines": 382
+      "glslSha256": "11aa291de2c2786d648fe2b68cbc030a218394fea436f4240170e37b5aedfec2",
+      "glslLines": 396
     },
     {
       "module": "color",
@@ -68,11 +68,11 @@
     {
       "module": "fog",
       "source": "omni-gfx/src/fog.slang",
-      "sourceSha256": "7f1e27b1555c6ba884651b2c76925f5a2973e50bd404c3622b875ffefb748a47",
+      "sourceSha256": "b2c9a17f0f36a9eea6fdcec10a42425e5300d682085af5f399b91ec4f76cf05b",
       "shader": "shaders/omni-gfx/fog.glsl",
       "generated": "omni-gfx/generated/glsl/fog.glsl",
-      "glslSha256": "61491b6ee16fab093b060b6b27de879f0867971d574f5bb750438a62037808f6",
-      "glslLines": 178
+      "glslSha256": "fd1dd82b4be2353722816099045c536048d7520d3de130730d7342558d58bd1e",
+      "glslLines": 366
     },
     {
       "module": "shadow",
@@ -118,6 +118,51 @@
       "generated": "omni-gfx/generated/glsl/antialias.glsl",
       "glslSha256": "5ebbbe81f14139bc15b6899c297c4ea18bcf46730127846e5f97cbf185d7c7b8",
       "glslLines": 267
+    },
+    {
+      "module": "weather",
+      "source": "omni-gfx/src/weather.slang",
+      "sourceSha256": "7390969c85f48009e9e026dd86320e8c4ac80eb1a42c1de20244ef92fcf5be51",
+      "shader": "shaders/omni-gfx/weather.glsl",
+      "generated": "omni-gfx/generated/glsl/weather.glsl",
+      "glslSha256": "25277b69ecf046bb8a275df309b5a1686cbf1b4cc00a63de28107bef0d52cae0",
+      "glslLines": 88
+    },
+    {
+      "module": "surface",
+      "source": "omni-gfx/src/surface.slang",
+      "sourceSha256": "8dc21fb870ed262f77b0d5bfaa8cbdcfa90b81a888355bff95e6c11718e52992",
+      "shader": "shaders/omni-gfx/surface.glsl",
+      "generated": "omni-gfx/generated/glsl/surface.glsl",
+      "glslSha256": "c55937efca73efca5d1a2ad02f2f9ccf487e09f5dfe3480dfe10e548bdc817fc",
+      "glslLines": 111
+    },
+    {
+      "module": "voxel",
+      "source": "omni-gfx/src/voxel.slang",
+      "sourceSha256": "14448c9bb9e91eb17f9b1051b5a4487c6c799cfe7ce4259c4b0345dfd34a9ef3",
+      "shader": "shaders/omni-gfx/voxel.glsl",
+      "generated": "omni-gfx/generated/glsl/voxel.glsl",
+      "glslSha256": "5e4b47196082d4ce6dab3cf10373cb60dd938cebd1140797fe462c3b459fbecc",
+      "glslLines": 137
+    },
+    {
+      "module": "upscale",
+      "source": "omni-gfx/src/upscale.slang",
+      "sourceSha256": "e343c332660fc94bd41b5bc2aac2a3207c6f821210364ef444d0367b18b6ecf7",
+      "shader": "shaders/omni-gfx/upscale.glsl",
+      "generated": "omni-gfx/generated/glsl/upscale.glsl",
+      "glslSha256": "25675d38ba35dc6e4a4f5dd77ff22de9e665e3b967497cc3b5c019bfcb794066",
+      "glslLines": 160
+    },
+    {
+      "module": "parallax",
+      "source": "omni-gfx/src/parallax.slang",
+      "sourceSha256": "3fe21d23d06a7b94f357fd09443ee764b9afe7c4e4fdb3addb6e109bd196ed08",
+      "shader": "shaders/omni-gfx/parallax.glsl",
+      "generated": "omni-gfx/generated/glsl/parallax.glsl",
+      "glslSha256": "a313b0c60a669f36ff8da70fe5cc95afa52f4de320599840e47b8d3184fc66a9",
+      "glslLines": 289
     }
   ]
 }

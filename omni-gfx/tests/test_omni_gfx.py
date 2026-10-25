@@ -51,7 +51,7 @@ class OmniGfxTests(unittest.TestCase):
         for name in generate.MODULES:
             text = generate.module_text(name)
             with self.subTest(module=name):
-                self.assertNotRegex(text, r"\b(?:float[234](?:x[234])?|Sampler2D|lerp|asfloat|asuint|asint)\b")  # 只允许 GLSL 名字。
+                self.assertNotRegex(text, r"\b(?:float[234](?:x[234])?|Sampler2D|Sampler3D|Usampler3D|lerp|asfloat|asuint|asint)\b")  # 只允许 GLSL 名字。
                 self.assertNotIn(".Load(", text)  # 纹理取像素必须换成 texelFetch。
                 self.assertNotIn("static const", text)  # GLSL 常量不带静态前缀。
 

@@ -23,7 +23,8 @@ SHADER_OUT = ROOT / "shaders" / "omni-gfx"  # Minecraft 直接引入的位置。
 GENERATED_OUT = LIB / "generated" / "glsl"  # 独立库查看与分发的副本。
 MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳。
 MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog",
-           "shadow", "gi", "reflection", "post", "antialias")  # 阶段一二的核心模块与阶段三的九个效果模块。
+           "shadow", "gi", "reflection", "post", "antialias",
+           "weather", "surface", "voxel", "upscale", "parallax")  # 阶段一二的核心模块、阶段三的九个效果模块与第二批迁移的独立模块。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
 DISPLAY = {
@@ -40,6 +41,11 @@ DISPLAY = {
     "reflection": "反射",
     "post": "后期",
     "antialias": "抗锯齿",
+    "weather": "天气",
+    "surface": "表面",
+    "voxel": "体素",
+    "upscale": "放大",
+    "parallax": "视差",
 }  # 每个生成文件头里的中文模块名，顺序与模块表一致。
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。
@@ -48,7 +54,8 @@ TYPE_WORDS = {
     "float4": "vec4", "float3": "vec3", "float2": "vec2", "float": "float",
     "int4": "ivec4", "int3": "ivec3", "int2": "ivec2", "int": "int",
     "uint4": "uvec4", "uint3": "uvec3", "uint2": "uvec2", "uint": "uint",
-}
+    "Sampler3DShadow": "sampler3DShadow", "Usampler3D": "usampler3D", "Sampler3D": "sampler3D",
+}  # 三维纹理的句柄名也必须替换，体积云与体素追踪都靠它取格。
 
 # 逐项替换的语法差异；每项都配一条原因，方便新会话判断能不能扩展。
 LOWERINGS = (
@@ -72,7 +79,7 @@ SAMPLE_LEVEL = re.compile(r"(\w+)\.SampleLevel\(\s*((?:[^(),]|\([^()]*\))+?)\s*,
 SAMPLE_CMP = re.compile(r"(\w+)\.SampleCmpLevelZero\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 两参数是纹理坐标与比较值。
 
 # 生成文件里不能残留的 Slang 写法；漏掉一种就说明转换表需要补充。
-LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(|\.SampleLevel\s*\(|\.SampleCmpLevelZero\s*\(")  # 成员采样与残留类型名都要拦住。
+LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|Sampler3D|Usampler3D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(|\.SampleLevel\s*\(|\.SampleCmpLevelZero\s*\(")  # 成员采样与残留类型名都要拦住。
 
 # 光影会把库嵌进自己的程序，库文件不能再声明语言版本。
 VERSION = re.compile(r"(?m)^\s*#version\b")
@@ -141,6 +148,7 @@ def _header(name: str) -> str:
 
 
 # 每个模块只保留一份转换实现，清单与写入共用同一份结果，避免两处产物不同。
+# 缓存没有上限：模块总数固定，缓存不会随运行次数增长。
 @lru_cache(maxsize=None)  # 同一进程里每个模块只读取和转换一次，测试与清单共用结果。
 def module_text(name: str) -> str:
     """返回一个模块完整的 GLSL 文本，包含生成说明与源文件原有内容。
