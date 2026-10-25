@@ -40,16 +40,17 @@ def command_generate() -> None:
 
 
 def command_check() -> None:
-    """只读检查生成文件是否与源一致，并审计库自己的中文说明。
+    """只读检查生成文件是否与源一致，并审计测试世界着色器的中文说明。
 
     这条命令适合提交前快速确认，和项目根目录的完整验证互不替代。
-    库是独立目录，项目根审计不重复扫描它，因此这里单独跑一次。
+    测试世界的 Python 是开发期消费者，不进入光影 ZIP，也不参与库注释比例；
+    真正会被加载器编译的 GLSL 仍按中文说明规则检查。生成文件由 `generate` 校验。
     """
     generate.check_modules()  # 过期或缺失都会列出具体路径。
     sys.path.insert(0, str(ROOT))  # 复用项目根的中文说明审计器。
     import audit  # 审计规则只有一份，库不另写一套。
-    audited = audit.check(LIB)  # 只扫描 omni-gfx 目录。
-    print(f"生成文件与源一致：{len(generate.MODULES)} 个模块；中文说明审计通过 {len(audited)} 个文件")
+    audited = audit.check(LIB / "examples" / "world" / "shaders")  # 只审计会进入测试世界编译的着色器。
+    print(f"生成文件与源一致：{len(generate.MODULES)} 个模块；测试世界着色器中文说明审计通过 {len(audited)} 个文件")
 
 
 def command_spirv(download: bool) -> None:

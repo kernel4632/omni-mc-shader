@@ -1,214 +1,667 @@
-"""植被与石块：把树、草叶、花和散落岩石追加进地形顶点数组。
+"""照片级测试世界的植被与石块：树干、树枝、树叶卡片、草丛、野花与巨石。
 
-调用位置：`omni-gfx/examples/world/render.py` 生成地形后调用一次。
+调用位置：
+    `omni-gfx/examples/world/render.py` 在地形网格之后调用 `build`；
+    返回三组顶点数组：不透明的树干与岩石、带透明通道的树叶、草丛与野花。
 设计原因与取舍：
-    树冠只写露在外面的面：先收集一整团叶方块，再逐格判断六个邻居是否也在叶团里，
-    这样一顶帽子从几百个面降到几十个面，阴影与主画面都不用为看不见的面付费。
-    草叶用两片交叉四边形而不是实体方块：远看有体积，近看是两面薄片，
-    这种做法和游戏里的植物一样，几乎不增加三角形却明显打散地面的纯色块。
-    所有位置与形状都由整数哈希决定，换机器、换会话都得到同一片森林。
+    树叶不用方块叶团，而是几十张带叶片的透明卡片交叉堆叠。
+    方块叶团的轮廓一眼就是体素，透明卡片在逆光时能透出层次，边缘也自然。
+    草叶同样用卡片：一张卡片是一小丛，近看每片叶子有独立渐变，远看连成草甸。
+    树干、树枝用锥形圆管，岩石用细分二十面体加噪声位移；两者都带真实扫描纹理，
+    粗糙度与法线来自贴图，不靠纯色高光。所有落点与形状由固定哈希决定，画面可重复。
 """
 from __future__ import annotations
 
-from array import array  # 与地形共用紧凑浮点数组。
+import math  # 三角函数、平方根与向量运算。
+import random  # 固定种子的落点与形状；不使用系统随机。
+from array import array  # 紧凑顶点数组。
 
-import terrain  # 复用噪声、列高读取与四边形写入工具。
+import terrain  # 高度、坡度与材质编号。
+
+PROPS_FLOATS = 13  # 位置三、法线三、UV 二、颜色三、风摆一、材质一。
+CARDS_FLOATS = 12  # 位置三、法线三、UV 二、颜色三、风摆一。
+
+TREE_COUNT = 88  # 中近景树的数量；再多会挡住湖面与山口。
+GRASS_COUNT = 16000  # 近景草丛卡片数量。
+REED_COUNT = 2600  # 湖岸芦苇数量。
+FLOWER_COUNT = 2200  # 近景野花卡片数量。
+ROCK_COUNT = 30  # 散落岩石与巨石数量。
+GRASS_RADIUS = 42.0  # 草丛只铺在机位周围，远处交给地面贴图。
+HERO_TREES = (  # 固定机位附近的主景树，手动摆位保证构图。
+    (-48.0, 132.0, 1.00, 0),
+    (60.0, 126.0, 0.94, 2),
+    (-92.0, 92.0, 1.05, 0),
+    (108.0, 82.0, 1.00, 1),
+    (-140.0, 10.0, 1.15, 0),
+    (150.0, 0.0, 1.08, 2),
+    (-60.0, -180.0, 1.20, 0),
+    (50.0, -190.0, 1.05, 1),
+)
 
 
-def _scatter(heights: list[float], size: int, step: int, seed: int, chance: float):
-    """按固定网格撒点，返回满足条件的落点与编号。
+def _append_quad(cards: array, corners, normal, uv_rect, color, sway_bottom: float, sway_top: float) -> None:
+    """把一张卡片写成两个三角形，四个角各自带风摆权重。
 
-    网格保证同类植物之间至少有 `step` 米间隔，抖动让它们不排成一条直线。
-    条件：落在草地上、坡度不大、高于海面两格以上。
+    `corners` 依次是左下、左上、右上、右下；UV 的纵向零在下、一在上，
+    因此草叶与花从底边向上生长，树叶卡片则整张参与摆动。
     """
-    points = []  # 收集落点。
-    for gz in range(2, size - 2, step):  # 逐格扫描。
-        for gx in range(2, size - 2, step):  # 当前格。
-            roll = terrain._hash3(gx, 3, gz, seed)  # 每个格子的固定随机数。
-            if roll > chance:  # 大多数格子不长东西。
-                continue
-            jitter_x = int((terrain._hash3(gx, 5, gz, seed + 1) - 0.5) * step)  # 横向抖动。
-            jitter_z = int((terrain._hash3(gx, 7, gz, seed + 2) - 0.5) * step)  # 纵向抖动。
-            x = max(1, min(size - 2, gx + jitter_x))  # 夹进岛内。
-            z = max(1, min(size - 2, gz + jitter_z))
-            height = terrain.column(heights, size, x, z)  # 落点高度。
-            if height < terrain.SEA_LEVEL + 1.0:  # 沙滩与水边不长树。
-                continue
-            slope = terrain.slope_at(heights, size, x, z)  # 坡度。
-            if slope > 1.0:  # 陡坡站不住。
-                continue
-            points.append((x, z, height, gx, gz))  # 记录落点与格子编号。
-    return points  # 结果顺序固定，画面可重复。
+    u0, v0, u1, v1 = uv_rect
+    uvs = ((u0, v0), (u0, v1), (u1, v1), (u1, v0))  # 与四角顺序对应。
+    for index in (0, 1, 2, 0, 2, 3):  # 两个三角形。
+        point = corners[index]
+        uv = uvs[index]
+        sway = sway_bottom if index in (0, 3) else sway_top  # 下边少摆、上边多摆。
+        cards.extend((point[0], point[1], point[2], normal[0], normal[1], normal[2],
+                      uv[0], uv[1], color[0], color[1], color[2], sway))
 
 
-def _leaf_color(x: int, y: int, z: int, seed: int) -> tuple[float, float, float]:
-    """叶片颜色：同一棵树也有深浅，避免树冠像一块塑料。"""
-    value = terrain._hash3(x, y, z, seed)  # 每格叶子的固定随机数。
-    depth = 0.19 + value * 0.11  # 绿色分量。
-    return (0.045 + value * 0.030, depth, 0.035 + value * 0.028)  # 偏深的叶绿，红光低一点才不会发黄。
-
-
-def add_tree(vertices: array, x: int, z: int, ground: float, seed: int) -> int:
-    """在指定列上长一棵树，返回写入的三角形数。
-
-    树干高四到七格，树冠是三层半径递减的叶团；每团里再按哈希挖掉一部分格子，
-    边缘因此不规则，不会像倒扣的碗。
-    """
-    triangles = 0  # 本棵树写入的三角形。
-    trunk = 5 + int(terrain._hash3(x, 11, z, seed) * 4)  # 树干高度。
-    wood = (0.24, 0.17, 0.11)  # 树干底色。
-    taper = 0.90 + 0.20 * terrain._hash3(x, 13, z, seed)  # 每棵树的粗细倍率。
-    triangles += terrain.push_box(vertices, (x + 0.32, ground, z + 0.32),
-                                  (0.36 * taper, float(trunk), 0.36 * taper), wood, terrain.MATERIAL_WOOD,
-                                  0.95, 0.35)  # 树干略微内缩，树冠不会浮在树干外面。
-    top = ground + trunk  # 树冠中心高度。
-    leaves = set()  # 叶方块集合，坐标是整数格。
-    for layer in range(-2, 4):  # 六层树冠，上下两层收窄。
-        radius = 3.1 - abs(layer + 0.4) * 0.62  # 中间最宽。
-        if layer > 0:  # 上半部分收得更快。
-            radius -= layer * 0.30
-        span = int(radius + 0.5)  # 转成整数格数。
-        for dz in range(-span, span + 1):  # 逐格填充。
-            for dx in range(-span, span + 1):
-                distance = (dx * dx + dz * dz) ** 0.5  # 到中心的水平距离。
-                if distance > radius + 0.25:  # 圆盘边缘。
-                    continue
-                roll = terrain._hash3(x + dx, int(top) + layer, z + dz, seed + 9)  # 边缘挖洞用。
-                if distance > radius - 0.4 and roll < 0.40:  # 外圈随机缺格，叶团因此不圆滑。
-                    continue
-                leaves.add((x + dx, int(top) + layer, z + dz))  # 记录叶方块。
-    faces = (  # 六个方向的邻居偏移与面法线。
-        ((0, 1, 0), (0.0, 1.0, 0.0)),
-        ((0, -1, 0), (0.0, -1.0, 0.0)),
-        ((0, 0, -1), (0.0, 0.0, -1.0)),
-        ((0, 0, 1), (0.0, 0.0, 1.0)),
-        ((-1, 0, 0), (-1.0, 0.0, 0.0)),
-        ((1, 0, 0), (1.0, 0.0, 0.0)),
+def _card_corners(center, right, up, half_width: float, half_height: float, bottom_anchor: bool):
+    """由中心点、横轴与纵轴构造四个角；`bottom_anchor` 为真时中心在底边。"""
+    if bottom_anchor:  # 草叶与花的根在底边。
+        base = (center[0] - right[0] * half_width, center[1] - right[1] * half_width,
+                center[2] - right[2] * half_width)
+        base_r = (center[0] + right[0] * half_width, center[1] + right[1] * half_width,
+                  center[2] + right[2] * half_width)
+        top = (base[0] + up[0] * half_height * 2.0, base[1] + up[1] * half_height * 2.0,
+               base[2] + up[2] * half_height * 2.0)
+        top_r = (base_r[0] + up[0] * half_height * 2.0, base_r[1] + up[1] * half_height * 2.0,
+                 base_r[2] + up[2] * half_height * 2.0)
+        return (base, top, top_r, base_r)
+    return (
+        (center[0] - right[0] * half_width - up[0] * half_height,
+         center[1] - right[1] * half_width - up[1] * half_height,
+         center[2] - right[2] * half_width - up[2] * half_height),
+        (center[0] - right[0] * half_width + up[0] * half_height,
+         center[1] - right[1] * half_width + up[1] * half_height,
+         center[2] - right[2] * half_width + up[2] * half_height),
+        (center[0] + right[0] * half_width + up[0] * half_height,
+         center[1] + right[1] * half_width + up[1] * half_height,
+         center[2] + right[2] * half_width + up[2] * half_height),
+        (center[0] + right[0] * half_width - up[0] * half_height,
+         center[1] + right[1] * half_width - up[1] * half_height,
+         center[2] + right[2] * half_width - up[2] * half_height),
     )
-    for cx, cy, cz in leaves:  # 逐叶方块写外表面。
-        color = _leaf_color(cx, cy, cz, seed + 17)  # 每格自己的颜色。
-        sway = min(1.0, 0.35 + (cy - ground) / max(float(trunk), 1.0) * 0.55)  # 越靠上摆得越多。
-        for (dx, dy, dz), normal in faces:  # 六个方向。
-            if (cx + dx, cy + dy, cz + dz) in leaves:  # 内部面不写。
-                continue
-            shade = 1.0 if normal[1] > 0.0 else 0.78  # 顶面亮，侧面暗，底面最暗。
-            face = (color[0] * shade, color[1] * shade, color[2] * shade)  # 面颜色。
-            if normal[1] > 0.0:  # 顶面的四个角。
-                corners = [(cx, cy + 1, cz), (cx, cy + 1, cz + 1), (cx + 1, cy + 1, cz + 1), (cx + 1, cy + 1, cz)]
-            elif normal[1] < 0.0:  # 底面。
-                corners = [(cx, cy, cz), (cx + 1, cy, cz), (cx + 1, cy, cz + 1), (cx, cy, cz + 1)]
-            elif normal[2] < 0.0:  # 北面。
-                corners = [(cx, cy, cz), (cx, cy + 1, cz), (cx + 1, cy + 1, cz), (cx + 1, cy, cz)]
-            elif normal[2] > 0.0:  # 南面。
-                corners = [(cx + 1, cy, cz + 1), (cx + 1, cy + 1, cz + 1), (cx, cy + 1, cz + 1), (cx, cy, cz + 1)]
-            elif normal[0] < 0.0:  # 西面。
-                corners = [(cx, cy, cz + 1), (cx, cy + 1, cz + 1), (cx, cy + 1, cz), (cx, cy, cz)]
-            else:  # 东面。
-                corners = [(cx + 1, cy, cz), (cx + 1, cy + 1, cz), (cx + 1, cy + 1, cz + 1), (cx + 1, cy, cz + 1)]
-            terrain.push_quad(vertices, corners, normal, face, 0.88, terrain.MATERIAL_LEAF, sway)  # 写入。
-            triangles += 2  # 每个外表面两个三角形。
-    return triangles  # 本棵树的三角形数。
 
 
-def add_tuft(vertices: array, x: float, z: float, ground: float, height: float, seed: int, color) -> int:
-    """写一丛交叉草叶：两片互成直角的四边形，远处看起来有体积。"""
-    half = 0.16  # 草叶半宽。
-    top = ground + height  # 叶片顶端。
-    bright = 0.90 + 0.20 * terrain._hash3(int(x), 23, int(z), seed)  # 每丛亮度不同。
-    face = (color[0] * bright, color[1] * bright, color[2] * bright)  # 草叶颜色。
-    plane_a = [(x - half, ground, z), (x - half * 0.45, top, z), (x + half * 0.45, top, z + 0.001),
-               (x + half, ground, z + 0.001)]  # 第一片。
-    plane_b = [(x, ground, z - half), (x + 0.001, top, z - half * 0.45), (x + 0.001, top, z + half * 0.45),
-               (x, ground, z + half)]  # 第二片，绕纵轴转九十度。
-    terrain.push_quad(vertices, plane_a, (0.0, 0.35, -1.0), face, 0.95, terrain.MATERIAL_BLADE, 1.0)  # 第一片。
-    terrain.push_quad(vertices, plane_b, (-1.0, 0.35, 0.0), face, 0.95, terrain.MATERIAL_BLADE, 1.0)  # 第二片。
-    return 4  # 两片各两个三角形。
+def _rotate(vector, angle: float):
+    """绕纵轴旋转一个水平向量，卡片朝向因此互不平行。"""
+    cos_a = math.cos(angle)
+    sin_a = math.sin(angle)
+    return (vector[0] * cos_a - vector[2] * sin_a, vector[1], vector[0] * sin_a + vector[2] * cos_a)
 
 
-def add_flower(vertices: array, x: float, z: float, ground: float, seed: int) -> int:
-    """写一朵小花：细梗加一片朝向天空的花冠。"""
-    stem_height = 0.35 + 0.20 * terrain._hash3(int(x), 31, int(z), seed)  # 花梗高度。
-    stem = (0.16, 0.30, 0.10)  # 花梗绿色。
-    petals = ((0.85, 0.42, 0.16), (0.82, 0.76, 0.24), (0.72, 0.26, 0.44), (0.86, 0.84, 0.78))  # 四种花色。
-    color = petals[int(terrain._hash3(int(x), 37, int(z), seed) * 4.0) % 4]  # 固定选一种。
-    terrain.push_quad(vertices, [(x - 0.03, ground, z), (x - 0.03, ground + stem_height, z),
-                                 (x + 0.03, ground + stem_height, z + 0.001), (x + 0.03, ground, z + 0.001)],
-                      (0.0, 0.2, -1.0), stem, 0.95, terrain.MATERIAL_BLADE, 0.6)  # 花梗。
-    terrain.push_quad(vertices, [(x - 0.10, ground + stem_height, z + 0.10), (x - 0.10, ground + stem_height + 0.18, z + 0.10),
-                                 (x + 0.10, ground + stem_height + 0.18, z - 0.10), (x + 0.10, ground + stem_height, z - 0.10)],
-                      (0.0, 1.0, 0.0), color, 0.95, terrain.MATERIAL_FLOWER, 0.8)  # 花冠斜着朝上。
-    return 4  # 两片各两个三角形。
+def _tree_color(rng: random.Random) -> tuple[float, float, float]:
+    """给一棵树一个整体色调，同一片林子不会全部一个绿色。"""
+    hue = rng.random()
+    if hue < 0.18:  # 偏黄绿的早秋树。
+        return (0.62, 0.60, 0.40)
+    if hue < 0.30:  # 深绿针叶或背阴树。
+        return (0.38, 0.48, 0.38)
+    if hue < 0.38:  # 少量偏红的灌木。
+        return (0.58, 0.42, 0.32)
+    return (0.46 + rng.random() * 0.14, 0.54 + rng.random() * 0.14, 0.36 + rng.random() * 0.12)
 
 
-def add_bush(vertices: array, x: float, z: float, ground: float, seed: int) -> int:
-    """写一丛矮灌木：贴地的一团叶子，填充树与树之间的空地。"""
-    triangles = 0  # 本丛写入的三角形。
-    leaves = set()  # 叶方块集合。
-    for layer in range(0, 3):  # 三层，越往上越小。
-        radius = 1.5 - layer * 0.42  # 半径。
-        span = int(radius + 0.5)  # 整数格数。
-        for dz in range(-span, span + 1):  # 逐格填充。
-            for dx in range(-span, span + 1):
-                distance = (dx * dx + dz * dz) ** 0.5  # 到中心的水平距离。
-                if distance > radius + 0.2:  # 圆盘边缘。
-                    continue
-                if terrain._hash3(int(x) + dx, layer + 21, int(z) + dz, seed) < 0.22:  # 随机缺口。
-                    continue
-                leaves.add((int(x) + dx, int(ground) + layer, int(z) + dz))  # 记录叶方块。
-    faces = (  # 六个方向的邻居偏移与面法线。
-        ((0, 1, 0), (0.0, 1.0, 0.0)),
-        ((0, -1, 0), (0.0, -1.0, 0.0)),
-        ((0, 0, -1), (0.0, 0.0, -1.0)),
-        ((0, 0, 1), (0.0, 0.0, 1.0)),
-        ((-1, 0, 0), (-1.0, 0.0, 0.0)),
-        ((1, 0, 0), (1.0, 0.0, 0.0)),
-    )
-    for cx, cy, cz in leaves:  # 逐叶方块写外表面。
-        color = _leaf_color(cx, cy, cz, seed + 5)  # 每格自己的颜色。
-        for (dx, dy, dz), normal in faces:  # 六个方向。
-            if (cx + dx, cy + dy, cz + dz) in leaves:  # 内部面不写。
-                continue
-            shade = 1.0 if normal[1] > 0.0 else 0.74  # 顶面亮，侧面暗。
-            face = (color[0] * shade, color[1] * shade, color[2] * shade)  # 面颜色。
-            if normal[1] != 0.0:  # 顶面与底面。
-                y = cy + (1.0 if normal[1] > 0.0 else 0.0)
-                corners = [(cx, y, cz), (cx, y, cz + 1), (cx + 1, y, cz + 1), (cx + 1, y, cz)]
-            elif normal[2] != 0.0:  # 南北面。
-                z = cz + (1.0 if normal[2] > 0.0 else 0.0)
-                corners = [(cx, cy, z), (cx, cy + 1, z), (cx + 1, cy + 1, z), (cx + 1, cy, z)]
-            else:  # 东西面。
-                x = cx + (1.0 if normal[0] > 0.0 else 0.0)
-                corners = [(x, cy, cz), (x, cy + 1, cz), (x, cy + 1, cz + 1), (x, cy, cz + 1)]
-            terrain.push_quad(vertices, corners, normal, face, 0.86, terrain.MATERIAL_LEAF, 0.55)  # 写入。
-            triangles += 2  # 每个外表面两个三角形。
-    return triangles  # 本丛的三角形数。
+def _add_tube(props: array, path, radii, sides: int, tint, material: int, uv_scale: float) -> int:
+    """沿折线生成一根锥形圆管，返回三角形数。
 
-
-def add_vegetation(vertices: array, heights: list[float], size: int) -> int:
-    """把树、灌木、草、花与石块追加到顶点数组，返回三角形总数。
-
-    顺序固定：先树（会挡住草），再灌木、草与花，最后石头；
-    顶点顺序不影响画面，但固定顺序能让截图完全可重复。
+    每个折点生成一圈顶点；相邻两圈之间补侧面四边形。
+    切线接近竖直时改用另一个参考轴，避免叉乘退化。
     """
-    triangles = 0  # 累计三角形。
-    for x, z, height, gx, gz in _scatter(heights, size, 6, 401, 0.34):  # 六米一格，留下草地空隙。
-        triangles += add_tree(vertices, x, z, height, 517 + (gx * 31 + gz * 17) % 97)  # 每棵树用不同哈希种子。
-    for x, z, height, gx, gz in _scatter(heights, size, 5, 457, 0.24):  # 灌木比树更密。
-        triangles += add_bush(vertices, x + 0.5, z + 0.5, height, 463 + gx)  # 一丛灌木。
-    tufts = _scatter(heights, size, 2, 613, 0.50)  # 两米一格，草比较密。
-    for x, z, height, gx, gz in tufts:  # 逐丛生成。
-        if terrain.column(heights, size, x, z) < terrain.SEA_LEVEL + 1.0:  # 水边不长草。
+    rings = []
+    normals_rings = []
+    for index, point in enumerate(path):  # 每个折点算一圈。
+        if index == 0:
+            tangent = (path[1][0] - point[0], path[1][1] - point[1], path[1][2] - point[2])
+        elif index == len(path) - 1:
+            tangent = (point[0] - path[index - 1][0], point[1] - path[index - 1][1], point[2] - path[index - 1][2])
+        else:
+            tangent = (path[index + 1][0] - path[index - 1][0], path[index + 1][1] - path[index - 1][1],
+                       path[index + 1][2] - path[index - 1][2])
+        length = math.sqrt(sum(component * component for component in tangent))
+        tangent = tuple(component / max(length, 1e-6) for component in tangent)
+        reference = (0.0, 0.0, 1.0) if abs(tangent[1]) < 0.92 else (1.0, 0.0, 0.0)
+        right = (tangent[1] * reference[2] - tangent[2] * reference[1],
+                 tangent[2] * reference[0] - tangent[0] * reference[2],
+                 tangent[0] * reference[1] - tangent[1] * reference[0])
+        right_length = math.sqrt(sum(component * component for component in right))
+        right = tuple(component / max(right_length, 1e-6) for component in right)
+        up = (right[1] * tangent[2] - right[2] * tangent[1],
+              right[2] * tangent[0] - right[0] * tangent[2],
+              right[0] * tangent[1] - right[1] * tangent[0])
+        ring = []
+        normal_ring = []
+        for side in range(sides):  # 一圈顶点。
+            angle = 2.0 * math.pi * side / sides
+            offset = (right[0] * math.cos(angle) + up[0] * math.sin(angle),
+                      right[1] * math.cos(angle) + up[1] * math.sin(angle),
+                      right[2] * math.cos(angle) + up[2] * math.sin(angle))
+            ring.append((point[0] + offset[0] * radii[index], point[1] + offset[1] * radii[index],
+                         point[2] + offset[2] * radii[index]))
+            normal_ring.append(offset)
+        rings.append(ring)
+        normals_rings.append(normal_ring)
+    triangles = 0
+    accumulated = 0.0
+    for index in range(len(path) - 1):  # 每两个折点之间一圈侧面。
+        segment = (path[index + 1][0] - path[index][0], path[index + 1][1] - path[index][1],
+                   path[index + 1][2] - path[index][2])
+        accumulated += math.sqrt(sum(component * component for component in segment))
+        for side in range(sides):  # 逐侧面写两个三角形。
+            next_side = (side + 1) % sides
+            p0 = rings[index][side]
+            p1 = rings[index][next_side]
+            p2 = rings[index + 1][next_side]
+            p3 = rings[index + 1][side]
+            n0 = normals_rings[index][side]
+            n1 = normals_rings[index][next_side]
+            n2 = normals_rings[index + 1][next_side]
+            n3 = normals_rings[index + 1][side]
+            u0 = side / sides * math.pi * 2.0 * uv_scale
+            u1 = (side + 1) / sides * math.pi * 2.0 * uv_scale
+            v0 = (accumulated - math.sqrt(sum(component * component for component in segment))) * uv_scale
+            v1 = accumulated * uv_scale
+            for vertex, normal, uv in ((p0, n0, (u0, v0)), (p1, n1, (u1, v0)),
+                                       (p2, n2, (u1, v1)), (p0, n0, (u0, v0)),
+                                       (p2, n2, (u1, v1)), (p3, n3, (u0, v1))):
+                props.extend((vertex[0], vertex[1], vertex[2], normal[0], normal[1], normal[2],
+                              uv[0], uv[1], tint[0], tint[1], tint[2], 0.0, float(material)))
+            triangles += 2
+    return triangles
+
+
+def _add_tree(props: array, cards: array, x: float, z: float, scale: float, kind: int,
+               rng: random.Random, detailed: bool = True) -> tuple[int, int]:
+    """在指定位置长一棵树，返回写入的不透明三角形与卡片三角形数量。
+
+    `kind` 零为阔叶大树，一为阔叶小树，二为针叶树。
+    阔叶树用几个椭圆叶团，针叶树用逐层收窄的枝叶环；两者都用同一张叶片卡片，
+    靠尺寸、密度与颜色区分，近看不会出现两种完全不同的塑料模型。
+    """
+    ground = terrain.height_at(x, z)
+    color = _tree_color(rng)
+    broadleaf = kind != 2
+    trunk_height = (8.5 + rng.random() * 3.5) * scale if broadleaf else (11.0 + rng.random() * 4.0) * scale
+    trunk_radius = (0.38 + rng.random() * 0.16) * scale if broadleaf else (0.26 + rng.random() * 0.10) * scale
+    lean_x = (rng.random() - 0.5) * 0.9 * scale
+    lean_z = (rng.random() - 0.5) * 0.9 * scale
+    path = []
+    radii = []
+    for level in range(5):  # 五段树干，轻微弯曲。
+        t = level / 4.0
+        path.append((x + lean_x * t * t, ground - 0.25 + trunk_height * t, z + lean_z * t * t))
+        radii.append(trunk_radius * (1.0 - 0.62 * t))
+    triangles = _add_tube(props, path, radii, 9, (0.52 + rng.random() * 0.10, 0.42 + rng.random() * 0.08,
+                                                     0.30 + rng.random() * 0.06),
+                          terrain.MATERIAL_BARK, 0.55)
+
+    # 主枝：从树干中上部向外伸出，托住叶团。
+    branch_count = 6 if broadleaf else 4
+    canopy_centers = []
+    for branch in range(branch_count):
+        angle = branch / branch_count * math.pi * 2.0 + rng.uniform(-0.4, 0.4)
+        start_t = 0.52 + rng.random() * 0.26
+        start = (x + lean_x * start_t * start_t, ground + trunk_height * start_t, z + lean_z * start_t * start_t)
+        reach = (2.1 + rng.random() * 2.2) * scale if broadleaf else (1.2 + rng.random() * 1.4) * scale
+        rise = (1.2 + rng.random() * 1.4) * scale if broadleaf else (0.4 + rng.random() * 0.8) * scale
+        end = (start[0] + math.cos(angle) * reach, start[1] + rise, start[2] + math.sin(angle) * reach)
+        middle = ((start[0] + end[0]) * 0.5 + math.cos(angle + 1.2) * 0.3 * scale,
+                  (start[1] + end[1]) * 0.5,
+                  (start[2] + end[2]) * 0.5 + math.sin(angle + 1.2) * 0.3 * scale)
+        branch_radius = trunk_radius * (0.34 - branch * 0.03)
+        triangles += _add_tube(props, [start, middle, end],
+                               [branch_radius, branch_radius * 0.62, branch_radius * 0.18], 6,
+                               (0.48, 0.38, 0.28), terrain.MATERIAL_BARK, 0.8)
+        canopy_centers.append((end[0], end[1] + (1.2 if broadleaf else 0.4) * scale,
+                               end[2], (2.9 + rng.random() * 1.4) * scale))
+
+    card_triangles = 0
+    if broadleaf:  # 阔叶树：几个椭圆叶团拼成不规则树冠。
+        canopy_centers.append((x + lean_x, ground + trunk_height * 0.98 + 1.0 * scale,
+                               z + lean_z, (4.0 + rng.random() * 1.4) * scale))
+        canopy_centers.append((x + lean_x * 0.7, ground + trunk_height * 0.64,
+                               z + lean_z * 0.7, (2.6 + rng.random() * 1.0) * scale))
+        expanded = []
+        if detailed:  # 近景树拆子团，轮廓更碎。
+            for center_x, center_y, center_z, radius in canopy_centers:
+                expanded.append((center_x, center_y, center_z, radius))
+                for _ in range(3):  # 每个主叶团再拆三个偏心子团，树冠边缘不会是一个圆球。
+                    offset_x = (rng.random() - 0.5) * radius * 1.35
+                    offset_y = (rng.random() - 0.45) * radius * 0.55
+                    offset_z = (rng.random() - 0.5) * radius * 1.35
+                    expanded.append((center_x + offset_x, center_y + offset_y, center_z + offset_z,
+                                     radius * rng.uniform(0.42, 0.68)))
+        else:  # 远景树只保留主叶团，用更大的卡片维持轮廓，省掉八成叶片。
+            expanded = canopy_centers
+        for center_x, center_y, center_z, radius in expanded:
+            # 叶团体积内撒卡片；中心密、边缘略疏，轮廓因此毛茸茸的。
+            card_count = int(18 + radius * 8) if detailed else int(10 + radius * 5)
+            for card in range(card_count):
+                theta = rng.random() * math.pi * 2.0
+                phi = math.acos(1.0 - 2.0 * rng.random())
+                distance = (rng.random() ** 0.42) * radius
+                px = center_x + math.sin(phi) * math.cos(theta) * distance
+                py = center_y + math.cos(phi) * distance * 0.72
+                pz = center_z + math.sin(phi) * math.sin(theta) * distance
+                outward = (px - center_x, (py - center_y) * 0.7, pz - center_z)
+                outward_length = math.sqrt(sum(component * component for component in outward)) or 1.0
+                normal = (outward[0] / outward_length, outward[1] / outward_length + 0.35,
+                          outward[2] / outward_length)
+                normal_length = math.sqrt(sum(component * component for component in normal)) or 1.0
+                normal = tuple(component / normal_length for component in normal)
+                facing = rng.random() * math.pi * 2.0
+                right = (math.cos(facing), 0.08 * math.sin(facing), math.sin(facing))
+                up = (-math.sin(facing) * 0.5, 0.9, math.cos(facing) * 0.5)
+                half = (0.62 + rng.random() * 0.46) * scale if detailed else (1.45 + rng.random() * 0.85) * scale
+                corners = _card_corners((px, py, pz), right, up, half, half * (0.80 + rng.random() * 0.30), False)
+                depth = distance / max(radius, 0.1)  # 叶团内部比外层暗，树冠才有体积。
+                shade = (0.58 + rng.random() * 0.26) * (1.0 - depth * 0.30)
+                tint = (color[0] * shade, color[1] * shade, color[2] * shade)
+                _append_quad(cards, corners, normal, (0.0, 0.0, 1.0, 1.0), tint, 0.35, 1.0)
+                card_triangles += 2
+    else:  # 针叶树：一层层向外下垂的枝叶环。
+        tiers = 7
+        for tier in range(tiers):
+            t = tier / (tiers - 1)
+            tier_y = ground + trunk_height * (0.36 + t * 0.62)
+            tier_radius = (3.4 * (1.0 - t) + 0.7) * scale
+            cards_in_tier = int(20 - tier * 1.5)
+            for card in range(cards_in_tier):
+                angle = card / cards_in_tier * math.pi * 2.0 + tier * 0.7 + rng.uniform(-0.2, 0.2)
+                px = x + lean_x * t + math.cos(angle) * tier_radius * rng.uniform(0.25, 0.85)
+                pz = z + lean_z * t + math.sin(angle) * tier_radius * rng.uniform(0.25, 0.85)
+                py = tier_y + rng.uniform(-0.4, 0.4)
+                normal = (math.cos(angle) * 0.55, 0.82, math.sin(angle) * 0.55)
+                facing = angle + math.pi * 0.5 + rng.uniform(-0.5, 0.5)
+                right = (math.cos(facing), 0.15, math.sin(facing))
+                up = (-math.sin(facing) * 0.4, 0.9, math.cos(facing) * 0.4)
+                half = (0.75 + rng.random() * 0.55) * scale
+                corners = _card_corners((px, py, pz), right, up, half, half * 0.55, False)
+                shade = 0.74 + rng.random() * 0.22
+                tint = (color[0] * shade * 0.82, color[1] * shade * 0.92, color[2] * shade * 0.82)
+                _append_quad(cards, corners, normal, (0.0, 0.0, 1.0, 1.0), tint, 0.2, 0.8)
+                card_triangles += 2
+    return triangles, card_triangles
+
+
+def _scatter_grass(cards: array, rng: random.Random, count: int, radius: float,
+                   reed: bool = False) -> int:
+    """在相机附近撒草叶卡片，返回三角形数。
+
+    落点用极坐标抖动；水面以下、陡坡与远处都跳过。
+    草丛高度随离岸距离变化，湖边更高更密，形成一条自然的水线。
+    """
+    camera_x, camera_z = terrain.CAMERA_START
+    triangles = 0
+    placed = 0
+    attempts = 0
+    while placed < count and attempts < count * 8:
+        attempts += 1
+        angle = rng.random() * math.pi * 2.0
+        distance = math.sqrt(rng.random()) * radius
+        x = camera_x + math.cos(angle) * distance
+        z = camera_z + math.sin(angle) * distance
+        height = terrain.height_at(x, z)
+        if height < terrain.WATER_LEVEL + (0.12 if reed else 0.35):  # 水里不长草；芦苇紧贴水线。
             continue
-        blade_height = 0.45 + 0.50 * terrain._hash3(gx, 41, gz, 613)  # 高低不齐。
-        color = (0.18 + 0.10 * terrain._hash3(gx, 43, gz, 607), 0.32 + 0.10 * terrain._hash3(gx, 47, gz, 609), 0.10)  # 草色。
-        triangles += add_tuft(vertices, x + 0.5, z + 0.5, height, blade_height, 619, color)  # 一丛草。
-    flowers = _scatter(heights, size, 7, 701, 0.30)  # 七米一格，花更稀疏。
-    for x, z, height, gx, gz in flowers:  # 逐朵生成。
-        triangles += add_flower(vertices, x + 0.5, z + 0.5, height, 709)  # 一朵花。
-    for x, z, height, gx, gz in _scatter(heights, size, 11, 811, 0.22):  # 散落岩石。
-        width = 0.8 + 0.9 * terrain._hash3(gx, 53, gz, 811)  # 石头大小。
-        depth = width * (0.8 + 0.4 * terrain._hash3(gx, 59, gz, 811))  # 长宽不等。
-        stone = terrain.base_color(terrain.MATERIAL_STONE, height, x, z)  # 石头颜色。
-        triangles += terrain.push_box(vertices, (x + 0.5 - width * 0.5, height - 0.25, z + 0.5 - depth * 0.5),
-                                      (width, 0.45 + 0.4 * width, depth), stone, terrain.MATERIAL_STONE, 0.9)  # 半埋进地面。
-    return triangles  # 全部新增三角形。
+        if not reed and height > terrain.WATER_LEVEL + 24.0:  # 太高的山坡只保留稀疏草。
+            if rng.random() > 0.25:
+                continue
+        if terrain.slope_at(x, z) > (0.42 if not reed else 0.55):
+            continue
+        # 小径上不长草，让泥土路面成为一条从机位通向水边的引导线。
+        path_x = 5.2 * math.sin((z - 104.0) * 0.045) + 2.4 * math.sin((z - 104.0) * 0.013 + 1.3)
+        if not reed and 110.0 < z < 220.0 and abs(x - path_x) < 2.1:
+            continue
+        if reed:  # 芦苇只长在岸线附近。
+            lake = terrain.lake_distance(x, z)
+            if lake < 1.00 or lake > 1.14:
+                continue
+        size = rng.uniform(0.42, 0.88) if not reed else rng.uniform(1.10, 1.85)
+        width = size * rng.uniform(0.95, 1.35)
+        shade = rng.uniform(0.82, 1.18)
+        if reed:  # 芦苇偏黄，和湿润的岸线对比。
+            tint = (1.02 * shade, 0.92 * shade, 0.52 * shade)
+        else:
+            tint = (0.55 * shade, 0.68 * shade, 0.45 * shade)
+        for plane in range(2):  # 两张交叉卡片已经能覆盖一圈，第三张在 720p 下只增加填充成本。
+            facing = plane / 2.0 * math.pi + rng.uniform(-0.18, 0.18)
+            right = (math.cos(facing), 0.0, math.sin(facing))
+            up = (0.06 * math.sin(facing), 1.0, -0.06 * math.cos(facing))
+            corners = _card_corners((x, height, z), right, up, width * 0.5, size * 0.5, True)
+            normal = (0.55 * math.cos(facing), 0.6, 0.55 * math.sin(facing))
+            _append_quad(cards, corners, normal, (0.0, 0.0, 1.0, 1.0), tint, 0.0, 1.0)
+            triangles += 2
+        placed += 1
+    return triangles
+
+
+def _scatter_shrubs(cards: array, rng: random.Random, count: int) -> int:
+    """在草坡与林缘撒灌木卡片，打破远处地面过于光滑的绿色。
+
+    只用叶片卡片，不复制完整树；每株两张交叉片，尺寸一米左右，
+    近看是灌木，远看只是一团深绿，能有效打散“高尔夫球场”一样的草坡。
+    """
+    camera_x, camera_z = terrain.CAMERA_START
+    triangles = 0
+    placed = 0
+    attempts = 0
+    while placed < count and attempts < count * 8:
+        attempts += 1
+        angle = rng.random() * math.pi * 2.0
+        distance = 18.0 + math.sqrt(rng.random()) * 340.0
+        x = camera_x + math.cos(angle) * distance
+        z = camera_z + math.sin(angle) * distance
+        if terrain.lake_distance(x, z) < 1.12:  # 水里不长灌木。
+            continue
+        height = terrain.height_at(x, z)
+        if height < 0.8 or height > 120.0 or terrain.slope_at(x, z) > 0.38:
+            continue
+        size = rng.uniform(0.55, 1.65)
+        shade = rng.uniform(0.55, 0.95)
+        tint = (0.78 * shade, 0.98 * shade, 0.58 * shade)
+        for plane in range(2):  # 两张交叉片，远看有体积。
+            facing = plane / 2.0 * math.pi + rng.uniform(-0.5, 0.5)
+            right = (math.cos(facing), 0.0, math.sin(facing))
+            up = (0.0, 1.0, 0.0)
+            corners = _card_corners((x, height, z), right, up, size * 0.55, size * 0.55, True)
+            _append_quad(cards, corners, (0.2 * math.cos(facing), 0.75, 0.2 * math.sin(facing)),
+                         (0.0, 0.0, 1.0, 1.0), tint, 0.0, 1.0)
+            triangles += 2
+        placed += 1
+    return triangles
+
+
+def _scatter_far_rocks(props: array, rng: random.Random, count: int) -> int:
+    """在较远的草坡上撒小石块，让山坡有可读的尺度参照。"""
+    camera_x, camera_z = terrain.CAMERA_START
+    triangles = 0
+    placed = 0
+    attempts = 0
+    while placed < count and attempts < count * 8:
+        attempts += 1
+        angle = rng.random() * math.pi * 2.0
+        distance = 25.0 + math.sqrt(rng.random()) * 260.0
+        x = camera_x + math.cos(angle) * distance
+        z = camera_z + math.sin(angle) * distance
+        if terrain.lake_distance(x, z) < 1.12:
+            continue
+        height = terrain.height_at(x, z)
+        if height < 0.8 or terrain.slope_at(x, z) > 0.42:
+            continue
+        triangles += _add_rock(props, x, z, rng.uniform(0.35, 1.4), rng, 1)
+        placed += 1
+    return triangles
+
+
+
+def _scatter_flowers(cards: array, rng: random.Random, count: int) -> int:
+    """在近景草地撒野花卡片，保持小尺寸，远看只是颜色点。"""
+    camera_x, camera_z = terrain.CAMERA_START
+    triangles = 0
+    placed = 0
+    attempts = 0
+    while placed < count and attempts < count * 10:
+        attempts += 1
+        angle = rng.random() * math.pi * 2.0
+        distance = math.sqrt(rng.random()) * 34.0
+        x = camera_x + math.cos(angle) * distance
+        z = camera_z + math.sin(angle) * distance
+        height = terrain.height_at(x, z)
+        if height < terrain.WATER_LEVEL + 0.8 or terrain.slope_at(x, z) > 0.32:
+            continue
+        path_x = 5.2 * math.sin((z - 104.0) * 0.045) + 2.4 * math.sin((z - 104.0) * 0.013 + 1.3)
+        if 110.0 < z < 220.0 and abs(x - path_x) < 1.8:
+            continue
+        size = rng.uniform(0.55, 1.05)
+        tint = (1.0, 1.0, 1.0)
+        for plane in range(2):  # 两张交叉卡片已经够小。
+            facing = plane / 2.0 * math.pi + rng.uniform(-0.4, 0.4)
+            right = (math.cos(facing), 0.0, math.sin(facing))
+            up = (0.0, 1.0, 0.0)
+            corners = _card_corners((x, height, z), right, up, size * 0.5, size * 0.5, True)
+            _append_quad(cards, corners, (0.0, 0.7, 0.4), (0.0, 0.0, 1.0, 1.0), tint, 0.0, 1.0)
+            triangles += 2
+        placed += 1
+    return triangles
+
+
+def _icosphere(subdivisions: int):
+    """返回细分二十面体的顶点与三角面，用于生成不规则岩石。"""
+    golden = (1.0 + math.sqrt(5.0)) * 0.5
+    vertices = [
+        (-1, golden, 0), (1, golden, 0), (-1, -golden, 0), (1, -golden, 0),
+        (0, -1, golden), (0, 1, golden), (0, -1, -golden), (0, 1, -golden),
+        (golden, 0, -1), (golden, 0, 1), (-golden, 0, -1), (-golden, 0, 1),
+    ]
+    vertices = [tuple(component / math.sqrt(3.0) for component in vertex) for vertex in vertices]
+    faces = [
+        (0, 11, 5), (0, 5, 1), (0, 1, 7), (0, 7, 10), (0, 10, 11),
+        (1, 5, 9), (5, 11, 4), (11, 10, 2), (10, 7, 6), (7, 1, 8),
+        (3, 9, 4), (3, 4, 2), (3, 2, 6), (3, 6, 8), (3, 8, 9),
+        (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1),
+    ]
+    for _ in range(subdivisions):
+        cache = {}
+        new_faces = []
+
+        def midpoint(a, b):
+            key = (min(a, b), max(a, b))
+            if key in cache:
+                return cache[key]
+            point = tuple((vertices[a][i] + vertices[b][i]) * 0.5 for i in range(3))
+            length = math.sqrt(sum(component * component for component in point))
+            index = len(vertices)
+            vertices.append(tuple(component / length for component in point))
+            cache[key] = index
+            return index
+
+        for a, b, c in faces:
+            ab = midpoint(a, b)
+            bc = midpoint(b, c)
+            ca = midpoint(c, a)
+            new_faces.extend(((a, ab, ca), (b, bc, ab), (c, ca, bc), (ab, bc, ca)))
+        faces = new_faces
+    return vertices, faces
+
+
+def _add_rock(props: array, x: float, z: float, size: float, rng: random.Random, subdivisions: int = 2) -> int:
+    """生成一块带噪声位移的岩石，返回三角形数。
+
+    岩石用世界坐标三平面采样贴图，不需要 UV；面法线取平均后仍保留一点硬边，
+    近看是粗糙石头而不是光滑橡皮。
+    """
+    base_vertices, faces = _icosphere(subdivisions)
+    ground = terrain.height_at(x, z)
+    squash = rng.uniform(0.55, 0.9)  # 多数石头扁一些，像被水冲过。
+    stretch = rng.uniform(0.8, 1.4)
+    rotation = rng.random() * math.pi * 2.0
+    cos_r = math.cos(rotation)
+    sin_r = math.sin(rotation)
+    tint_value = rng.uniform(0.78, 1.12)
+    tint = (tint_value, tint_value, tint_value)
+    world_vertices = []
+    for vertex in base_vertices:
+        noise = _rock_noise(vertex[0] * 2.6 + x, vertex[1] * 2.6 + z, vertex[2] * 2.6 + size)
+        radius = size * (0.78 + noise * 0.52)  # 每块石头轮廓不同。
+        local_x = vertex[0] * radius * stretch
+        local_y = vertex[1] * radius * squash
+        local_z = vertex[2] * radius
+        world_vertices.append((x + local_x * cos_r - local_z * sin_r,
+                               ground + local_y + size * 0.42,
+                               z + local_x * sin_r + local_z * cos_r))
+    # 先累加相邻面的法线，再归一化；圆滑法线让细分石面不再像低模三角片。
+    smooth_normals = [[0.0, 0.0, 0.0] for _ in world_vertices]
+    face_normals = []
+    for a, b, c in faces:
+        p0, p1, p2 = world_vertices[a], world_vertices[b], world_vertices[c]
+        edge1 = (p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2])
+        edge2 = (p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2])
+        face_normal = (edge1[1] * edge2[2] - edge1[2] * edge2[1],
+                       edge1[2] * edge2[0] - edge1[0] * edge2[2],
+                       edge1[0] * edge2[1] - edge1[1] * edge2[0])
+        face_normals.append(face_normal)
+        for index in (a, b, c):
+            smooth_normals[index][0] += face_normal[0]
+            smooth_normals[index][1] += face_normal[1]
+            smooth_normals[index][2] += face_normal[2]
+    for normal in smooth_normals:
+        length = math.sqrt(sum(component * component for component in normal))
+        normal[0] /= max(length, 1e-8)
+        normal[1] /= max(length, 1e-8)
+        normal[2] /= max(length, 1e-8)
+    triangles = 0
+    for face, face_normal in zip(faces, face_normals):
+        a, b, c = face
+        # 面法线朝向相机外侧，平滑法线偶尔会被邻居拉平；两者混合保留一点硬边。
+        length = math.sqrt(sum(component * component for component in face_normal)) or 1.0
+        face_dir = [component / length for component in face_normal]
+        for index in (a, b, c):
+            point = world_vertices[index]
+            normal = smooth_normals[index]
+            blended = [normal[0] * 0.65 + face_dir[0] * 0.35,
+                       normal[1] * 0.65 + face_dir[1] * 0.35,
+                       normal[2] * 0.65 + face_dir[2] * 0.35]
+            length = math.sqrt(sum(component * component for component in blended)) or 1.0
+            props.extend((point[0], point[1], point[2], blended[0] / length, blended[1] / length,
+                          blended[2] / length, 0.0, 0.0, tint[0], tint[1], tint[2], 0.0,
+                          float(terrain.MATERIAL_ROCK)))
+        triangles += 1
+    return triangles
+
+
+def _rock_noise(x: float, y: float, z: float) -> float:
+    """岩石位移用的三维值噪声，返回零到一。"""
+    ix, iy, iz = int(math.floor(x)), int(math.floor(y)), int(math.floor(z))
+    fx, fy, fz = x - ix, y - iy, z - iz
+    fx = fx * fx * (3.0 - 2.0 * fx)
+    fy = fy * fy * (3.0 - 2.0 * fy)
+    fz = fz * fz * (3.0 - 2.0 * fz)
+
+    def corner(dx, dy, dz):
+        value = (ix + dx) * 73856093 ^ (iy + dy) * 19349663 ^ (iz + dz) * 83492791
+        value = (value ^ (value >> 15)) * 2246822519
+        return ((value ^ (value >> 13)) & 0xFFFFFFFF) / 4294967295.0
+
+    c000 = corner(0, 0, 0)
+    c100 = corner(1, 0, 0)
+    c010 = corner(0, 1, 0)
+    c110 = corner(1, 1, 0)
+    c001 = corner(0, 0, 1)
+    c101 = corner(1, 0, 1)
+    c011 = corner(0, 1, 1)
+    c111 = corner(1, 1, 1)
+    x00 = c000 + (c100 - c000) * fx
+    x10 = c010 + (c110 - c010) * fx
+    x01 = c001 + (c101 - c001) * fx
+    x11 = c011 + (c111 - c011) * fx
+    y0 = x00 + (x10 - x00) * fy
+    y1 = x01 + (x11 - x01) * fy
+    return y0 + (y1 - y0) * fz
+
+
+def build() -> dict:
+    """构建全部植被与石块，返回三组顶点数据与三角形统计。
+
+    返回值键：`props`、`leaves`、`grass`、`flowers` 四组顶点数组，
+    以及同名加 `Triangles` 的计数；渲染器据此创建四个顶点数组。
+    """
+    rng = random.Random(20261028)  # 固定种子。
+    props = array("f")
+    leaves = array("f")
+    grass = array("f")
+    flowers = array("f")
+    prop_triangles = 0
+    leaf_triangles = 0
+
+    placed_trees = []
+    for x, z, scale, kind in HERO_TREES:  # 先放主景树，保证构图。
+        opaque, leaf = _add_tree(props, leaves, x, z, scale, kind, rng)
+        prop_triangles += opaque
+        leaf_triangles += leaf
+        placed_trees.append((x, z))
+
+    camera_x, camera_z = terrain.CAMERA_START
+    # 环湖树线：沿湖盆外缘撒一圈树，对岸因此有一条连续的林带，不像零散盆栽。
+    shoreline = 0
+    attempts = 0
+    while shoreline < 120 and attempts < 8000:
+        attempts += 1
+        angle = rng.random() * math.pi * 2.0
+        factor = rng.uniform(1.22, 1.62)
+        x = terrain.LAKE_CENTER[0] + math.cos(angle) * terrain.LAKE_RADIUS[0] * factor
+        z = terrain.LAKE_CENTER[1] + math.sin(angle) * terrain.LAKE_RADIUS[1] * factor
+        if abs(x) < 38.0 and z > 40.0:  # 留出近岸观景走廊。
+            continue
+        if terrain.height_at(x, z) < 0.8 or terrain.slope_at(x, z) > 0.34:
+            continue
+        if (x - camera_x) ** 2 + (z - camera_z) ** 2 < 22.0 ** 2:
+            continue
+        if any((x - tx) ** 2 + (z - tz) ** 2 < 3.5 ** 2 for tx, tz in placed_trees):
+            continue
+        scale = rng.uniform(1.20, 2.00)
+        kind = 2 if rng.random() < 0.30 else (0 if rng.random() < 0.4 else 1)
+        opaque, leaf = _add_tree(props, leaves, x, z, scale, kind, rng, False)
+        prop_triangles += opaque
+        leaf_triangles += leaf
+        placed_trees.append((x, z))
+        shoreline += 1
+    attempts = 0
+    while len(placed_trees) < TREE_COUNT + shoreline and attempts < 6000:  # 其余树按规则撒点。
+        attempts += 1
+        x = rng.uniform(-260.0, 300.0)
+        z = rng.uniform(-250.0, 210.0)
+        if abs(x) < 30.0 and -160.0 < z < 140.0:  # 留出湖面与视线走廊。
+            continue
+        lake = terrain.lake_distance(x, z)
+        if lake < 1.12:  # 不站在水里。
+            continue
+        height = terrain.height_at(x, z)
+        if height < 1.0 or height > 110.0:  # 高山裸岩不长树。
+            continue
+        if terrain.slope_at(x, z) > 0.30:
+            continue
+        if (x - camera_x) ** 2 + (z - camera_z) ** 2 < 18.0 ** 2:  # 太近会糊住镜头。
+            continue
+        if abs(x - camera_x) < 32.0 and z < camera_z - 4.0 and z > 60.0:  # 留出正前方湖面视线。
+            continue
+        if any((x - tx) ** 2 + (z - tz) ** 2 < 8.5 ** 2 for tx, tz in placed_trees):
+            continue
+        scale = rng.uniform(0.62, 1.15)
+        kind = 2 if rng.random() < 0.22 else (0 if rng.random() < 0.35 else 1)
+        near = (x - camera_x) ** 2 + (z - camera_z) ** 2 < 95.0 ** 2
+        opaque, leaf = _add_tree(props, leaves, x, z, scale, kind, rng, near)
+        prop_triangles += opaque
+        leaf_triangles += leaf
+        placed_trees.append((x, z))
+
+    grass_triangles = _scatter_grass(grass, rng, GRASS_COUNT, GRASS_RADIUS)  # 近景草甸。
+    grass_triangles += _scatter_grass(grass, rng, REED_COUNT, 160.0, reed=True)  # 岸边芦苇。
+    flower_triangles = _scatter_flowers(flowers, rng, FLOWER_COUNT)
+    leaf_triangles += _scatter_shrubs(leaves, rng, 2600)  # 远处灌木，打散光滑草坡。
+
+    rock_triangles = 0
+    for index in range(ROCK_COUNT):  # 散落岩石：近景几块，岸边一排。
+        if index < 10:  # 近景石块放在两侧，给草地一个尺度参照，不挡住湖面。
+            side = -1.0 if index % 2 == 0 else 1.0
+            x = camera_x + side * rng.uniform(4.0, 14.0)
+            z = camera_z - rng.uniform(8.0, 34.0)
+        else:
+            angle = rng.random() * math.pi * 2.0
+            distance = rng.uniform(40.0, 190.0)
+            x = camera_x + math.cos(angle) * distance
+            z = camera_z + math.sin(angle) * distance
+        if terrain.lake_distance(x, z) < 1.0:  # 水里不放大石头。
+            continue
+        size = rng.uniform(0.55, 1.65) if index < 10 else rng.uniform(0.4, 1.8)
+        subdivisions = 3 if index < 10 else 2
+        rock_triangles += _add_rock(props, x, z, size, rng, subdivisions)
+    rock_triangles += _scatter_far_rocks(props, rng, 50)  # 草坡上的小石块。
+
+    return {
+        "props": props, "propsTriangles": prop_triangles + rock_triangles,
+        "leaves": leaves, "leafTriangles": leaf_triangles,
+        "grass": grass, "grassTriangles": grass_triangles,
+        "flowers": flowers, "flowerTriangles": flower_triangles,
+        "trees": len(placed_trees),
+    }

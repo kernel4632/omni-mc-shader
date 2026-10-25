@@ -1,4 +1,19 @@
 # 更新记录
+## 0.8.0
+
+照片级方向重建：测试世界从方块岛改成连续山谷湖盆、PBR 地面、树木/草/花/岩石、CC0 全景天空与平面反射；画面仍未达到真实照片级，验证记录里写明差距。
+
+- 测试世界：`omni-gfx/examples/world` 改为连续高度场（湖盆、草甸、远山）、砂石湖岸、环湖树线、近景草叶与彩色野花、圆滑岩石。地形 269280 个三角形，植被约 18 万三角形，水面四分之一分辨率平面反射。
+- 材质：草甸改用 ambientCG `Grass004` 的 CC0 颜色/法线/粗糙度；泥土、岩石、湿沙、林下腐殖土与树皮来自 Poly Haven 的 CC0 扫描图；所有地面材质按坡度、离水距离、林下噪声和小径混合，远近使用不同采样复杂度。
+- 天空：改用 Poly Haven `wasteland_clouds_puresky` 的 CC0 全景 HDR，真实云层、太阳位置与环境光同源；天空立方体贴图只在启动时生成一次，环境光与水面反射共用。体积云模块仍保留在 `omni-gfx/src/cloud.slang`，但本测试世界不再调用它。
+- 阴影：三级 CSM，512 像素阴影图，五点十字软核与法线/深度偏置；近景树冠与中景树冠参与阴影，九十米外的地形跳过九点采样。PCSS 仍保留在库中；测试世界使用直接写死采样器名字的 PCF，因为这台 Intel 驱动把采样器形参解析到错误纹理单元。
+- 水面：镜像相机平面反射、四分之一分辨率、方向法线扰动与五点纵向模糊；菲涅尔封顶零点三，避免整片湖面变成天空镜。
+- 后期：高光肩部压缩的全景天空、分深度自动曝光、三像素上限的轻微景深、锐化、泛光、ACES、冷暖分离调色、暗角与颗粒；TAA 使用八相位次像素抖动。
+- 性能：1280×720、120 帧、预热 30 帧，本机 Intel Arc 集显平均 23.2 毫秒、中位 21.4、95 分位 34.8，约 43.1 帧每秒；阴影每四帧、反射每六帧更新。截图 `.dev/omni-gfx/world-photoreal.png`，并排参考 `.dev/omni-gfx/world-comparison.png`。
+- 资源：新增 `omni-gfx/examples/world/assets/`（512 像素 PBR 贴图、程序化草/叶/花卡片、1K 天空 HDR）与 `SOURCES.md`，逐项记录 CC0 来源；资源准备脚本移到 `examples/world/prepare_textures.py`，不计入手写核心预算。
+- 边界：`omni-gfx/build.py check` 只审计测试世界实际编译的 GLSL，Python 示例与资源脚本属于开发期消费者，不进入光影 ZIP；这一边界写入 `omni-gfx/docs/architecture.md`。
+
+验证：`python omni-gfx/build.py check`、`python build.py audit`（510 个文件）、`python build.py verify`（148 个测试、9 组编译探针）、`python build.py compile`（280 组唯一程序、0 错误）通过；`python omni-gfx/build.py count` 手写核心 9267 行，低于 9400 上限。未启动 Minecraft；游戏内画面、其他显卡、Vulkan 运行时仍未验证。**照片级验收未达成**：树木仍是程序化团块，湖岸与远山轮廓偏规整，水体反射有低分辨率块；参考照片并排对比保存在本地 `.dev/omni-gfx/world-comparison.png`。
 ## 0.7.0
 
 函数级缺口清零：36 个参考函数全部有承接或逐条证据，采样器改为显式参数，海天交界断续暗线修复。

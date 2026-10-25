@@ -6,6 +6,7 @@
 #include "/omni-gfx/math.glsl"
 
 uniform sampler2D uSource; // 来源纹理，第一级是全分辨率颜色，第二级是上一级的小图。
+uniform sampler2D uDepth; // 场景深度，第一级用它排除天空，避免亮天空压暗地面。
 uniform vec2 uResolution; // 当前渲染目标的尺寸。
 uniform int uMode; // 零表示第一级取平均，一表示把上一级缩成一个像素。
 
@@ -24,24 +25,38 @@ void main()
     {
         vec2 base = gl_FragCoord.xy / uResolution; // 当前小图像素在画面里的相对位置。
         vec2 offset = 0.35 / uResolution; // 四个点落在这一块的内侧。
-        float sum = 0.0; // 四个点的对数亮度之和。
-        sum += logLuminance(texture(uSource, base + vec2(-offset.x, -offset.y)).rgb); // 左上。
-        sum += logLuminance(texture(uSource, base + vec2(offset.x, -offset.y)).rgb); // 右上。
-        sum += logLuminance(texture(uSource, base + vec2(-offset.x, offset.y)).rgb); // 左下。
-        sum += logLuminance(texture(uSource, base + vec2(offset.x, offset.y)).rgb); // 右下。
-        fragColor = vec4(sum * 0.25, 0.0, 0.0, 1.0); // 平均后写入红色通道。
+        vec2 uvs[4] = vec2[4](base + vec2(-offset.x, -offset.y), base + vec2(offset.x, -offset.y),
+                              base + vec2(-offset.x, offset.y), base + vec2(offset.x, offset.y));
+        float sum = 0.0; // 几何像素的对数亮度之和。
+        float weight = 0.0; // 几何像素数量。
+        for (int i = 0; i < 4; i++)
+        {
+            float depth = texture(uDepth, uvs[i]).r;
+            if (depth < 0.999) // 天空不参与曝光统计，亮云不会把草坡压黑。
+            {
+                sum += logLuminance(texture(uSource, uvs[i]).rgb);
+                weight += 1.0;
+            }
+        }
+        fragColor = vec4(weight > 0.0 ? sum / weight : -99.0, 0.0, 0.0, 1.0);
     }
     else // 第二级：把六十四乘三十六的小图缩成一个像素。
     {
-        float sum = 0.0; // 全部样本的和。
+        float sum = 0.0; // 几何样本的和。
+        float count = 0.0;
         for (int y = 0; y < 8; y++) // 八乘八共六十四个样本。
         {
             for (int x = 0; x < 8; x++)
             {
                 vec2 uv = (vec2(float(x), float(y)) + 0.5) / 8.0; // 均匀铺满上一级小图。
-                sum += texture(uSource, uv).r; // 上一级已经是对数亮度，这里直接平均。
+                float value = texture(uSource, uv).r; // 上一级已经是对数亮度。
+                if (value > -20.0) // 跳过全天空的格子。
+                {
+                    sum += value;
+                    count += 1.0;
+                }
             }
         }
-        fragColor = vec4(sum / 64.0, 0.0, 0.0, 1.0); // 整幅画面的平均对数亮度。
+        fragColor = vec4(count > 0.0 ? sum / count : -2.0, 0.0, 0.0, 1.0); // 整幅几何画面的平均对数亮度。
     }
 }

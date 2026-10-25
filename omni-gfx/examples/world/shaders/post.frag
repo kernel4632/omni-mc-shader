@@ -8,6 +8,7 @@
 uniform sampler2D uColor; // 抗锯齿后的线性颜色。
 uniform sampler2D uBloom; // 泛光图，曲线编码。
 uniform sampler2D uExposure; // 一个像素的平均对数亮度。
+uniform sampler2D uDepth; // 场景深度，用来做轻微景深。
 uniform vec2 uResolution; // 画面尺寸。
 uniform float uExposureKey; // 目标中间亮度，越大画面越亮。
 uniform int uTonemap; // 零为 ACES，一为 AgX，二为无压缩。
@@ -15,17 +16,54 @@ uniform float uFrame; // 帧号，用于抖动。
 uniform float uTime; // 场景时间，用于颗粒。
 uniform float uAspect; // 画面宽高比。
 uniform float uBloomStrength; // 泛光强度。
+uniform float uFocusDistance; // 对焦距离，米。
+uniform float uAperture; // 光圈强度，越大背景越虚。
+uniform float uNear; // 投影近平面。
+uniform float uFar; // 投影远平面。
 
 out vec4 fragColor; // 最终显示颜色。
+
+// 把深度缓冲换成沿视线的距离，和相机距离同一单位。
+float linearDepth(float depth)
+{
+    float z = depth * 2.0 - 1.0;
+    return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));
+}
 
 void main()
 {
     vec2 uv = gl_FragCoord.xy / uResolution; // 零到一的画面坐标。
     vec3 color = texture(uColor, uv).rgb; // 线性场景颜色。
     color += texture(uBloom, uv).rgb * uBloomStrength; // 泛光图与场景同为线性，直接相加。
+    // 轻微景深：只在对焦平面外才取样，近景草叶与岩石保持清晰，远山和云被柔化。
+    // 光圈很小，半径最多几像素；这是照片感而不是玩具微缩效果。
+    float sceneDepth = linearDepth(texture(uDepth, uv).r);
+    float coc = clamp(uAperture * abs(sceneDepth - uFocusDistance) / max(sceneDepth, 0.5), 0.0, 1.0);
+    if (sceneDepth < 12.0) coc = 0.0; // 脚边的草与树干必须清楚，景深只柔化中远景。
+    float blurRadius = coc * 2.0; // 最大约两像素，只做轻微柔化。
+    if (blurRadius > 0.35)
+    {
+        vec3 sum = color;
+        float weight = 1.0;
+        for (int i = 0; i < 4; i++)
+        {
+            float angle = float(i) * 1.570796 + uFrame * 0.17; // 四个方向，逐帧轻微旋转。
+            vec2 offset = vec2(cos(angle), sin(angle)) * blurRadius / uResolution;
+            sum += texture(uColor, uv + offset).rgb;
+            weight += 1.0;
+        }
+        color = sum / weight;
+    }
+    // 轻度锐化：照片比实时渲染更需要边缘细节，一像素的十字核足够，不会出现白边。
+    vec2 sharpenTexel = 1.0 / uResolution;
+    vec3 blur4 = texture(uColor, uv + vec2(sharpenTexel.x, 0.0)).rgb
+               + texture(uColor, uv - vec2(sharpenTexel.x, 0.0)).rgb
+               + texture(uColor, uv + vec2(0.0, sharpenTexel.y)).rgb
+               + texture(uColor, uv - vec2(0.0, sharpenTexel.y)).rgb;
+    color += (color - blur4 * 0.25) * 0.18;
     float averageLog = texture(uExposure, vec2(0.5)).r; // 整幅画面的平均对数亮度。
     // 曝光倍率把平均亮度拉到目标值，再夹进区间，避免极端画面忽明忽暗。
-    float exposure = clamp(uExposureKey / max(exp2(averageLog), 1e-4), 0.18, 1.6);
+    float exposure = clamp(uExposureKey / max(exp2(averageLog), 1e-4), 0.18, 3.0);
     color *= exposure; // 应用曝光。
     color *= ogxVignette(uv, 0.42, 0.7, uAspect); // 轻微暗角，边缘只压三成。
     color = ogxFilmGrain(color, gl_FragCoord.xy, uTime, 0.004); // 极轻的颗粒，打散渐变色带。
@@ -42,6 +80,14 @@ void main()
     {
         mapped = ogxTonemapNone(color);
     }
+    // 调色：先轻微提高饱和度与中间调对比，再分开冷暗部与暖高光。
+    // 这一步在显示空间做，曲线已经把高光压回零到一，调色不会再把亮部推爆。
+    float luma = ogxLuminance(mapped);
+    mapped = mix(vec3(luma), mapped, 1.16); // 照片通常比原始渲染更饱和一点。
+    mapped = (mapped - 0.5) * 1.08 + 0.5; // 中间调略提对比，保留黑场。
+    mapped += vec3(0.020, 0.010, -0.012) * (1.0 - luma); // 阴影偏冷青。
+    mapped += vec3(0.014, 0.006, -0.010) * luma; // 高光偏暖。
+    mapped = clamp(mapped, 0.0, 1.0);
     float dither = (ogxBayer64(gl_FragCoord.xy + vec2(uFrame * 0.37, uFrame * 0.71)) - 0.5) / 255.0; // 每帧变化的抖动。
     fragColor = vec4(clamp(mapped + dither, 0.0, 1.0), 1.0); // 写屏幕。
 }

@@ -23,6 +23,7 @@ uniform vec2 uResolution; // 画面尺寸。
 uniform float uNear; // 投影近平面。
 uniform float uFar; // 投影远平面。
 uniform float uSunStrength; // 太阳辐照度倍率。
+uniform vec2 uReflectionTexel; // 反射图一个纹素的大小。
 
 out vec4 fragColor; // 合成后的水面颜色，透明通道固定为零。
 
@@ -40,28 +41,45 @@ void main()
     vec3 sunDirection = normalize(uSunDirection); // 太阳方向。
     vec3 sunColor = worldSunColor(); // 太阳色度。
     OgxWater water = ogxWaterDefault(); // 水体光学参数。
-    water.deepColor = vec3(0.020, 0.062, 0.115); // 深水偏蓝，保留可见层次。
-    water.absorption = vec3(0.26, 0.088, 0.042); // 红光吸收最快，浅滩呈青绿、深处收敛到深蓝。
-    water.shallowColor = vec3(0.038, 0.150, 0.160); // 浅滩的青绿色不要过饱和，否则岸边像一条发光带。
-    water.roughness = 0.045; // 太阳闪光集中，海面才有那一条碎金带。
-    // 三层波形：大尺度长波决定水面起伏，中尺度给出斜向交叉，近处再叠细波纹。
-    vec3 normalDetail = ogxWaterNormal(vWorldPosition.xz, uTime, distanceToCamera, 0.62, 4.4); // 近处细节波法线。
-    vec3 normalBroad = ogxWaterNormal(vWorldPosition.xz * 0.20, uTime * 0.85, distanceToCamera, 0.62, 4.4); // 低频波法线。
+    water.deepColor = vec3(0.010, 0.035, 0.062); // 深水偏冷蓝，保留可见层次。
+    water.absorption = vec3(0.30, 0.105, 0.052); // 红光吸收最快，浅滩呈青绿、深处收敛到深蓝。
+    water.shallowColor = vec3(0.024, 0.092, 0.082); // 浅滩的青绿色不要过饱和，否则岸边像一条发光带。
+    water.roughness = 0.09; // 湖面比海面平静，高光仍集中成一条细带。
+    // 三层波形：湖面只用十几厘米的小涟漪，不能像海面那样把倒影全部揉碎。
+    vec3 normalDetail = ogxWaterNormal(vWorldPosition.xz, uTime, distanceToCamera, 0.34, 0.62); // 近处细节波法线。
+    vec3 normalBroad = ogxWaterNormal(vWorldPosition.xz * 0.20, uTime * 0.85, distanceToCamera, 0.30, 0.48); // 低频波法线。
     vec3 normal = normalize(mix(normalDetail, normalBroad, smoothstep(50.0, 520.0, distanceToCamera))); // 按距离混合两种尺度。
     // 再叠一层方向不一致的细碎波纹：让水面在近处不会出现同一走向的规则条带。
     float chop = ogxValueNoise2(vWorldPosition.xz * 0.55 + vec2(uTime * 0.11, -uTime * 0.07)); // 半米到两米尺度的扰动。
-    normal = normalize(normal + vec3((chop - 0.5) * 0.10, 0.0, (chop - 0.5) * 0.08) * (1.0 - smoothstep(10.0, 60.0, distanceToCamera))); // 远处收掉，避免闪烁。
+    normal = normalize(normal + vec3((chop - 0.5) * 0.035, 0.0, (chop - 0.5) * 0.028) * (1.0 - smoothstep(10.0, 60.0, distanceToCamera))); // 远处收掉，避免闪烁。
     vec3 reflectionDirection = reflect(-viewDirection, normal); // 反射方向。
     vec2 screenUv = gl_FragCoord.xy / uResolution; // 当前像素的屏幕坐标。
     // 反射按法线在屏幕上偏移一点点：远处的倒影被波纹揉碎，不再是一条硬邦邦的镜像边界。
-    vec2 reflectionOffset = normal.xz * 0.035 / (1.0 + distanceToCamera * 0.02); // 近处偏移明显，远处收敛。
-    vec4 traced = texture(uReflection, clamp(screenUv + reflectionOffset, vec2(0.001), vec2(0.999))); // 降噪后的地形反射与可信度。
+    vec2 reflectionOffset = normal.xz * 0.12 / (1.0 + distanceToCamera * 0.02); // 近处偏移明显，远处收敛。
+    vec2 baseUv = clamp(screenUv + reflectionOffset, vec2(0.001), vec2(0.999));
+    // 半分辨率追踪在山脊上会留下阶梯；用九点小核按距离模糊，近岸仍保留轮廓。
+    vec2 texel = uReflectionTexel; // 反射图是四分之一分辨率。
+    float blurRadius = mix(2.0, 8.0, smoothstep(20.0, 900.0, distanceToCamera));
+    vec4 sample0 = texture(uReflection, baseUv);
+    vec4 sample1 = texture(uReflection, clamp(baseUv + vec2(texel.x, 0.0) * blurRadius, vec2(0.001), vec2(0.999)));
+    vec4 sample2 = texture(uReflection, clamp(baseUv - vec2(texel.x, 0.0) * blurRadius, vec2(0.001), vec2(0.999)));
+    vec4 sample3 = texture(uReflection, clamp(baseUv + vec2(0.0, texel.y) * blurRadius, vec2(0.001), vec2(0.999)));
+    vec4 sample4 = texture(uReflection, clamp(baseUv - vec2(0.0, texel.y) * blurRadius, vec2(0.001), vec2(0.999)));
+    vec3 tracedColor = sample0.rgb * sample0.a + sample1.rgb * sample1.a + sample2.rgb * sample2.a
+                     + sample3.rgb * sample3.a + sample4.rgb * sample4.a;
+    float tracedWeight = sample0.a + sample1.a + sample2.a + sample3.a + sample4.a;
+    tracedColor /= max(tracedWeight, 1e-4);
+    float confidence = tracedWeight / 5.0;
     // 反射立方体贴图只有一百九十二像素见方，必须从较模糊的层级开始取，
     // 否则云的边缘会被放大成一块块方块，看上去像水面上堆了白色积木。
-    float reflectionLod = mix(1.4, 4.2, smoothstep(40.0, 1500.0, distanceToCamera)); // 近处保留云的轮廓，远处才模糊。
+    float reflectionLod = 2.0; // 天空立方体贴图保留日落云层，又不至于放大成方块。
     reflectionDirection.y = max(reflectionDirection.y, 0.02); // 水面不可能反射地平线以下，压到水平面以上避免采到天空盒底部的黑面。
     vec3 skyReflection = textureLod(uSky, reflectionDirection, reflectionLod).rgb; // 天空与云的反射。
-    vec3 reflection = mix(skyReflection, traced.rgb, traced.a); // 命中地形就用地形，否则用天空。
+    // 太阳附近的天空在低层级上会摊成一大块白色；水面单独压掉这部分，
+    // 太阳高光由下面的 GGX 闪光负责，倒影里不再出现一堵白墙。
+    float sunGlare = smoothstep(0.35, 0.95, dot(reflectionDirection, sunDirection));
+    skyReflection *= mix(1.0, 0.16, sunGlare);
+    vec3 reflection = mix(skyReflection, tracedColor, clamp(confidence * 0.62, 0.0, 0.62)) * 0.22; // 平滑后的地形倒影只占六成。
     float surfaceDepth = linearDepth(gl_FragCoord.z); // 水面到相机的距离。
     float sceneDepth = linearDepth(texture(uSceneDepth, screenUv).r); // 水下不透明面的距离。
     float waterDepth = max(sceneDepth - surfaceDepth, 0.0); // 水层厚度近似。
@@ -79,13 +97,21 @@ void main()
     float foam = ogxWaterFoam(waterDepth * 0.8, foamNoise) * foamFade; // 岸线泡沫。
     float crest = smoothstep(0.66, 0.96, ogxValueNoise2(vWorldPosition.xz * 0.13 + vec2(uTime * 0.03, uTime * 0.02))); // 远处漂着的白浪花。
     foam = max(foam, crest * 0.18 * smoothstep(80.0, 320.0, distanceToCamera)); // 只在稍远处出现，近岸交给岸线泡沫。
-    float alpha; // 水面覆盖率。
-    vec3 waterColor = ogxWaterShade(water, normal, viewDirection, sunDirection, sunColor * uSunStrength,
-                                    reflection, behind, waterDepth, foam, alpha); // 菲涅尔、吸收、高光与泡沫合成。
+    // 湖水着色：吸收、深水色与菲涅尔反射分开算。
+    // 反射比例封顶在六成：真实湖面在近处仍能看见水下的青绿，不会整片变成天空镜。
+    float facing = clamp(dot(normal, viewDirection), 0.0, 1.0);
+    float fresnel = min(ogxWaterFresnel(facing, 0.02), 0.30);
+    vec3 transmitted = behind * ogxWaterAbsorption(water, waterDepth);
+    transmitted = mix(water.deepColor, transmitted, exp(-waterDepth * 0.32));
+    transmitted = mix(water.shallowColor, transmitted, clamp(waterDepth * 0.25, 0.0, 1.0));
+    vec3 waterColor = mix(transmitted, reflection, fresnel) * vec3(0.86, 0.96, 1.0);
+    waterColor += sunColor * ogxSpecularGGX(normal, viewDirection, sunDirection, water.roughness, 0.02) * uSunStrength * 0.5;
+    waterColor += foam * water.shallowColor * 0.8;
+    float alpha = clamp(fresnel * 0.85 + 0.22 + waterDepth * 0.08, 0.0, 1.0);
     // 太阳闪光再补一层更锐的 GGX：海面上那一条亮带是水面最容易被认出的特征。
     float glint = ogxSpecularGGX(normal, viewDirection, sunDirection, 0.028, 0.02); // 很光滑的微表面。
     glint *= smoothstep(-0.1, 0.25, dot(normalize(vWorldPosition - uCameraPos), sunDirection)); // 只在朝阳的那一侧。
-    waterColor += sunColor * glint * uSunStrength * 2.4; // 叠上碎金带。
+    waterColor += sunColor * glint * uSunStrength * 0.9; // 叠上碎金带；湖面平静，亮度比海面低。
     // 远处水面在屏幕上只剩几像素，水雾与吸收会把它压成黑带；按距离收敛到同方向的天空色，
     // 与地平线接上，这也是真实海面远处看起来就是天空色的原因。
     OgxAtmosphere air = worldAtmosphere(); // 本场景的大气常数。
