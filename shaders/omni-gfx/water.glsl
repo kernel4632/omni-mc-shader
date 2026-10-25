@@ -71,6 +71,42 @@ vec3 ogxWaterNormal(vec2 position, float time, float distance, float waveScale, 
     return normalize(vec3(-gradient.x * distanceFade, 1.0, -gradient.y * distanceFade)); // 高度场梯度转成朝上的法线。
 }
 
+// 单个 Gerstner 波对水面坡度的贡献：方向乘坡度余弦，波长决定传播速度。
+// 为什么不用贴图：解析波列的相位永远连续，远处压平后不会像滚动噪声那样闪烁；
+// 振幅已经折进 `steepness`，所以这里只交回水平梯度，调用方直接转成法线。
+vec2 ogxGerstnerGradient(vec2 position, vec2 direction, float wavelength, float steepness, float time, float phase)
+{
+    float waveNumber = 6.28318530718 / max(wavelength, 0.05); // 每米多少个弧度。
+    float angularSpeed = sqrt(9.81 * waveNumber); // 深水色散关系，长波跑得快、短波跑得慢。
+    float angle = waveNumber * dot(direction, position) - angularSpeed * time + phase; // 当前相位。
+    return direction * (steepness * cos(angle)); // 正弦波高度的水平导数。
+}
+
+// 水面 Gerstner 波法线：五组不同波长与方向的波叠加，再补一层细碎风纹。
+// 为什么用五组：一组是规则条纹，两组会互相拍成十字，五组不同方向和波长才有湖面的随机感。
+// 距离越远，短波越早淡出；否则一个像素覆盖多个波长，画面会闪成噪点。
+vec3 ogxGerstnerNormal(vec2 position, float time, float distance, float scale, float amplitude)
+{
+    vec2 p = position * scale; // 按波形密度缩放世界坐标。
+    vec2 gradient = vec2(0.0); // 五组波的水平梯度之和。
+    gradient += ogxGerstnerGradient(p, vec2(0.86, 0.51), 13.0, 0.090, time, 0.0); // 十三米长波。
+    gradient += ogxGerstnerGradient(p, vec2(-0.42, 0.91), 8.2, 0.072, time, 1.7); // 八米斜波。
+    float nearFade = 1.0 - smoothstep(45.0, 260.0, distance); // 四米以下的波在远处淡出。
+    gradient += ogxGerstnerGradient(p, vec2(0.97, -0.24), 5.1, 0.052, time, 3.1) * nearFade; // 五米碎波。
+    float closeFade = 1.0 - smoothstep(20.0, 110.0, distance); // 两米级波纹只在近处。
+    gradient += ogxGerstnerGradient(p, vec2(-0.71, -0.70), 3.3, 0.038, time, 5.2) * closeFade; // 三米波纹。
+    gradient += ogxGerstnerGradient(p, vec2(0.32, 0.95), 2.1, 0.026, time, 0.9) * closeFade; // 两米细波。
+    // 风纹：用两个相差半步的值噪声差分，补上解析波没有的碎小起伏。
+    float rippleFade = 1.0 - smoothstep(12.0, 70.0, distance);
+    float eps = 0.12; // 差分步长，米。
+    float height0 = ogxValueNoise2(p * 2.3 + vec2(time * 0.16, -time * 0.11));
+    float heightX = ogxValueNoise2((p + vec2(eps, 0.0)) * 2.3 + vec2(time * 0.16, -time * 0.11));
+    float heightZ = ogxValueNoise2((p + vec2(0.0, eps)) * 2.3 + vec2(time * 0.16, -time * 0.11));
+    gradient += vec2(height0 - heightX, height0 - heightZ) * (0.55 * rippleFade / eps);
+    gradient *= amplitude; // 统一坡度倍率。
+    return normalize(vec3(-gradient.x, 1.0, -gradient.y)); // 高度场梯度转成朝上的法线。
+}
+
 // 菲涅尔：正对时只剩基础反射率，掠射时接近全反射。
 float ogxWaterFresnel(float NdotV, float f0)
 {

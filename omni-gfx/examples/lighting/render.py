@@ -44,10 +44,10 @@ NEAR = 0.2  # 近平面。
 FAR = 2600.0  # 远平面，覆盖地形圆盘与远景。
 FOV = 44.0  # 竖直视场角，略宽于五十毫米镜头，让整排球与湖面同时入镜。
 EYE_HEIGHT = 1.72  # 站立视高，米。
-SUN_DIRECTION = (0.50, 0.33, -0.80)  # 太阳方向：湖对岸偏右，仰角约二十五度；高于云底、低于云顶，云顶受光、云底留影。
+SUN_DIRECTION = (0.32, 0.28, -0.90)  # 太阳方向：湖对岸偏右，仰角约十六度，落在画面右上方；云与水面高光都能看到。
 SUN_COLOR = (1.0, 0.975, 0.945)  # 五千八百开左右的太阳色度倾向，最终颜色再乘大气透过率。
-SUN_IRRADIANCE = 12.0  # 太阳辐照度倍率。
-SKY_INTENSITY = 0.62  # 天空整体倍率；抬到肉眼可见的亮度，背光地面仍保留蓝灰天光。
+SUN_IRRADIANCE = 4.5  # 太阳辐照度倍率。
+SKY_INTENSITY = 0.85  # 天空整体倍率；抬到肉眼可见的亮度，背光地面仍保留蓝灰天光。
 CASCADE_SIZE = 1024  # 每级阴影贴图边长。
 CASCADE_COUNT = 3  # 三级级联。
 CASCADE_EXTENTS = (26.0, 90.0, 300.0)  # 每级正交视锥半边长，米。
@@ -55,25 +55,24 @@ CASCADE_SPLITS = (32.0, 115.0, 380.0)  # 按视深度选级的分界。
 CASCADE_BLEND = 10.0  # 级联交界过渡宽度。
 SKY_MAP_SIZE = (256, 128)  # 环境光与反射用的等距柱状天空贴图尺寸。
 SKY_MAP_INTERVAL = 8  # 天空贴图每八帧更新一次，云移动很慢。
-CLOUD_SIZE = (WIDTH, HEIGHT)  # 体积云与主画面同分辨率；云边不再被半分辨率放大成方块。
-CLOUD_STEPS = 30  # 云沿视线步进数；积雨云塔身很厚，需要更多步数保住竖向层次。
-CLOUD_SHADOW_SIZE = 256  # 云影贴图边长。
-CLOUD_SHADOW_RANGE = 900.0  # 云影覆盖范围，米；低阳把云影投到更远的地面。
-CLOUD_SHADOW_INTERVAL = 2  # 云影每两帧更新一次。
+CLOUD_STEPS = 40  # 云沿视线步进数；半分辨率下可以多走几步保住云内层次。
+CLOUD_SHADOW_SIZE = 512  # 云影贴图边长。
+CLOUD_SHADOW_RANGE = 12000.0  # 云影覆盖范围，米；覆盖头顶云到可见地面的整段投影。
+CLOUD_SHADOW_INTERVAL = 1  # 云影每帧更新一次，云层在动，间隔太大会看出影子跳动。
 REFLECTION_SCALE = 2  # 平面反射每边缩小的倍数。
 REFLECTION_INTERVAL = 5  # 反射每五帧更新一次；水面波纹会掩盖延迟。
 RENDER_SCALE = 1.0  # 内部渲染比例；输出与内部分辨率一致，先保证后期放大链路正确。
 GI_BLEND = 0.16  # 全局光时间累积里本帧权重。
-CLOUD_BLEND = 0.10  # 云时间累积里本帧权重。
+CLOUD_BLEND = 0.14  # 云时间累积里本帧权重。
 BLOOM_SIZE = (320, 180)  # 泛光最细一级。
 BLOOM_COARSE_SIZE = (160, 90)  # 泛光最粗一级。
 LUMINANCE_SIZE = (64, 36)  # 曝光统计第一级。
-EXPOSURE_KEY = 0.18  # 自动曝光目标中间亮度；曝光只统计不透明场景，水面再亮也不会把地面压黑。
-BLOOM_STRENGTH = 0.10  # 泛光强度；压低一点，太阳附近不会糊成一片白。
-FOG_DENSITY = 0.020  # 近地面雾密度倍率；贴水薄雾给光柱足够介质，又不盖住近景。
-FOG_HEIGHT = 24.0  # 雾的高层衰减高度；让远山也带一点空气透视。
-FOG_SCATTER = 1.30  # 雾中阳光散射强度。
-FOG_AMBIENT = 0.04  # 雾中天光。
+EXPOSURE_KEY = 0.15  # 自动曝光目标中间亮度；曝光只统计不透明场景，水面再亮也不会把地面压黑。
+BLOOM_STRENGTH = 0.08  # 泛光强度；压低一点，太阳附近不会糊成一片白。
+FOG_DENSITY = 0.016  # 近地面雾密度倍率；贴水薄雾给光柱足够介质，又不盖住近景。
+FOG_HEIGHT = 26.0  # 雾的高层衰减高度；让远山也带一点空气透视。
+FOG_SCATTER = 2.40  # 雾中阳光散射强度。
+FOG_AMBIENT = 0.022  # 雾中天光。
 AO_STRENGTH = 1.15  # 环境光遮蔽强度。
 CONTACT_STRENGTH = 1.1  # 接触阴影强度。
 BOUNCE_STRENGTH = 1.2  # 颜色反弹强度。
@@ -302,8 +301,8 @@ class World:
         self.height = max(1, int(round(height * RENDER_SCALE)))  # 内部渲染高度。
         self.half_width = max(1, self.width // 2)  # 半分辨率宽度，用于全局光。
         self.half_height = max(1, self.height // 2)  # 半分辨率高度。
-        self.cloud_width = self.width  # 体积云全分辨率；云边与塔身细节不再被二倍放大抹平。
-        self.cloud_height = self.height  # 体积云全分辨率。
+        self.cloud_width = max(1, self.width // 2)  # 体积云半分辨率；四分之一成本留给多次散射与云内光照。
+        self.cloud_height = max(1, self.height // 2)  # 半分辨率高度。
         self.reflection_width = max(1, width // REFLECTION_SCALE)  # 反射宽度。
         self.reflection_height = max(1, height // REFLECTION_SCALE)  # 反射高度。
         self.tonemap = tonemap  # 色调映射。
@@ -340,7 +339,8 @@ class World:
         self.water_vao, self.water_vbo = upload_mesh(scene["water"], [(0, 2, 0)])  # 水面顶点。
         self.textures = {}  # 场景纹理集合。
         noise = cloudnoise.ensure()  # 三维噪声字节。
-        self.noise_base = make_texture_3d(cloudnoise.BASE_SIZE, noise["base"])  # 基础形状。
+        base_size = round((len(noise["base"]) // 4) ** (1.0 / 3.0))  # 按字节数推出立方边长，64 或 128 都能用。
+        self.noise_base = make_texture_3d(base_size, noise["base"])  # 基础形状。
         self.noise_detail = make_texture_3d(cloudnoise.DETAIL_SIZE, noise["detail"])  # 细节。
         self.noise_curl = make_texture_2d(cloudnoise.CURL_SIZE, noise["curl"])  # 二维扰动。
         self.blue_noise = make_blue_noise()  # 蓝噪声。
@@ -357,10 +357,16 @@ class World:
         self.scene_normal, self.scene_albedo = scene_colors[2], scene_colors[3]  # 法线与反照率。
         self.reflection_fbo, self.reflection_color, self.reflection_depth = gl.color_depth_target(
             self.reflection_width, self.reflection_height)  # 反射目标。
+        # 反射纹理要带 mipmap：水面在掠射角会把地平线附近的高频明暗直接放大成白黑相间的碎条，
+        # 预过滤后的低层级只保留山体与天空的大块颜色，粗糙水面才不会像一张揉皱的锡纸。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.reflection_color)  # 绑定反射颜色。
+        GL.glTexParameteri(GL.GL_TEXTURE_2D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR_MIPMAP_LINEAR)  # 缩小取 mip。
+        GL.glGenerateMipmap(GL.GL_TEXTURE_2D)  # 先建立层级，避免采样到未定义的内存。
         self.lit_fbo, self.lit_color = make_color_target(width, height)  # 合成后的不透明颜色。
         self.water_fbo, self.water_color, self.water_depth = gl.color_depth_target(width, height)  # 水面目标。
         self.fog_fbo, self.fog_color = make_color_target(width, height)  # 雾合成目标。
-        self.cloud_raw_fbo, self.cloud_raw = make_color_target(self.cloud_width, self.cloud_height)  # 本帧云。
+        self.cloud_raw_fbo, self.cloud_raw = make_color_target(self.cloud_width, self.cloud_height)  # 本帧云与时间累积目标零。
+        self.cloud_accum_fbo, self.cloud_accum = make_color_target(self.cloud_width, self.cloud_height)  # 时间累积目标一，与目标零双缓冲。
         self.cloud_temp_fbo, self.cloud_temp = make_color_target(self.cloud_width, self.cloud_height)  # 横向模糊中间结果。
         self.cloud_blur_fbo, self.cloud_blur = make_color_target(self.cloud_width, self.cloud_height)  # 最终云纹理。
         self.cloud_shadow_size = CLOUD_SHADOW_SIZE  # 云影尺寸。
@@ -384,11 +390,13 @@ class World:
         self.lum_final_fbo, self.lum_final = make_color_target(1, 1)  # 曝光最终。
         self.gi_index = 0  # 全局光历史下标。
         self.taa_index = 0  # 抗锯齿历史下标。
+        self.cloud_index = 0  # 云时间累积的双缓冲下标。
         self.jitter = (0.0, 0.0)  # 本帧抖动。
         self.tonemap = tonemap  # 色调映射。
         self.bloom_strength = BLOOM_STRENGTH  # 泛光强度。
         self.profile = False  # 是否输出每阶段耗时。
-        self.frame = 0  # 帧号。
+        self.water_debug = 0  # 水面调试模式，零正常，一法线，二反射，三折射，四高光。
+        self.surface_debug = 0  # 地表调试模式，零正常，一反照率。
         self.scene_time = 0.0  # 场景时间。
         self.last_sky_map = -1000  # 上次更新天空立方体的帧。
         self.camera = camera.Camera([geometry.CAMERA_START[0], self.camera_ground + EYE_HEIGHT, geometry.CAMERA_START[1]], fov=FOV)  # 站立相机。
@@ -556,27 +564,34 @@ class World:
         GL.glGenerateMipmap(GL.GL_TEXTURE_2D)  # 生成环境光层级。
 
     def render_clouds(self, frame: int, scene_time: float) -> None:
-        """半分辨率步进体积云，再做时间累积。"""
+        """半分辨率步进体积云，再做时间累积与可分离模糊。"""
         forward, right, up, tan_half, aspect = self.basis()  # 相机基。
-        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.cloud_raw_fbo)  # 本帧云目标。
-        GL.glViewport(0, 0, self.cloud_width, self.cloud_height)  # 与主画面同分辨率。
+        target = self.cloud_index  # 本帧写入的累积目标。
+        targets = (self.cloud_raw, self.cloud_accum)  # 两张轮换纹理。
+        target_fbos = (self.cloud_raw_fbo, self.cloud_accum_fbo)  # 与纹理对应的帧缓冲。
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, target_fbos[target])  # 本帧云目标。
+        GL.glViewport(0, 0, self.cloud_width, self.cloud_height)  # 半分辨率。
         GL.glDisable(GL.GL_DEPTH_TEST)  # 全屏。
         GL.glDepthMask(GL.GL_FALSE)  # 不写深度。
         GL.glUseProgram(self.cloud_program)  # 云程序。
         self.bind_common(self.cloud_program, frame, scene_time)  # 通用参数。
         set_uniforms(self.cloud_program, {"uResolution": [float(self.cloud_width), float(self.cloud_height)],
                                           "uForward": forward, "uRight": right, "uUp": up,
-                                          "uTanHalfFov": tan_half, "uAspect": aspect, "uCloudSteps": CLOUD_STEPS})  # 相机与步数。
+                                          "uTanHalfFov": tan_half, "uAspect": aspect, "uCloudSteps": CLOUD_STEPS,
+                                          "uCloudBlend": 1.0 if frame < 2 else CLOUD_BLEND})  # 相机、步数与累积权重。
         self.bind_noise(self.cloud_program)  # 噪声。
+        GL.glActiveTexture(GL.GL_TEXTURE14)  # 上一帧云。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, targets[1 - target])  # 另一张累积纹理。
+        GL.glUniform1i(location(self.cloud_program, "uCloudHistory"), 14)  # 采样器。
         GL.glBindVertexArray(self.fullscreen)  # 全屏。
-        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 步进。
+        GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 步进并累积。
         GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, self.cloud_temp_fbo)  # 横向模糊目标。
         GL.glViewport(0, 0, self.cloud_width, self.cloud_height)  # 半分辨率。
         GL.glUseProgram(self.cloud_blur_program)  # 模糊程序。
         set_uniforms(self.cloud_blur_program, {"uResolution": [float(self.cloud_width), float(self.cloud_height)],
                                                "uDirection": [1.0, 0.0]})  # 横向。
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 来源。
-        GL.glBindTexture(GL.GL_TEXTURE_2D, self.cloud_raw)  # 本帧云。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, targets[target])  # 本帧累积云。
         GL.glUniform1i(location(self.cloud_blur_program, "uSource"), 0)  # 采样器。
         GL.glBindVertexArray(self.fullscreen)  # 全屏。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 横向模糊。
@@ -587,6 +602,7 @@ class World:
         GL.glActiveTexture(GL.GL_TEXTURE0)  # 来源。
         GL.glBindTexture(GL.GL_TEXTURE_2D, self.cloud_temp)  # 横向结果。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, 3)  # 纵向模糊。
+        self.cloud_index = 1 - target  # 下一帧写另一张。
 
     def render_scene(self, frame: int, scene_time: float) -> None:
         """铺天空，再画地形与物体；输出直射、间接、法线与反照率。"""
@@ -619,10 +635,10 @@ class World:
         self.bind_sky_map(self.surface_program)  # 天空环境光。
         self.bind_noise(self.surface_program)  # 云影与蓝噪声。
         set_uniforms(self.surface_program, {"uViewProjection": self.view_projection(), "uIsTerrain": 1,
-                                            "uReflectionPass": 0, "uAerialStrength": 1.2, "uDebugMode": 0})  # 地形参数。
+                                            "uReflectionPass": 0, "uAerialStrength": 0.25, "uDebugMode": self.surface_debug})  # 地形参数。
         GL.glBindVertexArray(self.terrain_vao)  # 地形。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.terrain_triangles * 3)  # 绘制。
-        set_uniforms(self.surface_program, {"uIsTerrain": 0, "uAerialStrength": 0.8, "uDebugMode": 0})  # 物体参数。
+        set_uniforms(self.surface_program, {"uIsTerrain": 0, "uAerialStrength": 0.5, "uDebugMode": self.surface_debug})  # 物体参数。
         GL.glBindVertexArray(self.object_vao)  # 物体。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.object_triangles * 3)  # 绘制。
 
@@ -683,6 +699,9 @@ class World:
         set_uniforms(self.surface_program, {"uIsTerrain": 0})  # 物体。
         GL.glBindVertexArray(self.object_vao)  # 物体。
         GL.glDrawArrays(GL.GL_TRIANGLES, 0, self.object_triangles * 3)  # 绘制。
+        GL.glBindFramebuffer(GL.GL_FRAMEBUFFER, 0)  # 解绑后才能安全生成 mipmap。
+        GL.glBindTexture(GL.GL_TEXTURE_2D, self.reflection_color)  # 反射颜色。
+        GL.glGenerateMipmap(GL.GL_TEXTURE_2D)  # 更新倒影的模糊层级。
 
     def render_gi(self, frame: int, scene_time: float) -> None:
         """半分辨率算环境光遮蔽、接触阴影与颜色反弹。"""
@@ -759,9 +778,10 @@ class World:
         GL.glUseProgram(self.water_program)  # 水面程序。
         self.bind_common(self.water_program, frame, scene_time)  # 通用参数。
         self.bind_sky_map(self.water_program)  # 天空反射兜底。
+        self.bind_noise(self.water_program)  # 泡沫用的二维扰动图。
         set_uniforms(self.water_program, {"uViewProjection": self.view_projection(),
                                           "uResolution": [float(self.width), float(self.height)],
-                                          "uNear": NEAR, "uFar": FAR, "uWaterDebug": 0,
+                                          "uNear": NEAR, "uFar": FAR, "uWaterDebug": self.water_debug,
                                           "uReflectionTexel": [1.0 / self.reflection_width, 1.0 / self.reflection_height]})  # 水面参数。
         for unit, texture, name in ((13, self.reflection_color, "uReflection"), (14, self.lit_color, "uSceneColor"),
                                     (15, self.scene_depth, "uSceneDepth")):  # 输入。
@@ -970,7 +990,7 @@ class World:
         textures = [self.noise_base, self.noise_detail, self.noise_curl, self.blue_noise, self.sky_map,
                     self.scene_direct, self.scene_indirect, self.scene_normal, self.scene_albedo, self.scene_depth,
                     self.reflection_color, self.reflection_depth, self.lit_color, self.water_color, self.water_depth,
-                    self.fog_color, self.cloud_raw, self.cloud_temp, self.cloud_blur, self.cloud_shadow, self.lum_tile, self.lum_final,
+                    self.fog_color, self.cloud_raw, self.cloud_accum, self.cloud_temp, self.cloud_blur, self.cloud_shadow, self.lum_tile, self.lum_final,
                     self.bloom_color, self.bloom_coarse_color, self.bloom_combine_color]  # 单张纹理。
         textures.extend(self.shadow_depths)  # 阴影。
         textures.extend(self.taa_color)  # 抗锯齿历史。
@@ -978,7 +998,7 @@ class World:
             textures.extend(pair)  # 加入。
         GL.glDeleteTextures(textures)  # 删除纹理。
         fbos = [self.scene_fbo, self.reflection_fbo, self.lit_fbo, self.water_fbo, self.fog_fbo,
-                self.cloud_raw_fbo, self.cloud_shadow_fbo, self.lum_tile_fbo, self.lum_final_fbo,
+                self.cloud_raw_fbo, self.cloud_accum_fbo, self.cloud_shadow_fbo, self.lum_tile_fbo, self.lum_final_fbo,
                 self.bloom_fbo, self.bloom_coarse_fbo, self.bloom_combine_fbo, self.sky_fbo]  # 帧缓冲。
         fbos.extend(self.shadow_fbos)  # 阴影。
         fbos.extend(self.taa_fbo)  # 抗锯齿。
@@ -993,6 +1013,8 @@ def run(args) -> None:
     world = World(args.width, args.height, args.tonemap, args.exposure_key)  # 构建场景。
     world.bloom_strength = args.bloom  # 泛光强度。
     world.profile = args.profile  # 性能分析。
+    world.water_debug = args.water_debug  # 水面调试模式。
+    world.surface_debug = args.surface_debug  # 地表调试模式。
     output = Path(args.screenshot)  # 截图路径。
     perf_path = Path(args.perf)  # 性能记录路径。
     try:
@@ -1066,6 +1088,8 @@ def main() -> None:
     parser.add_argument("--exposure-key", type=float, default=EXPOSURE_KEY, help="自动曝光目标亮度")  # 曝光。
     parser.add_argument("--tonemap", type=int, default=1, choices=(0, 1, 2), help="零 AgX，一 ACES，二无压缩")  # 曲线。
     parser.add_argument("--bloom", type=float, default=BLOOM_STRENGTH, help="泛光强度")  # 泛光。
+    parser.add_argument("--water-debug", type=int, default=0, help="水面调试：零正常，一法线，二反射，三折射，四高光")  # 水面调试。
+    parser.add_argument("--surface-debug", type=int, default=0, help="地表调试：零正常，二反照率")  # 地表调试。
     parser.add_argument("--profile", action="store_true", help="输出每阶段耗时，仅用于性能分析")  # 分析。
     args = parser.parse_args()  # 解析。
     run(args)  # 运行。

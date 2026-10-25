@@ -18,10 +18,11 @@ HERE = Path(__file__).resolve().parent  # 当前示例目录。
 ROOT = HERE.parents[2]  # 仓库根目录。
 CACHE = ROOT / ".dev" / "omni-gfx" / "lighting" / "noise-v3"  # 生成缓存；开发产物不提交。改噪声参数时换版本号，避免读到旧体素。
 
-BASE_SIZE = 64  # 基础形状噪声边长；64 足够云块平滑，显存约一兆。
+BASE_SIZE = 64  # 生成基础形状噪声时的边长；参考纹理存在时改用 128 立方。
 DETAIL_SIZE = 48  # 细节侵蚀噪声边长；高频，尺寸小也看不出块。
 CURL_SIZE = 256  # 二维扰动噪声边长；采样次数多，分辨率高一些。
 SEED = 20261026  # 固定种子，保证不同机器生成同一片云。
+REFERENCE_BASE = ROOT / "references" / "iterationT" / "shaders" / "texture" / "CloudNoise_128_128_128.bin"  # 参考光影的 128 立方 Perlin-Worley；存在时优先使用。
 
 
 def _hash3(ix: int, iy: int, iz: int, seed: int) -> float:
@@ -178,9 +179,17 @@ def _load_or_build(name: str, builder) -> bytes:
 
 
 def ensure() -> dict[str, bytes]:
-    """返回三张噪声的原始字节，缺失时生成；调用方负责上传纹理。"""
+    """返回三张噪声的原始字节，缺失时生成；调用方负责上传纹理。
+
+    基础云噪声优先读取参考光影的 128 立方 Perlin-Worley：它的通道分布与 Nubis
+    的密度公式直接对应，云块比本地 64 立方生成的更细，也不需要每次重新生成。
+    """
+    if REFERENCE_BASE.is_file():  # 参考包存在时直接用它的云噪声。
+        base = REFERENCE_BASE.read_bytes()  # 八兆字节，启动读取很快。
+    else:  # 没有参考包时回退到本地生成，保证测试世界仍能独立启动。
+        base = _load_or_build(f"base-{BASE_SIZE}.rgba", _build_base)
     return {
-        "base": _load_or_build(f"base-{BASE_SIZE}.rgba", _build_base),  # 基础形状。
+        "base": base,  # 基础形状。
         "detail": _load_or_build(f"detail-{DETAIL_SIZE}.rgba", _build_detail),  # 细节侵蚀。
         "curl": _load_or_build(f"curl-{CURL_SIZE}.rgba", _build_curl),  # 二维扰动。
     }

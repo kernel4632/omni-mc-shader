@@ -54,8 +54,8 @@ OgxAtmosphere lightingAtmosphere() // 返回本场景的大气参数。
 {
     OgxAtmosphere air = ogxAtmosphereEarth(); // 先取库里的地球常数。
     air.sunIntensity = 20.0; // 太阳辐照度整体倍率，与曝光键值配合。
-    air.mieScattering = vec3(0.55e-3, 0.55e-3, 0.58e-3); // 气溶胶略淡，地平线保持蓝灰而不是一条白带。
-    air.mieG = 0.72; // 前向散射较强，太阳附近有自然白晕。
+    air.mieScattering = vec3(0.28e-3, 0.28e-3, 0.30e-3); // 气溶胶略淡，地平线保持蓝灰而不是一条白带。
+    air.mieG = 0.60; // 前向散射较强，太阳附近有自然白晕，但不会把整条地平线烧白。
     return air; // 返回可直接使用的参数。
 }
 
@@ -66,7 +66,7 @@ vec3 lightingSunChroma() // 返回太阳直射光的颜色，不含强度。
     vec3 origin = vec3(0.0, air.planetRadius + max(uCameraPosition.y, 0.0) * 0.001, 0.0); // 相机所在高度，公里。
     vec3 transmittance = ogxAtmosphereSunTransmittance(air, origin, normalize(uSunDirection), 4); // 阳光到地面的透过率。
     float luma = max(ogxLuminance(transmittance), 1e-4); // 只保留色度，亮度交给辐照度倍率。
-    return uSunColor * (transmittance / luma); // 叠上调用方的色温倾向。
+    return uSunColor * mix(transmittance / luma, vec3(1.0), 0.95); // 叠上调用方的色温倾向，低阳保持接近白色。
 }
 
 // 天空颜色：单次散射加太阳圆盘；`altitudeKm` 是相机高度，`steps` 是积分段数，`sunDisk` 控制圆盘是否参与。
@@ -78,54 +78,29 @@ vec3 lightingSky(vec3 direction, float altitudeKm, int steps, float sunDisk) // 
     vec3 sky = ogxAtmosphereSky(air, altitudeKm, direction, normalize(uSunDirection), steps); // 单次散射天空。
     vec3 origin = vec3(0.0, air.planetRadius + max(altitudeKm, 0.0), 0.0); // 太阳透过率的起点。
     vec3 transmittance = ogxAtmosphereSunTransmittance(air, origin, normalize(uSunDirection), 4); // 阳光到相机的透过率。
-    float disk = ogxSunDisc(direction, normalize(uSunDirection), 0.00042, 32000.0); // 约零点五度的太阳圆盘。
+    float disk = ogxSunDisc(direction, normalize(uSunDirection), 0.000016, 90000.0); // 约零点七度的太阳圆盘；之前三度多，泛光一开就成大白球。
     sky += uSunColor * transmittance * (disk * uSunIrradiance * 7.0 * sunDisk); // 圆盘亮度远高于天空，泛光会自然扩散。
     return max(sky, vec3(0.0)) * uSkyIntensity; // 天空整体倍率；直射光另算，不乘在这里。
-}
-
-// 大尺度云量遮罩：同一份二维噪声给主画面云块与地面云影共用。
-// 为什么不让云影自己取一个固定覆盖率：主画面按视线投影到大云团，云影按太阳方向投影到同一片云，
-// 如果两边用不同覆盖率，就会出现“天上没云、地上有影子”的悬空阴影。
-float lightingCloudCoverage(vec2 plane) // 返回零到一的覆盖率下限。
-{
-    // 主云塔位置：相机前方约三十二公里、偏右三公里；半径四到九公里，形成一座孤立的高耸积雨云。
-    // 为什么用世界坐标的圆形区域：只靠二维噪声很难稳定地把一座塔放到画面中央；这里先选位置，再让三维噪声长细节。
-    vec2 hero = vec2(3000.0, -32000.0); // 主云塔中心，米。
-    float heroRegion = 1.0 - smoothstep(4000.0, 9000.0, length(plane - hero)); // 中心为一，外缘平滑到零。
-    plane += vec2(-6000.0, 28000.0); // 把背景云团也放到远处，避免它们盖住主云塔。
-    float mask = texture(uCloudCurl, plane * 1.6e-5 + vec2(uTime * 0.000004, -uTime * 0.000002)).r; // 六十公里尺度。
-    float mask2 = texture(uCloudCurl, plane * 5.2e-5 + vec2(-uTime * 0.000006, uTime * 0.000004)).g; // 十九公里尺度。
-    float cluster = smoothstep(0.40, 0.58, mask) * smoothstep(0.33, 0.63, mask2); // 背景云团，彼此分开。
-    cluster = mix(cluster * 0.35, 1.0, heroRegion); // 主云塔内部铺满，外部只留少量背景云。
-    // 太阳方向的云洞：在太阳投影到云层的落点留一个缺口，四周用云环围住。
-    // 缺口让阳光直射到湖面与薄雾，云环在地面投下影子；两者相接就形成清晰但不生硬的光柱。
-    vec2 sunHole = lightingSunCloudPlane(); // 太阳投影到云层中部的落点。
-    float sunDistance = length(plane - sunHole); // 到太阳投影点的距离。
-    float gap = smoothstep(500.0, 1600.0, sunDistance); // 中心为零，外缘为一。
-    float ring = smoothstep(500.0, 1400.0, sunDistance) * (1.0 - smoothstep(2600.0, 5000.0, sunDistance)); // 云环。
-    cluster = max(cluster, ring * 0.95); // 云环负责影子。
-    cluster *= gap; // 缺口保持透光，阳光才能穿过薄雾。
-    return mix(0.12, 1.05, cluster); // 主云塔用略高于一的覆盖率，既填实塔身又保留噪声缺口。
 }
 
 // 云层参数：一次填完整，天空、方块与水面反射读同一份，云的位置不会错开。
 OgxCumulusMedia lightingCloudMedia() // 返回体积云参数。
 {
     OgxCumulusMedia media; // 先声明再逐字段填写。
-    media.wind = vec3(uTime * 0.0009, 0.0, uTime * 0.0017); // 缓慢水平风，云块每秒移动几米。
+    media.wind = vec3(uTime * 0.0006, 0.0, -uTime * 0.0011); // 缓慢水平风，按米计。
     media.camera_position = uCameraPosition; // 相机绝对位置，供曲率与云影使用。
-    media.light_color = mix(lightingSunChroma(), vec3(1.0), 0.45); // 云体多次散射后接近白色，只保留一半太阳色温。
-    media.sky_color = lightingSky(vec3(0.0, 1.0, 0.0), 2.0, 4, 0.0); // 云层高度的天顶光；不要太阳圆盘，避免云底被一个白点压亮。
+    media.light_color = mix(lightingSunChroma(), vec3(1.0), 0.62); // 多次散射后接近白色，只保留少量太阳色温。
+    media.sky_color = lightingSky(vec3(0.0, 1.0, 0.0), 2.0, 4, 0.0); // 云层高度的天顶光。
     media.lightning_position = vec3(0.0); // 本场景没有闪电。
-    media.altitude = vec2(1500.0, 10000.0); // 云底与云顶高度，米；十公里高的积雨云在二十到四十公里外形成完整塔身。
-    media.lighting_strength = vec2(uSunIrradiance * 0.012, 0.50); // 直射倍率；云顶亮白但不过曝，云底靠多次散射保留灰蓝。
+    media.altitude = vec2(1200.0, 2400.0); // 云底与云顶高度，米；一千二百米厚的积云，影子能落在近处湖面。
+    media.lighting_strength = vec2(max(uSunIrradiance * 0.022, 0.10), 0.55); // 直射倍率与环境光。
     media.planet_radius = 6360000.0; // 地球半径，米。
-    media.cloud_scale = 0.000065; // 约十五公里一个云块单元，主云塔宽三到五公里。
-    media.density_option = 0.140; // 消光倍率；厚云不透光，薄边仍能透出银边。
-    media.coverage = 0.72; // 默认云量；调用方按大尺度遮罩覆盖成云团与空隙。
-    media.wetness = 0.10; // 晴天积云，只让云顶稍微收口。
-    media.bottom_brightness = 0.028; // 云底更暗，避免整块云像白纸。
-    media.outscatter_factor = 1.35; // 外散射曲线，薄边更亮。
+    media.cloud_scale = 1.0; // 云坐标直接用米，基础噪声与细节噪声各自乘自己的频率。
+    media.density_option = 0.30; // 消光倍率；厚云不透光，薄边仍能透出银边。
+    media.coverage = 0.35; // 云量下限；数值越大云越多，空闲天空由二维天气噪声留出。
+    media.wetness = 0.06; // 晴天积云，只让云顶稍微收口。
+    media.bottom_brightness = 0.42; // 云底保留少量直射，主要靠天光与多次散射。
+    media.outscatter_factor = 1.30; // 外散射曲线，薄处与云顶更亮。
     media.lightning_intensity = 0.0; // 无闪电。
     media.lightning_strength = 0.0; // 无闪电。
     return media; // 返回本帧云层。
@@ -135,37 +110,39 @@ OgxCumulusMedia lightingCloudMedia() // 返回体积云参数。
 vec4 lightingCloudMarch(vec3 direction, vec2 jitter, int steps) // 返回 rgb 加色与 a 覆盖率。
 {
     OgxCumulusMedia media = lightingCloudMedia(); // 云层参数。
-    // 大尺度云量遮罩：把视线投到云层中部，在水平面上取低频噪声；
-    // 直接把视线投影到云层平面上取样；按视线水平坐标取样在低仰角会被压成放射状长条，云会像被拉成雨帘。
-    float layerDistance = max((5750.0 - uCameraPosition.y) / max(direction.y, 0.06), 0.0); // 到云层中部的距离。
-    vec2 plane = uCameraPosition.xz + direction.xz * layerDistance; // 云层平面上的落点。
-    // 主云塔用视线方位与仰角选出一根竖直云柱：二维平面遮罩只能选出天空里的一块圆斑，云会变成飞碟。
-    // 方位角以正前方为零，仰角用方向向量的纵分量；这根柱子从云底一直长到云顶，才有塔的轮廓。
-    float azimuth = atan(direction.x, -direction.z); // 当前视线的水平角。
-    float elevation = asin(clamp(direction.y, -1.0, 1.0)); // 当前视线的仰角。
-    float towerWidth = mix(0.085, 0.135, smoothstep(0.140, 0.205, elevation)); // 塔身宽度基本不变，只在顶部展开成砧状。
-    float heroAzimuth = 1.0 - smoothstep(towerWidth * 0.55, towerWidth, abs(azimuth - 0.090)); // 塔身水平半宽约三到七度。
-    float heroElevation = smoothstep(0.018, 0.045, elevation) * (1.0 - smoothstep(0.19, 0.245, elevation)); // 云底到云顶。
-    float hero = heroAzimuth * heroElevation; // 一表示主云塔内部。
-    // 太阳方向留出真正的无云洞：只降低覆盖率时，云量映射仍可能生成薄云，阳光穿不过来。
-    if (length(plane - lightingSunCloudPlane()) < 300.0) // 云洞半径，米。
-    {
-        return vec4(0.0); // 完全透明，露出蓝天与太阳方向。
-    }
-    media.coverage = mix(lightingCloudCoverage(plane) * 0.35, 0.86, hero); // 背景云压低，主塔用略高覆盖率填实，噪声咬出边缘。
+    // 太阳侧的积云中心在八公里外，覆盖率略高；左侧再放一团远云平衡画面。
+    // 两团都只改覆盖率，云形由同一套三维噪声决定，不是按视线画出来的柱子。
+    float midDistance = min((1800.0 - uCameraPosition.y) / max(direction.y, 0.05), 60000.0);
+    vec2 midPlane = uCameraPosition.xz + direction.xz * midDistance;
+    float sunCloud = 1.0 - smoothstep(1800.0, 4200.0, length(midPlane - vec2(1800.0, -8200.0)));
+    float leftCloud = 1.0 - smoothstep(3000.0, 6500.0, length(midPlane - vec2(-2800.0, -15600.0)));
+    media.coverage = mix(0.35, 0.65, max(sunCloud, leftCloud));
     vec3 hitOffset; // 平均命中位置，本场景不需要。
     vec4 cloud = ogxCumulusMarch(direction, media, jitter, hitOffset, uCloudBase, uCloudDetail, uCloudCurl,
-                                 float(steps), 1.0, normalize(uSunDirection), 1.0, 0.0, 2.5, 1.2); // 库的步进核心；高频细节侵蚀把规则云柱咬成花椰菜边。
+                                 float(steps), 1.0, normalize(uSunDirection), 0.0005, 0.0, 0.005, 1.20); // 高层积云。
+    // 空气透视：云越远，颜色越向天空的蓝灰靠，同时降低覆盖率。
+    // 没有这一步时，远处云层在地平线上排成一条高对比的碎块带，像一排贴在天空上的纸片。
+    float hitDistance = length(hitOffset);
+    float aerial = 1.0 - exp(-hitDistance * 5.0e-5);
+    vec3 haze = media.sky_color * 0.45;
+    cloud.rgb = mix(cloud.rgb, haze * (1.0 - cloud.a), aerial * 0.35);
+    float distanceFade = 1.0 - smoothstep(15000.0, 38000.0, hitDistance); // 三十八公里外淡出，地平线不再是一条碎云带。
+    cloud.rgb *= distanceFade;
+    cloud.a = mix(1.0, cloud.a, distanceFade);
     return vec4(cloud.rgb, 1.0 - cloud.a); // 换成预乘颜色与覆盖率，方便时间累积。
 }
 
 // 云影：把地面点投到云影贴图；超出范围或靠近边缘时淡回受光。
+// 高度修正让雾点也能查到头顶那片云：云影贴图烘在地面上，雾点越高，太阳光线穿过的云越靠前，
+// 所以按高度沿太阳水平方向反推一段，光柱的明暗才会随高度倾斜，而不是一根竖直灰柱。
 float lightingCloudShadow(vec3 position) // 返回零到一的太阳可见度。
 {
-    vec2 uv = (position.xz - uCloudShadowRect.xy) / max(uCloudShadowRect.z, 1.0) + 0.5; // 世界坐标换成贴图坐标。
-    vec2 edge = smoothstep(vec2(0.0), vec2(0.08), uv) * (1.0 - smoothstep(vec2(0.92), vec2(1.0), uv)); // 边缘淡出。
-    float shadow = texture(uCloudShadowMap, clamp(uv, vec2(0.001), vec2(0.999))).r; // 贴图里一表示受光。
-    return mix(1.0, shadow, edge.x * edge.y * uCloudShadowRect.w); // 范围外不压暗。
+    vec3 sun = normalize(uSunDirection);
+    float heightShift = max(position.y, 0.0) / max(sun.y, 0.05);
+    vec2 uv = (position.xz - sun.xz * heightShift - uCloudShadowRect.xy) / max(uCloudShadowRect.z, 1.0) + 0.5;
+    vec2 edge = smoothstep(vec2(0.0), vec2(0.08), uv) * (1.0 - smoothstep(vec2(0.92), vec2(1.0), uv));
+    float shadow = texture(uCloudShadowMap, clamp(uv, vec2(0.001), vec2(0.999))).r;
+    return mix(1.0, shadow, edge.x * edge.y * uCloudShadowRect.w);
 }
 
 // 空气透视：地表到相机的散射；远景融进天空，地平线不会有一条硬边。

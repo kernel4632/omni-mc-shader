@@ -47,7 +47,22 @@ void main()
         albedo *= (0.62 + macro * 0.76) * (0.86 + mid * 0.28) * (0.94 + fine * 0.12); // 三个尺度叠出草地的不均匀。
         albedo *= vec3(1.02, 0.98 + fine * 0.06, 0.92 + fine * 0.09); // 草叶的暖黄与冷绿差异。
         float dry = smoothstep(0.48, 0.78, ogxValueNoise2(vWorldPosition.xz * 0.045 + vec2(17.0, 3.0))); // 干草斑块。
-        albedo *= mix(vec3(1.0), vec3(1.32, 1.02, 0.52), dry * 0.55); // 更多枯黄，草地不再是一条荧光绿。
+        albedo *= mix(vec3(1.0), vec3(1.18, 1.00, 0.62), dry * 0.28); // 少量枯黄斑块，草地不再是一条荧光绿也不整片发灰。
+        albedo *= vec3(0.55, 1.35, 0.42); // 暖阳下保住草地的绿色，避免整片地面被压成米黄色。
+        // 大尺度草色斑块：一百到数百米的变化，远景不会只剩一条条被高度场压出来的色带。
+        float broad = ogxFbm2(vWorldPosition.xz * 0.006 + vec2(7.3, 1.9), 3); // 一百七十米尺度。
+        float huge = ogxValueNoise2(vWorldPosition.xz * 0.0015 + vec2(2.1, 5.7)); // 六百米尺度。
+        albedo *= mix(0.82, 1.14, broad) * mix(0.90, 1.10, huge);
+        albedo *= mix(vec3(0.96, 1.08, 0.86), vec3(1.04, 1.00, 0.94), broad); // 冷绿与暖黄草斑。
+        float farColor = ogxValueNoise2(vWorldPosition.xz * 0.018 + vec2(6.2, 3.8)); // 五十五米尺度。
+        albedo *= mix(0.86, 1.10, farColor); // 远景颜色也有起伏，山脊不会是一条同色的长带。
+        // 远景微法线：以五十米为周期的缓坡，打散高度场在远山上留下的水平条纹。
+        float farStep = 6.0;
+        float farNoise = ogxValueNoise2(vWorldPosition.xz * 0.020 + vec2(3.1, 8.4));
+        float farX = ogxValueNoise2((vWorldPosition.xz + vec2(farStep, 0.0)) * 0.020 + vec2(3.1, 8.4));
+        float farZ = ogxValueNoise2((vWorldPosition.xz + vec2(0.0, farStep)) * 0.020 + vec2(3.1, 8.4));
+        vec3 farBump = vec3((farNoise - farX) / farStep, 0.0, (farNoise - farZ) / farStep) * 1.30;
+        normal = normalize(normal + farBump * (1.0 - smoothstep(80.0, 520.0, distance)));
         // 微法线：按程序化草色噪声的梯度扰动法线，地面有细碎的明暗，不像一整块绿塑料。
         float eps = 0.12; // 差分步长，米。
         float height0 = ogxValueNoise2(vWorldPosition.xz * 0.75); // 当前高度。
@@ -76,6 +91,14 @@ void main()
         outAlbedoRough = vec4(albedo, roughness);
         return;
     }
+    if (uDebugMode == 2) // 开发检查：把线性反照率直接写成颜色。
+    {
+        outDirect = vec4(albedo, 1.0);
+        outIndirect = vec4(0.0, 0.0, 0.0, 1.0);
+        outNormalDepth = vec4(ogxEncodeNormal(normal), clamp(distance / 1000.0, 0.0, 1.0), 1.0);
+        outAlbedoRough = vec4(albedo, roughness);
+        return;
+    }
     if (uDebugMode == 4) // 开发检查：单点阴影比较。
     {
         vec3 c = lightingShadowCoord(uShadowMatrix0, vWorldPosition, normal, 0.02); // 第一级坐标。
@@ -88,7 +111,7 @@ void main()
         return;
     }
     float cloudShadow = lightingCloudShadow(vWorldPosition); // 大块云影。
-    float cloudWeight = smoothstep(35.0, 95.0, distance) * 0.65; // 近景保持阳光，云影落在中远景，避免整块前景被压黑。
+    float cloudWeight = smoothstep(22.0, 70.0, distance) * 0.70; // 近景保持阳光，云影落在中远景，避免整块前景被压黑。
     float visibility = shadow * mix(1.0, cloudShadow, cloudWeight); // 云影压暗地面，但保留太阳方向感。
     float NdotL = max(dot(normal, sunDirection), 0.0); // 太阳入射角。
     float NdotV = max(dot(normal, view), 0.0); // 视线与法线夹角。
@@ -122,6 +145,16 @@ void main()
     }
     outDirect = vec4(direct, 1.0); // 直射光附件。
     outIndirect = vec4(indirect, 1.0); // 间接光附件。
+    if (uDebugMode == 3) // 开发检查：只输出直射光。
+    {
+        outDirect = vec4(direct, 1.0);
+        outIndirect = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+    if (uDebugMode == 4) // 开发检查：只输出间接光。
+    {
+        outDirect = vec4(0.0, 0.0, 0.0, 1.0);
+        outIndirect = vec4(indirect, 1.0);
+    }
     outNormalDepth = vec4(ogxEncodeNormal(normal), clamp(distance / 1000.0, 0.0, 1.0), 1.0); // 法线与距离。
     outAlbedoRough = vec4(albedo, roughness); // 反照率与粗糙度。
     if (uReflectionPass == 1) // 反射目标只有一张颜色附件。
