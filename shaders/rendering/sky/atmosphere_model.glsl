@@ -33,6 +33,7 @@ gfx_atmosphere_model omniAtmosphereModel(){
 	m.solar_irradiance = atmosphereModel_solar_irradiance; // 太阳辐照度。
 	m.rayleigh_scattering = atmosphereModel_rayleigh_scattering; // 瑞利散射系数。
 	m.mie_scattering = atmosphereModel_mie_scattering; // 米氏散射系数。
+	m.absorption_extinction = atmosphereModel_absorption_extinction; // 臭氧吸收系数，只影响透过率。
 	m.density_rayleigh = atmosphereModel_densityProfile_rayleigh; // 瑞利密度剖面系数。
 	m.density_mie = atmosphereModel_densityProfile_mie; // 米氏密度剖面系数。
 	m.absorption_width = atmosphereModel_densityProfile_absorption_width; // 臭氧剖面转折高度。

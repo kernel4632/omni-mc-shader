@@ -63,16 +63,22 @@ def command_spirv(download: bool) -> None:
         print("下载 Slang 编译器到本机工具目录……")
         print("编译器位置：" + str(slang.download()))
     entries = []  # 每个模块一条记录，写进清单。
+    skipped = []  # 还没有探针的模块：明确列出，不冒充已覆盖。
     for module in generate.MODULES:  # 逐模块编译，互不影响。
+        if not (slang.PROBES / f"{module}.slang").is_file():  # 探针未补齐时跳过，而不是让整条命令失败。
+            skipped.append(module)  # 记录待补的模块。
+            continue
         output = slang.SPIRV_OUT / f"{module}.spv"  # 输出与模块同名。
         slang.compile_probe(module, output)  # 失败时带回编译器前几行错误。
         data = output.read_bytes()  # 读回实际产物计算大小与摘要。
         entries.append({"module": module, "bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()})  # 清单只记录可复现信息。
     import json  # 清单格式简单，局部导入保持顶部依赖精简。
-    manifest = {"schemaVersion": 1, "compiler": slang.version(), "probes": entries}  # 版本号是复现条件之一。
+    manifest = {"schemaVersion": 1, "compiler": slang.version(), "probes": entries, "skipped": skipped}  # 版本号是复现条件之一。
     slang.SPIRV_OUT.mkdir(parents=True, exist_ok=True)
     (slang.SPIRV_OUT / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")  # 固定换行与缩进。
     print(f"SPIR-V 生成完成：{len(entries)} 个模块，编译器 {manifest['compiler']}")
+    if skipped:  # 待补探针不影响已有产物，但必须在输出里可见。
+        print("未补齐探针、本次跳过：" + "、".join(skipped))
 
 
 def command_demo(extra: list[str]) -> None:

@@ -161,4 +161,18 @@ vec3 ogxHsvToRgb(vec3 color)
 // sRGB 到线性：三次多项式近似，供方块光表复原颜色。
 vec3 ogxSrgbToLinear(vec3 s) { return s * (s * (s * 0.305306011 + 0.682171111) + 0.012522878); }
 
+// 饱和度矩阵：把颜色朝灰阶收或向外推，一为原色。
+// 旧实现用四乘四矩阵，保留同一个构造顺序；生成 GLSL 后按列解释，与旧画面一致。
+mat4 ogxSaturationMatrix(float saturation)
+{
+    const vec3 luminance = vec3(0.3086, 0.6094, 0.0820); // 饱和度用的亮度权重。
+    vec3 lumSat = luminance * (1.0 - saturation); // 去饱和时混入的灰分量。
+    vec2 satZero = vec2(saturation, 0.0); // 原色保留量。
+    return mat4(
+        vec4(lumSat.r + satZero.xyy, 0.0),
+        vec4(lumSat.g + satZero.yxy, 0.0),
+        vec4(lumSat.b + satZero.yyx, 0.0),
+        vec4(0.0, 0.0, 0.0, 1.0)); // 三个颜色通道加一行齐次坐标。
+}
+
 #endif

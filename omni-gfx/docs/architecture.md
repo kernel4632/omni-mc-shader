@@ -42,6 +42,16 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `reflection.slang` | 可见法线采样、屏幕空间追踪、菲涅耳合并、九点小波降噪 | `math` |
 | `post.slang` | 泛光核、三次升采样、亮度曲线、暗角、颗粒、景深、动态模糊、分块测光 | `math` |
 | `antialias.slang` | YCoCg、历史邻域裁剪、三次采样、时间重投影 | `math` |
+| `weather.slang` | 雨雪随风偏移、植被与季节、暴风噪声与染色、每日天气哈希 | 无 |
+| `surface.slang` | 方块光曲线、材质法线与遮蔽、火把光、自发光 | `math` |
+| `parallax.slang` | 高度采样、平滑与锐利视差、自阴影、高度场法线 | `math` |
+| `voxel.slang` | 三维逐格步进、半透明染色、植物穿透、铁块镜面弹射 | `math`、`color` |
+| `upscale.slang` | FSR 边缘方向重采样、对比度自适应锐化 | `math` |
+| `planet.slang` | 末地行星本体、光环、大气 | `math`、`atmosphere` |
+| `accretion.slang` | 吸积盘积分、空间扭曲、圆环辉光、多普勒 | `math`、`fog` |
+| `atmosphere_model.slang` | 预计算大气的坐标、透过率、散射、辐照度与简化散射 | `atmosphere`、`math`、`color` |
+| `cloud_volume.slang` | 体积云形状、光照、步进、闪电与云影贴图 | `cloud`、`math` |
+| `fog_volume.slang` | 体积雾密度、光照吸收、步进、暴风与水下光柱 | `fog`、`weather`、`shadow`、`water`、`color` |
 
 规则：
 
@@ -100,3 +110,16 @@ SPIR-V 由 `tests/probes/*.slang` 编译，探针调用每个模块的全部公�
 - 需要纹理过滤时，先设计显式的采样器与纹理坐标接口，再迁移双三次函数；当前效果模块只收纯计算，反射色由调用方传入。
 - SPIR-V 从“模块探针”升级为“完整演示管线”时，把顶点/片元入口写成 Slang，并保留 GLSL 生成路径。
 - Minecraft 的接入点目前是 `rendering/fog/landscattering.glsl` 的相函数：它引入生成的 `atmosphere` 模块并调用 `ogxRayleighPhase` / `ogxMiePhase`，数值与旧实现逐项一致；`python build.py compile` 覆盖全部程序。
+
+## 七、第二批迁移（2026-10-25）
+
+`shaders/gfx/` 里的算法已经全部迁入 `src/`，该目录只剩 23 个适配层与一份说明。适配层保留旧函数名、旧宏、结构体字段与输出参数，宿主调用点完全不动。
+
+规则补充：
+
+- 算法模块只收纯计算；需要按步回调宿主的地方（雾照明、水下手持光、反射主流程的天空与体素钩子）用钩子宏或直接留在适配层，并在文件头写明原因。
+- 切线空间转换用三个显式点乘（`ogxParallaxToTangent`），矩阵乘向量用 `ogxMatrix3MulPoint` / `ogxMatrixMulPoint`，向量乘矩阵用 `ogxApplyRows`；不再写 `v * M`，因为 Slang 不支持这种写法，而 GLSL 与 Slang 的行列顺序又不同。
+- 三维纹理用 `Sampler3D`，取格写 `tex.Load(int3(pixel, level))`；生成器把它降级成 `texelFetch`。
+- 结构体字段沿用旧下划线命名，宿主逐字段赋值不用改；新写的结构体用驼峰命名。
+
+SPIR-V 覆盖：22 个模块探针编译通过，`voxel` 因为持有整数三维纹理（`usampler3D`）暂缺探针，命令会跳过并列出；这不影响 GLSL 路径与光影编译。

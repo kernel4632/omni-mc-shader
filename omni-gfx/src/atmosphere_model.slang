@@ -12,9 +12,10 @@ Omni 通用图形库预计算大气查表模块：坐标映射、透过率、组
 #ifndef OGX_ATMOSPHERE_MODEL_INCLUDED
 #define OGX_ATMOSPHERE_MODEL_INCLUDED
 
-// 球面几何与相位函数来自大气模块，亮度与夹紧来自数学模块。
+// 球面几何与相位函数来自大气模块，亮度与夹紧来自数学模块，色适应矩阵的按行乘法来自颜色模块。
 #include "atmosphere.slang"
 #include "math.slang"
+#include "color.slang"
 
 // 一次查表需要的全部常数与贴图尺寸；数值由宿主按原程序填写，本模块不保存默认值。
 struct OgxAtmosphereModel
@@ -27,6 +28,7 @@ struct OgxAtmosphereModel
     float3 solar_irradiance; // 太阳辐照度，决定大气散射的基准亮度。
     float3 rayleigh_scattering; // 瑞利散射系数，蓝光最强，天空因此偏蓝。
     float3 mie_scattering; // 米氏散射系数，气溶胶造成太阳附近的白晕。
+    float3 absorption_extinction; // 臭氧吸收系数，只影响透过率，不发光。
     float density_rayleigh; // 瑞利密度剖面的指数系数。
     float density_mie; // 米氏密度剖面的指数系数。
     float absorption_width; // 臭氧三角剖面的转折高度。
@@ -147,7 +149,10 @@ float2 ogxAtmoTransmittanceUv(OgxAtmosphereModel m, float r, float mu)
 float3 ogxAtmoTransmittanceToTop(OgxAtmosphereModel m, Sampler3D lut, float r, float mu)
 {
     float2 uv = ogxAtmoTransmittanceUv(m, r, mu); // 先算子图坐标。
-    return float3(lut.SampleLevel(float3(uv, 32.5 / 33.0), 0.0)); // 读固定深度层，取三通道颜色。
+    float depthCoord = 32.5 / 33.0; // 透过率固定存在靠后的深度层。
+    float3 lutCoord = float3(uv.x, uv.y, depthCoord); // 三维坐标先算好，避免采样调用里嵌构造。
+    float4 sample = lut.SampleLevel(lutCoord, 0.0); // 三维纹理采样返回四通道。
+    return sample.rgb; // 只取颜色三通道。
 }
 
 // 两点之间的透过率：由两端到层顶的透过率相除得到，地面相交时用镜像方向。
@@ -194,7 +199,7 @@ float3 ogxAtmoCombinedScattering(OgxAtmosphereModel m, Sampler3D lut, float r, f
     float3 uvw1 = float3((tex_x + 1.0 + uvwz.y) / m.scattering_nu, uvwz.z, uvwz.w); // 后一片的三维坐标。
     float4 combined = lut.SampleLevel(uvw0, 0.0) * (1.0 - frac) + lut.SampleLevel(uvw1, 0.0) * frac; // 两片之间线性插值。
     singleMieScattering = ogxAtmoExtrapolatedMie(m, combined); // 第四通道还原单次米氏散射。
-    return float3(combined); // 前三通道是组合散射。
+    return combined.rgb; // 前三通道是组合散射。
 }
 
 // 查辐照度：给出某个高度朝上接到的太阳与环境辐照度。
@@ -204,7 +209,10 @@ float3 ogxAtmoIrradiance(OgxAtmosphereModel m, Sampler3D lut, float r, float mu_
     float x_mu_s = mu_s * 0.5 + 0.5; // 太阳高度角从负一到一转成零到一。
     float2 uv = float2(ogxAtmoCombinedTextureCoord(x_mu_s, m.irradiance_width, m.combined_width), // 横坐标是高度角方向。
                        ogxAtmoCombinedTextureCoord(x_r, m.irradiance_height, m.combined_height) + m.transmittance_height / m.combined_height); // 纵坐标要跳过透过率子图。
-    return float3(lut.SampleLevel(float3(uv, 32.5 / 33.0), 0.0)); // 读固定深度层的辐照度。
+    float depthCoord = 32.5 / 33.0; // 辐照度与透过率在同一深度层的不同子图。
+    float3 lutCoord = float3(uv.x, uv.y, depthCoord); // 三维坐标先算好，避免采样调用里嵌构造。
+    float4 sample = lut.SampleLevel(lutCoord, 0.0); // 三维纹理采样返回四通道。
+    return sample.rgb; // 只取颜色三通道。
 }
 
 // 算某点的太阳、月亮与天空辐照度：太阳和月亮各出一份直射与一份环境。
@@ -215,12 +223,12 @@ float3 ogxAtmoSunSkyIrradiance(OgxAtmosphereModel m, Sampler3D lut, float3 point
     float r = length(point); // 点到地心的距离。
     float sun_mu_s = dot(point, sunDirection) / r; // 太阳方向相对当地向上的余弦。
     float moon_mu_s = dot(point, moonDirection) / r; // 月亮方向相对当地向上的余弦。
-    sunSkyIrradiance = ogxAtmoIrradiance(m, lut, r, sun_mu_s) * OGX_ATMO_LMS; // 太阳侧的环境辐照度，乘色适应矩阵。
-    moonSkyIrradiance = ogxAtmoIrradiance(m, lut, r, moon_mu_s) * nightBrightness * OGX_ATMO_LMS; // 月亮侧环境辐照度，按夜间亮度缩放。
+    sunSkyIrradiance = ogxApplyRows(OGX_ATMO_LMS[0], OGX_ATMO_LMS[1], OGX_ATMO_LMS[2], ogxAtmoIrradiance(m, lut, r, sun_mu_s)); // 太阳侧的环境辐照度，乘色适应矩阵。
+    moonSkyIrradiance = ogxApplyRows(OGX_ATMO_LMS[0], OGX_ATMO_LMS[1], OGX_ATMO_LMS[2], ogxAtmoIrradiance(m, lut, r, moon_mu_s) * nightBrightness); // 月亮侧环境辐照度，按夜间亮度缩放。
     float3 sunIrradiance = m.solar_irradiance; // 太阳直射从标准辐照度出发。
-    moonIrradiance = sunIrradiance * ogxAtmoTransmittanceToSun(m, lut, r, moon_mu_s) * nightBrightness * OGX_ATMO_LMS; // 月亮直射等于太阳辐照度乘月光透过率，再按夜间亮度缩放。
+    moonIrradiance = ogxApplyRows(OGX_ATMO_LMS[0], OGX_ATMO_LMS[1], OGX_ATMO_LMS[2], sunIrradiance * ogxAtmoTransmittanceToSun(m, lut, r, moon_mu_s) * nightBrightness); // 月亮直射等于太阳辐照度乘月光透过率，再按夜间亮度缩放。
     sunIrradiance *= ogxAtmoTransmittanceToSun(m, lut, r, sun_mu_s); // 太阳直射乘它自己的透过率。
-    return sunIrradiance * OGX_ATMO_LMS * sunTint; // 只染太阳直射：月亮直射有独立的色温，若在这里染色会把月亮一起带偏。
+    return ogxApplyRows(OGX_ATMO_LMS[0], OGX_ATMO_LMS[1], OGX_ATMO_LMS[2], sunIrradiance) * sunTint; // 只染太阳直射：月亮直射有独立的色温，若在这里染色会把月亮一起带偏。
 }
 
 // 算某个视线方向的天空辐射亮度：日月散射、可选的地面反弹，再乘天气修正。
@@ -276,7 +284,7 @@ float3 ogxAtmoSkyRadiance(OgxAtmosphereModel m, Sampler3D lut, float3 camera, fl
                 + moonSingleMieScattering * ogxMiePhase(m.mie_phase_g, moon_nu) * nightBrightness) // 月亮侧同理。
                 * mieTint; // 再按散射系数逐通道缩放米氏散射，默认全一不改画面。
     rayleigh = lerp(rayleigh, float3(ogxLuminance(rayleigh)) * m.solar_irradiance, wetness * 0.5); // 雨天把瑞利散射去色并按太阳谱重新染色。
-    return (rayleigh + mie + groundDiffuse) * (1.0 - wetness * 0.4) * OGX_ATMO_LMS * skyBrightness; // 合成后按雨天压暗、转色适应空间，再乘天空亮度。
+    return ogxApplyRows(OGX_ATMO_LMS[0], OGX_ATMO_LMS[1], OGX_ATMO_LMS[2], (rayleigh + mie + groundDiffuse) * (1.0 - wetness * 0.4)) * skyBrightness; // 合成后按雨天压暗、转色适应空间，再乘天空亮度。
 }
 
 // 算相机到某个世界点之间的天空辐射亮度，体积云与平面云算空气透视时用。
@@ -327,7 +335,33 @@ float3 ogxAtmoSkyRadianceToPoint(OgxAtmosphereModel m, Sampler3D lut, float3 cam
                 + moonSingleMieScattering * ogxMiePhase(m.mie_phase_g, moon_nu) * nightBrightness) // 月亮侧米氏散射。
                 * mieTint; // 按散射系数逐通道缩放，默认全一不改画面。
     rayleigh = lerp(rayleigh, float3(ogxLuminance(rayleigh)) * m.solar_irradiance, wetness * 0.5); // 雨天把瑞利散射去色重染。
-    return (rayleigh + mie) * (1.0 - wetness * 0.4) * OGX_ATMO_LMS * skyBrightness; // 合成后按雨天压暗并转色适应空间，再乘天空亮度。
+    return ogxApplyRows(OGX_ATMO_LMS[0], OGX_ATMO_LMS[1], OGX_ATMO_LMS[2], (rayleigh + mie) * (1.0 - wetness * 0.4)) * skyBrightness; // 合成后按雨天压暗并转色适应空间，再乘天空亮度。
+}
+
+// 简化的单次散射：沿阳光方向取四段估光学厚度，算出这段空气加到视线上的散射色。
+// 输入是相机、视线方向、散射距离、受光距离与光源方向；返回叠加的散射颜色。
+// 为什么用球面求交取段长：每段沿阳光走多远由大气层厚度决定，固定步长会在高处取样过密、低处过疏。
+float3 ogxAtmoSimpleScattering(OgxAtmosphereModel m, float3 camera, float3 worldDir, float dist, float shadowDist, float3 lightVector)
+{
+    float ds = ogxRaySphereIntersection(camera, lightVector, m.top_radius).y * 0.25; // 沿阳光到大气层顶的距离，取四分之一为每段长度。
+    float3 opticalLength = ds * lightVector; // 每段的光程矢量。
+    camera += 0.5 * opticalLength; // 相机先前移到第一段中点。
+    float3 opticalDepth = float3(0.0); // 累加的光学厚度，三通道分别是瑞利、米氏与吸收。
+    for (int i = 0; i < 4; i++, camera += opticalLength) // 四段累加。
+    {
+        float altitude = length(camera) - m.bottom_radius; // 该段所在高度。
+        opticalDepth += float3(ogxExponentialDensity(m.density_rayleigh, altitude), // 瑞利密度。
+                               ogxExponentialDensity(m.density_mie, altitude), // 米氏密度。
+                               ogxAbsorptionDensity(m.absorption_width, m.density_absorption, altitude)); // 臭氧密度。
+    }
+    opticalDepth = opticalDepth * ds + dist; // 乘段长并加上视线本身的距离。
+    float3 attenuation = exp2(-opticalDepth.x * m.rayleigh_scattering // 瑞利消光。
+                              - opticalDepth.y * m.mie_scattering // 米氏消光。
+                              - opticalDepth.z * m.absorption_extinction); // 臭氧吸收。
+    float nu = dot(worldDir, lightVector); // 视线与阳光的夹角。
+    float3 scattering = ogxRayleighPhase(nu) * m.rayleigh_scattering * (dist * 0.25 + shadowDist * 0.75) // 瑞利散射，四分之一取距离、四分之三取受光距离。
+                      + ogxMiePhase(0.6, nu) * m.mie_scattering * shadowDist; // 米氏散射只算受光的部分。
+    return ogxApplyRows(OGX_ATMO_LMS[0], OGX_ATMO_LMS[1], OGX_ATMO_LMS[2], scattering * m.solar_irradiance * attenuation); // 乘太阳辐照度、透过率与色适应矩阵。
 }
 
 #endif

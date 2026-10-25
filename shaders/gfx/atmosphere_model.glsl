@@ -77,4 +77,9 @@ vec3 gfx_atmo_sky_radiance_to_point(gfx_atmosphere_model m, sampler3D lut, vec3 
 		rayleigh_tint, mie_tint, night_brightness, wetness, sky_brightness, transmittance); // 实现在生成库。
 }
 
+// 简化的单次散射：沿阳光方向取四段估光学厚度，算出这段空气加到视线上的散射色。
+vec3 gfx_atmo_simple_scattering(gfx_atmosphere_model m, vec3 camera, vec3 world_dir, float dist, float shadow_dist, vec3 light_vector) {
+	return ogxAtmoSimpleScattering(m, camera, world_dir, dist, shadow_dist, light_vector); // 实现在生成库。
+}
+
 #endif

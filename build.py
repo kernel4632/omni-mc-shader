@@ -693,6 +693,7 @@ def check() -> None:
     # 实测这三条编默认配置与基础环境，再加地形一组全高与开远景，共 4 组唯一程序；整体耗时见本机 `verify` 输出。
     key_programs = {"gbuffers_terrain", "shadow", "setup", "shadowcomp"}  # 这几组在全部代表配置与两组环境下再编一次；地形之外再算上阴影顶点与两个计算阶段，才能编到光传播体积开启时的分支。
     smoke = {"gbuffers_terrain", "shadow", "final", "setup", "shadowcomp"}  # 默认配置与基础环境编译这几条；两个计算阶段体积小，加进来挡住计算着色器的语法错误。
+    # 生成库变大后这九组探针已接近十秒预算；任何新增模块都要先看本机 `verify` 的耗时，再决定是否扩探针。
     probes = [source for source in entries if source.parent.name == "world0" and source.stem in smoke]  # 主世界的轻量程序，默认配置与基础环境。
     compile_shaders(probes, found, profiles, key_programs)  # 关键程序另加全高配置与开远景环境。
     subprocess.run([str(tool("actionlint")), "-shellcheck=", "-pyflakes=", *map(str, sorted((ROOT / ".github/workflows").glob("*.yml")))], cwd=ROOT, check=True)  # 自动发布工作流也要在交付前通过真实检查器。

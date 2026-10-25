@@ -38,10 +38,10 @@ void ogxPlanetEnd(inout float3 color, float3 eye, float3 rayDir, float3 lightDir
                                            0.0, cos(ringAngle), sin(ringAngle),
                                            0.0, -sin(ringAngle), cos(ringAngle)); // 光环旋转矩阵。
     float3x3 ringRoataionMatrixInverse = transpose(ringRoataionMatrix); // 光环旋转的逆。
-    rayDir = eyeRoataionMatrix * rayDir; // 视线转到行星坐标系。
-    lightDir = eyeRoataionMatrix * lightDir; // 光方向同样转过去。
-    float3 rayDirRing = ringRoataionMatrix * rayDir; // 视线转到光环坐标系。
-    float3 lightDirRing = ringRoataionMatrix * lightDir; // 光方向转到光环坐标系。
+    rayDir = ogxMatrix3MulPoint(eyeRoataionMatrix, rayDir); // 视线转到行星坐标系。
+    lightDir = ogxMatrix3MulPoint(eyeRoataionMatrix, lightDir); // 光方向同样转过去。
+    float3 rayDirRing = ogxMatrix3MulPoint(ringRoataionMatrix, rayDir); // 视线转到光环坐标系。
+    float3 lightDirRing = ogxMatrix3MulPoint(ringRoataionMatrix, lightDir); // 光方向转到光环坐标系。
     float3 ringOrigin = float3(0.0, cos(ringAngle), sin(ringAngle)) * (eye.y / Rground); // 光环所在平面的原点。
     float2 ringRadius = float2(1.6, 2.6); // 光环内外半径。
     float3 surface = float3(0.0); // 行星表面与光环累积的颜色。
@@ -65,7 +65,7 @@ void ogxPlanetEnd(inout float3 color, float3 eye, float3 rayDir, float3 lightDir
         }
         float UdotN = ogxSaturate(dot(ringRoataionMatrixInverse[2], surfaceNormal)); // 光环上表面法线与地表法线夹角。
         float DdotN = ogxSaturate(dot(-ringRoataionMatrixInverse[2], surfaceNormal)); // 光环下表面同理。
-        float OLdotN = ogxSaturate(dot(ringRoataionMatrixInverse * normalize(float3(-lightDir.xy, 0.0)), surfaceNormal)); // 光线在环面上的投影与法线夹角。
+        float OLdotN = ogxSaturate(dot(ogxMatrix3MulPoint(ringRoataionMatrixInverse, normalize(float3(-lightDir.xy, 0.0))), surfaceNormal)); // 光线在环面上的投影与法线夹角。
         float ringLighting = ogxDiscProfile(UdotN, 1.2, 1.5) * (1.0 - ogxDiscProfile(UdotN, 3.4, 0.3)); // 上表面环带光照。
         ringLighting += ogxDiscProfile(DdotN, 1.2, 1.5) * (1.0 - ogxDiscProfile(DdotN, 3.4, 0.3)); // 下表面环带光照。
         ringLighting *= 1.0 - ogxDiscProfile(OLdotN, 0.7, 1.3); // 被行星自身挡住的部分去掉。

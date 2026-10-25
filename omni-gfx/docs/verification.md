@@ -109,3 +109,14 @@
 - 其他显卡与驱动：只有本机 Intel Arc 的数据；帧时波动受本机其他程序影响。
 - 长时间稳定性、显存变化、不同分辨率下的帧时：本轮未测。
 - 云、水、雾的物理正确性：仍是风格化近似，大气只有单次散射，云只有单层，反射是屏幕空间近似。
+
+## 六、第二批迁移的验证（2026-10-25）
+
+- 生成：python omni-gfx/build.py generate 输出 23 个模块、47 个文件，GLSL 共 12754 行；shaders/omni-gfx/ 与 generated/glsl/ 逐字节一致。
+- 库检查：python omni-gfx/build.py check 通过；src/*.slang 的中文说明比例在 26% 到 81% 之间，新迁模块均超过 50%，math、color 等早期核心模块仍低于 50%，按现有审计口径只对 GLSL 与薄入口强制。
+- 光影检查：python build.py verify 145 个测试通过，9 组编译探针通过，8.4 到 8.9 秒；全量编译 python build.py compile 280 组唯一程序通过。
+- SPIR-V：python omni-gfx/build.py spirv 22 个模块通过，oxel 因整数三维纹理 usampler3D 暂无探针，命令会列出并跳过；这不是 GLSL 路径的失败。
+- 适配层约束：测试改为扫描 shaders/gfx/*.glsl 全部文件，要求每个都引用同名生成模块；纯宿主布局（五级泛光子图、反射主流程的天空与体素钩子）留在适配层。
+- 循环分类：shaders/rendering/ 的十二个循环已逐个归类，只有大气光学厚度迁进库，其余十一处是几何装配、材质采样或依赖宿主选项的阶段胶水，详见 docs/rendering.md。
+
+未验证项与上一节相同：没有启动 Minecraft，没有看游戏内画面、Vulkan 运行时与其他显卡；Voxel 的 SPIR-V 探针与水面迭代波的参数化仍是待办。

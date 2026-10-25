@@ -39,7 +39,7 @@ float4 ogxAccretionDisc(float3 rayDir, float3 lightDir, float noise, Sampler2D n
         if (transmittance < 0.0001) break; // 已被遮满就停止。
         ogxWarpSpace(rayDir, rayPos); // 靠近黑洞时光线被拉弯。
         rayPos += rayDir * stepLength; // 前进一步。
-        float3 discPos = rotation * rayPos; // 转到吸积盘坐标系。
+        float3 discPos = ogxMatrix3MulPoint(rotation, rayPos); // 转到吸积盘坐标系。
         float r = length(discPos); // 到盘中心的半径。
         float p = ogxAtan2(-discPos.zx); // 盘面上的方位角。
         float h = discPos.y; // 离盘面的高度。

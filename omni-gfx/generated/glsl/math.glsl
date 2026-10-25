@@ -44,6 +44,11 @@ float ogxLuminance(vec3 color) { return dot(color, OGX_LUMA_WEIGHTS); }
 // 位运算取符号，支持标量；负数为负一，其余为正一。
 float ogxSign(float x) { return uintBitsToFloat((floatBitsToUint(x) & 0x80000000u) | 0x3f800000u); }
 
+// 向量版本的取符号：逐分量处理，法线折叠与八面体编码需要它。
+vec2 ogxSign(vec2 x) { return uintBitsToFloat((floatBitsToUint(x) & uvec2(0x80000000u)) | uvec2(0x3f800000u)); }
+vec3 ogxSign(vec3 x) { return uintBitsToFloat((floatBitsToUint(x) & uvec3(0x80000000u)) | uvec3(0x3f800000u)); }
+vec4 ogxSign(vec4 x) { return uintBitsToFloat((floatBitsToUint(x) & uvec4(0x80000000u)) | uvec4(0x3f800000u)); }
+
 // 位运算近似平方根，误差约百分之三，只用在不在乎精度的形状计算。
 float ogxFastSqrt(float x) { return uintBitsToFloat(uint(0x1fbd1df5 + (floatBitsToInt(x) >> 1))); }
 
@@ -391,6 +396,62 @@ void ogxWarpSpace(inout vec3 direction, inout vec3 position)
     vec3 singularityVector = normalize(origin - position);
     float warpAmount = 0.06;
     direction = normalize(direction + singularityVector * warpFactor * warpAmount);
+}
+
+// 夜视：把颜色往偏蓝的亮度上拉一半，暗处看得清但保留一点原色。
+void ogxDoNightEye(inout vec3 color)
+{
+    float luma = ogxLuminance(color); // 原色亮度。
+    color = mix(color, luma * vec3(0.7771, 1.0038, 1.6190), vec3(0.5)); // 偏蓝亮度与原色各占一半。
+}
+
+// 卡特穆尔-罗姆双三次采样：五次采样拼出十六像素的平滑放大，权重总和归一。
+// 中间两个像素先合并成一次双线性采样，省掉四次纹理读取，画面与逐像素版本一致。
+vec3 ogxBicubicTexture(sampler2D texSampler, vec2 coord, vec2 texSize)
+{
+    vec2 texPixelSize = 1.0 / texSize; // 一个像素的坐标大小。
+    coord = coord * texSize; // 换成像素坐标。
+    vec2 p = floor(coord - 0.5) + 0.5; // 左下最近像素中心。
+    vec2 f = coord - p; // 到该中心的小数偏移。
+    vec2 f2 = f * f; // 偏移平方。
+    vec2 f3 = f * f2; // 偏移立方。
+    const float c = 0.5; // 卡特穆尔-罗姆张力。
+    vec2 w0 = -c * f3 + 2.0 * c * f2 - c * f; // 第一个像素权重。
+    vec2 w1 = (2.0 - c) * f3 - (3.0 - c) * f2 + 1.0; // 第二个像素权重。
+    vec2 w2 = -(2.0 - c) * f3 + (3.0 - 2.0 * c) * f2 + c * f; // 第三个像素权重。
+    vec2 w3 = c * f3 - c * f2; // 第四个像素权重。
+    vec2 w12 = w1 + w2; // 中间两个像素合并成一次双线性采样。
+    vec2 tc12 = texPixelSize * (p + w2 / w12); // 合并采样的位置。
+    vec2 tc0 = texPixelSize * (p - 1.0); // 最左或最下像素位置。
+    vec2 tc3 = texPixelSize * (p + 2.0); // 最右或最上像素位置。
+    vec4 color = vec4(textureLod(texSampler, vec2(tc12.x, tc0.y), 0.0).rgb, 1.0) * (w12.x * w0.y) +
+                   vec4(textureLod(texSampler, vec2(tc0.x, tc12.y), 0.0).rgb, 1.0) * (w0.x * w12.y) +
+                   vec4(textureLod(texSampler, vec2(tc12.x, tc12.y), 0.0).rgb, 1.0) * (w12.x * w12.y) +
+                   vec4(textureLod(texSampler, vec2(tc3.x, tc12.y), 0.0).rgb, 1.0) * (w3.x * w12.y) +
+                   vec4(textureLod(texSampler, vec2(tc12.x, tc3.y), 0.0).rgb, 1.0) * (w12.x * w3.y); // 十字形五次采样，a 通道累计权重。
+    return color.rgb / color.a; // 除以权重和，补偿省掉的四角。
+}
+
+// 十六像素三次模糊：四次双线性采样合成，专供六十四见方的噪声贴图。
+vec4 ogxBicubicBlurTexture(sampler2D texSampler, vec2 coord)
+{
+    const float texPixelSize = 1.0 / 64.0; // 噪声贴图一个像素的大小。
+    coord = coord * 64.0 - 0.5; // 换成以像素中心为原点的坐标。
+    vec2 p = floor(coord); // 整数像素。
+    vec2 f = coord - p; // 小数偏移。
+    vec2 ff = f * f; // 偏移平方。
+    vec4 w0; // 两个方向的前两个三次样条权重。
+    vec4 w1; // 两个方向的后两个三次样条权重。
+    w0.xz = 1.0 - f; w0.xz *= w0.xz * w0.xz; // 第一个权重是反向偏移的立方。
+    w1.yw = ff * f; // 第四个权重是偏移立方。
+    w1.xz = 3.0 * w1.yw + 4.0 - 6.0 * ff; // 第三个权重。
+    w0.yw = 6.0 - w1.xz - w1.yw - w0.xz; // 第二个权重由总和为六推出。
+    vec4 s = w0 + w1; // 左右两对权重和。
+    vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy + w1 / s; // 每对合并成一次双线性采样的位置。
+    c *= texPixelSize; // 换回零到一坐标。
+    vec2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
+    return mix(mix(textureLod(texSampler, c.yw, 0.0), textureLod(texSampler, c.xw, 0.0), m.x),
+                mix(textureLod(texSampler, c.yz, 0.0), textureLod(texSampler, c.xz, 0.0), m.x), m.y); // 四次双线性采样得到十六像素的三次模糊。
 }
 
 #endif

@@ -119,19 +119,22 @@ class OmniGfxTests(unittest.TestCase):
                 self.assertIn(symbol, generate.module_text(name))  # 生成文本缺少入口函数说明模块没有接入。
 
     def test_minecraft_uses_generated_effect_modules(self):
-        """光影包的九个适配层都要引用生成的库，避免旧实现继续各写一套。"""
-        adapters = ("shadow", "gi", "reflection", "post", "antialias", "atmosphere", "cloud", "water", "fog")  # 每个效果一个适配层。
-        for name in adapters:
-            path = ROOT / "shaders" / "gfx" / f"{name}.glsl"  # 光影侧的适配层。
-            with self.subTest(module=name):
-                self.assertIn(f'#include "/omni-gfx/{name}.glsl"', path.read_text(encoding="utf-8"))  # 实现必须来自生成库。
+        """光影侧的每个适配层都要引用生成的库，避免旧实现继续各写一套。"""
+        adapters = sorted((ROOT / "shaders" / "gfx").glob("*.glsl"))  # 全部适配层，而不是一份手写清单。
+        self.assertTrue(adapters)  # 目录为空说明路径写错，不能当作通过。
+        for path in adapters:
+            text = path.read_text(encoding="utf-8")  # 只读适配层本身，不展开引用。
+            with self.subTest(module=path.stem):
+                self.assertIn(f'#include "/omni-gfx/{path.stem}.glsl"', text)  # 实现必须来自生成库。
 
     def test_minecraft_program_uses_generated_atmosphere(self):
-        """合成程序的相函数必须调用生成库，避免两套公式各自漂移。"""
+        """合成程序的大气散射必须调用生成库，避免两套公式各自漂移。"""
         text = (ROOT / "shaders" / "rendering" / "fog" / "landscattering.glsl").read_text(encoding="utf-8")  # 真实消费者。
         self.assertIn('#include "/omni-gfx/atmosphere.glsl"', text)  # 生成库必须在引用边界内。
-        self.assertIn("ogxRayleighPhase(", text)  # 瑞利相函数来自生成库。
-        self.assertIn("ogxMiePhase(", text)  # 米氏相函数来自生成库。
+        self.assertIn("gfx_atmo_simple_scattering(", text)  # 四段散射已迁到生成库的查表模块。
+        library = (ROOT / "omni-gfx" / "src" / "atmosphere_model.slang").read_text(encoding="utf-8")  # 库里的唯一算式。
+        self.assertIn("ogxRayleighPhase(", library)  # 瑞利相函数来自生成库。
+        self.assertIn("ogxMiePhase(", library)  # 米氏相函数来自生成库。
 
 
 if __name__ == "__main__":

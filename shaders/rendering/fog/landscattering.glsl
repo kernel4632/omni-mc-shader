@@ -19,30 +19,9 @@
 
 // 简化的单次散射：沿阳光方向取几段估光学厚度，算出这段空气加到视线上的散射色。
 // 输入是相机、视线方向、散射距离、受光距离与光源方向；返回叠加的散射颜色。
-// 为什么用球面求交取段长：每段沿阳光走多远由大气层厚度决定，固定步长会在高处取样过密、低处过疏。
+// 四段累加与密度剖面在生成库，本文件只把当前大气常数填进结构体。
 vec3 simpleScattering(vec3 camera, vec3 worldDir, float dist, float shadowDist, vec3 lightVector){
-	float ds = RaySphereIntersection(camera, lightVector, atmosphereModel_top_radius).y * 0.25; // 沿阳光到大层顶的距离，取四分之一为每段长度。
-	vec3 opticalLength = ds * lightVector; // 每段的光程矢量。
-	camera += 0.5 * opticalLength; // 相机先前移到第一段中点。
-
-	vec3 opticalDepth = vec3(0.0); // 累加的光学厚度，三通道分别是瑞利、米氏与吸收。
-	for (int i = 0; i < 4; i++, camera += opticalLength){ // 四段累加。
-		float altitude = length(camera) - atmosphereModel_bottom_radius; // 该段所在高度。
-		opticalDepth += vec3(GetProfileDensityRayleighMie(atmosphereModel_densityProfile_rayleigh, altitude), // 瑞利密度。
-							 GetProfileDensityRayleighMie(atmosphereModel_densityProfile_mie, altitude), // 米氏密度。
-							 GetProfileDensityAbsorption (atmosphereModel_densityProfile_absorption_width, atmosphereModel_densityProfile_absorption, altitude)); // 臭氧密度。
-	}
-	opticalDepth = opticalDepth * ds + dist; // 乘段长并加上视线本身的距离。
-
-	vec3 attenuation = exp2(-opticalDepth.x * atmosphereModel_rayleigh_scattering // 瑞利消光。
-		 				    -opticalDepth.y * atmosphereModel_mie_scattering // 米氏消光。
-		 			   	    -opticalDepth.z * atmosphereModel_absorption_extinction); // 臭氧吸收。
-
-	float nu = dot(worldDir, lightVector); // 视线与阳光的夹角。
-	vec3 scattering = ogxRayleighPhase(nu) * atmosphereModel_rayleigh_scattering * (dist * 0.25 + shadowDist * 0.75) // 瑞利散射，四分之一取距离、四分之三取受光距离。
-					+ ogxMiePhase(0.6, nu) * atmosphereModel_mie_scattering * shadowDist; // 米氏散射只算受光的部分。
-
-	return scattering * atmosphereModel_solar_irradiance * attenuation * GFX_ATMO_LMS; // 乘太阳辐照度、透过率与色适应矩阵。
+	return gfx_atmo_simple_scattering(omniAtmosphereModel(), camera, worldDir, dist, shadowDist, lightVector); // 实现在生成库。
 }
 
 // 地面大气散射：给地表方向的视线补一层空气散射，阴影区按选项削弱。

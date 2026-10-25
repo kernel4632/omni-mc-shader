@@ -5,20 +5,20 @@
     {
       "module": "math",
       "source": "omni-gfx/src/math.slang",
-      "sourceSha256": "6d22bd981943dfc9f0e598784af8ee7f9e755769e42450990ba0e7205aa7d380",
+      "sourceSha256": "4423733e81e6832f5fbefe880cd66aacc7e8da123a4fe9865d032f505ab5dc4b",
       "shader": "shaders/omni-gfx/math.glsl",
       "generated": "omni-gfx/generated/glsl/math.glsl",
-      "glslSha256": "11aa291de2c2786d648fe2b68cbc030a218394fea436f4240170e37b5aedfec2",
-      "glslLines": 396
+      "glslSha256": "8067431242219f8ddaedd0146c2dfbc0526225b2b1748c9654e94f598cfc5f44",
+      "glslLines": 457
     },
     {
       "module": "color",
       "source": "omni-gfx/src/color.slang",
-      "sourceSha256": "f106ac8967e28c22c9941a06b30f3c464ef96b3da659d847448ba7e0cdc35fb9",
+      "sourceSha256": "f7be3aff3ff4b89705f4f101340467ba618ec514b2acb05d013f50ae0818a027",
       "shader": "shaders/omni-gfx/color.glsl",
       "generated": "omni-gfx/generated/glsl/color.glsl",
-      "glslSha256": "9221821c5ff78f87772572952d1d25fba970ac3e4c1bb2923fe1b48820842c27",
-      "glslLines": 164
+      "glslSha256": "f6eb09421e8c05fad808e98c58409fa4a7f1476c4f9d8807586c85d79538a5bc",
+      "glslLines": 178
     },
     {
       "module": "sampling",
@@ -68,10 +68,10 @@
     {
       "module": "fog",
       "source": "omni-gfx/src/fog.slang",
-      "sourceSha256": "b2c9a17f0f36a9eea6fdcec10a42425e5300d682085af5f399b91ec4f76cf05b",
+      "sourceSha256": "f473f90a953ec0d41d89841e572f641198fa92ffdf87780efebee9d82b979a5b",
       "shader": "shaders/omni-gfx/fog.glsl",
       "generated": "omni-gfx/generated/glsl/fog.glsl",
-      "glslSha256": "fd1dd82b4be2353722816099045c536048d7520d3de130730d7342558d58bd1e",
+      "glslSha256": "908a7841b5d3ae410f63f007ddf38707a75b29c1a31a0a40ae996f8f2bf909a2",
       "glslLines": 366
     },
     {
@@ -167,38 +167,38 @@
     {
       "module": "planet",
       "source": "omni-gfx/src/planet.slang",
-      "sourceSha256": "829b52cb773deb78c04efed43a8f9f4affe749682a2d94d90763d720019d4483",
+      "sourceSha256": "6aece26ac1df531bb461a0b5c52a4955a1ecc243dc3d030774e20af3759b0e27",
       "shader": "shaders/omni-gfx/planet.glsl",
       "generated": "omni-gfx/generated/glsl/planet.glsl",
-      "glslSha256": "a566f15ede813a96e299c811160b0feedf6f5ef926fb00d61adfbaaf2babe8de",
+      "glslSha256": "ab4edf1872de0caef0a28df441ecd265e65ca37d3e91d81e2c5ede6258ca0193",
       "glslLines": 121
     },
     {
       "module": "accretion",
       "source": "omni-gfx/src/accretion.slang",
-      "sourceSha256": "98f16452da1c6daf12c3bd7be770f74c262c2fc02abb82f90d5f75f785eece73",
+      "sourceSha256": "8d73b6b065b442787847dc75e1de32a7c6adce4bb913a1fb64be8fcac3bf711f",
       "shader": "shaders/omni-gfx/accretion.glsl",
       "generated": "omni-gfx/generated/glsl/accretion.glsl",
-      "glslSha256": "a8bf5f23dc622f313ea9f683d249ac9b2a54c0f1d9aacf7010e20938b9734cee",
+      "glslSha256": "42977096ee79e98652d76c95316fd6a6a2e6022e1ed108292bf9c0ae6a75960c",
       "glslLines": 113
     },
     {
       "module": "atmosphere_model",
       "source": "omni-gfx/src/atmosphere_model.slang",
-      "sourceSha256": "b790c99cfbac1e8c868570c4af2270a00f84ffeec66e28697c844425b13eb868",
+      "sourceSha256": "99d1dcbe8357a94295b4bca2e6464ec7612974bb1b13459770579a3d2543311e",
       "shader": "shaders/omni-gfx/atmosphere_model.glsl",
       "generated": "omni-gfx/generated/glsl/atmosphere_model.glsl",
-      "glslSha256": "d042fdf5dc02b7b0e4f1fd85b7de9e6c0947121a14402fe57ece1ac1f9370664",
-      "glslLines": 338
+      "glslSha256": "ace03a9cf91feb98b9d57572c79d2abfd5733ee718214e55dbbcb6a49d199b91",
+      "glslLines": 372
     },
     {
       "module": "cloud_volume",
       "source": "omni-gfx/src/cloud_volume.slang",
-      "sourceSha256": "12cb23ade5ef4e6923213e58a01f2e650a877f5b3fbfe78eb005a7a2dcefdf57",
+      "sourceSha256": "c7404c6a316c958f40c2f0ce8a729b1c091eb09f2bbf7e4b2472344a3150c417",
       "shader": "shaders/omni-gfx/cloud_volume.glsl",
       "generated": "omni-gfx/generated/glsl/cloud_volume.glsl",
-      "glslSha256": "fade5c1da205e2718ce32010494dc3215200c561def719a053d69e3459b5b333",
-      "glslLines": 204
+      "glslSha256": "e11b442732295b9e9c55ffc2e01e2bd6156616f28c0331f1d1ba64f86222cd69",
+      "glslLines": 202
     },
     {
       "module": "fog_volume",

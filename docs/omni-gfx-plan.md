@@ -184,7 +184,11 @@ MC 光影编译 + 同场景对比
 - 2026-10-24 完成阶段 3 收尾与整包接入：新增 `shadow`、`gi`、`reflection`、`post`、`antialias` 五个 Slang 模块，扩展到 13 个模块；阴影补上三级级联与 PCSS，全局光补上地平线遮蔽、反弹与两级滤波，反射补上九点降噪，抗锯齿补上时间重投影，后期补上泛光核、景深与分块测光。Minecraft 侧的九个适配层改为引用生成库，调用点、519 个选项、九页菜单与默认画面不变；280 组程序离线编译通过。
 - 测试世界新增这些效果后，1280×720 在 Intel Arc 上 120 帧平均 11.86 毫秒（约 84 帧每秒），截图 `.dev/omni-gfx/world-complete.png`，详见 `omni-gfx/docs/verification.md`。
 - 未验证：Minecraft 游戏内画面、性能与兼容性；Vulkan/Aperture 运行时；其他显卡；纯屏幕空间追踪的独立场景；抗锯齿的移动画面表现。
-- 下一步：阶段 5（同一份 Slang 源生成 SPIR-V 并跑演示管线）与阶段 6（文档、许可证、示例与发布）。
+- 2026-10-25 完成第二批迁移：`weather`、`surface`、`parallax`、`voxel`、`upscale`、`planet`、`accretion`、`atmosphere_model`、`cloud_volume`、`fog_volume` 十个 Slang 模块，并补齐 `math`、`color`、`sampling`、`cloud`、`water`、`fog`、`atmosphere`、`post` 的剩余算法。`shaders/gfx/` 的 23 个文件全部变成适配层，GLSL 生成 23 个模块；SPIR-V 22 个探针通过，`voxel` 暂缺。
+- `shaders/rendering/` 的十二个循环逐个分类：只有大气光学厚度迁进库（`ogxAtmoSimpleScattering`），其余十一处是几何装配、材质采样或依赖宿主选项的阶段胶水，分类表见 `docs/rendering.md`。
+- 生成器新增三维纹理句柄（`Sampler3D` / `Usampler3D`）与整数取格写法；库源码审计覆盖 `.slang`，生成文件的中文说明按比例检查。
+- 手写核心从 4870 行增加到 7626 行，上限按决策记录上调到 8000 行；中文说明仍按 HOP 覆盖一半以上非空行。
+- 下一步：把水面两处重复的迭代正弦波抽成库函数；为 `voxel` 补整数三维纹理探针；阶段 5（完整 SPIR-V 演示管线）与阶段 6（文档、许可证、示例与发布）。
 
 ## 十四、决策记录
 

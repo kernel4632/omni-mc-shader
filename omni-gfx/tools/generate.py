@@ -88,6 +88,7 @@ SAMPLE_LEVEL = re.compile(r"(\w+)\.SampleLevel\(\s*((?:[^(),]|\([^()]*\))+?)\s*,
 SAMPLE_CMP = re.compile(r"(\w+)\.SampleCmpLevelZero\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 两参数是纹理坐标与比较值。
 
 # 生成文件里不能残留的 Slang 写法；漏掉一种就说明转换表需要补充。
+# 这里故意连注释一起检查，宁可多报也不要让半转换的代码进入光影包。
 LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|Sampler3D|Usampler3D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(|\.SampleLevel\s*\(|\.SampleCmpLevelZero\s*\(")  # 成员采样与残留类型名都要拦住。
 
 # 光影会把库嵌进自己的程序，库文件不能再声明语言版本。
@@ -158,6 +159,7 @@ def _header(name: str) -> str:
 
 
 # 每个模块只保留一份转换实现，清单与写入共用同一份结果，避免两处产物不同。
+# 模块顺序固定，清单里的顺序与生成文件的顺序因此可以逐项对照。
 # 缓存没有上限：模块总数固定，缓存不会随运行次数增长。
 @lru_cache(maxsize=None)  # 同一进程里每个模块只读取和转换一次，测试与清单共用结果。
 def module_text(name: str) -> str:

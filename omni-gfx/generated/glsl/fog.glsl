@@ -352,7 +352,7 @@ float ogxEndFogDensity(vec3 worldDir, float dist, float VdotL, float angleX, flo
     mat3 eyeRoataionMatrixX = mat3(1.0, 0.0, 0.0, 0.0, cos(angleX), -sin(angleX), 0.0, sin(angleX), cos(angleX)); // 俯仰旋转。
     mat3 eyeRoataionMatrixY = mat3(cos(angleY), 0.0, sin(angleY), 0.0, 1.0, 0.0, -sin(angleY), 0.0, cos(angleY)); // 偏航旋转。
     mat3 eyeRoataionMatrix = eyeRoataionMatrixX * eyeRoataionMatrixY; // 合成旋转。
-    vec3 dir = eyeRoataionMatrix * worldDir; // 视线转到相位坐标系。
+    vec3 dir = ogxMatrix3MulPoint(eyeRoataionMatrix, worldDir); // 视线转到相位坐标系。
     dist = min(dist, 512.0); // 距离封顶，远处不再变浓。
     float h = abs(dir.z) * dist * 0.03; // 沿视线方向的等效高度。
     float fogDepth = (1.0 - exp(-h)) / h * dist; // 密度沿距离的积分闭式解。

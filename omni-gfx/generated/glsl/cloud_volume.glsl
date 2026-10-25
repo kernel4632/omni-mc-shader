@@ -8,9 +8,7 @@
 Omni 通用图形库体积云模块：形状取样、光照步进、沿视线步进与云影。
 调用位置：任何需要体积云的程序；Minecraft 光影由 `/omni-gfx/cloud_volume.glsl` 引入，
     `rendering/cloud/volumetric.glsl` 只把选项、天气与纹理换成参数。
-可复制示例：
-    vec3 hitOffset; // 平均命中位置，相机相对方向。
-    vec4 layer = ogxCumulusMarch(worldDir, media, noise, hitOffset, baseTex, detailTex, curlTex, samples, quality, light);
+可复制示例：调用 `ogxCumulusMarch` 传入视线、云层参数与三张噪声图，返回加色项与透过率。
 设计原因与取舍：
     纹理、云层高度、风、天气与太阳方向全部由调用方传入，库不读取选项或宿主状态。
     基础云与附加层共用同一套步进核心；空气透视属于大气效果，留在调用方合成，库只交回加色项与透过率。
