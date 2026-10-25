@@ -8,7 +8,7 @@
 - `color` 补上 `Hejl`、`Hable`、`Reinhard`、`Lottes`、`Uchimura`、经济版电影曲线与标准 sRGB 编码；`noise` 补白噪声与三角噪声；`post` 补浮点与定点抖动、多边形光圈；`math` 补不夹紧映射、三分量极值、圆盘点列、螺旋采样与粗糙高光方向；`cloud` 补降雨密度。
 - 生成器新增 `tex.SampleGrad` 到 `textureGrad` 的等价转换，旋转网格超采样因此保持参考实现的屏幕导数行为；转换表与模块表同步写进 `omni-gfx/docs/architecture.md`。
 - `docs/gfx-parity.md` 整篇重写：76 行逐项对照，未覆盖从 4 条降到 0 条；`PrintFloat` 与 `text_rendering` 按参考包里的实际调用位置标为 MC 专用（调试叠加），剩余 15 条部分覆盖逐条写明宿主数据源。
-- 修复编码损坏：`build.py` 十四处注释与文档字符串、`shaders/rendering/lpv.glsl` 的工作组说明、`shaders/rendering/shadow/shadow.glsl` 的一处说明从问号还原成中文。
+- 修复编码损坏：`build.py` 十四处注释与文档字符串、`shaders/rendering/lpv.glsl` 的工作组说明、`shaders/rendering/shadow/shadow.glsl` 的一处说明、`config.py` 的一处说明与两处测试注释从问号还原成中文。早期 0.1.0 更新记录与一条历史裁决仍保留问号：原文逐字不可恢复，不凭猜测重写。
 - 选项、入口与默认画面不变：519 个选项、269 个入口、280 组唯一程序、四套预设。手写核心从 7626 行增到 8153 行，上限按决策记录上调到 8400 行。
 
 验证：`python omni-gfx/build.py check`、`python omni-gfx/build.py spirv`（24/24，编译器 2026.20）、`python build.py verify`（147 个测试、9 组编译探针）、`python build.py compile`（280 组唯一程序，0 错误）通过。未启动 Minecraft；游戏内画面、性能与其他显卡仍未验证。

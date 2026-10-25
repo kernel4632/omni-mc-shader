@@ -626,14 +626,14 @@ class EffectTests(unittest.TestCase):
         grass = support.code("effects/ground/grass.glsl")  # 草效果主体。
         self.assertIn("omniGrassWindOffset", grass)  # 摆动独立成函数。
         self.assertIn("omniGrassBlockAt", grass)  # 方块编号查询独立成函数。
-        self.assertIn("#define OMNI_SHADER_GRASS 0", grass)  # ???????
+        self.assertIn("#define OMNI_SHADER_GRASS 0", grass)  # 草效果默认关闭。
         geometry = support.code("effects/ground/grass_geometry.glsl")  # 草几何主体。
         self.assertIn("OMNI_GRASS_DETECT_FALLOFF", geometry)  # 底部检测参与高度。
         self.assertIn("OMNI_GRASS_DETECT_INV_FALLOFF", geometry)  # 侧向检测参与高度。
         self.assertIn("OMNI_SHORT_GRASS_BLOCK_ID", geometry)  # 仅矮草档按矮草方块生长。
         terrain = support.text("rendering/terrain.glsl")  # 地形主体。
         self.assertIn('/rendering/ground/grass.glsl"', terrain)  # 地形引入草效果的阶段片段。
-        self.assertIn("#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD", terrain)  # ????????????
+        self.assertIn("#if OMNI_SHADER_GRASS && defined OMNI_OVERWORLD", terrain)  # 草效果只在主世界编译。
         self.assertIn("DRAWBUFFERS:0359", terrain)  # 地形多写九号方块编号画面。
         self.assertIn("colortex9Clear = false", support.text("rendering/buffers.glsl"))  # 方块编号跨帧保留。
         self.assertIn("block.85 = grass_block", support.text("block.properties"))  # 草方块编号是八十五。

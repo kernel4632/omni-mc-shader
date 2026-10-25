@@ -126,7 +126,7 @@ class PipelineTests(unittest.TestCase):
             source.write_text(json.dumps(data), encoding="utf-8")
             migrated = config.shared(source, found, build.version())  # 导入应当通过并被忽略，而不是报未知选项。
             self.assertNotIn(removed, migrated["values"])  # 已移除的项不再出现在结果里。
-            # ?????? 0/1 ?????????? true/false ?????
+            # 旧布尔写法在导入时换算成 0/1，改过名的设置同样按当前取值落地。
             toggle = next(name for name, option in found.items() if tuple(option.values) == ("0", "1"))
             for old_value, new_value in (("true", "1"), ("false", "0")):
                 data["values"] = {toggle: old_value}
