@@ -24,7 +24,8 @@ GENERATED_OUT = LIB / "generated" / "glsl"  # 独立库查看与分发的副本�
 MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳。
 MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog",
            "shadow", "gi", "reflection", "post", "antialias",
-           "weather", "surface", "voxel", "upscale", "parallax")  # 阶段一二的核心模块、阶段三的九个效果模块与第二批迁移的独立模块。
+           "weather", "surface", "voxel", "upscale", "parallax",
+           "planet", "accretion", "atmosphere_model")  # 阶段一二的核心模块、阶段三的九个效果模块与第二批迁移的独立模块。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
 DISPLAY = {
@@ -46,6 +47,9 @@ DISPLAY = {
     "voxel": "体素",
     "upscale": "放大",
     "parallax": "视差",
+    "planet": "行星",
+    "accretion": "吸积盘",
+    "atmosphere_model": "大气查表",
 }  # 每个生成文件头里的中文模块名，顺序与模块表一致。
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。

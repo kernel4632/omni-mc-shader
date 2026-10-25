@@ -41,11 +41,11 @@
     {
       "module": "atmosphere",
       "source": "omni-gfx/src/atmosphere.slang",
-      "sourceSha256": "2fa45f52898c6a7a8d07602c7b05c6924b7810c528ab670a5cd300932631b941",
+      "sourceSha256": "69c6018a362cf7f0f0c116f8cdaa3876c22ec7a53b4c86b159ffaaf46d15db0b",
       "shader": "shaders/omni-gfx/atmosphere.glsl",
       "generated": "omni-gfx/generated/glsl/atmosphere.glsl",
-      "glslSha256": "2d20345049603799b00789e976f4551db827a595fcf6a0f551280edb6089c894",
-      "glslLines": 345
+      "glslSha256": "86f07a6e0e38e197e07ab75141125511a870364eafd7bd3cfb684bd156c6980f",
+      "glslLines": 592
     },
     {
       "module": "cloud",
@@ -163,6 +163,33 @@
       "generated": "omni-gfx/generated/glsl/parallax.glsl",
       "glslSha256": "a313b0c60a669f36ff8da70fe5cc95afa52f4de320599840e47b8d3184fc66a9",
       "glslLines": 289
+    },
+    {
+      "module": "planet",
+      "source": "omni-gfx/src/planet.slang",
+      "sourceSha256": "829b52cb773deb78c04efed43a8f9f4affe749682a2d94d90763d720019d4483",
+      "shader": "shaders/omni-gfx/planet.glsl",
+      "generated": "omni-gfx/generated/glsl/planet.glsl",
+      "glslSha256": "a566f15ede813a96e299c811160b0feedf6f5ef926fb00d61adfbaaf2babe8de",
+      "glslLines": 121
+    },
+    {
+      "module": "accretion",
+      "source": "omni-gfx/src/accretion.slang",
+      "sourceSha256": "98f16452da1c6daf12c3bd7be770f74c262c2fc02abb82f90d5f75f785eece73",
+      "shader": "shaders/omni-gfx/accretion.glsl",
+      "generated": "omni-gfx/generated/glsl/accretion.glsl",
+      "glslSha256": "a8bf5f23dc622f313ea9f683d249ac9b2a54c0f1d9aacf7010e20938b9734cee",
+      "glslLines": 113
+    },
+    {
+      "module": "atmosphere_model",
+      "source": "omni-gfx/src/atmosphere_model.slang",
+      "sourceSha256": "d025d3ec4e07bc2b001b3f55b6aa8a4e6b8a52b45f36d31499c531065a394b9f",
+      "shader": "shaders/omni-gfx/atmosphere_model.glsl",
+      "generated": "omni-gfx/generated/glsl/atmosphere_model.glsl",
+      "glslSha256": "34000a3ddf6c9d1e8309da789f9a1635a15d1a59fb0a53992ed5a3868908c977",
+      "glslLines": 338
     }
   ]
 }
