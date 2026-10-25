@@ -10,18 +10,13 @@
 */
 #ifndef OMNI_HELD_LIGHT_INCLUDED
 #define OMNI_HELD_LIGHT_INCLUDED // 置上标记，后续再次引用直接跳过。
-// 屏幕空间阴影的步进循环在通用库。
+// 屏幕空间阴影的步进循环在通用库，光斑形状与光束指向也在通用库。
 #include "/gfx/shadow.glsl"
+#include "/gfx/surface.glsl"
 // --- 手电筒光斑形状：按光线与指向的夹角给出一束光的强度分布 ---
 // 为什么用曲线两次叠加：主瓣给中心亮区，副瓣给一点点外圈余晖；再乘一圈环形暗环，让光斑边界更像手电筒。
 float spotShape(float r){
-	float shape = curve(saturate(r * 2.0 - (2.0 - OMNI_FLASHLIGHT_FOV))); // 中心主瓣，夹角越小越亮。
-	shape += curve(saturate(r * 1.25 - (1.0 - OMNI_FLASHLIGHT_FOV))) * 0.01; // 很弱的外圈余晖。
-
-	const float ringSize = 8.0 / OMNI_FLASHLIGHT_FOV; // 暗环的宽度随光束角度缩放。
-	shape *= 1.0 - curve(saturate(1.0 - abs(r * ringSize - ringSize + 1.0))) * 0.25; // 在主瓣外面压一圈暗环。
-
-	return shape; // 返回零到一的光斑强度。
+	return ogxSpotShape(r, OMNI_FLASHLIGHT_FOV); // 算式在通用库。
 }
 
 // --- 手持光源的屏幕空间阴影：在屏幕里沿光源方向找遮挡 ---
@@ -57,17 +52,9 @@ float TorchScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shado
 // 为什么单独成函数：光照与高光两处要同一个方向，分开写容易在改动时只改到一处。
 vec3 FlashlightAimDirection(){
 	#if OMNI_FLASHLIGHT_CAMERA_SMOOTH // 打开指向平滑时，光束方向滞后于视角。
-		float angleRx = eyeRxSmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 俯仰角按过渡时长滞后。
-		mat3 Rx = mat3(1.0,  0.0,          0.0,
-					   0.0,  cos(angleRx), sin(angleRx),
-					   0.0, -sin(angleRx), cos(angleRx)); // 俯仰旋转矩阵。
-		float angleRy = eyeRySmooth * -OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME; // 偏航角按过渡时长滞后。
-		mat3 Ry = mat3(cos(angleRy), 0.0, -sin(angleRy),
-					   0.0,          1.0,  0.0,
-					   sin(angleRy), 0.0,  cos(angleRy)); // 偏航旋转矩阵。
-		return Ry * Rx * vec3(0.0, 0.0, -1.0); // 平滑后的光束指向。
+		return ogxFlashlightAimDirection(eyeRxSmooth, eyeRySmooth, OMNI_FLASHLIGHT_CAMERA_SMOOTH_TIME, true); // 平滑旋转在通用库。
 	#else
-		return vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
+		return ogxFlashlightAimDirection(0.0, 0.0, 0.0, false); // 不平滑时始终朝相机正前方。
 	#endif
 }
 

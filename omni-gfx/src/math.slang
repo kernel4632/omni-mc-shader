@@ -151,6 +151,19 @@ float3 ogxLinearToGamma(float3 color) { return pow(color, float3(1.0 / 2.2)); }
 // 显示伽马转回线性，与上一函数互逆。
 float3 ogxGammaToLinear(float3 color) { return pow(color, float3(2.2)); }
 
+// 水洼粗糙度：湿润阶段按锐度在干湿之间插值；水面与材质解码共用这一条。
+float ogxPuddleRoughness(float roughness, float wetRoughness, float wetnessStages, float sharpness)
+{
+    return lerp(roughness, wetRoughness, wetnessStages * sharpness); // 湿润阶段乘锐度作为混合比例。
+}
+
+// 平滑曲线：把零到一映射成两端平、中间陡的零到一，投影光斑与柔边都用它。
+// 与 iterationT 的 `curve(x)` 逐项相同，调用方自己保证输入已夹紧。
+float ogxCurve01(float x)
+{
+    return x * x * (3.0 - 2.0 * x);
+}
+
 // 中间画面用的四次方根曲线，压缩高动态范围并保住暗部。
 float ogxLinearToCurve(float color) { return pow(color, 0.25); }
 
@@ -496,6 +509,33 @@ float4 ogxBicubicBlurTexture(Sampler2D texSampler, float2 coord)
     float2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
     return lerp(lerp(texSampler.SampleLevel(c.yw, 0.0), texSampler.SampleLevel(c.xw, 0.0), m.x),
                 lerp(texSampler.SampleLevel(c.yz, 0.0), texSampler.SampleLevel(c.xz, 0.0), m.x), m.y); // 四次双线性采样得到十六像素的三次模糊。
+}
+
+// R2 低差异序列：两个无理数比例把序号摊成平面上的均匀点，样本不会聚成一团。
+// 为什么用 R2 而不是随机数：随机数会成簇，R2 每加一个样本都把空隙补得更均匀。
+float2 ogxR2Sample(int n)
+{
+    float2 alpha = float2(0.75487765, 0.56984026); // 二维黄金比例常数，照 Eclipse 原值。
+    return fract(alpha * float(n)); // 序号乘常数后取小数，得到零到一的点。
+}
+
+// 余弦加权半球采样：把两个零到一的随机数变成朝上的半球方向。
+// 为什么用余弦权重：漫反射的入射能量本身带余弦，按这个分布采样可以直接平均，不用再除权重。
+float3 ogxCosineHemisphere(float2 xi)
+{
+    float theta = 6.28318530718 * xi.y; // 绕竖直轴的角度。
+    float r = sqrt(xi.x); // 半径开方，得到余弦分布。
+    return float3(r * cos(theta), r * sin(theta), sqrt(clamp(1.0 - xi.x, 0.0, 1.0))); // 横向两个分量加竖直分量。
+}
+
+// 把手部深度从固定深度尺度换算到正常投影尺度，屏幕空间追踪手部光时用。
+// `handDepth` 是加载器给的手部深度比例，手不参与追踪时原样返回。
+float ogxConvertHandDepth3(float depth, bool hand, float handDepth)
+{
+    if (!hand) return depth; // 不是手部像素就不换算。
+    float ndcDepth = depth * 2.0 - 1.0; // 零到一转负一到一。
+    ndcDepth /= handDepth; // 按手部深度比例还原。
+    return ndcDepth * 0.5 + 0.5; // 再转回零到一。
 }
 
 #endif

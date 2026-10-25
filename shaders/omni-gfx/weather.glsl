@@ -22,6 +22,8 @@ Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、
 #ifndef OGX_WEATHER_INCLUDED
 #define OGX_WEATHER_INCLUDED
 
+// 数学模块提供取模与夹紧，季节循环与时段划分要用。
+#include "/omni-gfx/math.glsl"
 // 雨雪随风摆动：固定风向叠一个缓慢旋转的扰动，再按高度放大。
 // 为什么扰动跟着世界位置走：不同位置的雨丝才不会像一整块布同步摆动。
 vec2 ogxRainWindOffset(vec3 worldPos, vec3 cameraPos, float time, vec2 wind, float disturbance, float outdoor)
@@ -83,6 +85,87 @@ float ogxWeatherHash11(float p)
     p *= p + 33.33; // 加偏移后再平方，让输入的小变化放大。
     p *= p + p; // 再乘自身的两倍，进一步拉开分布。
     return fract(p); // 取小数，得到零到一的哈希值。
+}
+
+// 四季调色板：树叶与非树叶各一套颜色，因为树叶的季节变化通常更明显。
+struct OgxSeasonPalette
+{
+    vec3 summer; // 非树叶的夏天颜色。
+    vec3 autumn; // 非树叶的秋天颜色。
+    vec3 winter; // 非树叶的冬天颜色。
+    vec3 spring; // 非树叶的春天颜色。
+    vec3 summerLeaf; // 树叶的夏天颜色。
+    vec3 autumnLeaf; // 树叶的秋天颜色。
+    vec3 winterLeaf; // 树叶的冬天颜色。
+    vec3 springLeaf; // 树叶的春天颜色。
+};
+
+// Eclipse 四季上色：按游戏天数在四个季节之间连续插值，再乘顶点色。
+// `tintIndex` 由调用方判断，决定这一面是否使用群系染色；不使用的面保持原色。
+vec3 ogxYearCycleColor(vec3 finalColor, vec3 glcolor, bool isLeaves, OgxSeasonPalette palette, int worldDay, int seasonLength,
+    int startSeason, bool tintIndex)
+{
+    vec3 summer = isLeaves ? palette.summerLeaf : palette.summer; // 树叶用树叶那一套。
+    vec3 autumn = isLeaves ? palette.autumnLeaf : palette.autumn;
+    vec3 winter = isLeaves ? palette.winterLeaf : palette.winter;
+    vec3 spring = isLeaves ? palette.springLeaf : palette.spring;
+    summer *= glcolor; // 四季颜色都乘顶点色，保留群系底色。
+    autumn *= glcolor;
+    winter *= glcolor;
+    spring *= glcolor;
+    float yearLoop = ogxMod(float(worldDay + startSeason * seasonLength), float(seasonLength * 4)); // 一年内的进度。
+    float summerTime = clamp(yearLoop, 0.0, float(seasonLength)) / float(seasonLength); // 四个季节各自的权重。
+    float autumnTime = clamp(yearLoop - float(seasonLength), 0.0, float(seasonLength)) / float(seasonLength);
+    float winterTime = clamp(yearLoop - float(seasonLength * 2), 0.0, float(seasonLength)) / float(seasonLength);
+    float springTime = clamp(yearLoop - float(seasonLength * 3), 0.0, float(seasonLength)) / float(seasonLength);
+    vec3 summerToFall = mix(summer, autumn, summerTime); // 依次插值，最后回到夏天。
+    vec3 fallToWinter = mix(summerToFall, winter, autumnTime);
+    vec3 winterToSpring = mix(fallToWinter, spring, winterTime);
+    vec3 springToSummer = mix(winterToSpring, summer, springTime);
+    return tintIndex ? springToSummer : finalColor; // 不使用群系染色的面保持原色。
+}
+
+// 一天四个时段的雾密度：晨、午、晚、夜各一组，均匀雾与团雾分开。
+struct OgxTodFog
+{
+    vec4 uniformBands; // 四个时段的均匀雾密度。
+    vec4 cloudyBands; // 四个时段的团雾密度。
+};
+
+// 群系雾覆盖：权重与两套密度，顺序是沼泽、丛林、黑森林、苍白花园。
+struct OgxBiomeFog
+{
+    vec4 weights; // 四个群系的权重。
+    float uniformDensity; // 群系均匀雾密度。
+    float cloudyDensity; // 群系团雾密度。
+};
+
+// Eclipse 时段雾：把一天切成晨、午、晚、夜四段，取对应密度。
+// `dailyUniform` 与 `dailyCloudy` 是每日天气给出的下限，开启时取较大者；群系雾最后覆盖。
+void ogxFogDensities(inout float uniformDensity, inout float cloudyDensity, float dayTime, float fogMultiplier,
+    OgxTodFog tod, vec2 daily, bool dailyWeather, OgxBiomeFog biome, bool perBiome, float maxDistance)
+{
+    float time = ogxMod(dayTime, 24000.0); // 一天内的时刻。
+    float morning = clamp((time - 22000.0) / 2000.0, 0.0, 1.0) + clamp((2000.0 - time) / 2000.0, 0.0, 1.0); // 晨，跨午夜两段。
+    float noon = clamp(time / 2000.0, 0.0, 1.0) * clamp((12000.0 - time) / 2000.0, 0.0, 1.0); // 午。
+    float evening = clamp((time - 10000.0) / 2000.0, 0.0, 1.0) * clamp((14000.0 - time) / 2000.0, 0.0, 1.0); // 晚。
+    float night = clamp((time - 13000.0) / 2000.0, 0.0, 1.0) * clamp((23000.0 - time) / 2000.0, 0.0, 1.0); // 夜。
+    vec4 uniformBands = tod.uniformBands * fogMultiplier; // 四段均匀雾密度乘总倍率。
+    vec4 cloudyBands = tod.cloudyBands * fogMultiplier; // 四段团雾密度。
+    if (dailyWeather) // 每日天气给一个下限。
+    {
+        uniformBands = max(uniformBands, vec4(daily.x, daily.x, daily.x, daily.x));
+        cloudyBands = max(cloudyBands, vec4(daily.y, daily.y, daily.y, daily.y));
+    }
+    if (perBiome) // 群系雾按权重与距离包络覆盖。
+    {
+        float inBiome = clamp(biome.weights.x + biome.weights.y + biome.weights.z + biome.weights.w, 0.0, 1.0);
+        float blend = inBiome * maxDistance;
+        uniformBands = mix(uniformBands, vec4(biome.uniformDensity, biome.uniformDensity, biome.uniformDensity, biome.uniformDensity), blend);
+        cloudyBands = mix(cloudyBands, vec4(biome.cloudyDensity, biome.cloudyDensity, biome.cloudyDensity, biome.cloudyDensity), blend);
+    }
+    uniformDensity *= morning * uniformBands.x + noon * uniformBands.y + evening * uniformBands.z + night * uniformBands.w; // 按四段权重求和。
+    cloudyDensity *= morning * cloudyBands.x + noon * cloudyBands.y + evening * cloudyBands.z + night * cloudyBands.w; // 团雾同样。
 }
 
 #endif

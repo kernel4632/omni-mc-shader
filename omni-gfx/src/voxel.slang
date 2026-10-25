@@ -131,4 +131,18 @@ float4 ogxVoxelReflection(float3 originWorld, float3 rayDirWorld, float3 surface
     return float4(0.0, 0.0, 0.0, -1.0); // 镜面弹射次数用尽仍未命中，交给调用方走天空回退。
 }
 
+// 体素写入格：把方块位置加上相机小数偏移，再落到以体积中心为原点的整数格。
+// `center` 是体积半边长，调用方按自己的网格尺寸给出，库不假设固定边长。
+int3 ogxVoxelWriteIndex(float3 playerPos, float3 cameraOffset, int3 center)
+{
+    return int3(floor(playerPos + cameraOffset)) + center; // 与 Eclipse `GetVoxelIndex` 的取整顺序一致。
+}
+
+// 体素写入是否在体积内：三个轴都必须在零到边长减一之间，越界写会被丢弃。
+bool ogxVoxelWriteInBounds(int3 voxelPos, int size)
+{
+    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0
+        && voxelPos.x < size && voxelPos.y < size && voxelPos.z < size; // 逐轴判断，避免夹紧后写错格。
+}
+
 #endif

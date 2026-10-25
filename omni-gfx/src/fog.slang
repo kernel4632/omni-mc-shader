@@ -358,4 +358,56 @@ float ogxEndFogDensity(float3 worldDir, float dist, float VdotL, float angleX, f
     return density; // 交回未换算单位的密度。
 }
 
+// 下界群系自发光：五个群系各给一种基色与强度，按平滑权重相加后再乘整体亮度。
+// 为什么每个群系单独一项：下界没有太阳，画面亮度全靠这组写死的基色撑着，群系之间差别很大。
+float3 ogxNetherBiomeLighting(float netherWastes, float soulSandValley, float crimsonForest, float warpedForest,
+    float basaltDeltas, float brightness)
+{
+    float3 lighting = netherWastes * float3(0.99, 0.34, 0.10) * 4.5e-4; // 荒地偏橙红，最弱。
+    lighting += soulSandValley * float3(0.60, 0.77, 1.00) * 2e-4; // 灵魂沙峡谷偏青蓝，更暗。
+    lighting += crimsonForest * float3(1.00, 0.80, 0.57) * 4e-4; // 绯红森林偏暖白。
+    lighting += warpedForest * float3(0.79, 0.82, 1.00) * 2.5e-4; // 诡异森林偏冷蓝。
+    lighting += basaltDeltas * float3(1.00, 0.78, 0.62) * 1e-3; // 玄武岩三角洲最亮。
+    return lighting * brightness; // 按整体亮度缩放。
+}
+
+// 下界群系雾色：前三个分量是颜色，第四个分量是密度，五个群系按同一套权重混合。
+// 为什么密度也按群系混合：玄武岩三角洲的灰雾最浓、诡异森林最淡，颜色和浓度本来就该一起变。
+float4 ogxNetherBiomeFogColor(float netherWastes, float soulSandValley, float crimsonForest, float warpedForest,
+    float basaltDeltas, float brightness, float density)
+{
+    float4 fog = float4(0.990, 0.170, 0.005, 0.010) * netherWastes; // 荒地橙红、中等密度。
+    fog += float4(0.010, 0.035, 0.060, 0.007) * soulSandValley; // 灵魂沙峡谷近乎黑青。
+    fog += float4(0.200, 0.020, 0.000, 0.010) * crimsonForest; // 绯红森林暗红。
+    fog += float4(0.030, 0.100, 0.130, 0.007) * warpedForest; // 诡异森林暗青。
+    fog += float4(0.400, 0.400, 0.400, 0.014) * basaltDeltas; // 玄武岩三角洲灰色、最浓。
+    return fog * float4(brightness, brightness, brightness, density); // 颜色乘亮度、密度乘雾浓度。
+}
+
+// Eclipse 群系雾色：四个群系各给一组红绿蓝基色，按权重相加；返回本群系颜色与覆盖程度。
+// 为什么颜色分量分开写：与参考文件一行对一行，之后核对某个群系的颜色不会看错列。
+float3 ogxBiomeFogColor(float4 weights, float3 paleGarden, float3 swamp, float3 jungle, float3 darkForest, out float coverage)
+{
+    coverage = clamp(weights.x + weights.y + weights.z + weights.w, 0.0, 1.0); // 四个群系权重之和就是覆盖程度。
+    float3 color = float3(0.0); // 默认不在任何群系内，颜色为零。
+    color.r = weights.w * paleGarden.r + weights.x * swamp.r + weights.y * jungle.r + weights.z * darkForest.r; // 红色分量。
+    color.g = weights.w * paleGarden.g + weights.x * swamp.g + weights.y * jungle.g + weights.z * darkForest.g; // 绿色分量。
+    color.b = weights.w * paleGarden.b + weights.x * swamp.b + weights.y * jungle.b + weights.z * darkForest.b; // 蓝色分量。
+    return color; // 交回群系雾色。
+}
+
+// Eclipse 群系雾密度：把高度衰减雾与团雾两套密度朝当前群系混合，远处按包络退回原值。
+// `weights` 顺序是沼泽、丛林、黑森林、苍白花园；`maxDistance` 是随距离收敛的包络。
+void ogxBiomeFogDensity(float4 weights, inout float uniformDensity, inout float cloudyDensity,
+    float swampUniform, float jungleUniform, float darkForestUniform, float paleGardenUniform,
+    float swampCloudy, float jungleCloudy, float darkForestCloudy, float paleGardenCloudy, float maxDistance)
+{
+    float inBiome = clamp(weights.x + weights.y + weights.z + weights.w, 0.0, 1.0); // 落在任一已启用群系内的程度。
+    float biomeUniform = weights.x * swampUniform + weights.y * jungleUniform + weights.z * darkForestUniform + weights.w * paleGardenUniform; // 高度衰减雾密度加权和。
+    float biomeCloudy = weights.x * swampCloudy + weights.y * jungleCloudy + weights.z * darkForestCloudy + weights.w * paleGardenCloudy; // 团雾密度加权和。
+    float blend = inBiome * maxDistance; // 群系内且靠近相机时才替换。
+    uniformDensity = lerp(uniformDensity, biomeUniform, blend); // 高度衰减雾朝群系值混合。
+    cloudyDensity = lerp(cloudyDensity, biomeCloudy, blend); // 团雾朝群系值混合。
+}
+
 #endif

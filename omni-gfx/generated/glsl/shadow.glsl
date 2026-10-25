@@ -22,6 +22,30 @@ Omni 通用图形库阴影模块：阴影相机投影、边缘压缩、屏幕空
 
 // 饱和、矩阵列展开与圆周常数来自数学模块。
 #include "/omni-gfx/math.glsl"
+// Eclipse 的阴影修补：按相机距离把世界坐标抬离表面一点点，抵消阴影图的彼得潘效应。
+// 为什么用小数抖动而不是固定偏移：固定偏移会在不同距离留下阶梯，按世界坐标取小数能让误差散开。
+// `transition` 是阴影过渡量，越小越靠近阴影边缘，偏移越强；`flatNormal` 为保持原签名而保留，原程序未使用。
+void ogxGriAndEminShadowFix(inout vec3 worldPos, vec3 flatNormal, float transition, vec3 cameraWorldPos, bool eyeInWater)
+{
+    transition = 1.0 - transition; // 过渡量取反，边缘处为一。
+    transition *= transition * transition * transition * transition * transition * transition; // 六次方，只让最边缘一段生效。
+    float zoomLevel = mix(0.0, 0.5, transition); // 边缘处偏移半个格子。
+    if (zoomLevel > 0.001 && !eyeInWater) // 水下不做偏移，原程序同样跳过。
+    {
+        worldPos = worldPos - (fract(worldPos + cameraWorldPos - worldPos * 0.0001) * zoomLevel - zoomLevel * 0.5); // 按位置小数把坐标推到格子中心附近。
+    }
+}
+
+// Eclipse 的阴影偏差：按一个阴影像素对应一个方块的尺度，沿几何法线把投影坐标推出表面。
+// `shadowNormal` 是法线经过阴影相机旋转后的方向，`shadowDistance` 与 `shadowMapResolution` 决定纹素大小。
+void ogxApplyShadowBias(inout vec3 projectedShadowPosition, vec3 shadowNormal, float shadowDistance, float shadowMapResolution)
+{
+    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个纹素对应的世界尺度，再放大一倍。
+    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远，斜投影误差越大。
+    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大偏差。
+    projectedShadowPosition += shadowNormal * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
+}
+
 // 黄金角的正弦与余弦：螺旋采样每步旋转这个角度，样本才不会排成放射状条纹。
 const float OGX_SHADOW_GOLDEN_COS = -0.737368878;
 const float OGX_SHADOW_GOLDEN_SIN = 0.675490294;

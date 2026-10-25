@@ -1,4 +1,18 @@
 # 更新记录
+## 0.5.6
+
+对照表重建：24 个模块逐项核对，15 条部分覆盖清零，海洋、下界雾与材质解码迁入库。
+
+- 重建 `docs/gfx-parity.md`：按 `omni-gfx/src`、iterationT `Lib/` 与 Eclipse `lib/` 的实际源码逐项重判，新增 24 个模块与参考来源表、15 条部分覆盖处理表、只服务 Minecraft 的逐条证据；76 行参考对照中已覆盖 56 条、库内 5 条、MC 专用 15 条、部分与未覆盖均为 0 条。上一版把下界抗锯齿误记为“打包不能搬”，本版改为已覆盖，代码早已在库里。
+- `water` 补齐海洋：波形空间、方向、波形法线、涟漪法线混合、三层泡沫与整像素函数进库，`waves.glsl` 只传贴图、纹素大小与选项；iterationT `PhysicsOceans.glsl` 与 Eclipse `oceans.glsl` 两条同时从部分变为已覆盖。另补 Eclipse `ripples.glsl` 的九格雨点与 `waterBump.glsl` 的焦散、水面高度、波法线，三条为库内，光影侧仍用原水面路径。
+- `fog` 补下界五群系光照与雾色加权，`fog_volume` 补 Eclipse 羽流、雾霭、顶烟三段步进；`rendering/world/nether.glsl` 只保留射线、雾色与选项接线。`NetherColor.glsl` 与 `nether_fog.glsl` 从部分变为已覆盖。
+- `surface` 补 labPBR 材质解码 `ogxPbrMaterialFromTex`、Eclipse 方块光曲线、间接光、光斑、光束指向与手持光衰减；`bind/gbuffer.glsl` 只复制六个材质字段，LPV 手持光与手电筒光斑改为调用库。材质编号掩码表、手持光源分支、手部屏幕阴影与手电筒仍标为 MC 专用，逐条写在对照表第六节。
+- `math` 补光斑平滑曲线、R2 低差异采样、余弦半球与手部深度换算；`noise` 补二维向量哈希、二维梯度噪声与旋度；`shadow` 补 Eclipse 两条阴影修补；`weather` 补四季上色与时段雾密度；`voxel` 补写入索引与边界判断。以上纯算式均进库，未接线的标为库内。
+- 手写核心从 8153 行增加到 8717 行，上限按决策记录从 8400 调到 8800；新增函数按参考实现逐行搬运，常数与分支不变。
+- 选项、入口与默认画面不变：519 个选项、269 个入口、280 组唯一程序、四套预设。被改写的宿主调用点逐项保持原算式与参数顺序。
+
+验证：`python omni-gfx/build.py generate`（24 个模块、49 个文件、GLSL 14910 行）、`python omni-gfx/build.py check`、`python omni-gfx/build.py spirv`（24/24，编译器 2026.20）、`python build.py audit`、`python build.py verify`（147 个测试、9 组编译探针；本机冷缓存 8.54 秒）、`python build.py compile`（280 组唯一程序，0 错误）通过。未启动 Minecraft；游戏内画面、性能与其他显卡仍未验证。
+
 ## 0.5.5
 
 对照表补缺：光传播体积与采样过滤迁入库，八处纯计算缺口补齐，未覆盖项清零，编码损坏还原。

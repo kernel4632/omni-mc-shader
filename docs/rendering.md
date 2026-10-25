@@ -88,7 +88,7 @@ Iris 的执行顺序是：阴影 → 不透明几何 → deferred 0–8 → 半�
 
 ## 渲染阶段里的十二个循环
 
-`shaders/rendering/` 原来有十二处循环。逐个看过之后按“换一个宿主还要不要这段逻辑”分类：只搬运顶点、只按图集取样、只给某个维度专用的留在阶段层；算法、常数和参数都在循环体里、换宿主仍成立的迁进生成库。现在还剩八处循环，全部是阶段胶水；四处已经迁走。
+`shaders/rendering/` 原来有十二处循环。逐个看过之后按“换一个宿主还要不要这段逻辑”分类：只搬运顶点、只按图集取样、只给某个维度专用的留在阶段层；算法、常数和参数都在循环体里、换宿主仍成立的迁进生成库。现在还剩七处循环，全部是阶段胶水；五处已经迁走。
 
 | 序号 | 位置 | 循环做什么 | 归属 |
 | --- | --- | --- | --- |
@@ -100,7 +100,7 @@ Iris 的执行顺序是：阴影 → 不透明几何 → deferred 0–8 → 半�
 | 6 | `ground/grass_geometry.glsl` 的 `j` 循环 | 一片草叶分成几段 | 留阶段层 |
 | 7 | `ground/grass_geometry.glsl` 的 `i` 循环 | 每段三个顶点 | 留阶段层 |
 | 8 | `ground/terrain_surface.glsl` 的 `SampleAnisotropic` | 沿特征向量在方块图集上取样 | 留阶段层 |
-| 9 | `world/nether.glsl` 的 `NetherVolumetricFog` | 下界体积雾沿视线步进 | 留阶段层 |
+| 9 | `world/nether.glsl` 的 `NetherVolumetricFog` | 下界体积雾沿视线步进 | 已迁库：`ogxNetherVolumetricFog`（`fog_volume.slang`） |
 | 10 | `celestial.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
 | 11 | `terrain.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
 | 12 | `entities.glsl` 的 `main` | 末地传送门叠十六层 | 留阶段层 |
@@ -109,8 +109,8 @@ Iris 的执行顺序是：阴影 → 不透明几何 → deferred 0–8 → 半�
 
 - 第 5 到 7 项是几何着色器的顶点生成。循环体每个顶点都调 `EmitVertex()`，并原样搬 `v_color`、`v_texCoord`、`v_blockLight` 这些加载器给的顶点属性。通用库拿不到几何着色器的输出流，也不该认识 Minecraft 的顶点格式，所以只把每片草的形状交给 `ground/grass.glsl` 的 `omniGrassBladeVertex` 与 `omniGrassBladeBarycentric`，循环留在阶段层。
 - 第 8 项是材质采样阶段。循环体里 `fract(tilesCoord)` 回绕、`atlasTiles` 换算、`MC_NORMAL_MAP` 与 `MC_SPECULAR_MAP` 决定读哪几张图，都是资源包与光影图集的约定。把这些搬进库，等于把图集布局写进通用代码。
-- 第 9 项只有下界一个使用者。羽流、雾霭、顶烟三段分别读 `OMNI_NETHER_PLUME_DENSITY`、`OMNI_NETHER_HAZE_DENSITY`、`OMNI_NETHER_CEILING_SMOKE_DENSITY`，还直接用 `NetherFogColor()`、`far`、`cameraPosition` 与固定颜色 `vec3(1.0, 0.4, 0.2)`。参数化要传十多个宿主值，库会把一个维度的美术决定写死，换宿主也没有第二处能复用。
+- 第 9 项现在只有取射线、雾色与选项的接线；羽流、雾霭、顶烟三段步进与三个密度选项都已作为参数传进库，固定颜色属于算法常数而不是宿主决定。
 - 第 10、11 项只有 `gl_in[i]` 到 `gl_Position` 的转发和 `EmitVertex()`，没有可抽取的计算。
 - 第 12 项是末地传送门方块：十六层靠 `end_portal_layer()` 生成的层矩阵与 `COLORS` 十六项常量表叠出颜色，是 Minecraft 独有的渲染约定。循环依赖那张常量表和投影坐标，迁进库只会多一层转发。
 
-迁进库的四处循环满足同一条标准：循环体只有算术，需要的输入都能当参数传，常数属于算法而不是宿主选项。水面那两处原本是同一段循环抄了两遍，迁走后共享一个函数与一份常数，以后改波形不会再改漏一处。
+迁进库的五处循环满足同一条标准：循环体只有算术，需要的输入都能当参数传，常数属于算法而不是宿主选项。水面那两处原本是同一段循环抄了两遍，迁走后共享一个函数与一份常数，以后改波形不会再改漏一处；下界三段雾把密度选项与噪声纹理换成参数后，同一段步进也能给别的引擎使用。

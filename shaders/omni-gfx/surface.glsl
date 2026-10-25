@@ -22,7 +22,7 @@ Omni 通用图形库表面模块：方块光曲线、材质法线、遮蔽换算
 #ifndef OGX_SURFACE_INCLUDED
 #define OGX_SURFACE_INCLUDED
 
-// 数学模块提供法线解码、夹紧与色相转换。
+// 数学模块提供法线解码、夹紧、湿面粗糙度与色相转换。
 #include "/omni-gfx/math.glsl"
 // 天光曲线：先抬高低等级，再压暗高等级，等级越高越接近饱和。
 float ogxCurveBlockLightSky(float blockLight)
@@ -106,6 +106,105 @@ float ogxTrimEmission(vec3 albedo)
 {
     vec3 hsv = ogxRgbToHsv(albedo); // 拆出明度。
     return sqrt(hsv.z); // 明度开方，照 Eclipse。
+}
+
+// 从表面贴图解出的一整套物理材质参数；字段与光影包的材质结构一一对应，调用方逐个复制即可。
+struct OgxPbrMaterial
+{
+    float roughness; // 粗糙度，越大高光越散。
+    float metalness; // 金属度，越大底色越偏反射。
+    float f0; // 正射反射率，非金属约零点零四。
+    float emissiveness; // 资源包给出的自发光强度。
+    float scattering; // 次表面散射强度。
+    float reflectionStrength; // 这份表面允许反射的强度。
+};
+
+// 从 labPBR 表面贴图解出材质：蓝色通道兼作孔隙率与散射，红绿通道是平滑度与金属度。
+// 参数全部显式传入，库不读取资源包格式选项；`baseTex` 会被吸水压暗，所以是输入输出参数。
+// 为什么先算孔隙率：它同时决定吸水暗化与湿润后的平滑度，两处必须用同一个值。
+OgxPbrMaterial ogxPbrMaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet, bool usePorosity,
+    int pbrFormat, float defaultPorosity, float porosityAbsorption, bool roughnessClamp,
+    float emissivenessGamma, float sssStrength, float sssOffset, float puddleSharpness)
+{
+    float porosity = defaultPorosity; // 默认孔隙率。
+    if (usePorosity && pbrFormat < 2) // 资源包自带孔隙率时才按高六位解码。
+    {
+        porosity = ogxSaturate(specTex.b * (255.0 / 63.0) - step(64.0 / 255.0, specTex.b)); // 蓝通道高六位表示孔隙率。
+    }
+    baseTex *= 1.0 - wet * ogxFastSqrt(porosity) * porosityAbsorption; // 吸水越多的表面越暗，开方让差异平缓。
+    OgxPbrMaterial material; // 下面逐项填写。
+    float rawSmoothness = mix(specTex.r, 1.0, ogxSaturate(wet * (1.7 - porosity * 0.7))); // 湿润把表面拉向光滑。
+    material.roughness = 1.0 - rawSmoothness; // 平滑度取反得到粗糙度。
+    material.roughness *= material.roughness; // 平方让光滑面更集中。
+    material.roughness = ogxPuddleRoughness(material.roughness, 0.5, wet, puddleSharpness); // 湿面锐度按选项混合。
+    float rawMetalness = specTex.g; // 绿通道是金属度。
+    if (pbrFormat == 0) rawMetalness = ogxSaturate(rawMetalness + step(0.9, rawMetalness)); // labPBR 预设金属位拉满。
+    material.metalness = roughnessClamp ? ogxSaturate(rawMetalness * 1.1 - 0.1) : rawMetalness; // 限制模式先放大再平移。
+    material.f0 = rawMetalness * 0.96 + 0.04; // 金属度高时反射率接近底色。
+    material.reflectionStrength = roughnessClamp ? ogxSaturate(2.0 - material.roughness * 5.0) : ogxSaturate(2.0 - material.roughness * 2.0); // 限制模式更快去掉粗糙面的反射。
+    material.reflectionStrength = ogxSaturate(material.reflectionStrength + material.metalness * 1e10 + wet * 3.0); // 金属与湿面全反射。
+    material.emissiveness = specTex.a; // 透明通道是自发光。
+    if (pbrFormat < 2) material.emissiveness -= step(1.0, material.emissiveness); // 满值表示没有自发光。
+    material.emissiveness = pow(material.emissiveness, emissivenessGamma); // 按选项重整亮暗对比。
+    material.scattering = pbrFormat < 2 ? ogxSaturate((specTex.b * 255.0 - 64.0) / 191.0) * sssStrength + sssOffset : 0.0; // 蓝通道其余位是散射。
+    return material; // 交回解码好的材质。
+}
+
+// Eclipse 方块光曲线：先把等级转成亮斑，再在平方曲线与固定高值之间混合。
+// 为什么亮斑单独算：原版光照图在最高几档突然变亮，直接平方会让灯下反而没有层次。
+vec3 ogxBlockLightCurveEclipse(vec3 lightColor, float lightmap)
+{
+    lightmap = clamp(lightmap, 0.0, 1.0); // 输入先夹到合法范围。
+    float brightspot = min(max(lightmap - 0.7, 0.0) * 3.3333, 1.0); // 只取最高三成作为亮斑。
+    brightspot *= brightspot * brightspot; // 三次方让亮斑收得更紧。
+    float lightmapLight = 1.0 - sqrt(1.0 - lightmap); // 开方曲线，低等级抬得更快。
+    lightmapLight *= lightmapLight; // 再平方，高等级更亮。
+    float curve = mix(lightmapLight, 2.5, brightspot); // 亮斑处直接推到固定高值。
+    return curve * lightColor; // 乘光色得到方块光。
+}
+
+// 手电筒光斑：按光线与光束指向的夹角给出一束光的强度分布。
+// 主瓣给中心亮区，副瓣给一点点外圈余晖，再乘一圈暗环，让边界更像手电筒。
+float ogxSpotShape(float r, float fov)
+{
+    float shape = ogxCurve01(ogxSaturate(r * 2.0 - (2.0 - fov))); // 中心主瓣，夹角越小越亮。
+    shape += ogxCurve01(ogxSaturate(r * 1.25 - (1.0 - fov))) * 0.01; // 很弱的外圈余晖。
+    float ringSize = 8.0 / fov; // 暗环宽度随光束角度缩放。
+    shape *= 1.0 - ogxCurve01(ogxSaturate(1.0 - abs(r * ringSize - ringSize + 1.0))) * 0.25; // 主瓣外压一圈暗环。
+    return shape; // 零到一的光斑强度。
+}
+
+// 手电筒指向：打开相机平滑时按两个平滑角度滞后于视角，否则始终朝相机正前方。
+// 为什么单独成函数：光照与高光两处要同一个方向，分开写容易在改动时只改到一处。
+vec3 ogxFlashlightAimDirection(float eyeRx, float eyeRy, float smoothTime, bool cameraSmooth)
+{
+    if (!cameraSmooth) return vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
+    float angleRx = eyeRx * -smoothTime; // 俯仰角按过渡时长滞后。
+    float angleRy = eyeRy * -smoothTime; // 偏航角按过渡时长滞后。
+    mat3 rx = mat3(1.0, 0.0, 0.0, 0.0, cos(angleRx), sin(angleRx), 0.0, -sin(angleRx), cos(angleRx)); // 俯仰旋转。
+    mat3 ry = mat3(cos(angleRy), 0.0, -sin(angleRy), 0.0, 1.0, 0.0, sin(angleRy), 0.0, cos(angleRy)); // 偏航旋转。
+    return ogxMatrix3MulPoint(ry, ogxMatrix3MulPoint(rx, vec3(0.0, 0.0, -1.0))); // 合成旋转后的光束指向。
+}
+
+// 手持光：按物品的光色、照明半径与到相机的距离算一个球形光源。
+// `relativeEye` 是相机小数偏移，`playerPos` 是相机相对位置；两者相加才是到光源的真实距离。
+vec3 ogxHandLight(vec3 lightColor, float lightRange, vec3 playerPos, vec3 relativeEye)
+{
+    float dist = length(playerPos + relativeEye); // 到手持光源的距离。
+    float falloff = pow(1.0 - dist / lightRange, 3.0); // 线性衰减再取三次方。
+    return lightColor * max(falloff, 0.0); // 范围外为零。
+}
+
+// Eclipse 间接光：天光按一条抬高次方的曲线缩放，再混入最低环境光。
+// `minAmount` 与 `minAmountInside` 分别是室外、室内的最低光比例，`nightVision` 是夜视附加量。
+vec3 ogxDoIndirectLighting(vec3 lightColor, vec3 minimumLightColor, float lightmap,
+    float ambientBrightness, float minAmount, float minAmountInside, float nightVision)
+{
+    float curve = (pow(lightmap, 15.0) * 2.0 + lightmap * lightmap) / 3.0; // 低等级压暗、高等级抬高。
+    vec3 indirect = lightColor * curve * ambientBrightness; // 天光按曲线缩放。
+    indirect += mix(minimumLightColor * (minAmount * 0.004 + nightVision * 0.02),
+                     minimumLightColor * (minAmountInside * 0.004 + nightVision * 0.02), 1.0 - lightmap); // 室外室内两档最低光按天光混合。
+    return indirect; // 交回间接光。
 }
 
 #endif

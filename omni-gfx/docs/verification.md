@@ -137,9 +137,21 @@
 
 - 新增 `lpv` 模块：Eclipse `lpv_render.glsl` 的取样解码、写入编码、亮度曲线、边缘淡出与合成搬进库；`shaders/rendering/lighting/lpv.glsl` 只留纹理选择、越界判断与帧奇偶。默认配置关闭光传播体积，因此默认画面不变；全高配置编到真实分支，证明库函数在 GLSL 430 计算程序里也能通过。
 - `sampling` 新增平滑过滤、阴影平滑过滤、最近点取样、旋转网格超采样与两套抗锯齿抖动序列；生成器为此新增 `tex.SampleGrad` 到 `textureGrad` 的等价转换，屏幕导数仍由调用方传入，库保持纯函数。
-- `color` 补五条色调映射曲线、经济版电影曲线与标准 sRGB 编码；`noise` 补白噪声与三角噪声；`post` 补浮点与定点抖动、多边形光圈；`math` 补不夹紧映射、三分量极值、圆盘点列、螺旋采样与粗糙高光方向；`cloud` 补降雨密度。这些函数按参考实现逐行搬运，两处有意偏离记在 `docs/gfx-parity.md` 第五节。
+- `color` 补五条色调映射曲线、经济版电影曲线与标准 sRGB 编码；`noise` 补白噪声与三角噪声；`post` 补浮点与定点抖动、多边形光圈；`math` 补不夹紧映射、三分量极值、圆盘点列、螺旋采样与粗糙高光方向；`cloud` 补降雨密度。这些函数按参考实现逐行搬运，有意偏离记在 `docs/gfx-parity.md` 的「有意偏离」小节。
 - 对照表：`docs/gfx-parity.md` 整篇重写，76 行逐项核对；未覆盖从 4 条降到 0 条，`PrintFloat` 与 `text_rendering` 按参考包里的实际调用位置改判为 MC 专用（调试叠加），剩余 15 条部分覆盖逐条写出宿主数据源。
 - 回归：新增 `test_minecraft_lpv_uses_generated_module`，要求光影侧继续引用生成库的 `lpv` 模块并调用解码、编码与合成三个函数。
 - 命令结果：`generate` 输出 24 个模块、49 个文件、GLSL 13744 行；`check` 通过，库内 38 个文件通过中文说明审计；`spirv` 24/24 通过（编译器 2026.20）；`verify` 147 个测试、9 组编译探针通过，本机冷缓存耗时 7.16 秒；`compile` 280 组唯一程序 0 错误。
 - 手写核心 8153 行，上限按决策记录调到 8400 行。
 - 未验证：没有启动 Minecraft，没有做游戏内像素对比，也没有跑测试世界的截图对比。默认画面不变的理由是新函数没有调用方、被改写的调用点逐项保持原算式，不是截图证明。
+
+## 九、部分覆盖清零（2026-10-25）
+
+- 海洋：`water` 新增波形空间、方向、波形法线、涟漪混合、泡沫与整像素函数；`shaders/rendering/water/waves.glsl` 的 `physics_waveHeight`、`physics_waveNormal`、`physics_wavePixel` 改为传贴图与选项，迭代正弦、空间换算与泡沫公式只在库里一份。iterationT `PhysicsOceans.glsl` 与 Eclipse `oceans.glsl` 两条同时清零。
+- 下界：`fog` 新增五群系光照与雾色加权；`fog_volume` 新增 Eclipse 三段体积雾步进，`NetherVolumetricFog` 只保留射线、雾色与选项接线；`world/nether.glsl` 已调用。`NetherColor.glsl` 与 `nether_fog.glsl` 两条清零。
+- 材质：`surface` 新增 `ogxPbrMaterialFromTex`，`bind/gbuffer.glsl` 只复制六个字段；材质编号掩码表保留，因为编号由几何阶段写入并对应 Minecraft 的方块与实体类别。
+- 参考文件剩余纯算式：Eclipse `Shadows.glsl` 的两条阴影修补、`ripples.glsl` 的程序化雨点与专用哈希、`waterBump.glsl` 的焦散/水面高度/波法线、`volumetricClouds.glsl` 的梯度噪声与旋度、`voxel_write.glsl` 的索引与边界、`climate_settings.glsl` 的四季与时段雾、`diffuse_lighting.glsl` 的方块光曲线/间接光/手持光、`indirect_lighting_effects.glsl` 的低差异采样与手部深度换算，都已进库。
+- 只服务 Minecraft 的剩余部分逐条写进 `docs/gfx-parity.md` 第六节：手持光源与高光、材质编号掩码、手部屏幕阴影与手电筒、Eclipse 屏幕追踪与双边升采样、体素写入、调试叠加与编号表。每条都有参考文件行号或宿主声明位置。
+- 对照表：`docs/gfx-parity.md` 重建为 24 个模块表、76 行参考对照、15 条处理记录与汇总；部分覆盖从 15 条降到 0 条，未覆盖仍为 0 条。
+- 命令结果：`generate` 输出 24 个模块、49 个文件、GLSL 14910 行；`check` 通过，库内 38 个文件通过中文说明审计；`spirv` 24/24 通过（编译器 2026.20）；`verify` 147 个测试、9 组编译探针通过；`compile` 280 组唯一程序 0 错误（本机冷缓存约 293 秒，热缓存直接复用）。
+- 手写核心从 8153 行增加到 8717 行，上限按决策记录调到 8800 行。
+- 未验证：没有启动 Minecraft；海洋、下界体积雾、材质解码与群系雾的改写只证明编译与算式逐项对应，游戏内画面与帧时仍未验证。

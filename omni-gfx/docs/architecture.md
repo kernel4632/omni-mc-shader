@@ -30,29 +30,29 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 
 | 模块 | 内容 | 依赖 |
 | --- | --- | --- |
-| `math.slang` | 常数、夹紧、亮度、三角近似、编码、GGX、黑体、求交、噪声、拜尔、切线基、矩阵列展开、空间扭曲 | 无 |
+| `math.slang` | 常数、夹紧、亮度、三角近似、编码、GGX、黑体、求交、噪声、拜尔、切线基、矩阵列展开、空间扭曲、光斑曲线、R2 采样、余弦半球、手部深度换算 | 无 |
 | `color.slang` | 伽马、ACES、AgX、高级调色、暗视觉、白平衡、黑边 | `math` |
 | `sampling.slang` | 蓝噪声、时间抖动、拜尔时间抖动 | `math` |
-| `noise.slang` | 整数哈希、二维与三维值噪声、分形叠加、域扭曲、查表式雾噪声 | `math` |
+| `noise.slang` | 整数哈希、二维向量哈希、二维与三维值噪声、二维梯度噪声与旋度、分形叠加、域扭曲、查表式雾噪声 | `math` |
 | `atmosphere.slang` | 球面几何、瑞利与米氏密度、光学厚度、单次散射天空、空气透视、太阳圆盘、星场与日月圆盘 | `math` |
 | `cloud.slang` | 球壳求交、程序化云密度、朝阳光照、沿视线步进、云影、平面云扭曲与多层密度 | `math`、`noise` |
-| `water.slang` | 方向波法线、菲涅尔、吸收、折射偏移、GGX 高光、岸线泡沫、水面合成、水位波与水体雾 | `math`、`noise` |
-| `fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分 | `math`、`noise` |
-| `shadow.slang` | 阴影投影与边缘压缩、屏幕空间阴影、级联选择、PCSS 遮挡物搜索、可变半影与透光散射 | `math` |
+| `water.slang` | 方向波法线、菲涅尔、吸收、折射偏移、GGX 高光、岸线泡沫、水面合成、水位波与水体雾、迭代海洋、涟漪混合、泡沫、Eclipse 雨点与水面高度/焦散 | `math`、`noise` |
+| `fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分、下界五群系配色、群系雾色与密度 | `math`、`noise` |
+| `shadow.slang` | 阴影投影与边缘压缩、屏幕空间阴影、级联选择、PCSS 遮挡物搜索、可变半影与透光散射、Eclipse 阴影修补 | `math` |
 | `gi.slang` | 地平线遮蔽、反射阴影图反弹、历史重投影、时间滤波、七乘七空间滤波、多弹射 | `math`、`shadow` |
 | `reflection.slang` | 可见法线采样、屏幕空间追踪、菲涅耳合并、九点小波降噪 | `math` |
 | `post.slang` | 泛光核、三次升采样、亮度曲线、暗角、颗粒、景深、动态模糊、分块测光 | `math` |
 | `antialias.slang` | YCoCg、历史邻域裁剪、三次采样、时间重投影 | `math` |
-| `weather.slang` | 雨雪随风偏移、植被与季节、暴风噪声与染色、每日天气哈希 | 无 |
-| `surface.slang` | 方块光曲线、材质法线与遮蔽、火把光、自发光 | `math` |
+| `weather.slang` | 雨雪随风偏移、植被与季节、暴风噪声与染色、每日天气哈希、四季上色、时段雾密度 | `math` |
+| `surface.slang` | 方块光曲线、材质法线与遮蔽、火把光、自发光、labPBR 材质解码、Eclipse 间接光、光斑、手持光 | `math` |
 | `parallax.slang` | 高度采样、平滑与锐利视差、自阴影、高度场法线 | `math` |
-| `voxel.slang` | 三维逐格步进、半透明染色、植物穿透、铁块镜面弹射 | `math`、`color` |
+| `voxel.slang` | 三维逐格步进、半透明染色、植物穿透、铁块镜面弹射、写入索引与边界 | `math`、`color` |
 | `upscale.slang` | FSR 边缘方向重采样、对比度自适应锐化 | `math` |
 | `planet.slang` | 末地行星本体、光环、大气 | `math`、`atmosphere` |
 | `accretion.slang` | 吸积盘积分、空间扭曲、圆环辉光、多普勒 | `math`、`fog` |
 | `atmosphere_model.slang` | 预计算大气的坐标、透过率、散射、辐照度与简化散射 | `atmosphere`、`math`、`color` |
 | `cloud_volume.slang` | 体积云形状、光照、步进、闪电与云影贴图 | `cloud`、`math` |
-| `fog_volume.slang` | 体积雾密度、光照吸收、步进、暴风与水下光柱 | `fog`、`weather`、`shadow`、`water`、`color` |
+| `fog_volume.slang` | 体积雾密度、光照吸收、步进、暴风、水下光柱、下界三段烟 | `fog`、`weather`、`shadow`、`water`、`color` |
 | `lpv.slang` | 光传播体积的取样解码、写入编码、亮度曲线、边缘淡出与合成 | `color`、`math` |
 
 规则：

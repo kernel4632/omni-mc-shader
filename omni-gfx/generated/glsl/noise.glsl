@@ -36,6 +36,43 @@ float ogxHash12(vec2 p)
     return fract((p3.x + p3.y) * p3.z); // 零到一的伪随机数。
 }
 
+// 二维向量哈希：把平面格点变成一个二维随机方向，供旋度噪声与雨点涟漪定位。
+// 与标量哈希共用同一组无理数，三个分量互相混合后再取两次小数部分。
+vec2 ogxHash22(vec2 p)
+{
+    vec3 p3 = fract(vec3(p.x, p.y, p.x) * vec3(0.1031, 0.1030, 0.0973)); // 两个坐标扩成三个分量。
+    p3 += dot(p3, p3.yzx + 19.19); // 三个分量互相打散。
+    return fract((vec2(p3.x, p3.x) + vec2(p3.y, p3.z)) * vec2(p3.z, p3.y)); // 取出两个独立的小数。
+}
+
+// 二维梯度噪声：四个角点各取一个随机方向，与格内偏移点乘后按平滑曲线插值。
+// 返回的是解析梯度，不是噪声值；旋度噪声只关心梯度方向，所以这里直接给出两个分量的偏导。
+vec2 ogxPerlinGradient2(vec2 coord)
+{
+    vec2 i = floor(coord); // 格子角点。
+    vec2 f = fract(coord); // 格内偏移。
+    vec2 u = f * f * (3.0 - 2.0 * f); // 插值权重。
+    vec2 du = 30.0 * f * f * (f * (f - 2.0) + 1.0); // 梯度权重，照 Eclipse 的写法保留。
+    vec2 g0 = normalize(ogxHash22(i) - vec2(0.5)); // 左下方向。
+    vec2 g1 = normalize(ogxHash22(i + vec2(1.0, 0.0)) - vec2(0.5)); // 右下方向。
+    vec2 g2 = normalize(ogxHash22(i + vec2(0.0, 1.0)) - vec2(0.5)); // 左上方向。
+    vec2 g3 = normalize(ogxHash22(i + vec2(1.0, 1.0)) - vec2(0.5)); // 右上方向。
+    float v0 = dot(g0, f); // 四个角点与偏移的点乘。
+    float v1 = dot(g1, f - vec2(1.0, 0.0));
+    float v2 = dot(g2, f - vec2(0.0, 1.0));
+    float v3 = dot(g3, f - vec2(1.0, 1.0));
+    vec2 omu = vec2(1.0) - u; // 反向权重。
+    return vec2(((v1 - v0) * omu.y + (v3 - v2) * u.y) * du.x,
+                  ((v2 - v0) * omu.x + (v3 - v1) * u.x) * du.y); // 两个方向的偏导。
+}
+
+// 二维旋度：把梯度旋转九十度，得到无散度的矢量场，卷云的丝状弯曲靠它。
+vec2 ogxCurl2D(vec2 coord)
+{
+    vec2 gradient = ogxPerlinGradient2(coord); // 先取梯度。
+    return vec2(gradient.y, -gradient.x); // 旋转九十度就是旋度。
+}
+
 // 白噪声：两个坐标点乘一组无理数后取正弦，成本只有一个点乘与一次正弦。
 // 为什么不用哈希：需要连续坐标上的随机值时，正弦哈希不会在整数格上出现明显的方块。
 float ogxWhiteNoise(vec2 coord)

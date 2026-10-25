@@ -7,6 +7,8 @@
 #ifndef OMNI_BIND_WORLD_BIOME_INCLUDED
 #define OMNI_BIND_WORLD_BIOME_INCLUDED
 #include "/effects/world/biome.glsl"
+// 群系雾色与雾密度的加权混合在通用库，本文件只把四个权重与选项常量传进去。
+#include "/gfx/fog.glsl"
 /*
 群系特色环境：按玩家所在生物群系，给体积雾换一套雾色与雾密度，来源是 Eclipse 的每群系环境（`PER_BIOME_ENVIRONMENT`）。
 调用位置：
@@ -72,24 +74,20 @@ vec4 omniBiomeWeights(){
 // 为什么直接加权求和：四个群系互斥，权重之和最多为一，相加即得本群系配色，不必写分支。
 // 颜色分量分开写，是为了让它和 Eclipse 原式一行对一行，方便之后逐行核对。
 void omniBiomeFogColor(vec4 weights, out vec3 biomeColor, out float coverage){
-	coverage = clamp(weights.x + weights.y + weights.z + weights.w, 0.0, 1.0); // 群系覆盖程度，零表示不在任何已启用群系内。
-	biomeColor = vec3(0.0); // 从黑色起累加，没落在群系里就保持黑色（调用方再按覆盖程度决定是否使用）。
-	biomeColor.r = weights.w * OMNI_PALE_GARDEN_FOG_COLOR_R + weights.x * OMNI_SWAMP_FOG_COLOR_R + weights.y * OMNI_JUNGLE_FOG_COLOR_R + weights.z * OMNI_DARKFOREST_FOG_COLOR_R; // 红色分量按权重相加。
-	biomeColor.g = weights.w * OMNI_PALE_GARDEN_FOG_COLOR_G + weights.x * OMNI_SWAMP_FOG_COLOR_G + weights.y * OMNI_JUNGLE_FOG_COLOR_G + weights.z * OMNI_DARKFOREST_FOG_COLOR_G; // 绿色分量按权重相加。
-	biomeColor.b = weights.w * OMNI_PALE_GARDEN_FOG_COLOR_B + weights.x * OMNI_SWAMP_FOG_COLOR_B + weights.y * OMNI_JUNGLE_FOG_COLOR_B + weights.z * OMNI_DARKFOREST_FOG_COLOR_B; // 蓝色分量按权重相加。
+	biomeColor = ogxBiomeFogColor(weights, vec3(OMNI_PALE_GARDEN_FOG_COLOR_R, OMNI_PALE_GARDEN_FOG_COLOR_G, OMNI_PALE_GARDEN_FOG_COLOR_B),
+		vec3(OMNI_SWAMP_FOG_COLOR_R, OMNI_SWAMP_FOG_COLOR_G, OMNI_SWAMP_FOG_COLOR_B),
+		vec3(OMNI_JUNGLE_FOG_COLOR_R, OMNI_JUNGLE_FOG_COLOR_G, OMNI_JUNGLE_FOG_COLOR_B),
+		vec3(OMNI_DARKFOREST_FOG_COLOR_R, OMNI_DARKFOREST_FOG_COLOR_G, OMNI_DARKFOREST_FOG_COLOR_B), coverage); // 颜色加权在通用库，覆盖程度一并交回。
 }
 
 // 群系雾密度：把“仅高度衰减”和“团雾”两套密度标度朝本群系的取值混合，来源 Eclipse 的 `BiomeFogDensity`。
 // `maxDistance` 是随离相机距离收敛的包络：近处替换成群系密度，远处退回原来的密度，避免整屏都被改写。
 // 为什么两套一起算：`VolumetricFog` 当前只用其中一套，但两套都更新，切换雾类型时不必改这里。
 void omniBiomeFogDensity(vec4 weights, inout float uniformDensity, inout float cloudyDensity, float maxDistance){
-	float inBiome = clamp(weights.x + weights.y + weights.z + weights.w, 0.0, 1.0); // 落在任一已启用群系内的程度。
-	float biomeUniform = weights.x * OMNI_SWAMP_FOG_DENSITY + weights.y * OMNI_JUNGLE_FOG_DENSITY + weights.z * OMNI_DARKFOREST_FOG_DENSITY + weights.w * OMNI_PALE_GARDEN_FOG_DENSITY; // 各群系高度衰减雾密度加权和。
-	float biomeCloudy = weights.w * OMNI_PALE_GARDEN_FOG_CLOUDY_DENSITY + weights.x * OMNI_SWAMP_FOG_CLOUDY_DENSITY + weights.y * OMNI_JUNGLE_FOG_CLOUDY_DENSITY + weights.z * OMNI_DARKFOREST_FOG_CLOUDY_DENSITY; // 各群系团雾密度加权和。
-
-	float blend = inBiome * maxDistance; // 群系内且靠近相机时才替换，远处的权重被包络压回零。
-	uniformDensity = mix(uniformDensity, biomeUniform, blend); // 高度衰减雾的密度标度朝群系值混合。
-	cloudyDensity = mix(cloudyDensity, biomeCloudy, blend); // 团雾的密度标度朝群系值混合。
+	ogxBiomeFogDensity(weights, uniformDensity, cloudyDensity,
+		OMNI_SWAMP_FOG_DENSITY, OMNI_JUNGLE_FOG_DENSITY, OMNI_DARKFOREST_FOG_DENSITY, OMNI_PALE_GARDEN_FOG_DENSITY,
+		OMNI_SWAMP_FOG_CLOUDY_DENSITY, OMNI_JUNGLE_FOG_CLOUDY_DENSITY, OMNI_DARKFOREST_FOG_CLOUDY_DENSITY, OMNI_PALE_GARDEN_FOG_CLOUDY_DENSITY,
+		maxDistance); // 两套密度与包络混合在通用库。
 }
 
 #endif // 总开关块结束。

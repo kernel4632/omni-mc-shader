@@ -98,7 +98,7 @@ def collect() -> dict:
             report["generatedTotal"] += nonempty
         elif name == "第三方":
             report["thirdPartyTotal"] += nonempty
-    report["handwrittenBudget"] = 8400  # 手写核心上限；第三批补上光传播体积模块、采样过滤与八处纯计算缺口，按实际规模上调，见计划文档。
+    report["handwrittenBudget"] = 8800  # 手写核心上限；第四批补上海洋、下界雾、材质解码与参考文件剩余纯算式，按实际规模上调，见计划文档。
     return report
 
 

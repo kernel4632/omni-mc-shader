@@ -77,39 +77,23 @@ uniform sampler2D physics_lightmap; // 原版光照图。
 	in float physics_localWaviness; // 顶点处的水深。
 #endif
 
-// 海洋波循环用的参数：常数取库的默认值，只有层数随外部海洋扩展变化。
-OgxOceanWaves physics_ocean_waves(int iterations) {
-	OgxOceanWaves waves = ogxOceanWavesDefault(); // 默认值就是原程序的那一组常数。
-	waves.iterations = iterations; // 层数由调用方给。
-	return waves;
+// 涟漪贴图的横向纹素大小：纹理尺寸仍由宿主查询，库只接收换算好的数值。
+vec2 physics_rippleTexel() {
+	return vec2(2.0 / textureSize(physics_ripples, 0).x, 0.0); // 横向一格对应两个纹素。
 }
 
 // 按迭代正弦求某点波高：每层频率与速度都放大，权重衰减，最后归一化并居中。
 float physics_waveHeight(vec2 position, int iterations, float factor, float time) {
-	position = (position - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale; // 换到波形空间。
-	OgxOceanWaveSum sum = ogxOceanWaveSum(position, time, physics_ocean_waves(iterations)); // 逐层累加在生成库里完成。
-	return ogxOceanWaveHeight(sum, physics_oceanHeight, factor); // 归一化并按海面高度缩放、居中。
+	vec2 waveSpace = ogxOceanWaveSpace(position, physics_waveOffset, PHYSICS_XZ_SCALE, physics_oceanWaveHorizontalScale); // 换到波形空间。
+	OgxOceanWaves waves = ogxOceanWavesDefault(); // 默认常数在库。
+	waves.iterations = iterations; // 层数由外部海洋扩展给。
+	return ogxOceanWaveHeight(ogxOceanWaveSum(waveSpace, time, waves), physics_oceanHeight, factor); // 归一化并按海面高度缩放、居中。
 }
 
 // 合成海面法线：波形法线再混入涟漪贴图的凹凸，涟漪越强权重越大。
 vec3 physics_waveNormal(const in vec2 position, const in vec2 direction, const in float factor, const in float time) {
-	float oceanHeightFactor = physics_oceanHeight / 13.0; // 海面高度相对基础值十三的倍率。
-	float totalFactor = oceanHeightFactor * factor; // 总倍率。
-	vec3 waveNormal = normalize(vec3(direction.x * totalFactor, PHYSICS_NORMAL_STRENGTH, direction.y * totalFactor)); // 由波形方向构造法线。
-
-	vec2 eyePosition = position + physics_modelOffset.xz; // 加上模型偏移，定位涟漪位置。
-	vec2 rippleFetch = (eyePosition + vec2(physics_rippleRange)) / (physics_rippleRange * 2.0); // 涟漪贴图采样坐标。
-	vec2 rippleTexelSize = vec2(2.0 / textureSize(physics_ripples, 0).x, 0.0); // 一个纹素的横向大小。
-	float left = texture(physics_ripples, rippleFetch - rippleTexelSize.xy).r; // 左侧涟漪高度。
-	float right = texture(physics_ripples, rippleFetch + rippleTexelSize.xy).r; // 右侧涟漪高度。
-	float top = texture(physics_ripples, rippleFetch - rippleTexelSize.yx).r; // 上侧涟漪高度。
-	float bottom = texture(physics_ripples, rippleFetch + rippleTexelSize.yx).r; // 下侧涟漪高度。
-	float totalEffect = left + right + top + bottom; // 四邻合计，表示涟漪强度。
-
-	float normalx = left - right; // 横向坡度。
-	float normalz = top - bottom; // 纵向坡度。
-	vec3 rippleNormal = normalize(vec3(normalx, 1.0, normalz)); // 涟漪法线。
-	return normalize(mix(waveNormal, rippleNormal, pow(totalEffect, 0.5))); // 按涟漪强度混合波形法线与涟漪法线。
+	return ogxOceanNormalWithRipple(position, direction, factor, physics_oceanHeight, PHYSICS_NORMAL_STRENGTH,
+		physics_modelOffset.xz, physics_ripples, physics_rippleRange, physics_rippleTexel()); // 混合在通用库。
 }
 
 // 海面像素的完整数据，一次算好方向、位置、法线、泡沫与高度，供片元阶段一次取用。
@@ -122,35 +106,18 @@ struct WavePixelData {
 };
 
 // 一次算出海面像素的全部数据，内部把波高、方向与泡沫合成，避免片元阶段重复迭代。
+// 波形迭代、空间换算、涟漪贴图与泡沫噪声都在通用库；这里只把宿主数据整理成结构体。
 WavePixelData physics_wavePixel(const in vec2 position, const in float factor, const in float iterations, const in float time) {
-	vec2 wavePos = (position.xy - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale; // 换到波形空间。
-	OgxOceanWaveSum sum = ogxOceanWaveSum(wavePos, time, physics_ocean_waves(int(ceil(iterations)))); // 逐层累加在生成库里完成；向上取整与原来的整数比较等价。
-
-	WavePixelData data; // 待填充的数据。
-	data.direction = -vec2(sum.detail / pow(sum.weightSum, 1.0 - PHYSICS_W_DETAIL)); // 方向取负，朝向波前进方向。
-	data.worldPos = sum.position / physics_oceanWaveHorizontalScale / PHYSICS_XZ_SCALE; // 还原世界位置。
-	data.height = ogxOceanWaveHeight(sum, physics_oceanHeight, factor); // 归一化并按海面高度缩放、居中。
-
-	data.normal = physics_waveNormal(position, data.direction, factor, time); // 复用上面的法线合成。
-
-	float waveAmplitude = data.height * pow(max(data.normal.y, 0.0), 4.0); // 波峰处的振幅，用来抑制泡沫。
-	vec2 waterUV = mix(position - physics_waveOffset, data.worldPos, clamp(factor * 2.0, 0.2, 1.0)); // 泡沫采样坐标在原始位置与波后位置间混合，避免泡沫拉花。
-
-	vec2 s1 = textureLod(physics_foam, vec3(waterUV * 0.26, physics_globalTime / 360.0), 0).rg; // 泡沫噪声第一层。
-	vec2 s2 = textureLod(physics_foam, vec3(waterUV * 0.02, physics_globalTime / 360.0 + 0.5), 0).rg; // 泡沫噪声第二层。
-	vec2 s3 = textureLod(physics_foam, vec3(waterUV * 0.1, physics_globalTime / 360.0 + 1.0), 0).rg; // 泡沫噪声第三层。
-
-	float waterSurfaceNoise = s1.r * s2.r * s3.r * 2.8 * physics_foamAmount; // 三层噪声相乘得到泡沫形状。
-	waveAmplitude = clamp(waveAmplitude * 1.2, 0.0, 1.0); // 振幅夹到零到一。
-	waterSurfaceNoise = (1.0 - waveAmplitude) * waterSurfaceNoise + waveAmplitude * physics_foamAmount; // 波峰处泡沫更强。
-
-	float worleyNoise = 0.2 + 0.8 * s1.g * (1.0 - s2.g); // 用噪声的另一个通道做细胞状调制。
-	float waterFoamMinSmooth = 0.45; // 泡沫起始阈值。
-	float waterFoamMaxSmooth = 2.0; // 泡沫最大增益。
-	waterSurfaceNoise = smoothstep(waterFoamMinSmooth, 1.0, waterSurfaceNoise) * worleyNoise; // 平滑阈值并乘细胞调制。
-
-	data.foam = clamp(waterFoamMaxSmooth * waterSurfaceNoise * physics_foamOpacity, 0.0, 1.0); // 得到最终泡沫强度。
-
+	OgxOceanPixel pixel = ogxOceanPixel(position, factor, iterations, time, physics_waveOffset, PHYSICS_XZ_SCALE,
+		physics_oceanWaveHorizontalScale, physics_oceanHeight, physics_modelOffset.xz, physics_ripples,
+		physics_rippleRange, physics_rippleTexel(), physics_foam, physics_globalTime, physics_foamAmount,
+		physics_foamOpacity, PHYSICS_NORMAL_STRENGTH); // 一次调用算完整像素。
+	WavePixelData data; // 转成光影包沿用的结构体。
+	data.direction = pixel.direction;
+	data.worldPos = pixel.worldPos;
+	data.normal = pixel.normal;
+	data.foam = pixel.foam;
+	data.height = pixel.height;
 	return data; // 返回完整数据。
 }
 

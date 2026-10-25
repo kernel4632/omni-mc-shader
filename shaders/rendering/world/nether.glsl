@@ -52,24 +52,17 @@ uniform float BiomeBasaltDeltasSmooth; // 玄武岩三角洲的权重。
 
 // --- 下界光照：每个群系一种基色和强度，叠加后乘整体亮度 ---
 // 为什么每个群系单独一项：下界没有太阳，画面亮度全靠这些写死的基色撑着，群系之间差别很大。
+// 五个群系的基色与强度在通用库，本函数只把平滑权重与亮度选项传进去。
 vec3 NetherLighting(){
-	vec3 netherLighting =	 BiomeNetherWastesSmooth *   vec3(0.99, 0.34, 0.10) * 4.5e-4; // 荒地偏橙红，最弱。
-	netherLighting +=		 BiomeSoulSandValleySmooth * vec3(0.60, 0.77, 1.00) * 2e-4; // 灵魂沙峡谷偏青蓝，更暗。
-	netherLighting +=		 BiomeCrimsonForestSmooth *  vec3(1.00, 0.80, 0.57) * 4e-4; // 绯红森林偏暖白。
-	netherLighting +=		 BiomeWarpedForestSmooth *   vec3(0.79, 0.82, 1.00) * 2.5e-4; // 诡异森林偏冷蓝。
-	netherLighting +=		 BiomeBasaltDeltasSmooth *   vec3(1.00, 0.78, 0.62) * 1e-3; // 玄武岩三角洲最亮。
-	return netherLighting * OMNI_NETHER_BRIGHTNESS; // 按整体亮度缩放。
+	return ogxNetherBiomeLighting(BiomeNetherWastesSmooth, BiomeSoulSandValleySmooth, BiomeCrimsonForestSmooth,
+		BiomeWarpedForestSmooth, BiomeBasaltDeltasSmooth, OMNI_NETHER_BRIGHTNESS); // 群系混合在通用库。
 }
 
 // --- 下界雾色：三通道是雾的颜色，第四分量是雾密度 ---
 // 为什么密度也按群系混合：玄武岩三角洲的灰雾最浓，诡异森林最淡，同一份权重同时决定颜色和浓度。
 vec4 NetherFogColor(){
-	vec4 fog =	 vec4(0.990, 0.170, 0.005, 0.010) * BiomeNetherWastesSmooth; // 荒地橙红、中等密度。
-	fog +=		 vec4(0.010, 0.035, 0.060, 0.007) * BiomeSoulSandValleySmooth; // 灵魂沙峡谷近乎黑青。
-	fog +=		 vec4(0.200, 0.020, 0.000, 0.010) * BiomeCrimsonForestSmooth; // 绯红森林暗红。
-	fog +=		 vec4(0.030, 0.100, 0.130, 0.007) * BiomeWarpedForestSmooth; // 诡异森林暗青。
-	fog +=		 vec4(0.400, 0.400, 0.400, 0.014) * BiomeBasaltDeltasSmooth; // 玄武岩三角洲灰色、最浓。
-	return fog * vec4(vec3(OMNI_NETHER_BRIGHTNESS), OMNI_NETHER_FOG_DENSITY); // 颜色乘亮度、密度乘雾浓度选项。
+	return ogxNetherBiomeFogColor(BiomeNetherWastesSmooth, BiomeSoulSandValleySmooth, BiomeCrimsonForestSmooth,
+		BiomeWarpedForestSmooth, BiomeBasaltDeltasSmooth, OMNI_NETHER_BRIGHTNESS, OMNI_NETHER_FOG_DENSITY); // 颜色与密度一起混合。
 }
 
 // --- 下界三段体积雾：Eclipse `lib/nether_fog.glsl` 的搬运，默认关闭 ---
@@ -115,51 +108,13 @@ vec4 NetherVolumetricFog(float startDist, float endDist, float ditherA, float di
 	vec3 worldRay = mat3(gbufferModelViewInverse) * NetherFogViewRay(); // 视空间射线方向换到相机相对世界方向。
 
 	endDist = min(endDist, min(far, 16.0 * 12.0)); // 最远只步进一百九十二米，照 Eclipse 的距离上限。
-	float rayLength = endDist - startDist; // 这一段视线的长度。
-	if (rayLength <= 0.0) return vec4(0.0, 0.0, 0.0, 1.0); // 空段或反向段直接返回，避免除零。
 
-	vec3 segment = worldRay * rayLength; // 整段的相机相对世界向量。
-	float dL = rayLength; // 光学厚度的段长，照 Eclipse。
-
-	vec3 base = gbufferModelViewInverse[3].xyz + worldRay * startDist; // 相机相对世界里的起点。
-
-	vec3 color = vec3(0.0); // 累加的散射色。
-	float absorbance = 1.0; // 剩余透射率，从全透开始。
 	vec3 hazeColor = normalize(NetherFogColor().xyz + 1e-6) * 0.25; // 雾霭颜色取当前下界雾色的方向，代替 Eclipse 的原版雾色。
 
-	for (int i = 0; i < samples; i++){ // 沿这一段逐步前进。
-		float d = (pow(expFactor, float(i + ditherB) / float(samples)) / expFactor - 1.0 / expFactor) / (1.0 - 1.0 / expFactor); // 指数步长在段上的归一化位置。
-		float dd = pow(expFactor, float(i + ditherA) / float(samples)) * log(expFactor) / float(samples) / (expFactor - 1.0); // 这一步厚度权重，照原程序。
-
-		vec3 relPos = base + d * segment; // 采样点的相机相对世界位置。
-		float dist = length(relPos); // 到相机的距离，近处淡出与羽流距离窗都用它。
-		vec3 worldPos = relPos + cameraPosition; // 绝对世界位置，体积噪声要它。
-
-		float densityVol = NetherFogCloudVolume(worldPos); // 这一点的原始体积密度。
-		float clearArea = 1.0 - min(max(1.0 - dist / 24.0, 0.0), 1.0); // 相机二十四米内淡出，避免贴脸起雾。
-
-		// --- 羽流：从低空升起、随时间侵蚀的发光烟柱 ---
-		float plumeDensity = min(densityVol * pow(min(max(100.0 - worldPos.y, 0.0) / 30.0, 1.0), 4.0), pow(clamp(1.0 - dist / far, 0.0, 1.0), 5.0)); // 越低越浓、越远越淡。
-		plumeDensity *= OMNI_NETHER_PLUME_DENSITY; // 乘玩家密度选项。
-		float plumeCoeff = exp(-plumeDensity * dd * dL); // 这一段羽流按比尔定律吸收掉的光。
-		vec3 plumeLight = vec3(1.0, 0.4, 0.2) * 0.25 * exp(-15.0 * densityVol) * (clearArea * clearArea * 0.9 + 0.1); // 暖橙色，密度高处压暗。
-		color += (plumeLight - plumeLight * plumeCoeff) * absorbance; // 叠上这一段羽流的散射。
-		absorbance *= plumeCoeff; // 透射率随之下降。
-
-		// --- 雾霭：极薄的均匀底色，照原程序不吸场景 ---
-		float hazeDensity = 0.001 * OMNI_NETHER_HAZE_DENSITY; // 很低的均匀密度，乘选项。
-		float hazeCoeff = exp(-hazeDensity * dd * dL); // 雾霭的吸收。
-		color += (hazeColor - hazeColor * hazeCoeff) * absorbance; // 只加散射，不回乘透射率。
-
-		// --- 顶部烟：贴近下界天花板（基岩层）才出现的灰烟 ---
-		float ceilingDensity = 0.001 * pow(min(max(worldPos.y - 40.0, 0.0) / 50.0, 1.0), 3.0) * OMNI_NETHER_CEILING_SMOKE_DENSITY; // 越高越浓，乘选项。
-		float ceilingCoeff = exp(-ceilingDensity * dd * dL); // 这一段灰烟的吸收。
-		vec3 ceilingSmoke = vec3(0.1); // 固定的灰烟颜色。
-		color += (ceilingSmoke - ceilingSmoke * ceilingCoeff) * (absorbance * 0.5 + 0.5); // 半强度叠加，照原程序。
-		absorbance *= ceilingCoeff; // 透射率继续下降。
-	}
-
-	return vec4(color * 0.0125, absorbance); // 散色换算到 Omni 管线单位，与解析雾同量级，再返回透射率。
+	// 三段步进与混合在通用库，这里只把相机、距离、三个密度选项与噪声纹理传进去。
+	return ogxNetherVolumetricFog(worldRay, gbufferModelViewInverse[3].xyz, cameraPosition, startDist, endDist,
+		ditherA, ditherB, samples, expFactor, 16.0 * 12.0, far, OMNI_NETHER_PLUME_DENSITY, OMNI_NETHER_HAZE_DENSITY,
+		OMNI_NETHER_CEILING_SMOKE_DENSITY, hazeColor, 0.0125, bind_time().seconds, noisetex);
 }
 
 // --- 下界雾：两种调用形状 ---

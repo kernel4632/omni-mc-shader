@@ -238,26 +238,16 @@ Material bind_material_from_tex(inout vec3 base_tex, vec4 spec_tex, float wet,
 		bool use_porosity, int pbr_format, float default_porosity, float porosity_absorption,
 		bool roughness_clamp, float emissiveness_gamma, float sss_strength, float sss_offset,
 		float puddle_sharpness){
-	float porosity = default_porosity; // 默认孔隙率。
-	if (use_porosity){ // 资源包自带孔隙率时按标准位宽解码。
-		if (pbr_format < 2) porosity = gfx_saturate(spec_tex.b * (255.0 / 63.0) - step(64.0 / 255.0, spec_tex.b)); // 蓝色通道的高六位表示孔隙率。
-	}
-	base_tex *= 1.0 - wet * gfx_fsqrt(porosity) * porosity_absorption; // 吸水越多的表面越暗，孔隙率开方让差异更平缓。
-	Material material; // 下面逐项填入。
-	float raw_smoothness = mix(spec_tex.r, 1.0, gfx_saturate(wet * (1.7 - porosity * 0.7))); // 湿润把表面拉向光滑，孔隙率大则拉得少。
-	material.roughness = 1.0 - raw_smoothness; // 平滑度取反得到粗糙度。
-	material.roughness *= material.roughness; // 再平方，让光滑面更集中。
-	material.roughness = gfx_puddle_roughness(material.roughness, 0.5, wet, puddle_sharpness); // 湿面反射锐度按选项混合。
-	float raw_metalness = spec_tex.g; // 绿色通道是金属度。
-	if (pbr_format == 0) raw_metalness = gfx_saturate(raw_metalness + step(0.9, raw_metalness)); // labPBR 允许预设金属，把高位拉满。
-	material.metalness = roughness_clamp ? gfx_saturate(raw_metalness * 1.1 - 0.1) : raw_metalness; // 限制模式先放大再平移，否则原样使用。
-	material.f0 = raw_metalness * 0.96 + 0.04; // 金属度高则反射率接近底色，非金属约零点零四。
-	material.reflectionStrength = roughness_clamp ? gfx_saturate(2.0 - material.roughness * 5.0) : gfx_saturate(2.0 - material.roughness * 2.0); // 限制模式更快去掉粗糙面的反射。
-	material.reflectionStrength = gfx_saturate(material.reflectionStrength + material.metalness * 1e10 + wet * 3.0); // 金属和湿润表面一律全反射。
-	material.emissiveness = spec_tex.a; // 透明通道是自发光。
-	if (pbr_format < 2) material.emissiveness -= step(1.0, material.emissiveness); // 标准规定满值表示没有自发光，减掉它。
-	material.emissiveness = pow(material.emissiveness, emissiveness_gamma); // 按选项重整亮暗对比。
-	material.scattering = pbr_format < 2 ? gfx_saturate((spec_tex.b * 255.0 - 64.0) / 191.0) * sss_strength + sss_offset : 0.0; // 蓝色通道的其余位表示散射强度，另一种格式记零。
+	OgxPbrMaterial decoded = ogxPbrMaterialFromTex(base_tex, spec_tex, wet, use_porosity, pbr_format,
+		default_porosity, porosity_absorption, roughness_clamp, emissiveness_gamma, sss_strength, sss_offset,
+		puddle_sharpness); // 解码在通用库，底色吸水压暗由输入输出参数带回。
+	Material material; // 转成光影包沿用的结构体。
+	material.roughness = decoded.roughness;
+	material.metalness = decoded.metalness;
+	material.f0 = decoded.f0;
+	material.emissiveness = decoded.emissiveness;
+	material.scattering = decoded.scattering;
+	material.reflectionStrength = decoded.reflectionStrength;
 	return material; // 交回解码好的材质。
 }
 #endif

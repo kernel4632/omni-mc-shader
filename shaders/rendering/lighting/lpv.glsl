@@ -49,6 +49,8 @@
 #include "/common/math.glsl"
 // 颜色转换与饱和度矩阵放在通用库。
 #include "/gfx/color.glsl"
+// 手持光的三次方衰减在表面模块，供雾照明复用。
+#include "/gfx/surface.glsl"
 // 体积光的取样、编码、坐标映射与边缘淡出都在通用库，本文件只保留纹理与体素接线。
 #include "/omni-gfx/lpv.glsl"
 
@@ -189,9 +191,7 @@ vec3 omniLpvHandLight(int itemId, vec3 playerPos){
 	vec4 colorRange = omniLpvUnpackColorRange(row.x); // 低字：光色三相与光照范围。
 	float lightRange = colorRange.a * 255.0; // 范围还原成格数。
 	if (lightRange <= 0.0) return vec3(0.0); // 不发光物品直接返回。
-	float lightDist = length(playerPos); // 采样点到玩家的距离，相机就是玩家。
-	float falloff = pow(max(1.0 - lightDist / lightRange, 0.0), 3.0); // 线性衰减再取三次方，范围外为零。
-	return omniSrgbToLinear(colorRange.rgb) * falloff; // 颜色转线性乘衰减，得到零到一的持光。
+	return ogxHandLight(omniSrgbToLinear(colorRange.rgb), lightRange, playerPos, vec3(0.0)); // 衰减在通用库，相机偏移为零。
 }
 #endif // 手持灯光结束。
 #endif // 片元取样结束。
