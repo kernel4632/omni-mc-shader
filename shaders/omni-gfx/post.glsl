@@ -426,4 +426,56 @@ float ogxExposureTileAverage(sampler2D sceneTexture, OgxExposureParams params)
     return exposure / weights; // 加权平均。
 }
 
+// 镜头眩光：求一个偏移向量在桶形畸变后的方向，用于把鬼影沿弧线排列。
+// 先把偏移抬到三维再绕与中心垂直的轴旋转，最后取回二维，等价于绕画面中心弯折。
+vec2 ogxGlareDistOffset(vec2 uv, vec2 pxoffset, float barrel)
+{
+    vec2 tocenter = uv.xy; // 当前点到中心的方向。
+    vec3 prep = normalize(vec3(tocenter.y, -tocenter.x, 0.0)); // 与中心方向垂直的轴。
+    float angle = length(tocenter.xy) * 2.221 * barrel; // 旋转角随距离增大。
+    vec3 oldoffset = vec3(pxoffset, 0.0); // 把偏移抬到三维。
+    vec3 rotated = oldoffset * cos(angle) + cross(prep, oldoffset) * sin(angle) + prep * dot(prep, oldoffset) * (1.0 - cos(angle)); // 绕轴旋转。
+    return rotated.xy; // 取回二维偏移。
+}
+
+// 画一个带色散的软光点：红绿蓝三个通道沿鬼影方向错开一点。
+// 色散量同时改变三个通道的半径，蓝光偏得最多，边缘因此出现彩边。
+vec3 ogxGlareFlare(vec2 uv, vec2 pos, float dist, float chromaOffset, float size, float barrel)
+{
+    pos = ogxGlareDistOffset(uv, pos, barrel); // 先对鬼影位置做桶形畸变。
+    float r = max(0.01 - pow(length(uv + (dist - chromaOffset) * pos), 2.4) * (1.0 / (size * 2.0)), 0.0) * 0.85; // 红色通道。
+    float g = max(0.01 - pow(length(uv + dist * pos), 2.4) * (1.0 / (size * 2.0)), 0.0) * 1.0; // 绿色通道。
+    float b = max(0.01 - pow(length(uv + (dist + chromaOffset) * pos), 2.4) * (1.0 / (size * 2.0)), 0.0) * 1.5; // 蓝色通道。
+    return vec3(r, g, b); // 返回带色散的光点颜色。
+}
+
+// 画一串沿鬼影方向排列的圆形光斑，颜色从暖到冷渐变。
+// 越靠后的光斑越小、越暗，模拟镜头内部多次反射的能量损失。
+vec3 ogxGlareOrb(vec2 uv, vec2 pos, float dist, float size, float barrel)
+{
+    float orbCount = 6.0; // 一组鬼影包含几个圆形光斑。
+    vec3 c = vec3(0.0); // 累加结果。
+    for (float i = 0.0; i < orbCount; i++) // 逐个光斑。
+    {
+        float j = i + 1.0; // 从一起数的序号。
+        float offset = j / (j + 0.1); // 这个光斑在鬼影方向上的位置。
+        float colOffset = j / orbCount * 0.5; // 颜色偏移。
+        float ss = size / (j + 1.0); // 越靠后的光斑越小。
+        c += ogxGlareFlare(uv, pos, dist + offset, ss * 2.0, ss, barrel) * vec3(1.0 - colOffset, 1.0, 0.5 + colOffset) * j; // 累加并染色放大。
+    }
+    c += ogxGlareFlare(uv, pos, dist + 0.8, 0.05, 3.0 * size, barrel) * 0.5; // 末尾再补一个大的柔和光斑。
+    return c; // 返回光斑颜色。
+}
+
+// 画一个环状光环，三个通道同样做色散。
+// 坐标先乘自身长度，圆点就被拉成环；分母里的二百五十控制环的锐度。
+vec3 ogxGlareRing(vec2 uv, vec2 pos, float dist, float chromaOffset, float blur)
+{
+    vec2 uvd = uv * length(uv); // 把坐标按到中心距离放大，得到环而不是点。
+    float r = max(1.0 / (1.0 + 250.0 * pow(length(uvd + (dist - chromaOffset) * pos), blur)), 0.0) * 0.8; // 红色通道。
+    float g = max(1.0 / (1.0 + 250.0 * pow(length(uvd + dist * pos), blur)), 0.0) * 1.0; // 绿色通道。
+    float b = max(1.0 / (1.0 + 250.0 * pow(length(uvd + (dist + chromaOffset) * pos), blur)), 0.0) * 1.5; // 蓝色通道。
+    return vec3(r, g, b); // 返回光环颜色。
+}
+
 #endif

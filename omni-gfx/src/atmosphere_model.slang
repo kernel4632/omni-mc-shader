@@ -1,6 +1,6 @@
 /*
 Omni 通用图形库预计算大气查表模块：坐标映射、透过率、组合散射、辐照度与天空辐射。
-调用位置：任何使用 Bruneton 风格预计算大气贴图的程序；Minecraft 光影由
+调用位置：任何使用论文式预计算大气贴图的程序；Minecraft 光影由
     `/omni-gfx/atmosphere_model.glsl` 引入，`rendering/sky/atmosphere_model.glsl` 只填常数与贴图。
 可复制示例：`OgxAtmosphereModel model = ...;` 由调用方填好行星常数与贴图尺寸，再调用
     `ogxAtmoSkyRadiance` 查某个方向的天空辐射。

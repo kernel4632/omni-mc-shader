@@ -302,4 +302,86 @@ float ogxPlanarLightingDensity(vec2 position, vec2 windDirection, sampler2D nois
     return density * density; // 平方收口。
 }
 
+// 云影投影坐标：把世界点沿光方向投到云影所在的水平面，再换成零到一贴图坐标。
+// 为什么先加相机高度：云影贴图跟着相机平移，投影必须用相机相对的高度，否则走动时影子会漂。
+vec2 ogxCloudShadowCoord(vec3 worldPos, vec3 lightDir, float cameraY, float range)
+{
+    vec2 coord = worldPos.xz - lightDir.xz * ((worldPos.y + cameraY) / lightDir.y); // 沿光方向落到云影平面。
+    return coord * (1.0 / range) + 0.5; // 换成贴图坐标。
+}
+
+// 十六像素三次模糊：四次双线性采样合成，返回红通道；云影贴图只有红通道有意义。
+// 两次双线性之间按权重比例混合，效果等价于四次三次采样，但纹理读取次数减半。
+float ogxCloudShadowBicubic(sampler2D shadowTex, vec2 coord, vec2 texSize)
+{
+    vec2 texPixel = 1.0 / texSize; // 一个像素的坐标大小。
+    coord = coord * texSize - 0.5; // 换成以像素为单位的坐标。
+    vec2 p = floor(coord); // 整数像素。
+    vec2 f = coord - p; // 小数偏移。
+    vec2 ff = f * f; // 偏移平方。
+    vec4 w0; // 两个方向的前两个权重。
+    vec4 w1; // 两个方向的后两个权重。
+    w0.xz = 1.0 - f; w0.xz *= w0.xz * w0.xz; // 第一个权重是反向偏移的立方。
+    w1.yw = ff * f; // 第四个权重是偏移立方。
+    w1.xz = 3.0 * w1.yw + 4.0 - 6.0 * ff; // 第三个权重。
+    w0.yw = 6.0 - w1.xz - w1.yw - w0.xz; // 第二个权重由总和为六推出。
+    vec4 s = w0 + w1; // 每对权重和。
+    vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy + w1 / s; // 每对合并成一次双线性采样的位置。
+    c *= texPixel.xxyy; // 换回零到一坐标。
+    vec2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
+    return mix(mix(textureLod(shadowTex, c.yw, 0.0).x, textureLod(shadowTex, c.xw, 0.0).x, m.x),
+                mix(textureLod(shadowTex, c.yz, 0.0).x, textureLod(shadowTex, c.xz, 0.0).x, m.x),
+                m.y); // 四次双线性采样得到十六像素的三次模糊，取红通道。
+}
+
+// 云影取样：按天气在晴天与雨天两档之间混合，`wetness` 是降雨湿润度。
+float ogxCloudShadowSample(sampler2D shadowTex, vec3 worldPos, vec3 lightDir, float cameraY, float range,
+    vec2 screenExtent, vec2 pixelSize, float texSize, float wetness, float rainShadow, bool fadeAngle)
+{
+    vec2 coord = ogxCloudShadowCoord(worldPos, lightDir, cameraY, range); // 投到云影贴图坐标。
+    float cloudShadow = 1.0 - wetness; // 雨天默认的云影底值。
+    if (ogxEqual(ogxSaturate(coord), coord)) // 只有落在贴图范围内才采样。
+    {
+        vec2 shadowTexel = screenExtent - coord * texSize; // 贴图贴在画面右上角，坐标要翻转。
+        vec2 fade = ogxSaturate(5.9 - abs(coord - 0.5) * 12.0); // 贴图边缘淡出，避免硬边界。
+        cloudShadow = mix(cloudShadow, ogxCloudShadowBicubic(shadowTex, shadowTexel * pixelSize, screenExtent), fade.x * fade.y); // 三次采样并淡出。
+    }
+    if (fadeAngle) // 太阳越贴地云影越淡。
+    {
+        float fade = smoothstep(0.06, 0.18, abs(lightDir.y)); // 光方向越平越淡。
+        cloudShadow = mix(1.0 - wetness, cloudShadow, fade * fade); // 按淡出权重混合。
+    }
+    return ((rainShadow - 1.0) * wetness + 1.0) * cloudShadow + (wetness - rainShadow * wetness); // 晴天与雨天两档之间插值。
+}
+
+// 全局云影：从云影贴图顶行的统计像素取一个粗粒度值；没有贴图时按天气估。
+float ogxGlobalCloudShadow(sampler2D shadowTex, ivec2 statTexel, float wetness, float rainShadow, bool fromTexture)
+{
+    if (fromTexture) return mix(texelFetch(shadowTex, statTexel, 0).a, 1.0, 0.03 - wetness * 0.015); // 统计像素存全局云影。
+    return 1.0 - wetness * (rainShadow * 0.985); // 纯天气估计。
+}
+
+// 云影横向或纵向高斯模糊：权重固定，轴由参数给；其余通道原样带过。
+// 只模糊红通道，因为绿蓝通道存的是别的统计量，混进来会污染后续读取。
+vec4 ogxCloudShadowBlur(sampler2D shadowTex, ivec2 texel, ivec2 axis, ivec2 borderMin, ivec2 borderMax)
+{
+    vec4 blur = vec4(0.0); // 模糊结果。
+    ivec2 sampleCoord = clamp(texel - 3 * axis, borderMin, borderMax); // 第三个负向样本。
+    blur.r += texelFetch(shadowTex, sampleCoord, 0).r * 0.054543; // 按高斯权重累加。
+    sampleCoord = clamp(texel - 2 * axis, borderMin, borderMax); // 第二个负向样本。
+    blur.r += texelFetch(shadowTex, sampleCoord, 0).r * 0.099384; // 累加。
+    sampleCoord = clamp(texel - 1 * axis, borderMin, borderMax); // 第一个负向样本。
+    blur.r += texelFetch(shadowTex, sampleCoord, 0).r * 0.181090; // 累加。
+    vec4 center = texelFetch(shadowTex, texel, 0); // 中心样本。
+    blur.r += center.r * 0.329966; // 中心权重最大。
+    blur.gba += center.gba; // 其余通道原样带过。
+    sampleCoord = clamp(texel + 1 * axis, borderMin, borderMax); // 第一个正向样本。
+    blur.r += texelFetch(shadowTex, sampleCoord, 0).r * 0.181090; // 累加。
+    sampleCoord = clamp(texel + 2 * axis, borderMin, borderMax); // 第二个正向样本。
+    blur.r += texelFetch(shadowTex, sampleCoord, 0).r * 0.099384; // 累加。
+    sampleCoord = clamp(texel + 3 * axis, borderMin, borderMax); // 第三个正向样本。
+    blur.r += texelFetch(shadowTex, sampleCoord, 0).r * 0.054543; // 累加。
+    return blur; // 返回模糊后的云影贴图。
+}
+
 #endif

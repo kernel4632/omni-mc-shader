@@ -71,10 +71,7 @@ float gfx_rain_specular(vec3 pos, sampler2D noise_texture){
 
 // 读一张雨点动画贴图并转成带符号的法线，指数控制边缘锐度。
 vec2 gfx_rain_animation_normal(sampler2D rainTexture, vec2 coord, float exponent){
-	vec2 n = textureLod(rainTexture, coord, 0.0).rg; // 读红绿两通道。
-	n = n * vec2(2.0, -2.0) + vec2(-1.0, 1.0); // 零到一转成负一到一，并翻转纵轴。
-	n = pow(abs(n), vec2(exponent)) * sign(n); // 按指数压形状，符号保留。
-	return n; // 返回法线横纵分量。
+	return ogxRainAnimationNormal(rainTexture, coord, exponent); // 实现在生成库。
 }
 
 // 水下与水后雾：按距离做分波段衰减并向雾色靠拢，返回混合后的颜色。
@@ -92,47 +89,17 @@ vec3 gfx_water_fog(vec3 color, vec3 view_dir, float opaque_dist, float water_dis
 }
 
 // 波法线方块读取：把世界位置按折射方向投到七号画面左下角的波法线方块，解出世界空间法线。
-// 为什么先按折射方向移动坐标：光线进入水面会弯折，直接用世界横纵坐标会读到错误的波法线。
 vec3 gfx_waves_normal_from_tex(vec3 position, vec3 light_dir, sampler2D normal_texture, vec2 pixel_size,
 		vec2 screen_size, float max_resolution, float refract_ior){
-	vec3 refracted = refract(light_dir, vec3(0.0, 1.0, 0.0), 1.0 / refract_ior); // 阳光按水面折射率弯折。
-	vec2 coord = position.xz; // 先取水平坐标。
-	coord.x += position.y * refracted.x / refracted.y; // 按高度沿光线横移横坐标。
-	coord.y += position.y * refracted.z / refracted.y; // 按高度沿光线横移纵坐标。
-	coord *= 0.02; // 缩到波法线图的空间尺度。
-	coord = fract(coord); // 平铺到零到一。
-	coord *= pixel_size * min(screen_size.y, max_resolution); // 折算成方块里的像素坐标。
-	return gfx_DecodeNormal(textureLod(normal_texture, coord, 0.0).xy); // 从方块里读八面体编码法线。
+	return ogxWavesNormalFromTex(position, light_dir, normal_texture, pixel_size, screen_size, max_resolution, refract_ior); // 实现在生成库。
 }
 
 // 水体焦散：按折射后的阳光在波面上找汇聚点，得到明暗花纹。
-// 为什么用九次采样：三乘三抖动采样已经能把焦散花纹的噪点压到可接受，再多收益不明显。
-// `camera_position` 用来还原绝对世界坐标，`underwater` 决定是否往全亮靠。
 float gfx_water_caustics(vec3 world_pos, vec3 light_dir, vec3 camera_position, sampler2D normal_texture,
 		vec2 pixel_size, vec2 screen_size, float max_resolution, float refract_ior, vec2 dither,
 		bool underwater, float brightness, float power){
-	vec3 position = world_pos + camera_position; // 换成绝对世界坐标。
-	vec3 lookup_center = position + vec3(0.0, 1.0, 0.0); // 从水面上方一米处开始找波面。
-	vec3 refracted = refract(light_dir, vec3(0.0, -1.0, 0.0), 1.0 / 1.2); // 阳光向下穿过水面时弯折；原程序固定用一点二。
-	float caustics = 0.0; // 累计焦散强度。
-
-	for (float i = -1.0; i <= 1.0; i++){ // 三乘三抖动采样。
-		for (float j = -1.0; j <= 1.0; j++){
-			vec2 offset = dither + vec2(i, j); // 当前采样偏移。
-			vec3 lookup_point = lookup_center; // 这一处的波面查询点。
-			lookup_point.xz += offset * 0.1; // 按偏移横移。
-			vec3 waves_normal = gfx_waves_normal_from_tex(lookup_point, light_dir, normal_texture, pixel_size,
-				screen_size, max_resolution, refract_ior).xzy; // 读取波法线并换到竖直轴朝上的坐标。
-			vec3 refract_vector = refract(vec3(0.0, 1.0, 0.0), waves_normal.xyz, 1.0); // 竖直光线被波面折射后的方向。
-			vec3 collision = lookup_point - refract_vector / refract_vector.y; // 光线与水平面的交点。
-			collision -= position; // 相对当前位置。
-			float dist = dot(collision, collision) * 7.1; // 交点距离的平方，放大差距。
-			caustics += 1.0 - gfx_saturate(dist * 7.0); // 交点越近越亮，模拟光线汇聚。
-		}
-	}
-
-	float final_caustics = mix(caustics * 0.16 + 0.2, 1.0, 0.3 - 0.3 * float(underwater)); // 拼成焦散亮度，水下再往全亮靠一点。
-	return pow(final_caustics * brightness, power); // 按亮度倍率与对比指数重整。
+	return ogxWaterCaustics(world_pos, light_dir, camera_position, normal_texture, pixel_size, screen_size,
+		max_resolution, refract_ior, dither, underwater, brightness, power); // 实现在生成库。
 }
 
 #endif

@@ -25,7 +25,7 @@ MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳
 MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog",
            "shadow", "gi", "reflection", "post", "antialias",
            "weather", "surface", "voxel", "upscale", "parallax",
-           "planet", "accretion", "atmosphere_model")  # 阶段一二的核心模块、阶段三的九个效果模块与第二批迁移的独立模块。
+           "planet", "accretion", "atmosphere_model", "cloud_volume", "fog_volume")  # 阶段一二的核心模块、阶段三的九个效果模块与第二批迁移的独立模块。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
 DISPLAY = {
@@ -50,9 +50,12 @@ DISPLAY = {
     "planet": "行星",
     "accretion": "吸积盘",
     "atmosphere_model": "大气查表",
+    "cloud_volume": "体积云",
+    "fog_volume": "体积雾",
 }  # 每个生成文件头里的中文模块名，顺序与模块表一致。
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。
+# 三维纹理句柄排在最后，因为它们的名字不会与向量类型混淆。
 TYPE_WORDS = {
     "float4x4": "mat4", "float3x3": "mat3", "float2x2": "mat2",
     "float4": "vec4", "float3": "vec3", "float2": "vec2", "float": "float",
@@ -62,6 +65,7 @@ TYPE_WORDS = {
 }  # 三维纹理的句柄名也必须替换，体积云与体素追踪都靠它取格。
 
 # 逐项替换的语法差异；每项都配一条原因，方便新会话判断能不能扩展。
+# 表内每条都只做等价改写：改名字、改写法，不改算式与常数。
 LOWERINGS = (
     (re.compile(r"\bstatic\s+const\b"), "const", "GLSL 全局常量不需要 static，写成 static 会编译失败。"),
     (re.compile(r"\bSampler2DShadow\b"), "sampler2DShadow", "阴影比较采样的句柄名与 GLSL 不同，必须先换更长的名字。"),
@@ -74,6 +78,7 @@ LOWERINGS = (
 )
 
 # 纹理取像素的写法：`tex.Load(int3(pixel, level))` 与 GLSL 的 `texelFetch` 一一对应。
+# 生成器只认这一种取格写法，换别的形式会落到残留检查里报错。
 LOAD = re.compile(r"(\w+)\.Load\(\s*int3\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 坐标参数允许再套一层构造函数。
 
 # 带细节层级的采样：Slang 用成员方法，GLSL 用自由函数；参数里允许一层括号，够放构造函数。
@@ -89,6 +94,7 @@ LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|Sampler3D|Usampler3
 VERSION = re.compile(r"(?m)^\s*#version\b")
 
 # 模块之间的引用在 Slang 里按相对路径写，在光影里按根路径写。
+# 只允许引用清单内的模块，拼错或引用光影文件都会在生成阶段失败。
 INCLUDE = re.compile(r'^\s*#include\s+"([\w./-]+)\.slang"\s*$', re.MULTILINE)
 
 

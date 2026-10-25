@@ -286,4 +286,59 @@ float3 ogxWaterFog(float3 color, float3 viewDir, float opaqueDist, float waterDi
     return lerp(fogColor, color, visibility); // 用可见度在水雾色与场景色之间混合。
 }
 
+// 雨点动画法线：读一张雨点动画贴图并转成带符号的法线，指数控制边缘锐度。
+// 只取红绿两通道：这张贴图存的是法线的横纵分量，蓝色在写入端舍弃。
+float2 ogxRainAnimationNormal(Sampler2D rainTexture, float2 coord, float exponent)
+{
+    float2 n = rainTexture.SampleLevel(coord, 0.0).rg; // 读红绿两通道。
+    n = n * float2(2.0, -2.0) + float2(-1.0, 1.0); // 零到一转成负一到一，并翻转纵轴。
+    n = pow(abs(n), float2(exponent)) * sign(n); // 按指数压形状，符号保留。
+    return n; // 返回法线横纵分量。
+}
+
+// 波法线方块读取：把世界位置按折射方向投到七号画面左下角的波法线方块，解出世界空间法线。
+// 为什么先按折射方向移动坐标：光线进入水面会弯折，直接用世界横纵坐标会读到错误的波法线。
+float3 ogxWavesNormalFromTex(float3 position, float3 lightDir, Sampler2D normalTexture, float2 pixelSize,
+    float2 screenExtent, float maxResolution, float refractIor)
+{
+    float3 refracted = refract(lightDir, float3(0.0, 1.0, 0.0), 1.0 / refractIor); // 阳光按水面折射率弯折。
+    float2 coord = position.xz; // 先取水平坐标。
+    coord.x += position.y * refracted.x / refracted.y; // 按高度沿光线横移横坐标。
+    coord.y += position.y * refracted.z / refracted.y; // 按高度沿光线横移纵坐标。
+    coord *= 0.02; // 缩到波法线图的空间尺度。
+    coord = fract(coord); // 平铺到零到一。
+    coord *= pixelSize * min(screenExtent.y, maxResolution); // 折算成方块里的像素坐标。
+    return ogxDecodeNormal(normalTexture.SampleLevel(coord, 0.0).xy); // 从方块里读八面体编码法线。
+}
+
+// 水体焦散：按折射后的阳光在波面上找汇聚点，得到明暗花纹。
+// 为什么用九次采样：三乘三抖动采样已经能把焦散花纹的噪点压到可接受，再多收益不明显。
+// `cameraOffset` 用来还原绝对世界坐标，`underwater` 决定是否往全亮靠。
+float ogxWaterCaustics(float3 worldPos, float3 lightDir, float3 cameraOffset, Sampler2D normalTexture,
+    float2 pixelSize, float2 screenExtent, float maxResolution, float refractIor, float2 dither,
+    bool underwater, float brightness, float power)
+{
+    float3 position = worldPos + cameraOffset; // 换成绝对世界坐标。
+    float3 lookupCenter = position + float3(0.0, 1.0, 0.0); // 从水面上方一米处开始找波面。
+    float caustics = 0.0; // 累计焦散强度。
+    for (float i = -1.0; i <= 1.0; i++) // 三乘三抖动采样。
+    {
+        for (float j = -1.0; j <= 1.0; j++)
+        {
+            float2 offset = dither + float2(i, j); // 当前采样偏移。
+            float3 lookupPoint = lookupCenter; // 这一处的波面查询点。
+            lookupPoint.xz += offset * 0.1; // 按偏移横移。
+            float3 wavesNormal = ogxWavesNormalFromTex(lookupPoint, lightDir, normalTexture, pixelSize,
+                screenExtent, maxResolution, refractIor).xzy; // 读取波法线并换到竖直轴朝上的坐标。
+            float3 refractVector = refract(float3(0.0, 1.0, 0.0), wavesNormal.xyz, 1.0); // 竖直光线被波面折射后的方向。
+            float3 collision = lookupPoint - refractVector / refractVector.y; // 光线与水平面的交点。
+            collision -= position; // 相对当前位置。
+            float dist = dot(collision, collision) * 7.1; // 交点距离的平方，放大差距。
+            caustics += 1.0 - ogxSaturate(dist * 7.0); // 交点越近越亮，模拟光线汇聚。
+        }
+    }
+    float finalCaustics = lerp(caustics * 0.16 + 0.2, 1.0, 0.3 - 0.3 * float(underwater)); // 拼成焦散亮度，水下再往全亮靠一点。
+    return pow(finalCaustics * brightness, power); // 按亮度倍率与对比指数重整。
+}
+
 #endif
