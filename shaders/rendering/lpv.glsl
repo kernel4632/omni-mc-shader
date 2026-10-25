@@ -36,7 +36,7 @@ void main(){
 // ========================= 阶段二 shadowcomp：每帧一步传播 =========================
 #ifdef OMNI_LPV_SHADOWCOMP // 只有本阶段编译下面的入口。
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; // 三维工作组，逐个填体积格。
-const ivec3 workGroups = ivec3(32, 32, 32); // ????????????????????????????????????? main ??????
+const ivec3 workGroups = ivec3(32, 32, 32); // 每轴三十二组，覆盖边长上限二百五十六格；超出边长的组由 main 里的判断直接退出。
 
 #if OMNI_LPV_ENABLED && defined IRIS_FEATURE_CUSTOM_IMAGES // 关闭或缺能力时 main 保持空实现。
 

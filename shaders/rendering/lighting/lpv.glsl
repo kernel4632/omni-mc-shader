@@ -49,6 +49,8 @@
 #include "/common/math.glsl"
 // 颜色转换与饱和度矩阵放在通用库。
 #include "/gfx/color.glsl"
+// 体积光的取样、编码、坐标映射与边缘淡出都在通用库，本文件只保留纹理与体素接线。
+#include "/omni-gfx/lpv.glsl"
 
 // --- 体积常量：边长、半边、编码范围 ---
 const uint omniLpvSide = uint(exp2(float(OMNI_LPV_SIZE))); // 每边单元数，六十四、一百二十八或二百五十六。
@@ -67,16 +69,15 @@ vec3 omniHsvToRgb(vec3 c){ // 色相、饱和度、明度转回颜色。
 vec3 omniSrgbToLinear(vec3 s){ // sRGB 到线性，照 Eclipse 的近似多项式，供方块光表复原颜色。
 	return gfx_srgb_to_linear(s); // 多项式在通用库。
 }
-float omniLpvCurve(float v){ return v * v; } // 体积光的曲线，照 Eclipse `lpv_render.glsl:5` 的非蒙版分支。
 
 // --- 坐标映射：相机相对位置到体积坐标与体素下标 ---
 // 体积格对齐到整数世界格：相机相对位置加 `fract(cameraPosition)` 得到“去掉相机所在格后的世界坐标”，
 // 再加半边把它放到体积中心；这样玩家走动时体积按整格平移，不会拖影。
-vec3 omniLpvPosition(vec3 playerPos){ return playerPos + fract(cameraPosition) + omniLpvHalf; }
+vec3 omniLpvPosition(vec3 playerPos){ return ogxLpvPosition(playerPos, fract(cameraPosition), omniLpvHalf.x); }
 // 体素下标：顶点阶段写入用，和 `omniLpvPosition` 同一套对齐，取整后就是单元编号。
 ivec3 omniVoxelIndex(vec3 playerPos){ return ivec3(floor(omniLpvPosition(playerPos))); }
 // 归一化坐标：片元采样用，单元中心落在零到一之间，硬件做三线性插值。
-vec3 omniLpvUvw(vec3 lpvPos){ return lpvPos / float(omniLpvSide); }
+vec3 omniLpvUvw(vec3 lpvPos){ return ogxLpvUvw(lpvPos, float(omniLpvSide)); }
 // 体素下标是否在体积内；越界写会被丢弃，与 Eclipse `SetVoxelBlock` 一致。
 bool omniVoxelInside(ivec3 cell){ return all(greaterThanEqual(cell, ivec3(0))) && all(lessThan(cell, ivec3(int(omniLpvSide)))); }
 
@@ -148,23 +149,17 @@ uint omniLpvDroppedItemVoxelId(int item){
 #if !defined(OMNI_COMPUTE) && OMNI_LPV_ENABLED && defined(IRIS_FEATURE_CUSTOM_IMAGES)
 uniform sampler3D omniLpvTex1; // 偶数帧写入的一张体积图，片元只读。
 uniform sampler3D omniLpvTex2; // 奇数帧写入的另一张，交替读取。
-// 读一个体积样本并解码：先把存下的 RGB 当 HSV 还原，再按 Eclipse 的编码曲线缩放。
+// 读一个体积样本并解码：先把存下的 RGB 当 HSV 还原，再按编码曲线缩放。
 vec4 omniLpvSample(vec3 lpvPos){
 	vec3 uvw = omniLpvUvw(lpvPos); // 归一化坐标。
 	vec4 sample = (frameCounter % 2) == 0
 		? textureLod(omniLpvTex1, uvw, 0.0) // 偶数帧读偶数帧写的那张。
 		: textureLod(omniLpvTex2, uvw, 0.0); // 奇数帧反过来，保证读到完整结果。
-	vec3 hsv = omniRgbToHsv(sample.rgb); // 把存储值当颜色再转 HSV，是 Eclipse 的既有解码方式。
-	hsv.z = omniLpvCurve(hsv.b) * omniLpvBlockSkyRange.x; // 按亮度的平方放大，得到最终能量。
-	sample.rgb = omniHsvToRgb(hsv); // 还原成颜色。
-	sample.rgb = clamp(sample.rgb / 15.0, 0.0, 1.0); // 归一到零到一，照 Eclipse。
-	return sample; // 交回彩色方块光与天光。
+	return ogxLpvDecodeSample(sample, omniLpvBlockSkyRange); // 解码算式在通用库，本文件只选纹理。
 }
 // 体积边缘淡出：越靠边越把体积光压回去，避免体积边界出现硬边。
 float omniLpvRangeFalloff(vec3 lpvPos){
-	vec3 cubicRadius = clamp(min((vec3(float(omniLpvSide)) - 1.0 - lpvPos) / omniLpvFadeLength, lpvPos / omniLpvFadeLength), 0.0, 1.0); // 到六个面的距离比。
-	float falloff = cubicRadius.x * cubicRadius.y * cubicRadius.z; // 三轴相乘，角上最小。
-	return 1.0 - pow(1.0 - pow(falloff, 1.5), 3.0); // 再压一次曲线，中心满值、边缘平滑归零。
+	return ogxLpvRangeFalloff(lpvPos, float(omniLpvSide), omniLpvFadeLength); // 三轴距离比与曲线都在通用库。
 }
 // 把体积光混回表面的方块光：返回替换后的方块光，供合成零号使用。
 // 参数 `blockLight` 是原版方块光算出的颜色，`playerPos` 是相机相对世界位置，`worldNormal` 是世界法线。
@@ -173,7 +168,7 @@ vec3 omniLpvApply(vec3 blockLight, vec3 playerPos, vec3 worldNormal){
 	vec3 lpvPos = omniLpvPosition(playerPos) + normalOffset; // 偏移后的体积坐标。
 	vec4 sample = omniLpvSample(lpvPos); // 读出彩色方块光与天光。
 	float falloff = omniLpvRangeFalloff(lpvPos); // 体积边缘淡出。
-	return mix(blockLight, sample.rgb, saturate(falloff * OMNI_LPV_STRENGTH)); // 用淡出把原版方块光换成体积光。
+	return ogxLpvApply(blockLight, sample, falloff, OMNI_LPV_STRENGTH); // 混合权重在通用库。
 }
 
 // --- 手持灯光：把手中光源的颜色与范围从光表取出来，照亮空气与水下雾 ---
@@ -336,15 +331,11 @@ uvec2 omniLpvBlockData(uint id){
 vec4 omniLpvReadAt(ivec3 coord){
 	if (any(lessThan(coord, ivec3(0))) || any(greaterThanEqual(coord, ivec3(int(omniLpvSide))))) return vec4(0.0); // 越界当没有光。
 	vec4 sample = (frameCounter % 2) == 0 ? imageLoad(omniLpv2, coord) : imageLoad(omniLpv1, coord); // 读上一帧写的那张。
-	vec4 hsvSky = vec4(omniRgbToHsv(sample.rgb), sample.a); // 拆出颜色与天光。
-	hsvSky.zw = exp2(hsvSky.zw * omniLpvBlockSkyRange) - 1.0; // 反解对数编码，得到饱和度与天光。
-	return vec4(omniHsvToRgb(hsvSky.xyz), hsvSky.w); // 还原成颜色加天光。
+	return ogxLpvDecode(sample, omniLpvBlockSkyRange); // 对数反解与颜色还原在通用库。
 }
 // 把传播结果按同一套编码写回本帧的一张体积图，照 Eclipse `shadowcomp.csh:164`。
 vec4 omniLpvEncode(vec4 value){
-	vec4 hsvSky = vec4(omniRgbToHsv(value.rgb), value.a); // 拆出颜色与天光。
-	hsvSky.zw = log2(hsvSky.zw + 1.0) / omniLpvBlockSkyRange; // 对数编码，压住动态范围。
-	return vec4(omniHsvToRgb(hsvSky.xyz), hsvSky.w); // 交回可存进八位图的值。
+	return ogxLpvEncode(value, omniLpvBlockSkyRange); // 对数编码在通用库，本文件不重复算式。
 }
 // 读一个方块编号的光表项；越界或没登记时按不透光的空项处理。
 uvec2 omniLpvBlockRow(uint blockId){

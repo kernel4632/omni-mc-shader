@@ -15,6 +15,10 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     acc += ogxAces(linearColor, true) + ogxAces(linearColor, false);  // 两条 ACES 分支。
     acc += ogxAgx(linearColor, 13.0, true) + ogxAgx(linearColor, 13.0, false);  // 两条 AgX 分支。
     acc += ogxTonemapNone(linearColor);  // 无压缩路径。
+    acc += ogxTonemapHejl(linearColor) + ogxTonemapHable(linearColor);  // 两条胶片曲线。
+    acc += ogxTonemapReinhard(linearColor) + ogxTonemapLottes(linearColor);  // 简单曲线与肩部曲线。
+    acc += ogxTonemapUchimura(linearColor) + ogxTonemapAcesFilm(linearColor);  // 三段拼接曲线与经济版电影曲线。
+    acc += ogxLinearToSrgb(linearColor);  // 标准 sRGB 分段编码。
     acc += ogxBlackBar(float2(0.5, 0.5), 1.7, 2.35) * linearColor;  // 黑边判断返回标量。
     acc += ogxPurkinje(linearColor, 0.5, 1.0);  // 暗视觉偏移。
     acc += ogxWhiteBalance(linearColor, float3(1.0, 0.98, 0.95));  // 白平衡。

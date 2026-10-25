@@ -36,6 +36,29 @@ float ogxHash12(vec2 p)
     return fract((p3.x + p3.y) * p3.z); // 零到一的伪随机数。
 }
 
+// 白噪声：两个坐标点乘一组无理数后取正弦，成本只有一个点乘与一次正弦。
+// 为什么不用哈希：需要连续坐标上的随机值时，正弦哈希不会在整数格上出现明显的方块。
+float ogxWhiteNoise(vec2 coord)
+{
+    return fract(sin(dot(coord, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// 随时间滚动的白噪声：每帧给坐标加一个小偏移，静止画面上不会留下固定花纹。
+float ogxWhiteNoiseTemporal(vec2 coord, float time)
+{
+    return ogxWhiteNoise(coord + 0.07 * fract(time));
+}
+
+// 三角分布噪声：把均匀分布先开方再减符号，取值集中在零附近，两端衰减。
+// 抖动要的是这种“多数很小、少数较大”的分布，均匀分布会让画面出现均匀的沙粒感。
+float ogxTriangleNoise(vec2 coord, float time)
+{
+    float center = ogxWhiteNoiseTemporal(coord, time) * 2.0 - 1.0;
+    float shaped = center * inversesqrt(max(abs(center), 1e-10));
+    shaped = max(-1.0, shaped);
+    return shaped - sign(center);
+}
+
 // 三维值噪声：八个格点各取哈希，再按平滑曲线插值。
 float ogxValueNoise3(vec3 p)
 {

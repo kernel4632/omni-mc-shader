@@ -98,7 +98,7 @@ def collect() -> dict:
             report["generatedTotal"] += nonempty
         elif name == "第三方":
             report["thirdPartyTotal"] += nonempty
-    report["handwrittenBudget"] = 8000  # 手写核心上限；第二批迁移把天气、表面、视差、行星、吸积盘、大气查表、体积云、体积雾、体素、放大与后期眩光整体迁入，按实际规模上调，见计划文档。
+    report["handwrittenBudget"] = 8400  # 手写核心上限；第三批补上光传播体积模块、采样过滤与八处纯计算缺口，按实际规模上调，见计划文档。
     return report
 
 

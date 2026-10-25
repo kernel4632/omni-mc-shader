@@ -25,7 +25,8 @@ MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳
 MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog",
            "shadow", "gi", "reflection", "post", "antialias",
            "weather", "surface", "voxel", "upscale", "parallax",
-           "planet", "accretion", "atmosphere_model", "cloud_volume", "fog_volume")  # 阶段一二的核心模块、阶段三的九个效果模块与第二批迁移的独立模块。
+           "planet", "accretion", "atmosphere_model", "cloud_volume", "fog_volume",
+           "lpv")  # 阶段一二的核心模块、阶段三的九个效果模块、第二批迁移的独立模块与第三批的光传播体积模块。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
 DISPLAY = {
@@ -52,6 +53,7 @@ DISPLAY = {
     "atmosphere_model": "大气查表",
     "cloud_volume": "体积云",
     "fog_volume": "体积雾",
+    "lpv": "光传播体积",
 }  # 每个生成文件头里的中文模块名，顺序与模块表一致。
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。
@@ -86,12 +88,15 @@ LOAD3D = re.compile(r"(\w+)\.Load\(\s*int4\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*(
 # 带细节层级的采样：Slang 用成员方法，GLSL 用自由函数；参数里允许一层括号，够放构造函数。
 SAMPLE_LEVEL = re.compile(r"(\w+)\.SampleLevel\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 参数里允许一层括号，够放构造函数。
 
+# 带屏幕导数的采样：GLSL 用 `textureGrad`，两个导数决定各向异性层级。
+SAMPLE_GRAD = re.compile(r"(\w+)\.SampleGrad\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*,\s*([^(),]+?)\s*\)")  # 坐标、横纵两个方向导数。
+
 # 阴影比较采样：GLSL 把比较值塞进第三个分量，Slang 单独作为参数。
 SAMPLE_CMP = re.compile(r"(\w+)\.SampleCmpLevelZero\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 两参数是纹理坐标与比较值。
 
 # 生成文件里不能残留的 Slang 写法；漏掉一种就说明转换表需要补充。
 # 这里故意连注释一起检查，宁可多报也不要让半转换的代码进入光影包。
-LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|Sampler3D|Usampler3D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(|\.SampleLevel\s*\(|\.SampleCmpLevelZero\s*\(")  # 成员采样与残留类型名都要拦住。
+LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|Sampler3D|Usampler3D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(|\.SampleLevel\s*\(|\.SampleGrad\s*\(|\.SampleCmpLevelZero\s*\(")  # 成员采样与残留类型名都要拦住。
 
 # 光影会把库嵌进自己的程序，库文件不能再声明语言版本。
 VERSION = re.compile(r"(?m)^\s*#version\b")
@@ -132,6 +137,7 @@ def _lower_text(text: str) -> str:
     text = LOAD3D.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 三维取格先换，避免 `int4` 被当成残留写法。
     text = LOAD.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 再换二维取格，此时 `int3` 还没改名。
     text = SAMPLE_CMP.sub(lambda m: f"textureLod({m[1]}, vec3({m[2]}, {m[3]}), 0.0)", text)  # 比较采样先展开成三分量坐标。
+    text = SAMPLE_GRAD.sub(lambda m: f"textureGrad({m[1]}, {m[2]}, {m[3]}, {m[4]})", text)  # 带导数的采样换成 GLSL 自由函数。
     text = SAMPLE_LEVEL.sub(lambda m: f"textureLod({m[1]}, {m[2]}, {m[3]})", text)  # 带层级采样换成 GLSL 自由函数。
     text = _replace_types(text)  # 类型名随后统一。
     for pattern, replacement, _reason in LOWERINGS:  # 逐项处理函数名与关键字。

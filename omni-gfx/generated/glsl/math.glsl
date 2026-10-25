@@ -55,6 +55,56 @@ float ogxFastSqrt(float x) { return uintBitsToFloat(uint(0x1fbd1df5 + (floatBits
 // 把值从一段区间线性映射到零到一，再夹紧；区间外不会越界。
 float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); }
 
+// 把值从一段区间线性映射到另一段区间，两端都不夹紧；目标区间可以反向。
+// 为什么保留不夹紧的版本：动画曲线与雾密度需要外插，提前夹紧会把远处的值压成一团。
+float ogxRemap(float x, float minOrigin, float maxOrigin, float minNew, float maxNew)
+{
+    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew;
+}
+
+// 三分量版本的不夹紧映射，逐通道用同一组端点。
+vec3 ogxRemap(vec3 x, vec3 minOrigin, vec3 maxOrigin, vec3 minNew, vec3 maxNew)
+{
+    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew;
+}
+
+// 三分量里最小的一个，等价于先两两取小再合并。
+float ogxMinVec3(vec3 value) { return min(value.x, min(value.y, value.z)); }
+
+// 三分量里最大的一个，和上一函数配对使用。
+float ogxMaxVec3(vec3 value) { return max(value.x, max(value.y, value.z)); }
+
+// 黄金角：圆周除以黄金比的平方，圆盘点列靠它错开方向，相邻两个点不会撞在一起。
+const float OGX_GOLDEN_ANGLE = 2.39996322973;
+
+// 圆盘内均匀分布的第 `index` 个采样点：角度按黄金角步进，半径取平方根保证面积均匀。
+vec2 ogxCircleMap(float index, float count)
+{
+    float angle = index * count * OGX_GOLDEN_ANGLE;
+    return vec2(sin(angle), cos(angle)) * sqrt(index);
+}
+
+// 把零到一的样本序号变成圆盘上的螺旋采样点，给环境光遮蔽与反射做低差异分布。
+// 为什么先把下限抬到一点五毫：零半径的点全部重叠在圆心，等于白算一次采样。
+vec2 ogxSpiralSample(int samples, int totalSamples, float rotation, float xi)
+{
+    xi = max(xi, 0.0015);
+    float alpha = float(samples + xi) * (1.0 / float(totalSamples));
+    float theta = OGX_PI * 2.0 * alpha * rotation;
+    return vec2(sqrt(xi) * sin(theta), sqrt(xi) * cos(theta));
+}
+
+// 粗糙高光的方向估算：把半程向量的斜率换成固定的螺旋步进。
+// 为什么用螺旋：没有真实法线分布时，按样本序号铺满锥面比随机抖动更不容易出闪点。
+vec3 ogxRoughSpecularDirection(float index, float alpha2, int steps)
+{
+    float x = (alpha2 * index) / (1.0 - index);
+    float y = index * float(steps) * 4096.0 * OGX_GOLDEN_ANGLE;
+    float c = inversesqrt(x + 1.0);
+    float s = sqrt(x) * c;
+    return vec3(cos(y) * s, sin(y) * s, c);
+}
+
 // 单位化向量，长度极小时用一个小分母兜底，避免着色点出现除零后的无穷值。
 // 比直接除以长度多一点开销，但水面与反射会在掠射角读到极短向量，必须兜底。
 vec3 ogxNormalize(vec3 vector) { return vector * inversesqrt(max(dot(vector, vector), 1e-10)); }

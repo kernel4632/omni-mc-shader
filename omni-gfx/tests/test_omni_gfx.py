@@ -142,6 +142,14 @@ class OmniGfxTests(unittest.TestCase):
         self.assertIn("ogxRayleighPhase(", library)  # 瑞利相函数来自生成库。
         self.assertIn("ogxMiePhase(", library)  # 米氏相函数来自生成库。
 
+    def test_minecraft_lpv_uses_generated_module(self):
+        """光传播体积的取样、编码与合成必须来自生成库，避免两套算式各自漂移。"""
+        text = (ROOT / "shaders" / "rendering" / "lighting" / "lpv.glsl").read_text(encoding="utf-8")  # 真实消费者。
+        self.assertIn('#include "/omni-gfx/lpv.glsl"', text)  # 生成库必须在引用边界内。
+        self.assertIn("ogxLpvDecodeSample(", text)  # 片元取样解码来自生成库。
+        self.assertIn("ogxLpvEncode(", text)  # 传播写入编码来自生成库。
+        self.assertIn("ogxLpvApply(", text)  # 混回方块光的合成来自生成库。
+
 
 if __name__ == "__main__":
     unittest.main()  # 允许直接运行本文件。

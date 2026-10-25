@@ -15,5 +15,6 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     acc += float3(ogxValueNoise3(p), ogxValueNoise2(uv), 0.0); // 两种值噪声。
     acc += float3(ogxFbm2(uv, 4), ogxFbm3(p, 3), 0.0); // 两种分形。
     acc += ogxWarp3(p, 0.5); // 域扭曲。
+    acc += float3(ogxWhiteNoise(uv), ogxWhiteNoiseTemporal(uv, t), ogxTriangleNoise(uv, t)); // 白噪声的三种用法。
     return float4(acc, 1.0); // 有输出即可。
 }

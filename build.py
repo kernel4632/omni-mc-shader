@@ -320,30 +320,29 @@ def configuration() -> tuple[dict, list, dict]:
 
     选项与预设边界由配置模块检查；这里不写文件，便于检查、打包和测试共用同一结果。
     """
-    found, groups = menu.scan(SHADERS)  # ?????????
-    profiles = menu.presets(ROOT / "presets", found)  # ?????????
-    files = menu.generated(SHADERS, found, groups, profiles)  # ???????????
-    menu_path = SHADERS / "shaders.properties"  # ??????????????????
-    files[menu_path] = files[menu_path] + program_switches()  # ?????????????
-    return found, profiles, files  # ??????????????
+    found, groups = menu.scan(SHADERS)  # 先扫描选项、分组与预设，后面全部复用这一份结果。
+    profiles = menu.presets(ROOT / "presets", found)  # 读取预设，并核对它们只引用已登记的选项。
+    files = menu.generated(SHADERS, found, groups, profiles)  # 生成菜单与翻译文本，此时还不写磁盘。
+    menu_path = SHADERS / "shaders.properties"  # 加载器设置的正式位置。
+    files[menu_path] = files[menu_path] + program_switches()  # 把程序开关追加到同一份设置文件。
+    return found, profiles, files  # 交回扫描结果与待写文件。
 
 
 def program_switches() -> str:
-    """??????????????????
+    """返回按选项控制程序是否编译的开关行。
 
-    ???????????????????????????????????????
-    ?????????????????????????????????????
-    ???????????????????????????
+    计算入口在对应功能关闭时不该被加载器执行，这里把它们的开关接到选项宏上；
+    加载器把 `enabled` 读成条件，条件不成立就不编译该程序。
     """
     lines = [
-        "# " + "".join("\\u%04x" % ord(ch) for ch in "\u8ba1\u7b97\u7a0b\u5e8f\u53ea\u5728\u5bf9\u5e94\u529f\u80fd\u5f00\u542f\u65f6\u7f16\u8bd1"),  # ????????????? ASCII?
+        "# " + "".join("\\u%04x" % ord(ch) for ch in "计算程序只在对应功能开启时编译"),  # 说明写成 ASCII 转义，设置文件编码不影响加载器。
     ]
-    for dimension in ("world0", "world1", "world-1"):  # ??????????
+    for dimension in ("world0", "world1", "world-1"):  # 三个维度都要登记。
         lines.append(f"program.{dimension}/setup.enabled=OMNI_LPV_ENABLED")
         lines.append(f"program.{dimension}/shadowcomp.enabled=OMNI_LPV_ENABLED")
-        for stage in ("prepare", "prepare1", "prepare2"):  # ??????????
+        for stage in ("prepare", "prepare1", "prepare2"):  # 三个准备阶段只在波浪模拟开启时编。
             lines.append(f"program.{dimension}/{stage}.enabled=OMNI_WAVE_SIMULATION")
-    return "\n".join(lines) + "\n"  # ?????????????????????
+    return "\n".join(lines) + "\n"  # 结尾留一个换行，追加到设置文件时不会与下一段粘连。
 
 # --- 生成入口行：把阶段、程序与维度宏拼成薄入口文本 ---
 def _draw_entry(name: str, rendering: str, stage: str, defines: list[str],
@@ -638,7 +637,7 @@ def check_loader_properties() -> None:
     方块、实体与物品的编号就全部对不上。这里在构建时直接拒绝，不让它再进游戏才暴露。
     """
     for name in ("block.properties", "entity.properties", "item.properties"):  # 这三个文件由加载器的编号解析器读取。
-        path = SHADERS / name  # ????????????
+        path = SHADERS / name  # 编号表在光影根目录，文件名由上方清单固定。
         data = path.read_bytes()  # 按字节判断，避免先解码再漏掉坏字节。
         bad = [index for index, byte in enumerate(data) if byte > 127]  # 任何非 ASCII 字节都不行。
         if bad:

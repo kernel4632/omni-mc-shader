@@ -22,6 +22,7 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `lerp` | `mix` | 插值函数名不同 |
 | `asfloat` / `asuint` / `asint` | `uintBitsToFloat` / `floatBitsToUint` / `floatBitsToInt` | 按位重解释函数名不同 |
 | `tex.Load(int3(p, l))` | `texelFetch(tex, p, l)` | 显式取像素接口不同 |
+| `tex.SampleGrad(uv, du, dv)` | `textureGrad(tex, uv, du, dv)` | 带屏幕导数的采样，用于旋转网格超采样 |
 
 生成器遇到表外语法会直接报错，不静默复制。`tests/test_omni_gfx.py` 会检查生成文本没有残留 Slang 写法、没有 `#version`、没有宿主符号。
 
@@ -52,6 +53,7 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `atmosphere_model.slang` | 预计算大气的坐标、透过率、散射、辐照度与简化散射 | `atmosphere`、`math`、`color` |
 | `cloud_volume.slang` | 体积云形状、光照、步进、闪电与云影贴图 | `cloud`、`math` |
 | `fog_volume.slang` | 体积雾密度、光照吸收、步进、暴风与水下光柱 | `fog`、`weather`、`shadow`、`water`、`color` |
+| `lpv.slang` | 光传播体积的取样解码、写入编码、亮度曲线、边缘淡出与合成 | `color`、`math` |
 
 规则：
 
@@ -108,6 +110,7 @@ SPIR-V 由 `tests/probes/*.slang` 编译，探针调用每个模块的全部公�
 - 阴影已经做到三级级联与 PCSS；全局光有地平线遮蔽、反射阴影图反弹与两级滤波；反射有屏幕空间追踪与九点降噪；抗锯齿有时间重投影。
 - 时间累积用在天空与云、遮蔽历史与抗锯齿历史三处；动态分辨率与专用升采样器还没有接入。
 - 需要纹理过滤时，先设计显式的采样器与纹理坐标接口，再迁移双三次函数；当前效果模块只收纯计算，反射色由调用方传入。
+- 第三批已经把平滑过滤、最近点取样与旋转网格超采样做成 `sampling` 的显式接口（导数由调用方传入），因此这条扩展点只剩“接到光影选项”这一步。
 - SPIR-V 从“模块探针”升级为“完整演示管线”时，把顶点/片元入口写成 Slang，并保留 GLSL 生成路径。
 - Minecraft 的接入点目前是 `rendering/fog/landscattering.glsl` 的相函数：它引入生成的 `atmosphere` 模块并调用 `ogxRayleighPhase` / `ogxMiePhase`，数值与旧实现逐项一致；`python build.py compile` 覆盖全部程序。
 
@@ -118,6 +121,7 @@ SPIR-V 由 `tests/probes/*.slang` 编译，探针调用每个模块的全部公�
 规则补充：
 
 - 算法模块只收纯计算；需要按步回调宿主的地方（雾照明、水下手持光、反射主流程的天空与体素钩子）用钩子宏或直接留在适配层，并在文件头写明原因。
+- 不能用作形参名的保留字：`sample` 在 GLSL 4.0 以后是插值限定符，430 的计算程序会直接报语法错误，统一改叫 `texel` 或 `value`。
 - 切线空间转换用三个显式点乘（`ogxParallaxToTangent`），矩阵乘向量用 `ogxMatrix3MulPoint` / `ogxMatrixMulPoint`，向量乘矩阵用 `ogxApplyRows`；不再写 `v * M`，因为 Slang 不支持这种写法，而 GLSL 与 Slang 的行列顺序又不同。
 - 三维纹理用 `Sampler3D`，取格写 `tex.Load(int3(pixel, level))`；生成器把它降级成 `texelFetch`。
 - 结构体字段沿用旧下划线命名，宿主逐字段赋值不用改；新写的结构体用驼峰命名。

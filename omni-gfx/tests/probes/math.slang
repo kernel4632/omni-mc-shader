@@ -19,6 +19,10 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
 
     acc += ogxSaturate(t) + ogxLuminance(n) + ogxSign(t) + ogxFastSqrt(t);  // 标量与亮度基础函数。
     acc += ogxRemapSaturate(t, 0.0, 1.0) + ogxAtan2(uv) + ogxFastAcos(t);  // 区间映射与三角函数近似。
+    acc += ogxRemap(t, 0.0, 1.0, 2.0, 3.0) + ogxMinVec3(n) + ogxMaxVec3(n);  // 不夹紧映射与三分量极值。
+    acc += ogxRemap(n, float3(0.0), float3(1.0), float3(2.0), float3(3.0));  // 向量版的不夹紧映射。
+    acc += float3(ogxCircleMap(t, 8.0), ogxSpiralSample(3, 16, 1.0, t).x);  // 圆盘点列与螺旋采样。
+    acc += ogxRoughSpecularDirection(t, 0.4, 8);  // 粗糙高光的螺旋方向。
     acc += ogxLinearToGamma(n) + ogxGammaToLinear(n) + ogxLinearToCurve(t) + ogxCurveToLinear(t);  // 伽马与曲线。
     acc += ogxLinearToCurve3(n) + ogxCurveToLinear3(n);  // 向量曲线。
     float packed8 = ogxPack2x8(uv);  // 八位打包。

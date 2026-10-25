@@ -17,6 +17,8 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 
 // 亮度权重、四次方根编码与区间重映射来自数学模块。
 #include "math.slang"
+// 抖动要用噪声模块里的三角分布噪声。
+#include "noise.slang"
 
 // 十三样本降采样：中心小、四角大，权重和为四，输出乘四分之一保持亮度。
 float3 ogxBloomDownsample(Sampler2D source, float2 coord, float2 texel)
@@ -137,6 +139,34 @@ float3 ogxFilmGrain(float3 color, float2 coord, float time, float strength)
 float ogxCocRadius(float focus, float depth, float aperture)
 {
     return abs(aperture * (depth - focus) / (depth * focus)); // 薄透镜近似。
+}
+
+// 浮点输出抖动：按目标格式的尾数位数，把三角噪声缩放到相邻两个可表示值之间。
+// 为什么按指数缩放：浮点数的间隔随数值变大，固定步长会在大值处看不见、小值处过重。
+float3 ogxDitherFloat(float3 color, float2 coord, float time, float3 mantissaBits)
+{
+    float dither = ogxTriangleNoise(coord, time);
+    float3 exponent = floor(log2(max(color, float3(1e-20))));
+    return color + dither * exp2(-mantissaBits) * exp2(exponent);
+}
+
+// 整数输出抖动：按目标格式的小数位数取固定步长，适合十六位或十位定点的中间画面。
+float3 ogxDitherFixed(float3 color, float2 coord, float time, float bits)
+{
+    return color + ogxTriangleNoise(coord, time) * exp2(-bits);
+}
+
+// 多边形光圈：把散焦偏移换成到多边形边的归一化距离，零在中心、一到边界。
+// 为什么用角度求半径：多边形每条边的半径随角度变化，直接取到边的距离比圆形核更接近真实光圈。
+float ogxBokehAperture(float2 offset, int blades, float rotation)
+{
+    float2 p = float2(offset.x * cos(rotation) - offset.y * sin(rotation), offset.x * sin(rotation) + offset.y * cos(rotation)); // 先按光圈转角旋转。
+    float radius = length(p); // 到中心的距离。
+    if (radius < 1e-6) return 1.0; // 中心点始终在光圈内。
+    float angle = ogxAtan2(p) + OGX_PI; // 角度换到零到二圆周率。
+    float sector = OGX_PI * 2.0 / float(max(blades, 3)); // 每条边对应的圆心角。
+    float edge = cos(sector * 0.5) / max(cos(ogxMod(angle, sector) - sector * 0.5), 1e-4); // 该角度上正多边形的半径。
+    return ogxSaturate(radius / edge); // 归一到零到一，边界之外大于一。
 }
 
 // 景深镜头倍数：焦距平方乘口径倍数，焦距与光圈取基准值时正好为一。

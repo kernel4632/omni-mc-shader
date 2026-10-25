@@ -49,6 +49,13 @@ OgxCloudLayer ogxCloudLayerDefault()
     return layer; // 返回可直接修改的默认值。
 }
 
+// 降雨对云量的加成：雨与雷暴各叠一成，超过一的部分截掉。
+// 为什么单独一个函数：降雨强度与雷暴强度来自天气，云层本身不知道下雨，加成必须在边界一次算完。
+float ogxCloudRainDensity(float density, float rain, float thunder)
+{
+    return min(density + rain * 0.1 + thunder * 0.1, 1.0);
+}
+
 // 云密度：低频云量图决定哪里长云，域扭曲与高度剪切打断重复。
 float ogxCloudDensity(OgxCloudLayer layer, vec3 position, bool withDetail)
 {

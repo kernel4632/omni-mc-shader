@@ -19,5 +19,6 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     acc += ogxCloudLight(layer, float3(uv, 0.18), sunDirection, 4) * direction; // 云光照。
     acc += ogxCloudMarch(layer, float3(0.0, 0.03, 0.0), direction, sunDirection, sunColor, sunColor * 0.2, t, 12).rgb; // 云步进。
     acc += ogxCloudShadow(layer, float3(uv, 0.02), sunDirection) * direction; // 云影。
+    acc += ogxCloudRainDensity(t, 0.5, 0.2) * direction; // 降雨对云量的加成。
     return float4(acc, 1.0); // 有输出即可。
 }

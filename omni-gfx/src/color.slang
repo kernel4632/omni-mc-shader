@@ -111,6 +111,84 @@ float3 ogxAgx(float3 color, float ev, bool abney)
 // 无压缩：只做伽马编码，保留全部高光，代价是容易硬剪切。
 float3 ogxTonemapNone(float3 color) { return pow(color, float3(1.0 / 2.2)); }
 
+// 线性到标准 sRGB 的分段编码：暗部走直线，亮部走二点四分之一幂，与二点二近似不同。
+float3 ogxLinearToSrgb(float3 color)
+{
+    float3 low = color * 12.92; // 暗部直线段。
+    float3 high = 1.055 * pow(ogxSaturate(color), float3(1.0 / 2.4)) - 0.055; // 亮部幂曲线。
+    return lerp(low, high, step(float3(0.0031308), color)); // 按阈值逐通道选择，接缝处两侧取值相同。
+}
+
+// 经济版电影曲线：一条有理式，成本低于 ACES 拟合，观感更硬、更亮。
+float3 ogxTonemapAcesFilm(float3 color)
+{
+    float3 x = color * 0.9; // 先压一点曝光。
+    return (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.95) + 0.12); // 分子分母都是二次式。
+}
+
+// `Hejl` 2015 胶片曲线：先加一点偏移让纯黑离开零，再用两个有理式的比值压肩部。
+float3 ogxTonemapHejl(float3 color)
+{
+    float4 vh = float4(color * 0.85, 3.0); // 三个颜色通道加一个白点参考。
+    float4 va = 1.75 * vh + 0.05; // 肩部斜率随亮度增加。
+    float4 vf = ((vh * va + 0.004) / (vh * (va + 0.55) + 0.0491)) - 0.0821 + 0.000633604888; // 有理式压缩，末尾常数把黑点抬回零。
+    return vf.xyz / vf.w; // 用白点参考归一，最亮处回到一。
+}
+
+// `Hable` 胶片曲线：六个常数分别控制肩部、线性段与趾部，白点十一做归一。
+float3 ogxTonemapHable(float3 color)
+{
+    float3 x = color * 2.0; // 先放大两倍，让中间灰落在曲线中段。
+    float3 mapped = ((x * (0.6 * x + 0.1 * 0.5) + 0.5 * 0.01) / (x * (0.6 * x + 0.5) + 0.5 * 0.3)) - 0.01 / 0.3; // 肩部强度零点六、线性强度零点五、线性角度零点一、趾部强度零点五、趾部两项零点零一与零点三。
+    float w = 11.0; // 白点。
+    float white = ((w * (0.6 * w + 0.1 * 0.5) + 0.5 * 0.01) / (w * (0.6 * w + 0.5) + 0.5 * 0.3)) - 0.01 / 0.3; // 同一条曲线在白点处的值。
+    return mapped / white; // 归一后最亮处正好到一。
+}
+
+// `Reinhard` 简单曲线：先放大一点六六倍再除以一加自身，暗部提得最明显。
+float3 ogxTonemapReinhard(float3 color)
+{
+    float3 x = color * 1.66; // 放大让中间灰更亮。
+    return x / (1.0 + x); // 双曲线压缩，结果永远不会超过一。
+}
+
+// `Lottes` 2016 曲线：指数控制对比度，肩部由输入中间灰与显示白点反推。
+// 为什么斜率和偏移写成普通变量：它们由幂函数算出，GLSL 的常量初始化不保证能折叠。
+float3 ogxTonemapLottes(float3 color)
+{
+    float a = 1.6; // 对比度指数。
+    float d = 0.977; // 肩部指数。
+    float hdrMax = 8.0; // 输入白点。
+    float midIn = 0.23; // 输入中间灰。
+    float midOut = 0.267; // 输出中间灰。
+    float b = (-pow(midIn, a) + pow(hdrMax, a) * midOut) / ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut); // 肩部斜率。
+    float c = (pow(hdrMax, a * d) * pow(midIn, a) - pow(hdrMax, a) * pow(midIn, a * d) * midOut) / ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut); // 肩部偏移。
+    return pow(color, float3(a)) / (pow(color, float3(a * d)) * b + c); // 两段幂函数之比。
+}
+
+// `Uchimura` 2017 曲线：分成趾部、线性段与肩部三截，再用平滑权重拼接。
+// 参考实现把平滑曲线的两个边界写反了，那样权重会出现负数；这里按边界在前的正确顺序写。
+float3 ogxTonemapUchimura(float3 color)
+{
+    float peak = 1.0; // 显示上限。
+    float contrast = 1.0; // 线性段斜率。
+    float mid = 0.12; // 线性段起点。
+    float length = 0.22; // 线性段折算长度。
+    float black = 1.0; // 趾部形状指数。
+    float l0 = ((peak - mid) * length) / contrast; // 折算后的线性段长度。
+    float s0 = mid + l0; // 肩部起点。
+    float s1 = mid + contrast * l0; // 肩部终点。
+    float c2 = (contrast * peak) / (peak - s1); // 肩部曲率。
+    float cp = c2 / peak; // 按显示上限归一。
+    float3 w0 = 1.0 - smoothstep(float3(0.0), float3(mid), color); // 趾部权重。
+    float3 w2 = step(float3(s0), color); // 肩部权重。
+    float3 w1 = 1.0 - w0 - w2; // 线性段权重，三者之和为一。
+    float3 toe = mid * pow(color / mid, float3(black)); // 趾部幂曲线。
+    float3 shoulder = peak - (peak - s1) / (1.0 + cp * (color - s0)); // 肩部有理曲线，越亮越贴近显示上限。
+    float3 linear = mid + contrast * (color - mid); // 中间直线段。
+    return clamp(toe * w0 + linear * w1 + shoulder * w2, float3(0.0), float3(1.0)); // 三段按权重拼接并夹紧。
+}
+
 // 黑边：按目标宽高比在画面上下或左右画黑边，返回该像素是否落在画面内。
 float ogxBlackBar(float2 coord, float aspect, float targetRatio)
 {
