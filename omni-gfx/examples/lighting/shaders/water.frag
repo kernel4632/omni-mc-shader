@@ -1,13 +1,12 @@
 #version 330 core
-// 水面片元阶段：Gerstner 波法线、菲涅尔、粗糙平面反射、屏幕折射、吸收、太阳闪光与岸线泡沫。
+// 水面片元阶段：Gerstner 波法线、平面反射、折射、iterationT 的水体吸收与菲涅尔。
 // 调用位置：主场景在水面以上的不透明几何之后；水面写入自己的深度，雾阶段据此计算距离。
 // 设计原因与取舍：
-//   反射来自镜像相机，不是屏幕空间猜出来的；波纹只扰动采样坐标，山脊倒影不会出现阶梯。
-//   折射读取水下的场景颜色，再按水下光程做逐通道吸收；掠射时光程最长，
-//   水色自然收敛到深蓝，而不是整片反射亮天空，这是水面在低视角下不发白的关键。
-//   菲涅尔用真实水的零点零二基础反射率，再对粗糙水面封顶；近看透底、远看映天，但不会变成一面镜子。
+//   反射来自镜像相机，倒影包含山体、树线与云；水面没有单独的太阳高光，
+//   iterationT 的太阳亮带来自倒影里被米氏散射照亮的那片天空，所以这里也不再叠白色光斑。
+//   水体吸收与雾色逐项照 iterationT 的 WaterFog：红绿蓝分别衰减，深水收敛到暗青，
+//   然后用菲涅尔把反射混进来；正对时能看清水下，掠射时接近镜面。
 #include "common.glsl"
-#include "shadow_lighting.glsl"
 
 in vec3 vWorldPosition; // 水面世界坐标。
 
@@ -36,17 +35,16 @@ void main()
     vec2 screenUv = gl_FragCoord.xy / uResolution; // 当前像素坐标。
     // Gerstner 波法线：五组不同波长与方向的解析波，叠加一层细碎风纹。
     // 远处自动压平高频，避免一个像素跨过多个波长时闪成噪点。
-    vec3 wave = ogxGerstnerNormal(vWorldPosition.xz, uTime, surfaceDepth, 1.0, 0.32);
+    vec3 wave = ogxGerstnerNormal(vWorldPosition.xz, uTime, surfaceDepth, 0.45, 0.025);
     if (uWaterDebug == 1) // 开发用：直接看法线，检查波纹是否过强。
     {
         fragColor = vec4(wave * 0.5 + 0.5, 1.0);
         return;
-    }    vec3 sunDirection = normalize(uSunDirection); // 太阳方向。
-    vec3 sunChroma = lightingSunChroma(); // 太阳色度。
+    }
+    vec3 skyLight = lightingSunSkyLight(); // 天空辐照度，用于水色。
     // 平面反射按法线在屏幕上偏移，再用九点旋转核模糊；粗糙水面不会是一面完美镜子。
-    // 偏移随距离收小，倒影不会被拉成横条；模糊半径随距离与粗糙度一起增大。
-    vec2 reflectionUv = screenUv + wave.xz * (0.004 / (1.0 + surfaceDepth * 0.018));
-    float lod = mix(1.8, 4.8, smoothstep(12.0, 1600.0, surfaceDepth)); // 远处取更高的 mip，滤掉地平线附近的高频明暗。
+    vec2 reflectionUv = screenUv + wave.xz * (0.0015 / (1.0 + surfaceDepth * 0.018));
+    float lod = mix(2.0, 5.0, smoothstep(12.0, 1600.0, surfaceDepth)); // 远处取更高的 mip，滤掉地平线附近的高频明暗。
     vec2 texel = uReflectionTexel * 3.6;
     vec3 reflection = textureLod(uReflection, clamp(reflectionUv, vec2(0.001), vec2(0.999)), lod).rgb * 0.44;
     vec2 diagonal = vec2(0.72, 0.69); // 斜向采样，避免十字核把高光拉成横竖亮线。
@@ -57,12 +55,9 @@ void main()
     // 天空只补倒影出屏的边缘；平面倒影本身已经包含山体、天空与云，不能再被一块蓝天覆盖。
     vec3 reflectedDir = reflect(-view, wave);
     reflectedDir.y = max(reflectedDir.y, 0.008);
-    vec3 skyReflection = lightingSampleSky(reflectedDir, mix(1.0, 4.2, lod * 0.25)) * vec3(0.88, 0.94, 1.0);
+    vec3 skyReflection = lightingSampleSky(reflectedDir, mix(1.0, 4.2, lod * 0.25));
     vec2 edgeUv = smoothstep(vec2(0.0), vec2(0.035), reflectionUv) * (1.0 - smoothstep(vec2(0.965), vec2(1.0), reflectionUv));
     reflection = mix(skyReflection, reflection, edgeUv.x * edgeUv.y);
-    // 反射高光压缩：太阳附近的云和天空可以很亮，但湖面不应该整片过曝成白纸。
-    reflection = min(reflection, vec3(12.0)); // 先夹住极端值。
-    reflection /= 1.0 + max(reflection.r, max(reflection.g, reflection.b)) * 0.14; // 柔和压缩，保留太阳路径的亮核。
     // 折射：按水下光程偏移采样水下颜色，跨过岸线就退回原坐标，避免拉伸。
     float sceneDepth = linearDepth(texture(uSceneDepth, screenUv).r); // 水下不透明面的距离。
     float pathLength = max(sceneDepth - surfaceDepth, 0.0); // 光线在水里走过的实际长度，米。
@@ -73,63 +68,30 @@ void main()
         refractionUv = screenUv; // 退回原坐标。
     }
     vec3 behind = texture(uSceneColor, refractionUv).rgb; // 水下场景颜色。
-    OgxWater water = ogxWaterDefault(); // 水体参数。
-    water.deepColor = vec3(0.0020, 0.014, 0.030); // 深水偏青蓝，保留可见层次。
-    water.absorption = vec3(0.52, 0.145, 0.058); // 红光吸收最快，浅滩偏青、深处偏蓝。
-    water.shallowColor = vec3(0.012, 0.060, 0.052); // 浅滩青绿色，不要过饱和。
-    water.roughness = 0.16; // 湖面有风，太阳高光摊成一条细带。
-    // 吸收按水下光程算，不按竖直深度。掠射时视线在水里走得很远，红光先被吃掉，
-    // 颜色收敛到深蓝；这是水面在低视角下变暗的主要来源，比单纯压反射更接近真实水色。
-    vec3 transmitted = behind * ogxWaterAbsorption(water, pathLength);
-    transmitted = mix(water.deepColor, transmitted, exp(-pathLength * 0.22));
-    transmitted = mix(water.shallowColor, transmitted, clamp(verticalDepth * 0.60, 0.0, 1.0));
+    // 水体吸收与雾：逐项照 iterationT 的 WaterFog，上水面时使用 0.29 的消光与 0.21 的吸收指数。
+    vec3 attenuationColor = vec3(0.2, 0.5, 0.7); // 红绿蓝的衰减基色。
+    vec3 absorbed = behind * pow(attenuationColor * 0.99, vec3(pathLength * 0.21)); // 逐通道吸收。
+    float visibility = exp2(-pathLength * 0.29); // 水下能见度。
+    vec3 waterFogColor = vec3(0.05, 0.6, 1.0); // 水体本身的散射色。
+    waterFogColor *= dot(vec3(0.33333), skyLight) * 0.04; // 天光越亮水色越亮，与 iterationT 相同。
+    vec3 transmitted = mix(waterFogColor, absorbed, visibility); // 先吸收，再按可见度混入雾色。
+    if (uWaterDebug == 5) { fragColor = vec4(behind, 1.0); return; } // 开发用：只看水下场景原色。
     if (uWaterDebug == 2) { fragColor = vec4(reflection, 1.0); return; } // 开发用：只看反射色。
     if (uWaterDebug == 3) { fragColor = vec4(transmitted, 1.0); return; } // 开发用：只看折射与吸收。
-    // 菲涅尔：正对时几乎全透，掠射时接近镜面；这是水面最重要的物理线索。
+    // 菲涅尔：与 iterationT 相同的 Schlick 与可见性项；正对几乎全透，掠射接近镜面。
     float NdotV = max(dot(wave, view), 0.0); // 视线与水面法线。
-    // 掠射角保留高反射：真实湖面在这个角度会把对岸树线、云和天空完整映出来。
-    // 不再额外乘零点六二压暗反射，改为让倒影内容本身承担明暗；否则远处水面会变成一条灰带。
-    float fresnel = min(ogxWaterFresnel(NdotV, 0.02), 0.92); // 粗糙水面在极限掠射时接近镜面。
-    // 反射整体略压暗并偏冷：天空在低阳时很亮，完全不压会让整片湖面变成白纸；
-    // 这里只压一成，保留云、树线和石门的完整倒影。
-    reflection *= vec3(0.86, 0.93, 1.0) * 0.90;
-    vec3 color = mix(transmitted, reflection, fresnel); // 折射与反射按菲涅尔混合。
-    // 太阳闪光：用只保留大尺度坡度的法线算一个宽高光，再乘一块低频亮斑。
-    // 直接用五组解析波的法线算锐高光，波峰会在湖面排成规则的白格；粗糙水面上的太阳路径
-    // 应该是一条断续的碎金带，而不是整片棋盘。高光强度和频率都压到最低，避免水面出现静电噪点。
-    vec3 glintNormal = normalize(mix(vec3(0.0, 1.0, 0.0), wave, 0.18));
-    float glint = min(ogxSpecularGGX(glintNormal, view, sunDirection, 0.60, 0.02), 0.50);
-    float glitterMask = texture(uCloudCurl, vWorldPosition.xz * 0.0025 + vec2(uTime * 0.0020, -uTime * 0.0011)).r;
-    glint *= smoothstep(0.40, 0.68, glitterMask) * smoothstep(0.06, 0.24, NdotV);
-    if (uWaterDebug == 4) { fragColor = vec4(vec3(glint * 0.3), 1.0); return; } // 开发用：只看太阳高光。
-    color += sunChroma * (glint * uSunIrradiance * 0.045);
-    // 岸线泡沫：只用很浅的水与岸坡梯度两个条件，泡沫贴着岸线出现，不会铺满整片浅湖。
-    // 噪声取自三维 Worley 细节图，气泡是圆的；旧的方形值噪声会在水面上印出规则的白色网格。
-    float foamNoise = texture(uCloudDetail, vec3(vWorldPosition.xz * 0.060, uTime * 0.006)).x;
-    vec2 depthStep = 1.0 / uResolution;
-    float depthLeft = linearDepth(texture(uSceneDepth, screenUv - vec2(depthStep.x, 0.0)).r);
-    float depthRight = linearDepth(texture(uSceneDepth, screenUv + vec2(depthStep.x, 0.0)).r);
-    float depthDown = linearDepth(texture(uSceneDepth, screenUv - vec2(0.0, depthStep.y)).r);
-    float depthUp = linearDepth(texture(uSceneDepth, screenUv + vec2(0.0, depthStep.y)).r);
-    // 岸坡梯度：水下地形在岸边变化快，湖心变化慢；用四邻深度差把泡沫限制在岸线附近。
-    float shoreGradient = abs(depthRight - depthLeft) + abs(depthUp - depthDown);
-    float foam = ogxWaterFoam(verticalDepth, foamNoise); // 库的岸线泡沫；按竖直水深判断。
-    foam = smoothstep(0.34, 0.72, foam) * smoothstep(0.20, 1.20, shoreGradient);
-    foam *= 1.0 - smoothstep(25.0, 110.0, surfaceDepth); // 远处泡沫只有几像素，淡出避免锯齿。
-    vec3 foamColor = vec3(0.52, 0.56, 0.55) * (0.48 + 0.52 * max(dot(wave, sunDirection), 0.0)); // 泡沫受太阳照亮。
-    color = mix(color, foamColor, foam * 0.62); // 泡沫是覆盖，不是叠加白光。
-    // 岸边地形与树冠也在水面投影：没有这一步，树和拱门像漂在水上，倒影再完整也缺接触。
-    // 用完整阴影查询而不是只看云影，树冠的窄影才能从岸线伸到水面。
-    float dither = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy)).x;
-    float terrainShadow = lightingShadow(vWorldPosition, vec3(0.0, 1.0, 0.0), surfaceDepth, dither);
-    float waterCloudShadow = lightingCloudShadow(vWorldPosition);
-    float sunVisibility = terrainShadow * mix(1.0, waterCloudShadow, 0.82);
-    glint *= mix(0.15, 1.0, sunVisibility); // 云影与树影只留下被遮挡的阳光高光。
-    color *= mix(0.78, 1.0, sunVisibility); // 只在阴影里压暗，反射内容与深水色仍然保留。
+    float NdotL = max(dot(wave, reflect(-view, wave)), 0.0); // 反射方向与法线，镜面时等于 NdotV。
+    float specular = ogxFresnelSchlick(NdotL, 0.02, 1.0); // 水的 F0 是零点零二。
+    specular *= ogxVisibilitySchlick(NdotL, NdotV + 0.8, 0.0); // 与 iterationT 的 V_Schlick 相同。
+    // 反射与折射的亮度差会加强轮廓：亮天空在水面边缘更明显，暗树影则压回去。
+    float difference = (length(transmitted) - length(reflection)) / (length(transmitted) + length(reflection) + 1e-4);
+    difference = sign(difference) * sqrt(abs(difference));
+    specular += 0.75 * difference * (1.0 - specular) * specular;
+    vec3 color = mix(transmitted, reflection, clamp(specular, 0.0, 1.0)); // 折射与反射按菲涅尔混合。
+    // 晴天静水没有白沫；只有下雨或拍岸时才应该出现，本场景保持水面干净。
     // 远处水面在屏幕上只剩几像素，逐渐收敛到同方向的天空色，与地平线接上。
-    // 收敛距离拉到九公里，十二公里远平面处已经接近真实地平线，不再出现一条浅色横带。
     vec3 horizonDir = normalize(vec3(-view.x, 0.02, -view.z));
-    vec3 horizon = lightingSampleSky(horizonDir, 3.0) * vec3(0.82, 0.90, 1.0);
+    vec3 horizon = lightingSampleSky(horizonDir, 3.0);
     color = mix(color, horizon, smoothstep(1500.0, 9000.0, surfaceDepth) * 0.45);
     fragColor = vec4(color, 1.0); // 水面不透明写入，深度随后覆盖。
 }

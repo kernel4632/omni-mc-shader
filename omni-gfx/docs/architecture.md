@@ -112,6 +112,14 @@ SPIR-V 由 `tests/probes/*.slang` 编译，探针调用每个模块的全部公�
 - `omni-gfx/build.py check` 审计测试世界实际编译的 GLSL；测试世界的 Python 与资源脚本是开发期消费者，不进入光影 ZIP，也不参与库注释比例。
 - 游戏内画面、其他显卡、Vulkan 运行时尚未验证。画面仍偏程序化，未达到真实照片级；参考对比保存在 `.dev/omni-gfx/world-comparison.png`。
 
+`examples/lighting/` 是光影验收场景，几何保持低模，重点检查光照链路：
+
+- 太阳与天空直接读取 `references/iterationT/shaders/texture/AtmoData_620_540_440_n4.bin`（512×128×33 RGBA32F）。CPU 每帧用同一张表算太阳直射、天空辐照度与太阳透过率，片元阶段只读 uniform；天空背景仍在 GPU 上逐像素查表。
+- 云使用参考包的 `CloudNoise_128_128_128.bin` 与 `CloudNoise2_32_32_32.bin`，密度、光照、步数与云影按 NUBIS 对齐；体积雾按参考包的密度剖面、六步指数分布与四次太阳方向取样。
+- 阴影是三级级联上的可变半影；环境光遮蔽是 GTAO 三切片；曝光与色调映射是 AgX 13、AE 曲线 0.7；水面是镜像相机平面反射加水体吸收，替代参考包的屏幕空间追踪。
+- 固定机位截图时，相机、太阳与时间不变，阴影、云影、天空贴图与倒影只烘一次；1280×720 的平均帧时记录在 `omni-gfx/docs/verification.md`。
+- 验收截图与并排对比只放 `.dev/omni-gfx/`，不进入仓库；游戏内画面仍未验证。
+
 ## 五、为什么没有 CMake 与 C++
 
 阶段 0 原计划用 SDL3 GPU + CMake。本机没有 cmake、cl、g++，下载 SDL3 也无法完成可验证的构建。用户允许改用 Python + GLFW + PyOpenGL，因此当前演示程序是 Python。没有创建无法运行的 `CMakeLists.txt`，避免留下假入口。未来若引入 C++ 消费者，再按实际工具链补构建文件。

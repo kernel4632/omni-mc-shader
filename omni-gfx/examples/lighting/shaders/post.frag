@@ -23,15 +23,18 @@ void main()
     vec3 color = texture(uColor, uv).rgb; // 线性场景颜色。
     color += texture(uBloom, uv).rgb * uBloomStrength; // 泛光与场景同为线性，直接相加。
     float averageLog = texture(uExposure, vec2(0.5)).r; // 几何画面平均对数亮度。
-    float exposure = clamp(uExposureKey / max(exp2(averageLog), 1e-4), 0.02, 64.0); // 自动曝光倍率；不再用四倍上限，逆光场景也能提亮暗部。
+    float average = max(exp2(averageLog), 1e-5); // 平均亮度。
+    // iterationT 的 AE_CURVE 是 0.7：曝光随场景亮度按负零点七次方变化，
+    // 不是一比一抵消，所以亮场景仍然更亮、暗场景仍然更暗，画面不会总是被拉成同一块灰。
+    float exposure = uExposureKey * pow(average / uExposureKey, -0.7);
+    exposure = clamp(exposure, 0.02, 64.0); // 限制极端场景的曝光倍率。
     color *= exposure; // 应用曝光。
-    color *= ogxVignette(uv, 0.42, 0.72, uAspect); // 轻微暗角，边缘只压两成。
-    color = ogxFilmGrain(color, gl_FragCoord.xy, uTime, 0.0025); // 极轻颗粒，打散渐变色带。
+    color *= ogxVignette(uv, 0.40, 0.0, uAspect); // iterationT 的暗角：衰减 0.4，圆度零。
     vec3 mapped; // 压缩后的显示颜色。
     if (uTonemap == 0) // AgX，默认曲线。
     {
-        mapped = ogxAgx(color, 16.5, true); // 宽动态范围压缩。
-        mapped = ogxLinearToGamma2(mapped); // 转显示伽马。
+        mapped = ogxAgx(color, 13.0, true); // AGX_EV 13，与 iterationT 默认相同。
+        mapped = ogxLinearToGamma2(mapped); // 转显示伽马二点二。
     }
     else if (uTonemap == 1) // ACES，影院标准对照。
     {
@@ -41,13 +44,7 @@ void main()
     {
         mapped = ogxTonemapNone(color); // 直接伽马。
     }
-    // 很轻的调色：保持饱和度接近原始，只在暗部加一点冷、高光加一点暖。
-    float luma = ogxLuminance(mapped); // 显示亮度。
-    mapped = mix(vec3(luma), mapped, 0.99); // 几乎不改变饱和度。
-    mapped = (mapped - 0.5) * 1.02 + 0.5; // 极小对比，保留黑场。
-    mapped += vec3(0.010, 0.004, -0.008) * (1.0 - luma); // 暗部略偏冷青。
-    mapped += vec3(0.008, 0.004, -0.006) * luma; // 高光略偏暖。
     mapped = clamp(mapped, 0.0, 1.0); // 显示范围。
-    float dither = (ogxBayer64(gl_FragCoord.xy + vec2(uFrame * 0.37, uFrame * 0.71)) - 0.5) / 255.0; // 每帧变化的抖动。
+    float dither = (ogxBayer64(gl_FragCoord.xy + vec2(uFrame * 0.37, uFrame * 0.71)) - 0.5) / 255.0; // 每帧变化的抖动，打散色带。
     fragColor = vec4(clamp(mapped + dither, 0.0, 1.0), 1.0); // 写屏幕。
 }

@@ -38,38 +38,16 @@ void main()
     vec3 albedo = vAlbedo; // 基础反照率来自顶点。
     float roughness = clamp(vRoughness, 0.03, 1.0); // 粗糙度。
     float metallic = clamp(vMetallic, 0.0, 1.0); // 金属度。
-    if (uIsTerrain == 1) // 地形：低频干湿斑块与近水湿岸。
+    if (uIsTerrain == 1) // 地形：颜色变化已经烘进顶点色，这里只处理近水湿岸。
     {
         metallic = 0.0; // 地面不是金属。
-        float macro = ogxFbm2(vWorldPosition.xz * 0.055 + vec2(5.1, 2.7), 3); // 十几米尺度的干湿斑块。
-        float mid = ogxFbm2(vWorldPosition.xz * 0.20 + vec2(11.3, -4.2), 2); // 几米尺度的草色变化。
-        float fine = ogxValueNoise2(vWorldPosition.xz * 0.9); // 一米以内的草色颗粒。
-        albedo *= (0.62 + macro * 0.76) * (0.86 + mid * 0.28) * (0.94 + fine * 0.12); // 三个尺度叠出草地的不均匀。
-        albedo *= vec3(1.02, 0.98 + fine * 0.06, 0.92 + fine * 0.09); // 草叶的暖黄与冷绿差异。
-        float dry = smoothstep(0.48, 0.78, ogxValueNoise2(vWorldPosition.xz * 0.045 + vec2(17.0, 3.0))); // 干草斑块。
-        albedo *= mix(vec3(1.0), vec3(1.18, 1.00, 0.62), dry * 0.28); // 少量枯黄斑块，草地不再是一条荧光绿也不整片发灰。
-        albedo *= vec3(0.55, 1.35, 0.42); // 暖阳下保住草地的绿色，避免整片地面被压成米黄色。
-        // 大尺度草色斑块：一百到数百米的变化，远景不会只剩一条条被高度场压出来的色带。
-        float broad = ogxFbm2(vWorldPosition.xz * 0.006 + vec2(7.3, 1.9), 3); // 一百七十米尺度。
-        float huge = ogxValueNoise2(vWorldPosition.xz * 0.0015 + vec2(2.1, 5.7)); // 六百米尺度。
-        albedo *= mix(0.82, 1.14, broad) * mix(0.90, 1.10, huge);
-        albedo *= mix(vec3(0.96, 1.08, 0.86), vec3(1.04, 1.00, 0.94), broad); // 冷绿与暖黄草斑。
-        float farColor = ogxValueNoise2(vWorldPosition.xz * 0.018 + vec2(6.2, 3.8)); // 五十五米尺度。
-        albedo *= mix(0.86, 1.10, farColor); // 远景颜色也有起伏，山脊不会是一条同色的长带。
-        // 远景微法线：以五十米为周期的缓坡，打散高度场在远山上留下的水平条纹。
-        float farStep = 6.0;
-        float farNoise = ogxValueNoise2(vWorldPosition.xz * 0.020 + vec2(3.1, 8.4));
-        float farX = ogxValueNoise2((vWorldPosition.xz + vec2(farStep, 0.0)) * 0.020 + vec2(3.1, 8.4));
-        float farZ = ogxValueNoise2((vWorldPosition.xz + vec2(0.0, farStep)) * 0.020 + vec2(3.1, 8.4));
-        vec3 farBump = vec3((farNoise - farX) / farStep, 0.0, (farNoise - farZ) / farStep) * 1.30;
-        normal = normalize(normal + farBump * (1.0 - smoothstep(80.0, 520.0, distance)));
-        // 微法线：按程序化草色噪声的梯度扰动法线，地面有细碎的明暗，不像一整块绿塑料。
-        float eps = 0.12; // 差分步长，米。
-        float height0 = ogxValueNoise2(vWorldPosition.xz * 0.75); // 当前高度。
-        float heightX = ogxValueNoise2((vWorldPosition.xz + vec2(eps, 0.0)) * 0.75); // 东侧高度。
-        float heightZ = ogxValueNoise2((vWorldPosition.xz + vec2(0.0, eps)) * 0.75); // 南侧高度。
-        vec3 bump = vec3((height0 - heightX) / eps, 0.0, (height0 - heightZ) / eps) * 0.10; // 梯度换成微法线。
-        normal = normalize(normal + bump * (1.0 - smoothstep(20.0, 120.0, distance))); // 远处淡出，避免闪烁。
+        // 大块草色在几何阶段按顶点算好；这里只补一层低频斑块和细颗粒，避免整片草地像一块塑料。
+        float spot = ogxFbm2(vWorldPosition.xz * 0.35 + vec2(3.7, 9.1), 2); // 两三米尺度的草色斑块。
+        albedo *= 0.88 + spot * 0.24; // 明暗起伏。
+        float grain = ogxValueNoise2(vWorldPosition.xz * 2.1); // 二十厘米以内的草叶颗粒。
+        albedo *= 0.94 + grain * 0.12; // 很轻的颗粒，远景不会闪。
+        // 片元阶段不再重复十几次噪声，
+        // 这是本场景最大的一项填充成本，去掉后每一帧能省下几毫秒。
         float wet = 1.0 - smoothstep(uWaterLevel + 0.02, uWaterLevel + 0.9, vWorldPosition.y); // 近水一米内算湿岸。
         albedo *= mix(1.0, 0.62, wet); // 湿岸更深。
         roughness = mix(roughness, 0.28, wet * 0.8); // 湿岸更光滑，能反射天空。
@@ -80,7 +58,6 @@ void main()
         albedo *= 0.82 + grain * 0.34; // 颜色轻微不均。
         roughness = clamp(roughness * (0.92 + grain * 0.16), 0.03, 1.0); // 粗糙度也有颗粒。
     }
-    vec3 sunChroma = lightingSunChroma(); // 由大气透过率决定的太阳颜色。
     float dither = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy)).x; // 每像素阴影旋转。
     float shadow = lightingShadow(vWorldPosition, normal, distance, dither); // 级联 PCSS。
     if (uDebugMode == 1) // 开发检查：把太阳可见度直接写成颜色。
@@ -110,40 +87,33 @@ void main()
         outAlbedoRough = vec4(albedo, roughness);
         return;
     }
-    float cloudShadow = lightingCloudShadow(vWorldPosition); // 大块云影。
-    // 近景也接收云影：云影贴图与天上的云对应，近处草地、岸坡与球体都会出现大块明暗。
-    // 距离权重从六米开始，避免脚下一小块地面突然变黑；最大只压到零点七八，保留天光。
-    float cloudWeight = smoothstep(6.0, 35.0, distance) * 0.90; // 云影压到接近九成，草地能看到云块投下的明暗。
-    float visibility = shadow * mix(1.0, cloudShadow, cloudWeight); // 云影压暗地面，但保留太阳方向感。
+    float cloudShadow = lightingCloudShadow(vWorldPosition); // 大块云影，与天上的云来自同一张噪声。
+    // 与 iterationT 相同：云影几乎完全生效，只留百分之三的直射让阴影里仍有方向感。
+    float visibility = shadow * mix(cloudShadow, 1.0, 0.03); // 太阳可见度。
     float NdotL = max(dot(normal, sunDirection), 0.0); // 太阳入射角。
     float NdotV = max(dot(normal, view), 0.0); // 视线与法线夹角。
-    float fresnel = ogxFresnelSchlick(NdotV, 0.04, 1.0); // 电介质菲涅尔，用于漫反射能量守恒。
+    vec3 sunLight = lightingSunLight(); // 完整太阳辐照度，已由大气表算出。
+    vec3 sunChroma = sunLight / max(ogxLuminance(sunLight), 1e-6); // 只用于高光染色。
     vec3 diffuseAlbedo = albedo * (1.0 - metallic); // 金属没有漫反射。
     vec3 specularTint = mix(vec3(1.0), albedo, metallic); // 金属高光带自身颜色。
     float f0 = mix(0.04, max(albedo.r, max(albedo.g, albedo.b)), metallic); // 金属的 F0 接近反照率。
-    // 直射漫反射：能量守恒的兰伯特项，再乘太阳辐照度与可见度。
-    vec3 diffuse = diffuseAlbedo * (OGX_INV_PI * uSunIrradiance * NdotL * visibility);
-    // 直射高光：GGX 微表面，粗糙度决定高光是一条细线还是一片柔亮。
-    // 最小粗糙度抬到零点一，避免太阳这种极小光源在低模球面上退化成方块状的单像素亮点。
-    float specular = ogxSpecularGGX(normal, view, sunDirection, max(roughness, 0.10), f0); // 标量高光。
-    // 草地与泥土的太阳高光要压到两成以下：低阳时相机和太阳都在地平线上方，
-    // 半向量几乎竖直，平滑地面会得到一大片白色镜面反射，像雪而不是草。
-    // 石块、球与方块保留完整高光，材质差异才看得出来。
-    float specularWeight = uIsTerrain == 1 ? 0.16 : 1.0;
-    vec3 direct = sunChroma * (diffuse + specularTint * (specular * uSunIrradiance * visibility * specularWeight)); // 直射光颜色。
-    // 天空环境光：法线方向取天空贴图，漫反射项乘一减菲涅尔，粗糙表面平均更大一片天空。
-    vec3 skyDiffuse = lightingSkyAmbient(normal, roughness) * diffuseAlbedo * (1.0 - fresnel); // 漫反射天光。
+    // 直射漫反射：与 iterationT 相同的 Burley 漫反射，再乘太阳辐照度与可见度。
+    float diffuse = ogxDiffuseBurley(normal, view, sunDirection, roughness);
+    vec3 direct = sunLight * (diffuseAlbedo * (diffuse * visibility));
+    // 直射高光：与 iterationT 相同的 GGX，草地压到二十分之一，避免低阳时整片草坡泛白。
+    float specular = ogxSpecularGGX(normal, view, sunDirection, clamp(roughness, 0.0015, 0.9), f0);
+    float highlight = specular * clamp(4.0 - roughness * 3.5, 0.0, 1.0) * (0.07 - (uIsTerrain == 1 ? 0.035 : 0.0));
+    direct += specularTint * (highlight * sunLight * visibility);
+    // 天空环境光：iterationT 的 SkyLighting，太阳侧天空辐照度带方向性，再乘反照率。
+    vec3 skyDiffuse = lightingSkyAmbient(normal, roughness) * diffuseAlbedo;
+    // 环境高光只留给金属与光滑物体；草地和树叶不再有白色轮廓。
     vec3 reflection = reflect(-view, normal); // 反射方向。
-    float lod = mix(1.0, 5.5, roughness); // 粗糙表面取更模糊的层级。
+    float lod = mix(1.5, 5.0, roughness); // 粗糙表面取更模糊的天空层级。
     float envFresnel = ogxFresnelSchlick(NdotV, f0, 1.0); // 环境反射的菲涅尔。
-    // 天空环境高光：绝缘体本来就弱；地面再乘零点二五，避免整片草坡泛出蓝白镜面。
-    vec3 skySpecular = lightingSampleSky(reflection, lod) * (envFresnel * mix(0.18, 1.0, metallic) * specularTint
-                       * (uIsTerrain == 1 ? 0.25 : 1.0)); // 环境高光。
-    // 地面反弹：朝下的面接收草地反射的阳光，颜色偏绿；这是屏幕空间反弹之前的基础一层。
-    vec3 ground = vec3(0.050, 0.075, 0.030) * sunChroma * (uSunIrradiance * 0.020 * max(-normal.y, 0.0)) * (1.0 - metallic); // 草地反弹。
-    vec3 indirect = skyDiffuse + skySpecular + ground; // 间接光。
-    // 空气透视：远景融进天空色，地平线不出现硬边；反射通道强度减半，倒影不要被雾洗白。
-    float aerialFade = smoothstep(20.0, 500.0, distance) * uAerialStrength; // 近景不受影响。
+    vec3 skySpecular = lightingSampleSky(reflection, lod) * (envFresnel * specularTint * mix(0.0, 0.45, step(0.5, metallic)));
+    vec3 indirect = skyDiffuse + skySpecular; // 间接光。
+    // 空气透视：用同一张大气表算相机到表面的散射与透过率；近景几乎不变化，远景融进天空。
+    float aerialFade = smoothstep(20.0, 600.0, distance) * uAerialStrength; // 近景不受影响。
     if (aerialFade > 0.001) // 只有远处才付这段成本。
     {
         vec3 transmittance; // 剩余透过率。

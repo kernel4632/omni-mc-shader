@@ -1,11 +1,11 @@
 #version 330 core
-// 体积雾阶段：沿视线步进高度雾，并用真实阴影步进生成可见光柱。
+// 体积雾阶段：沿视线步进高度雾，并用阴影贴图生成真实光柱。
 // 调用位置：水面合成之后、时间抗锯齿之前；读取水面目标颜色与深度。
 // 设计原因与取舍：
-//   每个雾点都沿太阳方向再走几次阴影查询：地形与云影把阳光切成亮暗两束，
-//   光柱来自这份真实的可见度差，不是后期画上去的亮带。
-//   相位用双瓣 HG，前向散射让逆光雾更亮；步进起点用蓝噪声抖动，时间抗锯齿把条带抹平。
-//   只对几何像素生效，天空的雾已经在大气散射里算过，重复叠会压暗地平线。
+//   密度、步数、相位、太阳取样步长与天光比例全部与 iterationT 的 体积雾 相同：
+//   雾层中心放在海平面附近（Minecraft 的 50 到 65 格），而不是从头到脚铺一层白纱；
+//   六个指数分布步把预算集中在水面与光柱上，远景交给大气表。
+//   每个雾点只查一次阴影贴图，和 iterationT 一样靠抖动与时间抗锯齿抹平边缘。
 #include "common.glsl"
 #include "shadow_lighting.glsl"
 
@@ -19,8 +19,8 @@ uniform float uTanHalfFov; // 视场角一半的正切。
 uniform float uAspect; // 宽高比。
 uniform float uNear; // 投影近平面。
 uniform float uFar; // 投影远平面。
-uniform float uFogDensity; // 近地面雾密度倍率。
-uniform float uFogHeight; // 高层稀雾的衰减高度，米。
+uniform float uFogDensity; // 雾密度倍率；一对应 iterationT 的 体积雾_DENSITY 0.01。
+uniform float uFogHeight; // 兼容旧参数；当前雾层高度由水面自动推算。
 uniform float uFogScatter; // 阳光散射强度。
 uniform float uFogAmbient; // 天光雾亮度。
 uniform int uFogDebug; // 开发检查：零正常，一平均太阳可见度，二只输出雾散射。
@@ -34,22 +34,28 @@ float linearDepth(float depth) // 返回沿视线距离，米。
     return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear)); // 透视反解。
 }
 
-// 雾密度：贴水薄雾加一层更高的稀雾，再用两层噪声打散成团块。
+// 雾密度：iterationT 的 体积雾_NOISE_TYPE 0 高度剖面，只保留一层平滑雾气。
+// 高度上下限从海平面换算：Minecraft 海平面是 63 格，雾层是 50 到 65 格，
+// 所以在本场景（水面为零）就是水面以下十三米到以上两米。
 float fogDensity(vec3 position) // 返回每米消光系数。
 {
-    float height = max(position.y - uWaterLevel, 0.0); // 离水面高度。
-    // 贴水薄雾在二点六米内明显衰减：岸坡与近景地面高出水面几米，
-    // 不应被一层均匀白纱盖住；光柱主要出现在水面上方这层薄雾里。
-    float mist = exp(-height / 1.4);
-    // 高层稀雾只保留很淡的一层，远处空气透视由地表着色器的解析散射负责，
-    // 这里再叠一层浓雾会把草地与远山洗成同一种灰。
-    float haze = exp(-height / max(uFogHeight, 1.0)) * 0.05;
-    vec2 wind = vec2(uTime * 0.0032, uTime * 0.0017); // 雾随风缓慢移动。
-    float low = texture(uCloudCurl, position.xz * 0.0075 + wind).r; // 一百多米尺度的团块。
-    float high = texture(uCloudCurl, position.xz * 0.023 + wind * 1.7).g; // 四十米尺度的碎边。
-    // 两层噪声只做轻微起伏：强度过大会让光柱断成脏斑点，时间抗锯齿也压不住。
-    float breakup = mix(0.62, 1.25, low * 0.75 + high * 0.25);
-    return uFogDensity * (mist * 0.95 + haze) * breakup; // 两层相加。
+    float maxHeight = uWaterLevel + 2.0; // 雾层上限，对应 Minecraft 的 65 格。
+    float minHeight = uWaterLevel - 13.0; // 雾层下限，对应 Minecraft 的 50 格。
+    float dh = max(position.y - maxHeight, 0.0) + max(minHeight - position.y, 0.0); // 到雾层的距离。
+    dh *= 2.0 / 40.0; // 体积雾_FALLOFF 40，换算成指数衰减。
+    return exp2(-dh) * 0.1; // 雾层内密度为 0.1，再乘 体积雾_DENSITY。
+}
+
+// 单次散射相位：iterationT 的 FogPhase，前向瓣与宽瓣按三比七混合。
+float fogPhase(float vdotl) // 返回相函数值。
+{
+    return ogxMiePhase(-0.4, vdotl) * 0.3 + ogxMiePhase(0.5, vdotl) * 0.7; // 两个方向瓣相加。
+}
+
+// 粉末效应：逆光看雾时，正面吸收更强，光柱边缘出现亮边。
+float fogPowder(float absorption, float lightingAbsorption, float vdotl) // 返回零到一权重。
+{
+    return mix((1.0 - absorption) * (1.0 - lightingAbsorption), 1.0, vdotl * 0.5 + 0.5); // 与 iterationT 相同。
 }
 
 void main()
@@ -64,60 +70,72 @@ void main()
     }
     vec3 direction = lightingRayDirection(gl_FragCoord.xy, uResolution, uForward, uRight, uUp, uTanHalfFov, uAspect); // 当前视线。
     float distance = linearDepth(depth); // 到场景的距离。
-    float maxDistance = min(distance, 900.0); // 雾只积到九百米，更远交给空气透视。
+    float maxDistance = min(distance, 900.0); // 只积到九百米，更远交给大气表。
     vec3 sunDirection = normalize(uSunDirection); // 太阳方向。
-    vec3 sunChroma = lightingSunChroma(); // 太阳色度。
-    float cosSun = dot(direction, sunDirection); // 视线与太阳夹角。
-    float phase = ogxHenyeyGreenstein(cosSun, 0.65) * 0.80 + ogxHenyeyGreenstein(cosSun, 0.12) * 0.20; // 双瓣相位，前向峰不尖。
+    vec3 sunLight = lightingSunLight(); // 完整太阳辐照度。
+    vec3 skyLight = lightingSunSkyLight(); // 天空辐照度。
     float jitter = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy)).x; // 起点抖动。
+    float vdotl = dot(direction, sunDirection); // 视线与太阳的夹角。
     vec3 scattered = vec3(0.0); // 累积散射。
     float visibilitySum = 0.0; // 开发检查用的可见度加权和。
     float visibilityWeight = 0.0; // 开发检查用的权重和。
-    vec3 skyAmbient = lightingSkyAmbient(vec3(0.0, 1.0, 0.0), 0.8) * uFogAmbient; // 天光在整段雾里近似不变。
     float transmittance = 1.0; // 剩余透过率。
-    // 十六步二次分布：近处步长小，能看清贴着水面的雾带与光柱；远处步长大，成本不随距离增加。
-    float previousT = 0.0;
-    for (int i = 0; i < 16; i++)
+    float fogAmount = 0.0; // 累积的雾量，最终乘天光。
+    float rayAmount = 0.0; // 累积的太阳散射。
+    const int steps = 6; // 与 iterationT 的 体积雾_QUALITY 相同。
+    float rSteps = 1.0 / float(steps); // 步数倒数。
+    // iterationT 的指数步长：pow(11, u) 把近处样本排得很密，远处只需几步。
+    float rayLength = maxDistance * rSteps * 0.23979; // 每步对应的基础光学长度。
+    float baseDensity = 0.05 / 12000.0; // 体积雾_DENSITY_BASE 1 除以远平面，给整条视线一点薄雾。
+    for (int i = 0; i < steps; i++)
     {
-        float u = (float(i) + jitter) / 16.0; // 当前步的归一化位置。
-        float t = u * u; // 二次曲线。
-        float stepLength = maxDistance * max(t - previousT, 0.0); // 本步步长，米。
-        previousT = t;
-        if (stepLength <= 0.0) continue;
-        vec3 position = uCameraPosition + direction * (maxDistance * t); // 当前雾点。
-        float density = fogDensity(position); // 当地密度。
-        if (density > 1.0e-5)
+        float u = (float(i) + jitter) * rSteps; // 当前步的归一化位置。
+        float exponential = pow(11.0, u); // 指数分布。
+        float stepLength = exponential * 0.1 - 0.1; // 这一段的起点比例。
+        float stepDensity = exponential * rayLength * 1.442695; // 这一段的光学厚度尺度。
+        float positionT = max(stepLength, 0.0); // 防止首步为负。
+        vec3 position = uCameraPosition + direction * (maxDistance * positionT); // 当前雾点。
+        float density = (fogDensity(position) * uFogDensity + baseDensity); // 当地密度。
+        float absorption = exp2(-density * stepDensity); // 这一段的透过率。
+        if (absorption < 0.99999) // 只有有雾的步才查阴影。
         {
-            // 沿太阳方向走三次阴影查询：每次查一个更远的点，光柱边缘因此有柔和的半影。
-            // 这一步是体积阴影，不是只看当前点；地形和云影都会在雾里留下真实的明暗。
+            // 太阳方向的四次密度取样：与 iterationT 相同的五米起步、每步乘一点五。
+            float lightingDensity = 0.0; // 太阳方向累积密度。
+            float lightingStep = 5.0; // 起始步长，米。
             vec3 lightPosition = position; // 从当前雾点出发。
-            float visibility = 0.0;
-            float terrainVisibility = 0.0; // 开发检查：单独累计地形阴影，不混入云影。
-            float lightStep = 3.5; // 第一段阴影距离，米；必须从近处开始，否则树冠与石门的影子会被跳过。
-            for (int j = 0; j < 3; j++)
+            for (int j = 0; j < 4; j++)
             {
-                float dither = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy) + ivec2(i * 17 + j * 41, i * 31 + j * 13)).x; // 每步抖动。
-                float terrainShadow = lightingShadowCheap(lightPosition, vec3(0.0, 1.0, 0.0), maxDistance * t + lightStep, dither);
-                float cloudShadow = lightingCloudShadow(lightPosition); // 云影在同一高度投下光柱。
-                // 云影占比较低：云影是大块光带，真正的窄光柱来自石门、树冠与岸坡的地形阴影。
-                // 如果让云影主导，雾里只会出现一整片灰，不会出现清晰的明暗边界。
-                visibility += terrainShadow * mix(1.0, cloudShadow, 0.55);
-                terrainVisibility += terrainShadow; // 开发检查：只累计地形阴影。
-                lightPosition += sunDirection * lightStep; // 朝太阳走远一点。
-                lightStep *= 2.8; // 三步覆盖近树、石门与远处树线。
+                lightingDensity += fogDensity(lightPosition) * lightingStep; // 累加密度乘距离。
+                lightPosition += sunDirection * lightingStep; // 朝太阳前进。
+                lightingStep *= 1.5; // 远处步长更大。
             }
-            visibility /= 3.0;
-            terrainVisibility /= 3.0;
-            float extinction = exp(-density * stepLength); // 这一步的透过率。
-            visibilitySum += terrainVisibility * (1.0 - extinction); // 开发检查：按散射权重累计地形阴影。
-            visibilityWeight += 1.0 - extinction; // 开发检查：累计权重。
-            // 太阳散射：阴影决定光柱，相位决定逆光亮度；强度按步长与剩余透过率积分。
-            vec3 sunLight = sunChroma * (uSunIrradiance * uFogScatter * phase * visibility * 0.055);
-            vec3 ambient = skyAmbient * mix(0.25, 1.0, clamp(position.y / 80.0, 0.0, 1.0)); // 低处天光被地面挡掉一部分。
-            scattered += (sunLight + ambient) * (transmittance * (1.0 - extinction)); // 体积散射积分。
-            transmittance *= extinction;
+            lightingDensity = (lightingDensity * uFogDensity + baseDensity); // 乘密度倍率。
+            float lightingAbsorption = exp2(-lightingDensity * stepDensity); // 太阳方向的透过率。
+            // 四阶多次散射相位：相位角逐次减半，权重也减半，与 iterationT 相同。
+            float phases = 0.0; // 相位和。
+            float order = 1.0; // 当前阶权重。
+            float phaseCos = vdotl; // 当前阶的夹角。
+            for (int j = 0; j < 4; j++)
+            {
+                phases += exp(-lightingDensity * order) * fogPhase(phaseCos) * order; // 累加各阶相位。
+                phaseCos *= 0.5; // 角度减半。
+                order *= 0.5; // 权重减半。
+            }
+            phases *= fogPowder(absorption, lightingAbsorption, vdotl); // 逆光粉末效应。
+            float dither = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy) + ivec2(i * 37 + 11, i * 17 + 5)).x; // 每步抖动。
+            float shadow = lightingShadowCheap(position, vec3(0.0, 1.0, 0.0), distance, dither); // 太阳可见度。
+            float integral = transmittance - absorption * transmittance; // 这一段的散射权重。
+            rayAmount += phases * integral * shadow; // 太阳散射累积。
+            fogAmount += integral; // 雾量累积。
+            visibilitySum += shadow * integral; // 开发检查。
+            visibilityWeight += integral; // 开发检查。
+            transmittance *= absorption; // 更新透过率。
+            if (transmittance < 0.01) break; // 几乎不透明。
         }
-        if (transmittance < 0.01) break; // 几乎不透明。
+        else
+        {
+            transmittance *= absorption; // 没有雾也要更新透过率。
+        }
     }
     if (uFogDebug == 1) // 开发检查：看阴影在雾里的分布。
     {
@@ -125,10 +143,13 @@ void main()
         fragColor = vec4(vec3(visibility), 1.0);
         return;
     }
-    if (uFogDebug == 2) // 开发检查：只看雾散射，检查光柱是否被地表颜色淹没。
+    // 雾的颜色：天光乘雾量，太阳色乘相位散射；比例与 iterationT 的 0.32 与 0.7 相同。
+    vec3 fogColor = skyLight * (fogAmount * 0.32 * uFogAmbient);
+    vec3 rayColor = sunLight * (rayAmount * 0.7 * uFogScatter);
+    if (uFogDebug == 2) // 开发检查：只看雾散射。
     {
-        fragColor = vec4(scattered, 1.0);
+        fragColor = vec4(fogColor + rayColor, 1.0);
         return;
     }
-    fragColor = vec4(color * transmittance + scattered, 1.0); // 雾合成。
+    fragColor = vec4(color * transmittance + fogColor + rayColor, 1.0); // 雾合成。
 }

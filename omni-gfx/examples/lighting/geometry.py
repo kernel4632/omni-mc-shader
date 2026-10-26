@@ -118,11 +118,22 @@ class HeightField:
         slope = 1.0 - max(min(normal_y, 1.0), 0.0)  # 零是平地，一是直壁。
         variation = self.fbm(x * 0.07, z * 0.07, 2)  # 大尺度干湿斑块。
         fine = self.fbm(x * 0.55, z * 0.55, 1)  # 细碎草色变化。
-        grass = (0.040 + variation * 0.026, 0.090 + variation * 0.040, 0.022 + fine * 0.018)  # 偏黄的草绿，饱和度略高。
-        rock = (0.085 + fine * 0.030, 0.080 + fine * 0.028, 0.072 + fine * 0.024)  # 中性灰岩。
-        mud = (0.115 + variation * 0.040, 0.088 + variation * 0.030, 0.055 + variation * 0.020)  # 湿泥与细沙。
+        grass = (0.120 + variation * 0.055, 0.145 + variation * 0.060, 0.070 + fine * 0.030)  # 偏黄的草绿。
+        rock = (0.190 + fine * 0.060, 0.180 + fine * 0.055, 0.160 + fine * 0.050)  # 中性灰岩。
+        mud = (0.230 + variation * 0.070, 0.180 + variation * 0.055, 0.115 + variation * 0.035)  # 湿泥与细沙。
         blend = min(max((slope - 0.34) / 0.30, 0.0), 1.0)  # 只有明显陡坡才露岩，岸坡保持草绿。
         albedo = tuple(grass[i] * (1.0 - blend) + rock[i] * blend for i in range(3))  # 草与岩混合。
+        # 草地的大块明暗与冷暖变化在这里烘进顶点色：片元阶段再做十几次噪声会让整帧慢下来，
+        # 低模地形每个顶点约一米多，顶点色插值已经足够表现几十米尺度的草色斑块。
+        macro = self.fbm(x * 0.055 + 5.1, z * 0.055 + 2.7, 3)  # 十几米尺度的干湿斑块。
+        mid = self.fbm(x * 0.20 + 11.3, z * 0.20 - 4.2, 2)  # 几米尺度的草色变化。
+        broad = self.fbm(x * 0.006 + 7.3, z * 0.006 + 1.9, 3)  # 一百七十米尺度。
+        huge = self.fbm(x * 0.0015 + 2.1, z * 0.0015 + 5.7, 2)  # 六百米尺度。
+        far = self.fbm(x * 0.018 + 6.2, z * 0.018 + 3.8, 2)  # 五十五米尺度。
+        dry = min(max((self.fbm(x * 0.045 + 17.0, z * 0.045 + 3.0, 2) - 0.48) / 0.30, 0.0), 1.0)  # 干草斑块。
+        albedo = tuple(albedo[i] * (0.78 + macro * 0.44) * (0.90 + mid * 0.20) * (0.95 + fine * 0.10) for i in range(3))
+        albedo = tuple(albedo[i] * (1.0 - dry * 0.22) + albedo[i] * (1.16 if i == 0 else 1.0 if i == 1 else 0.66) * dry * 0.22 for i in range(3))
+        albedo = tuple(component * (0.90 + broad * 0.22) * (0.94 + huge * 0.13) * (0.92 + far * 0.14) for component in albedo)
         shore = 1.0 - min(max((height - 0.05) / 0.85, 0.0), 1.0)  # 近水一米内算湿岸。
         albedo = tuple(albedo[i] * (1.0 - shore * 0.45) + mud[i] * shore * 0.45 for i in range(3))  # 湿岸更深更褐。
         if height < WATER_LEVEL - 0.02:  # 水下地面只保留很暗的底色，水体吸收会再压一次。
@@ -292,14 +303,14 @@ def add_tree(vertices: array, field: "HeightField", x: float, z: float, height: 
     ground = field.height(x, z)  # 树根所在地面高度。
     trunk_height = height * 0.52  # 树干到树冠中部。
     trunk_radius = max(0.16, height * 0.030)  # 高树树干更粗，近景不会细成一根针。
-    trunk_albedo = (0.042, 0.030, 0.020)  # 湿树皮的暗褐色。
+    trunk_albedo = (0.090, 0.062, 0.040)  # 湿树皮的暗褐色。
     add_cylinder(vertices, (x, ground - 0.42, z), trunk_radius, trunk_height + 0.42, trunk_albedo, 0.88,
                  segments=max(segments // 2, 5), taper=0.58)  # 底部埋进地面，接触阴影不会悬空。
     # 主叶团略偏上，下面的三个叶团压低轮廓；这样树冠底部不是一条水平线，
     # 低太阳从下方照进来时，边缘会先亮起来，像真实树冠的透光边。
     main_radius = crown_radius  # 主叶团半径。
     main_center = (x, ground + height * 0.74, z)  # 主叶团中心。
-    leaf_albedo = (0.030 + rng.random() * 0.010, 0.058 + rng.random() * 0.014, 0.020 + rng.random() * 0.008)  # 深绿。
+    leaf_albedo = (0.070 + rng.random() * 0.022, 0.125 + rng.random() * 0.030, 0.045 + rng.random() * 0.016)  # 深绿。
     add_ellipsoid(vertices, main_center, (main_radius, height * 0.30, main_radius * 0.88),
                   leaf_albedo, 0.86, rings=7, segments=segments, spin=rng.random() * 3.0)  # 主冠。
     for index in range(max(lobes - 1, 2)):  # 侧叶团。
@@ -309,7 +320,7 @@ def add_tree(vertices: array, field: "HeightField", x: float, z: float, height: 
                        ground + height * rng.uniform(0.58, 0.88),
                        z + math.sin(angle) * distance)  # 侧叶团中心。
         lobe_radius = crown_radius * rng.uniform(0.50, 0.74)  # 侧叶团更小。
-        lobe_color = (0.026 + rng.random() * 0.012, 0.050 + rng.random() * 0.018,
+        lobe_color = (0.060 + rng.random() * 0.024, 0.108 + rng.random() * 0.036,
                       0.018 + rng.random() * 0.008)  # 每团略有明暗差异。
         add_ellipsoid(vertices, lobe_center, (lobe_radius, height * rng.uniform(0.16, 0.24), lobe_radius * 0.86),
                       lobe_color, 0.88, rings=6, segments=max(segments - 2, 6), spin=rng.random() * 3.0)  # 侧冠。
@@ -318,7 +329,7 @@ def add_tree(vertices: array, field: "HeightField", x: float, z: float, height: 
 def add_bush(vertices: array, field: "HeightField", x: float, z: float, radius: float, rng: random.Random) -> None:
     """生成一丛贴地灌木：两个压扁的椭球，给岸线增加高度变化和接触阴影。"""
     ground = field.height(x, z)  # 地面高度。
-    color = (0.032 + rng.random() * 0.010, 0.062 + rng.random() * 0.016, 0.022 + rng.random() * 0.008)  # 深绿。
+    color = (0.072 + rng.random() * 0.022, 0.135 + rng.random() * 0.034, 0.048 + rng.random() * 0.016)  # 深绿。
     add_ellipsoid(vertices, (x, ground + radius * 0.35, z), (radius, radius * 0.52, radius * 0.88),
                   color, 0.90, rings=5, segments=8, spin=rng.random() * 3.0)  # 主灌木团。
     add_ellipsoid(vertices, (x + radius * 0.45, ground + radius * 0.28, z - radius * 0.30),
@@ -414,7 +425,7 @@ def build_objects(field: HeightField) -> tuple[array, int, dict]:
     )
     for x, z, half_w, half_d, height, tilt in monolith_specs:  # 逐根生成。
         ground = field.height(x, z)  # 底部埋进地面。
-        albedo = (0.105 + rng.random() * 0.015, 0.100 + rng.random() * 0.012, 0.092 + rng.random() * 0.010)  # 微弱色差。
+        albedo = (0.230 + rng.random() * 0.035, 0.220 + rng.random() * 0.030, 0.200 + rng.random() * 0.025)  # 微弱色差。
         add_box(vertices, (x, ground + height * 0.5 - 0.35, z), (half_w, height * 0.5, half_d), tilt,
                 albedo, 0.66)  # 立石本体。
     # 右侧两根窄石柱与一颗拱门前的孤石：它们站在太阳方位两侧，不遮住太阳圆盘，
@@ -427,7 +438,7 @@ def build_objects(field: HeightField) -> tuple[array, int, dict]:
     )
     for x, z, half_w, half_d, height, tilt in right_stones:  # 逐根生成。
         ground = field.height(x, z)  # 水下或岸边的地面高度。
-        albedo = (0.100 + rng.random() * 0.016, 0.096 + rng.random() * 0.014, 0.088 + rng.random() * 0.012)  # 灰岩。
+        albedo = (0.220 + rng.random() * 0.036, 0.210 + rng.random() * 0.030, 0.195 + rng.random() * 0.026)  # 灰岩。
         add_box(vertices, (x, ground + height * 0.5 - 0.55, z), (half_w, height * 0.5, half_d), tilt,
                 albedo, 0.68)  # 底部埋进水底或岸坡，接触阴影不会离开地面。
     # 几块散落的小石头，给近景提供额外接触阴影样本。

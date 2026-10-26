@@ -18,6 +18,6 @@ void main()
     OgxCumulusMedia media = lightingCloudMedia(); // 与主画面同一套云参数。
     vec3 sunDirection = normalize(uSunDirection); // 太阳方向。
     float shadow = ogxCumulusShadowTex(coord, media, sunDirection, uRange, uCloudBase, uCloudCurl,
-                                      0.00006, LIGHTING_CLOUD_COVERAGE_OFFSET, 0.0025, 1.10); // 库的云影投影。
+                                      0.0007, LIGHTING_CLOUD_COVERAGE_OFFSET, 0.007, 1.0); // 库的云影投影。
     fragColor = vec4(vec3(mix(1.0, shadow, 0.85)), 1.0); // 保留一点底光，云影清晰但不把地面压成黑块。
 }

@@ -17,6 +17,7 @@ import argparse  # 截图、计时与交互共用一套入口。
 import ctypes  # 顶点属性偏移包装。
 import json  # 性能记录。
 import math  # 视场角与矩阵。
+import struct  # 读预计算大气表的浮点数。
 import sys  # 搜索路径。
 import time  # 帧时测量。
 from array import array  # 读回曝光统计。
@@ -44,38 +45,40 @@ NEAR = 0.2  # 近平面。
 FAR = 12000.0  # 远平面，覆盖到真实地平线；水面在十二公里处与天空接上。
 FOV = 44.0  # 竖直视场角，略宽于五十毫米镜头，让整排球与湖面同时入镜。
 EYE_HEIGHT = 1.72  # 站立视高，米。
-SUN_DIRECTION = (0.34, 0.15, -0.94)  # 太阳方向：湖对岸偏右，仰角约九度；低阳从石门中间穿过，形成长光柱。
-SUN_COLOR = (1.0, 0.975, 0.945)  # 五千八百开左右的太阳色度倾向，最终颜色再乘大气透过率。
-SUN_IRRADIANCE = 4.5  # 太阳辐照度倍率。
-SKY_INTENSITY = 0.85  # 天空整体倍率；低阳场景保留可见的天光与云层亮度。
+SUN_DIRECTION = (-0.85, 0.50, 0.15)  # 太阳方向：正左方，仰角三十度；树影横向落在草地与湖面上，能看清软硬。
+SUN_COLOR = (1.0, 1.0, 1.0)  # 太阳色温倾向；一表示完全使用大气透过率算出的颜色。
+SUN_IRRADIANCE = 1.0  # 太阳辐照度倍率；一表示直接使用 iterationT 的太阳光谱。
+SKY_INTENSITY = 1.0  # 天空整体倍率；一表示直接使用 precomputed atmosphere。
 CASCADE_SIZE = 1024  # 每级阴影贴图边长。
 CASCADE_COUNT = 3  # 三级级联。
 CASCADE_EXTENTS = (26.0, 90.0, 300.0)  # 每级正交视锥半边长，米。
 CASCADE_SPLITS = (32.0, 115.0, 380.0)  # 按视深度选级的分界。
 CASCADE_BLEND = 10.0  # 级联交界过渡宽度。
-SKY_MAP_SIZE = (512, 256)  # 环境光与反射用的等距柱状天空贴图尺寸；反射里的云噪点会随分辨率下降。
-SKY_MAP_INTERVAL = 8  # 天空贴图每八帧更新一次，云移动很慢。
-CLOUD_STEPS = 40  # 云沿视线步进数；半分辨率下可以多走几步保住云内层次。
-CLOUD_SHADOW_SIZE = 512  # 云影贴图边长。
-CLOUD_SHADOW_RANGE = 12000.0  # 云影覆盖范围，米；覆盖头顶云到可见地面的整段投影。
-CLOUD_SHADOW_INTERVAL = 1  # 云影每帧更新一次，云层在动，间隔太大会看出影子跳动。
+SKY_MAP_SIZE = (512, 256)  # 环境光与反射用的等距柱状天空贴图尺寸。
+CLOUD_STEPS = 20  # iterationT 的晴天云最多二十步，视线越竖直越少。
+CLOUD_SHADOW_SIZE = 256  # 云影贴图边长，与 CLOUD_SHADOWTEX_SIZE 相同。
+CLOUD_SHADOW_RANGE = 4096.0  # 云影覆盖范围，米；与 iterationT 的 CLOUD_SHADOW_RANGE 相同。
 REFLECTION_SCALE = 2  # 平面反射每边缩小的倍数。
-REFLECTION_INTERVAL = 5  # 反射每五帧更新一次；水面波纹会掩盖延迟。
-RENDER_SCALE = 1.0  # 内部渲染比例；输出与内部分辨率一致，先保证后期放大链路正确。
+RENDER_SCALE = 1.0  # 内部渲染比例；输出与内部分辨率一致。
 GI_BLEND = 0.16  # 全局光时间累积里本帧权重。
 CLOUD_BLEND = 0.14  # 云时间累积里本帧权重。
+TAA_BLEND = 0.03  # TAA 本帧权重；iterationT 的历史权重是 0.97。
 BLOOM_SIZE = (320, 180)  # 泛光最细一级。
 BLOOM_COARSE_SIZE = (160, 90)  # 泛光最粗一级。
 LUMINANCE_SIZE = (64, 36)  # 曝光统计第一级。
-EXPOSURE_KEY = 0.09  # 自动曝光目标中间亮度；低阳逆光场景下压低，天空、水面与草地都保留层次。
-BLOOM_STRENGTH = 0.08  # 泛光强度；压低一点，太阳附近不会糊成一片白。
-FOG_DENSITY = 0.060  # 贴水薄雾密度倍率；雾层只抬高一点四米，光柱贴在水面上，岸坡不被打白。
-FOG_HEIGHT = 26.0  # 雾的高层衰减高度；只留很淡的一层，远处空气透视由解析散射负责。
-FOG_SCATTER = 2.20  # 雾中阳光散射强度；让光柱有可见亮核，同时靠雾层高度压住近岸。
-FOG_AMBIENT = 0.008  # 雾中天光；压低后阴影里的雾接近深蓝，光柱边界才清楚。
-AO_STRENGTH = 1.15  # 环境光遮蔽强度。
-CONTACT_STRENGTH = 1.1  # 接触阴影强度。
-BOUNCE_STRENGTH = 1.2  # 颜色反弹强度。
+EXPOSURE_KEY = 0.18  # 自动曝光参考亮度；AgX 中间灰是 0.18，配合 AE_CURVE 0.7。
+BLOOM_STRENGTH = 0.13  # 泛光强度，与 iterationT 的 BLOOM_AMOUNT 相同。
+FOG_DENSITY = 0.01  # 对应 iterationT 的 VFOG_DENSITY。
+FOG_HEIGHT = 2.0  # 雾层上限相对水面高度，米；兼容旧参数。
+FOG_SCATTER = 1.0  # 阳光散射倍率；一对应 VFOG_SUNLIGHT_DENSITY。
+FOG_AMBIENT = 1.0  # 天光雾倍率；一对应 VFOG_FOG_DENSITY。
+AO_STRENGTH = 0.95  # 环境光遮蔽强度，与 GTAO_STRENGTH 相同。
+CONTACT_STRENGTH = 0.7  # 接触阴影强度。
+BOUNCE_STRENGTH = 0.6  # 颜色反弹强度。
+ATMO_LUT_PATH = ROOT / "references/iterationT/shaders/texture/AtmoData_620_540_440_n4.bin"  # iterationT 的预计算大气表。
+ATMO_LUT_SIZE = 512 * 128 * 33 * 16  # 512×128×33 的 RGBA32F；文件末尾多出的 163840 字节不参与纹理。
+CLOUD_NOISE_PATH = ROOT / "references/iterationT/shaders/texture/CloudNoise_128_128_128.bin"  # 128 立方基础云噪声。
+CLOUD_DETAIL_PATH = ROOT / "references/iterationT/shaders/texture/CloudNoise2_32_32_32.bin"  # 32 立方细节云噪声。
 JITTER_SEQUENCE = ((0.5, 0.5), (0.25, 0.75), (0.75, 0.25), (0.125, 0.375), (0.625, 0.875),
                    (0.375, 0.125), (0.875, 0.625), (0.0625, 0.5625))  # 八相位次像素抖动。
 
@@ -190,6 +193,159 @@ def make_blue_noise() -> int:
     return texture  # 返回编号。
 
 
+def make_atmosphere_lut(raw: bytes) -> int:
+    """把 iterationT 的预计算大气表上传成 512×128×33 的 RGBA32F 三维纹理。"""
+    expected = 512 * 128 * 33 * 4 * 4  # 每像素四个 float。
+    if len(raw) != expected:  # 文件不完整时直接报错，不用一张错位的表算天空。
+        raise RuntimeError(f"大气表长度不符：{len(raw)}，应为 {expected}")
+    texture = GL.glGenTextures(1)  # 纹理。
+    GL.glBindTexture(GL.GL_TEXTURE_3D, texture)  # 绑定三维纹理。
+    GL.glTexImage3D(GL.GL_TEXTURE_3D, 0, GL.GL_RGBA32F, 512, 128, 33, 0, GL.GL_RGBA, GL.GL_FLOAT, raw)  # 原始浮点数据。
+    GL.glTexParameteri(GL.GL_TEXTURE_3D, GL.GL_TEXTURE_MIN_FILTER, GL.GL_LINEAR)  # 查表需要三线性插值。
+    GL.glTexParameteri(GL.GL_TEXTURE_3D, GL.GL_TEXTURE_MAG_FILTER, GL.GL_LINEAR)  # 放大也插值。
+    GL.glTexParameteri(GL.GL_TEXTURE_3D, GL.GL_TEXTURE_WRAP_S, GL.GL_CLAMP_TO_EDGE)  # 不越界。
+    GL.glTexParameteri(GL.GL_TEXTURE_3D, GL.GL_TEXTURE_WRAP_T, GL.GL_CLAMP_TO_EDGE)  # 不越界。
+    GL.glTexParameteri(GL.GL_TEXTURE_3D, GL.GL_TEXTURE_WRAP_R, GL.GL_CLAMP_TO_EDGE)  # 不越界。
+    return texture  # 返回编号。
+
+
+def smootherstep01(x: float) -> float:
+    """零到一的平滑曲线，和 iterationT 的 `curve` 相同。"""
+    x = min(max(x, 0.0), 1.0)  # 输入夹到零到一。
+    return x * x * (3.0 - 2.0 * x)  # 三次平滑。
+
+
+def smoothstep_range(edge0: float, edge1: float, x: float) -> float:
+    """GLSL 的 smoothstep，两端导数为零。"""
+    if edge0 == edge1:  # 退化区间没有过渡。
+        return 1.0 if x >= edge1 else 0.0
+    t = (x - edge0) / (edge1 - edge0)  # 归一化。
+    t = min(max(t, 0.0), 1.0)  # 夹到零到一。
+    return t * t * (3.0 - 2.0 * t)  # 三次平滑。
+
+
+class AtmosphereTable:
+    """在 CPU 上复算 iterationT 的太阳与天空辐照度，避免每个像素采样三维表。"""
+
+    def __init__(self, raw: bytes) -> None:
+        """保存原始浮点表与常数，采样时直接读字节。"""
+        self.raw = raw  # 512×128×33 的 RGBA32F。
+        self.bottom_radius = 6360.0  # 行星底半径，公里。
+        self.top_radius = 6420.0  # 大气层顶，公里。
+        self.sun_angular_radius = 0.005  # 太阳视半径。
+        self.solar = (1.68194, 1.85149, 1.91198)  # 太阳光谱。
+        self.transmittance_width = 256.0  # 透过率子图宽度。
+        self.transmittance_height = 64.0  # 透过率子图高度。
+        self.combined_width = 512.0  # 拼合大图宽度。
+        self.combined_height = 128.0  # 拼合大图高度。
+        self.irradiance_width = 64.0  # 辐照度子图宽度。
+        self.irradiance_height = 16.0  # 辐照度子图高度。
+        self.lms_rows = ((1.6858, -0.4624, -0.0069), (-0.0374, 1.0598, -0.0742), (-0.0283, -0.1119, 1.0491))  # 色适应矩阵的三行。
+
+    def sample(self, u: float, v: float, z: int) -> tuple[float, float, float]:
+        """在指定的深度层上做双线性采样，深度方向不插值。"""
+        x = u * 512.0 - 0.5  # 纹理坐标换成像素坐标。
+        y = v * 128.0 - 0.5
+        x0 = int(x // 1)  # 左列。
+        y0 = int(y // 1)  # 下行。
+        fx = x - x0  # 横向小数。
+        fy = y - y0  # 纵向小数。
+        x0 = min(max(x0, 0), 511)  # 夹进纹理。
+        y0 = min(max(y0, 0), 127)
+        x1 = min(x0 + 1, 511)  # 右列。
+        y1 = min(y0 + 1, 127)  # 上行。
+        base = (z * 128 + y0) * 512  # 下行的起始像素。
+        i00 = (base + x0) * 16  # 每个像素十六字节。
+        i10 = (base + x1) * 16
+        topBase = (z * 128 + y1) * 512  # 上一行的起始像素；y1 已经夹在纹理内。
+        i01 = (topBase + x0) * 16
+        i11 = (topBase + x1) * 16
+        values = []  # 三个通道。
+        for channel in range(3):
+            offset = channel * 4  # 每个通道一个 float。
+            v00 = struct.unpack_from("<f", self.raw, i00 + offset)[0]  # 左下。
+            v10 = struct.unpack_from("<f", self.raw, i10 + offset)[0]  # 右下。
+            v01 = struct.unpack_from("<f", self.raw, i01 + offset)[0]  # 左上。
+            v11 = struct.unpack_from("<f", self.raw, i11 + offset)[0]  # 右上。
+            low = v00 + (v10 - v00) * fx  # 横向插值。
+            high = v01 + (v11 - v01) * fx
+            values.append(low + (high - low) * fy)  # 纵向插值。
+        return values[0], values[1], values[2]
+
+    def texel_center(self, x: float, size: float) -> float:
+        """把零到一映射到贴图像素中心，避免采到子图边界。"""
+        return 0.5 / size + x * (1.0 - 1.0 / size)
+
+    def combined_coord(self, x: float, original: float, combined: float) -> float:
+        """把子图内部比例映射到拼合大图坐标。"""
+        return 0.5 / combined + x * (original / combined - 1.0 / combined)
+
+    def distance_to_top(self, r: float, mu: float) -> float:
+        """视线到大气层顶的远交点距离。"""
+        discriminant = r * r * (mu * mu - 1.0) + self.top_radius * self.top_radius  # 球面判别式。
+        return max(-r * mu + math.sqrt(max(discriminant, 0.0)), 0.0)
+
+    def transmittance_to_top(self, r: float, mu: float) -> tuple[float, float, float]:
+        """查某点朝某个方向到层顶的透过率。"""
+        h = math.sqrt(self.top_radius * self.top_radius - self.bottom_radius * self.bottom_radius)  # 层顶水平距离。
+        rho = math.sqrt(max(r * r - self.bottom_radius * self.bottom_radius, 0.0))  # 水平投影。
+        d = self.distance_to_top(r, mu)  # 到层顶的距离。
+        d_min = self.top_radius - r  # 距离下限。
+        d_max = rho + h  # 距离上限。
+        x_mu = (d - d_min) / (d_max - d_min)  # 高度角方向比例。
+        x_r = rho / h  # 半径方向比例。
+        u = self.combined_coord(x_mu, self.transmittance_width, self.combined_width)  # 横坐标。
+        v = self.combined_coord(x_r, self.transmittance_height, self.combined_height)  # 纵坐标。
+        return self.sample(u, v, 32)  # 透过率在第三十二层。
+
+    def transmittance_to_sun(self, r: float, mu_s: float) -> tuple[float, float, float]:
+        """某点朝太阳方向的透过率，贴地时按太阳视半径渐隐。"""
+        sin_theta_h = self.bottom_radius / r  # 地平线俯角正弦。
+        cos_theta_h = -math.sqrt(max(1.0 - sin_theta_h * sin_theta_h, 0.0))  # 地平线余弦。
+        base = self.transmittance_to_top(r, mu_s)  # 基础透过率。
+        edge = smoothstep_range(-sin_theta_h * self.sun_angular_radius,
+                                sin_theta_h * self.sun_angular_radius,
+                                mu_s - cos_theta_h)  # 太阳圆面过渡。
+        return base[0] * edge, base[1] * edge, base[2] * edge
+
+    def irradiance(self, r: float, mu_s: float) -> tuple[float, float, float]:
+        """查某高度朝上接到的太阳与环境辐照度。"""
+        x_r = (r - self.bottom_radius) / (self.top_radius - self.bottom_radius)  # 半径比例。
+        x_mu_s = mu_s * 0.5 + 0.5  # 太阳高度角比例。
+        u = self.combined_coord(x_mu_s, self.irradiance_width, self.combined_width)  # 横坐标。
+        v = self.combined_coord(x_r, self.irradiance_height, self.combined_height) + self.transmittance_height / self.combined_height  # 跳过透过率子图。
+        return self.sample(u, v, 32)  # 辐照度也在第三十二层。
+
+    def lms(self, color: tuple[float, float, float]) -> tuple[float, float, float]:
+        """乘色适应矩阵；行序与着色器的 `ogxApplyRows` 相同。"""
+        return tuple(sum(color[i] * row[i] for i in range(3)) for row in self.lms_rows)  # 三个点积。
+
+    def sun_and_sky(self, sun_direction: tuple[float, float, float]) -> tuple[tuple[float, float, float], tuple[float, float, float], tuple[float, float, float]]:
+        """返回太阳直射辐照度、天空辐照度与太阳透过率。"""
+        r = self.bottom_radius + 0.063  # 相机高度六十三米，单位公里。
+        mu_s = sun_direction[1]  # 相机在行星正上方，太阳高度角余弦就是 y 分量。
+        transmittance = self.transmittance_to_sun(r, mu_s)  # 太阳透过率。
+        sun = self.lms(tuple(self.solar[i] * transmittance[i] for i in range(3)))  # 太阳光谱乘透过率再转色适应空间。
+        sky = self.lms(self.irradiance(r, mu_s))  # 天空辐照度。
+        return sun, sky, transmittance
+
+
+def make_iterationt_cloud_noise() -> tuple[int, int]:
+    """加载 iterationT 的 128 立方基础云噪声与 32 立方细节噪声。"""
+    base = CLOUD_NOISE_PATH.read_bytes()  # RGBA8，128 立方。
+    if len(base) != 128 * 128 * 128 * 4:  # 长度不对说明不是这张纹理。
+        raise RuntimeError(f"基础云噪声长度不符：{len(base)}")
+    detail_raw = CLOUD_DETAIL_PATH.read_bytes()  # RGB8，32 立方。
+    if len(detail_raw) != 32 * 32 * 32 * 3:  # 长度不对说明不是这张纹理。
+        raise RuntimeError(f"细节云噪声长度不符：{len(detail_raw)}")
+    detail = bytearray(32 * 32 * 32 * 4)  # 补成 RGBA8，纹理格式统一。
+    detail[0::4] = detail_raw[0::3]  # 红通道。
+    detail[1::4] = detail_raw[1::3]  # 绿通道。
+    detail[2::4] = detail_raw[2::3]  # 蓝通道。
+    detail[3::4] = b"\xff" * (32 * 32 * 32)  # 透明通道填满，采样端不会读它。
+    return make_texture_3d(128, base), make_texture_3d(32, bytes(detail))  # 两张纹理。
+
+
 def location(program: int, name: str) -> int:
     """取 uniform 位置；不存在时返回负一，OpenGL 会忽略对应写入。"""
     return GL.glGetUniformLocation(program, name)
@@ -301,8 +457,8 @@ class World:
         self.height = max(1, int(round(height * RENDER_SCALE)))  # 内部渲染高度。
         self.half_width = max(1, self.width // 2)  # 半分辨率宽度，用于全局光。
         self.half_height = max(1, self.height // 2)  # 半分辨率高度。
-        self.cloud_width = max(1, self.width // 2)  # 体积云半分辨率；四分之一成本留给多次散射与云内光照。
-        self.cloud_height = max(1, self.height // 2)  # 半分辨率高度。
+        self.cloud_width = max(1, int(round(self.width * 0.75)))  # 体积云用四分之三分辨率，云边比半分辨率清楚，成本仍低于全分辨率。
+        self.cloud_height = max(1, int(round(self.height * 0.75)))  # 四分之三分辨率高度。
         self.reflection_width = max(1, width // REFLECTION_SCALE)  # 反射宽度。
         self.reflection_height = max(1, height // REFLECTION_SCALE)  # 反射高度。
         self.tonemap = tonemap  # 色调映射。
@@ -338,12 +494,13 @@ class World:
         self.object_vao, self.object_vbo = upload_mesh(scene["objects"], [(0, 3, 0), (1, 3, 12), (2, 3, 24), (3, 1, 36), (4, 1, 40)])  # 物体顶点。
         self.water_vao, self.water_vbo = upload_mesh(scene["water"], [(0, 2, 0)])  # 水面顶点。
         self.textures = {}  # 场景纹理集合。
-        noise = cloudnoise.ensure()  # 三维噪声字节。
-        base_size = round((len(noise["base"]) // 4) ** (1.0 / 3.0))  # 按字节数推出立方边长，64 或 128 都能用。
-        self.noise_base = make_texture_3d(base_size, noise["base"])  # 基础形状。
-        self.noise_detail = make_texture_3d(cloudnoise.DETAIL_SIZE, noise["detail"])  # 细节。
+        noise = cloudnoise.ensure()  # 二维扰动纹理仍用本地生成器。
+        self.noise_base, self.noise_detail = make_iterationt_cloud_noise()  # 云噪声直接用 iterationT 的同一份数据。
         self.noise_curl = make_texture_2d(cloudnoise.CURL_SIZE, noise["curl"])  # 二维扰动。
         self.blue_noise = make_blue_noise()  # 蓝噪声。
+        self.atmo_bytes = ATMO_LUT_PATH.read_bytes()[:ATMO_LUT_SIZE]  # 只取纹理部分，末尾多出的字节丢弃。
+        self.atmo_table = AtmosphereTable(self.atmo_bytes)  # CPU 侧的太阳与天空辐照度。
+        self.atmo_lut = make_atmosphere_lut(self.atmo_bytes)  # iterationT 的预计算大气表。
         self.sky_fbo, self.sky_map = make_sky_map(*SKY_MAP_SIZE)  # 等距柱状天空贴图。
         GL.glEnable(GL.GL_TEXTURE_CUBE_MAP_SEAMLESS)  # 立方体边缘不出现接缝；本场景不采样立方体，保留不影响结果。
         self.shadow_fbos = []  # 级联帧缓冲。
@@ -399,7 +556,7 @@ class World:
         self.surface_debug = 0  # 地表调试模式，零正常，一反照率。
         self.fog_debug = 0  # 雾调试模式，零正常，一太阳可见度，二只输出雾散射。
         self.scene_time = 0.0  # 场景时间。
-        self.last_sky_map = -1000  # 上次更新天空立方体的帧。
+        self.static_signature = None  # 相机、太阳与时间的签名；不变时阴影、云影和倒影都不用重画。
         self.camera = camera.Camera([geometry.CAMERA_START[0], self.camera_ground + EYE_HEIGHT, geometry.CAMERA_START[1]], fov=FOV)  # 站立相机。
         self.camera.look_at(list(geometry.LOOK_TARGET))  # 看向湖对岸。
         self.light_matrices = self.build_light_matrices()  # 三级阴影矩阵。
@@ -476,13 +633,20 @@ class World:
         self.camera.turn(delta_x, delta_y)  # 转向。
 
     def bind_common(self, program: int, frame: int, scene_time: float) -> None:
-        """写入所有阶段共用的太阳、相机、时间与云影参数。"""
+        """写入所有阶段共用的太阳、相机、时间、云影参数与大气表。"""
         set_uniforms(program, {
             "uSunDirection": self.sun, "uSunColor": list(SUN_COLOR), "uSunIrradiance": SUN_IRRADIANCE,
             "uSkyIntensity": SKY_INTENSITY, "uTime": scene_time, "uFrame": float(frame),
             "uWaterLevel": geometry.WATER_LEVEL, "uCameraPosition": self.camera.position,
             "uCloudShadowRect": [self.camera.position[0], self.camera.position[2], CLOUD_SHADOW_RANGE, 1.0],
         })  # 通用参数。
+        sun, sky, transmittance = self.atmo_table.sun_and_sky(self.sun)  # 太阳与天空辐照度每帧算一次。
+        fade = 1.0 - smootherstep01(min(max((1.0 - min(max(self.sun[1], 0.0), 1.0)) * 30.0 - 29.0, 0.0), 1.0))  # 太阳贴地时淡出。
+        set_uniforms(program, {"uSunLight": [component * fade for component in sun], "uSkyLight": sky,
+                               "uSunTransmittance": transmittance})  # 预计算光照，片元阶段不再采大气表。
+        GL.glActiveTexture(GL.GL_TEXTURE2)  # 二号单元在所有阶段都不放别的输入。
+        GL.glBindTexture(GL.GL_TEXTURE_3D, self.atmo_lut)  # 预计算大气表，只给天空背景与水天线用。
+        GL.glUniform1i(location(program, "uAtmoLut"), 2)  # 采样器。
 
     def bind_shadows(self, program: int) -> None:
         """绑定三级阴影矩阵、分界与深度图。"""
@@ -511,7 +675,7 @@ class World:
         GL.glUniform1i(location(program, "uSkyMap"), 6)  # 采样器。
 
     def render_shadow(self, frame: int, scene_time: float) -> None:
-        """从太阳方向渲染三级深度；远景级每两帧更新一次，近景每帧更新。"""
+        """从太阳方向渲染三级深度；固定机位只烘一次，移动时远景级每两帧更新。"""
         GL.glEnable(GL.GL_DEPTH_TEST)  # 打开深度。
         GL.glDepthMask(GL.GL_TRUE)  # 写深度。
         GL.glDisable(GL.GL_CULL_FACE)  # 地形与盒子都按朝外绕序，关闭剔除更稳。
@@ -743,7 +907,7 @@ class World:
         self.bind_common(self.composite_program, frame, scene_time)  # 通用参数。
         set_uniforms(self.composite_program, {"uResolution": [float(self.width), float(self.height)],
                                               "uAOTexel": [1.0 / self.half_width, 1.0 / self.half_height],
-                                              "uAoStrength": 1.0, "uContactStrength": 1.0,
+                                              "uAoStrength": 1.0, "uContactStrength": CONTACT_STRENGTH,
                                               "uBounceStrength": BOUNCE_STRENGTH})  # 参数。
         for unit, texture, name in ((0, self.scene_direct, "uDirect"), (1, self.scene_indirect, "uIndirect"),
                                     (2, self.scene_normal, "uNormalDepth"), (3, self.scene_albedo, "uAlbedoRough"),
@@ -834,7 +998,7 @@ class World:
                                         "uProjectionInverse": perspective_inverse(FOV, aspect, NEAR, FAR),
                                         "uPreviousViewProjection": self.previous_view_projection,
                                         "uCameraPos": self.camera.position, "uRight": right, "uUp": up,
-                                        "uForward": forward, "uBlend": 1.0 if frame < 2 else 0.10,
+                                        "uForward": forward, "uBlend": 1.0 if frame < 2 else TAA_BLEND,
                                         "uFar": FAR, "uJitter": self.jitter_uv()})  # 参数。
         for unit, texture, name in ((13, self.fog_color, "uCurrent"), (14, self.taa_color[self.taa_index], "uHistory"),
                                     (15, self.water_depth, "uDepth")):  # 输入。
@@ -933,13 +1097,19 @@ class World:
         self.scene_time = scene_time  # 场景时间。
         pattern = JITTER_SEQUENCE[frame % len(JITTER_SEQUENCE)]  # 次像素抖动。
         self.jitter = (pattern[0] - 0.5, pattern[1] - 0.5)  # 居中。
+        # 相机、太阳与时间都不变时，阴影、云影、天空贴图和倒影完全是上一帧的结果。
+        # 固定机位截图里跳过这些重复计算，省下的时间留给云、雾、水面与时间抗锯齿。
+        forward = self.camera.forward()  # 相机朝向参与签名，转身时阴影级联要重算。
+        signature = (round(scene_time, 2), *[round(value, 3) for value in self.camera.position],
+                     *[round(value, 3) for value in forward], *[round(value, 3) for value in self.sun])  # 场景签名。
+        static_update = signature != self.static_signature  # 只有场景变化才更新静态资源。
         stages = (
-            ("shadow", lambda: self.render_shadow(frame, scene_time)),  # 阴影每帧更新近景，远景隔帧。
-            ("cloudShadow", lambda: self.render_cloud_shadow(frame, scene_time) if frame % CLOUD_SHADOW_INTERVAL == 0 else None),  # 云影。
-            ("skyCube", lambda: self.render_sky_map(frame, scene_time) if frame - self.last_sky_map >= SKY_MAP_INTERVAL else None),  # 天空立方体。
+            ("shadow", lambda: self.render_shadow(frame, scene_time) if static_update else None),  # 静态场景只烘一次阴影。
+            ("cloudShadow", lambda: self.render_cloud_shadow(frame, scene_time) if static_update else None),  # 云影。
+            ("skyCube", lambda: self.render_sky_map(frame, scene_time) if static_update else None),  # 天空立方体。
             ("clouds", lambda: self.render_clouds(frame, scene_time)),  # 体积云。
             ("scene", lambda: self.render_scene(frame, scene_time)),  # 不透明场景。
-            ("reflection", lambda: self.render_reflection(frame, scene_time) if frame % REFLECTION_INTERVAL == 0 else None),  # 平面反射。
+            ("reflection", lambda: self.render_reflection(frame, scene_time) if static_update else None),  # 平面反射。
             ("gi", lambda: self.render_gi(frame, scene_time)),  # 遮蔽与反弹。
             ("composite", lambda: self.render_composite(frame, scene_time)),  # 直射与间接合成。
             ("water", lambda: self.render_water(frame, scene_time)),  # 水面。
@@ -955,9 +1125,8 @@ class World:
             if self.profile:  # 开发性能。
                 GL.glFinish()  # 等待显卡。
                 print(f"{name:>10}: {(time.perf_counter() - started) * 1000.0:6.2f} ms")  # 输出。
+        self.static_signature = signature  # 记录这一帧的场景状态。
         self.previous_view_projection = self.view_projection()  # 保存历史矩阵。
-        if frame - self.last_sky_map >= SKY_MAP_INTERVAL:  # 记录更新时间。
-            self.last_sky_map = frame  # 更新。
         self.frame = frame  # 保留。
 
     def exposure_value(self) -> float:
@@ -990,7 +1159,7 @@ class World:
             GL.glDeleteProgram(program)  # 删除。
         GL.glDeleteVertexArrays(4, [self.fullscreen, self.terrain_vao, self.object_vao, self.water_vao])  # 顶点数组。
         GL.glDeleteBuffers(3, [self.terrain_vbo, self.object_vbo, self.water_vbo])  # 缓冲。
-        textures = [self.noise_base, self.noise_detail, self.noise_curl, self.blue_noise, self.sky_map,
+        textures = [self.noise_base, self.noise_detail, self.noise_curl, self.blue_noise, self.sky_map, self.atmo_lut,
                     self.scene_direct, self.scene_indirect, self.scene_normal, self.scene_albedo, self.scene_depth,
                     self.reflection_color, self.reflection_depth, self.lit_color, self.water_color, self.water_depth,
                     self.fog_color, self.cloud_raw, self.cloud_accum, self.cloud_temp, self.cloud_blur, self.cloud_shadow, self.lum_tile, self.lum_final,
@@ -1090,7 +1259,7 @@ def main() -> None:
     parser.add_argument("--window", action="store_true", help="打开可交互窗口")  # 交互。
     parser.add_argument("--time", type=float, default=14.0, help="固定场景时间，秒")  # 时间。
     parser.add_argument("--exposure-key", type=float, default=EXPOSURE_KEY, help="自动曝光目标亮度")  # 曝光。
-    parser.add_argument("--tonemap", type=int, default=1, choices=(0, 1, 2), help="零 AgX，一 ACES，二无压缩")  # 曲线。
+    parser.add_argument("--tonemap", type=int, default=0, choices=(0, 1, 2), help="零 AgX，一 ACES，二无压缩")  # 曲线。
     parser.add_argument("--bloom", type=float, default=BLOOM_STRENGTH, help="泛光强度")  # 泛光。
     parser.add_argument("--water-debug", type=int, default=0, help="水面调试：零正常，一法线，二反射，三折射，四高光")  # 水面调试。
     parser.add_argument("--surface-debug", type=int, default=0, help="地表调试：零正常，二反照率")  # 地表调试。

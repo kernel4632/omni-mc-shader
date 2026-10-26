@@ -1,5 +1,60 @@
 # omni-gfx 验证记录
 
+## 〇、2026-10-26 光影验收 v5：按 iterationT 3.2.0 对齐
+
+设备：Intel(R) Arc(TM) Graphics，OpenGL 3.3.0 - Build 32.0.101.8531，Windows。本轮没有启动 Minecraft。
+
+| 命令 | 结果 |
+| --- | --- |
+| `python omni-gfx/build.py check` | 生成文件与源一致；24 个模块；测试世界与光影验证场景各 2 个入口的 GLSL 编译与中文说明审计通过 |
+| `python build.py audit` | 中文注释与实现审计通过（110 个代码文件） |
+| `python build.py verify` | 148 个测试全部通过；9 组唯一编译探针通过；打包完成 |
+| `python build.py compile` | 全部程序 × 两种代表配置 × 基础与开远景环境，280 组唯一程序，0 错误 |
+| `omni-gfx/examples/lighting/render.py --frames 10 --warmup 60` | 1280×720，平均 16.86 毫秒、中位 16.74、95 分位 17.67、最小 16.36、最大 17.67，约 59.3 帧每秒 |
+
+截图：`.dev/omni-gfx/world-iterationt.png`；并排：`.dev/omni-gfx/world-iterationt-comparison.png`；帧时：`.dev/omni-gfx/world-iterationt.json`。这三个文件只在本机 `.dev/`，按项目规则不提交。
+
+### 这一轮对齐了什么
+
+| 项目 | 参考位置 | 本场景实现 |
+| --- | --- | --- |
+| 大气与太阳 | `Lib/BasicFounctions/PrecomputedAtmosphere.glsl`、`Lib/Programs/CompositeVS.glsl` | 直接加载参考包的 `AtmoData_620_540_440_n4.bin`（512×128×33 RGBA32F）；太阳辐照度、天空辐照度与太阳透过率在 CPU 每帧查一次，片元阶段读 uniform；天空背景仍逐像素查同一张表 |
+| 曝光与色调映射 | `Lib/Programs/Final.glsl`、`Lib/Settings.glsl` | AgX、`AGX_EV 13`、乘 2.3、Abney 校正、伽马 2.2；自动曝光 `AE_CURVE 0.7`、参考亮度 0.18；暗角 0.4、强度零 |
+| 阴影 | `Lib/BasicFounctions/Sunlight_Shadow.glsl` | 九点遮挡搜索、十六点螺旋过滤、半影一到两个纹素；法线与深度偏置按级联缩放；远景退化成五点百分比过滤 |
+| 环境光遮蔽 | `Lib/IndividualFounctions/GTAO.glsl` | `ogxGroundTruthAo`：三切片、每片三步、世界半径 2 米、强度 0.95、多重反弹 |
+| 体积云 | `Lib/IndividualFounctions/NUBIS.glsl` | 参考包 128 立方基础噪声与 32 立方细节噪声；云底 500 米、云顶 1000 米、覆盖 0.28、密度 1.0、底部亮度 0.15、外散射 1.3、直射 36 倍、五次光照步进、二十步最多 |
+| 体积雾 | `Lib/IndividualFounctions/VolumetricFog.glsl` | 密度 0.01、衰减 40、六步 `pow(11,u)`、四次太阳方向密度取样、双瓣相位、四阶多次散射、粉末效应、天光 0.32、太阳 0.7 |
+| 水面 | `composite1.fsh` 的水体函数、`Lib/IndividualFounctions/Reflections/SSR.glsl` | 吸收色 (0.2,0.5,0.7)、吸收指数 0.21、可见度 0.29、水体雾色、Schlick 菲涅尔与可见性项；反射用镜像相机平面反射代替屏幕空间追踪 |
+| 时间抗锯齿 | `Lib/Settings.glsl`、`Lib/BasicFounctions/TAA.glsl` | 历史权重 0.97，本帧权重 0.03；八相位次像素抖动 |
+
+### 大气表的读取修正
+
+参考纹理文件是 512×128×33 的 RGBA32F（34,603,008 字节），末尾另有 163,840 字节数据。上一版误把开头 163,840 字节当成文件头跳过，导致整张表下移二十行：天空偏白、天空辐照度接近零。现在上传前 34,603,008 字节，CPU 查表使用同一段数据。
+
+GPU 探针在 1×1 目标里调用 `ogxAtmoSunSkyIrradiance`，与 CPU 侧 `AtmosphereTable.sun_and_sky` 的结果逐位比较：
+
+```text
+GPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
+CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
+```
+
+### 画面检查
+
+- 暗部层次：树冠背光面、拱门侧面、三个球的暗面保留蓝灰天光与草地反弹，没有压成纯黑。
+- 阴影软硬：拱门在右坡上的投影有清楚的接触端和一到两个纹素的半影；树冠自阴影边缘比旧版锐，近景不再是一团灰。
+- 云底与云顶：云顶白、云底蓝灰，云块边缘有花椰菜状鼓包；近距离云没有可见的整步横向条纹。
+- 水面反射：远岸与天空在湖面形成连续倒影，近处深水收敛到暗青；晴天泡沫与水面地形阴影造成的白色斑点已去掉。
+- 雾的远近：近景草地与湖岸清楚，远岸树线与山脊带一层很薄的蓝灰空气透视；没有铺满全屏的白纱。
+
+### 仍未验证
+
+- Minecraft 游戏内画面、性能与兼容性；离线编译和测试世界不能代替世界内效果。
+- 其他显卡与驱动；本轮帧时只代表这台 Intel Arc 和这个固定机位。
+- 水面是四分之一分辨率镜像相机平面反射，不是参考包的屏幕空间追踪；两者在出屏倒影和水下遮挡上会有差异。
+- 彩色反弹是屏幕空间的邻域反照率近似，不是参考包的 RSM 光线步进；暗部颜色方向一致，但多次反弹强度不能逐像素相等。
+- 没有天气、月亮、星空和维度切换；本场景只验证主世界晴天。
+- 共享模块 `cloud_volume` 的密度组合、竖直包络与云光照已按 NUBIS 改写；Minecraft 内的云形、云量与云底亮度会随之变化，本轮没有游戏内画面验证。
+
 ## 一、2026-10-24 阶段三收尾（0.4.1）
 
 设备：Intel(R) Arc(TM) Graphics，OpenGL 3.3.0 - Build 32.0.101.8531，Windows。本轮没有启动 Minecraft。

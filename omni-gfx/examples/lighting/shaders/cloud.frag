@@ -30,7 +30,7 @@ void main()
     }
     vec2 noise = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy) + ivec2(int(uFrame) * 37, int(uFrame) * 53)); // 每帧换相位的蓝噪声。
     vec2 jitter = vec2(0.5) + (noise - vec2(0.5)) * 0.85; // 接近整步抖动；不做整步抖动，厚云会在固定高度留下横纹。
-    vec4 cloud = lightingCloudMarch(direction, jitter, uCloudSteps); // 库的体积云步进。
+    vec4 cloud = lightingCloudMarch(direction, jitter); // 库的体积云步进，步数由 iterationT 的规则决定。
     vec4 history = texture(uCloudHistory, uv); // 上一帧同一像素。
     // 简单邻域夹紧：把历史限制在本帧颜色附近，移动相机时不会拖出一条旧云。
     history = clamp(history, cloud - vec4(0.18, 0.18, 0.18, 0.22), cloud + vec4(0.18, 0.18, 0.18, 0.22));

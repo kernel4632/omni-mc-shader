@@ -71,28 +71,25 @@ void main()
     vec3 worldPos = uCameraPosition + uRight * viewPos.x + uUp * viewPos.y - uForward * viewPos.z; // 世界位置。
     vec3 sunDirection = normalize(uSunDirection); // 太阳方向。
     float rotation = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy)).x * 6.28318530718 + uFrame * 2.399963229728653; // 逐像素逐帧旋转。
-    // 环境光遮蔽：十二个半球样本，半径一米二；只统计真正挡在天光方向上的近处几何。
-    float occlusion = 0.0; // 遮挡计数。
-    for (int i = 0; i < 8; i++) // 八个样本对半分辨率足够。
-    {
-        vec3 direction = hemisphereDirection(normal, float(i), 8.0, rotation); // 半球方向。
-        vec3 samplePos = viewPos + direction * (0.85 + 0.65 * fract(float(i) * 0.618)); // 半径在一米二附近抖动。
-        bool valid; // 投影是否有效。
-        vec3 projected = projectView(samplePos, valid); // 投到屏幕。
-        if (!valid || projected.x < 0.0 || projected.x > 1.0 || projected.y < 0.0 || projected.y > 1.0) // 出屏跳过。
-        {
-            continue; // 不产生遮挡。
-        }
-        float sampleDepth = texture(uDepth, projected.xy).r; // 样本位置的场景深度。
-        vec3 scenePos = viewPosition(projected.xy, sampleDepth); // 场景在那里的视空间位置。
-        float bias = 0.025; // 自遮挡偏置。
-        if (scenePos.z > samplePos.z + bias) // 场景更靠近相机，说明样本点在几何后面。
-        {
-            float range = smoothstep(0.0, 1.0, 1.0 - length(samplePos - viewPos) / 1.8); // 远处样本权重递减。
-            occlusion += range; // 累加遮挡。
-        }
-    }
-    float ao = 1.0 - min(occlusion / 8.0 * 1.6, 0.92) * uAoStrength; // 换成零到一遮蔽。
+    // 环境光遮蔽：直接调用 iterationT 的 GTAO，三切片、每片三步、世界半径两米。
+    // 为什么用世界半径：屏幕半径在近处会把半米宽的缝隙算成整片黑，世界半径才能保住暗部层次。
+    OgxGtaoParams gtao; // 参数结构体。
+    gtao.steps = 3.0; // GTAO_QUALITY。
+    gtao.slice_steps = 3.0; // GTAO_SLICE_QUALITY。
+    gtao.falloff_start = 0.7; // GTAO_FALLOFF_START。
+    gtao.max_sample_radius = 0.1; // GTAO_MAX_RADIUS。
+    gtao.world_radius = 2.0; // GTAO_WORLD_RADIUS。
+    gtao.screen_radius = 0.05; // 屏幕半径模式下才会用到。
+    gtao.strength = 0.95; // GTAO_STRENGTH。
+    gtao.radius_mode = 0; // 世界半径模式。
+    gtao.has_dh = false; // 本场景没有远景深度。
+    gtao.dh_ao = false; // 不把远景样本当遮挡物。
+    gtao.falloff_z_offset = false; // 默认按距离衰减。
+    vec3 normalView = normalize(vec3(dot(normal, uRight), dot(normal, uUp), -dot(normal, uForward))); // 视空间法线。
+    float aspect = uFullResolution.x / max(uFullResolution.y, 1.0); // 画面宽高比。
+    vec2 gtaoNoise = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy) + ivec2(int(uFrame) * 13, int(uFrame) * 7)).xy; // 每像素逐帧抖动。
+    float ao = ogxGroundTruthAo(viewPos, normalize(viewPos), normalView, uv, aspect, uDepth, uDepth,
+                                uProjection, uProjectionInverse, uProjectionInverse, gtao, gtaoNoise); // 地平线遮蔽。
     ao = clamp(ao, 0.05, 1.0); // 不压到纯黑，阴影里仍保留天光。
     // 接触阴影：沿太阳方向在屏幕上短距离步进，专门抓球与地面、方块与地面之间的窄缝。
     float contact = 1.0; // 默认没有接触遮挡。

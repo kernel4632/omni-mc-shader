@@ -74,14 +74,14 @@ void main()
     vec3 normal = ogxDecodeNormal(normalDepth.xy); // 世界法线。
     vec4 aoContact = upsampleAo(uv, depth); // 升采样遮蔽。
     vec3 bounce = upsampleBounce(uv, depth); // 升采样反弹。
-    float ao = mix(1.0, aoContact.r, uAoStrength); // 环境光遮蔽。
+    vec3 ao = ogxAoMultiBounce(aoContact.r, albedo); // iterationT 的多重反弹遮蔽，暗部按反照率提亮。
     float contact = mix(1.0, aoContact.g, uContactStrength); // 接触阴影。
-    // 间接光被环境光遮蔽压暗，但保留三成下限，阴影里仍有天光而不是纯黑。
-    indirect *= mix(0.28, 1.0, ao);
-    // 直射光被接触阴影压暗；接触处的几何遮挡比 PCSS 的半影更近。
+    // 间接光乘多重反弹遮蔽：洞穴和物体底部变暗，但高反照率的墙面会把光反弹回来。
+    indirect *= ao;
+    // 直射光被接触阴影压暗；接触处的几何遮挡比 VPS 的半影更近。
     direct *= mix(0.04, 1.0, contact);
     // 颜色反弹：邻域反照率当成一盏很低强度的彩色环境光，朝上的面接收更多。
     float skyFacing = 0.35 + 0.65 * clamp(normal.y, 0.0, 1.0); // 朝上的面接收更多环境反弹。
-    indirect += albedo * bounce * (uBounceStrength * skyFacing * mix(0.35, 1.0, ao));
+    indirect += albedo * bounce * (uBounceStrength * skyFacing * mix(0.35, 1.0, aoContact.r));
     fragColor = vec4(direct + indirect, 1.0); // 合成。
 }

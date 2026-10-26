@@ -49,68 +49,73 @@ float lightingPcf0(vec3 coordinate, float bias, vec2 rotation) // 返回零到�
 }
 
 // PCSS 第一级：先找遮挡物平均深度，再按深度差决定过滤半径。
+// 数值与 iterationT 的 可变半影 相同：九点遮挡搜索、十六点螺旋过滤、半影只有一到两个纹素，
+// 所以树影边缘是清楚的一条细软边，而不是一大片灰雾。
 float lightingPcss0(vec3 coordinate, float bias, vec2 rotation) // 返回零到一可见度。
 {
     float texel = uShadowTexel; // 纹素大小。
     float blockerSum = 0.0; // 遮挡物深度和。
     float blockerCount = 0.0; // 遮挡物样本数。
-    for (int i = 0; i < 6; i++) // 六点搜索，覆盖球体边缘与硬边。
+    float depthDiff = 0.0; // 遮挡深度差的平方和，用来决定半影宽度。
+    for (int i = 0; i < 9; i++) // 九点遮挡搜索，与 iterationT 的 3×3 相同。
     {
-        vec2 offset = lightingSpiralOffset(i, 6, rotation) * texel * 4.0; // 搜索半径四个纹素。
+        vec2 offset = lightingSpiralOffset(i, 9, rotation) * texel; // 一个纹素内搜索。
         float depth = texture(uShadowMap0, coordinate.xy + offset).r; // 该点最近遮挡物深度。
         if (depth < coordinate.z - bias) // 只有比接收点更近的样本才算遮挡。
         {
             blockerSum += depth; // 累加深度。
             blockerCount += 1.0; // 计数。
+            float difference = clamp((coordinate.z - depth) * 20.0, 0.0, 0.025); // 深度差归一化。
+            depthDiff += difference * difference; // 平方累加。
         }
     }
-    if (blockerCount < 0.5) // 没有遮挡物：退回单点比较，保住曲面自阴影与薄物体阴影。
+    if (blockerCount < 0.5) // 没有遮挡物：退回单点比较。
     {
         return step(coordinate.z - bias, texture(uShadowMap0, coordinate.xy).r); // 中心样本可见度。
     }
-    float blocker = blockerSum / blockerCount; // 平均遮挡物深度。
-    float gap = max(coordinate.z - blocker, 0.0); // 遮挡物与接收点的深度差。
-    float radiusTexels = clamp(gap * 2600.0, 2.0, 13.0); // 半影至少两个纹素，边缘不会退化成硬边。
+    float penumbra = sqrt(depthDiff / blockerCount) * 20.0 + 1.0; // 半影宽度，最窄一个纹素。
     float visible = 0.0; // 受光样本数。
-    for (int i = 0; i < 6; i++) // 六点百分比过滤。
+    for (int i = 0; i < 16; i++) // 十六点百分比过滤，与 可变半影_QUALITY 相同。
     {
-        vec2 offset = lightingSpiralOffset(i, 6, rotation) * texel * radiusTexels; // 半影半径内的样本。
+        vec2 offset = lightingSpiralOffset(i, 16, rotation) * texel * penumbra; // 半影半径内的样本。
         float depth = texture(uShadowMap0, coordinate.xy + offset).r; // 读样本深度。
         visible += step(coordinate.z - bias, depth); // 接收点不深于样本就算受光。
     }
-    return visible / 6.0; // 平均可见度。
+    return visible / 16.0; // 平均可见度。
 }
 
-// PCSS 第二级：样本减少到六加八，远处像素在画面上只占几像素。
+// PCSS 第二级：同样的 可变半影 形状，搜索圈略大，半影仍限制在两三个纹素。
 float lightingPcss1(vec3 coordinate, float bias, vec2 rotation) // 返回零到一可见度。
 {
     float texel = uShadowTexel; // 纹素大小。
     float blockerSum = 0.0; // 遮挡物深度和。
     float blockerCount = 0.0; // 遮挡物样本数。
-    for (int i = 0; i < 6; i++) // 六点搜索。
+    float depthDiff = 0.0; // 深度差平方和。
+    for (int i = 0; i < 9; i++) // 九点搜索。
     {
-        vec2 offset = lightingSpiralOffset(i, 6, rotation) * texel * 5.0; // 搜索半径五个纹素。
+        vec2 offset = lightingSpiralOffset(i, 9, rotation) * texel * 1.5; // 中景搜索略宽。
         float depth = texture(uShadowMap1, coordinate.xy + offset).r; // 样本深度。
         if (depth < coordinate.z - bias) // 更近的样本才是遮挡物。
         {
             blockerSum += depth; // 累加。
             blockerCount += 1.0; // 计数。
+            float difference = clamp((coordinate.z - depth) * 14.0, 0.0, 0.025); // 中景深度差归一化更慢。
+            depthDiff += difference * difference; // 平方累加。
         }
     }
     if (blockerCount < 0.5) // 没有遮挡：退回单点比较。
     {
         return step(coordinate.z - bias, texture(uShadowMap1, coordinate.xy).r); // 中心样本。
     }
-    float gap = max(coordinate.z - blockerSum / blockerCount, 0.0); // 深度差。
-    float radiusTexels = clamp(gap * 1800.0, 2.0, 9.0); // 第二级覆盖更大，半影上限略小。
+    float penumbra = sqrt(depthDiff / blockerCount) * 22.0 + 1.2; // 中景半影略宽。
     float visible = 0.0; // 受光样本数。
-    for (int i = 0; i < 6; i++) // 六点过滤。
+    for (int i = 0; i < 16; i++) // 十六点过滤。
     {
-        vec2 offset = lightingSpiralOffset(i, 6, rotation) * texel * radiusTexels; // 半影半径。
+        vec2 offset = lightingSpiralOffset(i, 16, rotation) * texel * penumbra; // 半影半径。
         float depth = texture(uShadowMap1, coordinate.xy + offset).r; // 样本深度。
         visible += step(coordinate.z - bias, depth); // 比较。
     }
-    return visible / 6.0; // 平均。
+    return visible / 16.0; // 平均。
 }
 
 // 中景五点 百分比过滤：远景不需要半影形状，五点核足够软，成本只有完整 PCSS 的三分之一。
@@ -146,8 +151,8 @@ float lightingShadow(vec3 worldPosition, vec3 normal, float viewDepth, float dit
     float facing = max(dot(normal, normalize(uSunDirection)), 0.0); // 表面朝太阳的程度。
     int cascade = viewDepth > uCascadeSplits.y ? 2 : (viewDepth > uCascadeSplits.x ? 1 : 0); // 选级。
     float farScale = cascade == 0 ? 1.0 : (cascade == 1 ? 2.6 : 7.0); // 级联越远，一个纹素覆盖的世界尺寸越大。
-    float normalBias = (0.018 + 0.055 * (1.0 - facing)) * farScale; // 掠射与远景沿法线推开更多，避免条纹。
-    float depthBias = 0.00004 + 0.00022 * (1.0 - facing) + (cascade == 2 ? 0.00055 : (cascade == 1 ? 0.00016 : 0.0)); // 远景加更大的深度偏置，压住斜坡条纹。
+    float normalBias = (0.012 + 0.040 * (1.0 - facing)) * farScale; // 掠射与远景沿法线多推开一点，避免条纹。
+    float depthBias = 0.00002 + 0.00012 * (1.0 - facing) + (cascade == 2 ? 0.00035 : (cascade == 1 ? 0.00010 : 0.0)); // 远景加更大的深度偏置。
     vec2 rotation = vec2(cos(dither * 6.28318530718), sin(dither * 6.28318530718)); // 每个像素的螺旋旋转。
     float split = cascade == 0 ? uCascadeSplits.x : (cascade == 1 ? uCascadeSplits.y : uCascadeSplits.z); // 当前级分界。
     float blend = cascade < 2 ? clamp((viewDepth - (split - uCascadeBlend)) / max(uCascadeBlend, 1e-4), 0.0, 1.0) : 0.0; // 交界权重。
@@ -156,18 +161,17 @@ float lightingShadow(vec3 worldPosition, vec3 normal, float viewDepth, float dit
     if (cascade == 0) // 近景。
     {
         coordinate = lightingShadowCoord(uShadowMatrix0, worldPosition, normal, normalBias); // 第一级坐标。
-        // 只有镜头附近真正需要软边与接触感的表面用完整 PCSS；大部分地面用五点 百分比过滤，省下填充成本。
-        primary = viewDepth < 16.0 ? lightingPcss0(coordinate, depthBias, rotation) : lightingPcf0(coordinate, depthBias, rotation);
+        primary = lightingPcss0(coordinate, depthBias, rotation); // 完整 可变半影，半影只有一到两个纹素。
     }
     else if (cascade == 1) // 中景。
     {
         coordinate = lightingShadowCoord(uShadowMatrix1, worldPosition, normal, normalBias); // 第二级坐标。
-        primary = lightingPcf1(coordinate, depthBias, rotation); // 中景五点 百分比过滤。
+        primary = lightingPcss1(coordinate, depthBias, rotation); // 中景 可变半影。
     }
     else // 远景。
     {
         coordinate = lightingShadowCoord(uShadowMatrix2, worldPosition, normal, normalBias); // 第三级坐标。
-        primary = lightingPcf2(coordinate, depthBias); // 五点 百分比过滤。
+        primary = lightingPcf2(coordinate, depthBias); // 远景只需要整体明暗。
     }
     // 阴影坐标出界说明两级覆盖范围不一致，出界时按受光处理，避免画面边缘出现黑框。
     if (any(lessThan(coordinate.xy, vec2(0.0))) || any(greaterThan(coordinate.xy, vec2(1.0)))) // 纹理范围判断。
@@ -183,7 +187,7 @@ float lightingShadow(vec3 worldPosition, vec3 normal, float viewDepth, float dit
     if (cascade == 0) // 零到一。
     {
         nextCoord = lightingShadowCoord(uShadowMatrix1, worldPosition, normal, normalBias); // 第二级。
-        secondary = lightingPcf1(nextCoord, depthBias, rotation); // 第二级查询。
+        secondary = lightingPcss1(nextCoord, depthBias, rotation); // 第二级查询。
     }
     else // 一到二。
     {
@@ -193,7 +197,7 @@ float lightingShadow(vec3 worldPosition, vec3 normal, float viewDepth, float dit
     return mix(primary, secondary, blend); // 交界平滑过渡。
 }
 
-// 雾用的简化阴影：三点 百分比过滤，不做遮挡物搜索；雾每帧要采样十几次，成本必须低。
+// 雾用的简化阴影：单点比较，与 iterationT 的 体积雾 每次取样一次阴影贴图相同。
 float lightingShadowCheap(vec3 worldPosition, vec3 normal, float viewDepth, float dither) // 返回零到一可见度。
 {
     int cascade = viewDepth > uCascadeSplits.y ? 2 : (viewDepth > uCascadeSplits.x ? 1 : 0); // 选级。
@@ -215,28 +219,9 @@ float lightingShadowCheap(vec3 worldPosition, vec3 normal, float viewDepth, floa
         return 1.0; // 受光。
     }
     float bias = 0.0002; // 雾点通常在半空，深度偏置取中间值；偏置过大会让近树影子消失。
-    float texel = uShadowTexel * 1.5; // 略宽的核。
-    vec2 offset = vec2(cos(dither * 6.28318530718), sin(dither * 6.28318530718)) * texel; // 每次步进取不同方向。
-    float visible; // 可见度。
-    if (cascade == 0) // 第一级贴图。
-    {
-        visible = step(coordinate.z - bias, texture(uShadowMap0, coordinate.xy).r) * 0.5; // 中心。
-        visible += step(coordinate.z - bias, texture(uShadowMap0, coordinate.xy + offset).r) * 0.25; // 一个偏移。
-        visible += step(coordinate.z - bias, texture(uShadowMap0, coordinate.xy - offset).r) * 0.25; // 另一个偏移。
-    }
-    else if (cascade == 1) // 第二级贴图。
-    {
-        visible = step(coordinate.z - bias, texture(uShadowMap1, coordinate.xy).r) * 0.5; // 中心。
-        visible += step(coordinate.z - bias, texture(uShadowMap1, coordinate.xy + offset).r) * 0.25; // 偏移。
-        visible += step(coordinate.z - bias, texture(uShadowMap1, coordinate.xy - offset).r) * 0.25; // 偏移。
-    }
-    else // 第三级贴图。
-    {
-        visible = step(coordinate.z - bias, texture(uShadowMap2, coordinate.xy).r) * 0.5; // 中心。
-        visible += step(coordinate.z - bias, texture(uShadowMap2, coordinate.xy + offset).r) * 0.25; // 偏移。
-        visible += step(coordinate.z - bias, texture(uShadowMap2, coordinate.xy - offset).r) * 0.25; // 偏移。
-    }
-    return visible; // 三点加权平均。
+    if (cascade == 0) return step(coordinate.z - bias, texture(uShadowMap0, coordinate.xy).r); // 第一级单点。
+    if (cascade == 1) return step(coordinate.z - bias, texture(uShadowMap1, coordinate.xy).r); // 第二级单点。
+    return step(coordinate.z - bias, texture(uShadowMap2, coordinate.xy).r); // 第三级单点。
 }
 
 #endif // 阴影采样结束。

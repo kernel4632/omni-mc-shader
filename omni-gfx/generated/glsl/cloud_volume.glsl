@@ -57,6 +57,13 @@ float ogxCumulusCurve(float x)
     return x * x * (3.0 - 2.0 * x); // 两端导数为零，云的口沿不会出现折线。
 }
 
+// NUBIS 的顶部曲线：以 1 为顶点、在 0 与 2 处落到零的抛物线，用来把云顶收圆。
+float ogxCumulusCurveTop(float x)
+{
+    x = x - 1.0; // 把顶点移到一。
+    return 1.0 - x * x; // 二次曲线在两端降到零。
+}
+
 // 把步进位置换成云坐标：竖直方向按行星曲率弯曲，水平方向随高度剪切。
 // 曲率修正让远处的云跟着地球弧度下沉，否则云层会像一块硬板挂在天边。
 // 为什么保留 `cloud_scale`：Minecraft 侧用公里，测试世界用米；调用方乘一次就能统一，
@@ -76,42 +83,36 @@ vec2 ogxCumulusSampleDensity(vec4 cloudPos, OgxCumulusMedia media, bool sampleDe
     sampler3D baseNoise, sampler3D detailNoise, sampler2D curlNoise, float baseScale, float coverageOffset,
     float detailScale, float detailStrength)
 {
-    // 参考 Nubis 的密度组合：yzw 三种 Worley 作为阈值，x 通道作为 Perlin-Worley 形状，
+    // 与 iterationT 的 NUBIS 逐行一致：yzw 三种 Worley 作为阈值，x 通道作为 Perlin-Worley 形状，
     // 再乘竖直包络。128 立方纹理的通道分布与这套公式直接对应，云块边缘才有细碎的花椰菜鼓包。
     vec4 baseSample = textureLod(baseNoise, cloudPos.xyz * baseScale + media.wind * 10.0, 0.0);
     float baseDensity = baseSample.y * 0.4 + baseSample.z * 0.4 + baseSample.w * 0.2;
     baseDensity = ogxRemapSaturate(baseSample.x, baseDensity - 1.0, 1.0);
-    // 天气图分两个尺度：低频先圈出几公里宽的大云团，高频再把同一片天空打碎成大小不一的云泡。
-    // 只用一层五十五公里周期的低频噪声时，整片天空只会长出一朵巨大的云，看起来像蘑菇。
-    float coverageLow = textureLod(curlNoise, cloudPos.xz * 1.0e-5 + media.wind.xz * 0.002
-        + vec2(coverageOffset), 0.0).r;
-    float coverageHigh = textureLod(curlNoise, cloudPos.xz * 3.2e-5 + media.wind.xz * 0.006
-        + vec2(coverageOffset * 1.7 + 0.37), 0.0).g;
-    float coverageNoise = coverageLow * 0.75 + coverageHigh * 0.25;
-    // 云顶收口高度随高频天气变化：有的云长到接近云层顶，有的只到中段，云的体量因此不同。
-    float topStart = mix(0.58, 0.84, ogxSaturate(coverageHigh * 1.25));    // 竖直包络：底部在很短的高度内到达满密度，形成平底；顶部慢慢收圆。
-    // 旧版把底部密度从零慢慢抬起，侧面看会变成上宽下窄的蘑菇柄；同时去掉顶部过强的曲线。
-    float bottomShape = smoothstep(0.0, 0.045, cloudPos.w);
-    float topShape = 1.0 - smoothstep(topStart, 1.0, cloudPos.w);
-    baseDensity *= bottomShape * topShape;
-    baseDensity *= 0.82 + 0.18 * ogxFastSqrt(ogxSaturate(cloudPos.w * 2.5));
-    // 大尺度云量：同一纵列从云底到云顶共享同一份覆盖，积云才会从平底往上长。
-    // 把天气噪声换成“云量”再当密度阈值：噪声低的地方阈值接近一，整列都是蓝天；
-    // 噪声高的地方阈值下降，只留下被三维噪声填满的云块。这样天空既有清楚的云团，也有蓝天缝。
-    float cloudField = ogxSaturate((coverageNoise - (1.0 - coverage)) / max(coverage, 0.05));
-    float densityThreshold = mix(1.0, 0.04, cloudField);
-    baseDensity = ogxRemapSaturate(baseDensity, densityThreshold, 1.0);
+    // 竖直包络：底部快速到达满密度形成平底，顶部用两段曲线收圆，云不会长成蘑菇柄。
+    float shapeCurve = ogxCumulusCurveTop(ogxSaturate(1.0 - cloudPos.w)) * 0.5;
+    shapeCurve += ogxCumulusCurve(ogxSaturate(1.15 - cloudPos.w * 1.43)) * 0.5;
+    baseDensity *= shapeCurve;
+    baseDensity *= ogxFastSqrt(ogxSaturate(cloudPos.w * 2.5)) * 0.2 + 0.8;
+    baseDensity *= mix(1.0, ogxCumulusCurveTop(ogxSaturate(cloudPos.w * 3.0)), media.wetness);
+    // 云量：同一纵列从云底到云顶共享同一份覆盖，积云才会从平底往上长。
+    // 噪声低的地方阈值接近一，整列都是蓝天；噪声高的地方阈值下降，只留下被三维噪声填满的云块。
+    float coverageNoise = textureLod(baseNoise, cloudPos.xyz * vec3(8.5e-5, -1.0e-5, 8.5e-5)
+        + media.wind + vec3(coverageOffset, coverageOffset, coverageOffset), 0.0).x;
+    coverage = ogxRemapSaturate(1.0 - coverageNoise, coverage * 0.2, coverage);
+    baseDensity = ogxRemapSaturate(baseDensity, coverage, 1.0);
+    // 密度控制：中段最厚，顶部收薄，底部保留平底；这两条曲线也决定云顶的亮边宽度。
+    baseDensity *= ogxCumulusCurve(ogxSaturate(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
+    baseDensity *= ogxCumulusCurveTop(ogxSaturate(cloudPos.w * 1.8));
     baseDensity = ogxSaturate(baseDensity);
     float detailedDensity = 0.0; // 高频侵蚀后的密度。
     if (baseDensity > 1.0e-6 && sampleDetail) // 只有基础密度存在才付细节成本。
     {
         float curl = textureLod(curlNoise, cloudPos.xy * 0.0001, 0.0).w; // 水平扭曲。
         cloudPos.xy += curl * (100.0 - cloudPos.w * 100.0); // 越靠云底扭曲越大，底部有翻滚感。
-        // 两张较大尺度的 Worley 叠成侵蚀量：大尺度先咬开云边，中尺度补碎屑。
-        // 不使用最小的第三通道：它在十几公里外只有两三个像素，会在云顶留下固定的白点纹理。
+        // 三张 Worley 从大到小削掉云边：通道权重 0.625、0.25、0.125 与 iterationT 相同。
         vec3 detailedNoise = textureLod(detailNoise, cloudPos.xyz * detailScale + media.wind * 140.0, 0.0).xyz;
-        detailedDensity = 1.0 - detailedNoise.x * 0.70 - detailedNoise.y * 0.30;
-        detailedDensity *= (0.28 - media.wetness * 0.10) * detailStrength; // 晴天边缘更碎，雨天更实。
+        detailedDensity = 1.0 - detailedNoise.x * 0.625 - detailedNoise.y * 0.25 - detailedNoise.z * 0.125;
+        detailedDensity *= (0.21 - media.wetness * 0.11) * detailStrength; // 晴天边缘更碎，雨天更实。
         detailedDensity = ogxRemapSaturate(baseDensity, detailedDensity, 1.0); // 侵蚀不能超过基础密度。
     }
     else // 不需要细节时直接用基础密度。
@@ -132,49 +133,37 @@ vec3 ogxCumulusLightning(vec3 relativePos, OgxCumulusMedia media, float lightDis
     return vec3(0.55, 0.65, 0.9) * (lightningLight * media.lightning_intensity * media.lightning_strength);
 }
 
-// 云的光照：沿太阳方向步进估遮挡，单次散射与三档多次散射叠加。
-// 为什么多次散射要三档：厚云里单次散射衰减极快，只留单次会把云底压成黑纸；
-// 三档消光系数分别代表一两次、三四次和更多次弹射，低档衰减慢，负责把云底托成灰蓝色。
+// 云的光照：沿太阳方向五次取样，单次散射、宽相位与底光按 NUBIS 的权重组合。
+// 为什么分为直射与环境两部分：厚云内部直射衰减极快，如果没有缓慢衰减的宽相位，
+// 云底会黑成纸片；环境项同时给出天空色，背光面才不会只剩灰。
 vec3 ogxCumulusLighting(vec3 marchingPos, OgxCumulusMedia media, vec2 cloudDensity, vec4 cloudPos, float noise,
     float vdotl, float coverage, vec3 worldLight, sampler3D baseNoise, sampler3D detailNoise, sampler2D curlNoise,
     float baseScale, float coverageOffset, float detailScale, float detailStrength)
 {
-    // 光照步进从近到远逐步放大：近处决定云边软硬，远处决定整块云有多厚。
-    float stepLength = 38.0; // 起始步长，米。
+    // 与 iterationT 相同：起始 28 米，五步，每步乘 1.5；前三步带高频细节。
+    float stepLength = 28.0; // 起始步长，米。
     float lightingDensity = 0.0; // 沿太阳方向累积的密度乘距离。
-    for (int i = 0; i < 7; i++, stepLength *= 1.55) // 七步，覆盖约八百米。
+    for (int i = 0; i < 5; i++) // 五次取样覆盖约三百米。
     {
         vec4 checkPos = ogxCumulusSetPos(marchingPos + worldLight * stepLength * noise, media); // 取样点。
-        // 前三步带高频细节，后三步只取基础密度；远处细节对阴影贡献很小，省下的时间给多次散射。
         lightingDensity += ogxCumulusSampleDensity(checkPos, media, i < 3, coverage, baseNoise, detailNoise, curlNoise,
-            baseScale, coverageOffset, detailScale, detailStrength).y * stepLength;
+            baseScale, coverageOffset, detailScale, detailStrength).y * stepLength; // 累加消光。
         marchingPos += worldLight * stepLength; // 沿光方向推进。
+        stepLength *= 1.5; // 远处步长更大，因为云的细节在远处会合并。
     }
-    float tau = max(lightingDensity, 0.0) * 0.040; // 归一化光学厚度；系数把米制密度和换成可调的消光量。
-    // 单次散射用强前向相位，逆光时云边出现银边；三次多次散射用更宽的相位，负责云体内部。
-    float phaseForward = ogxHenyeyGreenstein(vdotl, 0.78);
-    float phaseWide = ogxHenyeyGreenstein(vdotl, 0.28);
-    float phaseBack = ogxHenyeyGreenstein(vdotl, -0.15);
-    float single = exp(-tau * 1.55) * phaseForward;
-    float multi1 = exp(-tau * 0.62) * phaseWide * 0.60;
-    float multi2 = exp(-tau * 0.20) * phaseBack * 0.34;
-    float multi3 = exp(-tau * 0.060) * 0.30; // 最后一档近似各向同性，专门托云底。
-    float scatter = single + multi1 + multi2 + multi3;
-    // 薄边逆光：只有密度很低的边缘才加银边，否则整块云会像描了一圈白边。
-    float thin = 1.0 - ogxSaturate(cloudDensity.y);
-    float silver = thin * thin * thin * (phaseForward * 4.0 + 0.25);
-    scatter += silver * 0.55;
-    // 高度衰减：云底只留少量直射，云顶完整受光；中段过渡要快，否则云会整块发灰。
-    float height = ogxSaturate(cloudPos.w);
-    float heightLight = smoothstep(0.0, 0.72, height);
-    scatter *= mix(media.bottom_brightness, 1.0, heightLight);
-    // 外散射：云顶与薄处的散射更强，让云顶有层次，不是一张白纸。
-    scatter *= mix(0.65, 1.0, pow(height, media.outscatter_factor));
-    vec3 lightColor = media.light_color * (scatter * media.lighting_strength.x * 30.0);
-    // 天光：用归一化天空色，亮度单独控制；云底也接收蓝灰环境光，不会完全黑掉。
-    vec3 skyUnit = media.sky_color / max(dot(media.sky_color, vec3(0.2126, 0.7152, 0.0722)), 1.0e-4);
-    float ambient = (0.24 + 0.76 * height) * (0.62 + 0.38 * thin);
-    lightColor += skyUnit * (ambient * media.lighting_strength.y * 0.45);
+    // 单次散射：两档相位相加，再乘底部亮度与高度外散射。
+    float hg = ogxHenyeyGreenstein(vdotl, 0.7); // 强前向相位，逆光时出现银边。
+    float direct = exp2(-lightingDensity * (cloudPos.w * 0.15 + 0.05)) * (hg + 0.02) * (1.0 - media.wetness * 0.8); // 单次散射。
+    direct += (1.0 / (lightingDensity * 0.2 + 1.0)) * (ogxHenyeyGreenstein(vdotl, 0.2) + 0.1); // 多次散射的宽相位。
+    direct *= hg * 2.0 + 1.0; // 逆光侧整体提升。
+    direct *= mix(media.bottom_brightness, 0.005 + pow(cloudDensity.y, media.outscatter_factor),
+        ogxCumulusCurve(ogxSaturate(cloudPos.w * 3.333 - 0.333))); // 云底到云顶的亮度分配。
+    direct *= pow(max(cloudPos.w, 0.05), 0.75); // 云顶更受光。
+    vec3 lightColor = media.light_color * (direct * media.lighting_strength.x * 36.0); // 直射项，系数与 iterationT 相同。
+    // 天光：薄处与云顶接收更多环境光，云底保留蓝灰底色。
+    float ambient = 1.0 - cloudDensity.x;
+    ambient *= ogxFastSqrt(cloudPos.w);
+    lightColor += media.sky_color * (ambient * media.lighting_strength.y * 0.35);
     lightColor += ogxCumulusLightning(marchingPos - media.camera_position, media, 400.0, -10.0);
     return lightColor; // 返回这一段的云颜色。
 }
@@ -244,15 +233,15 @@ float ogxCumulusShadowTex(vec2 coord, OgxCumulusMedia media, vec3 worldLight, fl
     vec3 groundPos = vec3(coord.x + media.camera_position.x, 0.0, coord.y + media.camera_position.z); // 地面点。
     float thickness = media.altitude.y - media.altitude.x; // 云层厚度。
     float invLightY = 1.0 / max(worldLight.y, 0.05); // 低阳时限制投影距离。
-    vec3 samplePos = groundPos + worldLight * ((media.altitude.x + thickness * 0.20) * invLightY); // 投到云层下段。
+    vec3 samplePos = groundPos + worldLight * ((media.altitude.x + thickness * 0.25) * invLightY); // 投到云层下段。
     vec4 cloudPos = ogxCumulusSetPos(samplePos, media);
     float cloudDensity = ogxCumulusSampleDensity(cloudPos, media, false, media.coverage, baseNoise, baseNoise, curlNoise,
         baseScale, coverageOffset, detailScale, detailStrength).y; // 下段密度。
-    samplePos = groundPos + worldLight * ((media.altitude.x + thickness * 0.65) * invLightY); // 再往上一段。
+    samplePos = groundPos + worldLight * ((media.altitude.x + thickness * 0.50) * invLightY); // 再往上一段。
     cloudPos = ogxCumulusSetPos(samplePos, media);
     cloudDensity = max(cloudDensity, ogxCumulusSampleDensity(cloudPos, media, false, media.coverage, baseNoise, baseNoise,
         curlNoise, baseScale, coverageOffset, detailScale, detailStrength).y); // 两块取较厚的那块。
-    return exp2(-cloudDensity * 24.0); // 密度换成透过率；指数给影子里保留一点天光。
+    return exp2(-cloudDensity * 20.0); // 密度换成透过率；系数与 iterationT 的云影一致。
 }
 
 #endif

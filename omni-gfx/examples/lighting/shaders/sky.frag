@@ -50,31 +50,43 @@ void main()
     }
     float altitudeKm = max(uCameraPosition.y, 0.0) * 0.001; // 相机高度，公里。
     float sunDisk = (uSkyMode == 0) ? 1.0 : 0.0; // 只有主画面画太阳；环境光与水面的天空贴图不含圆盘，高光另算。
-    vec3 sky = lightingSky(direction, altitudeKm, uSkyMode == 1 ? 6 : 9, sunDisk); // 主画面多两段，贴图省一点。
+    vec3 sky = lightingSky(direction, altitudeKm, uSkyMode == 1 ? 6 : 9, sunDisk); // 主画面与贴图都用同一张散射表。
     // 把云叠到天空上：主画面用累积纹理，贴图按方向重新步进。
+    vec3 cloudColor; // 预乘云颜色。
+    float cloudTransmittance = 1.0; // 云的透射率。
     if (uUseCloudTexture == 1)
     {
-        // 四邻域取值让半分辨率云放大后边缘更软；透明通道是覆盖率，颜色已经预乘。
-        vec4 cloud = texture(uCloudTexture, uv); // 中心样本。
-        vec4 left = texture(uCloudTexture, uv - vec2(uCloudTexel.x, 0.0)); // 左。
-        vec4 right = texture(uCloudTexture, uv + vec2(uCloudTexel.x, 0.0)); // 右。
-        vec4 down = texture(uCloudTexture, uv - vec2(0.0, uCloudTexel.y)); // 下。
-        vec4 up = texture(uCloudTexture, uv + vec2(0.0, uCloudTexel.y)); // 上。
-        cloud = (cloud * 2.0 + left + right + down + up) / 6.0; // 轻微十字模糊，去掉半分辨率方块感。
-        sky = sky * (1.0 - cloud.a) + cloud.rgb; // 预乘合成。
+        vec4 cloud = texture(uCloudTexture, uv); // 云纹理已经在自己的通道里做过可分离模糊，这里直接采样。
+        cloudColor = cloud.rgb; // 预乘颜色。
+        cloudTransmittance = cloud.a; // 透射率。
     }
     else
     {
         vec2 noise = ogxBlueNoise(uBlueNoise, ivec2(gl_FragCoord.xy)); // 蓝噪声抖动起点。
-        vec4 cloud = lightingCloudMarch(direction, noise, uSkyMode == 1 ? 32 : 26); // 贴图三十二步，主画面二十六步。
-        sky = sky * (1.0 - cloud.a) + cloud.rgb; // 合成云。
+        vec4 cloud = lightingCloudMarch(direction, noise); // 按方向步进，步数与 iterationT 相同。
+        cloudColor = cloud.rgb; // 预乘颜色。
+        cloudTransmittance = cloud.a; // 透射率。
     }
-    // 地平线以下没有地形时避免纯黑：用略抬高的视线再取一次天空，远处水面会自然融进去。
-    if (direction.y < 0.0)
+    // 云的距离用于 iterationT 的 CLOUD_FADE：远处云逐渐交给空气透视，不再是一条贴在天空上的纸片。
+    float hitDistance = 200000.0; // 没有命中时给一个足够远的距离。
+    if (direction.y > 0.001) // 只有朝上的视线会穿过云层。
     {
-        vec3 lifted = normalize(vec3(direction.x, 0.002, direction.z)); // 抬到地平线上方。
-        vec3 horizon = lightingSky(lifted, altitudeKm, 4, 0.0); // 更便宜的地平线色。
-        sky = mix(horizon, sky, smoothstep(-0.25, 0.0, direction.y)); // 越低越接近地平线色。
+        float midAltitude = 750.0; // 云层中部高度，米。
+        float slant = (midAltitude - uCameraPosition.y) / direction.y; // 到云层中部的斜距。
+        if (slant > 0.0) hitDistance = slant; // 有效命中。
+    }
+    float cloudFade = clamp(exp2(-hitDistance * 8.0e-5), 0.0, 1.0); // 与 iterationT 相同的淡出曲线。
+    float fadedTransmittance = mix(1.0, cloudTransmittance, cloudFade); // 云在远处逐渐消失。
+    if (cloudTransmittance < 0.9999) // 只有真正有云时才付空气透视成本。
+    {
+        vec3 cloudPoint = uCameraPosition + direction * min(hitDistance, 60000.0); // 云团代表的点。
+        vec3 aerialTransmittance; // 大气到云点的透过率。
+        vec3 aerial = lightingAerial(cloudPoint, direction, min(hitDistance, 60000.0), aerialTransmittance); // 这段空气的散射色。
+        sky = sky * fadedTransmittance + aerial * (1.0 - fadedTransmittance) + cloudColor * (cloudFade * aerialTransmittance); // iterationT 的云合成顺序。
+    }
+    else
+    {
+        sky = sky * fadedTransmittance + cloudColor * cloudFade; // 没有云时只是保留天空。
     }
     if (uSceneTarget == 1) // 主场景：天空写进间接光附件，直射光为零。
     {
