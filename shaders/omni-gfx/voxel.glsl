@@ -150,4 +150,84 @@ bool ogxVoxelWriteInBounds(ivec3 voxelPos, int size)
         && voxelPos.x < size && voxelPos.y < size && voxelPos.z < size; // 逐轴判断，避免夹紧后写错格。
 }
 
+// 写入格：把玩家相对位置加上相机小数偏移，再平移到体积中心；`side` 是每边格数。
+ivec3 ogxGetVoxelIndex(vec3 playerPos, vec3 cameraOffset, int side)
+{
+    return ivec3(floor(playerPos + cameraOffset)) + ivec3(side / 2); // 参考实现按体积半边长平移。
+}
+
+// 体素下标：三轴按行优先展开成一维下标，供六面数据数组使用。
+int ogxVoxelIndex(ivec3 voxelPos, int size)
+{
+    return voxelPos.x + voxelPos.y * size + voxelPos.z * size * size; // 与参考实现的展开顺序一致。
+}
+
+// 体素面编号：按法线主轴与正负方向映射到零到五，零到五分别对应六个面。
+int ogxVoxelNormalIndex(vec3 voxelNormal)
+{
+    return clamp(int(abs(voxelNormal.x) * (voxelNormal.x * 0.5 + 0.5)
+        + abs(voxelNormal.y) * (voxelNormal.y * 0.5 + 2.5)
+        + abs(voxelNormal.z) * (voxelNormal.z * 0.5 + 4.5) + 0.5), 0, 5); // 参考实现的连续映射。
+}
+
+// 解包两个十六位小数：把一个浮点数的低位与高位拆回两个零到一的值。
+vec2 ogxDecodeVec2_16(float a)
+{
+    const vec2 constant1 = 4294967294.0 / vec2(65536.0, 4294967295.0); // 两个通道的缩放。
+    const float constant2 = 65536.0 / 65535.0; // 端点修正。
+    return fract(a * constant1) * constant2; // 拆包并修正。
+}
+
+// 解包两个八位颜色：参考实现把颜色压进一个浮点数，读回时按两位十六进制拆开。
+vec2 ogxDecodeVec2(float a)
+{
+    return vec2(fract(a * 256.0), fract(a * 65536.0)); // 低字节与高字节。
+}
+
+// 解码一个体素面的贴图坐标、光照与染色：六面数据里每个面存同样布局。
+void ogxDecodeVoxelFace(vec4 blockTexture, out vec2 texcoord, out vec2 lightmap, out vec3 tintColor)
+{
+    texcoord = ogxDecodeVec2_16(blockTexture.x); // 第一个分量是贴图坐标。
+    lightmap = ogxDecodeVec2(blockTexture.y); // 第二个分量是光照图。
+    lightmap = min(max(lightmap - 0.05, 0.0) * 1.06, 1.0); // 参考实现先压暗再放大，去掉底部一段。
+    vec2 rgTint = ogxDecodeVec2(blockTexture.b); // 第三个分量是红绿染色。
+    tintColor = vec3(rgTint.r, blockTexture.a, rgTint.g); // 蓝染色在第四分量。
+}
+
+// 只取体素面的贴图坐标，供不需要光照的反射采样。
+void ogxGetVoxelTexCoord(vec4 blockTexture, out vec2 texcoord)
+{
+    texcoord = ogxDecodeVec2_16(blockTexture.x); // 与完整解码使用同一拆包。
+}
+
+// 体素自发光：鲜艳又明亮的像素才发光，返回零到零点五。
+float ogxGetVoxelEmission(vec3 albedo)
+{
+    vec3 hsv = ogxRgbToHsv(albedo); // 拆出饱和度与明度。
+    float emissive = smoothstep(0.05, 0.15, hsv.y) * pow(hsv.z, 3.5); // 饱和度当门槛，明度拉对比。
+    return emissive * 0.5; // 参考实现的半值。
+}
+
+// 把体素自发光混进光照：发光强度接近满值时表示没有自发光，否则按曲线混向底色。
+void ogxVoxelEmission(inout vec3 lighting, vec3 albedo, float emission, float emissiveBrightness, float emissiveCurve)
+{
+    if (emission < 254.5 / 255.0) // 接近满值表示不发光。
+    {
+        lighting = mix(lighting, albedo * 5.0 * emissiveBrightness, pow(emission, emissiveCurve)); // 按强度与曲线混入。
+    }
+}
+
+// 阴影体素写入：判断这一笔是否该写入并算出格号；方块编号与实体枚举由调用方在边界决定。
+// `shouldWrite` 为假时不写；`voxelId` 为零时按空气处理；返回值是最终写入的编号。
+uint ogxPopulateShadowVoxelIndex(vec3 playerPos, vec3 cameraOffset, ivec3 midBlockOffset, int side,
+    bool shouldWrite, uint voxelId, float renderedItemId, float entityId, uint itemOffset, out ivec3 voxelPos)
+{
+    voxelPos = ogxGetVoxelIndex(playerPos + vec3(midBlockOffset) / 64.0, cameraOffset, side); // 中点偏移后算格号。
+    if (!shouldWrite) return 0u; // 不写入的绘制阶段直接返回。
+    if (voxelId == 0u) voxelId = 1u; // 参考实现把无编号地形当成实心方块。
+    if (renderedItemId > 100.0 && renderedItemId < 276.0) voxelId = uint(renderedItemId) + itemOffset; // 手持物品按偏移写入，避免与草互动。
+    else if (entityId > 0.0) voxelId = uint(entityId) + itemOffset; // 实体编号同样加偏移。
+    return voxelId; // 交回最终编号。
+}
+
 #endif

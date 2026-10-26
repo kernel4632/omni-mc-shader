@@ -9,27 +9,27 @@
   ],
   "summary": {
     "totals": {
-      "exact": 272,
-      "approximate": 103,
+      "exact": 378,
+      "approximate": 32,
       "mc_glue": 69,
-      "missing": 61,
+      "missing": 26,
       "referenceFunctions": 505,
       "algorithmFunctions": 436,
-      "exactCoverage": 0.6239
+      "exactCoverage": 0.867
     },
     "byPackage": {
       "iterationT": {
-        "exact": 155,
-        "approximate": 46,
+        "exact": 213,
+        "approximate": 5,
         "mc_glue": 22,
-        "missing": 17,
+        "missing": 0,
         "total": 240
       },
       "Eclipse": {
-        "exact": 117,
-        "approximate": 57,
+        "exact": 165,
+        "approximate": 27,
         "mc_glue": 47,
-        "missing": 44,
+        "missing": 26,
         "total": 265
       }
     }
@@ -93,11 +93,11 @@
       "referenceFunction": "HeldLighting",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "heldlight.ogxHeldLighting",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/Blocklight.glsl:162",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/Blocklight.glsl:162 -> omni-gfx/src/heldlight.slang:127",
       "referenceSamples": 0
     },
     {
@@ -106,11 +106,11 @@
       "referenceFunction": "TorchSpecularHighlight",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "heldlight.ogxTorchSpecularHighlight",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/Blocklight.glsl:283",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/Blocklight.glsl:283 -> omni-gfx/src/heldlight.slang:149",
       "referenceSamples": 0
     },
     {
@@ -123,7 +123,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/NetherColor.glsl:10 -> omni-gfx/src/fog.slang:373",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/NetherColor.glsl:10 -> omni-gfx/src/fog.slang:392",
       "referenceSamples": 0
     },
     {
@@ -136,7 +136,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/NetherColor.glsl:19 -> omni-gfx/src/fog.slang:386",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/NetherColor.glsl:19 -> omni-gfx/src/fog.slang:405",
       "referenceSamples": 0
     },
     {
@@ -146,10 +146,10 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere.ogxClampRadius",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:40 -> omni-gfx/src/atmosphere.slang:341",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:40 -> omni-gfx/src/atmosphere.slang:352",
       "referenceSamples": 0
     },
     {
@@ -162,7 +162,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:44 -> omni-gfx/src/atmosphere.slang:347",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:44 -> omni-gfx/src/atmosphere.slang:358",
       "referenceSamples": 0
     },
     {
@@ -171,11 +171,11 @@
       "referenceFunction": "RenderSunDisc",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "atmosphere.ogxSunDisc",
-      "status": "approximate",
+      "currentImplementation": "atmosphere.ogxItxSunDisc",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:48 -> omni-gfx/src/atmosphere.slang:258",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:48 -> omni-gfx/src/atmosphere.slang:267",
       "referenceSamples": 0
     },
     {
@@ -184,11 +184,11 @@
       "referenceFunction": "RenderMoonDisc",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "atmosphere.ogxMoonDiscReal",
-      "status": "approximate",
+      "currentImplementation": "atmosphere.ogxMoonDiscDefault",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:60 -> omni-gfx/src/atmosphere.slang:458",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:60 -> omni-gfx/src/atmosphere.slang:476",
       "referenceSamples": 0
     },
     {
@@ -198,10 +198,10 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere.ogxMoonDiscReflection",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:70 -> omni-gfx/src/atmosphere.slang:471",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:70 -> omni-gfx/src/atmosphere.slang:482",
       "referenceSamples": 0
     },
     {
@@ -210,11 +210,11 @@
       "referenceFunction": "DistanceToTopAtmosphereBoundary",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "atmosphere.ogxAtmosphereDistanceToTop",
-      "status": "approximate",
+      "currentImplementation": "atmosphere.ogxSphereDistanceToTop",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:85 -> omni-gfx/src/atmosphere.slang:70",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:85 -> omni-gfx/src/atmosphere.slang:279",
       "referenceSamples": 0
     },
     {
@@ -223,11 +223,11 @@
       "referenceFunction": "DistanceToBottomAtmosphereBoundary",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "atmosphere.ogxAtmosphereDistanceToGround",
-      "status": "approximate",
+      "currentImplementation": "atmosphere.ogxSphereDistanceToBottom",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:93 -> omni-gfx/src/atmosphere.slang:83",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:93 -> omni-gfx/src/atmosphere.slang:286",
       "referenceSamples": 0
     },
     {
@@ -237,10 +237,10 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere.ogxSphereRayIntersectsGround",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:101 -> omni-gfx/src/atmosphere.slang:282",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:101 -> omni-gfx/src/atmosphere.slang:293",
       "referenceSamples": 0
     },
     {
@@ -279,7 +279,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:135 -> omni-gfx/src/atmosphere.slang:306",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:135 -> omni-gfx/src/atmosphere.slang:317",
       "referenceSamples": 0
     },
     {
@@ -302,9 +302,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere_model.ogxAtmoScatteringUvwz",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:144 -> omni-gfx/src/atmosphere_model.slang:101",
       "referenceSamples": 0
     },
@@ -315,9 +315,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere_model.ogxAtmoTransmittanceUv",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:188 -> omni-gfx/src/atmosphere_model.slang:135",
       "referenceSamples": 0
     },
@@ -328,9 +328,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere_model.ogxAtmoTransmittanceToTop",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:205 -> omni-gfx/src/atmosphere_model.slang:149",
       "referenceSamples": 2
     },
@@ -341,9 +341,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere_model.ogxAtmoTransmittance",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:217 -> omni-gfx/src/atmosphere_model.slang:159",
       "referenceSamples": 0
     },
@@ -354,9 +354,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere_model.ogxAtmoTransmittanceToSun",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:239 -> omni-gfx/src/atmosphere_model.slang:171",
       "referenceSamples": 0
     },
@@ -367,9 +367,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere_model.ogxAtmoExtrapolatedMie",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:257 -> omni-gfx/src/atmosphere_model.slang:182",
       "referenceSamples": 0
     },
@@ -406,9 +406,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "atmosphere_model.ogxAtmoSunSkyIrradiance",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl:325 -> omni-gfx/src/atmosphere_model.slang:219",
       "referenceSamples": 0
     },
@@ -445,9 +445,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "shadow.ogxVariablePenumbraShadow",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/Sunlight_Shadow.glsl:3 -> omni-gfx/src/shadow.slang:244",
       "referenceSamples": 6
     },
@@ -457,11 +457,11 @@
       "referenceFunction": "ScreenSpaceShadow",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "shadow.ogxScreenSpaceShadow",
-      "status": "approximate",
+      "currentImplementation": "shadow.ogxSunScreenShadow",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/Sunlight_Shadow.glsl:158 -> omni-gfx/src/shadow.slang:102",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/Sunlight_Shadow.glsl:158 -> omni-gfx/src/shadow.slang:163",
       "referenceSamples": 3
     },
     {
@@ -484,9 +484,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "water.ogxWaterCaustics",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/Sunlight_Shadow.glsl:257 -> omni-gfx/src/water.slang:349",
       "referenceSamples": 0
     },
@@ -497,9 +497,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "antialias.ogxRgbToYCoCg",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:19 -> omni-gfx/src/antialias.slang:20",
       "referenceSamples": 0
     },
@@ -600,11 +600,11 @@
       "referenceFunction": "SampleCurrDepthFetchClosest3x3",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "antialias.ogxTaaSampleCurrent",
-      "status": "approximate",
+      "currentImplementation": "itx_taa.ogxItxSampleCurrDepthClosest3x3",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:81 -> omni-gfx/src/antialias.slang:101",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:81 -> omni-gfx/src/itx_taa.slang:26",
       "referenceSamples": 0
     },
     {
@@ -678,11 +678,11 @@
       "referenceFunction": "SampleDepthDHFetch",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "antialias.ogxTaaPrevDepthFetch",
-      "status": "approximate",
+      "currentImplementation": "itx_taa.ogxItxSampleDhDepthFetch",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:213 -> omni-gfx/src/antialias.slang:154",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:213 -> omni-gfx/src/itx_taa.slang:41",
       "referenceSamples": 1
     },
     {
@@ -691,11 +691,11 @@
       "referenceFunction": "SampleCurrDepthDHFetchClosest3x3",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "antialias.ogxTaaFetchCurrent",
-      "status": "approximate",
+      "currentImplementation": "itx_taa.ogxItxSampleCurrDepthDhClosest3x3",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:217 -> omni-gfx/src/antialias.slang:115",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:217 -> omni-gfx/src/itx_taa.slang:47",
       "referenceSamples": 0
     },
     {
@@ -704,11 +704,11 @@
       "referenceFunction": "CalculateCameraVelocity",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "gi.ogxGiCameraVelocity",
-      "status": "approximate",
+      "currentImplementation": "itx_taa.ogxItxCalculateCameraVelocity",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:231 -> omni-gfx/src/gi.slang:300",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TAA.glsl:231 -> omni-gfx/src/itx_taa.slang:63",
       "referenceSamples": 1
     },
     {
@@ -809,9 +809,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "sampling.ogxBlueNoise",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TemporalNoise.glsl:3 -> omni-gfx/src/sampling.slang:29",
       "referenceSamples": 1
     },
@@ -822,9 +822,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "sampling.ogxBlueNoiseTemporal",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TemporalNoise.glsl:7 -> omni-gfx/src/sampling.slang:35",
       "referenceSamples": 1
     },
@@ -835,9 +835,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "sampling.ogxBayerTemporal",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/TemporalNoise.glsl:11 -> omni-gfx/src/sampling.slang:43",
       "referenceSamples": 0
     },
@@ -851,7 +851,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified same constants and sampling order",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/VanillaComposite.glsl:3 -> omni-gfx/src/fog.slang:449",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/VanillaComposite.glsl:3 -> omni-gfx/src/fog.slang:468",
       "referenceSamples": 0
     },
     {
@@ -864,7 +864,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified same constants and sampling order",
-      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/VanillaComposite.glsl:14 -> omni-gfx/src/fog.slang:472",
+      "evidencePath": "references/iterationT/shaders/Lib/BasicFounctions/VanillaComposite.glsl:14 -> omni-gfx/src/fog.slang:491",
       "referenceSamples": 1
     },
     {
@@ -912,11 +912,11 @@
       "referenceFunction": "GetGbufferData",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "gbuffer.ogxGetGbufferData",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/GbufferData.glsl:131",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/GbufferData.glsl:131 -> omni-gfx/src/gbuffer.slang:170",
       "referenceSamples": 7
     },
     {
@@ -925,11 +925,11 @@
       "referenceFunction": "CalculateMasks",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "gbuffer.ogxCalculateMasks",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/GbufferData.glsl:208",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/GbufferData.glsl:208 -> omni-gfx/src/gbuffer.slang:106",
       "referenceSamples": 0
     },
     {
@@ -938,11 +938,11 @@
       "referenceFunction": "FixParticleMask",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "gbuffer.ogxFixParticleMask",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/GbufferData.glsl:250",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/GbufferData.glsl:250 -> omni-gfx/src/gbuffer.slang:142",
       "referenceSamples": 0
     },
     {
@@ -1134,9 +1134,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "cloud.ogxCloudShadowSample",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/CloudShadow.glsl:28 -> omni-gfx/src/cloud.slang:370",
       "referenceSamples": 0
     },
@@ -1185,11 +1185,11 @@
       "referenceFunction": "GetFocus",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxGetFocus",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/DOF.glsl:19",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/DOF.glsl:19 -> omni-gfx/src/itx_extra.slang:25",
       "referenceSamples": 1
     },
     {
@@ -1212,9 +1212,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "post.ogxDepthOfField",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/DOF.glsl:76 -> omni-gfx/src/post.slang:239",
       "referenceSamples": 2
     },
@@ -1228,7 +1228,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:12 -> omni-gfx/src/atmosphere.slang:433",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:12 -> omni-gfx/src/atmosphere.slang:444",
       "referenceSamples": 0
     },
     {
@@ -1241,7 +1241,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:48 -> omni-gfx/src/atmosphere.slang:593",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:48 -> omni-gfx/src/atmosphere.slang:604",
       "referenceSamples": 0
     },
     {
@@ -1254,7 +1254,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:57 -> omni-gfx/src/atmosphere.slang:603",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:57 -> omni-gfx/src/atmosphere.slang:614",
       "referenceSamples": 0
     },
     {
@@ -1267,7 +1267,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:67 -> omni-gfx/src/atmosphere.slang:333",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:67 -> omni-gfx/src/atmosphere.slang:344",
       "referenceSamples": 0
     },
     {
@@ -1329,9 +1329,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "fog.ogxCloudFbm",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
       "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:279 -> omni-gfx/src/fog.slang:198",
       "referenceSamples": 0
     },
@@ -1341,11 +1341,11 @@
       "referenceFunction": "CalculateCloudFBM_LQ",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "noise.ogxFbm3",
-      "status": "approximate",
+      "currentImplementation": "fog.ogxCloudFbmLq",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:297 -> omni-gfx/src/noise.slang:156",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:297 -> omni-gfx/src/fog.slang:217",
       "referenceSamples": 0
     },
     {
@@ -1394,10 +1394,10 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "fog.ogxEndFogDensity",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:531 -> omni-gfx/src/fog.slang:355",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl:531 -> omni-gfx/src/fog.slang:374",
       "referenceSamples": 0
     },
     {
@@ -1562,11 +1562,11 @@
       "referenceFunction": "LensFlare",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxLensFlare",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/LensGlareFlare.glsl:61",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/LensGlareFlare.glsl:61 -> omni-gfx/src/itx_extra.slang:91",
       "referenceSamples": 0
     },
     {
@@ -1576,9 +1576,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "post.ogxMotionBlur",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/MotionBlur.glsl:49 -> omni-gfx/src/post.slang:340",
       "referenceSamples": 5
     },
@@ -1601,11 +1601,11 @@
       "referenceFunction": "GetExposureTiles",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxGetExposureTiles",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/MotionBlur.glsl:167",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/MotionBlur.glsl:167 -> omni-gfx/src/itx_extra.slang:140",
       "referenceSamples": 2
     },
     {
@@ -1615,9 +1615,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "cloud.ogxHenyeyGreenstein",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl:3 -> omni-gfx/src/cloud.slang:210",
       "referenceSamples": 0
     },
@@ -1667,9 +1667,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "cloud_volume.ogxCumulusLighting",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl:73 -> omni-gfx/src/cloud_volume.slang:134",
       "referenceSamples": 0
     },
@@ -1770,11 +1770,11 @@
       "referenceFunction": "physics_waveNormal",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "water.ogxOceanWaveNormal",
-      "status": "approximate",
+      "currentImplementation": "water.ogxOceanNormalWithRipple",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/PhysicsOceans.glsl:120 -> omni-gfx/src/water.slang:476",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/PhysicsOceans.glsl:120 -> omni-gfx/src/water.slang:485",
       "referenceSamples": 4
     },
     {
@@ -1861,11 +1861,11 @@
       "referenceFunction": "PlanarClouds",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "planar.ogxPlanarClouds",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/PlanarClouds.glsl:106",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/PlanarClouds.glsl:106 -> omni-gfx/src/planar.slang:21",
       "referenceSamples": 0
     },
     {
@@ -1927,9 +1927,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "reflection.ogxReflectionAtrousFilter",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
       "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/Reflections/ReflectionFilter.glsl:3 -> omni-gfx/src/reflection.slang:226",
       "referenceSamples": 3
     },
@@ -1943,7 +1943,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/Reflections/SSR.glsl:113 -> omni-gfx/src/atmosphere.slang:504",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/Reflections/SSR.glsl:113 -> omni-gfx/src/atmosphere.slang:515",
       "referenceSamples": 0
     },
     {
@@ -2017,11 +2017,11 @@
       "referenceFunction": "GetRainNormal",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxGetRainNormal",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/Ripple.glsl:33",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/Ripple.glsl:33 -> omni-gfx/src/itx_extra.slang:423",
       "referenceSamples": 1
     },
     {
@@ -2082,11 +2082,11 @@
       "referenceFunction": "FogDensity",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "fog.ogxFogDensity",
-      "status": "approximate",
+      "currentImplementation": "fog.ogxFogDensityNoise",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl:34 -> omni-gfx/src/fog.slang:50",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl:34 -> omni-gfx/src/fog.slang:165",
       "referenceSamples": 0
     },
     {
@@ -2096,9 +2096,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "fog_volume.ogxVolumetricFog",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
       "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl:69 -> omni-gfx/src/fog_volume.slang:164",
       "referenceSamples": 4
     },
@@ -2108,11 +2108,11 @@
       "referenceFunction": "simpleScattering",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "atmosphere.ogxAtmosphereSky",
-      "status": "approximate",
+      "currentImplementation": "atmosphere_model.ogxAtmoSimpleScattering",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl:275 -> omni-gfx/src/atmosphere.slang:165",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl:275 -> omni-gfx/src/atmosphere_model.slang:344",
       "referenceSamples": 0
     },
     {
@@ -2121,11 +2121,11 @@
       "referenceFunction": "LandAtmosphericScattering",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxLandAtmosphericScattering",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl:300",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl:300 -> omni-gfx/src/itx_extra.slang:458",
       "referenceSamples": 1
     },
     {
@@ -2226,9 +2226,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "color.ogxAgxContrast",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:55 -> omni-gfx/src/color.slang:77",
       "referenceSamples": 0
     },
@@ -2239,9 +2239,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "color.ogxAgx",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:59 -> omni-gfx/src/color.slang:94",
       "referenceSamples": 0
     },
@@ -2252,9 +2252,9 @@
       "package": "iterationT",
       "profile": "iterationT",
       "currentImplementation": "color.ogxTonemapNone",
-      "status": "approximate",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
       "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:80 -> omni-gfx/src/color.slang:112",
       "referenceSamples": 0
     },
@@ -2264,11 +2264,11 @@
       "referenceFunction": "MergeBloom",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxMergeBloom",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:84",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:84 -> omni-gfx/src/itx_extra.slang:218",
       "referenceSamples": 6
     },
     {
@@ -2277,11 +2277,11 @@
       "referenceFunction": "GetExposureValue",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxGetExposureValue",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:177",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:177 -> omni-gfx/src/itx_extra.slang:198",
       "referenceSamples": 1
     },
     {
@@ -2342,11 +2342,11 @@
       "referenceFunction": "Fxaa",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxFxaa",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:481",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/Programs/Final.glsl:481 -> omni-gfx/src/itx_extra.slang:290",
       "referenceSamples": 8
     },
     {
@@ -2355,11 +2355,11 @@
       "referenceFunction": "DH_noise",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxDhNoise",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/Programs/Gbuffers/DH_Terrain_FS.glsl:32",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/Programs/Gbuffers/DH_Terrain_FS.glsl:32 -> omni-gfx/src/itx_extra.slang:323",
       "referenceSamples": 0
     },
     {
@@ -2394,11 +2394,11 @@
       "referenceFunction": "end_portal_layer",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxEndPortalLayer",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/Programs/Gbuffers/Entities_FS.glsl:91",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/Programs/Gbuffers/Entities_FS.glsl:91 -> omni-gfx/src/itx_extra.slang:336",
       "referenceSamples": 0
     },
     {
@@ -2433,11 +2433,11 @@
       "referenceFunction": "SampleAnisotropic",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "itx_extra.ogxSampleAnisotropic",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/iterationT/shaders/Lib/Programs/Gbuffers/Terrain_FS.glsl:57",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved",
+      "evidencePath": "references/iterationT/shaders/Lib/Programs/Gbuffers/Terrain_FS.glsl:57 -> omni-gfx/src/itx_extra.slang:369",
       "referenceSamples": 8
     },
     {
@@ -3213,11 +3213,11 @@
       "referenceFunction": "triNoise2d",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseTriNoise2d",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/aurora.glsl:53",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/aurora.glsl:53 -> omni-gfx/src/cloud_eclipse.slang:97",
       "referenceSamples": 0
     },
     {
@@ -3230,7 +3230,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/aurora.glsl:77 -> omni-gfx/src/atmosphere.slang:573",
+      "evidencePath": "references/Eclipse/shaders/lib/aurora.glsl:77 -> omni-gfx/src/atmosphere.slang:584",
       "referenceSamples": 0
     },
     {
@@ -3282,7 +3282,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse formula ported with explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/climate_settings.glsl:135 -> omni-gfx/src/fog.slang:425",
+      "evidencePath": "references/Eclipse/shaders/lib/climate_settings.glsl:135 -> omni-gfx/src/fog.slang:444",
       "referenceSamples": 0
     },
     {
@@ -3343,11 +3343,11 @@
       "referenceFunction": "fp10Dither",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "post.ogxDitherFloat",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseDither",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:19 -> omni-gfx/src/post.slang:146",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:19 -> omni-gfx/src/eclipse_extra.slang:179",
       "referenceSamples": 0
     },
     {
@@ -3356,11 +3356,11 @@
       "referenceFunction": "fp16Dither",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "post.ogxDitherFloat",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseDither",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:26 -> omni-gfx/src/post.slang:146",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:26 -> omni-gfx/src/eclipse_extra.slang:179",
       "referenceSamples": 0
     },
     {
@@ -3369,11 +3369,11 @@
       "referenceFunction": "int8Dither",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "post.ogxDitherFixed",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseDither",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:33 -> omni-gfx/src/post.slang:154",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:33 -> omni-gfx/src/eclipse_extra.slang:179",
       "referenceSamples": 0
     },
     {
@@ -3382,11 +3382,11 @@
       "referenceFunction": "int10Dither",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "post.ogxDitherFixed",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseDither",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:38 -> omni-gfx/src/post.slang:154",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:38 -> omni-gfx/src/eclipse_extra.slang:179",
       "referenceSamples": 0
     },
     {
@@ -3395,11 +3395,11 @@
       "referenceFunction": "int16Dither",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "post.ogxDitherFixed",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseDither",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:43 -> omni-gfx/src/post.slang:154",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/color_dither.glsl:43 -> omni-gfx/src/eclipse_extra.slang:179",
       "referenceSamples": 0
     },
     {
@@ -3512,11 +3512,11 @@
       "referenceFunction": "curve",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "color.ogxAgxContrast",
-      "status": "approximate",
+      "currentImplementation": "math.ogxCurve01",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/color_transforms.glsl:106 -> omni-gfx/src/color.slang:77",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/color_transforms.glsl:106 -> omni-gfx/src/math.slang:187",
       "referenceSamples": 0
     },
     {
@@ -3850,11 +3850,11 @@
       "referenceFunction": "LightSourcePosition",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "eclipse_extra.ogxEclipseLightSourcePosition",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:69",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:69 -> omni-gfx/src/eclipse_extra.slang:226",
       "referenceSamples": 1
     },
     {
@@ -3880,7 +3880,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified line-by-line with host data as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:110 -> omni-gfx/src/fog.slang:258",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:110 -> omni-gfx/src/fog.slang:277",
       "referenceSamples": 0
     },
     {
@@ -3893,7 +3893,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified line-by-line with host data as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:122 -> omni-gfx/src/fog.slang:269",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:122 -> omni-gfx/src/fog.slang:288",
       "referenceSamples": 0
     },
     {
@@ -3906,7 +3906,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified line-by-line with host data as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:144 -> omni-gfx/src/fog.slang:282",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:144 -> omni-gfx/src/fog.slang:301",
       "referenceSamples": 0
     },
     {
@@ -3919,7 +3919,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified same constants and operation order",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:169 -> omni-gfx/src/fog.slang:296",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:169 -> omni-gfx/src/fog.slang:315",
       "referenceSamples": 0
     },
     {
@@ -3928,11 +3928,11 @@
       "referenceFunction": "LightSourceColors",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "eclipse_extra.ogxEclipseLightSourceColors",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:182",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:182 -> omni-gfx/src/eclipse_extra.slang:239",
       "referenceSamples": 0
     },
     {
@@ -3945,7 +3945,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified line-by-line with host data as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:198 -> omni-gfx/src/fog.slang:303",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:198 -> omni-gfx/src/fog.slang:322",
       "referenceSamples": 0
     },
     {
@@ -3958,7 +3958,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse formula ported with explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:215 -> omni-gfx/src/fog.slang:441",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:215 -> omni-gfx/src/fog.slang:460",
       "referenceSamples": 0
     },
     {
@@ -3971,7 +3971,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified line-by-line with host data as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:219 -> omni-gfx/src/fog.slang:319",
+      "evidencePath": "references/Eclipse/shaders/lib/end_fog.glsl:219 -> omni-gfx/src/fog.slang:338",
       "referenceSamples": 1
     },
     {
@@ -4149,11 +4149,11 @@
       "referenceFunction": "Iris_Lightningflash",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "fog_volume.ogxFogLightning",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseLightningFlash",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/lightning_stuff.glsl:8 -> omni-gfx/src/fog_volume.slang:133",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/lightning_stuff.glsl:8 -> omni-gfx/src/eclipse_extra.slang:190",
       "referenceSamples": 0
     },
     {
@@ -4162,11 +4162,11 @@
       "referenceFunction": "Iris_Lightningflash_VLcloud",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "cloud_volume.ogxCumulusLightning",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseLightningCloud",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/lightning_stuff.glsl:31 -> omni-gfx/src/cloud_volume.slang:121",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/lightning_stuff.glsl:31 -> omni-gfx/src/eclipse_extra.slang:206",
       "referenceSamples": 0
     },
     {
@@ -4175,11 +4175,11 @@
       "referenceFunction": "Iris_Lightningflash_VLfog",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "fog_volume.ogxFogLightning",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseLightningFog",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/lightning_stuff.glsl:44 -> omni-gfx/src/fog_volume.slang:133",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/lightning_stuff.glsl:44 -> omni-gfx/src/eclipse_extra.slang:216",
       "referenceSamples": 0
     },
     {
@@ -4257,7 +4257,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; verified line-by-line with host data as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/nether_fog.glsl:15 -> omni-gfx/src/fog.slang:230",
+      "evidencePath": "references/Eclipse/shaders/lib/nether_fog.glsl:15 -> omni-gfx/src/fog.slang:249",
       "referenceSamples": 1
     },
     {
@@ -4279,11 +4279,11 @@
       "referenceFunction": "fogPhase",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "fog.ogxFogPhase",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseFogPhase",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/overworld_fog.glsl:59 -> omni-gfx/src/fog.slang:59",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/overworld_fog.glsl:59 -> omni-gfx/src/eclipse_extra.slang:159",
       "referenceSamples": 0
     },
     {
@@ -4461,11 +4461,11 @@
       "referenceFunction": "integrate_arc",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "eclipse_extra.ogxEclipseIntegrateArc",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/PhotonGTAO.glsl:104",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/PhotonGTAO.glsl:104 -> omni-gfx/src/eclipse_extra.slang:19",
       "referenceSamples": 0
     },
     {
@@ -4474,11 +4474,11 @@
       "referenceFunction": "calculate_maximum_horizon_angle",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "eclipse_extra.ogxEclipseMaxHorizonAngle",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/PhotonGTAO.glsl:109",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/PhotonGTAO.glsl:109 -> omni-gfx/src/eclipse_extra.slang:26",
       "referenceSamples": 1
     },
     {
@@ -4487,11 +4487,11 @@
       "referenceFunction": "ambient_occlusion",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "gi.ogxGroundTruthAo",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseAmbientOcclusion",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/PhotonGTAO.glsl:145 -> omni-gfx/src/gi.slang:108",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/PhotonGTAO.glsl:145 -> omni-gfx/src/eclipse_extra.slang:58",
       "referenceSamples": 0
     },
     {
@@ -4634,7 +4634,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse sky model with host constants as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:38 -> omni-gfx/src/atmosphere.slang:630",
+      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:38 -> omni-gfx/src/atmosphere.slang:641",
       "referenceSamples": 0
     },
     {
@@ -4647,7 +4647,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse sky model with host constants as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:43 -> omni-gfx/src/atmosphere.slang:636",
+      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:43 -> omni-gfx/src/atmosphere.slang:647",
       "referenceSamples": 0
     },
     {
@@ -4660,7 +4660,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse sky model with host constants as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:48 -> omni-gfx/src/atmosphere.slang:643",
+      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:48 -> omni-gfx/src/atmosphere.slang:654",
       "referenceSamples": 0
     },
     {
@@ -4673,7 +4673,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse sky model with host constants as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:52 -> omni-gfx/src/atmosphere.slang:650",
+      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:52 -> omni-gfx/src/atmosphere.slang:661",
       "referenceSamples": 0
     },
     {
@@ -4686,7 +4686,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse sky model with host constants as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:61 -> omni-gfx/src/atmosphere.slang:660",
+      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:61 -> omni-gfx/src/atmosphere.slang:671",
       "referenceSamples": 0
     },
     {
@@ -4699,7 +4699,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse sky model with host constants as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:82 -> omni-gfx/src/atmosphere.slang:686",
+      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:82 -> omni-gfx/src/atmosphere.slang:697",
       "referenceSamples": 0
     },
     {
@@ -4712,7 +4712,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none; exact Eclipse sky model with host constants as explicit parameters",
-      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:89 -> omni-gfx/src/atmosphere.slang:695",
+      "evidencePath": "references/Eclipse/shaders/lib/ROBOBO_sky.glsl:89 -> omni-gfx/src/atmosphere.slang:706",
       "referenceSamples": 0
     },
     {
@@ -4747,11 +4747,11 @@
       "referenceFunction": "BiasShadowProjection",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "shadow.ogxApplyShadowBias",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseBiasShadowProjection",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/Shadow_Params.glsl:20 -> omni-gfx/src/shadow.slang:36",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/Shadow_Params.glsl:20 -> omni-gfx/src/eclipse_extra.slang:99",
       "referenceSamples": 0
     },
     {
@@ -4760,11 +4760,11 @@
       "referenceFunction": "calcDistort",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "eclipse_extra.ogxEclipseCalcDistort",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/Shadow_Params.glsl:27",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/Shadow_Params.glsl:27 -> omni-gfx/src/eclipse_extra.slang:93",
       "referenceSamples": 0
     },
     {
@@ -4816,7 +4816,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:10 -> omni-gfx/src/atmosphere.slang:504",
+      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:10 -> omni-gfx/src/atmosphere.slang:515",
       "referenceSamples": 0
     },
     {
@@ -4829,7 +4829,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:27 -> omni-gfx/src/atmosphere.slang:465",
+      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:27 -> omni-gfx/src/atmosphere.slang:476",
       "referenceSamples": 0
     },
     {
@@ -4842,7 +4842,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:58 -> omni-gfx/src/atmosphere.slang:458",
+      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:58 -> omni-gfx/src/atmosphere.slang:469",
       "referenceSamples": 0
     },
     {
@@ -4985,7 +4985,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:166 -> omni-gfx/src/atmosphere.slang:533",
+      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:166 -> omni-gfx/src/atmosphere.slang:544",
       "referenceSamples": 0
     },
     {
@@ -5011,7 +5011,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:186 -> omni-gfx/src/atmosphere.slang:552",
+      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:186 -> omni-gfx/src/atmosphere.slang:563",
       "referenceSamples": 1
     },
     {
@@ -5024,7 +5024,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:195 -> omni-gfx/src/atmosphere.slang:552",
+      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:195 -> omni-gfx/src/atmosphere.slang:563",
       "referenceSamples": 1
     },
     {
@@ -5037,7 +5037,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:210 -> omni-gfx/src/atmosphere.slang:561",
+      "evidencePath": "references/Eclipse/shaders/lib/sky_gradient.glsl:210 -> omni-gfx/src/atmosphere.slang:572",
       "referenceSamples": 1
     },
     {
@@ -5111,11 +5111,11 @@
       "referenceFunction": "frisvad",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "math.ogxTangentBasis",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseFrisvad",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:17 -> omni-gfx/src/math.slang:471",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:17 -> omni-gfx/src/eclipse_extra.slang:248",
       "referenceSamples": 0
     },
     {
@@ -5163,11 +5163,11 @@
       "referenceFunction": "SampleVNDFGGX",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "reflection.ogxSampleGgxVndf",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseSampleVndfGgx",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:44 -> omni-gfx/src/reflection.slang:23",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:44 -> omni-gfx/src/eclipse_extra.slang:268",
       "referenceSamples": 0
     },
     {
@@ -5176,11 +5176,11 @@
       "referenceFunction": "GGX",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "math.ogxDistributionGGX",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseGgx",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:75 -> omni-gfx/src/math.slang:273",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:75 -> omni-gfx/src/eclipse_extra.slang:283",
       "referenceSamples": 0
     },
     {
@@ -5189,11 +5189,11 @@
       "referenceFunction": "shlickFresnelRoughness",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "math.ogxFresnelSchlick",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseShlickFresnelRoughness",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:95 -> omni-gfx/src/math.slang:281",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:95 -> omni-gfx/src/eclipse_extra.slang:300",
       "referenceSamples": 0
     },
     {
@@ -5254,11 +5254,11 @@
       "referenceFunction": "voxelIndex",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "voxel.ogxVoxelWriteIndex",
-      "status": "approximate",
+      "currentImplementation": "voxel.ogxVoxelIndex",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:266 -> omni-gfx/src/voxel.slang:136",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:266 -> omni-gfx/src/voxel.slang:155",
       "referenceSamples": 0
     },
     {
@@ -5345,11 +5345,11 @@
       "referenceFunction": "CleanVoxelSample",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "eclipse_extra.ogxEclipseCleanVoxelSample",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:308",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:308 -> omni-gfx/src/eclipse_extra.slang:350",
       "referenceSamples": 0
     },
     {
@@ -5371,11 +5371,11 @@
       "referenceFunction": "planeIntersect",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "math.ogxRayPlaneIntersection",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipsePlaneIntersect",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:441 -> omni-gfx/src/math.slang:350",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:441 -> omni-gfx/src/eclipse_extra.slang:311",
       "referenceSamples": 0
     },
     {
@@ -5384,11 +5384,11 @@
       "referenceFunction": "AABBintersection",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "math.ogxRayBoxIntersection",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseAabbIntersection",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:459 -> omni-gfx/src/math.slang:413",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:459 -> omni-gfx/src/eclipse_extra.slang:331",
       "referenceSamples": 0
     },
     {
@@ -5687,7 +5687,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:13 -> omni-gfx/src/atmosphere.slang:362",
+      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:13 -> omni-gfx/src/atmosphere.slang:373",
       "referenceSamples": 0
     },
     {
@@ -5700,7 +5700,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:22 -> omni-gfx/src/atmosphere.slang:433",
+      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:22 -> omni-gfx/src/atmosphere.slang:444",
       "referenceSamples": 0
     },
     {
@@ -5726,7 +5726,7 @@
       "status": "exact",
       "algorithm": true,
       "difference": "none",
-      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:48 -> omni-gfx/src/atmosphere.slang:394",
+      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:48 -> omni-gfx/src/atmosphere.slang:405",
       "referenceSamples": 0
     },
     {
@@ -5739,7 +5739,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:52 -> omni-gfx/src/atmosphere.slang:400",
+      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:52 -> omni-gfx/src/atmosphere.slang:411",
       "referenceSamples": 0
     },
     {
@@ -5752,7 +5752,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:82 -> omni-gfx/src/atmosphere.slang:422",
+      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:82 -> omni-gfx/src/atmosphere.slang:433",
       "referenceSamples": 0
     },
     {
@@ -5765,7 +5765,7 @@
       "status": "approximate",
       "algorithm": true,
       "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:93 -> omni-gfx/src/atmosphere.slang:433",
+      "evidencePath": "references/Eclipse/shaders/lib/stars.glsl:93 -> omni-gfx/src/atmosphere.slang:444",
       "referenceSamples": 0
     },
     {
@@ -6099,11 +6099,11 @@
       "referenceFunction": "clampNormal",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "math.ogxNormalize",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseClampNormal",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:72 -> omni-gfx/src/math.slang:129",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:72 -> omni-gfx/src/eclipse_extra.slang:136",
       "referenceSamples": 0
     },
     {
@@ -6151,11 +6151,11 @@
       "referenceFunction": "calculateHardShadows",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "eclipse_extra.ogxEclipseCalculateHardShadows",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:111",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:111 -> omni-gfx/src/eclipse_extra.slang:107",
       "referenceSamples": 0
     },
     {
@@ -6177,11 +6177,11 @@
       "referenceFunction": "cartToSphere",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "math.ogxCircleMap",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseCartToSphere",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:127 -> omni-gfx/src/math.slang:100",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:127 -> omni-gfx/src/eclipse_extra.slang:143",
       "referenceSamples": 0
     },
     {
@@ -6190,11 +6190,11 @@
       "referenceFunction": "sphereToCart",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "atmosphere.ogxSkyUnproject",
-      "status": "approximate",
+      "currentImplementation": "eclipse_extra.ogxEclipseSphereToCart",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:134 -> omni-gfx/src/atmosphere.slang:478",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:134 -> omni-gfx/src/eclipse_extra.slang:152",
       "referenceSamples": 0
     },
     {
@@ -6255,11 +6255,11 @@
       "referenceFunction": "customRotation",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "eclipse_extra.ogxEclipseCustomRotation",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:199",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/util.glsl:199 -> omni-gfx/src/eclipse_extra.slang:114",
       "referenceSamples": 0
     },
     {
@@ -6307,11 +6307,11 @@
       "referenceFunction": "hash2",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "noise.ogxHash22",
-      "status": "approximate",
+      "currentImplementation": "cloud_eclipse.ogxEclipseHash2",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:79 -> omni-gfx/src/noise.slang:36",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:79 -> omni-gfx/src/cloud_eclipse.slang:56",
       "referenceSamples": 0
     },
     {
@@ -6320,11 +6320,11 @@
       "referenceFunction": "normalize_hash",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "noise.ogxHash22",
-      "status": "approximate",
+      "currentImplementation": "cloud_eclipse.ogxEclipseNormalizeHash",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:85 -> omni-gfx/src/noise.slang:36",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:85 -> omni-gfx/src/cloud_eclipse.slang:64",
       "referenceSamples": 0
     },
     {
@@ -6333,11 +6333,11 @@
       "referenceFunction": "perlin_gradient",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "noise.ogxPerlinGradient2",
-      "status": "approximate",
+      "currentImplementation": "cloud_eclipse.ogxEclipsePerlinGradient",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:89 -> omni-gfx/src/noise.slang:45",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:89 -> omni-gfx/src/cloud_eclipse.slang:70",
       "referenceSamples": 0
     },
     {
@@ -6346,11 +6346,11 @@
       "referenceFunction": "curl2D",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "noise.ogxCurl2D",
-      "status": "approximate",
+      "currentImplementation": "cloud_eclipse.ogxEclipseCurl2D",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:113 -> omni-gfx/src/noise.slang:65",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:113 -> omni-gfx/src/cloud_eclipse.slang:90",
       "referenceSamples": 0
     },
     {
@@ -6359,11 +6359,11 @@
       "referenceFunction": "getCloudShape",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetCloudShape",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:118",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:118 -> omni-gfx/src/cloud_eclipse.slang:113",
       "referenceSamples": 9
     },
     {
@@ -6372,11 +6372,11 @@
       "referenceFunction": "getCumulonimbusShape",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetCumulonimbusShape",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:288",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:288 -> omni-gfx/src/cloud_eclipse.slang:216",
       "referenceSamples": 1
     },
     {
@@ -6385,11 +6385,11 @@
       "referenceFunction": "getLightningPosition",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetLightningPosition",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:377",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:377 -> omni-gfx/src/cloud_eclipse.slang:269",
       "referenceSamples": 0
     },
     {
@@ -6398,11 +6398,11 @@
       "referenceFunction": "getPlanetShadow",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "planet.ogxPlanetEnd",
-      "status": "approximate",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetPlanetShadow",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:404 -> omni-gfx/src/planet.slang:22",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:404 -> omni-gfx/src/cloud_eclipse.slang:284",
       "referenceSamples": 0
     },
     {
@@ -6411,11 +6411,11 @@
       "referenceFunction": "GetCloudShadow",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetCloudShadow",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:412",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:412 -> omni-gfx/src/cloud_eclipse.slang:292",
       "referenceSamples": 0
     },
     {
@@ -6424,11 +6424,11 @@
       "referenceFunction": "getRayOrigin",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetRayOrigin",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:464",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:464 -> omni-gfx/src/cloud_eclipse.slang:321",
       "referenceSamples": 0
     },
     {
@@ -6450,11 +6450,11 @@
       "referenceFunction": "getCloudScattering",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "cloud.ogxCloudMarch",
-      "status": "approximate",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetCloudScattering",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:512 -> omni-gfx/src/cloud.slang:122",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:512 -> omni-gfx/src/cloud_eclipse.slang:348",
       "referenceSamples": 0
     },
     {
@@ -6463,11 +6463,11 @@
       "referenceFunction": "getCloudLighting",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "cloud.ogxCloudLight",
-      "status": "approximate",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetCloudLighting",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:578 -> omni-gfx/src/cloud.slang:97",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:578 -> omni-gfx/src/cloud_eclipse.slang:383",
       "referenceSamples": 0
     },
     {
@@ -6476,11 +6476,11 @@
       "referenceFunction": "raymarchCloud",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseRaymarchCloud",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:628",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:628 -> omni-gfx/src/cloud_eclipse.slang:405",
       "referenceSamples": 4
     },
     {
@@ -6489,11 +6489,11 @@
       "referenceFunction": "GetVolumetricClouds",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetVolumetricClouds",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:960",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:960 -> omni-gfx/src/cloud_eclipse.slang:576",
       "referenceSamples": 0
     },
     {
@@ -6502,11 +6502,11 @@
       "referenceFunction": "raymarchCloudSimple",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "cloud.ogxCloudMarch",
-      "status": "approximate",
+      "currentImplementation": "cloud_eclipse.ogxEclipseRaymarchCloudSimple",
+      "status": "exact",
       "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:1385 -> omni-gfx/src/cloud.slang:122",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:1385 -> omni-gfx/src/cloud_eclipse.slang:771",
       "referenceSamples": 0
     },
     {
@@ -6515,11 +6515,11 @@
       "referenceFunction": "GetVolumetricCloudsSimple",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "cloud_eclipse.ogxEclipseGetVolumetricCloudsSimple",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:1493",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved",
+      "evidencePath": "references/Eclipse/shaders/lib/volumetricClouds.glsl:1493 -> omni-gfx/src/cloud_eclipse.slang:833",
       "referenceSamples": 0
     },
     {
@@ -6554,11 +6554,11 @@
       "referenceFunction": "PopulateShadowVoxel",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "",
-      "status": "missing",
+      "currentImplementation": "voxel.ogxPopulateShadowVoxelIndex",
+      "status": "exact",
       "algorithm": true,
-      "difference": "no receiving function and no glue justification",
-      "evidencePath": "references/Eclipse/shaders/lib/voxel_write.glsl:89",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them",
+      "evidencePath": "references/Eclipse/shaders/lib/voxel_write.glsl:89 -> omni-gfx/src/voxel.slang:217",
       "referenceSamples": 0
     },
     {

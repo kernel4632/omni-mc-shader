@@ -1,4 +1,15 @@
 # 更新记录
+## 0.14.0
+
+严格函数扩展第一批：exact 从 272 增到 378，approximate 从 103 降到 32，missing 从 61 降到 26；新增 iterationT 的 G-buffer 解码、手持光、镜头光斑、曝光分块、泛光、FXAA、远景噪点、末地传送门层、各向异性采样、雨滴法线与平面云，新增 Eclipse 五层体积云、GTAO、阴影压缩、雾相位、颜色抖动、闪电、末地光源与相机/体素数学。
+
+- 新增库模块：`gbuffer`、`heldlight`、`itx_extra`、`planar`、`camera`、`itx_taa`、`cloud_eclipse`、`eclipse_extra`；全部生成 GLSL 330 并进入两个严格 profile。
+- iterationT：补齐 `GetGbufferData`、`CalculateMasks`、`FixParticleMask`、`HeldLighting`、`TorchSpecularHighlight`、`GetFocus`、`LensFlare`、`GetExposureTiles`、`MergeBloom`、`GetExposureValue`、`Fxaa`、`DH_noise`、`end_portal_layer`、`SampleAnisotropic`、`GetRainNormal`、`LandAtmosphericScattering`、`PlanarClouds`；大气、阴影、TAA 取样与水焦散按参考逐项核对后升级 exact。
+- Eclipse：`getCloudShape`、`getCumulonimbusShape`、`getLightningPosition`、`GetCloudShadow`、`getRayOrigin`、`getCloudScattering`、`getCloudLighting`、`raymarchCloud`、`GetVolumetricClouds`、`raymarchCloudSimple`、`GetVolumetricCloudsSimple` 按参考主循环移植；GTAO、`calcDistort`、`BiasShadowProjection`、`calculateHardShadows`、`customRotation`、雾相位、五种颜色抖动与三种闪电脑改为显式参数。
+- 数学胶水：新增屏幕/视/世界/阴影/远景投影、深度换算、GTAO 投影与体素下标/面编号/解码函数；这些函数由库显式接收矩阵与缓冲，不再只留在 Minecraft 侧。
+- 验证：`python omni-gfx/build.py check`、`strict-parity`、`profiles`、`python build.py audit`、`python build.py verify` 通过；`python build.py compile` 结果见提交说明。未启动 Minecraft。
+- 限制：remaining missing 26 个，集中在 Eclipse 的 Photonics、WSR 反射/雾/水面体积、`calculateAtmosphere`、`doBlockLightLighting`、`calculateFlashlight`、`GetEndFogShadow`、`applyGameplayEffects`、`rayTrace_GI`、`RT_alternate` 与 `applySceneControllerParameters`；approximate 32 个仍需逐行核对常数与采样顺序，不能把本次结果当成全部完成。
+
 ## 0.13.1
 
 严格统计补充：坐标与投影约定按 mc_glue 归类，approximate 从 113 降到 103，mc_glue 增到 69；exact 仍为 272，缺口清单不变。

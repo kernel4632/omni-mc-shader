@@ -263,6 +263,17 @@ float ogxSunDisc(float3 viewDirection, float3 sunDirection, float size, float ha
     return disc * disc; // 平方让边缘更收。
 }
 
+// iterationT 太阳圆盘：在圆盘遮罩上乘参考实现的暖白色，供原样对照。
+float3 ogxItxSunDisc(float3 worldDir, float3 sunDir)
+{
+    float d = dot(worldDir, sunDir); // 与太阳方向的夹角余弦。
+    float size = 5e-5; // 太阳角半径。
+    float hardness = 4e4; // 边缘斜率。
+    float disc = ogxCurve01(ogxSaturate((d - (1.0 - size)) * hardness)); // 参考实现的平滑曲线。
+    disc *= disc; // 平方收边。
+    return float3(1.1114, 0.9756, 0.9133) * disc; // 太阳的暖白色。
+}
+
 // 球面几何的另一种写法：只给半径与高度角余弦，省掉每次重建起点向量。
 // 与旧 `shaders/gfx/atmosphere.glsl` 的算式逐项一致，供预计算查表的坐标映射使用。
 float ogxSphereDistanceToTop(float r, float mu, float topRadius)

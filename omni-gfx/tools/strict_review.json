@@ -1093,6 +1093,430 @@
     "getWaterHeightmap": {
       "target": "water.ogxWaterBumpHeightmap",
       "difference": "none; verified same constants and sampling order"
+    },
+    "HeldLighting": {
+      "target": "heldlight.ogxHeldLighting",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "TorchSpecularHighlight": {
+      "target": "heldlight.ogxTorchSpecularHighlight",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "GetGbufferData": {
+      "target": "gbuffer.ogxGetGbufferData",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "CalculateMasks": {
+      "target": "gbuffer.ogxCalculateMasks",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "FixParticleMask": {
+      "target": "gbuffer.ogxFixParticleMask",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "GetFocus": {
+      "target": "itx_extra.ogxGetFocus",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "LensFlare": {
+      "target": "itx_extra.ogxLensFlare",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "GetExposureTiles": {
+      "target": "itx_extra.ogxGetExposureTiles",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "PlanarClouds": {
+      "target": "planar.ogxPlanarClouds",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "GetRainNormal": {
+      "target": "itx_extra.ogxGetRainNormal",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "LandAtmosphericScattering": {
+      "target": "itx_extra.ogxLandAtmosphericScattering",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "MergeBloom": {
+      "target": "itx_extra.ogxMergeBloom",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "GetExposureValue": {
+      "target": "itx_extra.ogxGetExposureValue",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "Fxaa": {
+      "target": "itx_extra.ogxFxaa",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "DH_noise": {
+      "target": "itx_extra.ogxDhNoise",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "end_portal_layer": {
+      "target": "itx_extra.ogxEndPortalLayer",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "SampleAnisotropic": {
+      "target": "itx_extra.ogxSampleAnisotropic",
+      "difference": "none; full port with host globals replaced by explicit parameters; constants, branching and sample order preserved"
+    },
+    "hash2": {
+      "target": "cloud_eclipse.ogxEclipseHash2",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "normalize_hash": {
+      "target": "cloud_eclipse.ogxEclipseNormalizeHash",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "perlin_gradient": {
+      "target": "cloud_eclipse.ogxEclipsePerlinGradient",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "curl2D": {
+      "target": "cloud_eclipse.ogxEclipseCurl2D",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "triNoise2d": {
+      "target": "cloud_eclipse.ogxEclipseTriNoise2d",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "getCloudShape": {
+      "target": "cloud_eclipse.ogxEclipseGetCloudShape",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "getCumulonimbusShape": {
+      "target": "cloud_eclipse.ogxEclipseGetCumulonimbusShape",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "getLightningPosition": {
+      "target": "cloud_eclipse.ogxEclipseGetLightningPosition",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "GetCloudShadow": {
+      "target": "cloud_eclipse.ogxEclipseGetCloudShadow",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "getRayOrigin": {
+      "target": "cloud_eclipse.ogxEclipseGetRayOrigin",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "getCloudScattering": {
+      "target": "cloud_eclipse.ogxEclipseGetCloudScattering",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "getCloudLighting": {
+      "target": "cloud_eclipse.ogxEclipseGetCloudLighting",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "raymarchCloud": {
+      "target": "cloud_eclipse.ogxEclipseRaymarchCloud",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "GetVolumetricClouds": {
+      "target": "cloud_eclipse.ogxEclipseGetVolumetricClouds",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "raymarchCloudSimple": {
+      "target": "cloud_eclipse.ogxEclipseRaymarchCloudSimple",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "GetVolumetricCloudsSimple": {
+      "target": "cloud_eclipse.ogxEclipseGetVolumetricCloudsSimple",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "getPlanetShadow": {
+      "target": "cloud_eclipse.ogxEclipseGetPlanetShadow",
+      "difference": "none; macro layer settings replaced by explicit struct fields; constants, loop bounds, sample order and blend order preserved"
+    },
+    "integrate_arc": {
+      "target": "eclipse_extra.ogxEclipseIntegrateArc",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "calculate_maximum_horizon_angle": {
+      "target": "eclipse_extra.ogxEclipseMaxHorizonAngle",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "ambient_occlusion": {
+      "target": "eclipse_extra.ogxEclipseAmbientOcclusion",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "calcDistort": {
+      "target": "eclipse_extra.ogxEclipseCalcDistort",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "BiasShadowProjection": {
+      "target": "eclipse_extra.ogxEclipseBiasShadowProjection",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "calculateHardShadows": {
+      "target": "eclipse_extra.ogxEclipseCalculateHardShadows",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "customRotation": {
+      "target": "eclipse_extra.ogxEclipseCustomRotation",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "clampNormal": {
+      "target": "eclipse_extra.ogxEclipseClampNormal",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "cartToSphere": {
+      "target": "eclipse_extra.ogxEclipseCartToSphere",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "sphereToCart": {
+      "target": "eclipse_extra.ogxEclipseSphereToCart",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "fogPhase": {
+      "target": "eclipse_extra.ogxEclipseFogPhase",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "fp10Dither": {
+      "target": "eclipse_extra.ogxEclipseDither",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "fp16Dither": {
+      "target": "eclipse_extra.ogxEclipseDither",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "int8Dither": {
+      "target": "eclipse_extra.ogxEclipseDither",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "int10Dither": {
+      "target": "eclipse_extra.ogxEclipseDither",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "int16Dither": {
+      "target": "eclipse_extra.ogxEclipseDither",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "Iris_Lightningflash": {
+      "target": "eclipse_extra.ogxEclipseLightningFlash",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "Iris_Lightningflash_VLcloud": {
+      "target": "eclipse_extra.ogxEclipseLightningCloud",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "Iris_Lightningflash_VLfog": {
+      "target": "eclipse_extra.ogxEclipseLightningFog",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "LightSourcePosition": {
+      "target": "eclipse_extra.ogxEclipseLightSourcePosition",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "LightSourceColors": {
+      "target": "eclipse_extra.ogxEclipseLightSourceColors",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "ClampRadius": {
+      "target": "atmosphere.ogxClampRadius",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "RenderSunDisc": {
+      "target": "atmosphere.ogxItxSunDisc",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "RenderMoonDisc": {
+      "target": "atmosphere.ogxMoonDiscDefault",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "RenderMoonDiscReflection": {
+      "target": "atmosphere.ogxMoonDiscReflection",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "DistanceToTopAtmosphereBoundary": {
+      "target": "atmosphere.ogxSphereDistanceToTop",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "DistanceToBottomAtmosphereBoundary": {
+      "target": "atmosphere.ogxSphereDistanceToBottom",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "RayIntersectsGround": {
+      "target": "atmosphere.ogxSphereRayIntersectsGround",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "GetScatteringTextureUvwzFromRMuMuSNu": {
+      "target": "atmosphere_model.ogxAtmoScatteringUvwz",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "GetTransmittanceTextureUvFromRMu": {
+      "target": "atmosphere_model.ogxAtmoTransmittanceUv",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "GetTransmittanceToTopAtmosphereBoundary": {
+      "target": "atmosphere_model.ogxAtmoTransmittanceToTop",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "GetTransmittance": {
+      "target": "atmosphere_model.ogxAtmoTransmittance",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "GetTransmittanceToSun": {
+      "target": "atmosphere_model.ogxAtmoTransmittanceToSun",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "GetExtrapolatedSingleMieScattering": {
+      "target": "atmosphere_model.ogxAtmoExtrapolatedMie",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "GetSunAndSkyIrradiance": {
+      "target": "atmosphere_model.ogxAtmoSunSkyIrradiance",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "VariablePenumbraShadow": {
+      "target": "shadow.ogxVariablePenumbraShadow",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "ScreenSpaceShadow": {
+      "target": "shadow.ogxSunScreenShadow",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "CalculateWaterCaustics": {
+      "target": "water.ogxWaterCaustics",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "RGB_To_YCoCg": {
+      "target": "antialias.ogxRgbToYCoCg",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "SampleCurrDepthFetchClosest3x3": {
+      "target": "itx_taa.ogxItxSampleCurrDepthClosest3x3",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "SampleDepthDHFetch": {
+      "target": "itx_taa.ogxItxSampleDhDepthFetch",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "SampleCurrDepthDHFetchClosest3x3": {
+      "target": "itx_taa.ogxItxSampleCurrDepthDhClosest3x3",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "CalculateCameraVelocity": {
+      "target": "itx_taa.ogxItxCalculateCameraVelocity",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "BlueNoise": {
+      "target": "sampling.ogxBlueNoise",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "BlueNoiseTemproal": {
+      "target": "sampling.ogxBlueNoiseTemporal",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "BayerTemproal": {
+      "target": "sampling.ogxBayerTemporal",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "CloudShadowFromTex": {
+      "target": "cloud.ogxCloudShadowSample",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "DepthOfField": {
+      "target": "post.ogxDepthOfField",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "MotionBlur": {
+      "target": "post.ogxMotionBlur",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "HenyeyGreenstein": {
+      "target": "cloud.ogxHenyeyGreenstein",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "CloudLighting": {
+      "target": "cloud_volume.ogxCumulusLighting",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "AgxDefaultContrastApprox": {
+      "target": "color.ogxAgxContrast",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "AgX": {
+      "target": "color.ogxAgx",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "None": {
+      "target": "color.ogxTonemapNone",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "simpleScattering": {
+      "target": "atmosphere_model.ogxAtmoSimpleScattering",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "EndFog": {
+      "target": "fog.ogxEndFogDensity",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "PopulateShadowVoxel": {
+      "target": "voxel.ogxPopulateShadowVoxelIndex",
+      "difference": "none; explicit parameters replace host globals; constants, sample count and order preserved; conditional features are zero unless caller enables them"
+    },
+    "CalculateCloudFBM": {
+      "target": "fog.ogxCloudFbm",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "CalculateCloudFBM_LQ": {
+      "target": "fog.ogxCloudFbmLq",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "physics_waveNormal": {
+      "target": "water.ogxOceanNormalWithRipple",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "AtrousWaveletFilter": {
+      "target": "reflection.ogxReflectionAtrousFilter",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "FogDensity": {
+      "target": "fog.ogxFogDensityNoise",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "VolumetricFog": {
+      "target": "fog_volume.ogxVolumetricFog",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "curve": {
+      "target": "math.ogxCurve01",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "frisvad": {
+      "target": "eclipse_extra.ogxEclipseFrisvad",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "SampleVNDFGGX": {
+      "target": "eclipse_extra.ogxEclipseSampleVndfGgx",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "GGX": {
+      "target": "eclipse_extra.ogxEclipseGgx",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "shlickFresnelRoughness": {
+      "target": "eclipse_extra.ogxEclipseShlickFresnelRoughness",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "voxelIndex": {
+      "target": "voxel.ogxVoxelIndex",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "planeIntersect": {
+      "target": "eclipse_extra.ogxEclipsePlaneIntersect",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "AABBintersection": {
+      "target": "eclipse_extra.ogxEclipseAabbIntersection",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "CleanVoxelSample": {
+      "target": "eclipse_extra.ogxEclipseCleanVoxelSample",
+      "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
     }
   },
   "mcGlue": {

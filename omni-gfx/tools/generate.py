@@ -26,7 +26,8 @@ MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water",
            "shadow", "gi", "reflection", "post", "antialias",
            "weather", "surface", "voxel", "upscale", "parallax",
            "planet", "accretion", "atmosphere_model", "cloud_volume", "fog_volume",
-           "lpv")  # 阶段一二的核心模块、阶段三的九个效果模块、第二批迁移的独立模块与第三批的光传播体积模块。
+           "lpv", "gbuffer", "heldlight", "itx_extra", "planar", "camera", "itx_taa", "cloud_eclipse",
+           "eclipse_extra")  # 阶段一二的核心模块、阶段三的九个效果模块、第二批迁移的独立模块与第三批的补充模块。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
 DISPLAY = {
@@ -54,6 +55,14 @@ DISPLAY = {
     "cloud_volume": "体积云",
     "fog_volume": "体积雾",
     "lpv": "光传播体积",
+    "gbuffer": "延迟缓冲",
+    "heldlight": "手持光",
+    "itx_extra": "补充后期",
+    "planar": "平面云",
+    "camera": "相机变换",
+    "itx_taa": "时间取样",
+    "cloud_eclipse": "Eclipse 体积云",
+    "eclipse_extra": "Eclipse 补充",
 }  # 每个生成文件头里的中文模块名，顺序与模块表一致。
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。

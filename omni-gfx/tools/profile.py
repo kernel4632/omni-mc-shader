@@ -65,7 +65,8 @@ MODULES = (
     "math", "color", "sampling", "noise", "atmosphere", "atmosphere_model",
     "cloud", "cloud_volume", "water", "fog", "fog_volume", "shadow", "gi",
     "reflection", "post", "antialias", "weather", "surface", "voxel",
-    "upscale", "parallax", "planet", "accretion", "lpv",
+    "upscale", "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
+    "itx_extra", "planar", "camera", "itx_taa", "cloud_eclipse", "eclipse_extra",
 )  # 与生成器模块表一致；顺序固定，展开结果可复现。
 
 
