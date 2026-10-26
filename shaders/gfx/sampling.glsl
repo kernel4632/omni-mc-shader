@@ -25,4 +25,13 @@ vec2 gfx_blue_noise_temporal(sampler2D noiseTexture, ivec2 pixel, int frame){ re
 // 每帧平移的拜尔抖动，一百二十八帧一循环。
 float gfx_bayer_temporal(ivec2 pixel, int frame){ return ogxBayerTemporal(pixel, frame); } // 实现在生成库。
 
+// 参考的平滑纹理过滤：三次曲线重采样，参数与库一致。
+vec4 smoothfilter(sampler2D tex, vec2 uv, vec2 textureResolution){
+	return ogxSmoothFilter(tex, uv, textureResolution);
+}
+// 参考的阴影平滑过滤：比较采样器版本，返回值只取比较结果。
+float shadowsmoothfilter(sampler2DShadow tex, vec3 uv, float textureResolution){
+	return ogxShadowSmoothFilter(tex, uv, textureResolution);
+}
+
 #endif

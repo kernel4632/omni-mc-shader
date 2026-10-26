@@ -48,4 +48,12 @@
 #include "/rendering/cloud/planar.glsl"
 // 云影贴图与模糊：不依赖云密度，任何引入云的程序都能编译。
 #include "/rendering/cloud/shadow.glsl"
+// --- Eclipse 云兼容层：参考直接读降雨/雷暴与全局噪声贴图 ---
+float getRainDensity(float currentDensity){
+	return ogxCloudRainDensity(currentDensity, rainStrength, 0.0);
+}
+float densityAtPos(vec3 pos){
+	return ogxCloudDensityAtPos(pos, noisetex, 512.0);
+}
+
 #endif // OMNI_RENDER_CLOUD_CLOUD_INCLUDED

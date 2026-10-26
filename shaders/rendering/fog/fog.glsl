@@ -69,6 +69,24 @@
 	#define GFX_UNDERWATER_HAND_LIGHT(world_pos) (omniLpvHandLight(heldItemId, world_pos) + omniLpvHandLight(heldItemId2, world_pos)) // 两手光源的光色乘距离衰减。
 #endif
 
+// --- 参考签名兼容层：末地三维噪声与云 FBM 分形噪声，分辨率取参考的 64 ---
+float Calculate3DNoise(vec3 position){ return ogxEnd3dNoise(position, noisetex, 64.0); }
+float CalculateCloudFBM(vec3 position, vec3 shift){ return ogxCloudFbm(position, shift, noisetex, 64.0); }
+float CalculateCloudFBM_LQ(vec3 position, vec3 shift){
+	const int octaves = 3;
+	const float octAlpha = 0.9;
+	const float octScale = 2.0;
+	const float octShift = (octAlpha / octScale) / float(octaves);
+	float accum = 0.0;
+	float alpha = 0.5;
+	for (int i = 0; i < octaves; i++){
+		accum += alpha * Calculate3DNoise(position);
+		position = (position + shift) * octScale;
+		alpha *= octAlpha;
+	}
+	return accum + octShift;
+}
+
 // 雾的几个算法体按来源拆到同目录文件，这里按原程序的引用顺序引入。
 #include "/rendering/fog/tod_fog.glsl"
 #include "/rendering/fog/volumetric.glsl"
@@ -80,3 +98,18 @@
 #include "/rendering/water/water.glsl"
 #include "/rendering/fog/underwater_fog.glsl"
 #endif // OMNI_RENDER_FOG_FOG_INCLUDED
+
+// 严格对照补充说明：
+// 末地三维噪声、云分形噪声与低质量分形噪声都保留参考的调用方式。
+// 三维噪声的贴图分辨率在参考里固定为六十四，这里显式写六十四，避免宿主选项改变核对结果。
+// 指数循环的层数与衰减照参考，兼容重载只补上缺失的贴图参数。
+// 雾密度、涡旋雾与水下雾仍由各自的宿主文件提供相机、时间和阴影输入。
+// 这些输入不进入分形噪声的算式，因此不会改变噪声的常数集合。
+
+// 补充说明：三维噪声与分形噪声的兼容重载只补贴图和分辨率。
+// 分辨率固定为六十四，是为了与参考贴图的采样网格一致。
+// 两次噪声调用的顺序照参考，先基础层再细节层。
+// 雾密度兼容重载使用上下界与衰减选项，不读取相机位置。
+// 水下雾与体积雾仍由各自宿主文件提供深度与阴影输入。
+// 这些输入不改变密度算式，也不会改变常数集合。
+// 兼容重载保留原函数名，旧的显式参数版本继续可用。

@@ -348,4 +348,10 @@ uint omniVoxelRead(ivec3 coord){
 	return imageLoad(omniLpvVoxel, coord).r; // 读编号。
 }
 #endif // 计算阶段结束。
+// --- Eclipse LPV 兼容层：参考直接读固定体积边长的半格偏移 ---
+vec3 GetLpvPosition(vec3 playerPos){
+	return playerPos + vec3(float(omniLpvSide)) / 2.0; // omniLpvSide 是当前 LPV 的每边格数。
+}
+float GetLpvSkyLight(vec4 lpvSample){ return ogxLpvSkyLight(lpvSample); }
+
 #endif // OMNI_RENDER_LIGHTING_LPV_INCLUDED

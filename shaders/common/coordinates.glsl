@@ -103,4 +103,10 @@ float ScreenDepth_From_LinearDepth(float depth){
 	}
 
 #endif // 远景函数结束。
+// --- Eclipse 线性深度兼容层：参考直接读 near/far 全局量 ---
+float invLinZ(float lindepth){ return -((2.0 * near / lindepth) - far - near) / (far - near); }
+float linZ(float depth){ return (2.0 * near) / (far + near - depth * (far - near)); }
+float linZ2(float depth, float nearPlane, float farPlane){ return (2.0 * nearPlane) / (farPlane + nearPlane - depth * (farPlane - nearPlane)); }
+float DH_invLinZ(float lindepth){ return -((2.0 * near / lindepth) - far - near) / (far - near); }
+
 #endif // 文件守卫结束。

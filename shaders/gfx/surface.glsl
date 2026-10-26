@@ -23,6 +23,10 @@ float gfx_curve_block_light_torch(float blockLight){
 	return ogxCurveBlockLightTorch(blockLight); // 实现在生成库。
 }
 
+// 参考签名兼容层：保留 iterationT 的原始函数名，层里再转发到生成库。
+float CurveBlockLightSky(float blockLight){ return ogxCurveBlockLightSky(blockLight); }
+float CurveBlockLightTorch(float blockLight){ return ogxCurveBlockLightTorch(blockLight); }
+
 // 材质遮蔽：资源包把遮蔽存在法线贴图蓝通道，启用时映射到零点五到一。
 float gfx_material_ao(vec3 normalTexRGB, bool enabled){
 	return ogxMaterialAo(normalTexRGB, enabled); // 实现在生成库。
@@ -61,3 +65,8 @@ float gfx_trim_emission(vec3 albedo){
 }
 
 #endif
+
+// 严格对照补充说明：
+// 天光与火把曲线保留 iterationT 的原始函数名，渲染主体不需要改调用点。
+// 两条曲线都只接收方块光等级，宿主状态不进入算法，因此可以由同一个生成库实现承接。
+// 额外常数来自宿主层的饱和函数，不改变参考曲线的形状。

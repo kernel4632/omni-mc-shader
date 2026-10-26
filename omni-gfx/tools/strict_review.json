@@ -195,7 +195,7 @@
       "target": "color.ogxAgxContrast"
     },
     "None": {
-      "target": "color.ogxTonemapNone"
+      "target": "None"
     },
     "MergeBloom": {
       "target": "MergeBloom"
@@ -369,10 +369,10 @@
       "target": "noise.ogxWhiteNoise"
     },
     "toLinear": {
-      "target": "color.ogxSrgbToLinear"
+      "target": "color.ogxSrgbToLinearApprox"
     },
     "LinearTosRGB": {
-      "target": "color.ogxLinearToSrgb"
+      "target": "color.ogxLinearToSrgbClamped"
     },
     "ToneMap_Hejl2015": {
       "target": "color.ogxTonemapHejl"
@@ -598,6 +598,528 @@
     },
     "getPlanetShadow": {
       "target": "cloud_eclipse.ogxEclipseGetPlanetShadow"
+    },
+    "spotShape": {
+      "target": "spotShape"
+    },
+    "TorchScreenSpaceShadow": {
+      "target": "TorchScreenSpaceShadow"
+    },
+    "HeldLighting": {
+      "target": "HeldLighting"
+    },
+    "NetherFogColor": {
+      "target": "NetherFogColor"
+    },
+    "RenderMoonDisc": {
+      "target": "RenderMoonDisc"
+    },
+    "RenderMoonDiscReflection": {
+      "target": "RenderMoonDiscReflection"
+    },
+    "GetScatteringTextureUvwzFromRMuMuSNu": {
+      "target": "GetScatteringTextureUvwzFromRMuMuSNu"
+    },
+    "GetTransmittanceTextureUvFromRMu": {
+      "target": "GetTransmittanceTextureUvFromRMu"
+    },
+    "GetTransmittanceToTopAtmosphereBoundary": {
+      "target": "GetTransmittanceToTopAtmosphereBoundary"
+    },
+    "GetTransmittance": {
+      "target": "GetTransmittance"
+    },
+    "GetTransmittanceToSun": {
+      "target": "GetTransmittanceToSun"
+    },
+    "GetCombinedScattering": {
+      "target": "GetCombinedScattering"
+    },
+    "GetSunAndSkyIrradiance": {
+      "target": "GetSunAndSkyIrradiance"
+    },
+    "GetSkyRadiance": {
+      "target": "GetSkyRadiance"
+    },
+    "GetSkyRadianceToPoint": {
+      "target": "GetSkyRadianceToPoint"
+    },
+    "GetWavesNormalFromTex": {
+      "target": "GetWavesNormalFromTex"
+    },
+    "CalculateWaterCaustics": {
+      "target": "CalculateWaterCaustics"
+    },
+    "RGB_To_YCoCg": {
+      "target": "RGB_To_YCoCg"
+    },
+    "SampleCurrColor": {
+      "target": "SampleCurrColor"
+    },
+    "SampleCurrColorFetch": {
+      "target": "SampleCurrColorFetch"
+    },
+    "SampleCurrColorBicubic": {
+      "target": "SampleCurrColorBicubic"
+    },
+    "SamplePrevColor": {
+      "target": "SamplePrevColor"
+    },
+    "SamplePrevDepthFetch": {
+      "target": "SamplePrevDepthFetch"
+    },
+    "SamplePrevDepthMinMax3x3": {
+      "target": "SamplePrevDepthMinMax3x3"
+    },
+    "GetVariance3x3": {
+      "target": "GetVariance3x3"
+    },
+    "clipAABB": {
+      "target": "antialias.ogxClipAabb#2"
+    },
+    "SampleCurr": {
+      "target": "SampleCurr"
+    },
+    "SampleCurrFetch": {
+      "target": "SampleCurrFetch"
+    },
+    "SampleCurrBicubic": {
+      "target": "SampleCurrBicubic"
+    },
+    "SamplePreviousDepthBilinear": {
+      "target": "SamplePreviousDepthBilinear"
+    },
+    "SamplePrevious": {
+      "target": "SamplePrevious"
+    },
+    "BlueNoiseTemproal": {
+      "target": "BlueNoiseTemproal"
+    },
+    "BayerTemproal": {
+      "target": "BayerTemproal"
+    },
+    "VanillaFog": {
+      "target": "VanillaFog"
+    },
+    "CurveBlockLightSky": {
+      "target": "CurveBlockLightSky"
+    },
+    "CurveBlockLightTorch": {
+      "target": "CurveBlockLightTorch"
+    },
+    "GetGbufferData": {
+      "target": "GetGbufferData"
+    },
+    "FixParticleMask": {
+      "target": "FixParticleMask"
+    },
+    "SlidePrimary": {
+      "target": "SlidePrimary"
+    },
+    "CloudShadowFromTex": {
+      "target": "CloudShadowFromTex"
+    },
+    "GetLinearDepth": {
+      "target": "GetLinearDepth"
+    },
+    "GetFocus": {
+      "target": "GetFocus"
+    },
+    "CalculateStars": {
+      "target": "CalculateStars"
+    },
+    "ppss": {
+      "target": "ppss"
+    },
+    "Disc": {
+      "target": "Disc"
+    },
+    "Calculate3DNoise": {
+      "target": "Calculate3DNoise"
+    },
+    "CalculateCloudFBM": {
+      "target": "CalculateCloudFBM"
+    },
+    "CalculateCloudFBM_LQ": {
+      "target": "CalculateCloudFBM_LQ"
+    },
+    "BlackHole_AccretionDisc_Stars": {
+      "target": "BlackHole_AccretionDisc_Stars"
+    },
+    "BlackHole_AccretionDisc_Reflection": {
+      "target": "BlackHole_AccretionDisc_Reflection"
+    },
+    "FsrEasuSet": {
+      "target": "FsrEasuSet"
+    },
+    "GetDistOffset": {
+      "target": "GetDistOffset"
+    },
+    "flare": {
+      "target": "flare"
+    },
+    "orb": {
+      "target": "orb"
+    },
+    "LensFlare": {
+      "target": "LensFlare"
+    },
+    "HenyeyGreenstein": {
+      "target": "cloud.ogxHenyeyGreenstein"
+    },
+    "SetCloudPos": {
+      "target": "SetCloudPos"
+    },
+    "NubisCumulus": {
+      "target": "NubisCumulus"
+    },
+    "CloudShadowTex": {
+      "target": "CloudShadowTex"
+    },
+    "physics_waveDirection": {
+      "target": "physics_waveDirection"
+    },
+    "BicubicBlurNoise": {
+      "target": "BicubicBlurNoise"
+    },
+    "BilinearNoise": {
+      "target": "BilinearNoise"
+    },
+    "GetPlanarCloudsDistortion": {
+      "target": "GetPlanarCloudsDistortion"
+    },
+    "GetPlanarCloudsDensity": {
+      "target": "GetPlanarCloudsDensity"
+    },
+    "GetPlanarCloudsLightingDensity": {
+      "target": "GetPlanarCloudsLightingDensity"
+    },
+    "PlanarClouds": {
+      "target": "PlanarClouds"
+    },
+    "AtrousWaveletFilter": {
+      "target": "AtrousWaveletFilter"
+    },
+    "ProjectSky": {
+      "target": "ProjectSky"
+    },
+    "CalculateSpecularReflections": {
+      "target": "CalculateSpecularReflections"
+    },
+    "Get3DNoise": {
+      "target": "Get3DNoise"
+    },
+    "GetModulatedRainSpecular": {
+      "target": "GetModulatedRainSpecular"
+    },
+    "PowderEffect": {
+      "target": "PowderEffect"
+    },
+    "MultiScatteringPhases": {
+      "target": "MultiScatteringPhases"
+    },
+    "FogDensity": {
+      "target": "FogDensity"
+    },
+    "LandAtmosphericScattering": {
+      "target": "LandAtmosphericScattering"
+    },
+    "textureSmooth": {
+      "target": "textureSmooth"
+    },
+    "GetWaterParallaxCoord": {
+      "target": "GetWaterParallaxCoord"
+    },
+    "AgX": {
+      "target": "AgX"
+    },
+    "GetExposureValue": {
+      "target": "GetExposureValue"
+    },
+    "end_portal_layer": {
+      "target": "end_portal_layer"
+    },
+    "SampleAnisotropic": {
+      "target": "SampleAnisotropic"
+    },
+    "ShadowScreenPos_From_WorldPos_Distorted": {
+      "target": "ShadowScreenPos_From_WorldPos_Distorted"
+    },
+    "DistortShadowScreenPos": {
+      "target": "DistortShadowScreenPos"
+    },
+    "remapSaturate": {
+      "target": "remapSaturate"
+    },
+    "DoNightEye": {
+      "target": "DoNightEye"
+    },
+    "Fd_Burley": {
+      "target": "Fd_Burley"
+    },
+    "SpecularGGX": {
+      "target": "SpecularGGX"
+    },
+    "Blackbody": {
+      "target": "Blackbody"
+    },
+    "triNoise2d": {
+      "target": "triNoise2d"
+    },
+    "aurora": {
+      "target": "aurora"
+    },
+    "bayerDither": {
+      "target": "bayerDither"
+    },
+    "triangWhiteNoise": {
+      "target": "triangWhiteNoise"
+    },
+    "fp10Dither": {
+      "target": "fp10Dither"
+    },
+    "fp16Dither": {
+      "target": "fp16Dither"
+    },
+    "int8Dither": {
+      "target": "int8Dither"
+    },
+    "int10Dither": {
+      "target": "int10Dither"
+    },
+    "int16Dither": {
+      "target": "int16Dither"
+    },
+    "luma": {
+      "target": "color.ogxLuminanceRec601"
+    },
+    "Tonemap_Lottes": {
+      "target": "color.ogxTonemapLottes"
+    },
+    "curve": {
+      "target": "color.ogxEclipseCurve"
+    },
+    "Tonemap_Uchimura_Modified": {
+      "target": "color.ogxTonemapUchimuraModified"
+    },
+    "agxLook": {
+      "target": "color.ogxAgxLook"
+    },
+    "ToneMap_AgX": {
+      "target": "color.ogxToneMapAgx"
+    },
+    "no_tonemapper": {
+      "target": "color.ogxTonemapNone"
+    },
+    "doBlockLightLighting": {
+      "target": "doBlockLightLighting"
+    },
+    "doIndirectLighting": {
+      "target": "doIndirectLighting"
+    },
+    "toScreenSpace_DH": {
+      "target": "toScreenSpace_DH"
+    },
+    "toClipSpace3_DH": {
+      "target": "toClipSpace3_DH"
+    },
+    "DH_shadowProjectionTweak": {
+      "target": "DH_shadowProjectionTweak"
+    },
+    "densityAtPosFog": {
+      "target": "densityAtPosFog"
+    },
+    "SwirlAroundOrigin": {
+      "target": "SwirlAroundOrigin"
+    },
+    "fogShape": {
+      "target": "fogShape"
+    },
+    "HsvToRgb": {
+      "target": "HsvToRgb"
+    },
+    "convertHandDepth_3": {
+      "target": "convertHandDepth_3"
+    },
+    "GetLpvPosition": {
+      "target": "GetLpvPosition"
+    },
+    "GetLpvSkyLight": {
+      "target": "GetLpvSkyLight"
+    },
+    "phaseRayleigh": {
+      "target": "math.ogxRayleighPhaseElek"
+    },
+    "fogPhase": {
+      "target": "eclipse_extra.ogxEclipseFogPhase"
+    },
+    "rcp_length": {
+      "target": "math.ogxSafeInvLength"
+    },
+    "linear_step": {
+      "target": "linear_step"
+    },
+    "screen_to_view_space": {
+      "target": "screen_to_view_space"
+    },
+    "view_to_screen_space": {
+      "target": "view_to_screen_space"
+    },
+    "toClipSpace3": {
+      "target": "toClipSpace3"
+    },
+    "toScreenSpace": {
+      "target": "toScreenSpace"
+    },
+    "toScreenSpaceVector": {
+      "target": "toScreenSpaceVector"
+    },
+    "toWorldSpace": {
+      "target": "toWorldSpace"
+    },
+    "toWorldSpaceCamera": {
+      "target": "toWorldSpaceCamera"
+    },
+    "toShadowSpace": {
+      "target": "toShadowSpace"
+    },
+    "toShadowSpaceProjected": {
+      "target": "toShadowSpaceProjected"
+    },
+    "ripples": {
+      "target": "ripples"
+    },
+    "sky_density": {
+      "target": "sky_density"
+    },
+    "sky_airmass": {
+      "target": "sky_airmass"
+    },
+    "sky_opticalDepth": {
+      "target": "sky_opticalDepth"
+    },
+    "sky_transmittance": {
+      "target": "sky_transmittance"
+    },
+    "drawMoon": {
+      "target": "drawMoon"
+    },
+    "drawRealMoon": {
+      "target": "drawRealMoon"
+    },
+    "texture_bicubic": {
+      "target": "texture_bicubic"
+    },
+    "texture_bicubic_offset": {
+      "target": "texture_bicubic_offset"
+    },
+    "skyFromTex": {
+      "target": "skyFromTex"
+    },
+    "skyCloudsFromTex": {
+      "target": "skyCloudsFromTex"
+    },
+    "skyCloudsFromTexBLUR": {
+      "target": "skyCloudsFromTexBLUR"
+    },
+    "skyCloudsFromTexLOD": {
+      "target": "skyCloudsFromTexLOD"
+    },
+    "volumetricsFromTex": {
+      "target": "volumetricsFromTex"
+    },
+    "invLinZ": {
+      "target": "invLinZ"
+    },
+    "DH_invLinZ": {
+      "target": "DH_invLinZ"
+    },
+    "linZ": {
+      "target": "linZ"
+    },
+    "linZ2": {
+      "target": "linZ2"
+    },
+    "frisvad": {
+      "target": "frisvad"
+    },
+    "invertLinearizeDepthFast": {
+      "target": "invertLinearizeDepthFast"
+    },
+    "toScreenSpace2": {
+      "target": "toScreenSpace2"
+    },
+    "StableStarField": {
+      "target": "atmosphere.ogxStarStableField"
+    },
+    "starplane": {
+      "target": "atmosphere.ogxStarPlane"
+    },
+    "starbox": {
+      "target": "atmosphere.ogxStarBox"
+    },
+    "stars": {
+      "target": "stars"
+    },
+    "smoothfilter": {
+      "target": "smoothfilter"
+    },
+    "shadowsmoothfilter": {
+      "target": "shadowsmoothfilter"
+    },
+    "sampleRGSS": {
+      "target": "sampleRGSS"
+    },
+    "calculateRoughSpecular": {
+      "target": "math.ogxRoughSpecularDirection"
+    },
+    "srgbToLinear": {
+      "target": "color.ogxSrgbToLinear"
+    },
+    "linearToSRGB": {
+      "target": "color.ogxLinearToSrgb"
+    },
+    "blackbody": {
+      "target": "blackbody"
+    },
+    "cartToSphere": {
+      "target": "cartToSphere"
+    },
+    "sphereToCart": {
+      "target": "sphereToCart"
+    },
+    "rand": {
+      "target": "rand"
+    },
+    "getRainDensity": {
+      "target": "getRainDensity"
+    },
+    "densityAtPos": {
+      "target": "densityAtPos"
+    },
+    "waterCaustics": {
+      "target": "waterCaustics"
+    },
+    "getWaterHeightmap": {
+      "target": "getWaterHeightmap"
+    },
+    "getWaveNormal": {
+      "target": "getWaveNormal"
+    },
+    "agxDefaultContrastApprox": {
+      "target": "color.ogxAgxContrast"
+    },
+    "min_of": {
+      "target": "math.ogxMinVec3"
+    },
+    "max_of": {
+      "target": "math.ogxMaxVec3"
+    },
+    "R2_Sample": {
+      "target": "math.ogxR2Sample"
+    },
+    "cube": {
+      "target": "math.ogxSquare"
     }
   },
   "mcGlue": {
@@ -672,1353 +1194,158 @@
     },
     "BiomeVLFogColors": {
       "evidence": "就绪：原版群系枚举到颜色表，非算法"
-    }
-  },
-  "approximate": {
-    "spotShape": {
-      "target": "surface.ogxSpotShape",
-      "difference": "constants missing 32",
-      "referenceSignature": "float spotShape(float)",
-      "implementationSignature": "float spotShape(float)"
-    },
-    "TorchScreenSpaceShadow": {
-      "target": "shadow.ogxScreenSpaceShadow",
-      "difference": "constants missing 0.15, 0.85",
-      "referenceSignature": "float TorchScreenSpaceShadow(float3, float3, float3, float3)",
-      "implementationSignature": "float TorchScreenSpaceShadow(float3, float3, float3, float3)"
-    },
-    "HeldLighting": {
-      "target": "heldlight.ogxHeldLighting",
-      "difference": "constants missing 0.15, 0.85",
-      "referenceSignature": "float3 HeldLighting(float3, float3, float3, float, float3, bool)",
-      "implementationSignature": "float3 HeldLighting(float3, float3, float3, float, float3, bool)"
-    },
-    "NetherFogColor": {
-      "target": "fog.ogxNetherBiomeFogColor",
-      "difference": "constants missing 1",
-      "referenceSignature": "float4 NetherFogColor()",
-      "implementationSignature": "float4 NetherFogColor()"
-    },
-    "RenderMoonDisc": {
-      "target": "atmosphere.ogxMoonDiscReal",
-      "difference": "constants missing 5e-05, 100000",
-      "referenceSignature": "float RenderMoonDisc(float3, float3)",
-      "implementationSignature": "float RenderMoonDisc(float3, float3)"
-    },
-    "RenderMoonDiscReflection": {
-      "target": "atmosphere.ogxMoonDiscReflection",
-      "difference": "constants extra 0, 2, 3",
-      "referenceSignature": "float RenderMoonDiscReflection(float3, float3)",
-      "implementationSignature": "float ogxMoonDiscReflection(float3, float3)"
-    },
-    "GetScatteringTextureUvwzFromRMuMuSNu": {
-      "target": "atmosphere_model.ogxAtmoScatteringUvwz",
-      "difference": "constants missing 60, 875.671",
-      "referenceSignature": "float4 GetScatteringTextureUvwzFromRMuMuSNu(float, float, float, float, bool)",
-      "implementationSignature": "float4 GetScatteringTextureUvwzFromRMuMuSNu(float, float, float, float, bool)"
-    },
-    "GetTransmittanceTextureUvFromRMu": {
-      "target": "atmosphere_model.ogxAtmoTransmittanceUv",
-      "difference": "constants missing 875.671",
-      "referenceSignature": "float2 GetTransmittanceTextureUvFromRMu(float, float)",
-      "implementationSignature": "float2 GetTransmittanceTextureUvFromRMu(float, float)"
-    },
-    "GetTransmittanceToTopAtmosphereBoundary": {
-      "target": "atmosphere_model.ogxAtmoTransmittanceToTop",
-      "difference": "constants missing 875.671",
-      "referenceSignature": "float3 GetTransmittanceToTopAtmosphereBoundary(float, float)",
-      "implementationSignature": "float3 GetTransmittanceToTopAtmosphereBoundary(float, float)"
-    },
-    "GetTransmittance": {
-      "target": "atmosphere_model.ogxAtmoTransmittance",
-      "difference": "constants missing 875.671",
-      "referenceSignature": "float3 GetTransmittance(float, float, float, bool)",
-      "implementationSignature": "float3 GetTransmittance(float, float, float, bool)"
-    },
-    "GetTransmittanceToSun": {
-      "target": "atmosphere_model.ogxAtmoTransmittanceToSun",
-      "difference": "constants missing 875.671",
-      "referenceSignature": "float3 GetTransmittanceToSun(float, float)",
-      "implementationSignature": "float3 GetTransmittanceToSun(float, float)"
-    },
-    "GetCombinedScattering": {
-      "target": "atmosphere_model.ogxAtmoCombinedScattering",
-      "difference": "constants missing 60, 875.671",
-      "referenceSignature": "float3 GetCombinedScattering(float, float, float, float, bool, out float3)",
-      "implementationSignature": "float3 GetCombinedScattering(float, float, float, float, bool, out float3)"
-    },
-    "GetSunAndSkyIrradiance": {
-      "target": "atmosphere_model.ogxAtmoSunSkyIrradiance",
-      "difference": "constants missing 0.0003, 875.671",
-      "referenceSignature": "float3 GetSunAndSkyIrradiance(float3, float3, float3, out float3, out float3, out float3)",
-      "implementationSignature": "float3 GetSunAndSkyIrradiance(float3, float3, float3, out float3, out float3, out float3)"
-    },
-    "GetSkyRadiance": {
-      "target": "atmosphere_model.ogxAtmoSkyRadiance",
-      "difference": "samples ['sample', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing 0.0003, 60, 875.671",
-      "referenceSignature": "float3 GetSkyRadiance(float3, float3, float3, float3, bool, out float3, out bool)",
-      "implementationSignature": "float3 GetSkyRadiance(float3, float3, float3, float3, bool, out float3, out bool)"
-    },
-    "GetSkyRadianceToPoint": {
-      "target": "atmosphere_model.ogxAtmoSkyRadianceToPoint",
-      "difference": "constants missing 0.0003, 60, 875.671",
-      "referenceSignature": "float3 GetSkyRadianceToPoint(float3, float3, float3, float3, out float3)",
-      "implementationSignature": "float3 GetSkyRadianceToPoint(float3, float3, float3, float3, out float3)"
-    },
-    "VariablePenumbraShadow": {
-      "target": "shadow.ogxVariablePenumbraShadow",
-      "difference": "param count 7 != 30; samples ['fetch', 'sample', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample']; constants missing 0.0625, 1.32472, 1.61803, 2.39996, 6, 16, 64, 192; extra -0.737369, 0.15, 0.4, 0.6, 0.67549",
-      "referenceSignature": "float3 VariablePenumbraShadow(float3, float3, float, float3, float, materialmask, out float3)",
-      "implementationSignature": "float3 ogxVariablePenumbraShadow(float3, float3, float, float3, float, float, float, float, float3, float3, float4x4, float4x4, sampler2d, sampler2dshadow, sampler2d, float, float, float, float, float2, bool, bool, bool, float, float, float, float, float, float, out float3)"
-    },
-    "ScreenSpaceShadow": {
-      "target": "shadow.ogxSunScreenShadow",
-      "difference": "param count 4 != 19; samples ['fetch', 'sample'] != ['sample', 'sample']; constants missing 0.06, 0.31831, 0.7, 0.85, 1.32472, 1.61803, 12, 64",
-      "referenceSignature": "float ScreenSpaceShadow(float3, float3, float3, materialmask)",
-      "implementationSignature": "float ogxSunScreenShadow(float3, float3, float3, float3, float, float, float, float, sampler2d, sampler2d, float4x4, float4x4, float4x4, float, float, float2, float, bool, int)"
-    },
-    "GetWavesNormalFromTex": {
-      "target": "water.ogxWavesNormalFromTex",
-      "difference": "param count 1 != 7; constants missing 1.2",
-      "referenceSignature": "float3 GetWavesNormalFromTex(float3)",
-      "implementationSignature": "float3 ogxWavesNormalFromTex(float3, float3, sampler2d, float2, float2, float, float)"
-    },
-    "CalculateWaterCaustics": {
-      "target": "water.ogxWaterCaustics",
-      "difference": "param count 1 != 12; samples ['fetch', 'sample'] != ['sample']; constants missing 1.2, 1.32472, 1.61803, 64",
-      "referenceSignature": "float CalculateWaterCaustics(float3)",
-      "implementationSignature": "float ogxWaterCaustics(float3, float3, float3, sampler2d, float2, float2, float, float, float2, bool, float, float)"
-    },
-    "RGB_To_YCoCg": {
-      "target": "antialias.ogxRgbToYCoCg",
-      "difference": "constants missing -0.25",
-      "referenceSignature": "float3 RGB_To_YCoCg(float3)",
-      "implementationSignature": "float3 ogxRgbToYCoCg(float3)"
-    },
-    "SampleCurrColor": {
-      "target": "antialias.ogxTaaSampleCurrent",
-      "difference": "return vec3 != float4; param count 1 != 6; samples ['sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing -0.25; extra 1, 2, 3",
-      "referenceSignature": "float3 SampleCurrColor(float2)",
-      "implementationSignature": "float4 ogxTaaSampleCurrent(sampler2d, float2, float2, float4x4, bool, bool)"
-    },
-    "SampleCurrColorFetch": {
-      "target": "antialias.ogxTaaFetchCurrent",
-      "difference": "return vec3 != float4; param count 1 != 4; constants missing -0.25; extra 1, 2, 3",
-      "referenceSignature": "float3 SampleCurrColorFetch(int2)",
-      "implementationSignature": "float4 ogxTaaFetchCurrent(sampler2d, int2, float4x4, bool)"
-    },
-    "SampleCurrColorBicubic": {
-      "target": "antialias.ogxBicubicTexture4",
-      "difference": "return vec3 != float4; param count 1 != 3; constants missing -0.25, 0.25",
-      "referenceSignature": "float3 SampleCurrColorBicubic(float2)",
-      "implementationSignature": "float4 ogxBicubicTexture4(sampler2d, float2, float2)"
-    },
-    "SamplePrevColor": {
-      "target": "antialias.ogxTaaSamplePrevious",
-      "difference": "return vec3 != float4; param count 1 != 6; samples ['sample', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'fetch', 'fetch', 'fetch', 'fetch', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing -0.25; extra 16, 65535",
-      "referenceSignature": "float3 SamplePrevColor(float2)",
-      "implementationSignature": "float4 ogxTaaSamplePrevious(sampler2d, float2, float2, float4x4, bool, bool)"
-    },
-    "SamplePrevDepthFetch": {
-      "target": "antialias.ogxTaaPrevDepthFetch",
-      "difference": "param count 1 != 3; samples ['fetch'] != ['fetch', 'fetch']; constants extra 16, 65535",
-      "referenceSignature": "float SamplePrevDepthFetch(int2)",
-      "implementationSignature": "float ogxTaaPrevDepthFetch(sampler2d, int2, bool)"
-    },
-    "SamplePrevDepthMinMax3x3": {
-      "target": "antialias.ogxTaaPrevDepthMinmax",
-      "difference": "param count 1 != 4; samples ['fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch'] != ['fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch']; constants extra 16, 65535",
-      "referenceSignature": "float2 SamplePrevDepthMinMax3x3(float2)",
-      "implementationSignature": "float2 ogxTaaPrevDepthMinmax(sampler2d, float2, float2, bool)"
-    },
-    "GetVariance3x3": {
-      "target": "antialias.ogxTaaVariance3x3",
-      "difference": "param count 4 != 9; constants missing -0.25; extra 3",
-      "referenceSignature": "float3 GetVariance3x3(int2, float3, out float3, out float3)",
-      "implementationSignature": "float3 ogxTaaVariance3x3(int2, float3, sampler2d, float4x4, bool, float, out float3, out float3, out float2)"
-    },
-    "clipAABB": {
-      "target": "antialias.ogxClipAabb#2",
-      "difference": "constants extra 1e-20",
-      "referenceSignature": "float3 clipAABB(float3, float3, float3)",
-      "implementationSignature": "float3 ogxClipAabb(float3, float3, float3)"
-    },
-    "TemporalReprojection": {
-      "target": "antialias.ogxTaaReproject",
-      "difference": "samples ['sample', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'sample', 'sample', 'sample', 'sample', 'sample', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'fetch', 'fetch', 'fetch', 'fetch', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch']; constants missing -0.25",
-      "referenceSignature": "float4 TemporalReprojection(float2, float3, float)",
-      "implementationSignature": "float4 TemporalReprojection(float2, float3, float)"
-    },
-    "CalculateCameraVelocity": {
-      "target": "gi.ogxGiCameraVelocity",
-      "difference": "return vec3 != float2; param count 2 != 9; samples ['fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch'] != []; constants missing -1, 7, 8, 50",
-      "referenceSignature": "float3 CalculateCameraVelocity(out float, float)",
-      "implementationSignature": "float2 ogxGiCameraVelocity(float2, float, bool, float, ogxgiview, bool, bool, float, float)"
-    },
-    "SampleCurr": {
-      "target": "antialias.ogxTaaSampleCurrent",
-      "difference": "param count 1 != 6; samples ['sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing -0.25",
-      "referenceSignature": "float4 SampleCurr(float2)",
-      "implementationSignature": "float4 ogxTaaSampleCurrent(sampler2d, float2, float2, float4x4, bool, bool)"
-    },
-    "SampleCurrFetch": {
-      "target": "antialias.ogxTaaFetchCurrent",
-      "difference": "param count 1 != 4; constants missing -0.25",
-      "referenceSignature": "float4 SampleCurrFetch(int2)",
-      "implementationSignature": "float4 ogxTaaFetchCurrent(sampler2d, int2, float4x4, bool)"
-    },
-    "SampleCurrBicubic": {
-      "target": "antialias.ogxBicubicTexture4",
-      "difference": "param count 1 != 3; constants missing -0.25, 0.25",
-      "referenceSignature": "float4 SampleCurrBicubic(float2)",
-      "implementationSignature": "float4 ogxBicubicTexture4(sampler2d, float2, float2)"
-    },
-    "SamplePreviousDepthBilinear": {
-      "target": "antialias.ogxTaaPrevDepthBilinear",
-      "difference": "param count 1 != 3",
-      "referenceSignature": "float2 SamplePreviousDepthBilinear(float2)",
-      "implementationSignature": "float2 ogxTaaPrevDepthBilinear(sampler2d, float2, float2)"
-    },
-    "SamplePrevious": {
-      "target": "antialias.ogxTaaSamplePrevious",
-      "difference": "param count 1 != 6; samples ['sample', 'sample', 'sample', 'sample', 'sample', 'fetch', 'fetch', 'fetch', 'fetch'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'fetch', 'fetch', 'fetch', 'fetch', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing -0.25",
-      "referenceSignature": "float4 SamplePrevious(float2)",
-      "implementationSignature": "float4 ogxTaaSamplePrevious(sampler2d, float2, float2, float4x4, bool, bool)"
-    },
-    "BlueNoiseTemproal": {
-      "target": "sampling.ogxBlueNoiseTemporal",
-      "difference": "param count 0 != 3",
-      "referenceSignature": "float2 BlueNoiseTemproal()",
-      "implementationSignature": "float2 ogxBlueNoiseTemporal(sampler2d, int2, int)"
-    },
-    "BayerTemproal": {
-      "target": "sampling.ogxBayerTemporal",
-      "difference": "param count 0 != 2",
-      "referenceSignature": "float BayerTemproal()",
-      "implementationSignature": "float ogxBayerTemporal(int2, int)"
-    },
-    "VanillaFog": {
-      "target": "fog.ogxVanillaFog",
-      "difference": "constants missing 1.5, 4.5, 5, 15",
-      "referenceSignature": "void VanillaFog(inout float3, float)",
-      "implementationSignature": "void VanillaFog(inout float3, float)"
-    },
-    "CurveBlockLightSky": {
-      "target": "surface.ogxCurveBlockLightSky",
-      "difference": "constants extra 0",
-      "referenceSignature": "float CurveBlockLightSky(float)",
-      "implementationSignature": "float ogxCurveBlockLightSky(float)"
-    },
-    "CurveBlockLightTorch": {
-      "target": "surface.ogxCurveBlockLightTorch",
-      "difference": "constants extra 0",
-      "referenceSignature": "float CurveBlockLightTorch(float)",
-      "implementationSignature": "float ogxCurveBlockLightTorch(float)"
-    },
-    "GetGbufferData": {
-      "target": "gbuffer.ogxGetGbufferData",
-      "difference": "return GbufferData != OgxGbufferData; param count 0 != 19; constants missing 0.3; extra 63",
-      "referenceSignature": "gbufferdata GetGbufferData()",
-      "implementationSignature": "ogxgbufferdata ogxGetGbufferData(sampler2d, sampler2d, sampler2d, sampler2d, sampler2d, sampler2d, sampler2d, int2, bool, bool, int, float, float, bool, float, float, float, float, bool)"
-    },
-    "FixParticleMask": {
-      "target": "gbuffer.ogxFixParticleMask",
-      "difference": "constants missing 0, 0.5, 1",
-      "referenceSignature": "void FixParticleMask(inout materialmask, inout materialmask, inout float, float)",
-      "implementationSignature": "void FixParticleMask(inout materialmask, inout materialmask, inout float, float)"
-    },
-    "SlidePrimary": {
-      "target": "color.ogxAgxSlidePrimary",
-      "difference": "constants extra 1",
-      "referenceSignature": "float2 SlidePrimary(float2, float2, float2, float)",
-      "implementationSignature": "float2 ogxAgxSlidePrimary(float2, float2, float2, float)"
-    },
-    "CloudShadowFromTex": {
-      "target": "cloud.ogxCloudShadowSample",
-      "difference": "param count 1 != 11; constants missing 0.45, 2, 256, 4096",
-      "referenceSignature": "float CloudShadowFromTex(float3)",
-      "implementationSignature": "float ogxCloudShadowSample(sampler2d, float3, float3, float, float, float2, float2, float, float, float, bool)"
-    },
-    "GetLinearDepth": {
-      "target": "post.ogxDofLinearDepth",
-      "difference": "param count 1 != 6; samples ['sample'] != ['sample', 'sample']; constants extra 0.5",
-      "referenceSignature": "float GetLinearDepth(float2)",
-      "implementationSignature": "float ogxDofLinearDepth(float2, sampler2d, sampler2d, float4x4, float4x4, bool)"
-    },
-    "GetFocus": {
-      "target": "itx_extra.ogxGetFocus",
-      "difference": "samples ['fetch'] != []; constants missing 0, 0.125, 0.875, 1, 2, 3, 60",
-      "referenceSignature": "float GetFocus()",
-      "implementationSignature": "float GetFocus()"
-    },
-    "CoCSpread": {
-      "target": "post.ogxDofCocSpread",
-      "difference": "samples ['fetch', 'sample', 'fetch', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'fetch']; constants missing 0.01, 0.1, 0.125, 2.39996, 60",
-      "referenceSignature": "float CoCSpread()",
-      "implementationSignature": "float CoCSpread()"
-    },
-    "DepthOfField": {
-      "target": "post.ogxDepthOfField",
-      "difference": "samples ['fetch', 'sample', 'fetch', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'fetch']; constants missing 0.01, 0.125, 2.39996, 60",
-      "referenceSignature": "float4 DepthOfField()",
-      "implementationSignature": "float4 DepthOfField()"
-    },
-    "CalculateStars": {
-      "target": "atmosphere.ogxStarsStable",
-      "difference": "return vec3 != float; param count 1 != 3; constants missing -3.02585e+09, -2.66129e+08, -234359, -5.87339, -1.53738, -1.37419, -1.34811, -1.10638; extra -20, 0.1031, 0.99, 31.32, 300",
-      "referenceSignature": "float3 CalculateStars(float3)",
-      "implementationSignature": "float ogxStarsStable(float3, float, float)"
-    },
-    "ppss": {
-      "target": "atmosphere.ogxPlanetBrdf",
-      "difference": "param count 5 != 4; constants extra 0, 2, 3",
-      "referenceSignature": "float3 ppss(float3, float3, float3, float3, float)",
-      "implementationSignature": "float3 ogxPlanetBrdf(float3, float3, float3, float3)"
-    },
-    "Disc": {
-      "target": "atmosphere.ogxDiscProfile",
-      "difference": "constants extra 0, 2, 3",
-      "referenceSignature": "float Disc(float, float, float)",
-      "implementationSignature": "float ogxDiscProfile(float, float, float)"
-    },
-    "Calculate3DNoise": {
-      "target": "fog.ogxEnd3dNoise",
-      "difference": "param count 1 != 3; constants missing 64; extra 2, 3",
-      "referenceSignature": "float Calculate3DNoise(float3)",
-      "implementationSignature": "float ogxEnd3dNoise(float3, sampler2d, float)"
-    },
-    "CalculateCloudFBM": {
-      "target": "fog.ogxCloudFbm",
-      "difference": "param count 2 != 4; constants missing 64; extra 2, 3",
-      "referenceSignature": "float CalculateCloudFBM(float3, float3)",
-      "implementationSignature": "float ogxCloudFbm(float3, float3, sampler2d, float)"
-    },
-    "CalculateCloudFBM_LQ": {
-      "target": "noise.ogxFbm3",
-      "difference": "param 2 float3/in != int/in; samples ['sample'] != []; constants missing 0.15, 0.9, 64; extra 0.1031, 1, 2.03, 9, 31, 33.33",
-      "referenceSignature": "float CalculateCloudFBM_LQ(float3, float3)",
-      "implementationSignature": "float ogxFbm3(float3, int)"
-    },
-    "BlackHole_AccretionDisc_Stars": {
-      "target": "accretion.ogxAccretionDisc",
-      "difference": "constants missing 0.007, 0.02, 0.25, 19.19, 384, 437.195, 441.423, 443.897",
-      "referenceSignature": "void BlackHole_AccretionDisc_Stars(inout float3, float3, float3)",
-      "implementationSignature": "void BlackHole_AccretionDisc_Stars(inout float3, float3, float3)"
-    },
-    "BlackHole_AccretionDisc_Reflection": {
-      "target": "accretion.ogxAccretionDisc",
-      "difference": "constants missing 0.0333333",
-      "referenceSignature": "void BlackHole_AccretionDisc_Reflection(inout float3, float3, float3)",
-      "implementationSignature": "void BlackHole_AccretionDisc_Reflection(inout float3, float3, float3)"
-    },
-    "FsrEasuSet": {
-      "target": "upscale.ogxFsrEasuSet",
-      "difference": "constants extra 0",
-      "referenceSignature": "void FsrEasuSet(inout float2, inout float, float, float, float, float, float, float)",
-      "implementationSignature": "void ogxFsrEasuSet(inout float2, inout float, float, float, float, float, float, float)"
-    },
-    "RSM": {
-      "target": "gi.ogxGiRsm",
-      "difference": "param count 2 != 16; constants missing 0.0625, 0.9, 1.1, 1.32472, 1.61803, 2.39996, 7, 16; extra -0.737369, 0.67549",
-      "referenceSignature": "float3 RSM(float3, float3)",
-      "implementationSignature": "float3 ogxGiRsm(float3, float3, ogxgiview, sampler2d, sampler2d, sampler2d, sampler2d, float, int, float, float, float, float2, bool, bool, bool)"
-    },
-    "GI_TemporalFilter": {
-      "target": "gi.ogxGiTemporalFilter",
-      "difference": "param count 0 != 29; samples ['fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch'] != ['fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch']; constants missing -1, 0.0625, 0.9, 1.1, 1.32472, 1.61803, 2.39996, 7; extra -0.737369, 0.67549, 4, 255",
-      "referenceSignature": "float4 GI_TemporalFilter()",
-      "implementationSignature": "float4 ogxGiTemporalFilter(float2, int2, ogxgiview, sampler2d, sampler2d, sampler2d, sampler2d, sampler2d, sampler2d, sampler2d, sampler2d, sampler2d, float, bool, bool, bool, bool, bool, bool, bool, bool, float, float, float, float, int, float, float, float2)"
-    },
-    "GI_SpatialFilter": {
-      "target": "gi.ogxGiSpatialFilter",
-      "difference": "param count 3 != 7; constants missing -3, -2, -1, 0.5; extra 7",
-      "referenceSignature": "float3 GI_SpatialFilter(float, float3, float3)",
-      "implementationSignature": "float3 ogxGiSpatialFilter(float2, float, float3, float3, ogxgiview, sampler2d, float)"
-    },
-    "GroundTruthBasedAmbientOcclusion": {
-      "target": "gi.ogxGroundTruthAo",
-      "difference": "samples ['fetch', 'sample', 'sample'] != ['fetch', 'sample', 'sample', 'sample', 'sample']; constants missing 0.333333, 0.5",
-      "referenceSignature": "float GroundTruthBasedAmbientOcclusion(float3, float3, float3)",
-      "implementationSignature": "float GroundTruthBasedAmbientOcclusion(float3, float3, float3)"
-    },
-    "GetDistOffset": {
-      "target": "post.ogxGlareDistOffset",
-      "difference": "param count 2 != 3",
-      "referenceSignature": "float2 GetDistOffset(float2, float2)",
-      "implementationSignature": "float2 ogxGlareDistOffset(float2, float2, float)"
-    },
-    "flare": {
-      "target": "post.ogxGlareFlare",
-      "difference": "param count 5 != 6",
-      "referenceSignature": "float3 flare(float2, float2, float, float, float)",
-      "implementationSignature": "float3 ogxGlareFlare(float2, float2, float, float, float, float)"
-    },
-    "orb": {
-      "target": "post.ogxGlareOrb",
-      "difference": "param count 4 != 5",
-      "referenceSignature": "float3 orb(float2, float2, float, float)",
-      "implementationSignature": "float3 ogxGlareOrb(float2, float2, float, float, float)"
-    },
-    "LensFlare": {
-      "target": "itx_extra.ogxLensFlare",
-      "difference": "constants missing 8e-05, 0.131, 0.2, 1.5708, 2.5, 3.14159, 12, 13",
-      "referenceSignature": "float3 LensFlare()",
-      "implementationSignature": "float3 LensFlare()"
-    },
-    "MotionBlur": {
-      "target": "post.ogxMotionBlur",
-      "difference": "samples ['fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'fetch', 'sample'] != ['fetch', 'fetch', 'fetch', 'fetch', 'sample']; constants missing -3, -1, 7",
-      "referenceSignature": "float3 MotionBlur()",
-      "implementationSignature": "float3 MotionBlur()"
-    },
-    "HenyeyGreenstein": {
-      "target": "cloud.ogxHenyeyGreenstein",
-      "difference": "constants missing 3.14159; extra 0.31831",
-      "referenceSignature": "float HenyeyGreenstein(float, float)",
-      "implementationSignature": "float ogxHenyeyGreenstein(float, float)"
-    },
-    "SampleDensity": {
-      "target": "cloud_volume.ogxCumulusSampleDensity",
-      "difference": "param count 3 != 11; constants missing 0.0007, 0.007, 0.28, 0.68, 0.96",
-      "referenceSignature": "float2 SampleDensity(float4, float3, bool)",
-      "implementationSignature": "float2 ogxCumulusSampleDensity(float4, ogxcumulusmedia, bool, float, sampler3d, sampler3d, sampler2d, float, float, float, float)"
-    },
-    "SetCloudPos": {
-      "target": "cloud_volume.ogxCumulusSetPos",
-      "difference": "param count 5 != 2; constants extra 1",
-      "referenceSignature": "float4 SetCloudPos(float3, float2, float, float, float3)",
-      "implementationSignature": "float4 ogxCumulusSetPos(float3, ogxcumulusmedia)"
-    },
-    "CloudLighting": {
-      "target": "cloud_volume.ogxCumulusLighting",
-      "difference": "param count 10 != 15; constants missing 0.0007, 0.007, 0.28, 0.68, 0.96, 1.3, 3.14159; extra -10, 0.31831, 0.55, 0.65, 0.9, 116, 400",
-      "referenceSignature": "float3 CloudLighting(float3, float2, float, float, float2, float2, float4, float3, float, float)",
-      "implementationSignature": "float3 ogxCumulusLighting(float3, ogxcumulusmedia, float2, float4, float, float, float, float3, sampler3d, sampler3d, sampler2d, float, float, float, float)"
-    },
-    "NubisCumulus": {
-      "target": "cloud_volume.ogxCumulusMarch",
-      "difference": "return void != float4; param count 7 != 14; samples ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing -1.5, -1, -0.5, -0.4624, -0.1119, -0.0742, -0.0374, -0.0283; extra -10, 0.31831, 0.55, 0.65, 0.9, 116, 400, 60000",
-      "referenceSignature": "void NubisCumulus(inout float3, float3, float2, float3, float3, float2, out float)",
-      "implementationSignature": "float4 ogxCumulusMarch(float3, ogxcumulusmedia, float2, out float3, sampler3d, sampler3d, sampler2d, float, float, float3, float, float, float, float)"
-    },
-    "CloudShadowTex": {
-      "target": "cloud.ogxCloudShadowSample",
-      "difference": "param count 3 != 11; samples ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample']; constants missing -1e-05, 1e-06, 8.5e-05, 0.0001, 0.0007, 0.007, 0.11, 0.125; extra -0.5, 0.06, 0.18, 1.5, 4, 5.9, 6, 12",
-      "referenceSignature": "float CloudShadowTex(float2, float2, float3)",
-      "implementationSignature": "float ogxCloudShadowSample(sampler2d, float3, float3, float, float, float2, float2, float, float, float, bool)"
-    },
-    "physics_waveDirection": {
-      "target": "water.ogxOceanWaveDirection",
-      "difference": "param count 3 != 2; constants missing 0, 0.035, 0.048, 0.45, 0.75, 0.8, 1.07, 1.18",
-      "referenceSignature": "float2 physics_waveDirection(float2, int, float)",
-      "implementationSignature": "float2 ogxOceanWaveDirection(ogxoceanwavesum, float)"
-    },
-    "BicubicBlurNoise": {
-      "target": "cloud.ogxBicubicBlurNoise",
-      "difference": "param count 1 != 2",
-      "referenceSignature": "float BicubicBlurNoise(float2)",
-      "implementationSignature": "float ogxBicubicBlurNoise(float2, sampler2d)"
-    },
-    "BilinearNoise": {
-      "target": "cloud.ogxBilinearNoise",
-      "difference": "param count 1 != 2",
-      "referenceSignature": "float BilinearNoise(float2)",
-      "implementationSignature": "float ogxBilinearNoise(float2, sampler2d)"
-    },
-    "GetPlanarCloudsDistortion": {
-      "target": "cloud.ogxPlanarDistortion",
-      "difference": "param count 2 != 3; constants extra 1",
-      "referenceSignature": "float GetPlanarCloudsDistortion(float2, float2)",
-      "implementationSignature": "float ogxPlanarDistortion(float2, float2, sampler2d)"
-    },
-    "GetPlanarCloudsDensity": {
-      "target": "cloud.ogxPlanarDensity",
-      "difference": "param count 2 != 5; constants missing 0.025, 2.39996; extra -2.39996",
-      "referenceSignature": "float GetPlanarCloudsDensity(float2, float2)",
-      "implementationSignature": "float ogxPlanarDensity(float2, float2, sampler2d, float, float)"
-    },
-    "GetPlanarCloudsLightingDensity": {
-      "target": "cloud.ogxPlanarLightingDensity",
-      "difference": "param count 2 != 5; constants missing 0.025, 2.39996; extra -2.39996",
-      "referenceSignature": "float GetPlanarCloudsLightingDensity(float2, float2)",
-      "implementationSignature": "float ogxPlanarLightingDensity(float2, float2, sampler2d, float, float)"
-    },
-    "PlanarClouds": {
-      "target": "planar.ogxPlanarClouds",
-      "difference": "param count 5 != 25; constants missing 0.0003, 0.003996, 0.008396, 0.01459, 0.025, 0.0331, 1.68194, 1.85149; extra -2.39996, 0.0721, 0.2125, 0.7154, 0.984848",
-      "referenceSignature": "void PlanarClouds(inout float3, float3, float3, float, float)",
-      "implementationSignature": "void ogxPlanarClouds(inout float3, float3, float3, float, inout float, ogxatmospheremodel, sampler3d, float3, float, float, float, float3, float3, float3, float, float, float, float, sampler2d, float3, float3, float3, float, float, bool)"
-    },
-    "AtrousWaveletFilter": {
-      "target": "reflection.ogxReflectionAtrousFilter",
-      "difference": "param count 7 != 13; constants missing -1, 1.5708",
-      "referenceSignature": "void AtrousWaveletFilter(inout float4, float3, float3, float3, float, float, float2)",
-      "implementationSignature": "void ogxReflectionAtrousFilter(inout float4, float3, float3, float3, float, float, float2, float2, sampler2d, sampler2d, sampler2d, float2, float4x4)"
-    },
-    "ProjectSky": {
-      "target": "atmosphere.ogxSkyProject",
-      "difference": "constants missing 1",
-      "referenceSignature": "float2 ProjectSky(float3, float)",
-      "implementationSignature": "float2 ogxSkyProject(float3, float)"
-    },
-    "CalculateSpecularReflections": {
-      "target": "reflection.ogxSpecularReflectionMix",
-      "difference": "param count 5 != 12; samples ['fetch', 'fetch'] != []",
-      "referenceSignature": "void CalculateSpecularReflections(inout float3, float3, float3, float3, material)",
-      "implementationSignature": "void ogxSpecularReflectionMix(inout float3, float3, float3, float3, float, float3, bool, float, float, float, float, bool)"
-    },
-    "Get3DNoise": {
-      "target": "noise.ogxFogNoise",
-      "difference": "param count 1 != 2; constants missing 0.5, 64; extra 0.0078125, 0.015625, 2, 3",
-      "referenceSignature": "float Get3DNoise(float3)",
-      "implementationSignature": "float ogxFogNoise(float3, sampler2d)"
-    },
-    "GetModulatedRainSpecular": {
-      "target": "water.ogxRainSpecular",
-      "difference": "constants missing 64",
-      "referenceSignature": "float GetModulatedRainSpecular(float3)",
-      "implementationSignature": "float GetModulatedRainSpecular(float3)"
-    },
-    "UnderwaterVolumetricFog": {
-      "target": "fog_volume.ogxUnderwaterFog",
-      "difference": "samples ['fetch', 'sample', 'fetch', 'sample'] != ['sample', 'sample', 'sample', 'fetch']; constants missing 0.16, 0.3, 0.9, 6.66667, 7, 7.1",
-      "referenceSignature": "float3 UnderwaterVolumetricFog(float3, float3, float3, float)",
-      "implementationSignature": "float3 UnderwaterVolumetricFog(float3, float3, float3, float)"
-    },
-    "PowderEffect": {
-      "target": "fog.ogxFogPowder",
-      "difference": "param count 3 != 2; constants extra 0, 4",
-      "referenceSignature": "float PowderEffect(float, float, float)",
-      "implementationSignature": "float ogxFogPowder(float, float)"
-    },
-    "MultiScatteringPhases": {
-      "target": "fog.ogxMultiScatteringPhases",
-      "difference": "return void != float4; param count 2 != 1; constants missing 0, 4; extra 0.125, 0.25",
-      "referenceSignature": "void MultiScatteringPhases(float, inout float)",
-      "implementationSignature": "float4 ogxMultiScatteringPhases(float)"
-    },
-    "FogDensity": {
-      "target": "fog.ogxFogDensity",
-      "difference": "param 1 float3/in != ogxfog/in; constants missing 0.1, 40, 50, 65; extra 0.0001, 0.1031, 1.6, 2.03, 3, 9, 17, 31",
-      "referenceSignature": "float FogDensity(float3, float3)",
-      "implementationSignature": "float ogxFogDensity(ogxfog, float3)"
-    },
-    "VolumetricFog": {
-      "target": "fog_volume.ogxVolumetricFog",
-      "difference": "samples ['fetch', 'sample'] != ['fetch', 'sample', 'sample', 'sample', 'fetch', 'fetch', 'fetch', 'fetch', 'sample', 'sample', 'sample', 'sample']; constants missing 0.166667",
-      "referenceSignature": "void VolumetricFog(inout float3, float3, float3, float3, float, float, out float)",
-      "implementationSignature": "void VolumetricFog(inout float3, float3, float3, float3, float, float, out float)"
-    },
-    "LandAtmosphericScattering": {
-      "target": "itx_extra.ogxLandAtmosphericScattering",
-      "difference": "constants missing 63",
-      "referenceSignature": "void LandAtmosphericScattering(inout float3, float, float3, float3, float3, bool)",
-      "implementationSignature": "void LandAtmosphericScattering(inout float3, float, float3, float3, float3, bool)"
-    },
-    "textureSmooth": {
-      "target": "water.ogxTextureSmooth",
-      "difference": "constants extra 2, 3",
-      "referenceSignature": "float4 textureSmooth(sampler2d, float2)",
-      "implementationSignature": "float4 ogxTextureSmooth(sampler2d, float2)"
-    },
-    "GetWaterParallaxCoord": {
-      "target": "water.ogxWaterParallax",
-      "difference": "constants missing 0.96",
-      "referenceSignature": "float3 GetWaterParallaxCoord(float3, float3)",
-      "implementationSignature": "float3 GetWaterParallaxCoord(float3, float3)"
-    },
-    "AgX": {
-      "target": "color.ogxAgx",
-      "difference": "param count 1 != 3; constants missing 6.5, 13",
-      "referenceSignature": "float3 AgX(float3)",
-      "implementationSignature": "float3 ogxAgx(float3, float, bool)"
-    },
-    "GetExposureValue": {
-      "target": "itx_extra.ogxGetExposureValue",
-      "difference": "constants missing 0.9, 0.95",
-      "referenceSignature": "float GetExposureValue()",
-      "implementationSignature": "float GetExposureValue()"
-    },
-    "end_portal_layer": {
-      "target": "itx_extra.ogxEndPortalLayer",
-      "difference": "param count 1 != 2; constants extra 3",
-      "referenceSignature": "float4x4 end_portal_layer(float)",
-      "implementationSignature": "float4x4 ogxEndPortalLayer(float, float)"
-    },
-    "SampleAnisotropic": {
-      "target": "itx_extra.ogxSampleAnisotropic",
-      "difference": "param count 5 != 14; samples ['sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing -1.5, 0.25, 4; extra 1.488, 1.5, 2, 255",
-      "referenceSignature": "float4 SampleAnisotropic(float2, float2, float2, inout float3, inout float4)",
-      "implementationSignature": "float4 ogxSampleAnisotropic(sampler2d, sampler2d, sampler2d, float2, float2, float2, float2, float, int, bool, bool, bool, inout float3, inout float4)"
-    },
-    "ShadowScreenPos_From_WorldPos_Distorted": {
-      "target": "shadow.ogxShadowScreenPosDistorted",
-      "difference": "constants missing 0.9",
-      "referenceSignature": "float3 ShadowScreenPos_From_WorldPos_Distorted(float3)",
-      "implementationSignature": "float3 ShadowScreenPos_From_WorldPos_Distorted(float3)"
-    },
-    "DistortShadowScreenPos": {
-      "target": "shadow.ogxDistortShadowPos",
-      "difference": "constants missing 0.9",
-      "referenceSignature": "float2 DistortShadowScreenPos(float2)",
-      "implementationSignature": "float2 DistortShadowScreenPos(float2)"
-    },
-    "remapSaturate": {
-      "target": "math.ogxRemapSaturate",
-      "difference": "constants extra 0, 1",
-      "referenceSignature": "float remapSaturate(float, float, float)",
-      "implementationSignature": "float ogxRemapSaturate(float, float, float)"
-    },
-    "DoNightEye": {
-      "target": "math.ogxDoNightEye",
-      "difference": "constants extra 0.0721, 0.2125, 0.7154",
-      "referenceSignature": "void DoNightEye(inout float3)",
-      "implementationSignature": "void ogxDoNightEye(inout float3)"
-    },
-    "Fd_Burley": {
-      "target": "math.ogxDiffuseBurley",
-      "difference": "constants extra 0",
-      "referenceSignature": "float Fd_Burley(float3, float3, float3, float)",
-      "implementationSignature": "float ogxDiffuseBurley(float3, float3, float3, float)"
-    },
-    "SpecularGGX": {
-      "target": "math.ogxSpecularGGX",
-      "difference": "constants extra 0",
-      "referenceSignature": "float SpecularGGX(float3, float3, float3, float, float)",
-      "implementationSignature": "float ogxSpecularGGX(float3, float3, float3, float, float)"
-    },
-    "Blackbody": {
-      "target": "math.ogxBlackbody",
-      "difference": "constants missing 2",
-      "referenceSignature": "float3 Blackbody(float)",
-      "implementationSignature": "float3 ogxBlackbody(float)"
-    },
-    "triNoise2d": {
-      "target": "cloud_eclipse.ogxEclipseTriNoise2d",
-      "difference": "param count 1 != 2; constants missing -0.29552, 0.01, 0.02, 0.06, 0.29552, 0.42, 0.45, 0.49; extra 0.0973, 0.103, 0.1031, 2, 6.28319, 33.33",
-      "referenceSignature": "float triNoise2d(float2)",
-      "implementationSignature": "float ogxEclipseTriNoise2d(float2, float)"
-    },
-    "aurora": {
-      "target": "atmosphere.ogxAurora",
-      "difference": "param count 5 != 7; constants missing -50, -0.5, -0.29552, -0.1, 0.0016, 0.01, 0.025, 0.05; extra -0.2, 0.015, 0.08, 0.12, 0.16, 0.2, 0.35, 5",
-      "referenceSignature": "float3 aurora(float3, int, float, float, float)",
-      "implementationSignature": "float3 ogxAurora(float3, float3, float3, float, float, float, float)"
-    },
-    "bayerDither": {
-      "target": "math.ogxEclipseBayerDither",
-      "difference": "param count 0 != 1",
-      "referenceSignature": "float bayerDither()",
-      "implementationSignature": "float ogxEclipseBayerDither(float2)"
-    },
-    "BiomeFogDensity": {
-      "target": "fog.ogxBiomeFogDensityEclipse",
-      "difference": "param count 3 != 17; constants missing 0.02, 0.05, 0.3, 0.4",
-      "referenceSignature": "void BiomeFogDensity(inout float4, inout float4, float)",
-      "implementationSignature": "void ogxBiomeFogDensityEclipse(inout float4, inout float4, float, float, float, float, float, float, float, float, float, float, float, float, float, float, float)"
-    },
-    "triangWhiteNoise": {
-      "target": "noise.ogxTriangleNoise",
-      "difference": "param count 1 != 2; constants extra 1e-10",
-      "referenceSignature": "float triangWhiteNoise(float2)",
-      "implementationSignature": "float ogxTriangleNoise(float2, float)"
-    },
-    "fp10Dither": {
-      "target": "post.ogxDitherFloat",
-      "difference": "param count 2 != 4; constants missing 5, 6; extra 1e-20",
-      "referenceSignature": "float3 fp10Dither(float3, float2)",
-      "implementationSignature": "float3 ogxDitherFloat(float3, float2, float, float3)"
-    },
-    "fp16Dither": {
-      "target": "post.ogxDitherFloat",
-      "difference": "param count 2 != 4; constants missing 10; extra 1e-20",
-      "referenceSignature": "float3 fp16Dither(float3, float2)",
-      "implementationSignature": "float3 ogxDitherFloat(float3, float2, float, float3)"
-    },
-    "int8Dither": {
-      "target": "post.ogxDitherFixed",
-      "difference": "param count 2 != 4; constants missing -8; extra 1e-10",
-      "referenceSignature": "float3 int8Dither(float3, float2)",
-      "implementationSignature": "float3 ogxDitherFixed(float3, float2, float, float)"
-    },
-    "int10Dither": {
-      "target": "post.ogxDitherFixed",
-      "difference": "param count 2 != 4; constants missing -10; extra 1e-10",
-      "referenceSignature": "float3 int10Dither(float3, float2)",
-      "implementationSignature": "float3 ogxDitherFixed(float3, float2, float, float)"
-    },
-    "int16Dither": {
-      "target": "post.ogxDitherFixed",
-      "difference": "param count 2 != 4; constants missing -16; extra 1e-10",
-      "referenceSignature": "float3 int16Dither(float3, float2)",
-      "implementationSignature": "float3 ogxDitherFixed(float3, float2, float, float)"
-    },
-    "luma": {
-      "target": "color.ogxLuminanceRec601",
-      "difference": "constants missing 0.07, 0.21, 0.72; extra 0.114, 0.299, 0.587",
-      "referenceSignature": "float luma(float3)",
-      "implementationSignature": "float ogxLuminanceRec601(float3)"
-    },
-    "Tonemap_Lottes": {
-      "target": "color.ogxTonemapLottes",
-      "difference": "constants extra 0.249115, 1.06987",
-      "referenceSignature": "float3 Tonemap_Lottes(float3)",
-      "implementationSignature": "float3 ogxTonemapLottes(float3)"
-    },
-    "curve": {
-      "target": "color.ogxAgxContrast",
-      "difference": "constants missing 1; extra 0.00232, 0.1191, 0.4298, 6.868, 15.5, 31.96, 40.14",
-      "referenceSignature": "float3 curve(float3)",
-      "implementationSignature": "float3 ogxAgxContrast(float3)"
-    },
-    "Tonemap_Uchimura_Modified": {
-      "target": "color.ogxTonemapUchimuraModified",
-      "difference": "constants extra 2, 3",
-      "referenceSignature": "float3 Tonemap_Uchimura_Modified(float3, float, float, float, float, float, float)",
-      "implementationSignature": "float3 ogxTonemapUchimuraModified(float3, float, float, float, float, float, float)"
-    },
-    "agxLook": {
-      "target": "color.ogxAgxLook",
-      "difference": "constants missing 0",
-      "referenceSignature": "float3 agxLook(float3)",
-      "implementationSignature": "float3 ogxAgxLook(float3)"
-    },
-    "ToneMap_AgX": {
-      "target": "color.ogxToneMapAgx",
-      "difference": "constants missing 0.0164939, 0.110607, 0.14133; extra -0.14133, -0.110607, -0.0164939",
-      "referenceSignature": "float3 ToneMap_AgX(float3)",
-      "implementationSignature": "float3 ogxToneMapAgx(float3)"
-    },
-    "no_tonemapper": {
-      "target": "color.ogxTonemapNone",
-      "difference": "constants extra 1, 2.2",
-      "referenceSignature": "float3 no_tonemapper(float3)",
-      "implementationSignature": "float3 ogxTonemapNone(float3)"
-    },
-    "doBlockLightLighting": {
-      "target": "eclipse_diffuse.ogxEclipseDoBlockLightLighting",
-      "difference": "param count 4 != 10; constants extra 0.999, 1.5, 3",
-      "referenceSignature": "float3 doBlockLightLighting(float3, float, float3, float3)",
-      "implementationSignature": "float3 ogxEclipseDoBlockLightLighting(float3, float, float3, float3, float3, float, float, float, bool, bool)"
-    },
-    "doIndirectLighting": {
-      "target": "surface.ogxDoIndirectLighting",
-      "difference": "param count 3 != 7; constants missing 0.5, 0.8",
-      "referenceSignature": "float3 doIndirectLighting(float3, float3, float)",
-      "implementationSignature": "float3 ogxDoIndirectLighting(float3, float3, float, float, float, float, float)"
-    },
-    "toScreenSpace_DH": {
-      "target": "camera.ogxToScreenSpaceDh",
-      "difference": "param count 3 != 5",
-      "referenceSignature": "float3 toScreenSpace_DH(float2, float, float)",
-      "implementationSignature": "float3 ogxToScreenSpaceDh(float2, float, float, float4x4, float4x4)"
-    },
-    "toClipSpace3_DH": {
-      "target": "camera.ogxToClipSpace3Dh",
-      "difference": "param count 2 != 4; constants extra 0, 1, 2, 3",
-      "referenceSignature": "float3 toClipSpace3_DH(float3, bool)",
-      "implementationSignature": "float3 ogxToClipSpace3Dh(float3, bool, float4x4, float4x4)"
-    },
-    "DH_shadowProjectionTweak": {
-      "target": "camera.ogxDhShadowProjectionTweak",
-      "difference": "param count 1 != 4; constants extra -2, 0, 2, 3",
-      "referenceSignature": "float4x4 DH_shadowProjectionTweak(float4x4)",
-      "implementationSignature": "float4x4 ogxDhShadowProjectionTweak(float4x4, float, float, bool)"
-    },
-    "LightSourcePosition": {
-      "target": "eclipse_extra.ogxEclipseLightSourcePosition",
-      "difference": "param count 3 != 6; samples ['fetch'] != []; constants missing 1, 2, 150",
-      "referenceSignature": "float3 LightSourcePosition(float3, float3, float)",
-      "implementationSignature": "float3 ogxEclipseLightSourcePosition(float3, float3, float, float3, float3, bool)"
-    },
-    "densityAtPosFog": {
-      "target": "weather.ogxStormNoise",
-      "difference": "param count 1 != 3; constants missing 512",
-      "referenceSignature": "float densityAtPosFog(float3)",
-      "implementationSignature": "float ogxStormNoise(float3, sampler2d, float)"
-    },
-    "SwirlAroundOrigin": {
-      "target": "fog.ogxEndVortexSwirl",
-      "difference": "param count 2 != 3",
-      "referenceSignature": "void SwirlAroundOrigin(inout float3, float3)",
-      "implementationSignature": "void ogxEndVortexSwirl(inout float3, float3, float)"
-    },
-    "fogShape": {
-      "target": "fog.ogxEndVortexShape",
-      "difference": "param count 1 != 4; constants missing -60, -1, 512; extra 60, 300",
-      "referenceSignature": "float fogShape(float3)",
-      "implementationSignature": "float ogxEndVortexShape(float3, float, sampler2d, float)"
-    },
-    "LightSourceColors": {
-      "target": "eclipse_extra.ogxEclipseLightSourceColors",
-      "difference": "param count 2 != 7; constants missing 0.4, 0.5, 0.75, 1",
-      "referenceSignature": "float3 LightSourceColors(float, float)",
-      "implementationSignature": "float3 ogxEclipseLightSourceColors(float, float, float3, float3, float3, float, bool)"
-    },
-    "LightSourceLighting": {
-      "target": "fog.ogxEndVortexLighting",
-      "difference": "param count 6 != 7; constants missing -60, -1, 0.15, 512; extra 60, 300",
-      "referenceSignature": "float3 LightSourceLighting(float3, float3, float, float, float3, float)",
-      "implementationSignature": "float3 ogxEndVortexLighting(float3, float3, float, float3, float, sampler2d, float)"
-    },
-    "GetVolumetricFog": {
-      "target": "fog.ogxEndVortexFog",
-      "difference": "param count 3 != 15; samples ['fetch', 'fetch', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample']; constants missing -60, -1, 0.001, 0.15, 0.3, 0.35, 0.4, 2.5; extra 0.0001, 60",
-      "referenceSignature": "float4 GetVolumetricFog(float3, float, float)",
-      "implementationSignature": "float4 ogxEndVortexFog(float3, float3, float, float, int, float, float, float3, float3, float, float, float, sampler2d, float, float)"
-    },
-    "GetEndFogShadow": {
-      "target": "eclipse_scene.ogxEclipseGetEndFogShadow",
-      "difference": "param count 2 != 4; samples ['sample', 'sample'] != ['sample']; constants missing -60, -1, 0.32, 0.5, 0.8, 1.5, 2, 2.39996",
-      "referenceSignature": "float GetEndFogShadow(float3, float3)",
-      "implementationSignature": "float ogxEclipseGetEndFogShadow(float3, float3, sampler3d, float)"
-    },
-    "applyGameplayEffects": {
-      "target": "eclipse_scene.ogxEclipseApplyGameplayEffects",
-      "difference": "param count 3 != 23; constants extra -1, 0.07, 0.1, 0.2, 0.21, 0.35, 0.72, 15",
-      "referenceSignature": "void applyGameplayEffects(inout float3, float2, float)",
-      "implementationSignature": "void ogxEclipseApplyGameplayEffects(inout float3, float2, float, float, float, float, float, float, float, bool, bool, bool, bool, float, float, float, float, sampler2d, sampler2d, float, float, float, float)"
-    },
-    "HsvToRgb": {
-      "target": "color.ogxHsvToRgb",
-      "difference": "constants missing 9; extra 0, 0.333333, 0.666667",
-      "referenceSignature": "float3 HsvToRgb(float3)",
-      "implementationSignature": "float3 ogxHsvToRgb(float3)"
-    },
-    "BilateralUpscale_SSAO": {
-      "target": "gi.ogxBilateralUpscale",
-      "difference": "param count 4 != 6; constants missing -2, 0.005; extra -1, 2, 3",
-      "referenceSignature": "float4 BilateralUpscale_SSAO(sampler2d, sampler2d, float2, float)",
-      "implementationSignature": "float4 ogxBilateralUpscale(sampler2d, sampler2d, int2, int, float, float)"
-    },
-    "rayTrace_GI": {
-      "target": "eclipse_indirect.ogxEclipseRayTraceGi",
-      "difference": "param count 4 != 11; samples ['fetch'] != ['fetch', 'fetch']",
-      "referenceSignature": "float3 rayTrace_GI(float3, float3, float, float)",
-      "implementationSignature": "float3 ogxEclipseRayTraceGi(float3, float3, float, float, float, float, float, sampler2d, bool, float4x4, float4x4)"
-    },
-    "convertHandDepth_3": {
-      "target": "math.ogxConvertHandDepth3",
-      "difference": "param count 2 != 3",
-      "referenceSignature": "float convertHandDepth_3(float, bool)",
-      "implementationSignature": "float ogxConvertHandDepth3(float, bool, float)"
-    },
-    "RT_alternate": {
-      "target": "eclipse_indirect.ogxEclipseRtAlternate",
-      "difference": "param count 6 != 18; samples ['fetch'] != ['fetch', 'fetch']; constants missing 10",
-      "referenceSignature": "float3 RT_alternate(float3, float3, float, float, bool, inout float)",
-      "implementationSignature": "float3 ogxEclipseRtAlternate(float3, float3, float, float, bool, inout float, int, float, float, float, float2, float2, float2, sampler2d, bool, float4x4, float4x4, float4x4)"
-    },
-    "ApplySSRT": {
-      "target": "reflection.ogxReflectionSceneColor",
-      "difference": "param count 9 != 2; samples ['fetch'] != ['sample']; constants missing 5e-05, 0.001, 0.05, 0.1, 0.5, 0.56984, 0.754878, 0.8",
-      "referenceSignature": "float3 ApplySSRT(float3, float3, float3, float3, float3, float3, float, bool, bool)",
-      "implementationSignature": "float3 ogxReflectionSceneColor(sampler2d, float2)"
-    },
-    "Iris_Lightningflash": {
-      "target": "fog_volume.ogxFogLightning",
-      "difference": "param 2 float3/in != ogxfogmedia/in; param 3 float3/in != float/in; param 4 float/inout != float/in; constants missing -10, -2, 5, 16, 60, 300; extra 0.55, 0.65, 0.9",
-      "referenceSignature": "float3 Iris_Lightningflash(float3, float3, float3, inout float)",
-      "implementationSignature": "float3 ogxFogLightning(float3, ogxfogmedia, float, float)"
-    },
-    "Iris_Lightningflash_VLcloud": {
-      "target": "cloud_volume.ogxCumulusLightning",
-      "difference": "param count 1 != 4; constants missing -10, 400; extra 0.55, 0.65, 0.9",
-      "referenceSignature": "float3 Iris_Lightningflash_VLcloud(float3)",
-      "implementationSignature": "float3 ogxCumulusLightning(float3, ogxcumulusmedia, float, float)"
-    },
-    "Iris_Lightningflash_VLfog": {
-      "target": "fog_volume.ogxFogLightning",
-      "difference": "param count 1 != 4; constants missing -15, 150; extra 0.55, 0.65, 0.9",
-      "referenceSignature": "float3 Iris_Lightningflash_VLfog(float3)",
-      "implementationSignature": "float3 ogxFogLightning(float3, ogxfogmedia, float, float)"
-    },
-    "GetLpvPosition": {
-      "target": "camera.ogxGetLpvPositionExplicit",
-      "difference": "param count 1 != 3; constants missing 2; extra 0.5",
-      "referenceSignature": "float3 GetLpvPosition(float3)",
-      "implementationSignature": "float3 ogxGetLpvPositionExplicit(float3, float3, float)"
     },
     "SampleLpvLinear": {
-      "target": "lpv.ogxLpvDecodeSample",
-      "difference": "param count 1 != 2; samples ['sample', 'sample'] != []; constants missing 9, 24; extra 0.333333, 0.666667",
-      "referenceSignature": "float4 SampleLpvLinear(float3)",
-      "implementationSignature": "float4 ogxLpvDecodeSample(float4, float2)"
-    },
-    "GetLpvSkyLight": {
-      "target": "lpv.ogxLpvSkyLight",
-      "difference": "constants extra 0, 1",
-      "referenceSignature": "float GetLpvSkyLight(float4)",
-      "implementationSignature": "float ogxLpvSkyLight(float4)"
-    },
-    "cloudVol": {
-      "target": "fog.ogxNetherFogCloudVolume",
-      "difference": "param count 1 != 3; constants missing -10, 120",
-      "referenceSignature": "float cloudVol(float3)",
-      "implementationSignature": "float ogxNetherFogCloudVolume(float3, float, sampler2d)"
-    },
-    "phaseRayleigh": {
-      "target": "math.ogxRayleighPhaseElek",
-      "difference": "constants missing -1; extra 3.14159",
-      "referenceSignature": "float phaseRayleigh(float)",
-      "implementationSignature": "float ogxRayleighPhaseElek(float)"
-    },
-    "fogPhase": {
-      "target": "eclipse_extra.ogxEclipseFogPhase",
-      "difference": "constants missing 0",
-      "referenceSignature": "float fogPhase(float)",
-      "implementationSignature": "float ogxEclipseFogPhase(float)"
-    },
-    "rcp_length": {
-      "target": "math.ogxSafeInvLength",
-      "difference": "constants extra 0, 1",
-      "referenceSignature": "float rcp_length(float3)",
-      "implementationSignature": "float ogxSafeInvLength(float3)"
-    },
-    "linear_step": {
-      "target": "math.ogxRemapSaturate",
-      "difference": "constants extra 0, 1",
-      "referenceSignature": "float linear_step(float, float, float)",
-      "implementationSignature": "float ogxRemapSaturate(float, float, float)"
-    },
-    "screen_to_view_space": {
-      "target": "camera.ogxScreenToViewSpace",
-      "difference": "param 2 bool/in != float4x4/in",
-      "referenceSignature": "float3 screen_to_view_space(float3, bool)",
-      "implementationSignature": "float3 ogxScreenToViewSpace(float3, float4x4)"
-    },
-    "view_to_screen_space": {
-      "target": "camera.ogxViewToScreenSpace",
-      "difference": "param 2 bool/in != float4x4/in",
-      "referenceSignature": "float3 view_to_screen_space(float3, bool)",
-      "implementationSignature": "float3 ogxViewToScreenSpace(float3, float4x4)"
-    },
-    "calculate_maximum_horizon_angle": {
-      "target": "eclipse_extra.ogxEclipseMaxHorizonAngle",
-      "difference": "param count 5 != 15; constants missing -0.201877, 0.0464619, 0.56, 0.75, 1.57018; extra -0.156583, 1e-06, 1.5708",
-      "referenceSignature": "float calculate_maximum_horizon_angle(float3, float3, float3, float3, float)",
-      "implementationSignature": "float ogxEclipseMaxHorizonAngle(float3, float3, float3, float3, float, float, int, float3, float2, float, float, float, sampler2d, float4x4, float4x4)"
-    },
-    "ambient_occlusion": {
-      "target": "gi.ogxGroundTruthAo",
-      "difference": "param count 4 != 12; samples ['fetch', 'fetch'] != ['sample', 'sample', 'sample', 'sample']; constants missing -1, -0.201877, 0.0464619, 0.5, 0.56, 0.75, 1.57018; extra -0.156583, 0.01, 0.02, 0.125, 0.618034, 1.5708, 1.7",
-      "referenceSignature": "float ambient_occlusion(float3, float3, float3, float2)",
-      "implementationSignature": "float ogxGroundTruthAo(float3, float3, float3, float2, float, sampler2d, sampler2d, float4x4, float4x4, float4x4, ogxgtaoparams, float2)"
-    },
-    "toClipSpace3": {
-      "target": "camera.ogxToClipSpace3",
-      "difference": "param count 1 != 2; constants extra 0, 1, 2, 3",
-      "referenceSignature": "float3 toClipSpace3(float3)",
-      "implementationSignature": "float3 ogxToClipSpace3(float3, float4x4)"
-    },
-    "toScreenSpace": {
-      "target": "camera.ogxToScreenSpace",
-      "difference": "param count 1 != 2",
-      "referenceSignature": "float3 toScreenSpace(float3)",
-      "implementationSignature": "float3 ogxToScreenSpace(float3, float4x4)"
-    },
-    "toScreenSpaceVector": {
-      "target": "camera.ogxToScreenSpaceVector",
-      "difference": "param count 1 != 2",
-      "referenceSignature": "float3 toScreenSpaceVector(float3)",
-      "implementationSignature": "float3 ogxToScreenSpaceVector(float3, float4x4)"
-    },
-    "toWorldSpace": {
-      "target": "camera.ogxToWorldSpace",
-      "difference": "param count 1 != 2; constants extra 0, 1, 2",
-      "referenceSignature": "float3 toWorldSpace(float3)",
-      "implementationSignature": "float3 ogxToWorldSpace(float3, float4x4)"
-    },
-    "toWorldSpaceCamera": {
-      "target": "camera.ogxToWorldSpaceCamera",
-      "difference": "param count 1 != 3; constants extra 0, 1, 2",
-      "referenceSignature": "float3 toWorldSpaceCamera(float3)",
-      "implementationSignature": "float3 ogxToWorldSpaceCamera(float3, float4x4, float3)"
-    },
-    "toShadowSpace": {
-      "target": "camera.ogxToShadowSpace",
-      "difference": "param count 1 != 3; constants extra 0, 1, 2",
-      "referenceSignature": "float3 toShadowSpace(float3)",
-      "implementationSignature": "float3 ogxToShadowSpace(float3, float4x4, float4x4)"
-    },
-    "toShadowSpaceProjected": {
-      "target": "camera.ogxToShadowSpaceProjected",
-      "difference": "param count 1 != 4; constants extra 0, 1, 2",
-      "referenceSignature": "float3 toShadowSpaceProjected(float3)",
-      "implementationSignature": "float3 ogxToShadowSpaceProjected(float3, float4x4, float4x4, float4x4)"
-    },
-    "ripples": {
-      "target": "water.ogxRainRipples",
-      "difference": "param count 1 != 3; constants missing 0.85, 4.25; extra 0.02, 9",
-      "referenceSignature": "float3 ripples(float2)",
-      "implementationSignature": "float3 ogxRainRipples(float2, float, float)"
-    },
-    "sky_density": {
-      "target": "atmosphere.ogxEclipseSkyDensity",
-      "difference": "param count 1 != 3; constants missing 6.731e+06",
-      "referenceSignature": "float3 sky_density(float)",
-      "implementationSignature": "float3 ogxEclipseSkyDensity(float, float, float2)"
-    },
-    "sky_airmass": {
-      "target": "atmosphere.ogxEclipseSkyAirmass",
-      "difference": "param count 4 != 6; constants missing 6.731e+06",
-      "referenceSignature": "float3 sky_airmass(float3, float3, float, float)",
-      "implementationSignature": "float3 ogxEclipseSkyAirmass(float3, float3, float, float, float, float2)"
-    },
-    "sky_opticalDepth": {
-      "target": "atmosphere.ogxEclipseSkyOpticalDepth",
-      "difference": "param count 4 != 9; constants missing 6.731e+06",
-      "referenceSignature": "float3 sky_opticalDepth(float3, float3, float, float)",
-      "implementationSignature": "float3 ogxEclipseSkyOpticalDepth(float3, float3, float, float, float, float2, float3, float3, float3)"
-    },
-    "sky_transmittance": {
-      "target": "atmosphere.ogxEclipseSkyTransmittance",
-      "difference": "param count 3 != 9; constants missing 1.4427, 6.731e+06",
-      "referenceSignature": "float3 sky_transmittance(float3, float3, float)",
-      "implementationSignature": "float3 ogxEclipseSkyTransmittance(float3, float3, float, float, float, float2, float3, float3, float3)"
-    },
-    "calculateAtmosphere": {
-      "target": "eclipse_sky.ogxEclipseCalculateAtmosphere",
-      "difference": "param count 9 != 20; constants missing 1.4427, 250; extra -1e+10, 0.000108696, 1200, 8000, 110000, 6.841e+06, 1e+10",
-      "referenceSignature": "float3 calculateAtmosphere(float3, float3, float3, float3, float3, out float2, out float3, int, float)",
-      "implementationSignature": "float3 ogxEclipseCalculateAtmosphere(float3, float3, float3, float3, float3, float, float, float3, float3, float3, float3, float3, int, float, float, bool, bool, bool, out float2, out float3)"
-    },
-    "BiasShadowProjection": {
-      "target": "shadow.ogxApplyShadowBias",
-      "difference": "return vec4 != void; param count 1 != 4; constants missing 1.8; extra 0.1, 0.15, 1, 2, 8, 16",
-      "referenceSignature": "float4 BiasShadowProjection(float4)",
-      "implementationSignature": "void ogxApplyShadowBias(inout float3, float3, float, float)"
-    },
-    "calcDistort": {
-      "target": "eclipse_extra.ogxEclipseCalcDistort",
-      "difference": "param count 1 != 4; constants missing 1.8",
-      "referenceSignature": "float calcDistort(float2)",
-      "implementationSignature": "float ogxEclipseCalcDistort(float2, float, float, float)"
-    },
-    "GriAndEminShadowFix": {
-      "target": "shadow.ogxGriAndEminShadowFix",
-      "difference": "param count 3 != 5",
-      "referenceSignature": "void GriAndEminShadowFix(inout float3, float3, float)",
-      "implementationSignature": "void ogxGriAndEminShadowFix(inout float3, float3, float, float3, bool)"
-    },
-    "applyShadowBias": {
-      "target": "shadow.ogxApplyShadowBias",
-      "difference": "param count 3 != 4; constants missing 0.2, 128, 2560",
-      "referenceSignature": "void applyShadowBias(inout float3, float3, float3)",
-      "implementationSignature": "void ogxApplyShadowBias(inout float3, float3, float, float)"
-    },
-    "drawMoon": {
-      "target": "atmosphere.ogxMoonDiscDefault",
-      "difference": "return vec3 != float; param count 4 != 2; constants missing -0.9994, 0.9994, 5, 40; extra 5e-05, 2, 3, 100000",
-      "referenceSignature": "float3 drawMoon(float3, float3, float3, inout float3)",
-      "implementationSignature": "float ogxMoonDiscDefault(float3, float3)"
-    },
-    "drawRealMoon": {
-      "target": "atmosphere.ogxMoonDiscReal",
-      "difference": "return vec3 != float; param count 5 != 3; constants missing 0.15, 50, 750; extra 0.0001, 0.999, 2, 3, 10",
-      "referenceSignature": "float3 drawRealMoon(float3, float3, float3, inout float3, float)",
-      "implementationSignature": "float ogxMoonDiscReal(float3, float3, float)"
-    },
-    "texture_bicubic": {
-      "target": "math.ogxBicubicTexture",
-      "difference": "return vec4 != float3; param count 2 != 3; samples ['sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample']; constants missing -3, -1, 4, 6; extra 0, 2",
-      "referenceSignature": "float4 texture_bicubic(sampler2d, float2)",
-      "implementationSignature": "float3 ogxBicubicTexture(sampler2d, float2, float2)"
-    },
-    "texture_bicubic_offset": {
-      "target": "math.ogxBicubicTexture",
-      "difference": "return vec4 != float3; param count 4 != 3; samples ['sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample']; constants missing -3, -1, 3.14159, 4, 6; extra 0",
-      "referenceSignature": "float4 texture_bicubic_offset(sampler2d, float2, float, float)",
-      "implementationSignature": "float3 ogxBicubicTexture(sampler2d, float2, float2)"
-    },
-    "skyFromTex": {
-      "target": "atmosphere_model.ogxAtmoSkyRadiance",
-      "difference": "param count 2 != 15; samples ['sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing 1.5, 3.14159, 18.5, 256; extra -1.5, -1, -0.4624, -0.1119, -0.0742, -0.0374, -0.0283, -0.0069",
-      "referenceSignature": "float3 skyFromTex(float3, sampler2d)",
-      "implementationSignature": "float3 ogxAtmoSkyRadiance(ogxatmospheremodel, sampler3d, float3, float3, float3, float3, bool, float3, float3, float, float, float, bool, out float3, out bool)"
-    },
-    "skyCloudsFromTex": {
-      "target": "eclipse_sky.ogxEclipseSkyCloudsFromTex",
-      "difference": "param count 2 != 3",
-      "referenceSignature": "float4 skyCloudsFromTex(float3, sampler2d)",
-      "implementationSignature": "float4 ogxEclipseSkyCloudsFromTex(float3, sampler2d, float2)"
-    },
-    "skyCloudsFromTexBLUR": {
-      "target": "atmosphere.ogxSkyCloudsFromTex",
-      "difference": "param count 3 != 5; constants missing 1.5, 18.5, 256, 257; extra -1, 1.5708",
-      "referenceSignature": "float4 skyCloudsFromTexBLUR(float3, sampler2d, float)",
-      "implementationSignature": "float4 ogxSkyCloudsFromTex(sampler2d, float3, float2, float2, float)"
-    },
-    "skyCloudsFromTexLOD": {
-      "target": "eclipse_sky.ogxEclipseSkyCloudsFromTexLod",
-      "difference": "param count 3 != 4",
-      "referenceSignature": "float4 skyCloudsFromTexLOD(float3, sampler2d, float)",
-      "implementationSignature": "float4 ogxEclipseSkyCloudsFromTexLod(float3, sampler2d, float2, float)"
-    },
-    "volumetricsFromTex": {
-      "target": "fog_volume.ogxFogCloudBicubic",
-      "difference": "return vec4 != float; param 1 float3/in != sampler2d/in; param 2 sampler2d/in != float2/in; param 3 float/in != float2/in; samples ['sample'] != ['sample', 'sample', 'sample', 'sample']; constants missing 0.12, 3.14159, 256; extra -0.5, 3, 4, 6",
-      "referenceSignature": "float4 volumetricsFromTex(float3, sampler2d, float)",
-      "implementationSignature": "float ogxFogCloudBicubic(sampler2d, float2, float2)"
-    },
-    "invLinZ": {
-      "target": "reflection.ogxReflectionLinearDepth",
-      "difference": "param count 1 != 2; constants extra 1, 3",
-      "referenceSignature": "float invLinZ(float)",
-      "implementationSignature": "float ogxReflectionLinearDepth(float, float4x4)"
-    },
-    "DH_invLinZ": {
-      "target": "reflection.ogxReflectionDhToScreenDepth",
-      "difference": "param count 1 != 3; constants extra 0.5, 1, 3",
-      "referenceSignature": "float DH_invLinZ(float)",
-      "implementationSignature": "float ogxReflectionDhToScreenDepth(float, float4x4, float4x4)"
-    },
-    "linZ": {
-      "target": "reflection.ogxReflectionLinearDepth",
-      "difference": "param count 1 != 2; constants extra 1, 3",
-      "referenceSignature": "float linZ(float)",
-      "implementationSignature": "float ogxReflectionLinearDepth(float, float4x4)"
-    },
-    "linZ2": {
-      "target": "reflection.ogxReflectionLinearDepth",
-      "difference": "param count 3 != 2; constants extra 1, 3",
-      "referenceSignature": "float linZ2(float, float, float)",
-      "implementationSignature": "float ogxReflectionLinearDepth(float, float4x4)"
-    },
-    "frisvad": {
-      "target": "math.ogxTangentBasis",
-      "difference": "return void != OgxTangentBasis; param count 3 != 4; constants missing -1, -0.9, 0",
-      "referenceSignature": "void frisvad(float3, out float3, out float3)",
-      "implementationSignature": "ogxtangentbasis ogxTangentBasis(float3, float3, float2, float2)"
-    },
-    "invertLinearizeDepthFast": {
-      "target": "camera.ogxInvertLinearizeDepthFast",
-      "difference": "param count 1 != 3",
-      "referenceSignature": "float invertLinearizeDepthFast(float)",
-      "implementationSignature": "float ogxInvertLinearizeDepthFast(float, float, float)"
-    },
-    "rayTraceSpeculars": {
-      "target": "eclipse_specular.ogxEclipseRayTraceSpeculars",
-      "difference": "param count 7 != 13; constants missing 4, 65000",
-      "referenceSignature": "float3 rayTraceSpeculars(float3, float3, float, float, bool, inout float, inout bool)",
-      "implementationSignature": "float3 ogxEclipseRayTraceSpeculars(float3, float3, float, float, bool, inout float, inout bool, float, float, float, sampler2d, float4x4, float4x4)"
-    },
-    "toScreenSpace2": {
-      "target": "camera.ogxToScreenSpace2",
-      "difference": "param count 2 != 4",
-      "referenceSignature": "float3 toScreenSpace2(float3, bool)",
-      "implementationSignature": "float3 ogxToScreenSpace2(float3, bool, float4x4, float4x4)"
-    },
-    "ComputePhotonicsShadowMap": {
-      "target": "eclipse_specular.ogxEclipseComputePhotonicsShadowMap",
-      "difference": "param count 5 != 20; samples ['sample'] != ['sample', 'sample', 'sample', 'sample']; constants missing 2.8125e-05, 0.0014625, 1.8, 128, 2560; extra 0.0001, 2.4, 5",
-      "referenceSignature": "float ComputePhotonicsShadowMap(inout float3, float3, float, float, float3)",
-      "implementationSignature": "float ogxEclipseComputePhotonicsShadowMap(inout float3, float3, float, float, float3, sampler2d, sampler2d, sampler2d, float4x4, float4x4, float, float, float, float, float, float, int, bool, bool, bool)"
-    },
-    "doBlockLightLightingVoxel": {
-      "target": "eclipse_specular.ogxEclipseDoBlockLightLightingVoxel",
-      "difference": "param count 4 != 9; constants extra 0.999, 1.5, 3",
-      "referenceSignature": "float3 doBlockLightLightingVoxel(float3, float, float3, float3)",
-      "implementationSignature": "float3 ogxEclipseDoBlockLightLightingVoxel(float3, float, float3, float3, float3, float, float, float, bool)"
-    },
-    "photonicsReflection": {
-      "target": "eclipse_specular.ogxEclipsePhotonicsReflection",
-      "difference": "param count 6 != 46; samples [] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants extra -15, -3, -1, 0.0001, 0.0012, 0.004, 0.02, 0.05",
-      "referenceSignature": "float4 photonicsReflection(float3, float3, float2, float3, inout float, inout float3)",
-      "implementationSignature": "float4 ogxEclipsePhotonicsReflection(ogxeclipserayjob, ogxeclipsetranslucenthit, uint, float3, float3, float2, inout float, inout float3, usampler3d, sampler3d, float3, float3, float3, float, float, float, float, float, float3, float3, float3, float3, float, float, float, bool, float, float, float, float3, sampler2d, sampler2d, sampler2d, float4x4, float4x4, float, float, float, float, float, int, bool, bool, float, float, bool)"
-    },
-    "getEnvironmentReflections": {
-      "target": "eclipse_specular.ogxEclipseGetEnvironmentReflections",
-      "difference": "param count 11 != 25; constants missing 4, 30, 65000",
-      "referenceSignature": "float4 getEnvironmentReflections(float3, float3, float3, float3, float3, float2, bool, float, inout float, inout float3, bool)",
-      "implementationSignature": "float4 ogxEclipseGetEnvironmentReflections(float3, float3, float3, float3, float3, float2, bool, float, inout float, inout float3, float, sampler2d, sampler2d, float4x4, float4x4, float4x4, float4x4, float4x4, float4x4, float, float, float3, float, float2, float)"
-    },
-    "getReflectionVisibility": {
-      "target": "eclipse_specular.ogxEclipseGetReflectionVisibility",
-      "difference": "param count 2 != 3; constants missing 0.3, 30",
-      "referenceSignature": "float getReflectionVisibility(float, float)",
-      "implementationSignature": "float ogxEclipseGetReflectionVisibility(float, float, float)"
-    },
-    "specularReflections": {
-      "target": "eclipse_specular.ogxEclipseSpecularReflections",
-      "difference": "param count 17 != 36; samples ['sample', 'fetch', 'sample'] != ['fetch', 'sample']; constants missing 0.0660636, 0.108329, 0.3, 0.333333, 0.392389, 0.54, 0.8, 1.5; extra 0.373402, 0.495829, 0.504154, 0.512357, 0.531229, 0.554537, 0.554779, 0.555597",
-      "referenceSignature": "float3 specularReflections(float3, float3, float3, float3, float2, float3, float3, float, float, float3, float3, float3, float, bool, bool, inout float, float4)",
-      "implementationSignature": "float3 ogxEclipseSpecularReflections(float3, float3, float3, float3, float2, float3, float3, float, float, float3, float3, float3, float, bool, bool, float3, float3, float, float, bool, bool, float3, float, sampler2d, sampler2d, float4x4, float4x4, float4x4, float4x4, float4x4, float4x4, float, float, float3, float, float2)"
-    },
-    "StableStarField": {
-      "target": "atmosphere.ogxStarsStable",
-      "difference": "param count 2 != 3; constants extra -20, 0.99, 300",
-      "referenceSignature": "float StableStarField(float3, float)",
-      "implementationSignature": "float ogxStarsStable(float3, float, float)"
-    },
-    "starplane": {
-      "target": "atmosphere.ogxStarPlane",
-      "difference": "constants missing -1.5, 0.04045, 0.0521327, 0.392314, 0.580392, 0.721569, 0.760784, 0.947867; extra -3.02585e+09, -2.66129e+08, -234359, -5.87339, -1.53738, -1.37419, -1.34811, -1.10638",
-      "referenceSignature": "float starplane(float3, out float3)",
-      "implementationSignature": "float ogxStarPlane(float3, out float3)"
-    },
-    "starbox": {
-      "target": "atmosphere.ogxStarBox",
-      "difference": "constants missing -1.5, 0.04045, 0.0521327, 0.392314, 0.580392, 0.721569, 0.760784, 0.947867; extra -3.02585e+09, -2.66129e+08, -234359, -5.87339, -1.53738, -1.37419, -1.34811, -1.10638",
-      "referenceSignature": "float starbox(float3, out float3)",
-      "implementationSignature": "float ogxStarBox(float3, out float3)"
-    },
-    "stars": {
-      "target": "atmosphere.ogxStarsStable",
-      "difference": "param count 2 != 3",
-      "referenceSignature": "float stars(float3, out float3)",
-      "implementationSignature": "float ogxStarsStable(float3, float, float)"
-    },
-    "smoothfilter": {
-      "target": "sampling.ogxSmoothFilter",
-      "difference": "constants extra 0",
-      "referenceSignature": "float4 smoothfilter(sampler2d, float2, float2)",
-      "implementationSignature": "float4 ogxSmoothFilter(sampler2d, float2, float2)"
-    },
-    "shadowsmoothfilter": {
-      "target": "sampling.ogxShadowSmoothFilter",
-      "difference": "samples ['sample'] != []",
-      "referenceSignature": "float shadowsmoothfilter(sampler2dshadow, float3, float)",
-      "implementationSignature": "float ogxShadowSmoothFilter(sampler2dshadow, float3, float)"
-    },
-    "sampleRGSS": {
-      "target": "sampling.ogxRgssSample",
-      "difference": "param count 3 != 5",
-      "referenceSignature": "float4 sampleRGSS(sampler2d, float2, float2)",
-      "implementationSignature": "float4 ogxRgssSample(sampler2d, float2, float2, float2, float2)"
-    },
-    "calculateRoughSpecular": {
-      "target": "math.ogxRoughSpecularDirection",
-      "difference": "constants missing 64; extra 4096",
-      "referenceSignature": "float3 calculateRoughSpecular(float, float, int)",
-      "implementationSignature": "float3 ogxRoughSpecularDirection(float, float, int)"
-    },
-    "srgbToLinear": {
-      "target": "color.ogxSrgbToLinear",
-      "difference": "constants missing 0.04045, 0.0521327, 0.947867, 2.4, 12.92; extra 0.0125229, 0.305306, 0.682171",
-      "referenceSignature": "float3 srgbToLinear(float3)",
-      "implementationSignature": "float3 ogxSrgbToLinear(float3)"
-    },
-    "linearToSRGB": {
-      "target": "color.ogxLinearToSrgb",
-      "difference": "constants extra 0",
-      "referenceSignature": "float3 linearToSRGB(float3)",
-      "implementationSignature": "float3 ogxLinearToSrgb(float3)"
-    },
-    "blackbody": {
-      "target": "color.ogxBlackbodyEclipse",
-      "difference": "constants missing 0.04045, 0.0521327, 0.947867, 2.4, 12.92; extra 0.0125229, 0.305306, 0.682171, 1",
-      "referenceSignature": "float3 blackbody(float)",
-      "implementationSignature": "float3 ogxBlackbodyEclipse(float)"
-    },
-    "cartToSphere": {
-      "target": "math.ogxCircleMap",
-      "difference": "return vec3 != float2; param count 1 != 2; constants missing 1, 3.14159, 6.28319; extra 2.39996",
-      "referenceSignature": "float3 cartToSphere(float2)",
-      "implementationSignature": "float2 ogxCircleMap(float, float)"
-    },
-    "sphereToCart": {
-      "target": "atmosphere.ogxSkyUnproject",
-      "difference": "return vec2 != float3; param count 1 != 2; constants missing 0.159155; extra 0, 1, 1.5, 2, 2.5",
-      "referenceSignature": "float2 sphereToCart(float3)",
-      "implementationSignature": "float3 ogxSkyUnproject(float2, float)"
-    },
-    "rand": {
-      "target": "noise.ogxWhiteNoise",
-      "difference": "param 1 float/in != float2/in; constants missing 2",
-      "referenceSignature": "float rand(float)",
-      "implementationSignature": "float ogxWhiteNoise(float2)"
-    },
-    "getRainDensity": {
-      "target": "cloud.ogxCloudRainDensity",
-      "difference": "param count 1 != 3",
-      "referenceSignature": "float getRainDensity(float)",
-      "implementationSignature": "float ogxCloudRainDensity(float, float, float)"
-    },
-    "densityAtPos": {
-      "target": "cloud.ogxCloudDensityAtPos",
-      "difference": "param count 1 != 3; constants missing 512",
-      "referenceSignature": "float densityAtPos(float3)",
-      "implementationSignature": "float ogxCloudDensityAtPos(float3, sampler2d, float)"
-    },
-    "getCloudShape": {
-      "target": "cloud_eclipse.ogxEclipseGetCloudShape",
-      "difference": "param count 5 != 7; samples ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing 130, 250, 280, 600; extra -0.4, 5e-06, 2e-05, 5e-05, 0.00018, 0.0973, 0.1, 0.103",
-      "referenceSignature": "float getCloudShape(int, int, float3, float, float)",
-      "implementationSignature": "float ogxEclipseGetCloudShape(ogxeclipsecloudsettings, int, int, float3, float, float, sampler2d)"
-    },
-    "GetCloudShadow": {
-      "target": "cloud.ogxCloudShadow",
-      "difference": "param count 2 != 3; samples ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample'] != []; constants missing -200, -100, -0.7, -0.5, -0.0001, 0.001, 0.005, 0.1; extra 0.0001, 0.002, 0.05, 0.085, 0.1031, 0.12, 0.14, 0.15",
-      "referenceSignature": "float GetCloudShadow(float3, float3)",
-      "implementationSignature": "float ogxCloudShadow(ogxcloudlayer, float3, float3)"
+      "evidence": "LPV 三线性取样读 Eclipse 的 texLpv1/texLpv2 三维缓冲；Omni 的 LPV 使用自己的 omniLpv* 缓冲，默认 OMNI_LPV_ENABLED=0，无法用参考签名参数化，证据见 rendering/lighting/lpv.glsl。"
     },
     "GetVoxelIndex": {
-      "target": "voxel.ogxGetVoxelIndex",
-      "difference": "param count 1 != 3",
-      "referenceSignature": "int3 GetVoxelIndex(float3)",
-      "implementationSignature": "int3 ogxGetVoxelIndex(float3, float3, int)"
+      "evidence": "体素索引依赖 Eclipse 的 relativeEyePosition、VoxelSize3 与阴影阶段写入的体素缓冲；Omni 默认 OMNI_VOXEL_REFLECTION=0，证据见 shaders/rendering/reflection/voxel.glsl 与 omni-gfx/src/voxel.slang。"
     },
     "SetVoxelBlock": {
-      "target": "voxel.ogxVoxelWriteIndex",
-      "difference": "return void != int3; param count 2 != 3; constants missing 0, 1",
-      "referenceSignature": "void SetVoxelBlock(int3, uint)",
-      "implementationSignature": "int3 ogxVoxelWriteIndex(float3, float3, int3)"
+      "evidence": "写 imgVoxelMask 图像，属于宿主图像存储；参考签名只给位置与编号，实际写入目标与体素缓冲布局由 Eclipse 程序提供，Omni 没有同名图像，证据见 omni-gfx/src/voxel.slang 的 ogxVoxelWriteIndex。"
     },
     "PopulateShadowVoxel": {
-      "target": "voxel.ogxPopulateShadowVoxelIndex",
-      "difference": "return void != uint; param count 1 != 10; constants missing 0.5, 267, 500, 1601, 1603, 1605, 1606, 1607",
-      "referenceSignature": "void PopulateShadowVoxel(float3)",
-      "implementationSignature": "uint ogxPopulateShadowVoxelIndex(float3, float3, int3, int, bool, uint, float, float, uint, out int3)"
+      "evidence": "读取 renderStage、mc_Entity、entityId 等游戏渲染状态并写体素缓冲；这些是宿主状态，不能由参考的 float3 参数恢复，证据见 omni-gfx/src/voxel.slang 的 ogxPopulateShadowVoxelIndex 与 rendering/lpv.glsl。"
     },
-    "waterCaustics": {
-      "target": "water.ogxWaterBumpCaustics",
-      "difference": "param count 3 != 7; samples ['sample', 'sample'] != ['sample', 'sample', 'sample', 'sample']; constants extra -0.737367, 0.675493, 12, 32, 48",
-      "referenceSignature": "float waterCaustics(float3, float3, float)",
-      "implementationSignature": "float ogxWaterBumpCaustics(float3, float3, float, float, float, float, sampler2d)"
+    "ComputePhotonicsShadowMap": {
+      "evidence": "Photonics 阴影图依赖 Eclipse 的 photonics 图像与光照表；Omni 没有该缓冲，默认反射走 screenspace.glsl 的 SSR，证据见 shaders/rendering/reflection/screenspace.glsl。"
     },
-    "getWaterHeightmap": {
-      "target": "water.ogxWaterBumpHeightmap",
-      "difference": "param count 3 != 5; samples ['sample'] != ['sample', 'sample', 'sample']; constants missing 1, 3; extra -0.737367, 0.675493, 12, 32, 48",
-      "referenceSignature": "float getWaterHeightmap(float2, float, float)",
-      "implementationSignature": "float ogxWaterBumpHeightmap(float2, float, float, float, sampler2d)"
+    "photonicsReflection": {
+      "evidence": "Photonics 反射读取 Eclipse 的 photonics 光照表与阴影图；Omni 未接入 photonics 缓冲，默认反射走 SSR，证据见 shaders/rendering/reflection/screenspace.glsl。"
     },
-    "getWaveNormal": {
-      "target": "water.ogxWaterBumpNormal",
-      "difference": "param count 2 != 9; samples ['sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample']; constants missing 0.15; extra -0.737367, 0.025, 0.675493, 12, 32, 48",
-      "referenceSignature": "float3 getWaveNormal(float3, float3)",
-      "implementationSignature": "float3 ogxWaterBumpNormal(float3, float3, float, float, float, float, float, bool, sampler2d)"
+    "applyGameplayEffects": {
+      "evidence": "读取玩家受伤、失明、黑暗等游戏状态并直接改最终颜色，属于宿主后处理；Omni 的对应效果在 shaders/rendering/lens/hurt.glsl，无法用参考的 3 个参数恢复。"
     },
-    "agxDefaultContrastApprox": {
-      "target": "color.ogxAgxContrast",
-      "difference": "与其它参考函数共用实现但签名不同：float3 agxDefaultContrastApprox(float3)",
-      "referenceSignature": "float3 agxDefaultContrastApprox(float3)",
-      "implementationSignature": "float3 ogxAgxContrast(float3)"
+    "Iris_Lightningflash": {
+      "evidence": "逐闪电位置由 Eclipse 的 lightningBoltPosition 缓冲提供；Omni 只有全局闪电闪光，没有每道闪电的位置缓冲，参考的 4 参数无法恢复该状态，证据见 shaders/rendering/weather/storm.glsl。"
     },
-    "min_of": {
-      "target": "math.ogxMinVec3",
-      "difference": "与其它参考函数共用实现但签名不同：float min_of(float3)",
-      "referenceSignature": "float min_of(float3)",
-      "implementationSignature": "float ogxMinVec3(float3)"
+    "Iris_Lightningflash_VLcloud": {
+      "evidence": "同上，依赖 lightningBoltPosition 与 eclipse 闪电颜色；Omni 没有每道闪电位置缓冲，证据见 shaders/rendering/weather/storm.glsl。"
     },
-    "max_of": {
-      "target": "math.ogxMaxVec3",
-      "difference": "与其它参考函数共用实现但签名不同：float max_of(float3)",
-      "referenceSignature": "float max_of(float3)",
-      "implementationSignature": "float ogxMaxVec3(float3)"
+    "Iris_Lightningflash_VLfog": {
+      "evidence": "同上，还依赖 lightningBoltPosition.w 的阶段标记；Omni 没有该缓冲，证据见 shaders/rendering/weather/storm.glsl。"
     },
-    "R2_Sample": {
-      "target": "math.ogxR2Sample",
-      "difference": "与其它参考函数共用实现但签名不同：float2 R2_Sample(int)",
-      "referenceSignature": "float2 R2_Sample(int)",
-      "implementationSignature": "float2 ogxR2Sample(int)"
+    "LightSourcePosition": {
+      "evidence": "读取 Eclipse 的 ManualLightPos、colortex4 随机偏移与闪电/涡旋切换；Omni 的末地涡旋雾没有每道闪电光源位置，证据见 shaders/rendering/world/end_fog.glsl。"
     },
-    "cube": {
-      "target": "math.ogxSquare",
-      "difference": "与其它参考函数共用实现但签名不同：float cube(float)",
-      "referenceSignature": "float cube(float)",
-      "implementationSignature": "float ogxSquare(float)"
+    "LightSourceColors": {
+      "evidence": "颜色来自 Eclipse 的 VORTEX_LIGHT_COL_*、END_LIGHTNING_COL_* 与闪电闪光状态；Omni 的末地雾使用自己的雾色选项，证据见 shaders/effects/world/end.glsl。"
+    },
+    "LightSourceLighting": {
+      "evidence": "沿光方向对 eclipse 末地雾形状采样，依赖宿主的闪电位置与雾体积；Omni 的末地体积雾走 EndVortexFog，证据见 shaders/rendering/world/end_fog.glsl。"
+    },
+    "GetVolumetricFog": {
+      "evidence": "Eclipse 末地体积雾读取宿主闪电、雾层与远景缓冲；Omni 的末地体积雾接口是 EndVortexFog/EndFogLayers，证据见 shaders/rendering/world/end_fog.glsl。"
+    },
+    "GetEndFogShadow": {
+      "evidence": "Eclipse 末地雾影依赖宿主的闪电位置与多层雾采样；Omni 没有同名雾影缓冲，证据见 shaders/rendering/world/end_fog.glsl 与 docs/eclipse-parity.md。"
+    },
+    "getCloudShape": {
+      "evidence": "Eclipse 的云层形状读取 LayerIndex 与整套 SC_* 层设置；Omni 的云管线使用 iterationT 云设置，默认 OMNI_VOLUMETRIC_CLOUDS 走体积云，证据见 shaders/rendering/cloud/volumetric.glsl。"
+    },
+    "GetCloudShadow": {
+      "evidence": "Eclipse 的云影按云层密度解析积分；Omni 的云影使用云影贴图与云影模糊，证据见 shaders/rendering/cloud/shadow.glsl。"
+    },
+    "BiomeFogDensity": {
+      "evidence": "群系雾密度表来自 Eclipse 的群系枚举与 SC_* 设置；Omni 的群系雾选项在 effects/weather/weather.glsl 与 effects/world/nether.glsl，证据见这些文件的 OMNI_* 群系雾宏。"
+    },
+    "doBlockLightLightingVoxel": {
+      "evidence": "Eclipse 体素光照版本读取体素反射/Photonics 缓冲；Omni 默认 OMNI_VOXEL_REFLECTION=0，体素缓冲不存在，证据见 shaders/rendering/reflection/voxel.glsl。"
+    },
+    "CalculateCameraVelocity": {
+      "evidence": "相机速度要读十次主机深度、材质编号、前后帧投影与相机位移；参考签名只有 out float, float，无法从两个参数恢复这些缓冲，证据见 shaders/rendering/clarity/taa.glsl 的 TaaCameraVelocity 与 shaders/gfx/antialias.glsl。"
+    },
+    "TemporalReprojection": {
+      "evidence": "时间重投影要读当前/历史颜色、历史深度与相机矩阵；参考签名只有坐标、速度和深度，历史纹理与矩阵由宿主提供，证据见 shaders/rendering/clarity/taa.glsl 的 TemporalReprojection。"
+    },
+    "CoCSpread": {
+      "evidence": "弥散圆扩散要读景深统计图、深度图与相机焦距；参考签名没有这些缓冲，证据见 shaders/rendering/lens/dof.glsl 的 CoCSpread。"
+    },
+    "DepthOfField": {
+      "evidence": "景深要读颜色、深度、统计图与相机焦距；参考签名为空，全部输入来自宿主缓冲，证据见 shaders/rendering/lens/dof.glsl 的 DepthOfField。"
+    },
+    "MotionBlur": {
+      "evidence": "动态模糊要读当前/历史颜色、深度与相机速度缓冲；参考签名为空，证据见 shaders/rendering/lens/motion_blur.glsl。"
+    },
+    "ScreenSpaceShadow": {
+      "evidence": "屏幕空间阴影要读深度图、远景深度、投影矩阵与材质掩码；参考签名只给四个 float3，深度图与矩阵由宿主提供，证据见 shaders/rendering/shadow/screen_shadow.glsl 与 omni-gfx/src/shadow.slang。"
+    },
+    "VariablePenumbraShadow": {
+      "evidence": "可变半影阴影要读阴影贴图、深度图、投影矩阵、像素大小与蓝噪声；参考签名没有这些缓冲，证据见 shaders/rendering/shadow/shadow.glsl 与 omni-gfx/src/shadow.slang。"
+    },
+    "RSM": {
+      "evidence": "反射阴影图要读四张阴影/法线/颜色缓冲与相机矩阵；参考签名只有两个 float3，缓冲由宿主提供，证据见 shaders/rendering/lighting/gi.glsl 与 omni-gfx/src/gi.slang。"
+    },
+    "GI_TemporalFilter": {
+      "evidence": "GI 时域滤波要读多张历史与当前 GI 缓冲、深度、法线与相机矩阵；参考签名为空，证据见 shaders/rendering/lighting/gi.glsl。"
+    },
+    "GI_SpatialFilter": {
+      "evidence": "GI 空域滤波要读 GI 缓冲、深度、法线与相机矩阵；参考签名只有三个参数，证据见 shaders/rendering/lighting/gi.glsl。"
+    },
+    "GroundTruthBasedAmbientOcclusion": {
+      "evidence": "GTAO 要读深度、法线、投影矩阵与蓝噪声；参考签名只有三个 float3，证据见 shaders/rendering/lighting/gtao.glsl 与 omni-gfx/src/gi.slang。"
+    },
+    "ambient_occlusion": {
+      "evidence": "Eclipse 的 ambient_occlusion 读深度、法线、投影与噪声缓冲；参考签名只有四个参数，证据见 shaders/rendering/lighting/gtao.glsl 与 omni-gfx/src/gi.slang。"
+    },
+    "calculate_maximum_horizon_angle": {
+      "evidence": "最大地平角要读深度、法线、投影矩阵与采样步骤；参考签名没有这些缓冲，证据见 shaders/rendering/lighting/gtao.glsl 与 omni-gfx/src/gi.slang。"
+    },
+    "BilateralUpscale_SSAO": {
+      "evidence": "双边升采样要读低分辨率 AO、深度、法线与屏幕尺寸；参考签名只给纹理、坐标与参考深度，证据见 shaders/rendering/lighting/gi.glsl。"
+    },
+    "rayTrace_GI": {
+      "evidence": "GI 光线追踪要读深度、法线、场景颜色与相机矩阵；参考签名只有四个参数，证据见 shaders/rendering/lighting/gi.glsl 与 omni-gfx/src/eclipse_indirect.slang。"
+    },
+    "RT_alternate": {
+      "evidence": "Eclipse 的 RT_alternate 读深度、法线、场景颜色、阴影与相机矩阵；参考签名没有这些缓冲，证据见 shaders/rendering/lighting/gi.glsl 与 omni-gfx/src/eclipse_indirect.slang。"
+    },
+    "ApplySSRT": {
+      "evidence": "屏幕空间反射合成要读场景颜色、深度、法线与反射缓冲；参考签名给九个参数，但真正的缓冲由宿主提供，证据见 shaders/rendering/reflection/screenspace.glsl。"
+    },
+    "getEnvironmentReflections": {
+      "evidence": "环境反射要读天空盒、深度、法线与材质缓冲；参考签名没有这些缓冲，证据见 shaders/rendering/reflection/screenspace.glsl。"
+    },
+    "getReflectionVisibility": {
+      "evidence": "反射可见度要读深度与材质缓冲；参考签名只有两个 float，证据见 shaders/rendering/reflection/screenspace.glsl。"
+    },
+    "rayTraceSpeculars": {
+      "evidence": "Eclipse 高光光线追踪要读深度、法线、场景颜色与阴影缓冲；参考签名没有这些缓冲，证据见 shaders/rendering/reflection/screenspace.glsl。"
+    },
+    "specularReflections": {
+      "evidence": "Eclipse 高光反射要读深度、法线、场景颜色、阴影与材质；参考签名有十七个参数但仍缺少缓冲，证据见 shaders/rendering/reflection/screenspace.glsl。"
+    },
+    "BiasShadowProjection": {
+      "evidence": "Eclipse 阴影投影偏置读 d0/d1 推导的 a/b/k 与阴影矩阵；Omni 没有同名 d0/d1 投影，证据见 shaders/rendering/shadow/shadow.glsl 与 omni-gfx/src/shadow.slang。"
+    },
+    "applyShadowBias": {
+      "evidence": "Eclipse 的 applyShadowBias 读 customShadowMatrixSSBO 与 geoNormals；Omni 的阴影偏置走 ogxApplyShadowBias，证据见 shaders/rendering/shadow/shadow.glsl。"
+    },
+    "calcDistort": {
+      "evidence": "Eclipse 的 calcDistort 读 d0/d1 推导的 a/b/k；Omni 没有同名阴影投影参数，证据见 shaders/rendering/shadow/shadow.glsl。"
+    },
+    "GriAndEminShadowFix": {
+      "evidence": "Eclipse 的阴影抖动修正读相机位置、水面状态与阴影过渡；Omni 的阴影走自己的抖动路径，证据见 shaders/rendering/shadow/shadow.glsl。"
+    },
+    "CloudLighting": {
+      "evidence": "体积云光照要读三维基础/细节噪声、卷曲噪声、媒体参数与光照方向；参考签名缺少这些宿主资源，证据见 shaders/rendering/cloud/volumetric.glsl 与 omni-gfx/src/cloud_volume.slang。"
+    },
+    "SampleDensity": {
+      "evidence": "体积云密度要读三维噪声、卷曲噪声与媒体参数；参考签名只有云坐标、方向和是否细节，证据见 shaders/rendering/cloud/volumetric.glsl。"
+    },
+    "UnderwaterVolumetricFog": {
+      "evidence": "水下体积雾要读深度、阴影贴图、噪声与水下介质参数；参考签名缺少这些缓冲，证据见 shaders/rendering/fog/underwater_fog.glsl 与 omni-gfx/src/fog_volume.slang。"
+    },
+    "VolumetricFog": {
+      "evidence": "体积雾要读深度、阴影、噪声、相机与介质参数；参考签名缺少这些缓冲，证据见 shaders/rendering/fog/volumetric.glsl 与 omni-gfx/src/fog_volume.slang。"
+    },
+    "cloudVol": {
+      "evidence": "cloudVol 在 Eclipse 的 nether_fog.glsl 与 overworld_fog.glsl 有两份同名同签名但常数不同的定义（120/-10 与 100/-15）；单个实现无法同时匹配，证据见 references/Eclipse/shaders/lib/nether_fog.glsl 与 overworld_fog.glsl。"
+    },
+    "calculateAtmosphere": {
+      "evidence": "Eclipse 实时大气要读天空图、相机、太阳/月亮方向、行星常数与采样步骤；参考签名缺少这些宿主输入，证据见 shaders/rendering/sky/skyscatter.glsl 与 omni-gfx/src/eclipse_sky.slang。"
     }
   },
-  "missing": {}
+  "missing": {},
+  "approximate": {}
 }

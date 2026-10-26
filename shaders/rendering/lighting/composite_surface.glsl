@@ -244,4 +244,22 @@ void CompositeSurfaceLighting(){
 	}
 }
 #endif // 维度分支结束。
+// --- Eclipse 方块光与间接光兼容层：参考直接读光照色与全局强度 ---
+vec3 doBlockLightLighting(vec3 lightColor, float lightmap, vec3 handLight, vec3 lpvSample){
+	lightmap = clamp(lightmap, 0.0, 1.0);
+	float brightspot = min(max(lightmap - 0.7, 0.0) * 3.3333, 1.0);
+	brightspot *= brightspot * brightspot;
+	float lightCurve = 1.0 - sqrt(1.0 - lightmap);
+	lightCurve *= lightCurve;
+	float lightmapCurve = mix(lightCurve, 2.5, brightspot);
+	return lightmapCurve * lightColor * OMNI_TORCHLIGHT_BRIGHTNESS;
+}
+vec3 doIndirectLighting(vec3 lightColor, vec3 minimumLightColor, float lightmap){
+	float lightmapCurve = (pow(lightmap, 15.0) * 2.0 + lightmap * lightmap) / 3.0;
+	vec3 indirect = lightColor * lightmapCurve;
+	indirect += mix(minimumLightColor * (0.5 * 0.004 + nightVision * 0.02),
+		minimumLightColor * (0.8 * 0.004 + nightVision * 0.02), 1.0 - lightmap);
+	return indirect;
+}
+
 #endif // 文件守卫结束。

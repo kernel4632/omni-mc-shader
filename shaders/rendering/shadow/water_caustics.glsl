@@ -27,4 +27,13 @@ float CalculateWaterCaustics(vec3 worldPos, vec3 shadowLightVector){
 		CAUSTICS_TEX_RESOLUTION, WATER_REFRACT_IOR, dither, isEyeInWater != 0,
 		OMNI_WATER_CAUSTICS_BRIGHTNESS, OMNI_WATER_CAUSTICS_POWER); // 一次调用完成九次采样与亮度重整。
 }
+// --- 参考签名兼容层：参考函数自己读全局光方向，宿主层用同名重载补齐 ---
+// 为什么单独保留单参数版本：影子程序的 `worldShadowVector` 已由调用方声明，单参数入口
+// 与 iterationT 的 `GetWavesNormalFromTex(position)`、`CalculateWaterCaustics(worldPos)` 对齐。
+vec3 GetWavesNormalFromTex(vec3 position){
+	return GetWavesNormalFromTex(position, vec3(0.0, 1.0, 0.0)); // 非阴影程序没有全局光方向，用朝上的保守方向。
+}
+float CalculateWaterCaustics(vec3 worldPos){
+	return CalculateWaterCaustics(worldPos, vec3(0.0, 1.0, 0.0)); // 同上，兼容重载不依赖宿主全局量。
+}
 #endif // 文件守卫结束。

@@ -87,4 +87,18 @@ vec3 EndFog(float dist, vec3 worldDir){
 vec4 EndFogWithTransmittance(float dist, vec3 worldDir){
 	return EndFogLayers(dist, worldDir); // 转交公共计算，散射色与透射率一并带回。
 }
+// --- Eclipse 末地雾兼容层：参考函数自己取时间与噪声贴图 ---
+void SwirlAroundOrigin(inout vec3 alteredOrigin, vec3 origin){
+	ogxEndVortexSwirl(alteredOrigin, origin, frameTimeCounter);
+}
+float fogShape(vec3 pos){
+	return ogxEndVortexShape(pos, frameTimeCounter, noisetex, 512.0);
+}
+float cloudVol(vec3 pos){
+	return ogxNetherFogCloudVolume(pos, frameTimeCounter, noisetex);
+}
+float densityAtPosFog(vec3 pos){
+	return ogxStormNoise(pos, noisetex, 512.0);
+}
+
 #endif // OMNI_END_FOG_INCLUDED 结束。

@@ -83,4 +83,6 @@
 #include "/rendering/sky/stars.glsl"
 // 天空盒投影：世界方向与天空盒图坐标的互逆换算。
 #include "/rendering/sky/skybox.glsl"
+// Eclipse 天空图集与三次采样的同名兼容层。
+#include "/rendering/sky/eclipse_sky_adapters.glsl"
 #endif // OMNI_RENDER_SKY_SKY_INCLUDED

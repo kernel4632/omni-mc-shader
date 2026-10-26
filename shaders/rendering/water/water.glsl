@@ -59,4 +59,6 @@
 #include "/rendering/water/waterfog.glsl"
 // 水面折射与彩色透光吸收。
 #include "/rendering/water/refraction.glsl"
+// Eclipse 水面波函数兼容层。
+#include "/rendering/water/eclipse_bump_adapters.glsl"
 #endif // OMNI_RENDER_WATER_WATER_INCLUDED

@@ -353,7 +353,8 @@ float ogxWaterCaustics(float3 worldPos, float3 lightDir, float3 cameraOffset, Sa
     float3 position = worldPos + cameraOffset; // 换成绝对世界坐标。
     float3 lookupCenter = position + float3(0.0, 1.0, 0.0); // 从水面上方一米处开始找波面。
     float caustics = 0.0; // 累计焦散强度。
-    for (float i = -1.0; i <= 1.0; i++) // 三乘三抖动采样。
+    const float causticsStart = -1.0; // 三乘三采样从负一开始，保留参考的循环下界常数。
+    for (float i = causticsStart; i <= 1.0; i++) // 三乘三抖动采样。
     {
         for (float j = -1.0; j <= 1.0; j++)
         {

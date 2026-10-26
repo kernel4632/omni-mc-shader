@@ -145,6 +145,29 @@ vec3 AdvancedColor(vec3 color){
 	return gfx_advanced_color(color, OMNI_LUMA_GAMMA, OMNI_WHITE_CLIP, OMNI_SATURATION, OMNI_GAMMA); // 调色步骤在通用库，选项在这里传入。
 }
 
+// 参考签名兼容层：HSV 转 RGB 与 Eclipse 黑体色。
+vec3 HsvToRgb(vec3 color){ return ogxHsvToRgb(color); }
+vec3 blackbody(float temperature){ return ogxBlackbodyEclipse(temperature); }
+
+// 参考签名兼容层：浮点与定点尾数抖动直接读帧时间，位宽照参考。
+vec3 fp10Dither(vec3 color, vec2 tc01){ return ogxDitherFloat(color, tc01, frameTimeCounter, vec3(6.0, 6.0, 5.0)); }
+vec3 fp16Dither(vec3 color, vec2 tc01){ return ogxDitherFloat(color, tc01, frameTimeCounter, vec3(10.0)); }
+vec3 int8Dither(vec3 color, vec2 tc01){ return ogxDitherFixed(color, tc01, frameTimeCounter, -8.0); }
+vec3 int10Dither(vec3 color, vec2 tc01){ return ogxDitherFixed(color, tc01, frameTimeCounter, -10.0); }
+vec3 int16Dither(vec3 color, vec2 tc01){ return ogxDitherFixed(color, tc01, frameTimeCounter, -16.0); }
+
+// 参考签名兼容层：iterationT 的默认 AgX 曝光 13、半动态范围 6.5。
+vec3 AgX(vec3 color){ return ogxAgx(color, 13.0, 13.0 * 0.5, true); }
+
+// 参考签名兼容层：iterationT 的 `None` 仍做二点二伽马；Eclipse 的 `no_tonemapper` 才原样返回。
+vec3 None(vec3 color){ return pow(color, vec3(1.0 / 2.2)); }
+vec3 TonemapNone(vec3 color){ return pow(color, vec3(1.0 / 2.2)); }
+
+// 参考签名兼容层：iterationT `SlidePrimary` 直接转发到通用库，参数顺序与参考一致。
+vec2 SlidePrimary(vec2 primary, vec2 neighborA, vec2 neighborB, float amount){
+	return ogxAgxSlidePrimary(primary, neighborA, neighborB, amount);
+}
+
 // 说明：原程序里那套可配置宽色域压缩（`AgXConfigurable` 一族，八个函数与五个常量）在 iterationT 里
 // 也没有接入渲染流程，属于实验残留；这里按项目规范「不留死代码」删除，默认画面不受影响，
 // 记录见 `docs/parity.md` 的偏离清单。

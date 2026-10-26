@@ -28,4 +28,10 @@ vec3 CalculateStars(vec3 worldDir, vec3 sunVector){
 		return vec3(starScale * gfx_stars_stable(worldDir, OMNI_STARS_BRIGHTNESS, OMNI_STARS_AMOUNT)); // 白色路径没有星温，转成三分量。
 	#endif
 }
+// 参考签名兼容层：Eclipse 的 `stars` 返回亮度并回填星色，亮度口径取本项目的选项。
+float stars(vec3 viewPos, out vec3 starColor){
+	starColor = vec3(1.0);
+	float field = max(1.0 - ogxStarStableField(viewPos * 300.0, 0.99), 0.0);
+	return OMNI_STARS_BRIGHTNESS * exp(field * -20.0 * (1.0 / OMNI_STARS_AMOUNT));
+}
 #endif // 文件守卫结束。

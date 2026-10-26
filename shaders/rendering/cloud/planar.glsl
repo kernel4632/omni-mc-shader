@@ -22,6 +22,8 @@ float BilinearNoise(vec2 position) { return gfx_bilinear_noise(position, noisete
 float GetPlanarCloudsDistortion(vec2 position, vec2 windDirection) { return gfx_planar_distortion(position, windDirection, noisetex); }
 // 平面云密度：位置先被扭曲，再叠多层旋转噪声得到云块。
 float GetPlanarCloudsDensity(vec2 position, vec2 windDirection) { return gfx_planar_density(position, windDirection, noisetex, OMNI_PLANAR_NOISE_SCALE, OMNI_PLANAR_COVERAGE); }
+// 平面云光照密度：沿光方向估遮挡时用的低层数版本。
+float GetPlanarCloudsLightingDensity(vec2 position, vec2 windDirection) { return gfx_planar_lighting_density(position, windDirection, noisetex, OMNI_PLANAR_NOISE_SCALE, OMNI_PLANAR_COVERAGE); }
 // 平面云：视线与云平面求一次交点，再沿光方向叠几层光照密度估遮挡。
 // 调用前提：`color` 已算好天空颜色（会被就地修改），`cloudTransmittance` 是体积云留下的透过率。
 // 为什么不受每日天气影响：平面云是 iterationT 独有的层，Eclipse 的每日天气表没有它，所以这里只读 `OMNI_PLANAR_*`。

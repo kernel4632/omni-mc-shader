@@ -58,4 +58,11 @@
 	}
 #endif // 眩光与光斑结束。
 
+// --- 参考签名兼容层：参考的镜头函数直接读全局畸变强度 ---
+vec2 GetDistOffset(vec2 uv, vec2 pxoffset){ return gfx_glare_dist_offset(uv, pxoffset, 1.0); }
+vec3 flare(vec2 uv, vec2 pos, float dist, float size, float chromaOffset){
+	return gfx_glare_flare(uv, pos, dist, chromaOffset, size, 1.0);
+}
+vec3 orb(vec2 uv, vec2 pos, float dist, float size){ return gfx_glare_orb(uv, pos, dist, size, 1.0); }
+
 #endif // 文件守卫结束。

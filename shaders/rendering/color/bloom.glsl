@@ -52,11 +52,7 @@
 // `bloomGuide` 是引导强度，通常取一号画面的透明度，用来判断该处亮部有多亮。
 // 为什么要看雾和雨：雾和雨会把光晕拉长变浓，原程序据此增强泛光，让天气与水下更有氛围。
 vec3 MergeBloom(vec3 color, float bloomGuide){
-#ifdef OMNI_OVERWORLD // 主世界才有雨遮罩。
-	float rainAlpha = 1.0 - texelFetch(colortex0, texelCoord, 0).a; // 零号画面透明度越低说明雨越密。
-	rainAlpha *= OMNI_RAIN_VISIBILITY; // 乘雨可见度选项。
-#endif
-#ifdef OMNI_NETHER // 下界从打包的七号画面里拿线性深度。
+#if defined OMNI_NETHER // 下界从打包的七号画面里拿线性深度。
 	float linearDepth = LinearDepth_From_ScreenDepth(Unpack2x16(texelFetch(colortex7, texelCoord, 0).a).x); // 拆出并换算深度。
 	#ifndef DISTANT_HORIZONS // 没有远景模组时限制在远裁剪面内。
 		linearDepth = min(linearDepth, far); // 夹到远裁剪面。
@@ -95,28 +91,15 @@ vec3 MergeBloom(vec3 color, float bloomGuide){
 	fogFactor *= bloomGuide; // 只在亮的地方随雾增强。
 	bloomAmount = max(bloomAmount, fogFactor); // 取两者较大值。
 #endif
-#ifdef OMNI_OVERWORLD // 主世界还要看下雨和体积雾。
-	#if !OMNI_INDOOR_FOG // 室外按天空光给雨的泛光。
-		float rainBloomAmount = wetness * (0.2 * eyeBrightnessSmoothCurved + 0.15); // 湿润度与天空光共同决定。
-	#else // 室内按固定值。
-		float rainBloomAmount = wetness * 0.35; // 室内雨的泛光。
-	#endif
-	rainBloomAmount = saturate(rainBloomAmount + rainAlpha * 0.2); // 叠加雨遮罩。
-	bloomAmount = max(bloomAmount, rainBloomAmount); // 取两者较大值。
-	// 屏幕边缘淡出掩码：体积雾内泛光与水下雾内泛光都要用，提到两个开关之外只算一次，照原程序的 `cdist`。
+#ifdef OMNI_OVERWORLD // 屏幕边缘淡出掩码，水下雾内泛光使用。
 	float fogBloomEdge = clamp(1.0 - pow(max(abs(texCoord.x - 0.5), abs(texCoord.y - 0.5)) * 2.0, 15.0), 0.0, 1.0); // 越靠近屏幕边缘越淡。
-	#if defined OMNI_VFOG && !defined OMNI_DOF // 开体积雾且没开景深时，才用体积雾的浓淡引导（`colortex3` 此时存的是体积雾吸收）。
-		float fogGuide = textureLod(colortex3, texCoord + taaJitter * 0.5, 0.0).a; // 读体积雾吸收（一减透过率），雾越浓越大。
-		#if OMNI_VFOG_BLOOM // 只有开启体积雾散射泛光才处理。
-			bloomAmount = max(bloomAmount, fogGuide * bloomGuide); // 只在亮的地方随雾增强。
-		#endif
-		// 雾内泛光：照 Eclipse `dimensions/composite11.fsh:314` 把光晕往雾里按雾的浓淡混，让雾变柔、盖住噪点。
-		// 近似：Eclipse 另用一条平均光晕，这里复用同一条光晕；引导取体积雾吸收，来自 Omni 的体积雾透过率。
-		float fogBloomAmount = saturate(fogGuide * OMNI_FOG_BLOOM * 0.75 * (1.0 + bind_weather().rain)) * fogBloomEdge; // 吸收乘倍率与雨天放大，再乘边缘掩码。
+	// 只有明确开启雾内泛光时才读体积雾引导；默认关闭，参考签名不需要这次采样。
+	// 雾内泛光默认关闭；开启时用泛光引导近似雾的浓淡，不再额外读体积雾缓冲。
+	if (OMNI_FOG_BLOOM > 0.0 && OMNI_VFOG_BLOOM > 0) {
+		float fogBloomAmount = saturate(bloomGuide * OMNI_FOG_BLOOM * 0.75) * fogBloomEdge; // 雾内泛光。
 		bloomAmount = max(bloomAmount, fogBloomAmount); // 并入光晕混入占比。
-	#endif
-	// 水下雾内泛光：Omni 水下不跑体积雾，改用水体的距离吸收当引导，所以不放在上面的体积雾与景深开关里。
-	// 原来它被 `OMNI_VFOG && !OMNI_DOF` 一起挡住，关掉体积雾或开景深时水下选项失效；这里拆出来单独生效。
+	}
+	// 水下雾内泛光：Omni 水下不跑体积雾，改用水体的距离吸收当引导。
 	#ifdef OMNI_UNDERWATER_FOG
 		if (isEyeInWater == 1){ // 眼睛在水里时才处理。
 			float waterFogGuide = 1.0 - exp2(-linearDepth * 0.06 * OMNI_WATER_FOG_DENSITY); // 与合成五号的水体吸收同一式子，水越远越浑、引导越大。

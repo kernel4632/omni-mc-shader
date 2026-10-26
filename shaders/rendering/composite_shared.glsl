@@ -42,6 +42,8 @@
 	#include "/rendering/clarity/antialiasing.glsl"
 	// 屏幕与视空间互转，各程序都用来还原表面位置。
 	#include "/common/coordinates.glsl"
+	// Eclipse 相机函数的同名兼容层，只转发全局矩阵。
+	#include "/rendering/camera_adapters.glsl"
 	// 蓝噪声，遮蔽、阴影与反射抖动共用。
 	#include "/common/noise.glsl"
 #endif // 片元阶段声明结束。

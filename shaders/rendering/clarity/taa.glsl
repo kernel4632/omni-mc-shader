@@ -177,4 +177,66 @@ vec4 TemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin, out flo
 		clipToCenter, depthCompare, microBlur, true, referenceDepth); // 一次调用完成下界重投影。
 }
 
+// --- 参考签名兼容层：iterationT 的 TAA 取样函数直接读固定画面 ---
+// 这些重载保留参考文件名与签名，内部仍走通用库的同一套取样与颜色空间转换。
+// 为什么需要：参考函数不带纹理参数，宿主层必须在同一编译单元里填入 colortex1/7 与屏幕尺寸。
+vec3 SampleCurrColor(vec2 coord){ return RGB_To_YCoCg(textureLod(colortex1, coord, 0.0).rgb); } // 当前帧颜色，带深度时只取 rgb。
+vec3 SampleCurrColorFetch(ivec2 coord){ return RGB_To_YCoCg(texelFetch(colortex1, coord, 0).rgb); } // 当前帧颜色，整数像素取样。
+vec3 SampleCurrColorBicubic(vec2 coord){ return RGB_To_YCoCg(BicubicTexture(colortex1, coord, screenSize)); } // 当前帧三次采样后的颜色。
+vec4 SampleCurr(vec2 coord){ vec4 curr = textureLod(colortex1, coord, 0.0); curr.rgb = RGB_To_YCoCg(curr.rgb); curr.a = LinearDepth_From_ScreenDepth(curr.a); return curr; } // 当前帧四通道，颜色与深度都换到参考空间。
+vec4 SampleCurrFetch(ivec2 coord){ vec4 curr = texelFetch(colortex1, coord, 0); curr.rgb = RGB_To_YCoCg(curr.rgb); curr.a = LinearDepth_From_ScreenDepth(curr.a); return curr; } // 当前帧四通道，整数像素。
+vec4 SampleCurrBicubic(vec2 coord){ vec4 curr = ogxBicubicTexture4(colortex1, coord, screenSize); curr.rgb = RGB_To_YCoCg(curr.rgb); curr.a = LinearDepth_From_ScreenDepth(curr.a); return curr; } // 当前帧四通道三次采样。
+vec3 SamplePrevColor(vec2 coord){ return RGB_To_YCoCg(BicubicTexture(colortex7, coord, screenSize)); } // 历史颜色，三次采样。
+float SamplePrevDepthFetch(ivec2 coord){ return texelFetch(colortex7, coord, 0).w; } // 历史深度，主世界存在透明度通道。
+vec2 SamplePrevDepthMinMax3x3(vec2 prevCoord){ // 历史深度三乘三最小与最大，供邻域裁剪。
+	ivec2 nearestTexel = ivec2(prevCoord * screenSize); // 历史坐标换成整数像素。
+	float depth0 = SamplePrevDepthFetch(nearestTexel + ivec2(-1, -1)); // 左上。
+	float depth1 = SamplePrevDepthFetch(nearestTexel + ivec2( 0, -1)); // 上。
+	float depth2 = SamplePrevDepthFetch(nearestTexel + ivec2( 1, -1)); // 右上。
+	float depth3 = SamplePrevDepthFetch(nearestTexel + ivec2(-1,  0)); // 左。
+	float depth4 = SamplePrevDepthFetch(nearestTexel + ivec2( 0,  0)); // 中。
+	float depth5 = SamplePrevDepthFetch(nearestTexel + ivec2( 1,  0)); // 右。
+	float depth6 = SamplePrevDepthFetch(nearestTexel + ivec2(-1,  1)); // 左下。
+	float depth7 = SamplePrevDepthFetch(nearestTexel + ivec2( 0,  1)); // 下。
+	float depth8 = SamplePrevDepthFetch(nearestTexel + ivec2( 1,  1)); // 右下。
+	return vec2(min9(depth0, depth1, depth2, depth3, depth4, depth5, depth6, depth7, depth8),
+		max9(depth0, depth1, depth2, depth3, depth4, depth5, depth6, depth7, depth8)); // 返回最小与最大。
+}
+vec2 SamplePreviousDepthBilinear(vec2 coord){ // 历史深度双线性，下界把两个参考深度打包在透明度通道。
+	coord = coord * screenSize - 0.5; // 换成像素中心坐标。
+	vec2 f = fract(coord); // 小数部分做双线性权重。
+	ivec2 texel = ivec2(coord); // 左上角整数像素。
+	vec2 s0 = Unpack2x16(texelFetch(colortex7, texel, 0).a); // 左上。
+	vec2 s1 = Unpack2x16(texelFetch(colortex7, texel + ivec2(1, 0), 0).a); // 右上。
+	vec2 s2 = Unpack2x16(texelFetch(colortex7, texel + ivec2(0, 1), 0).a); // 左下。
+	vec2 s3 = Unpack2x16(texelFetch(colortex7, texel + ivec2(1, 1), 0).a); // 右下。
+	return mix(mix(s0, s1, f.x), mix(s2, s3, f.x), f.y); // 先横向再纵向插值。
+}
+vec4 SamplePrevious(vec2 coord){ // 下界历史：颜色三次采样，深度双线性后换成米制参考深度。
+	vec3 prevColor = RGB_To_YCoCg(BicubicTexture(colortex7, coord, screenSize)); // 历史颜色。
+	float prevReferenceDepth = LinearDepth_From_ScreenDepth(SamplePreviousDepthBilinear(coord).x); // 第一个打包深度。
+	return vec4(prevColor, prevReferenceDepth); // 颜色与参考深度一起返回。
+}
+vec3 GetVariance3x3(ivec2 coord, vec3 currColor, out vec3 avgColor, out vec3 crossAvgColor){ // 九点颜色方差。
+	vec3 color0 = SampleCurrColorFetch(coord + ivec2(-1, -1)); // 左上。
+	vec3 color1 = SampleCurrColorFetch(coord + ivec2( 0, -1)); // 上。
+	vec3 color2 = SampleCurrColorFetch(coord + ivec2( 1, -1)); // 右上。
+	vec3 color3 = SampleCurrColorFetch(coord + ivec2(-1,  0)); // 左。
+	vec3 color4 = SampleCurrColorFetch(coord + ivec2( 0,  0)); // 中。
+	vec3 color5 = SampleCurrColorFetch(coord + ivec2( 1,  0)); // 右。
+	vec3 color6 = SampleCurrColorFetch(coord + ivec2(-1,  1)); // 左下。
+	vec3 color7 = SampleCurrColorFetch(coord + ivec2( 0,  1)); // 下。
+	vec3 color8 = SampleCurrColorFetch(coord + ivec2( 1,  1)); // 右下。
+	crossAvgColor = color1 + color3 + color4 + color5 + color7; // 十字五点。
+	avgColor = (crossAvgColor + color0 + color2 + color6 + color8) / 9.0; // 九点平均。
+	crossAvgColor *= 0.2; // 十字平均。
+	vec3 m2 = (color0 * color0 + color1 * color1 + color2 * color2 + color3 * color3 + color4 * color4
+		+ color5 * color5 + color6 * color6 + color7 * color7 + color8 * color8) / 9.0; // 二阶矩。
+	vec3 variance = sqrt(m2 - avgColor * avgColor) * OMNI_TAA_AGGRESSION; // 方差按选项放大。
+	vec3 minColor = min(avgColor - variance, currColor) * 0.5; // 下界。
+	vec3 maxColor = max(avgColor + variance, currColor) * 0.5; // 上界。
+	avgColor = minColor + maxColor; // 平均回到两界中点。
+	return maxColor - minColor; // 返回范围宽度。
+}
+
 #endif // 文件守卫结束。

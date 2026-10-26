@@ -158,7 +158,7 @@ vec3 ogxDitherFloat(vec3 color, vec2 coord, float time, vec3 mantissaBits)
 // 整数输出抖动：按目标格式的小数位数取固定步长，适合十六位或十位定点的中间画面。
 vec3 ogxDitherFixed(vec3 color, vec2 coord, float time, float bits)
 {
-    return color + ogxTriangleNoise(coord, time) * exp2(-bits);
+    return color + ogxTriangleNoise(coord, time) * exp2(bits); // bits 用参考的负指数写法，例如 -8。
 }
 
 // 多边形光圈：把散焦偏移换成到多边形边的归一化距离，零在中心、一到边界。

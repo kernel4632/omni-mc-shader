@@ -212,7 +212,7 @@ float ogxHenyeyGreenstein(float cosAngle, float g)
     float num = 1.0 - g * g; // 分子，决定整体强度。
     float denom = 1.0 + g * g - 2.0 * g * cosAngle; // 分母，越靠前越小。
     float inverse = rsqrt(denom); // 分母的平方根倒数。
-    return num * inverse * inverse * inverse * (0.25 * OGX_INV_PI); // 合成一次散射的相函数。
+    return num * inverse * inverse * inverse * (0.25 / OGX_PI); // 合成一次散射的相函数。
 }
 
 // 云顶曲线：把归一化高度换成边缘压低的圆顶，用来让云的顶部看起来是弧面。
@@ -273,7 +273,7 @@ float ogxPlanarDensity(float2 position, float2 windDirection, Sampler2D noiseTex
     for (float i = 1.0; i <= 6.0; i++) // 六层。
     {
         float scale = ogxFastSqrt(i); // 每层频率取平方根。
-        float turn = -2.39996322973 * i; // 累积旋转角：每层再转一个黄金角，方向为负。
+        float turn = 2.39996322973 * i; // 累积旋转角：每层再转一个黄金角，方向与参考一致。
         float grow = pow(octScale, i); // 累积缩放：层间矩阵每次都乘上频率倍数。
         float2 v = position - windDirection * scale; // 本层的偏移位置。
         float2 noisePosition = grow * float2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大，与逐层乘矩阵的结果一致。
@@ -300,7 +300,7 @@ float ogxPlanarLightingDensity(float2 position, float2 windDirection, Sampler2D 
     for (float i = 1.0; i <= 3.0; i++) // 三层。
     {
         float scale = ogxFastSqrt(i); // 每层频率。
-        float turn = -2.39996322973 * i; // 累积旋转角。
+        float turn = 2.39996322973 * i; // 累积旋转角。
         float grow = pow(octScale, i); // 累积缩放。
         float2 v = position - windDirection * scale; // 本层的偏移位置。
         float2 noisePosition = grow * float2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大。

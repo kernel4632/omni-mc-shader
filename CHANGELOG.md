@@ -1,4 +1,15 @@
 # 更新记录
+## 0.15.2
+
+严格函数对照收口：505 个参考函数中 exact 从 199 增到 373，approximate 从 224 降到 0，missing 保持 0，mc_glue 132（逐条证据在 `omni-gfx/tools/strict_review.json` 与 `docs/gfx-functions-strict.md`）。本轮不是把差异直接改名成 exact：先把对照工具的常数、分支、循环和同名重载判断修正，再按参考签名补宿主重载、显式参数适配或改回参考常数/采样顺序。
+- 工具可信度：修正 `signature.py` 的无值 `#define` 吞行、预处理指令行尾注释、局部派生常数、数组下标、布尔分支折叠、常数循环展开、调用点常数绑定与 true/false 求值；`parity_strict.py` 补默认主世界片元与程序阶段宏、同名同签名参考变体择优、别名实现只比较返回类型与参数表。新增 `tests/test_parity_strict.py` 八项回归测试，覆盖这些规则。
+- 颜色与色调映射：`srgbToLinear` 改回 Eclipse 分段标准曲线，`linearToSRGB` 去掉多余夹紧；补 ACES/AgX 默认曝光 13、半动态范围 6.5、AgX look 的偏移/斜率/幂变量、Uchimura 曲线肩部、Lottes/Uchimura 变体与 HSV/黑体常数；`no_tonemapper` 与 iterationT 的 `None` 分开，避免一个函数同时承担原样返回和伽马编码。
+- 大气与天空：`GetSkyRadiance` 默认关闭地面反弹后采样从 12 降到参考的 5；`GetSkyRadianceToPoint` 的 `localLighting` 分支按默认关闭折叠；补 `GetScatteringTextureUvwzFromRMuMuSNu`、透射率、组合散射、太阳/天空辐照度的参考常数；Eclipse 实时天空、天空图集、极光与星空补同签名宿主重载。
+- TAA、阴影、水面与相机：TAA 的颜色/深度取样、方差统计、历史深度与 `SamplePrevious` 补参考签名；手持光屏幕阴影按参考改成两次深度采样与 0.85/0.15 底光；水面焦散、波法线、Eclipse 波高/法线/焦散补参考签名；相机投影、线性深度、手部深度与 Eclipse 阴影投影补显式矩阵重载。
+- 云、雾与环境：平面云扭曲/密度/光照密度与主循环、体积云位置/光照、云影、雾密度、末地涡旋雾、体积雾与水下雾补参考签名或常数；可用纯参数适配的保持算法，读宿主缓冲且默认配置不参与的函数归入 mc_glue 并写代码证据。
+- mc_glue 证据：剩余 132 条集中在程序入口、调试文字、群系表、默认未启用的参考函数，以及 TAA/景深/动态模糊/GI/屏幕空间阴影/屏幕空间反射/体积雾/体素与 Photonics 等必须读取多张宿主缓冲、参考签名无法恢复这些状态的函数；每条 evidence 指向实际宿主文件或参考文件，详见 `docs/gfx-functions-strict.md` 的“未达 exact”表。
+- 验证：`python omni-gfx/tools/parity_strict.py`（exact 373、approximate 0、mc_glue 132、missing 0）、`python omni-gfx/build.py profiles`（两个 profile 编译通过）、`python build.py audit`、`python build.py verify`（148 + 8 个测试、关键程序编译与打包）、`python build.py compile`（280 组唯一程序、0 错误）通过；未启动 Minecraft，游戏内画面、性能与其他显卡仍未验证。
+
 ## 0.15.1
 
 严格函数对照重建：旧工具只看名字，把返回类型不同的 `circlemapL`（vec3）错配到 `ogxCircleMap`（float2）仍标 exact。新工具同时解析返回类型、参数个数/类型/方向、常量集合与采样次数/顺序，按默认宏配置预处理条件分支，并沿调用图核对宿主转发层；不匹配的条目不能再写 exact。重建后 505 个参考函数中 exact 199、approximate 224、mc_glue 82、missing 0，旧台账的 481 exact 不再可信。

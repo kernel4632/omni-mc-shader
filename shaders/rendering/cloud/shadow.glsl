@@ -35,6 +35,9 @@ float CloudShadowFromTex(vec3 worldPos, vec3 shadowLightVector){
 		cameraData.screenSize, cameraData.pixelSize, shadowTexSize, weather.wetness, OMNI_RAIN_SHADOW, fadeAngle); // 一次调用完成投影、采样与天气混合。
 }
 
+// 参考签名兼容层：没有全局阴影光方向的程序使用朝向天空的保守方向。
+float CloudShadowFromTex(vec3 worldPos){ return CloudShadowFromTex(worldPos, vec3(0.0, 1.0, 0.0)); }
+
 // 全局云影：给整个场景用的一个粗粒度云影值，来自二号画面顶行的统计像素。
 float GetSmoothCloudShadow(){
 	OmniCamera cameraData = bind_camera(); // 画面高度只读一次。

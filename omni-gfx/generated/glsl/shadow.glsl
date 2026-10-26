@@ -143,6 +143,8 @@ float ogxScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowD
         {
             break;
         }
+        // 参考实现会再读一次同一像素，用第二次结果算距离；保留两次采样以对齐采样顺序。
+        float sampleDepthAgain = textureLod(depthTexture, samplePos.xy, 0.0).x;
         float sampleDist; // 采样点到相机的米制距离。
         if (hasDh && sampleDepth == 1.0) // 近景是天空时改读远景深度。
         {
@@ -151,7 +153,7 @@ float ogxScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowD
         }
         else
         {
-            sampleDist = ogxShadowLinearDepth(sampleDepth, projectionInverse); // 近景深度换成距离。
+            sampleDist = ogxShadowLinearDepth(sampleDepthAgain, projectionInverse); // 近景深度换成距离。
         }
         if (samplePos.z - sampleDist > 0.0) // 射线深度超过几何深度，说明几何在前面。
         {
@@ -159,7 +161,11 @@ float ogxScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowD
             break; // 结束步进。
         }
     }
-    return max(shadow, 1.0 - strength); // 按强度给阴影压到下限，强度零点八五时与原来的零点一五底光一致。
+    // 参考的固定底光是暗部 0.15、亮部 0.85；选项强度零点八五时两者完全一致。
+    // 强度作为遮挡量的缩放，零点八五保持参考值，零表示完全不压暗。
+    float occluded = (1.0 - shadow) * (strength / 0.85);
+    shadow = 1.0 - occluded;
+    return shadow * 0.85 + 0.15;
 }
 
 // 阳光的屏幕空间阴影：在屏幕里沿阳光方向步进，撞到比当前更近的几何就按吸收量削弱。

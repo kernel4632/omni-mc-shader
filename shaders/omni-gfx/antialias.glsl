@@ -26,7 +26,7 @@ vec3 ogxRgbToYCoCg(vec3 color)
 {
     return vec3(color.r * 0.25 + color.g * 0.5 + color.b * 0.25,
                   color.r * 0.5 - color.b * 0.5,
-                  -color.r * 0.25 + color.g * 0.5 - color.b * 0.25); // 亮度与两个色差。
+                  color.r * -0.25 + color.g * 0.5 + color.b * -0.25); // 亮度与两个色差。
 }
 
 // 从亮度与色差空间换回线性颜色。

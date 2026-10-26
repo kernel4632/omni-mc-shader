@@ -56,6 +56,8 @@
 // --- 区间重映射 ---
 // 把落在 `e0` 到 `e1` 的值映射到零到一并夹紧。
 float remapSaturate(float x, float e0, float e1){ return gfx_remapSaturate(x, e0, e1); }
+// Eclipse 的 `linear_step` 与 remapSaturate 同式，只是名字不同。
+float linear_step(float x, float edge0, float edge1){ return remapSaturate(x, edge0, edge1); }
 
 // --- 角度近似 ---
 // 两参数反正切：返回从横轴到向量的角度，横分量为零时单独处理避免除零。
@@ -173,4 +175,17 @@ vec3 omniNormalize(vec3 vector){ return gfx_omniNormalize(vector); }
 // 颜色转色相、饱和度、明度：体积光染色与矿石/纹饰自发光都要拆出这三个量，来源 Eclipse `lib/hsv.glsl`。
 // 为什么放共用文件：两处以上效果（体积光、自发光矿石/纹饰）都要用，复制一份会与别处不一致。
 vec3 omniRgbToHsv(vec3 c){ return gfx_omniRgbToHsv(c); }
+// Eclipse `frisvad`：由法线生成一组正交切线，退化方向单独处理。
+void frisvad(vec3 n, out vec3 f, out vec3 r){
+	if (n.z < -0.9){
+		f = vec3(0.0, -1.0, 0.0);
+		r = vec3(-1.0, 0.0, 0.0);
+	}else{
+		float a = 1.0 / (1.0 + n.z);
+		float b = -n.x * n.y * a;
+		f = vec3(1.0 - n.x * n.x * a, b, -n.x);
+		r = vec3(b, 1.0 - n.y * n.y * a, -n.y);
+	}
+}
+
 #endif // 文件守卫结束。

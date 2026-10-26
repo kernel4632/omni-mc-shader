@@ -157,7 +157,7 @@ vec3 HeldLighting(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3
 		}
 
 		#ifdef OMNI_OVERWORLD // 主世界与下界末地用不同的亮度常数。
-			return colorTorchlight * (ao * 0.5 + 0.5) * (heldLightFalloff * (OMNI_TORCHLIGHT_BRIGHTNESS * OMNI_HELDLIGHT_BRIGHTNESS * 0.0015)); // 火把光色乘遮蔽与强度。
+			return colorTorchlight * (ao * 0.5 + 0.5) * (heldLightFalloff * (OMNI_TORCHLIGHT_BRIGHTNESS * OMNI_HELDLIGHT_BRIGHTNESS * 0.015)); // 参考的 0.015 是亮度标度，不能用旧版的 0.0015；否则手持光暗十倍。 // 火把光色乘遮蔽与强度。
 		#else
 			return colorTorchlight * (ao * 0.5 + 0.5) * (heldLightFalloff * (OMNI_TORCHLIGHT_BRIGHTNESS * OMNI_HELDLIGHT_BRIGHTNESS * 0.015)); // 下界末地常数放大十倍。
 		#endif

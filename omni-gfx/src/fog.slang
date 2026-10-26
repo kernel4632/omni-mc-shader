@@ -254,7 +254,7 @@ float ogxNetherFogCloudVolume(float3 pos, float time, Sampler2D noiseTexture)
     float floorPlumes = clamp(0.3 - exp(plumes * -6.0), 0.0, 1.0); // 贴地烟的量。
     plumes *= plumes; // 平方拉开烟与空的差别。
     float erosion = ogxNetherFogDensityAt(samplePos * 400.0 - time * 10.0 - wind * 10.0, noiseTexture) * 0.7 + 0.3; // 随时间的侵蚀。
-    float roofToFloor = exp(max(100.0 - pos.y, 0.0) / -15.0); // 从天花板到地面变淡。
+    float roofToFloor = exp(max(120.0 - pos.y, 0.0) / -10.0); // 从天花板到地面变淡。
     float floorFalloff = pow(exp(max(pos.y - 31.0, 0.0) / -3.0), 2.0); // 离地越高越淡。
     return max((roofToFloor - plumes * (1.0 - erosion)) * 2.0, clamp((floorFalloff - floorPlumes * 0.5) * erosion, 0.0, 1.0)); // 两种形状取大者。
 }
@@ -302,7 +302,7 @@ float ogxEndVortexShape(float3 pos, float time, Sampler2D noiseTexture, float no
 {
     float vortexBounds = clamp(300.0 - length(pos), 0.0, 1.0); // 距原点三百格内为涡旋核心。
     float3 samplePos = pos * float3(1.0, 1.0 / 48.0, 1.0); // 竖直压扁，得到分层云感。
-    float voidZone = max(exp2(-sqrt(max(pos.y + 60.0, 0.0))), 0.0); // 主岛下方六十格起逐渐发白。
+    float voidZone = max(exp2(-1.0 * sqrt(max(pos.y - -60.0, 0.0))), 0.0); // 主岛下方六十格起逐渐发白。
     ogxEndVortexSwirl(samplePos, pos, time); // 把采样坐标按漩涡旋转。
     float noise = ogxEndVortexNoise(samplePos * 12.0, noiseTexture, noiseResolution); // 基础噪声决定浓淡。
     float erosion = 1.0 - ogxEndVortexNoise((samplePos - time / 18.0) * (124.0 + (1.0 - noise) * 7.0), noiseTexture, noiseResolution); // 随时间上升的侵蚀噪声。

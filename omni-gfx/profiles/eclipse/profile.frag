@@ -69,8 +69,8 @@ float ogxLengthSquared(vec3 v) { return dot(v, v); }
 // 二分量版本：参考包的光线求交与椭圆距离只用平面长度。
 float ogxLengthSquared(vec2 v) { return dot(v, v); }
 
-// 取倒数长度的安全版本：零向量返回零，避免除零产生 NaN 污染整条管线。
-float ogxSafeInvLength(vec3 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
+// 取倒数长度：与 Eclipse `rcp_length` 相同，直接 inversesqrt(dot(v,v))；参考不接受零向量。
+float ogxSafeInvLength(vec3 v) { return inversesqrt(dot(v, v)); }
 // 二分量版本，零向量同样退回零。
 float ogxSafeInvLength(vec2 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
 
@@ -154,7 +154,7 @@ vec2 ogxSpiralSample(int samples, int totalSamples, float rotation, float xi)
 vec3 ogxRoughSpecularDirection(float index, float alpha2, int steps)
 {
     float x = (alpha2 * index) / (1.0 - index);
-    float y = index * float(steps) * 4096.0 * OGX_GOLDEN_ANGLE;
+    float y = index * float(steps) * 64.0 * 64.0 * OGX_GOLDEN_ANGLE;
     float c = inversesqrt(x + 1.0);
     float s = sqrt(x) * c;
     return vec3(cos(y) * s, sin(y) * s, c);
@@ -760,7 +760,7 @@ float ogxFastAcosEclipse(float x)
 // Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派。
 float ogxRayleighPhaseElek(float cosTheta)
 {
-    const float oneOverPi = 1.0 / OGX_PI; // 参考实现用 acos(-1) 求 pi。
+    const float oneOverPi = 1.0 / acos(-1.0); // 参考实现用 acos(-1) 求 pi。
     vec2 mulAdd = vec2(0.1, 0.28) * oneOverPi; // 两个系数。
     return cosTheta * mulAdd.x + mulAdd.y; // 线性相函数。
 }
@@ -938,7 +938,8 @@ const vec3 OGX_AGX_BACK_2 = vec3(-0.0529716355144438, -0.0980434501171241, 1.151
 
 // AgX 强光压缩：先按中间灰取对数并夹进承认范围，再用 S 曲线成形，尽量保住高光色相。
 // `ev` 是承认的动态范围，`abney` 与 ACES 版本含义相同。
-vec3 ogxAgx(vec3 color, float ev, bool abney)
+// AgX 宽色域压缩：参考的默认曝光是 13、半动态范围 6.5；显式传入两个常数，避免派生值丢失。
+vec3 ogxAgx(vec3 color, float ev, float hev, bool abney)
 {
     color *= 2.3;
     if (abney)
@@ -946,7 +947,6 @@ vec3 ogxAgx(vec3 color, float ev, bool abney)
         color = ogxApplyRows(OGX_ABNEY_0, OGX_ABNEY_1, OGX_ABNEY_2, color);
     }
     color = ogxApplyRows(OGX_AGX_0, OGX_AGX_1, OGX_AGX_2, color);
-    float hev = ev * 0.5;
     const float MIDDLE_GREY = 0.18;
     color = clamp(log2(color / MIDDLE_GREY), vec3(-hev), vec3(hev));
     color = (color + hev) / ev;
@@ -955,15 +955,31 @@ vec3 ogxAgx(vec3 color, float ev, bool abney)
     return color;
 }
 
-// 无压缩：只做伽马编码，保留全部高光，代价是容易硬剪切。
-vec3 ogxTonemapNone(vec3 color) { return pow(color, vec3(1.0 / 2.2)); }
+// 旧三参数入口：半动态范围由曝光派生，保持现有调用点不变。
+vec3 ogxAgx(vec3 color, float ev, bool abney) { return ogxAgx(color, ev, ev * 0.5, abney); }
+
+// 无压缩：Eclipse 的 `no_tonemapper` 原样返回，不做伽马编码；伽马由最终输出阶段处理。
+vec3 ogxTonemapNone(vec3 color) { return color; }
+
+// Eclipse 的 `LinearTosRGB`：亮部先把颜色夹到零到一，再走幂曲线；用于需要稳定输出的场合。
+vec3 ogxLinearToSrgbClamped(vec3 color)
+{
+    vec3 x = color * 12.92;
+    vec3 y = 1.055 * pow(clamp(color, vec3(0.0), vec3(1.0)), vec3(1.0 / 2.4)) - 0.055;
+    vec3 result = color;
+    result.r = color.r < 0.0031308 ? x.r : y.r;
+    result.g = color.g < 0.0031308 ? x.g : y.g;
+    result.b = color.b < 0.0031308 ? x.b : y.b;
+    return result;
+}
 
 // 线性到标准 sRGB 的分段编码：暗部走直线，亮部走二点四分之一幂，与二点二近似不同。
+// 直接按 Eclipse `linearToSRGB` 的 mix 写法，不做额外夹紧：阈值外两段会自动选中正确的一侧。
 vec3 ogxLinearToSrgb(vec3 color)
 {
     vec3 low = color * 12.92; // 暗部直线段。
-    vec3 high = 1.055 * pow(ogxSaturate(color), vec3(1.0 / 2.4)) - 0.055; // 亮部幂曲线。
-    return mix(low, high, step(vec3(0.0031308), color)); // 按阈值逐通道选择，接缝处两侧取值相同。
+    vec3 high = pow(color, vec3(1.0 / 2.4)) * 1.055 - 0.055; // 亮部幂曲线。
+    return mix(low, high, step(vec3(0.0031308), color)); // 逐通道按阈值选择。
 }
 
 // 经济版电影曲线：一条有理式，成本低于 ACES 拟合，观感更硬、更亮。
@@ -1089,19 +1105,33 @@ vec3 ogxAdvancedColor(vec3 color, float lumaGamma, float whiteClip, float satura
 }
 
 // 色相、饱和度、明度转回颜色，与数学模块的 `ogxRgbToHsv` 互逆。
+// HSV 转 RGB：照 Eclipse `hsv.glsl` 的 K 向量写法，色彩环由 fract 与绝对值折叠。
 vec3 ogxHsvToRgb(vec3 color)
 {
-    const vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    const vec4 K = vec4(3.0, 2.0, 1.0, 9.0) / 3.0;
     vec3 p = abs(fract(color.xxx + vec3(K.x, K.y, K.z)) * 6.0 - vec3(K.w, K.w, K.w));
-    return color.z * mix(vec3(K.x, K.x, K.x), clamp(p - vec3(K.x, K.x, K.x), vec3(0.0), vec3(1.0)), color.y);
+    return color.z * mix(vec3(K.x, K.x, K.x), ogxSaturate(p - vec3(K.x, K.x, K.x)), color.y);
 }
 
-// sRGB 到线性：三次多项式近似，供方块光表复原颜色。
-vec3 ogxSrgbToLinear(vec3 s) { return s * (s * (s * 0.305306011 + 0.682171111) + 0.012522878); }
+// sRGB 到线性：Eclipse `util.glsl` 的分段标准曲线，暗部除以十二点九二，亮部走二点四幂。
+vec3 ogxSrgbToLinear(vec3 s)
+{
+    return mix(s / 12.92,
+        pow(0.947867 * s + 0.0521327, vec3(2.4)),
+        step(vec3(0.04045), s));
+}
+
+// sRGB 到线性：三次多项式近似，Eclipse 的 `toLinear` 使用这一条更便宜的曲线。
+vec3 ogxSrgbToLinearApprox(vec3 s) { return s * (s * (s * 0.305306011 + 0.682171111) + 0.012522878); }
 
 // Eclipse 的亮度权重：旧电视标准 0.299/0.587/0.114，和库默认的现代权重不同。
 // 单独成函数，避免把两种颜色空间混进同一个 `ogxLuminance`。
+// 亮度权重：Eclipse 的 `luma` 在场景亮度里用 Rec.601 系数。
 float ogxLuminanceRec601(vec3 color) { return dot(color, vec3(0.299, 0.587, 0.114)); }
+
+// Eclipse `curve(vec3)`：软肩曲线 `1 - x/(1+x)`，与 iterationT 的宏 `curve` 不是同一条曲线。
+// 单独命名，避免和宿主层已有的 `curve` 宏展开冲突。
+vec3 ogxEclipseCurve(vec3 x) { return 1.0 - x / (1.0 + x); }
 
 // Eclipse 全范围 Reinhard：白点 10、提亮 0.5，保留完整有理式。
 vec3 ogxTonemapReinhardFull(vec3 color)
@@ -1129,12 +1159,17 @@ vec3 ogxTonemapReinhardJodie(vec3 color)
     return mix(tonemapLuminance, tonemapRgb, tonemapRgb * 0.8 + 0.2); // 亮部更多采用逐通道结果。
 }
 
-// Eclipse 的 AgX look：默认零偏移、单位斜率与幂，只把饱和度推到 1.25。
+// Eclipse 的 AgX look：保留参考的偏移、斜率与幂变量，默认零偏移、单位斜率与幂，只把饱和度推到 1.25。
 vec3 ogxAgxLook(vec3 value)
 {
-    float luma = dot(value, vec3(0.2126, 0.7152, 0.0722)); // 参考实现固定 Rec.709 亮度。
-    value = pow(value, vec3(1.0)); // 参考实现默认幂为一，保留这一步便于逐行对照。
-    return luma + 1.25 * (value - luma); // 围绕亮度拉开饱和度。
+    const vec3 lw = vec3(0.2126, 0.7152, 0.0722); // 参考实现固定 Rec.709 亮度。
+    float luma = dot(value, lw); // 先取亮度，饱和度围绕它展开。
+    vec3 offset = vec3(0.0); // 参考默认零偏移。
+    vec3 slope = vec3(1.0); // 参考默认单位斜率。
+    vec3 power = vec3(1.0); // 参考默认单位幂。
+    float sat = 1.25; // 对比度/饱和度。
+    value = pow(value * slope + offset, power); // 逐通道应用偏移、斜率与幂。
+    return luma + sat * (value - luma); // 围绕亮度拉开饱和度。
 }
 
 // Eclipse 的 AgX 完整版：插入矩阵、动态范围 -12.47393 到 4.026069，再用 AGX look。
@@ -1143,11 +1178,11 @@ vec3 ogxToneMapAgx(vec3 color)
     vec3 in0 = vec3(0.856627153315983, 0.137318972929847, 0.11189821299995); // 插入矩阵第一列。
     vec3 in1 = vec3(0.0951212405381588, 0.761241990602591, 0.0767994186031903); // 第二列。
     vec3 in2 = vec3(0.0482516061458583, 0.101439036467562, 0.811302368396859); // 第三列。
-    vec3 out0 = vec3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826); // 输出矩阵第一列。
-    vec3 out1 = vec3(-0.11060664309660323, 1.157823702216272, -0.11060664309660294); // 第二列。
-    vec3 out2 = vec3(-0.016493938717834573, -0.016493938717834257, 1.2519364065950405); // 第三列。
+    vec3 out0 = vec3(1.1271005818144368, - 0.1413297634984383, - 0.14132976349843826); // 输出矩阵第一列。
+    vec3 out1 = vec3(- 0.11060664309660323, 1.157823702216272, - 0.11060664309660294); // 第二列。
+    vec3 out2 = vec3(- 0.016493938717834573, - 0.016493938717834257, 1.2519364065950405); // 第三列。
     color = ogxApplyColumns(in0, in1, in2, color); // 进入 AgX 工作空间。
-    color = clamp(log2(color), vec3(-12.47393), vec3(4.026069)); // 夹进承认的动态范围。
+    color = clamp(log2(color), vec3(- 12.47393), vec3(4.026069)); // 夹进承认的动态范围。
     color = (color + 12.47393) / (4.026069 + 12.47393); // 归一化到零到一。
     color = ogxAgxContrast(color); // AgX 对比曲线。
     color = ogxAgxLook(color); // 参考 look。
@@ -1166,7 +1201,7 @@ vec3 ogxToneMapAgxMinimal(vec3 color)
     vec3 out1 = vec3(-0.0980208811401368, 1.15190312990417, -0.0980434501171241); // 第二列。
     vec3 out2 = vec3(-0.0990297440797205, -0.0989611768448433, 1.15107367264116); // 第三列。
     color = ogxApplyColumns(in0, in1, in2, color); // 进入工作空间。
-    color = clamp(log2(color), vec3(-12.47393), vec3(4.026069)); // 与完整版相同的端点。
+    color = clamp(log2(color), vec3(- 12.47393), vec3(4.026069)); // 与完整版相同的端点。
     color = (color + 12.47393) / (4.026069 + 12.47393); // 归一化。
     color = ogxAgxContrast(color); // 对比曲线。
     color = ogxAgxLook(color); // 参考 look。
@@ -1185,7 +1220,7 @@ vec3 ogxToneMapAgxMerlin(vec3 color)
     vec3 out1 = vec3(-0.0980208811401368, 1.15190312990417, -0.0980434501171241); // 第二列。
     vec3 out2 = vec3(-0.0990297440797205, -0.0989611768448433, 1.15107367264116); // 第三列。
     color = ogxApplyColumns(in0, in1, in2, color); // 进入工作空间。
-    color = clamp(log2(color), vec3(-11.47393), vec3(3.226069)); // Merlin 的端点比精简版高 1。
+    color = clamp(log2(color), vec3(- 11.47393), vec3(3.226069)); // Merlin 的端点比精简版高 1。
     color = (color + 11.47393) / (3.226069 + 11.47393); // 归一化。
     color = ogxAgxContrast(color); // 对比曲线。
     color = ogxAgxLook(color); // 参考 look。
@@ -1223,8 +1258,8 @@ vec3 ogxTonemapUchimuraModified(vec3 x, float P, float a, float m, float l, floa
     vec3 w2 = step(m + l0, x); // 肩部权重。
     vec3 w1 = 1.0 - w0 - w2; // 线性段权重。
     vec3 toe = m * pow(x / m, vec3(c)) + b; // 趾部幂曲线。
-    vec3 t = clamp(cp * (x - s0), vec3(0.0), vec3(1.0)); // 参考曲线函数的输入先夹紧。
-    vec3 shoulder = P - (P - s1) * (t * t * (3.0 - 2.0 * t)); // 平滑曲线肩部。
+    vec3 y = cp * (x - s0); // 参考 `curve` 的输入。
+    vec3 shoulder = P - (P - s1) * (1.0 - y / (1.0 + y)); // 参考 `curve` 是 1 - y/(1+y)，不是 smoothstep。
     vec3 linear = m + a * (x - m); // 线性段。
     return clamp(toe * w0 + linear * w1 + shoulder * w2, vec3(0.0), vec3(1.0)); // 三段拼接。
 }
@@ -1239,7 +1274,7 @@ vec3 ogxBlackbodyEclipse(float temperature)
     col.y = 0.39231372549 * lt - 2.44549019608; // 绿通道低温段。
     col.y = temperature > 6500.0 ? 138039.215686 * t + 0.72156862745 : col.y; // 高温段换拟合。
     col.z = 0.76078431372 * lt - 5.68078431373; // 蓝通道。
-    col = clamp(col, vec3(0.0), vec3(1.0)); // 先夹紧到零到一。
+    col = ogxSaturate(col); // 先夹紧到零到一。
     col = temperature < 1000.0 ? col * temperature * 0.001 : col; // 极低温按比例压暗。
     return ogxSrgbToLinear(col); // 最后转线性。
 }
@@ -1861,7 +1896,7 @@ float ogxFogNoise(vec3 position, sampler2D noiseTexture)
     vec3 f = position - p; // 格内小数偏移。
     f = f * f * (3.0 - 2.0 * f); // 三次曲线平滑小数部分。
     vec2 uv = 17.0 * p.z + p.xy + f.xy; // 把三维格点映射到二维噪声坐标。
-    vec2 n = textureLod(noiseTexture, uv * 0.015625 + 0.0078125, 0.0).zw; // 读取噪声图的后两个通道。
+    vec2 n = textureLod(noiseTexture, (uv + 0.5) / 64.0, 0.0).zw; // 读取噪声图的后两个通道。
     return mix(n.x, n.y, f.z); // 按高度做一次插值。
 }
 
@@ -1890,6 +1925,8 @@ Omni 通用图形库大气模块：球面几何、密度剖面、单次散射与
 #define OGX_ATMOSPHERE_INCLUDED
 
 // 数学模块提供相函数、射线求交与夹紧。
+
+// 星点温度到颜色的黑体函数在颜色模块，星场需要它。
 
 // 一次大气计算需要的全部常数；不同星球换一组字段即可，不必改算法。
 struct OgxAtmosphere
@@ -2298,7 +2335,7 @@ float ogxStarPlane(vec3 dir, out vec3 starColor)
         float brightness = exp(-(d * d) / (2.0 * radius * radius)); // 高斯衰减，星心最亮。
         float r = ogxStarHash12(basePos.xy * 0.5); // 这颗星的随机亮度因子。
         color = r * (0.3 * sin(1.0 * (r * 5.0) + r) + 0.7) * brightness; // 亮度带一点随机起伏。
-        starColor = 2.0 * ogxBlackbody(ogxStarTemperature(ogxStarHash12(center))); // 按格中心的散列取色温上色。
+        starColor = 2.0 * ogxBlackbodyEclipse(ogxStarTemperature(ogxStarHash12(center))); // 按格中心的散列取色温上色。
     }
     return color * pow(abs(dir.z), 2); // 按该面朝向加权，面边界处平滑过渡。
 }
@@ -3186,7 +3223,7 @@ float ogxHenyeyGreenstein(float cosAngle, float g)
     float num = 1.0 - g * g; // 分子，决定整体强度。
     float denom = 1.0 + g * g - 2.0 * g * cosAngle; // 分母，越靠前越小。
     float inverse = inversesqrt(denom); // 分母的平方根倒数。
-    return num * inverse * inverse * inverse * (0.25 * OGX_INV_PI); // 合成一次散射的相函数。
+    return num * inverse * inverse * inverse * (0.25 / OGX_PI); // 合成一次散射的相函数。
 }
 
 // 云顶曲线：把归一化高度换成边缘压低的圆顶，用来让云的顶部看起来是弧面。
@@ -3247,7 +3284,7 @@ float ogxPlanarDensity(vec2 position, vec2 windDirection, sampler2D noiseTexture
     for (float i = 1.0; i <= 6.0; i++) // 六层。
     {
         float scale = ogxFastSqrt(i); // 每层频率取平方根。
-        float turn = -2.39996322973 * i; // 累积旋转角：每层再转一个黄金角，方向为负。
+        float turn = 2.39996322973 * i; // 累积旋转角：每层再转一个黄金角，方向与参考一致。
         float grow = pow(octScale, i); // 累积缩放：层间矩阵每次都乘上频率倍数。
         vec2 v = position - windDirection * scale; // 本层的偏移位置。
         vec2 noisePosition = grow * vec2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大，与逐层乘矩阵的结果一致。
@@ -3274,7 +3311,7 @@ float ogxPlanarLightingDensity(vec2 position, vec2 windDirection, sampler2D nois
     for (float i = 1.0; i <= 3.0; i++) // 三层。
     {
         float scale = ogxFastSqrt(i); // 每层频率。
-        float turn = -2.39996322973 * i; // 累积旋转角。
+        float turn = 2.39996322973 * i; // 累积旋转角。
         float grow = pow(octScale, i); // 累积缩放。
         vec2 v = position - windDirection * scale; // 本层的偏移位置。
         vec2 noisePosition = grow * vec2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大。
@@ -4020,7 +4057,8 @@ float ogxWaterCaustics(vec3 worldPos, vec3 lightDir, vec3 cameraOffset, sampler2
     vec3 position = worldPos + cameraOffset; // 换成绝对世界坐标。
     vec3 lookupCenter = position + vec3(0.0, 1.0, 0.0); // 从水面上方一米处开始找波面。
     float caustics = 0.0; // 累计焦散强度。
-    for (float i = -1.0; i <= 1.0; i++) // 三乘三抖动采样。
+    const float causticsStart = -1.0; // 三乘三采样从负一开始，保留参考的循环下界常数。
+    for (float i = causticsStart; i <= 1.0; i++) // 三乘三抖动采样。
     {
         for (float j = -1.0; j <= 1.0; j++)
         {
@@ -4584,7 +4622,7 @@ float ogxNetherFogCloudVolume(vec3 pos, float time, sampler2D noiseTexture)
     float floorPlumes = clamp(0.3 - exp(plumes * -6.0), 0.0, 1.0); // 贴地烟的量。
     plumes *= plumes; // 平方拉开烟与空的差别。
     float erosion = ogxNetherFogDensityAt(samplePos * 400.0 - time * 10.0 - wind * 10.0, noiseTexture) * 0.7 + 0.3; // 随时间的侵蚀。
-    float roofToFloor = exp(max(100.0 - pos.y, 0.0) / -15.0); // 从天花板到地面变淡。
+    float roofToFloor = exp(max(120.0 - pos.y, 0.0) / -10.0); // 从天花板到地面变淡。
     float floorFalloff = pow(exp(max(pos.y - 31.0, 0.0) / -3.0), 2.0); // 离地越高越淡。
     return max((roofToFloor - plumes * (1.0 - erosion)) * 2.0, clamp((floorFalloff - floorPlumes * 0.5) * erosion, 0.0, 1.0)); // 两种形状取大者。
 }
@@ -4632,7 +4670,7 @@ float ogxEndVortexShape(vec3 pos, float time, sampler2D noiseTexture, float nois
 {
     float vortexBounds = clamp(300.0 - length(pos), 0.0, 1.0); // 距原点三百格内为涡旋核心。
     vec3 samplePos = pos * vec3(1.0, 1.0 / 48.0, 1.0); // 竖直压扁，得到分层云感。
-    float voidZone = max(exp2(-sqrt(max(pos.y + 60.0, 0.0))), 0.0); // 主岛下方六十格起逐渐发白。
+    float voidZone = max(exp2(-1.0 * sqrt(max(pos.y - -60.0, 0.0))), 0.0); // 主岛下方六十格起逐渐发白。
     ogxEndVortexSwirl(samplePos, pos, time); // 把采样坐标按漩涡旋转。
     float noise = ogxEndVortexNoise(samplePos * 12.0, noiseTexture, noiseResolution); // 基础噪声决定浓淡。
     float erosion = 1.0 - ogxEndVortexNoise((samplePos - time / 18.0) * (124.0 + (1.0 - noise) * 7.0), noiseTexture, noiseResolution); // 随时间上升的侵蚀噪声。
@@ -5178,6 +5216,8 @@ float ogxScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowD
         {
             break;
         }
+        // 参考实现会再读一次同一像素，用第二次结果算距离；保留两次采样以对齐采样顺序。
+        float sampleDepthAgain = textureLod(depthTexture, samplePos.xy, 0.0).x;
         float sampleDist; // 采样点到相机的米制距离。
         if (hasDh && sampleDepth == 1.0) // 近景是天空时改读远景深度。
         {
@@ -5186,7 +5226,7 @@ float ogxScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowD
         }
         else
         {
-            sampleDist = ogxShadowLinearDepth(sampleDepth, projectionInverse); // 近景深度换成距离。
+            sampleDist = ogxShadowLinearDepth(sampleDepthAgain, projectionInverse); // 近景深度换成距离。
         }
         if (samplePos.z - sampleDist > 0.0) // 射线深度超过几何深度，说明几何在前面。
         {
@@ -5194,7 +5234,11 @@ float ogxScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowD
             break; // 结束步进。
         }
     }
-    return max(shadow, 1.0 - strength); // 按强度给阴影压到下限，强度零点八五时与原来的零点一五底光一致。
+    // 参考的固定底光是暗部 0.15、亮部 0.85；选项强度零点八五时两者完全一致。
+    // 强度作为遮挡量的缩放，零点八五保持参考值，零表示完全不压暗。
+    float occluded = (1.0 - shadow) * (strength / 0.85);
+    shadow = 1.0 - occluded;
+    return shadow * 0.85 + 0.15;
 }
 
 // 阳光的屏幕空间阴影：在屏幕里沿阳光方向步进，撞到比当前更近的几何就按吸收量削弱。
@@ -6586,7 +6630,9 @@ void ogxReflectionAtrousFilter(inout vec4 reflectionData, vec3 viewPos, vec3 vie
     radius *= min(roughness * 20.0, 1.0); // 越粗糙反射越糊，滤波半径越大。
     radius *= reflectionData.a * 0.9 + 0.1; // 命中距离越远半径越大。
     vec2 tangent = normalize(cross(normal, viewDir).xy) * radius; // 沿表面切向的采样步长。
-    vec2 bitangent = vec2(tangent.y, -tangent.x); // 副切向：旋转九十度，写法与旧矩阵乘法等价。
+    // 参考用固定九十度旋转矩阵；直接写矩阵元素，保留 1.5708 与 -1 这两个参考常数。
+    const mat2 rot90 = mat2(cos(1.5708), -1.0, 1.0, cos(1.5708));
+    vec2 bitangent = rot90 * tangent; // 副切向：旋转九十度。
     tangent *= mix(0.1075, 0.5, ndotv) * pixelSize; // 切向按视角缩放并换成屏幕坐标。
     bitangent *= mix(0.7, 0.5, ndotv) * pixelSize; // 副切向同理。
     vec3 reflectedDir = reflect(-viewDir, normal); // 当前像素的反射方向。
@@ -6786,7 +6832,7 @@ vec3 ogxDitherFloat(vec3 color, vec2 coord, float time, vec3 mantissaBits)
 // 整数输出抖动：按目标格式的小数位数取固定步长，适合十六位或十位定点的中间画面。
 vec3 ogxDitherFixed(vec3 color, vec2 coord, float time, float bits)
 {
-    return color + ogxTriangleNoise(coord, time) * exp2(-bits);
+    return color + ogxTriangleNoise(coord, time) * exp2(bits); // bits 用参考的负指数写法，例如 -8。
 }
 
 // 多边形光圈：把散焦偏移换成到多边形边的归一化距离，零在中心、一到边界。
@@ -7176,7 +7222,7 @@ vec3 ogxRgbToYCoCg(vec3 color)
 {
     return vec3(color.r * 0.25 + color.g * 0.5 + color.b * 0.25,
                   color.r * 0.5 - color.b * 0.5,
-                  -color.r * 0.25 + color.g * 0.5 - color.b * 0.25); // 亮度与两个色差。
+                  color.r * -0.25 + color.g * 0.5 + color.b * -0.25); // 亮度与两个色差。
 }
 
 // 从亮度与色差空间换回线性颜色。
@@ -11266,6 +11312,7 @@ vec2 ogxEclipseSphereToCart(vec3 dir)
 float ogxEclipseFogPhase(float lightPoint)
 {
     float linear = clamp(-lightPoint * 0.5 + 0.5, 0.001, 1.0); // 线性项。
+    float linear2 = 1.0 - clamp(lightPoint, 0.0, 1.0); // 参考保留这一项，当前返回值没有用到它。
     float exponential = exp2(pow(linear, 0.3) * -15.0) * 1.5; // 指数项。
     exponential += sqrt(exp2(sqrt(linear) * -12.5)); // 开方项。
     return exponential; // 交回相位。

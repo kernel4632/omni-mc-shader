@@ -189,5 +189,14 @@ vec4 omniCloudImage(vec3 worldDir, vec3 cloudCamera, vec2 noise, vec2 cloudAltit
 	return vec4(color, cloudTransmittance); // 返回加色与透过率。
 }
 #endif // 低分辨率体积云总图结束。
+// 参考签名兼容层：只填参考用到的三项媒体参数，其余保持默认零值。
+vec4 SetCloudPos(vec3 marchingPos, vec2 cloudAltitude, float planetRadius, float cloudScale, vec3 unused){
+	OgxCumulusMedia media;
+	media.planet_radius = planetRadius;
+	media.altitude = cloudAltitude;
+	media.cloud_scale = cloudScale;
+	return ogxCumulusSetPos(marchingPos, media);
+}
+
 #endif // 云密度阶段结束。
 #endif // 文件守卫结束。

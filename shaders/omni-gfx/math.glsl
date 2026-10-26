@@ -60,8 +60,8 @@ float ogxLengthSquared(vec3 v) { return dot(v, v); }
 // 二分量版本：参考包的光线求交与椭圆距离只用平面长度。
 float ogxLengthSquared(vec2 v) { return dot(v, v); }
 
-// 取倒数长度的安全版本：零向量返回零，避免除零产生 NaN 污染整条管线。
-float ogxSafeInvLength(vec3 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
+// 取倒数长度：与 Eclipse `rcp_length` 相同，直接 inversesqrt(dot(v,v))；参考不接受零向量。
+float ogxSafeInvLength(vec3 v) { return inversesqrt(dot(v, v)); }
 // 二分量版本，零向量同样退回零。
 float ogxSafeInvLength(vec2 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
 
@@ -145,7 +145,7 @@ vec2 ogxSpiralSample(int samples, int totalSamples, float rotation, float xi)
 vec3 ogxRoughSpecularDirection(float index, float alpha2, int steps)
 {
     float x = (alpha2 * index) / (1.0 - index);
-    float y = index * float(steps) * 4096.0 * OGX_GOLDEN_ANGLE;
+    float y = index * float(steps) * 64.0 * 64.0 * OGX_GOLDEN_ANGLE;
     float c = inversesqrt(x + 1.0);
     float s = sqrt(x) * c;
     return vec3(cos(y) * s, sin(y) * s, c);
@@ -751,7 +751,7 @@ float ogxFastAcosEclipse(float x)
 // Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派。
 float ogxRayleighPhaseElek(float cosTheta)
 {
-    const float oneOverPi = 1.0 / OGX_PI; // 参考实现用 acos(-1) 求 pi。
+    const float oneOverPi = 1.0 / acos(-1.0); // 参考实现用 acos(-1) 求 pi。
     vec2 mulAdd = vec2(0.1, 0.28) * oneOverPi; // 两个系数。
     return cosTheta * mulAdd.x + mulAdd.y; // 线性相函数。
 }

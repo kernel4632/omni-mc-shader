@@ -109,4 +109,16 @@ float gfx_disc_profile(float a, float s, float h){ return ogxDiscProfile(a, s, h
 // 行星环带噪声：五层噪声叠出环带细缝。
 float gfx_planet_ring_noise(float position, sampler2D noiseTexture){ return ogxPlanetRingNoise(position, noiseTexture); } // 实现在生成库。
 
+// Eclipse 球面与经纬贴图坐标：参考直接使用 TAU/PI 与 rTAU。
+vec3 cartToSphere(vec2 coord){
+	coord.y = 1.0 - coord.y;
+	coord *= vec2(TAU, PI); // 经度乘 TAU、纬度乘 PI，把零到一映射到整圈。
+	vec2 lon = vec2(sin(coord.x), cos(coord.x)) * sin(coord.y);
+	return vec3(lon.x, cos(coord.y), lon.y);
+}
+vec2 sphereToCart(vec3 dir){
+	float lonlat = atan(-dir.x, -dir.z);
+	return vec2(lonlat * 0.159155 + 0.5, 0.5 * dir.y + 0.5); // 参考的 rTAU 取 0.159155。
+}
+
 #endif

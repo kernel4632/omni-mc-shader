@@ -12,7 +12,7 @@ import build  # 读取真实流程表、原生选项与编译器位置。
 import options  # 核对菜单分类与流程设置解析。
 import support  # 共享扫描、展开与效果原文缓存。
 
-DESCENDING_EDGES = {"end.glsl": "末地行星阴影与大气米散射用下降遮罩，照 iterationT 原样保留", "end_sky.glsl": "末地大气米散射的下降遮罩随算法体拆到该文件，照 iterationT 原样保留", "snow.glsl": "积雪融化阶段用下降遮罩判断雪量区间，照 Eclipse 原样保留", "planet.glsl": "末地行星大气按视线掠过地面的角度衰减，边缘用下降遮罩，照原式保留"}  # 允许反序阈值的文件，值写明原因。
+DESCENDING_EDGES = {"end.glsl": "末地行星阴影与大气米散射用下降遮罩，照 iterationT 原样保留", "end_sky.glsl": "末地大气米散射的下降遮罩随算法体拆到该文件，照 iterationT 原样保留", "snow.glsl": "积雪融化阶段用下降遮罩判断雪量区间，照 Eclipse 原样保留", "planet.glsl": "末地行星大气按视线掠过地面的角度衰减，边缘用下降遮罩，照原式保留", "skyscatter.glsl": "Eclipse 极光在月亮落下与太阳未升起时用下降遮罩淡出，照参考保留", "waves.glsl": "Eclipse 雨点涟漪的环形波用下降遮罩收口，照参考保留"}  # 允许反序阈值的文件，值写明原因。
 
 
 class EffectTests(unittest.TestCase):

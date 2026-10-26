@@ -16,6 +16,8 @@ Omni 通用图形库大气模块：球面几何、密度剖面、单次散射与
 
 // 数学模块提供相函数、射线求交与夹紧。
 #include "math.slang"
+// 星点温度到颜色的黑体函数在颜色模块，星场需要它。
+#include "color.slang"
 
 // 一次大气计算需要的全部常数；不同星球换一组字段即可，不必改算法。
 struct OgxAtmosphere
@@ -424,7 +426,7 @@ float ogxStarPlane(float3 dir, out float3 starColor)
         float brightness = exp(-(d * d) / (2.0 * radius * radius)); // 高斯衰减，星心最亮。
         float r = ogxStarHash12(basePos.xy * 0.5); // 这颗星的随机亮度因子。
         color = r * (0.3 * sin(1.0 * (r * 5.0) + r) + 0.7) * brightness; // 亮度带一点随机起伏。
-        starColor = 2.0 * ogxBlackbody(ogxStarTemperature(ogxStarHash12(center))); // 按格中心的散列取色温上色。
+        starColor = 2.0 * ogxBlackbodyEclipse(ogxStarTemperature(ogxStarHash12(center))); // 按格中心的散列取色温上色。
     }
     return color * pow(abs(dir.z), 2); // 按该面朝向加权，面边界处平滑过渡。
 }

@@ -380,6 +380,8 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 
 **2026-10-26 更正**：上述 `exact 481` 由只看名字的旧工具得出，已作废。抽查发现 Eclipse 的 `circlemapL`（返回 vec3）被映射到 `ogxCircleMap`（返回 float2）仍标 exact；重建工具后按返回类型、参数个数/类型/方向、常量集合与采样次数/顺序重新核对，505 个函数的结果为 exact 199、approximate 224、mc_glue 82、missing 0。224 个 approximate 的逐条原因写在 `docs/gfx-functions-strict.md`，不能把本轮结果当成全部算法已对齐。
 
+**2026-10-27 严格收口（0.15.2）**：先修正严格工具的常数与分支解析（无值 `#define` 吞行、指令行尾注释、局部派生常数、数组下标、布尔分支折叠、常数循环展开、调用点常数绑定），再逐条补同签名宿主重载、显式参数适配或参考常数/采样顺序。505 个函数的结果为 exact 373、approximate 0、mc_glue 132、missing 0；approximate 不再作为中间状态保留。剩余 mc_glue 每条都在 `omni-gfx/tools/strict_review.json` 写 evidence，集中为程序入口、调试文字、群系表、默认未启用的参考函数，以及必须读取多张宿主缓冲、参考签名无法恢复状态的 TAA/景深/动态模糊/GI/屏幕空间阴影/屏幕空间反射/体积雾/体素/Photonics 等函数；不能把这些证据理解成算法已经逐位一致。两个 profile、280 组唯一程序、审计与 156 个测试通过，游戏内画面与性能仍未验证。
+
 ### 已裁决：旧选项的处置（2026-10-16）
 
 规则：iterationT 的选项全部保留（加 `OMNI_` 前缀）；与 iterationT 含义相同只是改了名的旧选项按下表改名，

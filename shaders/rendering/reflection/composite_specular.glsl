@@ -39,4 +39,12 @@ void CompositeScreenSpaceReflection(){
 	if (gbuffer.material.reflectionStrength > 0.0) // 只有允许反射的表面才追踪。
 		compositeOutput3 = CalculateSpecularReflections(viewPos, worldPos, viewDir, gbuffer.normalW, gbuffer.depthW, gbuffer.albedo, gbuffer.material, gbuffer.lightmapW.g, materialMask.hand > 0.5, isSmooth, highlightStrength); // 追踪反射并回退天空盒。
 }
+// 参考签名兼容层：参考的反射合并直接读三号反射图与一号不透明度。
+void CalculateSpecularReflections(inout vec3 color, vec3 viewDir, vec3 normal, vec3 albedo, Material material){
+	vec3 reflection = CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb); // 三号画面存的是编码后的反射色。
+	bool notTotal = texelFetch(colortex1, texelCoord, 0).a >= 0.5; // 一号透明度低于一半时走正常混合。
+	ogxSpecularReflectionMix(color, viewDir, normal, albedo, 1.0, reflection, notTotal,
+		material.metalness, material.roughness, material.f0, material.reflectionStrength, true);
+}
+
 #endif // 文件守卫结束。

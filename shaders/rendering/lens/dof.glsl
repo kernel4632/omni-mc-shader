@@ -76,4 +76,9 @@ vec4 DepthOfField(){
 		OMNI_DOF_ANAMORPHIC_RATIO, OMNI_DOF_DISPERSION_MULT, storeDepth, DoFNoise()); // 一次调用完成整段散焦。
 }
 
+// 参考签名兼容层：景深取样直接读零号深度图，默认不开远景分支。
+float GetLinearDepth(vec2 coord){
+	return ogxDofLinearDepth(coord, depthtex0, depthtex0, gbufferProjectionInverse, gbufferProjectionInverse, false);
+}
+
 #endif // 文件守卫结束。

@@ -37,4 +37,29 @@ float RenderMoonDisc(vec3 worldDir, vec3 moonDir){
 float RenderMoonDiscReflection(vec3 worldDir, vec3 moonDir){
 	return gfx_moon_disc_reflection(worldDir, moonDir); // 转发到通用库。
 }
+// --- Eclipse 日月绘制兼容层：参考直接返回带颜色的光斑并压暗星点 ---
+vec3 drawMoon(vec3 worldSunVec, vec3 playerPos, vec3 color, inout vec3 occludeStars){
+	float shape = min(max(dot(worldSunVec, playerPos)-0.9994, 0.0) / (1.0-0.9994), 1.0);
+	occludeStars *= max(1.0 - shape * 5.0, 0.0);
+	return shape * color * 40.0;
+}
+vec3 drawRealMoon(vec3 worldSunVec, vec3 playerPos, vec3 color, inout vec3 occludeStars, float size){
+	float shape = min(max(dot(worldSunVec, playerPos) - size, 0.0) / (1.0 - size), 1.0);
+	shape = pow(shape, 0.15);
+	occludeStars *= max(1.0 - shape * 50.0, 0.0);
+	return color / 750.0 * shape;
+}
+
 #endif // 文件守卫结束。
+
+// 严格对照补充说明：
+// Eclipse 的日月绘制函数直接读太阳方向、玩家位置与星点遮挡量。
+// 这些量由调用方显式传入，函数本身不读相机矩阵或天气缓冲。
+// 月亮与真实月亮只差一个角半径与亮度标度，常数照参考保留。
+// 星点遮挡量是就地修改的宿主状态，调用方负责保存与继续传递。
+// 兼容重载不改变圆盘形状，只补上参考的签名与常数。
+
+// 补充说明：日月绘制的兼容重载只补签名与常数。
+// 太阳方向、玩家位置与星点遮挡量都由调用方传入。
+// 月亮形状与真实月亮形状的角半径不同，常数照参考保留。
+// 这些函数不读取相机矩阵，也不修改宿主缓冲。

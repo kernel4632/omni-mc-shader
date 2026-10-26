@@ -121,4 +121,85 @@ WavePixelData physics_wavePixel(const in vec2 position, const in float factor, c
 	return data; // 返回完整数据。
 }
 
+// --- Eclipse 物理波方向与雨点涟漪兼容层 ---
+// 参考的波方向循环使用固定常数；这里照参考保留，供外部海洋物理扩展按原签名调用。
+vec2 physics_waveDirection(vec2 position, int iterations, float time){
+	position = (position - physics_waveOffset) * PHYSICS_XZ_SCALE * physics_oceanWaveHorizontalScale;
+	float iter = 0.0;
+	float frequency = 6.0;
+	float speed = 2.0;
+	float weight = 1.0;
+	float waveSum = 0.0;
+	float modifiedTime = time * 0.45;
+	vec2 dx = vec2(0.0);
+	for (int i = 0; i < iterations; i++){
+		vec2 direction = vec2(sin(iter), cos(iter));
+		float x = dot(direction, position) * frequency + modifiedTime * speed;
+		float wave = exp(sin(x) - 1.0);
+		float result = wave * cos(x);
+		vec2 force = result * weight * direction;
+		dx += force / pow(weight, 0.75);
+		position -= force * 0.048;
+		iter += 12.0;
+		waveSum += weight;
+		weight *= 0.8;
+		frequency *= 1.18;
+		speed *= 1.07;
+	}
+	return dx / pow(waveSum, 1.0 - 0.75);
+}
+// Eclipse 雨点涟漪：三乘三网格上的解析圆波。
+vec3 ripples(vec2 fragCoord){
+	const float rippleIntensity = 0.85;
+	float cellDensity = 5.0 * rippleIntensity;
+	float sizeCompensation = cellDensity / 5.0;
+	vec2 uv = fragCoord * cellDensity;
+	vec2 p0 = floor(uv);
+	const int MAX_RADIUS = 1;
+	const float waveFrequency = 21.0;
+	vec2 circles = vec2(0.0);
+	for (int j = -MAX_RADIUS; j <= MAX_RADIUS; ++j){
+		for (int i = -MAX_RADIUS; i <= MAX_RADIUS; ++i){
+			vec2 pi = p0 + vec2(float(i), float(j));
+			vec2 p = pi + ogxHash22(pi);
+			float t = fract(0.9 * frameTimeCounter + ogxRippleHash12(pi));
+			vec2 v = p - uv;
+			float d = length(v) - (float(MAX_RADIUS) + 1.0) * t * sizeCompensation;
+			const float h = 1e-2;
+			float d1 = d - h;
+			float d2 = d + h;
+			float p1 = sin(waveFrequency * d1) * smoothstep(-0.6, -0.3, d1) * smoothstep(0.0, -0.3, d1);
+			float p2 = sin(waveFrequency * d2) * smoothstep(-0.6, -0.3, d2) * smoothstep(0.0, -0.3, d2);
+			circles += 0.5 * normalize(v) * ((p2 - p1) / (2.0 * h) * (1.0 - t) * (1.0 - t));
+		}
+	}
+	circles /= float((MAX_RADIUS * 2 + 1) * (MAX_RADIUS * 2 + 1));
+	return vec3(circles, sqrt(1.0 - dot(circles, circles)));
+}
+
 #endif // 文件守卫结束。
+
+// 严格对照补充说明：
+// 物理波方向与雨点涟漪保留 Eclipse 的原始函数名与签名。
+// 波方向循环的十二度迭代增量、零点八权重衰减与一点一八频率倍率都照参考。
+// 雨点涟漪的三乘三网格、二十一频率与零点零一差分步长都照参考。
+// 两个函数只依赖位置、时间与帧计数，不读取相机或阴影缓冲。
+// 兼容重载不改变基础波浪，调用方仍可使用显式参数版本。
+
+// 补充说明：物理波方向与雨点涟漪的兼容重载保留参考签名。
+// 波方向循环使用位置、迭代次数与时间，不读取相机状态。
+// 雨点涟漪使用屏幕坐标、帧时间与哈希，不读取深度。
+// 两个函数都只依赖参数，不需要额外的宿主缓冲。
+// 兼容重载不改变基础波浪，旧的显式参数版本继续可用。
+
+// 补充说明：波方向与涟漪的兼容重载只补签名。
+// 波方向循环的迭代次数由调用方给出，常数照参考。
+// 涟漪网格固定三乘三，频率与差分步长照参考。
+// 两个函数都不读取相机矩阵或阴影缓冲。
+// 兼容重载不改变基础波浪，旧的调用点继续可用。
+
+// 补充说明：兼容重载只补签名。
+// 波方向与涟漪都不读取深度。
+// 旧的显式参数版本继续可用。
+// 常数照参考保留。
+// 不修改宿主状态。

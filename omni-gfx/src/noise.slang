@@ -218,7 +218,7 @@ float ogxFogNoise(float3 position, Sampler2D noiseTexture)
     float3 f = position - p; // 格内小数偏移。
     f = f * f * (3.0 - 2.0 * f); // 三次曲线平滑小数部分。
     float2 uv = 17.0 * p.z + p.xy + f.xy; // 把三维格点映射到二维噪声坐标。
-    float2 n = noiseTexture.SampleLevel(uv * 0.015625 + 0.0078125, 0.0).zw; // 读取噪声图的后两个通道。
+    float2 n = noiseTexture.SampleLevel((uv + 0.5) / 64.0, 0.0).zw; // 读取噪声图的后两个通道。
     return lerp(n.x, n.y, f.z); // 按高度做一次插值。
 }
 

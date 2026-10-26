@@ -173,4 +173,27 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 		OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2, OMNI_VFOG_FALLOFF, OMNI_VFOG_SUNLIGHT_ABSORPTION, steps,
 		VFOG_SUNLIGHT_STEPS, VFOG_SUNLIGHT_STEPLENGTH, dither, transmittance); // 一次调用完成整段步进。
 }
+// --- 参考签名兼容层：体积雾的两个参考函数 ---
+// 参考的粉末效应用吸收系数与光照吸收系数直接插值，库里的版本参数化程度不同。
+float PowderEffect(float absorption, float lightingAbsorption, float VdotL){
+	return mix((1.0 - absorption) * (1.0 - lightingAbsorption), 1.0, VdotL * 0.5 + 0.5);
+}
+// 参考把四档散射系数写进调用方给的数组；库返回四分量，这里按参考循环填回。
+void MultiScatteringPhases(float VdotL, inout float phases[4]){
+	float cn = 1.0;
+	for (int i = 0; i < 4; i++, cn *= 0.5){
+		phases[i] = ogxFogPhase(VdotL * cn);
+	}
+}
+
+// 参考签名兼容层：体积雾密度按参考的上下界与衰减，时间项由调用方给。
+float FogDensity(vec3 fogPos, vec3 wind){
+	float maxHeight = max(OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2);
+	float minHeight = min(OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2);
+	float dh = max(fogPos.y - maxHeight, 0.0) + max(minHeight - fogPos.y, 0.0);
+	dh *= 2.0 / OMNI_VFOG_FALLOFF;
+	float density = exp2(-dh * (1.0 - 0.0 * 0.5));
+	return density * 0.1;
+}
+
 #endif // OMNI_VOLUMETRIC_INCLUDED 结束。

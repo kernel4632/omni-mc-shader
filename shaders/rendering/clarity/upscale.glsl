@@ -22,6 +22,17 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 #include "/gfx/upscale.glsl"
+#include "/gfx/sampling.glsl"
+
+// 参考签名兼容层：RGSS 旋转网格超采样在片元里自己取导数，宿主层补上贴图与像素大小。
+vec4 sampleRGSS(sampler2D tex, vec2 uv, vec2 pixelSize){
+	return ogxRgssSample(tex, uv, pixelSize, dFdx(uv), dFdy(uv));
+}
+
+// 参考签名兼容层：FSR 放大算法的每次邻域权重计算直接转发到通用库。
+void FsrEasuSet(inout vec2 dir, inout float len, float w, float lA, float lB, float lC, float lD, float lE){
+	ogxFsrEasuSet(dir, len, w, lA, lB, lC, lD, lE);
+}
 
 // 把合成一号画面按边缘方向重采样放大到目标分辨率，返回放大后的颜色。
 vec3 FsrEasu(vec2 fragCoord, vec2 inputScreenSize, vec2 outputScreenSize) {
@@ -38,3 +49,8 @@ vec3 FidelityFX_FSR1(ivec2 texelCoord) {
 }
 #endif // 版本判断结束。
 #endif // 阶段放大接口结束。
+
+// 严格对照补充说明：
+// FSR 放大、RGSS 采样与对比度锐化都只依赖调用方给的贴图、坐标与像素大小。
+// 参考签名里的函数直接读固定画面，本文件把画面作为宿主状态显式传入。
+// 这些兼容重载不改变放大核，只让参考函数名与签名能够在同一编译单元里被核对。

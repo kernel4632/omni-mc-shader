@@ -159,6 +159,7 @@ float2 ogxEclipseSphereToCart(float3 dir)
 float ogxEclipseFogPhase(float lightPoint)
 {
     float linear = clamp(-lightPoint * 0.5 + 0.5, 0.001, 1.0); // 线性项。
+    float linear2 = 1.0 - clamp(lightPoint, 0.0, 1.0); // 参考保留这一项，当前返回值没有用到它。
     float exponential = exp2(pow(linear, 0.3) * -15.0) * 1.5; // 指数项。
     exponential += sqrt(exp2(sqrt(linear) * -12.5)); // 开方项。
     return exponential; // 交回相位。

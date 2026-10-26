@@ -112,6 +112,12 @@ vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, i
 	return vec4(albedoSample.rgb * weights, textureLod(tex, coord, 0.0).a); // 颜色归一化，透明度取原始值。
 }
 
+// 参考签名兼容层：参考没有材质遮蔽输出，多出的输出由适配层丢弃。
+vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, inout vec4 specularTex){
+	float materialAO = 1.0;
+	return SampleAnisotropic(coord, duv1, duv2, normalTex, specularTex, materialAO);
+}
+
 // 表面采样：按开关走视差、各向异性过滤或屏幕导数采样，得到底色、高光与法线，并可能丢弃透明像素。
 // `materialAO` 是资源包法线蓝通道给出的材质遮蔽，未开该功能时恒为一，调用方把它乘到底色。
 void SampleTerrainSurface(mat3 tbn, vec2 coord, vec2 duv1, vec2 duv2, vec3 shadowVector, inout float parallaxShadow, out vec4 albedoTex, out vec4 specularTex, out vec3 normalTex, out float materialAO){

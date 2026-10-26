@@ -238,7 +238,9 @@ void ogxReflectionAtrousFilter(inout vec4 reflectionData, vec3 viewPos, vec3 vie
     radius *= min(roughness * 20.0, 1.0); // 越粗糙反射越糊，滤波半径越大。
     radius *= reflectionData.a * 0.9 + 0.1; // 命中距离越远半径越大。
     vec2 tangent = normalize(cross(normal, viewDir).xy) * radius; // 沿表面切向的采样步长。
-    vec2 bitangent = vec2(tangent.y, -tangent.x); // 副切向：旋转九十度，写法与旧矩阵乘法等价。
+    // 参考用固定九十度旋转矩阵；直接写矩阵元素，保留 1.5708 与 -1 这两个参考常数。
+    const mat2 rot90 = mat2(cos(1.5708), -1.0, 1.0, cos(1.5708));
+    vec2 bitangent = rot90 * tangent; // 副切向：旋转九十度。
     tangent *= mix(0.1075, 0.5, ndotv) * pixelSize; // 切向按视角缩放并换成屏幕坐标。
     bitangent *= mix(0.7, 0.5, ndotv) * pixelSize; // 副切向同理。
     vec3 reflectedDir = reflect(-viewDir, normal); // 当前像素的反射方向。

@@ -79,6 +79,19 @@ def implementation_environment() -> tuple[dict, dict, dict, dict]:
     """
     defines = signature.read_profile_defines(ROOT / "shaders/shaders.properties")
     defines["MC_VERSION"] = VERSION
+    # 默认对照看主世界片元：这两个宏由加载器按程序注入，不在 profile 文本里。
+    # 不补的话，宿主文件外层的 `#ifdef OMNI_OVERWORLD` 会把整段主世界算法裁掉，
+    # 严格对照看到的是空函数，常数与采样全部误报为缺失。
+    defines.setdefault("OMNI_OVERWORLD", "1")
+    defines.setdefault("OMNI_FRAGMENT", "1")
+    # 宿主里很多兼容重载写在 `#if defined OMNI_COMPOSITE3_PASS` 之类的程序分支内。
+    # 对照要看到所有分支的实现，不能因为默认 profile 没写这些程序宏就当成缺失。
+    for program in ("OMNI_COMPOSITE3_PASS", "OMNI_COMPOSITE4_PASS", "OMNI_COMPOSITE5_PASS",
+                    "OMNI_COMPOSITE7_PASS", "OMNI_DEFERRED0_PASS", "OMNI_DEFERRED1_PASS",
+                    "OMNI_FINAL_PASS", "OMNI_SHADOW_PASS", "OMNI_ENTITIES_PASS",
+                    "OMNI_BLOCK_PASS", "OMNI_HAND_PASS", "OMNI_TRANSLUCENT_PASS",
+                    "OMNI_TERRAIN_PASS", "OMNI_CLOUD_DENSITY_PASS", "OMNI_CLOUD_SHADOW_PASS"):
+        defines.setdefault(program, "1")
     defines = signature.collect_defines(sorted((ROOT / "shaders").rglob("*.glsl")), defines)
     index = signature.index_by_function_name(IMPL_PATHS, defines)
     constants = signature.global_constant_table(IMPL_PATHS, defines)
@@ -161,8 +174,24 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
                 continue
             ref, impl, layer = resolved
             allow_extra = (layer == "host" or bool(entry.get("adapter"))) and "--strict-constants" not in sys.argv[1:]
-            result = signature.compare(ref, impl, ref_constants[ref["pack"]], impl_constants,
-                                       None, ref_index[ref["pack"]], impl_index, allow_extra)
+            # 参考包有时在不同目录定义同名同签名的变体（例如 `luma` 的 Rec.601 与
+            # 另一套权重）。实现只要与其中一个变体完全一致就算 exact，不能因为排序
+            # 先读到另一个变体就误判。
+            impl_signature = (impl["return"], tuple((p["direction"], p["type"]) for p in impl["params"]))
+            candidates = [item for item in refs
+                          if (item["return"], tuple((p["direction"], p["type"]) for p in item["params"]))
+                          == impl_signature]
+            result = None
+            best_ref = ref
+            for candidate in candidates or [ref]:
+                current = signature.compare(candidate, impl, ref_constants[candidate["pack"]], impl_constants,
+                                            None, ref_index[candidate["pack"]], impl_index, allow_extra)
+                if result is None or len(current["issues"]) < len(result["issues"]):
+                    result = current
+                    best_ref = candidate
+                if not current["issues"]:
+                    break
+            ref = best_ref
             status = "exact" if not result["issues"] else "approximate"
             difference = "none" if status == "exact" else "; ".join(result["issues"])
             records.append({
@@ -245,7 +274,10 @@ def check_single_target(records: list[dict]) -> list[str]:
     for key, group in groups.items():
         if len(group) < 2:
             continue
-        signatures = {(r["referenceSignature"]) for r in group}
+        # referenceSignature 里带函数名，同名不同大小写或别名会让字符串永远不同；
+        # 这里只比较返回类型与参数表，名字不参与“是否同一份实现”的判断。
+        signatures = {(record["referenceSignature"].split("(", 1)[0].split()[0],
+                       record["referenceSignature"].split("(", 1)[1]) for record in group}
         if len(signatures) == 1:
             continue  # 同名同签名的真正别名可以共用一个实现。
         names = "、".join(r["referenceFunction"] for r in group)

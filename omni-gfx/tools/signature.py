@@ -56,6 +56,7 @@ SAMPLE_CALLS = {
     "SampleGrad": "sample", "SampleBias": "sample",
     "texelFetch": "fetch", "Load": "fetch",
     "textureGather": "gather", "Gather": "gather",
+    "SampleCmpLevelZero": "sample", "SampleCmp": "sample",
 }
 
 CALL_PATTERN = re.compile(r"\b([A-Za-z_]\w*)\s*\(")  # 函数调用候选。
@@ -129,12 +130,15 @@ def strip_comments(text: str) -> str:
 def evaluate_condition(expression: str, defines: dict[str, str]) -> bool:
     """计算 `#if` 表达式；未知名字按零处理，和 C 预处理器一致。"""
     text = expression.strip()
+    # profile 用 `!OMNI_X` 关闭开关；这类值写成 0，在 #ifdef 视角下应视为未定义。
+    # 否则 `#ifdef OMNI_ATMO_HORIZON` 会在关闭时仍然进入地面反弹分支，采样数直接翻倍。
+    defined = {name for name, value in defines.items() if value not in ("0", "")}
     text = re.sub(r"defined\s*\(\s*(PROGRAM_[A-Za-z0-9_]+)\s*\)", "1", text)
     text = re.sub(r"defined\s*\(\s*([A-Za-z_]\w*)\s*\)",
-                  lambda m: "1" if m.group(1) in defines else "0", text)
+                  lambda m: "1" if m.group(1) in defined else "0", text)
     text = re.sub(r"defined\s+(PROGRAM_[A-Za-z0-9_]+)", "1", text)
     text = re.sub(r"defined\s+([A-Za-z_]\w*)",
-                  lambda m: "1" if m.group(1) in defines else "0", text)
+                  lambda m: "1" if m.group(1) in defined else "0", text)
     text = re.sub(r"\b(PROGRAM_[A-Za-z0-9_]+)\b", "1", text)
     text = re.sub(r"\b([A-Za-z_]\w*)\b", lambda m: defines.get(m.group(1), "0") or "1", text)
     text = re.sub(r"\btrue\b", "1", text)
@@ -164,7 +168,10 @@ def preprocess(text: str, defines: dict[str, str]) -> str:
         directive = stripped.startswith("#")
         keep = active
         if directive:
-            match = re.match(r"#\s*(\w+)\s*(.*)", stripped)
+            # 预处理指令后的 `//` 注释不能进入条件表达式，否则 `#if !FLAG // 说明`
+            # 会因为无法求值被当成假，整段主世界代码被裁掉。
+            directive_text = re.sub(r"//.*$", "", stripped).strip()
+            match = re.match(r"#\s*(\w+)\s*(.*)", directive_text)
             keyword = match.group(1) if match else ""
             rest = match.group(2).strip() if match else ""
             if keyword in ("if", "ifdef", "ifndef"):
@@ -173,10 +180,10 @@ def preprocess(text: str, defines: dict[str, str]) -> str:
                     condition = evaluate_condition(rest, defines)
                 elif keyword == "ifdef":
                     name = rest.split()[0] if rest else ""
-                    condition = name.startswith("PROGRAM_") or name in defines
+                    condition = name.startswith("PROGRAM_") or defines.get(name, "0") not in ("0", "")
                 else:
                     name = rest.split()[0] if rest else ""
-                    condition = not (name.startswith("PROGRAM_") or name in defines)
+                    condition = not (name.startswith("PROGRAM_") or defines.get(name, "0") not in ("0", ""))
                 stack.append([parent, condition, condition])
                 active = parent and condition
                 keep = False
@@ -367,7 +374,7 @@ def global_constant_table(paths: list[Path], defines: dict[str, str] | None = No
             # 用空格覆盖函数体，保留换行与长度，后面的正则不会读到局部声明。
             start, end = item["bodyStart"], item["bodyEnd"]
             text = text[:start] + re.sub(r"[^\n]", " ", text[start:end]) + text[end:]
-        for match in re.finditer(r"(?m)^\s*(?:static\s+)?const\s+(?:\w+\s+)+([A-Za-z_]\w*)\s*=\s*([^;]+);", text):
+        for match in re.finditer(r"(?m)^[ \t]*(?:static\s+)?const\s+(?:\w+\s+)+([A-Za-z_]\w*)\s*=\s*([^;]+);", text):
             name, expression = match.group(1), match.group(2)
             value = evaluate_constant(expression, table)
             if value is None:
@@ -376,8 +383,10 @@ def global_constant_table(paths: list[Path], defines: dict[str, str] | None = No
                 table[name] = None  # 同名不同值无法确定引用目标。
             else:
                 table[name] = value
-        for match in re.finditer(r"(?m)^\s*#define\s+([A-Za-z_]\w*)\s+(.+)$", text):
-            name, expression = match.group(1), match.group(2).strip()
+        # 为什么用 [ \t] 而不是 \s：选项文件里有不带值的开关宏（如 OMNI_HELDLIGHT_SHADOW），
+        # \s 会跨过换行把下一条 #define 吞成它的值，后面的常数就整条消失。
+        for match in re.finditer(r"(?m)^[ \t]*#define[ \t]+([A-Za-z_]\w*)(?:[ \t]+([^\n]*))?$", text):
+            name, expression = match.group(1), (match.group(2) or "1").strip()
             if "(" in expression.split("//")[0] and name in expression:
                 continue
             value = evaluate_constant(expression, table)
@@ -389,6 +398,10 @@ def global_constant_table(paths: list[Path], defines: dict[str, str] | None = No
 def evaluate_constant(expression: str, table: dict) -> list[float] | None:
     """把常量表达式算成数值列表；无法安全求值时返回 None，不猜结果。"""
     text = expression.strip()
+    if text == "true":
+        return [1.0]
+    if text == "false":
+        return [0.0]
     text = re.sub(r"//.*$", "", text).strip()
     text = re.sub(r"\b(?:float|vec2|vec3|vec4|float2|float3|float4|mat2|mat3|mat4|"
                   r"float2x2|float3x3|float4x4)\s*\(", "(", text)
@@ -454,6 +467,228 @@ def local_constants(body: str, table: dict) -> dict[str, list[float]]:
     return local
 
 
+def local_bools(body: str, values: dict[str, bool] | None = None) -> dict[str, bool]:
+    """收集只赋值一次的局部布尔量，用来判断哪些 `if` 分支在默认配置下根本不会执行。
+
+    为什么需要：参考包用 `#ifdef ATMO_HORIZON` 把整段地面反弹删掉；库里改成运行时
+    `bool groundBounce` 后，采样调用仍留在源码里，严格对照会把关闭的 7 次采样也算进去。
+    这里只在实参或局部布尔能静态确定为 false/true 时裁剪分支，运行时值不猜。
+    `values` 给出已经知道的外层布尔实参，局部量可以依赖它们继续折叠。
+    """
+    local: dict[str, bool] = dict(values or {})
+    for match in re.finditer(r"(?:const\s+)?bool\s+([A-Za-z_]\w*)\s*=\s*([^;]+);", body):
+        name, expression = match.group(1), match.group(2)
+        rest = body[match.end():]
+        if re.search(rf"\b{re.escape(name)}\s*(?:[+\-*/]?=)", rest):
+            continue
+        value = evaluate_bool_expression(expression, local)
+        if value is not None:
+            local[name] = value
+    return local
+
+
+def evaluate_bool_expression(expression: str, values: dict[str, bool]) -> bool | None:
+    """把只含布尔名字、真值、比较和逻辑运算的表达式算成真或假；算不出时返回空。
+
+    逻辑运算按短路规则处理：`false && 未知` 一定是假，`true || 未知` 一定是真。
+    这样默认配置关闭的地面反弹分支会被裁掉，而真正依赖运行时变量的条件保持原样。
+    """
+    text = expression.strip()
+    while text.startswith("(") and text.endswith(")") and matching_delimiter(text, 0, "(", ")") == len(text) - 1:
+        text = text[1:-1].strip()
+    if not text:
+        return None
+    # 三元表达式：条件已知时只保留被选中的分支，`localLighting ? 查询 : false` 才能在默认关闭时折叠。
+    ternary = split_ternary(text)
+    if ternary is not None:
+        condition, when_true, when_false = ternary
+        value = evaluate_bool_expression(condition, values)
+        if value is None:
+            return None
+        return evaluate_bool_expression(when_true if value else when_false, values)
+    or_parts = split_bool_operator(text, "||")
+    if len(or_parts) > 1:
+        results = [evaluate_bool_expression(part, values) for part in or_parts]
+        if any(value is True for value in results):
+            return True
+        return False if all(value is False for value in results) else None
+    and_parts = split_bool_operator(text, "&&")
+    if len(and_parts) > 1:
+        results = [evaluate_bool_expression(part, values) for part in and_parts]
+        if any(value is False for value in results):
+            return False
+        return True if all(value is True for value in results) else None
+    if text.startswith("!") and not text.startswith("!="):
+        inner = evaluate_bool_expression(text[1:], values)
+        return None if inner is None else not inner
+    for operator in ("==", "!=", ">=", "<=", ">", "<"):
+        parts = split_bool_operator(text, operator)
+        if len(parts) == 2:
+            table = {name: [1.0 if value else 0.0] for name, value in values.items()}
+            left = evaluate_constant(parts[0], table)
+            right = evaluate_constant(parts[1], table)
+            if left is None or right is None or len(left) != 1 or len(right) != 1:
+                return None
+            a, b = left[0], right[0]
+            return {"==": a == b, "!=": a != b, ">=": a >= b, "<=": a <= b,
+                    ">": a > b, "<": a < b}[operator]
+    if text in ("true", "1"):
+        return True
+    if text in ("false", "0"):
+        return False
+    if text in values:
+        return values[text]
+    return None
+
+
+def split_ternary(text: str) -> tuple[str, str, str] | None:
+    """在顶层把 `条件 ? 真分支 : 假分支` 拆开；嵌套三元按最外层处理。"""
+    depth, question = 0, -1
+    for index, char in enumerate(text):
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif char == "?" and depth == 0:
+            question = index
+            break
+    if question < 0:
+        return None
+    depth = 0
+    for index in range(question + 1, len(text)):
+        char = text[index]
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif char == ":" and depth == 0:
+            return text[:question].strip(), text[question + 1:index].strip(), text[index + 1:].strip()
+    return None
+
+
+def split_bool_operator(text: str, operator: str) -> list[str]:
+    """按顶层逻辑运算符切分；括号里的同名运算符不切。"""
+    parts, depth, start, index = [], 0, 0, 0
+    while index <= len(text) - len(operator):
+        char = text[index]
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif depth == 0 and text.startswith(operator, index):
+            parts.append(text[start:index].strip())
+            index += len(operator)
+            start = index
+            continue
+        index += 1
+    if not parts:
+        return [text.strip()]
+    parts.append(text[start:].strip())
+    return parts
+
+
+def unroll_constant_loops(body: str, scope: dict) -> str:
+    """把边界能静态求值的 `for` 循环按迭代次数展开，供采样与常数统计使用。
+
+    为什么需要：参考写 `for (int i = 0; i < 3; i++) texture(...)`，一个采样调用点
+    实际执行三次；库为了性能把循环手写展开成三次调用。只数调用点会把两者判成
+    2 对 4 的假差异。这里按常数边界展开参考循环，让比较的是运行次数而不是写法。
+    边界含运行时变量或次数过大时保持原样，不猜。
+    """
+    pattern = re.compile(
+        r"\bfor\s*\(\s*(?:int|uint|float)\s+([A-Za-z_]\w*)\s*=\s*([^;]+);"
+        r"\s*\1\s*(<=|<)\s*([^;]+);\s*[^)]*\)\s*\{")
+    text = body
+    for _ in range(64):
+        changed = False
+        for match in reversed(list(pattern.finditer(text))):
+            start_value = evaluate_constant(match.group(2), scope)
+            end_value = evaluate_constant(match.group(4), scope)
+            if not start_value or not end_value or len(start_value) != 1 or len(end_value) != 1:
+                continue
+            start, end = start_value[0], end_value[0]
+            count = int(end - start) + (1 if match.group(3) == "<=" else 0)
+            if count <= 0 or count > 64:
+                continue
+            brace = text.find("{", match.end() - 1)
+            if brace < 0:
+                continue
+            brace_end = matching_delimiter(text, brace, "{", "}")
+            if brace_end < 0:
+                continue
+            inner = unroll_constant_loops(text[brace + 1:brace_end], scope)
+            text = text[:match.start()] + inner * count + text[brace_end + 1:]
+            changed = True
+            break
+        if not changed:
+            break
+    return text
+
+
+def prune_static_branches(body: str, values: dict[str, bool]) -> str:
+    """删掉条件能静态确定的 `if` 分支，只保留默认配置会执行的部分。
+
+    只处理带大括号的 `if`；条件里出现未知运行时名字时保持原样。这样不会改变真正
+    依赖运行时数据的代码，只把 `if (false)` 里为另一种配置准备的采样移出统计。
+    """
+    text = body
+    for _ in range(64):
+        changed = False
+        for match in reversed(list(re.finditer(r"\bif\s*\(", text))):
+            open_paren = text.find("(", match.start())
+            close_paren = matching_delimiter(text, open_paren, "(", ")")
+            if close_paren < 0:
+                continue
+            value = evaluate_bool_expression(text[open_paren + 1:close_paren], values)
+            if value is None:
+                continue
+            cursor = close_paren + 1
+            while cursor < len(text) and text[cursor].isspace():
+                cursor += 1
+            if cursor >= len(text) or text[cursor] != "{":
+                continue
+            block_end = matching_delimiter(text, cursor, "{", "}")
+            if block_end < 0:
+                continue
+            taken_start, taken_end = (cursor + 1, block_end) if value else (block_end + 1, block_end + 1)
+            after = block_end + 1
+            cursor = after
+            while cursor < len(text) and text[cursor].isspace():
+                cursor += 1
+            if text.startswith("else", cursor):
+                else_start = cursor + 4
+                cursor = else_start
+                while cursor < len(text) and text[cursor].isspace():
+                    cursor += 1
+                if cursor < len(text) and text[cursor] == "{":
+                    else_end = matching_delimiter(text, cursor, "{", "}")
+                    if else_end < 0:
+                        continue
+                    if not value:
+                        taken_start, taken_end = cursor + 1, else_end
+                    after = else_end + 1
+            replacement = text[taken_start:taken_end] if value or taken_start != taken_end else ""
+            text = text[:match.start()] + replacement + text[after:]
+            changed = True
+            break
+        if not changed:
+            break
+    return text
+
+
+def matching_delimiter(text: str, start: int, opening: str, closing: str) -> int:
+    """返回与 `start` 处左括号配对的右括号位置；找不到返回负一。"""
+    depth = 0
+    for index in range(start, len(text)):
+        if text[index] == opening:
+            depth += 1
+        elif text[index] == closing:
+            depth -= 1
+            if depth == 0:
+                return index
+    return -1
+
+
 def remove_local_declarations(body: str) -> str:
     """把局部变量声明的类型与名字换成空格，保留右侧表达式。
 
@@ -466,6 +701,11 @@ def remove_local_declarations(body: str) -> str:
     return pattern.sub(lambda m: " " * len(m.group(0)), body)
 
 
+def strip_bracket_indices(text: str) -> str:
+    """把方括号里的数组下标换成空格，下标数字不是算式常数。"""
+    return re.sub(r"\[[^\[\]\n]*\]", lambda m: "[" + " " * (len(m.group(0)) - 2) + "]", text)
+
+
 def numeric_signature(body: str, table: dict) -> tuple[list[float], list[str]]:
     """返回函数体实际使用的数值列表与无法解析的名字。
 
@@ -476,6 +716,7 @@ def numeric_signature(body: str, table: dict) -> tuple[list[float], list[str]]:
     local = local_constants(body, table)
     scope = {**table, **local}
     text = remove_local_declarations(body)  # 声明本身不计入使用次数。
+    text = strip_bracket_indices(text)  # 数组下标不是常数。
     values = []
     unresolved = []
     for match in re.finditer(r"\b[A-Za-z_]\w*\b", text):
@@ -574,16 +815,25 @@ def call_sites(body: str) -> list[tuple[str, int]]:
 
 def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, list[float]],
                  depth: int = 0, stack: tuple[str, ...] = (),
-                 cache: dict[tuple[str, int, str], tuple[list[float], list[str], list[str]]] | None = None
+                 cache: dict[tuple, tuple[list[float], list[str], list[str]]] | None = None,
+                 bindings: dict[str, list[float]] | None = None
                  ) -> tuple[list[float], list[str], list[str]]:
     """沿调用图收集数值、采样顺序与无法解析的常量名。
 
     为什么沿调用图：宿主层函数通常只有一行转发，算法在通用库里；只看外层会得到
     “没有常数、没有采样”的假一致。调用图把真正的算式算进来，同时保留调用顺序。
+
+    为什么把实参绑到形参：参考包的 `FLASHLIGHT_FOV` 是编译期常数，库函数把它改成显式
+    参数 `fov`。只比较函数体时，库里的 `8.0 / fov` 无法折叠，参考里的 `8.0 / 0.25`
+    却会折叠出额外的 32，制造假差异。调用点已知的常数实参绑定到形参后，两边都会
+    得到同一组数值；绑定只接受能静态求值的实参，运行时值不参与。
+
     结果按函数缓存；否则大气与光照的调用图会在每次比较时重复展开很多次。
     """
     cache = {} if cache is None else cache
-    key = (item.get("path", ""), item.get("line", 0), item["name"])
+    bindings = bindings or {}
+    binding_key = tuple(sorted((name, tuple(value)) for name, value in bindings.items()))
+    key = (item.get("path", ""), item.get("line", 0), item["name"], binding_key)
     if key in cache:
         return cache[key]
     if key in stack:
@@ -597,9 +847,24 @@ def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, 
         r"sampler2d|sampler3d|samplercube)\s+([A-Za-z_]\w*)\s*(?=[=;,\[])", body))
     base_scope = {name: value for name, value in constants.items()
                   if name not in parameter_names and name not in declared_names}
+    # 只把调用点能静态求值的实参放进作用域；其余形参仍按运行时值处理，不猜。
+    param_types = {p['raw'].split()[-1]: p['type'] for p in item['params'] if p['raw'].split()}
+    bound_names = {name for name in bindings if name in parameter_names}
+    base_scope.update({name: value for name, value in bindings.items()
+                       if name in parameter_names and param_types.get(name) != 'bool'})
     local = local_constants(body, base_scope)
     scope = {**base_scope, **local}
+    # 布尔实参与局部布尔量单独记录：它们决定 `if` 分支是否在默认配置下执行，
+    # 不能混进数值常数集合，否则 0 和 1 会被误当成算式常数。
+    bool_bindings = {}
+    for name, value in bindings.items():
+        if name in parameter_names and param_types.get(name) == 'bool' and len(value) == 1:
+            bool_bindings[name] = bool(value[0])
+    bool_scope = local_bools(body, bool_bindings)
+    body = prune_static_branches(body, bool_scope)
+    body = unroll_constant_loops(body, scope)
     text = remove_local_declarations(body)
+    text = strip_bracket_indices(text)  # 数组下标不是常数。
     numbers: list[float] = []
     samples: list[str] = []
     unresolved: list[str] = []
@@ -628,7 +893,12 @@ def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, 
             after = text[end] if end < len(text) else ""
             if before == "." or after == "(":
                 continue  # 结构字段或函数名不是常量引用。
-            numbers.extend(scope[token])
+            # 局部常量的值由右侧表达式算出来，右侧的字面量与全局常数已经计入；
+            # 再把局部名展开成结果会重复计入派生值（例如 H=sqrt(6420²-6360²) 的 875.671），
+            # 参考能折叠而显式参数化的实现不能折叠时就会制造假差异。
+            # 绑定形参同理：实参本身的常数在调用点已经计入，展开派生值会多出中间结果。
+            if token not in local and token not in bound_names:
+                numbers.extend(scope[token])
             consumed.update(range(position, end))
             continue
         if token in SAMPLE_CALLS:
@@ -640,14 +910,42 @@ def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, 
         if not candidates or token in stack or depth >= 12:
             continue
         callee = candidates[0]  # 同名同参数个数的重载极少；仍有多个时取源码顺序第一个。
+        arg_texts = argument_texts(text, end)
+        callee_bindings = {}
+        if len(arg_texts) == len(callee["params"]):
+            for param, arg in zip(callee["params"], arg_texts):
+                param_name = param["raw"].split()[-1] if param["raw"].split() else ""
+                value = evaluate_constant(arg, scope)
+                if value is None:
+                    bool_value = evaluate_bool_expression(arg, bool_scope)
+                    if bool_value is not None:
+                        value = [1.0 if bool_value else 0.0]
+                if param_name and value is not None:
+                    callee_bindings[param_name] = value
         sub_numbers, sub_samples, sub_unresolved = collect_tree(
-            callee, index, constants, depth + 1, (*stack, key), cache)
+            callee, index, constants, depth + 1, (*stack, key), cache, callee_bindings)
         numbers.extend(sub_numbers)
         samples.extend(sub_samples)
         unresolved.extend(sub_unresolved)
     result = (numbers, samples, unresolved)
     cache[key] = result
     return result
+
+
+def argument_texts(text: str, open_paren: int) -> list[str]:
+    """返回左括号处调用的顶层实参文本，用来把常数实参绑定到形参。"""
+    depth, cursor = 0, open_paren
+    while cursor < len(text):
+        if text[cursor] == "(":
+            depth += 1
+        elif text[cursor] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        cursor += 1
+    if cursor >= len(text):
+        return []
+    return split_top_level(text[open_paren + 1:cursor])
 
 
 def arguments_at(text: str, open_paren: int) -> int:

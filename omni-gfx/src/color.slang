@@ -94,7 +94,8 @@ static const float3 OGX_AGX_BACK_2 = float3(-0.0529716355144438, -0.098043450117
 
 // AgX 强光压缩：先按中间灰取对数并夹进承认范围，再用 S 曲线成形，尽量保住高光色相。
 // `ev` 是承认的动态范围，`abney` 与 ACES 版本含义相同。
-float3 ogxAgx(float3 color, float ev, bool abney)
+// AgX 宽色域压缩：参考的默认曝光是 13、半动态范围 6.5；显式传入两个常数，避免派生值丢失。
+float3 ogxAgx(float3 color, float ev, float hev, bool abney)
 {
     color *= 2.3;
     if (abney)
@@ -102,7 +103,6 @@ float3 ogxAgx(float3 color, float ev, bool abney)
         color = ogxApplyRows(OGX_ABNEY_0, OGX_ABNEY_1, OGX_ABNEY_2, color);
     }
     color = ogxApplyRows(OGX_AGX_0, OGX_AGX_1, OGX_AGX_2, color);
-    float hev = ev * 0.5;
     static const float MIDDLE_GREY = 0.18;
     color = clamp(log2(color / MIDDLE_GREY), float3(-hev), float3(hev));
     color = (color + hev) / ev;
@@ -111,15 +111,31 @@ float3 ogxAgx(float3 color, float ev, bool abney)
     return color;
 }
 
-// 无压缩：只做伽马编码，保留全部高光，代价是容易硬剪切。
-float3 ogxTonemapNone(float3 color) { return pow(color, float3(1.0 / 2.2)); }
+// 旧三参数入口：半动态范围由曝光派生，保持现有调用点不变。
+float3 ogxAgx(float3 color, float ev, bool abney) { return ogxAgx(color, ev, ev * 0.5, abney); }
+
+// 无压缩：Eclipse 的 `no_tonemapper` 原样返回，不做伽马编码；伽马由最终输出阶段处理。
+float3 ogxTonemapNone(float3 color) { return color; }
+
+// Eclipse 的 `LinearTosRGB`：亮部先把颜色夹到零到一，再走幂曲线；用于需要稳定输出的场合。
+float3 ogxLinearToSrgbClamped(float3 color)
+{
+    float3 x = color * 12.92;
+    float3 y = 1.055 * pow(clamp(color, float3(0.0), float3(1.0)), float3(1.0 / 2.4)) - 0.055;
+    float3 result = color;
+    result.r = color.r < 0.0031308 ? x.r : y.r;
+    result.g = color.g < 0.0031308 ? x.g : y.g;
+    result.b = color.b < 0.0031308 ? x.b : y.b;
+    return result;
+}
 
 // 线性到标准 sRGB 的分段编码：暗部走直线，亮部走二点四分之一幂，与二点二近似不同。
+// 直接按 Eclipse `linearToSRGB` 的 mix 写法，不做额外夹紧：阈值外两段会自动选中正确的一侧。
 float3 ogxLinearToSrgb(float3 color)
 {
     float3 low = color * 12.92; // 暗部直线段。
-    float3 high = 1.055 * pow(ogxSaturate(color), float3(1.0 / 2.4)) - 0.055; // 亮部幂曲线。
-    return lerp(low, high, step(float3(0.0031308), color)); // 按阈值逐通道选择，接缝处两侧取值相同。
+    float3 high = pow(color, float3(1.0 / 2.4)) * 1.055 - 0.055; // 亮部幂曲线。
+    return lerp(low, high, step(float3(0.0031308), color)); // 逐通道按阈值选择。
 }
 
 // 经济版电影曲线：一条有理式，成本低于 ACES 拟合，观感更硬、更亮。
@@ -245,19 +261,33 @@ float3 ogxAdvancedColor(float3 color, float lumaGamma, float whiteClip, float sa
 }
 
 // 色相、饱和度、明度转回颜色，与数学模块的 `ogxRgbToHsv` 互逆。
+// HSV 转 RGB：照 Eclipse `hsv.glsl` 的 K 向量写法，色彩环由 fract 与绝对值折叠。
 float3 ogxHsvToRgb(float3 color)
 {
-    static const float4 K = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+    const float4 K = float4(3.0, 2.0, 1.0, 9.0) / 3.0;
     float3 p = abs(fract(color.xxx + float3(K.x, K.y, K.z)) * 6.0 - float3(K.w, K.w, K.w));
-    return color.z * lerp(float3(K.x, K.x, K.x), clamp(p - float3(K.x, K.x, K.x), float3(0.0), float3(1.0)), color.y);
+    return color.z * lerp(float3(K.x, K.x, K.x), ogxSaturate(p - float3(K.x, K.x, K.x)), color.y);
 }
 
-// sRGB 到线性：三次多项式近似，供方块光表复原颜色。
-float3 ogxSrgbToLinear(float3 s) { return s * (s * (s * 0.305306011 + 0.682171111) + 0.012522878); }
+// sRGB 到线性：Eclipse `util.glsl` 的分段标准曲线，暗部除以十二点九二，亮部走二点四幂。
+float3 ogxSrgbToLinear(float3 s)
+{
+    return lerp(s / 12.92,
+        pow(0.947867 * s + 0.0521327, float3(2.4)),
+        step(float3(0.04045), s));
+}
+
+// sRGB 到线性：三次多项式近似，Eclipse 的 `toLinear` 使用这一条更便宜的曲线。
+float3 ogxSrgbToLinearApprox(float3 s) { return s * (s * (s * 0.305306011 + 0.682171111) + 0.012522878); }
 
 // Eclipse 的亮度权重：旧电视标准 0.299/0.587/0.114，和库默认的现代权重不同。
 // 单独成函数，避免把两种颜色空间混进同一个 `ogxLuminance`。
+// 亮度权重：Eclipse 的 `luma` 在场景亮度里用 Rec.601 系数。
 float ogxLuminanceRec601(float3 color) { return dot(color, float3(0.299, 0.587, 0.114)); }
+
+// Eclipse `curve(float3)`：软肩曲线 `1 - x/(1+x)`，与 iterationT 的宏 `curve` 不是同一条曲线。
+// 单独命名，避免和宿主层已有的 `curve` 宏展开冲突。
+float3 ogxEclipseCurve(float3 x) { return 1.0 - x / (1.0 + x); }
 
 // Eclipse 全范围 Reinhard：白点 10、提亮 0.5，保留完整有理式。
 float3 ogxTonemapReinhardFull(float3 color)
@@ -285,12 +315,17 @@ float3 ogxTonemapReinhardJodie(float3 color)
     return lerp(tonemapLuminance, tonemapRgb, tonemapRgb * 0.8 + 0.2); // 亮部更多采用逐通道结果。
 }
 
-// Eclipse 的 AgX look：默认零偏移、单位斜率与幂，只把饱和度推到 1.25。
+// Eclipse 的 AgX look：保留参考的偏移、斜率与幂变量，默认零偏移、单位斜率与幂，只把饱和度推到 1.25。
 float3 ogxAgxLook(float3 value)
 {
-    float luma = dot(value, float3(0.2126, 0.7152, 0.0722)); // 参考实现固定 Rec.709 亮度。
-    value = pow(value, float3(1.0)); // 参考实现默认幂为一，保留这一步便于逐行对照。
-    return luma + 1.25 * (value - luma); // 围绕亮度拉开饱和度。
+    const float3 lw = float3(0.2126, 0.7152, 0.0722); // 参考实现固定 Rec.709 亮度。
+    float luma = dot(value, lw); // 先取亮度，饱和度围绕它展开。
+    float3 offset = float3(0.0); // 参考默认零偏移。
+    float3 slope = float3(1.0); // 参考默认单位斜率。
+    float3 power = float3(1.0); // 参考默认单位幂。
+    float sat = 1.25; // 对比度/饱和度。
+    value = pow(value * slope + offset, power); // 逐通道应用偏移、斜率与幂。
+    return luma + sat * (value - luma); // 围绕亮度拉开饱和度。
 }
 
 // Eclipse 的 AgX 完整版：插入矩阵、动态范围 -12.47393 到 4.026069，再用 AGX look。
@@ -299,11 +334,11 @@ float3 ogxToneMapAgx(float3 color)
     float3 in0 = float3(0.856627153315983, 0.137318972929847, 0.11189821299995); // 插入矩阵第一列。
     float3 in1 = float3(0.0951212405381588, 0.761241990602591, 0.0767994186031903); // 第二列。
     float3 in2 = float3(0.0482516061458583, 0.101439036467562, 0.811302368396859); // 第三列。
-    float3 out0 = float3(1.1271005818144368, -0.1413297634984383, -0.14132976349843826); // 输出矩阵第一列。
-    float3 out1 = float3(-0.11060664309660323, 1.157823702216272, -0.11060664309660294); // 第二列。
-    float3 out2 = float3(-0.016493938717834573, -0.016493938717834257, 1.2519364065950405); // 第三列。
+    float3 out0 = float3(1.1271005818144368, - 0.1413297634984383, - 0.14132976349843826); // 输出矩阵第一列。
+    float3 out1 = float3(- 0.11060664309660323, 1.157823702216272, - 0.11060664309660294); // 第二列。
+    float3 out2 = float3(- 0.016493938717834573, - 0.016493938717834257, 1.2519364065950405); // 第三列。
     color = ogxApplyColumns(in0, in1, in2, color); // 进入 AgX 工作空间。
-    color = clamp(log2(color), float3(-12.47393), float3(4.026069)); // 夹进承认的动态范围。
+    color = clamp(log2(color), float3(- 12.47393), float3(4.026069)); // 夹进承认的动态范围。
     color = (color + 12.47393) / (4.026069 + 12.47393); // 归一化到零到一。
     color = ogxAgxContrast(color); // AgX 对比曲线。
     color = ogxAgxLook(color); // 参考 look。
@@ -322,7 +357,7 @@ float3 ogxToneMapAgxMinimal(float3 color)
     float3 out1 = float3(-0.0980208811401368, 1.15190312990417, -0.0980434501171241); // 第二列。
     float3 out2 = float3(-0.0990297440797205, -0.0989611768448433, 1.15107367264116); // 第三列。
     color = ogxApplyColumns(in0, in1, in2, color); // 进入工作空间。
-    color = clamp(log2(color), float3(-12.47393), float3(4.026069)); // 与完整版相同的端点。
+    color = clamp(log2(color), float3(- 12.47393), float3(4.026069)); // 与完整版相同的端点。
     color = (color + 12.47393) / (4.026069 + 12.47393); // 归一化。
     color = ogxAgxContrast(color); // 对比曲线。
     color = ogxAgxLook(color); // 参考 look。
@@ -341,7 +376,7 @@ float3 ogxToneMapAgxMerlin(float3 color)
     float3 out1 = float3(-0.0980208811401368, 1.15190312990417, -0.0980434501171241); // 第二列。
     float3 out2 = float3(-0.0990297440797205, -0.0989611768448433, 1.15107367264116); // 第三列。
     color = ogxApplyColumns(in0, in1, in2, color); // 进入工作空间。
-    color = clamp(log2(color), float3(-11.47393), float3(3.226069)); // Merlin 的端点比精简版高 1。
+    color = clamp(log2(color), float3(- 11.47393), float3(3.226069)); // Merlin 的端点比精简版高 1。
     color = (color + 11.47393) / (3.226069 + 11.47393); // 归一化。
     color = ogxAgxContrast(color); // 对比曲线。
     color = ogxAgxLook(color); // 参考 look。
@@ -379,8 +414,8 @@ float3 ogxTonemapUchimuraModified(float3 x, float P, float a, float m, float l, 
     float3 w2 = step(m + l0, x); // 肩部权重。
     float3 w1 = 1.0 - w0 - w2; // 线性段权重。
     float3 toe = m * pow(x / m, float3(c)) + b; // 趾部幂曲线。
-    float3 t = clamp(cp * (x - s0), float3(0.0), float3(1.0)); // 参考曲线函数的输入先夹紧。
-    float3 shoulder = P - (P - s1) * (t * t * (3.0 - 2.0 * t)); // 平滑曲线肩部。
+    float3 y = cp * (x - s0); // 参考 `curve` 的输入。
+    float3 shoulder = P - (P - s1) * (1.0 - y / (1.0 + y)); // 参考 `curve` 是 1 - y/(1+y)，不是 smoothstep。
     float3 linear = m + a * (x - m); // 线性段。
     return clamp(toe * w0 + linear * w1 + shoulder * w2, float3(0.0), float3(1.0)); // 三段拼接。
 }
@@ -395,7 +430,7 @@ float3 ogxBlackbodyEclipse(float temperature)
     col.y = 0.39231372549 * lt - 2.44549019608; // 绿通道低温段。
     col.y = temperature > 6500.0 ? 138039.215686 * t + 0.72156862745 : col.y; // 高温段换拟合。
     col.z = 0.76078431372 * lt - 5.68078431373; // 蓝通道。
-    col = clamp(col, float3(0.0), float3(1.0)); // 先夹紧到零到一。
+    col = ogxSaturate(col); // 先夹紧到零到一。
     col = temperature < 1000.0 ? col * temperature * 0.001 : col; // 极低温按比例压暗。
     return ogxSrgbToLinear(col); // 最后转线性。
 }

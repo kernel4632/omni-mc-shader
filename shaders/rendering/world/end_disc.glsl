@@ -27,7 +27,7 @@ void BlackHole_AccretionDisc_Stars(inout vec3 color, in vec3 rayDir, in vec3 lig
 		OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE != 0, OMNI_ACCRETIONDISC_DOPPLER_EFFECT != 0); // 天空版五十步、起点三米、噪声四次方。
 
 	#if OMNI_STAR_TYPE > 0 // 打开星空才画星星。
-		color += EndCalculateStars(rayDir); // 叠星空。
+		color += CalculateStars(rayDir); // 参考的末地星空用 iterationT 星场，不是主世界稳定星场。
 	#endif
 
 	color *= disc.a; // 前面的天光被吸积盘吃掉。

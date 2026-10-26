@@ -19,6 +19,8 @@
 #include "/common/math.glsl"
 // 采样算法放在通用库，本文件只把加载器纹理、像素坐标和帧号传进去。
 #include "/gfx/sampling.glsl"
+// 三角噪声与雾噪声在生成库，宿主兼容层直接引用。
+#include "/omni-gfx/noise.glsl"
 
 // 统一像素坐标：片元阶段用真实片元坐标，其它阶段取零；见文件头的取舍说明。
 #ifdef OMNI_FRAGMENT
@@ -26,6 +28,21 @@
 #else
 	#define OMNI_PIXEL vec2(0.0) // 顶点、几何与计算阶段：本文件不在这里取噪声，给一个可编译的常量。
 #endif
+
+// --- Eclipse 抖动与采样兼容层：参考函数自己取像素坐标、时间与导数 ---
+#ifdef OMNI_FRAGMENT
+// 四乘四拜尔矩阵，参考直接读 gl_FragCoord。
+float bayerDither(){ return ogxEclipseBayerDither(gl_FragCoord.xy); }
+// 三角白噪声，参考直接读当前帧时间。
+float triangWhiteNoise(vec2 n){ return ogxTriangleNoise(n, frameTimeCounter); }
+#endif // 片元阶段结束。
+
+
+// 参考签名兼容层：iterationT 的 `Get3DNoise` 直接读全局噪声贴图。
+float Get3DNoise(vec3 position){ return ogxFogNoise(position, noisetex); }
+
+// 参考的一维白噪声：把输入扩成两个不同频率再走二维哈希。
+float rand(float co){ return ogxWhiteNoise(vec2(co, co * 2.0)); }
 
 // 不随时间变化的二维蓝噪声，按像素位置平铺。
 vec2 BlueNoise(){
@@ -41,4 +58,7 @@ vec2 BlueNoiseTemporal(){
 float BayerTemporal(){
 	return gfx_bayer_temporal(ivec2(OMNI_PIXEL), frameCounter); // 拜尔矩阵与帧偏移都在库里。
 }
+// 参考签名兼容层：参考的采样函数不带参数，直接取当前像素与帧号。
+vec2 BlueNoiseTemproal(){ return BlueNoiseTemporal(); }
+float BayerTemproal(){ return BayerTemporal(); }
 #endif // 文件守卫结束。
