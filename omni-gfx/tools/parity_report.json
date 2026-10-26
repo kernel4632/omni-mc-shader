@@ -10,25 +10,25 @@
   "summary": {
     "totals": {
       "exact": 272,
-      "approximate": 113,
-      "mc_glue": 59,
+      "approximate": 103,
+      "mc_glue": 69,
       "missing": 61,
       "referenceFunctions": 505,
-      "algorithmFunctions": 446,
-      "exactCoverage": 0.6099
+      "algorithmFunctions": 436,
+      "exactCoverage": 0.6239
     },
     "byPackage": {
       "iterationT": {
         "exact": 155,
-        "approximate": 55,
-        "mc_glue": 13,
+        "approximate": 46,
+        "mc_glue": 22,
         "missing": 17,
         "total": 240
       },
       "Eclipse": {
         "exact": 117,
-        "approximate": 58,
-        "mc_glue": 46,
+        "approximate": 57,
+        "mc_glue": 47,
         "missing": 44,
         "total": 265
       }
@@ -2446,11 +2446,11 @@
       "referenceFunction": "ViewPos_From_ScreenPos",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "gi.ogxGiViewPos",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:1 -> omni-gfx/src/gi.slang:75",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:1",
       "referenceSamples": 0
     },
     {
@@ -2459,11 +2459,11 @@
       "referenceFunction": "ViewPos_From_ScreenPos_Raw",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "gi.ogxGiViewPos",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:10 -> omni-gfx/src/gi.slang:75",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:10",
       "referenceSamples": 0
     },
     {
@@ -2472,11 +2472,11 @@
       "referenceFunction": "ScreenPos_From_ViewPos",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "shadow.ogxShadowScreenPos",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:16 -> omni-gfx/src/shadow.slang:59",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:16",
       "referenceSamples": 0
     },
     {
@@ -2498,11 +2498,11 @@
       "referenceFunction": "ScreenDepth_From_LinearDepth",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "post.ogxScreenDepthFromLinearDepth",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:35 -> omni-gfx/src/post.slang:181",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:35",
       "referenceSamples": 0
     },
     {
@@ -2511,11 +2511,11 @@
       "referenceFunction": "ViewPos_From_ScreenPos_DH",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "gi.ogxGiViewPosDh",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:42 -> omni-gfx/src/gi.slang:83",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:42",
       "referenceSamples": 0
     },
     {
@@ -2563,11 +2563,11 @@
       "referenceFunction": "LinearDepth_From_ScreenDepth_DH",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "reflection.ogxReflectionDhToScreenDepth",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:71 -> omni-gfx/src/reflection.slang:68",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:71",
       "referenceSamples": 0
     },
     {
@@ -2602,11 +2602,11 @@
       "referenceFunction": "ShadowScreenPos_From_WorldPos_Distorted",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "shadow.ogxShadowScreenPosDistorted",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:3 -> omni-gfx/src/shadow.slang:65",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:3",
       "referenceSamples": 0
     },
     {
@@ -2615,11 +2615,11 @@
       "referenceFunction": "ShadowScreenPos_From_WorldPos",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "shadow.ogxShadowScreenPos",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:14 -> omni-gfx/src/shadow.slang:59",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:14",
       "referenceSamples": 0
     },
     {
@@ -2641,11 +2641,11 @@
       "referenceFunction": "DistortShadowScreenPos",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "shadow.ogxDistortShadowPos",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:28 -> omni-gfx/src/shadow.slang:75",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:28",
       "referenceSamples": 0
     },
     {
@@ -5124,11 +5124,11 @@
       "referenceFunction": "CoordBase",
       "package": "Eclipse",
       "profile": "Eclipse",
-      "currentImplementation": "math.ogxCircleMap",
-      "status": "approximate",
-      "algorithm": true,
-      "difference": "not reviewed line by line; old map only records the receiving function",
-      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:29 -> omni-gfx/src/math.slang:100",
+      "currentImplementation": "",
+      "status": "mc_glue",
+      "algorithm": false,
+      "difference": "\u5c31\u7eea\uff1a\u5750\u6807/\u6295\u5f71\u7ea6\u5b9a\uff0c\u4e0d\u662f\u6548\u679c\u7b97\u6cd5",
+      "evidencePath": "references/Eclipse/shaders/lib/specular.glsl:29",
       "referenceSamples": 0
     },
     {

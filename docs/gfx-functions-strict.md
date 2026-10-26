@@ -5,14 +5,14 @@
 
 ## 结论
 
-- 参考函数共 505 个；算法函数 446 个。
-- exact：272 个；approximate：113 个；mc_glue：59 个；missing：61 个。
-- exact 覆盖率（按算法函数）：61.0%。
+- 参考函数共 505 个；算法函数 436 个。
+- exact：272 个；approximate：103 个；mc_glue：69 个；missing：61 个。
+- exact 覆盖率（按算法函数）：62.4%。
 
 | 参考包 | exact | approximate | mc_glue | missing |
 | --- | --- | --- | --- | --- |
-| iterationT | 155 | 55 | 13 | 17 |
-| Eclipse | 117 | 58 | 46 | 44 |
+| iterationT | 155 | 46 | 22 | 17 |
+| Eclipse | 117 | 57 | 47 | 44 |
 
 ## 未达 exact 的函数
 
@@ -87,22 +87,22 @@
 | `DH_noise` | iterationT | missing | — | no receiving function and no glue justification | `references/iterationT/shaders/Lib/Programs/Gbuffers/DH_Terrain_FS.glsl:32` |
 | `end_portal_layer` | iterationT | missing | — | no receiving function and no glue justification | `references/iterationT/shaders/Lib/Programs/Gbuffers/Entities_FS.glsl:91` |
 | `SampleAnisotropic` | iterationT | missing | — | no receiving function and no glue justification | `references/iterationT/shaders/Lib/Programs/Gbuffers/Terrain_FS.glsl:57` |
-| `ViewPos_From_ScreenPos` | iterationT | approximate | `gi.ogxGiViewPos` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:1 -> omni-gfx/src/gi.slang:75` |
-| `ViewPos_From_ScreenPos_Raw` | iterationT | approximate | `gi.ogxGiViewPos` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:10 -> omni-gfx/src/gi.slang:75` |
-| `ScreenPos_From_ViewPos` | iterationT | approximate | `shadow.ogxShadowScreenPos` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:16 -> omni-gfx/src/shadow.slang:59` |
+| `ViewPos_From_ScreenPos` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:1` |
+| `ViewPos_From_ScreenPos_Raw` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:10` |
+| `ScreenPos_From_ViewPos` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:16` |
 | `ScreenPos_From_ViewPos_Raw` | iterationT | mc_glue | — | 就绪：屏幕坐标约定 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:25` |
-| `ScreenDepth_From_LinearDepth` | iterationT | approximate | `post.ogxScreenDepthFromLinearDepth` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:35 -> omni-gfx/src/post.slang:181` |
-| `ViewPos_From_ScreenPos_DH` | iterationT | approximate | `gi.ogxGiViewPosDh` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:42 -> omni-gfx/src/gi.slang:83` |
+| `ScreenDepth_From_LinearDepth` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:35` |
+| `ViewPos_From_ScreenPos_DH` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:42` |
 | `ViewPos_From_ScreenPos_Raw_DH` | iterationT | mc_glue | — | 就绪：远景坐标约定 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:51` |
 | `ScreenPos_From_ViewPos_DH` | iterationT | mc_glue | — | 就绪：远景坐标约定 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:57` |
 | `ScreenPos_From_ViewPos_Raw_DH` | iterationT | mc_glue | — | 就绪：远景坐标约定 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:66` |
-| `LinearDepth_From_ScreenDepth_DH` | iterationT | approximate | `reflection.ogxReflectionDhToScreenDepth` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:71 -> omni-gfx/src/reflection.slang:68` |
+| `LinearDepth_From_ScreenDepth_DH` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:71` |
 | `ScreenDepth_From_LinearDepth_DH` | iterationT | mc_glue | — | 就绪：远景深度约定 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:76` |
 | `ScreenDepth_From_DHScreenDepth` | iterationT | mc_glue | — | 就绪：远景深度约定 | `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl:81` |
-| `ShadowScreenPos_From_WorldPos_Distorted` | iterationT | approximate | `shadow.ogxShadowScreenPosDistorted` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:3 -> omni-gfx/src/shadow.slang:65` |
-| `ShadowScreenPos_From_WorldPos` | iterationT | approximate | `shadow.ogxShadowScreenPos` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:14 -> omni-gfx/src/shadow.slang:59` |
+| `ShadowScreenPos_From_WorldPos_Distorted` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:3` |
+| `ShadowScreenPos_From_WorldPos` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:14` |
 | `ShadowScreenPos_From_WorldPos_WithoutZScaling` | iterationT | mc_glue | — | 就绪：阴影坐标约定 | `references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:21` |
-| `DistortShadowScreenPos` | iterationT | approximate | `shadow.ogxDistortShadowPos` | not reviewed line by line; old map only records the receiving function | `references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:28 -> omni-gfx/src/shadow.slang:75` |
+| `DistortShadowScreenPos` | iterationT | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/iterationT/shaders/Lib/Uniform/ShadowTransforms.glsl:28` |
 | `triNoise2d` | Eclipse | missing | — | no receiving function and no glue justification | `references/Eclipse/shaders/lib/aurora.glsl:53` |
 | `aurora` | Eclipse | approximate | `atmosphere.ogxAurora` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/aurora.glsl:77 -> omni-gfx/src/atmosphere.slang:573` |
 | `YearCycleColor` | Eclipse | approximate | `weather.ogxYearCycleColor` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/climate_settings.glsl:19 -> omni-gfx/src/weather.slang:100` |
@@ -166,7 +166,7 @@
 | `skyCloudsFromTexLOD` | Eclipse | approximate | `atmosphere.ogxSkyCloudsFromTexLod` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/sky_gradient.glsl:210 -> omni-gfx/src/atmosphere.slang:561` |
 | `volumetricsFromTex` | Eclipse | approximate | `fog_volume.ogxFogCloudBicubic` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/sky_gradient.glsl:229 -> omni-gfx/src/fog_volume.slang:79` |
 | `frisvad` | Eclipse | approximate | `math.ogxTangentBasis` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/specular.glsl:17 -> omni-gfx/src/math.slang:471` |
-| `CoordBase` | Eclipse | approximate | `math.ogxCircleMap` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/specular.glsl:29 -> omni-gfx/src/math.slang:100` |
+| `CoordBase` | Eclipse | mc_glue | — | 就绪：坐标/投影约定，不是效果算法 | `references/Eclipse/shaders/lib/specular.glsl:29` |
 | `SampleVNDFGGX` | Eclipse | approximate | `reflection.ogxSampleGgxVndf` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/specular.glsl:44 -> omni-gfx/src/reflection.slang:23` |
 | `GGX` | Eclipse | approximate | `math.ogxDistributionGGX` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/specular.glsl:75 -> omni-gfx/src/math.slang:273` |
 | `shlickFresnelRoughness` | Eclipse | approximate | `math.ogxFresnelSchlick` | not reviewed line by line; old map only records the receiving function | `references/Eclipse/shaders/lib/specular.glsl:95 -> omni-gfx/src/math.slang:281` |

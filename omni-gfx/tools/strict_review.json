@@ -1272,6 +1272,36 @@
     },
     "GetLpvPosition": {
       "evidence": "就绪：世界坐标到光传播体积坐标约定"
+    },
+    "ViewPos_From_ScreenPos": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "ViewPos_From_ScreenPos_Raw": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "ScreenPos_From_ViewPos": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "ScreenDepth_From_LinearDepth": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "ViewPos_From_ScreenPos_DH": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "LinearDepth_From_ScreenDepth_DH": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "ShadowScreenPos_From_WorldPos_Distorted": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "ShadowScreenPos_From_WorldPos": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "DistortShadowScreenPos": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
+    },
+    "CoordBase": {
+      "evidence": "就绪：坐标/投影约定，不是效果算法"
     }
   },
   "approximate": {},

@@ -12,7 +12,7 @@
 - `omni-gfx/src` 现有 24 个 Slang 模块。
 - `shaders/gfx/` 的 22 个旧 GLSL 文件已变成转发层，循环 0、纹理采样 0。
 - 模块级覆盖已完成；函数级逐条明细见 `docs/gfx-functions.md`（2026-10-26 由 `python omni-gfx/build.py parity` 从源码重建，505 个参考函数：已迁入 378、MC 专用 127、缺失 0、调试输出 0）。
-- 严格对照另见 `docs/gfx-functions-strict.md` 与 `omni-gfx/tools/parity_report.json`：exact 272、approximate 113、mc_glue 59、missing 61。旧的“已迁入”只代表有承接函数，严格结论以这份新表为准。
+- 严格对照另见 `docs/gfx-functions-strict.md` 与 `omni-gfx/tools/parity_report.json`：exact 272、approximate 103、mc_glue 69、missing 61。旧的“已迁入”只代表有承接函数，严格结论以这份新表为准。
 - 第五批把函数级缺口清零：20 个函数新进库（拜尔 16/32/128、月亮与天空盒双线性取像素、天空经纬投影与云图两级采样、双边升采样、Xonk 曲线、十六位分量解码、整数哈希、球面求交哨兵版、三次 B 样条权重八件），15 个按算法逐项对照到库内已有实现，1 个（`GetCloudShadow`）按宿主符号留在光影侧；采样器一律改为显式参数，不再以“库不绑定采样器”为由排除。
 - 没有启动 Minecraft，游戏内画面、性能与维度切换仍未验证。
 

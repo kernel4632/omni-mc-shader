@@ -1,4 +1,8 @@
 # 更新记录
+## 0.13.1
+
+严格统计补充：坐标与投影约定按 mc_glue 归类，approximate 从 113 降到 103，mc_glue 增到 69；exact 仍为 272，缺口清单不变。
+
 ## 0.13.0
 
 严格函数对照与两个 profile：新增机器可读的 exact/approximate/mc_glue/missing 台账，按参考包分别生成并编译 GLSL，补齐一批此前被旧覆盖表掩盖的色调映射、AgX、天空与相函数差异。
