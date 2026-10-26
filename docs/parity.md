@@ -378,7 +378,7 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 
 57. 严格函数覆盖收口（`dev.166`）：新增 `eclipse_sky`、`itx_end`、`eclipse_indirect`、`eclipse_specular`、`eclipse_diffuse`、`eclipse_scene` 六个库模块，逐项移植 Eclipse 的 WSR/Photonics 高光、阴影、体素求交、间接光、天空、极光、手电、场景控制与末地雾，以及 iterationT 的末地星空、行星 BRDF、黑洞吸积盘与云影。坐标、深度、阴影投影与体素数学从 `mc_glue` 移进 `camera`、`shadow`、`voxel` 等模块，`mc_glue` 只剩程序入口、标题、文字渲染与群系属性表。严格统计为 505 个函数：exact 481、approximate 0、missing 0、mc_glue 24。完整离线编译改为真实 `#include` 临时源码树，`glslang` 按文件守卫处理重复引用，280 组唯一程序约 12 秒、0 错误。新增模块当前只由严格 profile 与独立测试消费，宿主画面接线与游戏内验证仍未完成。
 
-**2026-10-26 更正**：上述 `exact 481` 由只看名字的旧工具得出，已作废。抽查发现 Eclipse 的 `circlemapL`（返回 vec3）被映射到 `ogxCircleMap`（返回 float2）仍标 exact；重建工具后按返回类型、参数个数/类型/方向、常量集合与采样次数/顺序重新核对，505 个函数的结果为 exact 196、approximate 227、mc_glue 82、missing 0。227 个 approximate 的逐条原因写在 `docs/gfx-functions-strict.md`，不能把本轮结果当成全部算法已对齐。
+**2026-10-26 更正**：上述 `exact 481` 由只看名字的旧工具得出，已作废。抽查发现 Eclipse 的 `circlemapL`（返回 vec3）被映射到 `ogxCircleMap`（返回 float2）仍标 exact；重建工具后按返回类型、参数个数/类型/方向、常量集合与采样次数/顺序重新核对，505 个函数的结果为 exact 199、approximate 224、mc_glue 82、missing 0。224 个 approximate 的逐条原因写在 `docs/gfx-functions-strict.md`，不能把本轮结果当成全部算法已对齐。
 
 ### 已裁决：旧选项的处置（2026-10-16）
 

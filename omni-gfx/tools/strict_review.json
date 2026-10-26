@@ -83,8 +83,14 @@
     "unproject": {
       "target": "color.ogxAgxUnproject"
     },
+    "primaries_to_matrix": {
+      "target": "color.ogxAgxPrimariesToMat3"
+    },
     "RotationToSlide": {
       "target": "color.ogxAgxRotationToSlide"
+    },
+    "ComputeCompressionMatrix": {
+      "target": "color.ogxAgxCompressionToMat3"
     },
     "open_domain_to_normalized_log2": {
       "target": "color.ogxAgxOpenDomainToNormalizedLog2"
@@ -97,6 +103,9 @@
     },
     "AgXConfigurable": {
       "target": "color.ogxAgxConfigurable"
+    },
+    "AgXConfigurable1": {
+      "target": "color.ogxAgxConfigurable1Mat3"
     },
     "BicubicBlurTexture": {
       "target": "math.ogxBicubicBlurTexture"
@@ -918,29 +927,11 @@
       "referenceSignature": "void FixParticleMask(inout materialmask, inout materialmask, inout float, float)",
       "implementationSignature": "void FixParticleMask(inout materialmask, inout materialmask, inout float, float)"
     },
-    "primaries_to_matrix": {
-      "target": "color.ogxAgxPrimariesToMatrix",
-      "difference": "return mat3 != OgxAgxMat3",
-      "referenceSignature": "float3x3 primaries_to_matrix(float2, float2, float2, float2)",
-      "implementationSignature": "ogxagxmat3 ogxAgxPrimariesToMatrix(float2, float2, float2, float2)"
-    },
     "SlidePrimary": {
       "target": "color.ogxAgxSlidePrimary",
       "difference": "constants extra 1",
       "referenceSignature": "float2 SlidePrimary(float2, float2, float2, float)",
       "implementationSignature": "float2 ogxAgxSlidePrimary(float2, float2, float2, float)"
-    },
-    "ComputeCompressionMatrix": {
-      "target": "color.ogxAgxComputeCompressionMatrix",
-      "difference": "return mat3 != OgxAgxMat3",
-      "referenceSignature": "float3x3 ComputeCompressionMatrix(float2, float2, float2, float2)",
-      "implementationSignature": "ogxagxmat3 ogxAgxComputeCompressionMatrix(float2, float2, float2, float2)"
-    },
-    "AgXConfigurable1": {
-      "target": "color.ogxAgxConfigurable1",
-      "difference": "return mat3 != OgxAgxMat3",
-      "referenceSignature": "float3x3 AgXConfigurable1()",
-      "implementationSignature": "ogxagxmat3 ogxAgxConfigurable1()"
     },
     "CloudShadowFromTex": {
       "target": "cloud.ogxCloudShadowSample",

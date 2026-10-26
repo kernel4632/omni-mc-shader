@@ -6,12 +6,12 @@
 ## 结论
 
 - 参考函数共 505 个；算法函数 423 个。
-- exact：196 个；approximate：227 个；mc_glue：82 个；missing：0 个。
-- exact 覆盖率（按算法函数）：46.3%。
+- exact：199 个；approximate：224 个；mc_glue：82 个；missing：0 个。
+- exact 覆盖率（按算法函数）：47.0%。
 
 | 参考包 | exact | approximate | mc_glue | missing |
 | --- | --- | --- | --- | --- |
-| iterationT | 113 | 106 | 21 | 0 |
+| iterationT | 116 | 103 | 21 | 0 |
 | Eclipse | 83 | 121 | 61 | 0 |
 
 ## 未达 exact 的函数
@@ -63,10 +63,7 @@
 | `CurveBlockLightTorch` | iterationT | approximate | `float CurveBlockLightTorch(float)` | `surface.ogxCurveBlockLightTorch` | constants extra 0 |
 | `GetGbufferData` | iterationT | approximate | `gbufferdata GetGbufferData()` | `gbuffer.ogxGetGbufferData` | return GbufferData != OgxGbufferData; param count 0 != 19; constants missing 0.3; extra 63 |
 | `FixParticleMask` | iterationT | approximate | `void FixParticleMask(inout materialmask, inout materialmask, inout float, float)` | `gbuffer.ogxFixParticleMask` | constants missing 0, 0.5, 1 |
-| `primaries_to_matrix` | iterationT | approximate | `float3x3 primaries_to_matrix(float2, float2, float2, float2)` | `color.ogxAgxPrimariesToMatrix` | return mat3 != OgxAgxMat3 |
 | `SlidePrimary` | iterationT | approximate | `float2 SlidePrimary(float2, float2, float2, float)` | `color.ogxAgxSlidePrimary` | constants extra 1 |
-| `ComputeCompressionMatrix` | iterationT | approximate | `float3x3 ComputeCompressionMatrix(float2, float2, float2, float2)` | `color.ogxAgxComputeCompressionMatrix` | return mat3 != OgxAgxMat3 |
-| `AgXConfigurable1` | iterationT | approximate | `float3x3 AgXConfigurable1()` | `color.ogxAgxConfigurable1` | return mat3 != OgxAgxMat3 |
 | `BloomDownSample` | iterationT | mc_glue | `—` | — | 参考默认配置未启用该函数，不参与画面 |
 | `AxialGaussianBlur` | iterationT | mc_glue | `—` | — | 参考默认配置未启用该函数，不参与画面 |
 | `CloudShadowFromTex` | iterationT | approximate | `float CloudShadowFromTex(float3)` | `cloud.ogxCloudShadowSample` | param count 1 != 11; constants missing 0.45, 2, 256, 4096 |
