@@ -1,4 +1,19 @@
 # 更新记录
+## 0.15.0
+
+严格函数覆盖收口：exact 从 378 增到 481，approximate 从 32 降到 0，missing 从 26 降到 0，mc_glue 从 69 降到 24；剩余 mc_glue 只有程序入口、标题、文字渲染与群系属性表。新增六个库模块并全部生成 GLSL 330、进入两个严格 profile。
+
+- 新增 `eclipse_sky`：Eclipse 太阳与月亮圆盘、球面屏幕映射、Catmull-Rom 双三次采样、天空盒云图查表、大气积分与极光。
+- 新增 `itx_end`：iterationT 末地星空、行星 BRDF、黑洞吸积盘主版与反射版、云影密度查表。
+- 新增 `eclipse_indirect`：余弦半球采样、切线空间转世界、SSGI 两种屏幕追踪、双边上采样与 SSGI 合成。
+- 新增 `eclipse_specular`：WSR/Photonics 的体素求交、阴影图、体素追踪、LPV 雾、水体积、反射着色、反射可见度与高光合成。
+- 新增 `eclipse_diffuse`：手持光屏幕空间阴影、方块光合成与手电光。
+- 新增 `eclipse_scene`：受伤/入水/着火画面效果、场景控制参数与末地雾阴影。
+- 坐标、深度、阴影投影与体素数学从 `mc_glue` 移进 `camera`、`shadow`、`voxel`；补齐 `ogxGetVoxelBlock`、`ogxMatrixMulPoint4`、`ogxEclipseStars` 等库函数。
+- 生成器新增括号配对的取格与带层级采样转换，深度表达式里嵌套多层构造函数也能正确降级到 `texelFetch` / `textureLod`。
+- 完整离线编译的并行数按 CPU 核心数封顶，避免一次启动数百个 `glslang` 进程造成内存与调度抖动。
+- 完整离线编译改用真实 `#include` 与临时源码树，`glslang` 按文件守卫处理重复引用；280 组唯一程序从超过 300 秒降到约 12 秒，0 错误。
+- 验证：`python omni-gfx/build.py check`、`strict-parity`、`profiles`、`python build.py audit`、`python build.py verify`、`python build.py compile` 通过；新增模块只由严格 profile 与独立测试消费，Minecraft 宿主接线与游戏内画面仍未验证。
 ## 0.14.0
 
 严格函数扩展第一批：exact 从 272 增到 378，approximate 从 103 降到 32，missing 从 61 降到 26；新增 iterationT 的 G-buffer 解码、手持光、镜头光斑、曝光分块、泛光、FXAA、远景噪点、末地传送门层、各向异性采样、雨滴法线与平面云，新增 Eclipse 五层体积云、GTAO、阴影压缩、雾相位、颜色抖动、闪电、末地光源与相机/体素数学。

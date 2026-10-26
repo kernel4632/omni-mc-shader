@@ -717,4 +717,11 @@ vec3 ogxEclipseSkyTransmittance(vec3 position, vec3 direction, float rayLength, 
     return exp2(-depth); // exp(-depth/ln2) 与 exp2(-depth) 等价。
 }
 
+// Eclipse 星场：用星盒三角投影得到星点，再按亮度与数量做指数强化。
+float ogxEclipseStars(vec3 viewPos, float brightness, float amount, out vec3 starColor)
+{
+    float stars = max(1.0 - ogxStarBox(viewPos, starColor), 0.0); // 星盒投影。
+    return 75.0 * brightness * exp(stars * -20.0 * (1.0 / max(amount, 1e-6))); // 参考实现的亮度曲线。
+}
+
 #endif

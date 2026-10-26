@@ -1517,6 +1517,418 @@
     "CleanVoxelSample": {
       "target": "eclipse_extra.ogxEclipseCleanVoxelSample",
       "difference": "none; explicit parameters replace host globals; constants, loop bounds and sample order preserved"
+    },
+    "CalculateStars": {
+      "target": "itx_end.ogxItxEndStars",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ppss": {
+      "target": "itx_end.ogxItxPpss",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "BlackHole_AccretionDisc_Stars": {
+      "target": "itx_end.ogxItxBlackHoleStars",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "BlackHole_AccretionDisc_Reflection": {
+      "target": "itx_end.ogxItxBlackHoleReflection",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "CloudShadowTex": {
+      "target": "itx_end.ogxItxCloudShadowTex",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "aurora": {
+      "target": "eclipse_sky.ogxEclipseAurora",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "YearCycleColor": {
+      "target": "weather.ogxYearCycleColor",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "cosineHemisphereSample": {
+      "target": "eclipse_indirect.ogxEclipseCosineHemisphereSample",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "TangentToWorld": {
+      "target": "eclipse_indirect.ogxEclipseTangentToWorld",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "BilateralUpscale_SSAO": {
+      "target": "eclipse_indirect.ogxEclipseBilateralUpscaleSsao",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ApplySSRT": {
+      "target": "eclipse_indirect.ogxEclipseApplySsrt",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "drawSun": {
+      "target": "eclipse_sky.ogxEclipseDrawSun",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "sphereMap": {
+      "target": "eclipse_sky.ogxEclipseSphereMap",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "drawMoon": {
+      "target": "eclipse_sky.ogxEclipseDrawMoon",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "drawRealMoon": {
+      "target": "eclipse_sky.ogxEclipseDrawRealMoon",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "texture_bicubic": {
+      "target": "eclipse_sky.ogxEclipseBicubicTexture",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "texture_bicubic_offset": {
+      "target": "eclipse_sky.ogxEclipseBicubicTextureOffset",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "sphereToCarte": {
+      "target": "eclipse_sky.ogxEclipseSphereToCarte",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "skyFromTex": {
+      "target": "eclipse_sky.ogxEclipseSkyFromTex",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "skyCloudsFromTex": {
+      "target": "eclipse_sky.ogxEclipseSkyCloudsFromTex",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "skyCloudsFromTexBLUR": {
+      "target": "eclipse_sky.ogxEclipseSkyCloudsFromTexBlur",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "skyCloudsFromTexLOD": {
+      "target": "eclipse_sky.ogxEclipseSkyCloudsFromTexLod",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "volumetricsFromTex": {
+      "target": "eclipse_sky.ogxEclipseVolumetricsFromTex",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ComputeVoxelShadowMap": {
+      "target": "eclipse_specular.ogxEclipseComputeVoxelShadowMap",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "traceQuarterVoxel": {
+      "target": "eclipse_specular.ogxEclipseTraceQuarterVoxel",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "voxelReflection": {
+      "target": "eclipse_specular.ogxEclipseVoxelReflection",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "hash13": {
+      "target": "atmosphere.ogxStarHash13",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "hash12_alt": {
+      "target": "atmosphere.ogxStarHash12",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "starplane": {
+      "target": "atmosphere.ogxStarPlane",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "starbox": {
+      "target": "atmosphere.ogxStarBox",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "stars": {
+      "target": "atmosphere.ogxEclipseStars",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "waterCaustics": {
+      "target": "water.ogxWaterBumpCaustics",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "SSRT_Handlight_Shadows": {
+      "target": "eclipse_diffuse.ogxEclipseSsrtHandlightShadows",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "doBlockLightLighting": {
+      "target": "eclipse_diffuse.ogxEclipseDoBlockLightLighting",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "calculateFlashlight": {
+      "target": "eclipse_diffuse.ogxEclipseCalculateFlashlight",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "GetEndFogShadow": {
+      "target": "eclipse_scene.ogxEclipseGetEndFogShadow",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "applyGameplayEffects": {
+      "target": "eclipse_scene.ogxEclipseApplyGameplayEffects",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "rayTrace_GI": {
+      "target": "eclipse_indirect.ogxEclipseRayTraceGi",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "RT_alternate": {
+      "target": "eclipse_indirect.ogxEclipseRtAlternate",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "calculateAtmosphere": {
+      "target": "eclipse_sky.ogxEclipseCalculateAtmosphere",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "applySceneControllerParameters": {
+      "target": "eclipse_scene.ogxEclipseApplySceneControllerParameters",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "rayTraceSpeculars": {
+      "target": "eclipse_specular.ogxEclipseRayTraceSpeculars",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "sortIntersectionCutout": {
+      "target": "eclipse_specular.ogxEclipseSortIntersectionCutout",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "sortIntersectionOpaque": {
+      "target": "eclipse_specular.ogxEclipseSortIntersectionOpaque",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "fenceIntersection": {
+      "target": "eclipse_specular.ogxEclipseFenceIntersection",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "fenceIntersection2": {
+      "target": "eclipse_specular.ogxEclipseFenceIntersection2",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "CleanPhotonicsSample": {
+      "target": "eclipse_extra.ogxEclipseCleanVoxelSample",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ComputePhotonicsShadowMap": {
+      "target": "eclipse_specular.ogxEclipseComputePhotonicsShadowMap",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "trace_wsr": {
+      "target": "eclipse_specular.ogxEclipseTraceWsr",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "doBlockLightLightingVoxel": {
+      "target": "eclipse_specular.ogxEclipseDoBlockLightLightingVoxel",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "raymarchWSR_LPV": {
+      "target": "eclipse_specular.ogxEclipseRaymarchWsrLpv",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "raymarchWSRfog": {
+      "target": "eclipse_specular.ogxEclipseRaymarchWsrFog",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "WSRwaterVolumetrics": {
+      "target": "eclipse_specular.ogxEclipseWsrWaterVolumetrics",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "photonicsReflectionShading": {
+      "target": "eclipse_specular.ogxEclipsePhotonicsReflectionShading",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "photonicsReflection": {
+      "target": "eclipse_specular.ogxEclipsePhotonicsReflection",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "getEnvironmentReflections": {
+      "target": "eclipse_specular.ogxEclipseGetEnvironmentReflections",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "getReflectionVisibility": {
+      "target": "eclipse_specular.ogxEclipseGetReflectionVisibility",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "specularReflections": {
+      "target": "eclipse_specular.ogxEclipseSpecularReflections",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ViewPos_From_ScreenPos": {
+      "target": "camera.ogxViewPosFromScreenPos",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ViewPos_From_ScreenPos_Raw": {
+      "target": "camera.ogxViewPosFromScreenPosRaw",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ScreenPos_From_ViewPos": {
+      "target": "camera.ogxScreenPosFromViewPos",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ScreenPos_From_ViewPos_Raw": {
+      "target": "camera.ogxScreenPosFromViewPosRaw",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ScreenDepth_From_LinearDepth": {
+      "target": "post.ogxScreenDepthFromLinearDepth",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ViewPos_From_ScreenPos_DH": {
+      "target": "camera.ogxViewPosFromScreenPosDh",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ViewPos_From_ScreenPos_Raw_DH": {
+      "target": "camera.ogxViewPosFromScreenPosRawDh",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ScreenPos_From_ViewPos_DH": {
+      "target": "camera.ogxScreenPosFromViewPosDh",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ScreenPos_From_ViewPos_Raw_DH": {
+      "target": "camera.ogxScreenPosFromViewPosRawDh",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "LinearDepth_From_ScreenDepth_DH": {
+      "target": "camera.ogxLinearDepthFromScreenDepthDh",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ScreenDepth_From_LinearDepth_DH": {
+      "target": "camera.ogxScreenDepthFromLinearDepthDh",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ScreenDepth_From_DHScreenDepth": {
+      "target": "camera.ogxScreenDepthFromDhScreenDepth",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ShadowScreenPos_From_WorldPos_Distorted": {
+      "target": "shadow.ogxShadowScreenPosDistorted",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ShadowScreenPos_From_WorldPos": {
+      "target": "shadow.ogxShadowScreenPos",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "ShadowScreenPos_From_WorldPos_WithoutZScaling": {
+      "target": "shadow.ogxShadowScreenPos",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "DistortShadowScreenPos": {
+      "target": "shadow.ogxDistortShadowPos",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "swapperlinZ2": {
+      "target": "camera.ogxSwapperlinZ2",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toScreenSpace_DH": {
+      "target": "camera.ogxToScreenSpaceDh",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toClipSpace3_DH": {
+      "target": "camera.ogxToClipSpace3Dh",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "DH_shadowProjectionTweak": {
+      "target": "camera.ogxDhShadowProjectionTweak",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "GetLpvPosition": {
+      "target": "camera.ogxGetLpvPositionExplicit",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "project": {
+      "target": "camera.ogxProject",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "project_and_divide": {
+      "target": "camera.ogxProjectAndDivide",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "screen_to_view_space": {
+      "target": "camera.ogxScreenToViewSpace",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "view_to_screen_space": {
+      "target": "camera.ogxViewToScreenSpace",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toClipSpace3": {
+      "target": "camera.ogxToClipSpace3",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toScreenSpace": {
+      "target": "camera.ogxToScreenSpace",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toScreenSpaceVector": {
+      "target": "camera.ogxToScreenSpaceVector",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toWorldSpace": {
+      "target": "camera.ogxToWorldSpace",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toWorldSpaceCamera": {
+      "target": "camera.ogxToWorldSpaceCamera",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toShadowSpace": {
+      "target": "camera.ogxToShadowSpace",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toShadowSpaceProjected": {
+      "target": "camera.ogxToShadowSpaceProjected",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "CoordBase": {
+      "target": "eclipse_extra.ogxEclipseFrisvad",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "invertLinearizeDepthFast": {
+      "target": "camera.ogxInvertLinearizeDepthFast",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "toScreenSpace2": {
+      "target": "camera.ogxToScreenSpace2",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "GetVoxelBlock": {
+      "target": "voxel.ogxGetVoxelBlock",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "voxelNormalIndex": {
+      "target": "voxel.ogxVoxelNormalIndex",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "GetVoxelData": {
+      "target": "voxel.ogxDecodeVoxelFace",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "GetTexCoord": {
+      "target": "voxel.ogxGetVoxelTexCoord",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "getVoxelEmission": {
+      "target": "voxel.ogxGetVoxelEmission",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "voxelEmission": {
+      "target": "voxel.ogxVoxelEmission",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "getPhotonicsEmission": {
+      "target": "voxel.ogxGetVoxelEmission",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "photonicsEmission": {
+      "target": "voxel.ogxVoxelEmission",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "GetVoxelIndex": {
+      "target": "voxel.ogxGetVoxelIndex",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
+    },
+    "SetVoxelBlock": {
+      "target": "voxel.ogxVoxelWriteInBounds",
+      "difference": "none; explicit parameters replace host globals, constants and sample order preserved"
     }
   },
   "mcGlue": {
@@ -1589,143 +2001,8 @@
     "title": {
       "evidence": "就绪：标题计数与屏幕文字，不参与画面效果"
     },
-    "swapperlinZ2": {
-      "evidence": "就绪：只交换深度约定"
-    },
-    "toScreenSpace_DH": {
-      "evidence": "就绪：远景模组投影约定"
-    },
-    "toClipSpace3_DH": {
-      "evidence": "就绪：远景模组投影约定"
-    },
-    "DH_shadowProjectionTweak": {
-      "evidence": "就绪：远景阴影投影约定"
-    },
-    "project": {
-      "evidence": "就绪：矩阵投影约定"
-    },
-    "project_and_divide": {
-      "evidence": "就绪：矩阵投影约定"
-    },
-    "screen_to_view_space": {
-      "evidence": "就绪：屏幕到视空间约定"
-    },
-    "view_to_screen_space": {
-      "evidence": "就绪：视空间到屏幕约定"
-    },
-    "toClipSpace3": {
-      "evidence": "就绪：裁剪空间约定"
-    },
-    "toScreenSpace": {
-      "evidence": "就绪：屏幕空间约定"
-    },
-    "toScreenSpaceVector": {
-      "evidence": "就绪：屏幕空间方向约定"
-    },
-    "toWorldSpace": {
-      "evidence": "就绪：世界空间约定"
-    },
-    "toWorldSpaceCamera": {
-      "evidence": "就绪：相机空间约定"
-    },
-    "toShadowSpace": {
-      "evidence": "就绪：阴影空间约定"
-    },
-    "toShadowSpaceProjected": {
-      "evidence": "就绪：阴影空间约定"
-    },
-    "invertLinearizeDepthFast": {
-      "evidence": "就绪：深度约定"
-    },
-    "toScreenSpace2": {
-      "evidence": "就绪：屏幕空间约定"
-    },
-    "GetTexCoord": {
-      "evidence": "就绪：纹理坐标约定"
-    },
-    "ShadowScreenPos_From_WorldPos_WithoutZScaling": {
-      "evidence": "就绪：阴影坐标约定"
-    },
-    "ScreenPos_From_ViewPos_Raw": {
-      "evidence": "就绪：屏幕坐标约定"
-    },
-    "ViewPos_From_ScreenPos_Raw_DH": {
-      "evidence": "就绪：远景坐标约定"
-    },
-    "ScreenPos_From_ViewPos_DH": {
-      "evidence": "就绪：远景坐标约定"
-    },
-    "ScreenPos_From_ViewPos_Raw_DH": {
-      "evidence": "就绪：远景坐标约定"
-    },
-    "ScreenDepth_From_LinearDepth_DH": {
-      "evidence": "就绪：远景深度约定"
-    },
-    "ScreenDepth_From_DHScreenDepth": {
-      "evidence": "就绪：远景深度约定"
-    },
     "BiomeVLFogColors": {
       "evidence": "就绪：原版群系枚举到颜色表，非算法"
-    },
-    "GetVoxelBlock": {
-      "evidence": "就绪：Minecraft 体素编号约定"
-    },
-    "GetVoxelIndex": {
-      "evidence": "就绪：Minecraft 体素编号约定"
-    },
-    "voxelNormalIndex": {
-      "evidence": "就绪：Minecraft 体素编号约定"
-    },
-    "GetVoxelData": {
-      "evidence": "就绪：Minecraft 体素编号约定"
-    },
-    "SetVoxelBlock": {
-      "evidence": "就绪：Minecraft 体素写入约定"
-    },
-    "voxelEmission": {
-      "evidence": "就绪：方块编号到自发光"
-    },
-    "getVoxelEmission": {
-      "evidence": "就绪：方块编号到自发光"
-    },
-    "getPhotonicsEmission": {
-      "evidence": "就绪：方块编号到自发光"
-    },
-    "photonicsEmission": {
-      "evidence": "就绪：方块编号到自发光"
-    },
-    "GetLpvPosition": {
-      "evidence": "就绪：世界坐标到光传播体积坐标约定"
-    },
-    "ViewPos_From_ScreenPos": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "ViewPos_From_ScreenPos_Raw": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "ScreenPos_From_ViewPos": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "ScreenDepth_From_LinearDepth": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "ViewPos_From_ScreenPos_DH": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "LinearDepth_From_ScreenDepth_DH": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "ShadowScreenPos_From_WorldPos_Distorted": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "ShadowScreenPos_From_WorldPos": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "DistortShadowScreenPos": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
-    },
-    "CoordBase": {
-      "evidence": "就绪：坐标/投影约定，不是效果算法"
     }
   },
   "approximate": {},

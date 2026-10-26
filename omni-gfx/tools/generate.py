@@ -27,7 +27,8 @@ MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water",
            "weather", "surface", "voxel", "upscale", "parallax",
            "planet", "accretion", "atmosphere_model", "cloud_volume", "fog_volume",
            "lpv", "gbuffer", "heldlight", "itx_extra", "planar", "camera", "itx_taa", "cloud_eclipse",
-           "eclipse_extra")  # 阶段一二的核心模块、阶段三的九个效果模块、第二批迁移的独立模块与第三批的补充模块。
+           "eclipse_extra", "eclipse_sky", "itx_end", "eclipse_indirect", "eclipse_specular",
+           "eclipse_diffuse", "eclipse_scene")  # 阶段一二的核心模块、阶段三的九个效果模块、第二批迁移的独立模块与第三批的补充模块。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
 DISPLAY = {
@@ -63,6 +64,12 @@ DISPLAY = {
     "itx_taa": "时间取样",
     "cloud_eclipse": "Eclipse 体积云",
     "eclipse_extra": "Eclipse 补充",
+    "eclipse_sky": "Eclipse 天空",
+    "itx_end": "iterationT 末地",
+    "eclipse_indirect": "Eclipse 间接光",
+    "eclipse_specular": "Eclipse 高光",
+    "eclipse_diffuse": "Eclipse 漫反射",
+    "eclipse_scene": "Eclipse 场景",
 }  # 每个生成文件头里的中文模块名，顺序与模块表一致。
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。
@@ -137,12 +144,105 @@ def _resolve_include(match: re.Match) -> str:
     return f'#include "/omni-gfx/{name}.glsl"'
 
 
+def _replace_loads(text: str) -> str:
+    """把任意嵌套的 `tex.Load(int3/pixel, level)` 换成 GLSL 的 `texelFetch`。
+
+    为什么不用单条正则：深度表达式里会嵌套 `int2(...)`、`texelFetchSize(...)`，
+    正则只允许一层括号就会漏掉，最后在残留检查里报错。这里用括号配对扫描，
+    只改取格写法，不改坐标与层级表达式本身。
+    """
+    pattern = re.compile(r"(\w+)\.Load\(\s*int([34])\(")
+    while True:
+        match = pattern.search(text)
+        if not match:
+            return text
+        body_start = match.end()
+        depth = 1
+        index = body_start
+        while index < len(text) and depth > 0:
+            if text[index] == "(":
+                depth += 1
+            elif text[index] == ")":
+                depth -= 1
+            index += 1
+        if depth != 0:
+            raise ValueError("纹理取格的括号不配对")
+        coords = text[body_start:index - 1]
+        close = index
+        while close < len(text) and text[close] in " \t":
+            close += 1
+        if close >= len(text) or text[close] != ")":
+            raise ValueError("纹理取格缺少外层右括号")
+        parts = []
+        part_start = 0
+        part_depth = 0
+        for position, character in enumerate(coords):
+            if character == "(":
+                part_depth += 1
+            elif character == ")":
+                part_depth -= 1
+            elif character == "," and part_depth == 0:
+                parts.append(coords[part_start:position].strip())
+                part_start = position + 1
+        parts.append(coords[part_start:].strip())
+        if len(parts) != 2:
+            raise ValueError("纹理取格必须有坐标与层级两个参数")
+        replacement = f"texelFetch({match[1]}, {parts[0]}, {parts[1]})"
+        text = text[:match.start()] + replacement + text[close + 1:]
+
+
+def _split_arguments(text: str) -> list[str]:
+    """按顶层逗号拆分函数参数，括号里的逗号不拆。"""
+    parts = []
+    start = 0
+    depth = 0
+    for position, character in enumerate(text):
+        if character == "(":
+            depth += 1
+        elif character == ")":
+            depth -= 1
+        elif character == "," and depth == 0:
+            parts.append(text[start:position].strip())
+            start = position + 1
+    parts.append(text[start:].strip())
+    return parts
+
+
+def _replace_sample_levels(text: str) -> str:
+    """把任意嵌套的 `tex.SampleLevel(coord, lod)` 换成 `textureLod`。
+
+    与取格同理：坐标表达式可能嵌套多层构造函数，单条正则会把合法写法留在
+    残留检查里。这里用括号配对，只改调用写法。
+    """
+    pattern = re.compile(r"(\w+)\.SampleLevel\(")
+    while True:
+        match = pattern.search(text)
+        if not match:
+            return text
+        depth = 1
+        index = match.end()
+        while index < len(text) and depth > 0:
+            if text[index] == "(":
+                depth += 1
+            elif text[index] == ")":
+                depth -= 1
+            index += 1
+        if depth != 0:
+            raise ValueError("纹理采样的括号不配对")
+        parts = _split_arguments(text[match.end():index - 1])
+        if len(parts) != 2:
+            raise ValueError("带层级采样必须有两个参数")
+        text = text[:match.start()] + f"textureLod({match[1]}, {parts[0]}, {parts[1]})" + text[index:]
+
+
 def _lower_text(text: str) -> str:
     """执行全部语法转换，并在返回前确认没有残留 Slang 写法。
 
     顺序有讲究：先换类型与关键字，再换纹理取像素，最后检查残留。
     一旦源文件用了转换表以外的新语法，这里直接失败，避免生成看似成功但编译不过的文件。
     """
+    text = _replace_loads(text)  # 任意嵌套的取格先换，避免复杂深度表达式漏转。
+    text = _replace_sample_levels(text)  # 任意嵌套的采样层级写法也先换成 GLSL 自由函数。
     text = LOAD3D.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 三维取格先换，避免 `int4` 被当成残留写法。
     text = LOAD.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 再换二维取格，此时 `int3` 还没改名。
     text = SAMPLE_CMP.sub(lambda m: f"textureLod({m[1]}, vec3({m[2]}, {m[3]}), 0.0)", text)  # 比较采样先展开成三分量坐标。

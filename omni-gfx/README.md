@@ -80,7 +80,7 @@ python omni-gfx/build.py count
 python omni-gfx/build.py parity
 ```
 
-从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 378、MC 专用 127、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。
+从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 481、MC 专用 24、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。严格结论以 `tools/parity_report.json` 为准：exact 481、approximate 0、missing 0、mc_glue 24。
 
 ## 已知边界
 
@@ -102,4 +102,4 @@ python omni-gfx/build.py parity
 python omni-gfx/build.py strict-parity
 python omni-gfx/build.py profiles
 \\n
-\strict-parity\ 读取 \	ools/strict_review.json\，生成 \	ools/parity_report.json\ 与 \docs/gfx-functions-strict.md\；状态只允许 exact、approximate、mc_glue、missing。\profiles\ 分别生成 iterationT 与 Eclipse 的 \profile.frag\，并用本机 \glslang\ 独立编译。严格统计以报告为准，当前仍有 approximate 与 missing。
+\strict-parity\ 读取 \	ools/strict_review.json\，生成 \	ools/parity_report.json\ 与 \docs/gfx-functions-strict.md\；状态只允许 exact、approximate、mc_glue、missing。\profiles\ 分别生成 iterationT 与 Eclipse 的 \profile.frag\，并用本机 \glslang\ 独立编译。严格统计以报告为准：当前 exact 481、approximate 0、missing 0、mc_glue 24，剩下的 mc_glue 只有程序入口、标题、文字渲染与群系属性表。

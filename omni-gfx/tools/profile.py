@@ -67,6 +67,8 @@ MODULES = (
     "reflection", "post", "antialias", "weather", "surface", "voxel",
     "upscale", "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
     "itx_extra", "planar", "camera", "itx_taa", "cloud_eclipse", "eclipse_extra",
+    "eclipse_sky", "itx_end", "eclipse_indirect", "eclipse_specular",
+    "eclipse_diffuse", "eclipse_scene",
 )  # 与生成器模块表一致；顺序固定，展开结果可复现。
 
 

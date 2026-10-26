@@ -171,7 +171,7 @@ def numbered_sources(shaders: Path | None = None) -> dict[Path, int]:
     return {resolved(path): index + 1 for index, path in enumerate(sorted(shaders.rglob("*"))) if path.is_file()}  # 一次排序生成全部编号。
 
 # --- 展开引用：编译一份完整源码，同时保留每段原文的位置 ---
-def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), sourceNumbers: dict | None = None, cache: dict | None = None) -> str:
+def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), sourceNumbers: dict | None = None, cache: dict | None = None, seen: set | None = None, context: tuple[str, ...] = ()) -> str:
     """展开 `source` 中的真实引用，返回含 `#line` 原文件编号和行号的编译文本。
 
     `shaders` 限定引用根目录；`stack` 只记录当前递归路径，用来报告循环引用。
@@ -181,6 +181,13 @@ def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), 
     source = resolved(source)  # 规范化后识别循环。
     if source in stack:  # 先检查当前路径，不能让缓存掩盖循环引用。
         raise ValueError("循环引用：" + " → ".join(path.name for path in (*stack, source)))  # 展开前拒绝无限递归。
+    if seen is None:  # 每个入口单独记录已展开文件，避免把不同入口的依赖混在一起。
+        seen = set()  # 一次展开只保留一份同名、同条件上下文的文件。
+    key_context = tuple(item for item in context if not re.match(r"#\s*ifndef\s+\w+_INCLUDED$", item))  # 文件自身的守卫总是成立，不能把不同文件的守卫当成不同条件。
+    key = (source, key_context)  # 同一个文件在不同条件分支里必须分别展开。
+    if key in seen:  # 同一条件上下文已经展开过，第二次引用由文件守卫跳过。
+        return ""  # 不重复输出同一份定义。
+    seen.add(key)  # 先登记，再展开依赖。
     if cache is None:  # 独立调用也能复用同一引用树中的重复文件。
         cache = {}  # 一次展开共享已读取内容，不反复访问磁盘。
     if source in cache:
@@ -198,12 +205,24 @@ def expand(source: Path, shaders: Path = SHADERS, stack: tuple[Path, ...] = (), 
     parts: list[str] = []  # 待拼接的片段，最后一次 `join`。
     cursor = 0  # 已经写入片段对应的原文位置。
     current = 1  # `cursor` 所在的原文行号，从 1 起算。
+    scan = 0  # 条件编译上下文扫描位置。
+    context_stack = list(context)  # 当前引用行所在的 `#if` 路径。
     for match in INCLUDE.finditer(masked):  # 正序扫描真实引用。
+        segment = masked[scan:match.start()]  # 只扫描上一次引用到这一次引用之间的预处理行。
+        for line in segment.splitlines():  # 逐行统计条件块。
+            directive = line.split("//", 1)[0].strip()  # 去掉行注释再判断。
+            if re.match(r"#\s*(?:if|ifdef|ifndef)\b", directive):
+                context_stack.append(directive)  # 进入条件块。
+            elif re.match(r"#\s*(?:elif|else)\b", directive) and context_stack:
+                context_stack[-1] = directive  # 同一层的另一支。
+            elif re.match(r"#\s*endif\b", directive) and context_stack:
+                context_stack.pop()  # 离开条件块。
+        scan = match.start()  # 下一次从这里继续。
         segment = text[cursor:match.start()]  # 引用行之前的一段原文。
         current += segment.count("\n")  # 推进到引用所在行。
         parts.append(segment)  # 原文片段原样保留。
         included = source_path(match[1], source, shaders)  # 检查外部文件引用一次。
-        content = expand(included, shaders, (*stack, source), sourceNumbers, cache)  # 子文件沿用同一编号表和读取缓存。
+        content = expand(included, shaders, (*stack, source), sourceNumbers, cache, seen, tuple(context_stack))  # 子文件沿用同一编号表、读取缓存与条件上下文。
         # 只扫被引用文件原文，不扫已经拼接好的大文本：嵌套文件自己的 `#version` 会在上一层递归里先报出，
         # 所以展开结果里可能残留的 `#version` 只会来自这个文件本身。合成本体展开约 2300 万字符，逐次重扫要 0.4 秒。
         if re.search(r"^\s*#version", included.read_text(encoding="utf-8"), re.MULTILINE):  # 完整程序只能由入口声明语言版本。
@@ -452,25 +471,74 @@ def generate() -> None:
             output_path.write_text(generated_text, encoding="utf-8", newline="\n")
 
 # --- 替换测试配置：保留算法原文，只改变原生选项声明 ---
-def option_source(text: str, found: dict, values: dict[str, str]) -> str:
-    """按已验证的 `values` 替换源码 `text` 中已登记选项，返回编译用文本。
+def prepare_source(text: str, found: dict) -> tuple[str, str]:
+    """把展开后的源码压成“正文 + 选项声明”两部分，供两种代表配置复用。
 
-    `found` 来自同一选项扫描结果；其余行原样保留，因此离线测试编译真实效果分支。
+    为什么单独拆出来：一次完整编译要对同一份展开源码套默认与全高两套取值，
+    展开文本有数兆，选项提取和去注释是主要成本；只做一次，后面两套配置都便宜。
     """
-    result = []  # 保留业务源行。
-    for line in text.splitlines():
-        if "define" not in line and "const" not in line:  # 绝大多数业务行两个词都不含，先廉价跳过，避免对每行都跑正则。
-            result.append(line)  # 明显不是选项声明的行原样保留。
-            continue
-        definition = menu.DEFINE.fullmatch(line)  # 只替换原生宏声明。
-        if definition and definition[2] in found:  # 只动扫描器登记的原生宏，不改普通宏。
-            name, value = definition[2], values[definition[2]]  # 仅替换声明，不改业务分支。
-            line = (("#define " if value == "true" else "//#define ") + name) if found[name].values == ("false", "true") else f"#define {name} {value}"
-        constant = menu.CONST.fullmatch(line)  # Iris原生const选项使用同一份值替换。
-        if constant and constant[2] in found:  # 加载器原生常量与宏使用同一份配置值。
-            line = f"const {constant[1]} {constant[2]} = {values[constant[2]]}; // [{ ' '.join(found[constant[2]].values) }]"
-        result.append(line)  # 其他代码保留。
-    return "\n".join(result) + "\n"  # 固定末尾换行，避免配置差异影响编译摘要。
+    names = "|".join(re.escape(name) for name in sorted(found, key=len, reverse=True))  # 长名字优先，避免前缀抢先匹配。
+    define_pattern = re.compile(rf"(?m)^[ \t]*(?://[ \t]*)?#define[ \t]+({names})\b[^\n]*$")  # 已登记宏选项行。
+    const_pattern = re.compile(rf"(?m)^[ \t]*const[ \t]+(int|float)[ \t]+({names})\b[^\n]*$")  # 已登记原生常量行。
+    declarations = {}  # 每个选项只保留一条声明，避免重复包含导致重定义。
+    for match in define_pattern.finditer(text):  # 收集宏声明。
+        declarations[match[1]] = match.group(0)  # 同名后出现的覆盖先出现的。
+    for match in const_pattern.finditer(text):  # 收集常量声明。
+        declarations[match[2]] = match.group(0)  # 同名只留一条。
+    body = define_pattern.sub("", text)  # 正文里去掉已抽出的宏行，避免重复定义。
+    body = const_pattern.sub("", body)  # 正文里去掉已抽出的常量行。
+    body = re.sub(r"/\*.*?\*/", "", body, flags=re.S)  # 去掉块注释，保留其余代码。
+    body = re.sub(r"(?m)//[^\n]*", "", body)  # 去掉行注释，编译不需要说明文字。
+    body = re.sub(r"\n{3,}", "\n\n", body)  # 合并连续空行，缩小编译器输入。
+    return body, "\n".join(declarations[name] for name in sorted(declarations))  # 交回可复用的两部分。
+
+
+def render_source(prepared: tuple[str, str], found: dict, values: dict[str, str]) -> str:
+    """把一份已准备好的源码套上指定选项取值，返回编译器输入。"""
+    body, declaration_text = prepared  # 复用已经提取好的正文与声明。
+    if not declaration_text:  # 没有声明时正文原样交回。
+        return body
+    rendered = []  # 逐条替换声明，声明数量只有几百，逐行处理足够快。
+    for line in declaration_text.splitlines():  # 只处理抽出的声明行。
+        definition = menu.DEFINE.fullmatch(line)  # 宏选项。
+        if definition and definition[2] in found:  # 只替换已登记的名字。
+            name, value = definition[2], values[definition[2]]  # 取当前配置值。
+            line = (("#define " if value == "true" else "//#define ") + name) if found[name].values == ("false", "true") else f"#define {name} {value}"  # 布尔开关保留注释形式。
+        constant = menu.CONST.fullmatch(line)  # 原生常量选项。
+        if constant and constant[2] in found:  # 只替换已登记的名字。
+            line = f"const {constant[1]} {constant[2]} = {values[constant[2]]}; // [{ ' '.join(found[constant[2]].values) }]"  # 值与范围一起写回。
+        rendered.append(line)  # 保留未改动的声明。
+    lines = body.splitlines()  # 只在真正的代码前插入声明。
+    insert_at = 0  # 插入位置从第一行开始。
+    while insert_at < len(lines) and (lines[insert_at].lstrip().startswith("#version") or lines[insert_at].lstrip().startswith("#extension")):  # 语言版本与扩展必须保持在最前。
+        insert_at += 1  # 跳过这些预处理行。
+    head = "\n".join(lines[:insert_at])  # 版本与扩展行。
+    tail = "\n".join(lines[insert_at:])  # 其余代码。
+    return head + "\n" + "\n".join(rendered) + "\n" + tail  # 声明放在版本之后、代码之前。
+
+
+def option_source_inplace(text: str, found: dict, values: dict[str, str]) -> str:
+    """按选项取值替换一份源码里的声明，保持行序与注释不变。
+
+    供“真实 include + 临时源码树”的完整编译使用：每个文件只改自己的声明，
+    不把声明搬到文件开头，因此包含关系与宏定义顺序和游戏里完全一致。
+    """
+    result = []  # 保留原有行序。
+    for line in text.splitlines():  # 文件通常只有几百行，逐行替换成本可接受。
+        definition = menu.DEFINE.fullmatch(line)  # 宏选项。
+        if definition and definition[2] in found:  # 只替换已登记的名字。
+            name, value = definition[2], values[definition[2]]  # 当前配置值。
+            line = (("#define " if value == "true" else "//#define ") + name) if found[name].values == ("false", "true") else f"#define {name} {value}"  # 布尔开关保留注释形式。
+        constant = menu.CONST.fullmatch(line)  # 原生常量选项。
+        if constant and constant[2] in found:  # 只替换已登记的名字。
+            line = f"const {constant[1]} {constant[2]} = {values[constant[2]]}; // [{ ' '.join(found[constant[2]].values) }]"  # 值与范围一起写回。
+        result.append(line)  # 未改动的行原样保留。
+    return "\n".join(result) + "\n"  # 固定末尾换行。
+
+
+def option_source(text: str, found: dict, values: dict[str, str]) -> str:
+    """单次调用的兼容入口：准备源码后立刻套上选项取值。"""
+    return render_source(prepare_source(text, found), found, values)
 
 # --- 选择代表配置：只检查默认与高效果，不遍历每个选项 ---
 def variants(found: dict, profiles: list) -> list[tuple[str, dict]]:
@@ -511,6 +579,7 @@ def _program_jobs(programs: dict, expanded: dict, found: dict, profiles: list,
     预算被挤爆；成功缓存只跳过之前确实链接成功过的相同内容。
     """
     jobs, seen, reused = [], set(), 0  # 分别保存待编译任务、去重摘要与跳过的成功组数。
+    prepared = {}  # 展开源码的“正文 + 声明”只提取一次，两种配置复用。
     for label, option_values in variants(found, profiles):  # 代表组合逐项展开。
         for environment, defines in environments:  # 基础与远景均检查。
             if (label == "default" and environment != "base") or (label == "all_high" and environment != "iris_dh"):
@@ -518,7 +587,10 @@ def _program_jobs(programs: dict, expanded: dict, found: dict, profiles: list,
             for program, sources in programs.items():  # 各维度不遗漏。
                 if label != "default" and program.name not in full_programs:
                     continue  # 非主要通路只在默认配置下编一次，足以挡住引入与宏撞名错误。
-                texts = [option_source(expanded[source], found, option_values) for source in sources]  # 每个阶段使用同一份选项取值。
+                for source in sources:  # 只提取尚未处理过的展开源码。
+                    if source not in prepared:
+                        prepared[source] = prepare_source(expanded[source], found)
+                texts = [render_source(prepared[source], found, option_values) for source in sources]  # 每个阶段使用同一份选项取值。
                 texts = [text.replace("#version 330 compatibility", "#version 330 compatibility\n" + defines, 1) for text in texts]  # 环境宏只注入临时文本，不修改入口文件。
                 if program.name.startswith("dh_") and environment == "iris_dh":
                     texts = [text.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1) if source.suffix == ".vsh" else text for source, text in zip(sources, texts)]  # 只在顶点阶段模拟加载器自动提供的远景材质编号。
@@ -541,7 +613,7 @@ def _run_compile_jobs(jobs: list, validator: Path, number_to_path: dict, known_g
     阶段文件写在自动清理的临时目录，绝不落入源码树；错误只由主线程汇总，避免不同线程交错输出。
     """
     failures = []  # 收集全部失败，一次报告，避免只看到第一条。
-    workers = max(1, len(jobs))  # 任务数量已主动缩减，所有独立链接一次并行启动，不再人为排成长队。
+    workers = max(1, min(len(jobs), (os.cpu_count() or 4)))  # 并行数按机器核心数封顶：一次启动数百个 `glslang` 会让内存与调度互相拖慢。
     with tempfile.TemporaryDirectory(prefix="omni-glsl-") as temporary:
         temporary_folder = Path(temporary)  # 所有阶段文件放在自动清理目录。
 
@@ -566,38 +638,104 @@ def _run_compile_jobs(jobs: list, validator: Path, number_to_path: dict, known_g
                     known_good.add(job["digest"])  # 只有本次确实链接成功才写入缓存候选。
     return failures
 
-# --- 编译与链接：多阶段成组检查，缓存只信任成功的相同源码 ---
+# --- 编译与链接：真实 include 临时源码树，避免文本展开把同一文件复制数百次 ---
+def _shader_tree_digest() -> str:
+    """返回全部 GLSL 源文件的整体摘要，任一被包含文件变化都会让编译缓存失效。"""
+    digest = hashlib.sha256()  # 增量摘要。
+    for path in sorted(SHADERS.rglob("*.glsl")):  # 只统计会被 include 的文件。
+        digest.update(path.relative_to(SHADERS).as_posix().encode("utf-8"))  # 路径也参与摘要。
+        digest.update(path.read_bytes())  # 原文逐字节参与。
+    return digest.hexdigest()  # 交回十六进制摘要。
+
+
+def _write_compile_tree(root: Path, found: dict, values: dict[str, str], defines: str) -> None:
+    """把光影源码复制到临时目录，替换选项取值并给入口注入环境宏与 include 扩展。
+
+    为什么复制整棵树：`glslang` 的 include 扩展按 `-I` 根目录解析 `/rendering/...`
+    这类路径；复制后每个文件只出现一次，预处理器的守卫会按真实条件跳过重复引用。
+    """
+    for path in SHADERS.rglob("*.glsl"):  # 库与效果文件。
+        relative = path.relative_to(SHADERS)  # 保持相对路径。
+        target = root / relative  # 临时树中的同一位置。
+        target.parent.mkdir(parents=True, exist_ok=True)  # 首次写入建立目录。
+        target.write_text(option_source_inplace(path.read_text(encoding="utf-8"), found, values), encoding="utf-8", newline="\n")  # 只替换声明，不搬动行序。
+    for path in SHADERS.rglob("*"):  # 生成的入口也要放进临时树。
+        if path.suffix not in (".vsh", ".fsh", ".gsh", ".csh") or not path.is_file():  # 只处理真实阶段入口。
+            continue
+        relative = path.relative_to(SHADERS).with_suffix(STAGES[path.suffix])  # 编译器只认 `.vert`、`.frag`、`.geom`、`.comp` 等后缀。
+        target = root / relative  # 临时树中的同一位置。
+        target.parent.mkdir(parents=True, exist_ok=True)  # 建立维度目录。
+        text = option_source_inplace(path.read_text(encoding="utf-8"), found, values)  # 入口一般没有选项，仍走同一边界。
+        lines = text.splitlines()  # 保留原有版本行。
+        if lines and lines[0].startswith("#version"):  # 版本必须留在第一行。
+            text = lines[0] + "\n#extension GL_GOOGLE_include_directive : require\n" + defines + "\n" + "\n".join(lines[1:]) + "\n"  # 扩展紧跟版本，环境宏随后。
+        if path.stem.startswith("dh_") and path.suffix == ".vsh" and "DISTANT_HORIZONS" in defines:  # 远景顶点需要加载器提供的材质编号。
+            text = text.replace("#define DISTANT_HORIZONS", "#define DISTANT_HORIZONS\nin int dhMaterialId;", 1)  # 只注入一次。
+        target.write_text(text, encoding="utf-8", newline="\n")  # 写入临时入口。
+
+
+def _run_include_jobs(jobs: list, validator: Path, temp_root: Path) -> list[str]:
+    """并行编译临时源码树里的阶段组，返回失败说明列表。"""
+    failures = []  # 收集全部失败。
+    workers = max(1, min(len(jobs), (os.cpu_count() or 4)))  # 并行数按核心数封顶，避免进程过多互相拖慢。
+    with ThreadPoolExecutor(max_workers=workers) as pool:  # 只并行独立程序组。
+        def compile_one(job: dict):
+            """调用编译器链接一组阶段，返回任务与原始结果。"""
+            command = [str(validator), f"-I{job['include']}", "-l", *map(str, job["stages"])]  # include 根目录与阶段文件。
+            process_result = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace")  # 保留输出供主线程汇总。
+            return job, process_result  # 主线程判断成败。
+        for completed, (job, process_result) in enumerate(pool.map(compile_one, jobs), 1):  # 保持任务次序。
+            if process_result.returncode:  # 失败组不进入成功缓存。
+                message = (process_result.stdout + process_result.stderr).replace(str(temp_root), str(SHADERS))  # 临时路径换回光影相对路径。
+                failures.append(f"GLSL 编译/链接失败：{job['program'].relative_to(SHADERS)} / {job['label']} / {job['environment']}\n{message}")  # 同时报告程序、配置和环境。
+    return failures  # 交回失败清单。
+
+
 def compile_shaders(entries: list[Path], found: dict, profiles: list, full_programs: set[str]) -> None:
     """对 `entries` 的程序编译并链接代表选项配置，失败时映回光影相对路径。
 
     `found` 与 `profiles` 来自配置扫描。`full_programs` 列出要在全部代表配置下编译的程序名，
-    其余程序只编译默认配置。离线环境只模拟基础与远景宏，不替代游戏验证。
-    缓存位于开发报告目录，并同时核对编译器文件摘要和展开后源码摘要。
+    其余程序只编译默认配置。这里使用真实 `#include` 与临时源码树，不再把引用树展开成几十兆文本；
+    `glslang` 的预处理器会按文件守卫跳过重复引用，因此不会出现文本展开的条件分支错配。
     """
     validator = tool("glslang")  # 真正执行编译器。
-    source_numbers = numbered_sources()  # 所有入口共用编号，编译器报错可指回原文件。
-    expanded_cache = {}  # 本次检查共享读取结果，不把源码缓存带到下次运行。
-    expanded = {source: expand(source, sourceNumbers=source_numbers, cache=expanded_cache) for source in entries}  # 展开后保留原始文件编号。
-    print("入口展开完成，开始检查选项接入", flush=True)  # 长时间离线检查期间及时给出阶段状态。
     programs = {}  # 同名入口的多个绘制阶段必须作为一个链接程序。
     for source in entries:
-        programs.setdefault(source.with_suffix(""), []).append(source)  # 细分与几何阶段一起链接。
+        programs.setdefault(source.with_suffix(""), []).append(source)  # 顶点、几何与片元一起链接。
     cache_path = ROOT / ".dev/reports/glsl-cache.json"  # 成功源码缓存只服务开发，不进入发行包。
     compiler_digest = hashlib.sha256(validator.read_bytes()).hexdigest()  # 编译器文件变化就让旧成功记录失效。
+    tree_digest = _shader_tree_digest()  # 任一源文件变化都让缓存失效。
     cached_report = json.loads(cache_path.read_text(encoding="utf-8")) if cache_path.is_file() else {}  # 首次运行没有缓存，按空记录处理。
     known_good = set(cached_report.get("programs", [])) if cached_report.get("compiler") == compiler_digest else set()  # 只信任同一个编译器写下的成功摘要。
-    jobs, seen, reused = _program_jobs(programs, expanded, found, profiles, full_programs, _compile_environments(), known_good)  # 先把代表配置、环境与程序展开成任务。
-    number_to_path = {str(index): path.relative_to(SHADERS).as_posix() for path, index in numbered_sources().items()}  # 编译器数字编号反查为项目内相对路径。
-    failures = _run_compile_jobs(jobs, validator, number_to_path, known_good)  # 并行编译并汇总失败。
+    environments = dict(_compile_environments())  # 基础与远景两组宏。
+    jobs, seen, reused = [], set(), 0  # 任务、去重摘要与缓存复用数。
+    with tempfile.TemporaryDirectory(prefix="omni-include-") as temporary:
+        temp_root = Path(temporary)  # 临时源码树根目录。
+        for label, option_values in variants(found, profiles):  # 两种代表配置各建一棵树。
+            environment = "base" if label == "default" else "iris_dh"  # 默认走基础，高效果走远景。
+            defines = environments[environment]  # 对应环境宏。
+            _write_compile_tree(temp_root / label, found, option_values, defines)  # 替换选项并写入临时树。
+            for program, sources in programs.items():  # 各维度不遗漏。
+                if label != "default" and program.name not in full_programs:
+                    continue  # 非主要通路只在默认配置下编一次。
+                stages = [temp_root / label / source.relative_to(SHADERS).with_suffix(STAGES[source.suffix]) for source in sources]  # 临时树中的阶段文件使用编译器后缀。
+                digest = hashlib.sha256((tree_digest + label + str(program)).encode()).hexdigest()  # 唯一任务编号。
+                if digest in seen:  # 相同内容只编一次。
+                    continue  # 跳过重复任务。
+                seen.add(digest)  # 登记本次任务。
+                if digest in known_good:  # 缓存只跳过之前成功过的相同源码。
+                    reused += 1  # 记录复用。
+                    continue  # 不启动编译器。
+                jobs.append({"digest": digest, "label": label, "environment": environment, "program": program, "stages": stages, "include": temp_root / label})  # 保留报告所需信息。
+        failures = _run_include_jobs(jobs, validator, temp_root)  # 并行编译并汇总失败。
     cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
-    cache_text = json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n"  # 只保存当前检查范围的成功记录，不积攒历史大矩阵。
-    temporary_cache = cache_path.with_name(cache_path.name + ".part")  # 同目录临时文件，替换才在同一个文件系统内。
+    cache_text = json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n"  # 只保存当前检查范围的成功记录。
+    temporary_cache = cache_path.with_name(cache_path.name + ".part")  # 同目录临时文件。
     temporary_cache.write_text(cache_text, encoding="utf-8")  # 先写完整内容。
-    os.replace(temporary_cache, cache_path)  # 原子替换：并发的另一个构建或中途失败都不会让读者读到半截 JSON。
-    if failures:  # 资源目录退出后临时文件已清理，再统一报告最多五项失败。
-        raise ValueError("\n\n".join(failures[:5]))  # 只报前五条，避免长错误淹没真正原因；完整失败仍需逐条修。
-    unique_programs = len(seen)  # 唯一程序数由新编译与成功缓存复用共同组成。
-    print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{unique_programs} 组唯一程序，复用 {reused} 组相同源码")
+    os.replace(temporary_cache, cache_path)  # 原子替换。
+    if failures:  # 临时目录退出后统一报告最多五项失败。
+        raise ValueError("\n\n".join(failures[:5]))  # 只报前五条，避免长错误淹没真正原因。
+    print(f"GLSL 编译与链接通过：{len(variants(found, profiles))} 种配置，{len(seen)} 组唯一程序，复用 {reused} 组相同源码")
 
 def dependencies() -> dict[str, bytes]:
     """校验依赖清单，返回发布包相对路径到原始字节的白名单。

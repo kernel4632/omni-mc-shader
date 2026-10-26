@@ -330,8 +330,8 @@ uvec2 omniLpvBlockData(uint id){
 // 读上一帧写的一张体积图并解码成与写入端同口径的线性值，照 Eclipse `shadowcomp.csh:39`。
 vec4 omniLpvReadAt(ivec3 coord){
 	if (any(lessThan(coord, ivec3(0))) || any(greaterThanEqual(coord, ivec3(int(omniLpvSide))))) return vec4(0.0); // 越界当没有光。
-	vec4 sample = (frameCounter % 2) == 0 ? imageLoad(omniLpv2, coord) : imageLoad(omniLpv1, coord); // 读上一帧写的那张。
-	return ogxLpvDecode(sample, omniLpvBlockSkyRange); // 对数反解与颜色还原在通用库。
+	vec4 texel = (frameCounter % 2) == 0 ? imageLoad(omniLpv2, coord) : imageLoad(omniLpv1, coord); // 读上一帧写的那张。
+	return ogxLpvDecode(texel, omniLpvBlockSkyRange); // 对数反解与颜色还原在通用库。
 }
 // 把传播结果按同一套编码写回本帧的一张体积图，照 Eclipse `shadowcomp.csh:164`。
 vec4 omniLpvEncode(vec4 value){

@@ -47,14 +47,14 @@ const ivec3 omniLpvFlatten = ivec3(1, 10, 100); // 把三维共享下标展平�
 const float omniLpvFalloff = 0.96; // 每步传播的衰减，照 Eclipse `LpvBlockSkyFalloff`。
 
 // 三维下标展平成一维共享下标。
-int omniLpvSharedIndex(ivec3 pos){ return dot(pos, omniLpvFlatten); }
+int omniLpvSharedIndex(ivec3 pos){ return pos.x + pos.y * 10 + pos.z * 100; }
 // 把一个格子的体积值与体素编号读进共享缓冲：体积值加上跨帧格偏移，体素用本帧坐标。
 void omniLpvPopulate(ivec3 imgCoordOffset, ivec3 workGroupOffset, uint i){
-	int flat = int(i); // 展平下标，共享缓冲共一千格。
-	ivec3 grid = ivec3(flat / omniLpvFlatten.x, flat / omniLpvFlatten.y, flat / omniLpvFlatten.z) % 10; // 共享格坐标，零到九。
+	int index = int(i); // 展平下标，共享缓冲共一千格。
+	ivec3 grid = ivec3(index / omniLpvFlatten.x, index / omniLpvFlatten.y, index / omniLpvFlatten.z) % 10; // 共享格坐标，零到九。
 	ivec3 pos = workGroupOffset + grid; // 该共享格在体积里的坐标，外面一圈会到负一或边长。
-	omniLpvShared[flat] = omniLpvReadAt(imgCoordOffset + pos); // 体积值：读上一帧那张图，并补偿体积随玩家移动的整格位移。
-	omniVoxelShared[flat] = omniVoxelRead(pos); // 体素编号：本帧阴影阶段刚写入，直接用当前坐标。
+	omniLpvShared[index] = omniLpvReadAt(imgCoordOffset + pos); // 体积值：读上一帧那张图，并补偿体积随玩家移动的整格位移。
+	omniVoxelShared[index] = omniVoxelRead(pos); // 体素编号：本帧阴影阶段刚写入，直接用当前坐标。
 }
 // 取一个邻居的体积值，按该格的方向掩码决定它能不能把光传过来。
 vec4 omniLpvSampleNeighbour(ivec3 pos, int maskIndex){

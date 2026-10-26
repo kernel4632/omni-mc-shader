@@ -131,6 +131,12 @@ float4 ogxVoxelReflection(float3 originWorld, float3 rayDirWorld, float3 surface
     return float4(0.0, 0.0, 0.0, -1.0); // 镜面弹射次数用尽仍未命中，交给调用方走天空回退。
 }
 
+// 体素编号：从三维掩码直接取格，并按参考实现取两千以内的编号。
+uint ogxGetVoxelBlock(Usampler3D voxelMask, int3 voxelPos)
+{
+    return voxelMask.Load(int4(voxelPos, 0)).r % 2000u; // 参考实现的编号掩码。
+}
+
 // 体素写入格：把方块位置加上相机小数偏移，再落到以体积中心为原点的整数格。
 // `center` 是体积半边长，调用方按自己的网格尺寸给出，库不假设固定边长。
 int3 ogxVoxelWriteIndex(float3 playerPos, float3 cameraOffset, int3 center)

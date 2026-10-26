@@ -259,10 +259,10 @@ float3 ogxGetLpvPosition(float3 worldPos, float3 lpvOrigin, float voxelSize)
     return (worldPos - lpvOrigin) / voxelSize; // 换到体积格坐标。
 }
 
-// 深度约定交换：把零到一的深度换成负一到一再换回，保持数值不变，供需要不同约定的接口使用。
-float ogxSwapperlinZ2(float depth)
+// 深度约定交换：参考实现只把屏幕深度转成线性距离，不做数值变换。
+float ogxSwapperlinZ2(float depth, float nearPlane, float farPlane)
 {
-    return depth; // 参考实现只交换约定，不做数值变换。
+    return (2.0 * nearPlane) / (farPlane + nearPlane - depth * (farPlane - nearPlane)); // 参考实现的分式。
 }
 
 // 快速深度线性化：Eclipse 的屏幕深度转米制距离。
@@ -271,10 +271,20 @@ float ogxInvertLinearizeDepthFast(float z, float nearPlane, float farPlane)
     return (farPlane * (z - nearPlane)) / (z * (farPlane - nearPlane)); // 参考实现的分式。
 }
 
-// 屏幕坐标转视空间并加抖动：Eclipse 的 `toScreenSpace2`。
-float3 ogxToScreenSpace2(float2 coord, float depth, float2 jitter, float4x4 projectionInverse)
+// 屏幕坐标转视空间：Eclipse 的 `toScreenSpace2`，可按 `depthCheck` 选择远景逆投影。
+float3 ogxToScreenSpace2(float3 p, bool depthCheck, float4x4 projectionInverse, float4x4 dhProjectionInverse)
 {
-    return ogxToScreenSpace(float3(coord - jitter * 0.5, depth), projectionInverse); // 先减半个抖动再逆投影。
+    float4x4 matrix = depthCheck ? dhProjectionInverse : projectionInverse; // 按开关选矩阵。
+    float4 inverseDiag = float4(matrix[0][0], matrix[1][1], matrix[2][2], matrix[2][3]); // 逆投影的对角项与深度平移。
+    float3 p3 = p * 2.0 - 1.0; // 零到一转负一到一。
+    float4 fragPosition = inverseDiag * p3.xyzz + matrix[3]; // 对角项乘坐标再加平移。
+    return fragPosition.xyz / fragPosition.w; // 齐次除法。
+}
+
+// 光传播体积坐标：玩家相对位置加相机小数偏移，再平移到体积中心。
+float3 ogxGetLpvPositionExplicit(float3 playerPos, float3 cameraOffset, float lpvSize)
+{
+    return playerPos + cameraOffset + float3(lpvSize * 0.5); // 与参考实现的 `LpvSize3/2u` 相同。
 }
 
 #endif
