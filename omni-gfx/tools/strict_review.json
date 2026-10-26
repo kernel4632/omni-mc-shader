@@ -1,0 +1,1279 @@
+{
+  "schemaVersion": 1,
+  "note": "exact 必须逐行核对参考函数的常数、采样次数与顺序、颜色空间；近似替代必须写进 approximate，不能写成 exact。",
+  "exact": {
+    "ACES": {
+      "target": "color.ogxAces",
+      "difference": "none"
+    },
+    "ACESFilm": {
+      "target": "color.ogxTonemapAcesFilm",
+      "difference": "none"
+    },
+    "RRTAndODTFit": {
+      "target": "color.ogxRrtOdtFit",
+      "difference": "none"
+    },
+    "HableTonemap": {
+      "target": "color.ogxTonemapHable",
+      "difference": "none"
+    },
+    "agxDefaultContrastApprox": {
+      "target": "color.ogxAgxContrast",
+      "difference": "none"
+    },
+    "LinearTosRGB": {
+      "target": "color.ogxLinearToSrgb",
+      "difference": "none"
+    },
+    "linearToSRGB": {
+      "target": "color.ogxLinearToSrgb",
+      "difference": "none"
+    },
+    "srgbToLinear": {
+      "target": "color.ogxSrgbToLinear",
+      "difference": "none"
+    },
+    "GammaToLinear": {
+      "target": "math.ogxGammaToLinear",
+      "difference": "none"
+    },
+    "LinearToGamma": {
+      "target": "math.ogxLinearToGamma",
+      "difference": "none"
+    },
+    "LinearToCurve": {
+      "target": "math.ogxLinearToCurve",
+      "difference": "none"
+    },
+    "CurveToLinear": {
+      "target": "math.ogxCurveToLinear",
+      "difference": "none"
+    },
+    "DoNightEye": {
+      "target": "math.ogxDoNightEye",
+      "difference": "none"
+    },
+    "Pack2x8": {
+      "target": "math.ogxPack2x8",
+      "difference": "none"
+    },
+    "Unpack2x8": {
+      "target": "math.ogxUnpack2x8",
+      "difference": "none"
+    },
+    "Pack2x16": {
+      "target": "math.ogxPack2x16",
+      "difference": "none"
+    },
+    "Unpack2x16": {
+      "target": "math.ogxUnpack2x16",
+      "difference": "none"
+    },
+    "DecodeNormal": {
+      "target": "math.ogxDecodeNormal",
+      "difference": "none"
+    },
+    "DecodeNormalTex": {
+      "target": "math.ogxDecodeNormalTex",
+      "difference": "none"
+    },
+    "EncodeNormal": {
+      "target": "math.ogxEncodeNormal",
+      "difference": "none"
+    },
+    "OctWrap": {
+      "target": "math.ogxOctWrap",
+      "difference": "none"
+    },
+    "F_Schlick": {
+      "target": "math.ogxFresnelSchlick",
+      "difference": "none"
+    },
+    "V_Schlick": {
+      "target": "math.ogxVisibilitySchlick",
+      "difference": "none"
+    },
+    "D_Walter": {
+      "target": "math.ogxDistributionGGX",
+      "difference": "none"
+    },
+    "SpecularGGX": {
+      "target": "math.ogxSpecularGGX",
+      "difference": "none"
+    },
+    "Fd_Burley": {
+      "target": "math.ogxDiffuseBurley",
+      "difference": "none"
+    },
+    "RayPlaneIntersection": {
+      "target": "math.ogxRayPlaneIntersection",
+      "difference": "none"
+    },
+    "RaySphereIntersection": {
+      "target": "math.ogxRaySphereIntersection",
+      "difference": "none"
+    },
+    "RayleighPhaseFunction": {
+      "target": "math.ogxRayleighPhase",
+      "difference": "none"
+    },
+    "MiePhaseFunction": {
+      "target": "math.ogxMiePhase",
+      "difference": "none"
+    },
+    "InterleavedGradientNoise": {
+      "target": "math.ogxInterleavedGradientNoise",
+      "difference": "none"
+    },
+    "bayer2": {
+      "target": "math.ogxBayer2",
+      "difference": "none"
+    },
+    "bayer4": {
+      "target": "math.ogxBayer4",
+      "difference": "none"
+    },
+    "bayer8": {
+      "target": "math.ogxBayer8",
+      "difference": "none"
+    },
+    "bayer16": {
+      "target": "math.ogxBayer16",
+      "difference": "none"
+    },
+    "bayer32": {
+      "target": "math.ogxBayer32",
+      "difference": "none"
+    },
+    "bayer64": {
+      "target": "math.ogxBayer64",
+      "difference": "none"
+    },
+    "bayer128": {
+      "target": "math.ogxBayer128",
+      "difference": "none"
+    },
+    "remapSaturate": {
+      "target": "math.ogxRemapSaturate",
+      "difference": "none"
+    },
+    "remap": {
+      "target": "math.ogxRemap",
+      "difference": "none"
+    },
+    "atan2": {
+      "target": "math.ogxAtan2",
+      "difference": "none"
+    },
+    "facos": {
+      "target": "math.ogxFastAcos",
+      "difference": "none"
+    },
+    "minVec3": {
+      "target": "math.ogxMinVec3",
+      "difference": "none"
+    },
+    "maxVec3": {
+      "target": "math.ogxMaxVec3",
+      "difference": "none"
+    },
+    "RotateMatrix": {
+      "target": "math.ogxRotateMatrix",
+      "difference": "none"
+    },
+    "mat2_rotate_z": {
+      "target": "math.ogxRotateMatrix",
+      "difference": "none"
+    },
+    "WarpSpace": {
+      "target": "math.ogxWarpSpace",
+      "difference": "none"
+    },
+    "AlmostIdentity": {
+      "target": "water.ogxAlmostIdentity",
+      "difference": "none"
+    },
+    "Vignette": {
+      "target": "post.ogxVignette",
+      "difference": "none"
+    },
+    "BlackBar": {
+      "target": "color.ogxBlackBar",
+      "difference": "none"
+    },
+    "SafeSqrt": {
+      "target": "atmosphere.ogxSafeSqrt",
+      "difference": "none"
+    },
+    "H": {
+      "target": "atmosphere.ogxChandrasekharH",
+      "difference": "none"
+    },
+    "Disc": {
+      "target": "atmosphere.ogxDiscProfile",
+      "difference": "none"
+    },
+    "GetTextureCoordFromUnitRange": {
+      "target": "atmosphere.ogxSubTextureCoord",
+      "difference": "none"
+    },
+    "GetCombinedTextureCoordFromUnitRange": {
+      "target": "atmosphere_model.ogxAtmoCombinedTextureCoord",
+      "difference": "none"
+    },
+    "GetProfileDensityRayleighMie": {
+      "target": "atmosphere_model.ogxAtmoDensityRayleighMie",
+      "difference": "none"
+    },
+    "GetProfileDensityAbsorption": {
+      "target": "atmosphere_model.ogxAtmoDensityAbsorption",
+      "difference": "none"
+    },
+    "GetCombinedScattering": {
+      "target": "atmosphere_model.ogxAtmoCombinedScattering",
+      "difference": "none; LUT sampler and model constants are explicit parameters"
+    },
+    "GetIrradiance": {
+      "target": "atmosphere_model.ogxAtmoIrradiance",
+      "difference": "none; LUT sampler and model constants are explicit parameters"
+    },
+    "GetSkyRadiance": {
+      "target": "atmosphere_model.ogxAtmoSkyRadiance",
+      "difference": "none at default tints; host tints are explicit parameters"
+    },
+    "GetSkyRadianceToPoint": {
+      "target": "atmosphere_model.ogxAtmoSkyRadianceToPoint",
+      "difference": "none at default tints; host tints are explicit parameters"
+    },
+    "YCoCg_To_RGB": {
+      "target": "antialias.ogxYCoCgToRgb",
+      "difference": "none"
+    },
+    "RgbToYCoCg": {
+      "target": "antialias.ogxRgbToYCoCg",
+      "difference": "none"
+    },
+    "clipAABB": {
+      "target": "antialias.ogxClipAabb",
+      "difference": "none"
+    },
+    "BicubicTexture": {
+      "target": "math.ogxBicubicTexture",
+      "difference": "none"
+    },
+    "BicubicBlurTexture": {
+      "target": "math.ogxBicubicBlurTexture",
+      "difference": "none"
+    },
+    "BicubicTextureVec4": {
+      "target": "antialias.ogxBicubicTexture4",
+      "difference": "none"
+    },
+    "BilinearTexture": {
+      "target": "math.ogxBilinearTexture",
+      "difference": "none"
+    },
+    "BilinearTextureSkybox": {
+      "target": "math.ogxBilinearTextureSkybox",
+      "difference": "none"
+    },
+    "BloomDownSample": {
+      "target": "post.ogxBloomDownsample",
+      "difference": "none"
+    },
+    "AxialGaussianBlur": {
+      "target": "post.ogxAxialGaussianBlur",
+      "difference": "none"
+    },
+    "CalculateCoCRadius": {
+      "target": "post.ogxCocRadius",
+      "difference": "none"
+    },
+    "GetDistOffset": {
+      "target": "post.ogxGlareDistOffset",
+      "difference": "none"
+    },
+    "flare": {
+      "target": "post.ogxGlareFlare",
+      "difference": "none"
+    },
+    "orb": {
+      "target": "post.ogxGlareOrb",
+      "difference": "none"
+    },
+    "ring": {
+      "target": "post.ogxGlareRing",
+      "difference": "none"
+    },
+    "curveTop": {
+      "target": "cloud.ogxCloudTopCurve",
+      "difference": "none"
+    },
+    "SetCloudPos": {
+      "target": "cloud_volume.ogxCumulusSetPos",
+      "difference": "none"
+    },
+    "BicubicBlurNoise": {
+      "target": "cloud.ogxBicubicBlurNoise",
+      "difference": "none"
+    },
+    "BilinearNoise": {
+      "target": "cloud.ogxBilinearNoise",
+      "difference": "none"
+    },
+    "GetPlanarCloudsDistortion": {
+      "target": "cloud.ogxPlanarDistortion",
+      "difference": "none"
+    },
+    "GetPlanarCloudsDensity": {
+      "target": "cloud.ogxPlanarDensity",
+      "difference": "none"
+    },
+    "GetPlanarCloudsLightingDensity": {
+      "target": "cloud.ogxPlanarLightingDensity",
+      "difference": "none"
+    },
+    "ProjectSky": {
+      "target": "atmosphere.ogxSkyProject",
+      "difference": "none"
+    },
+    "sampleGGXVNDF": {
+      "target": "reflection.ogxSampleGgxVndf",
+      "difference": "none"
+    },
+    "PowderEffect": {
+      "target": "fog.ogxFogPowder",
+      "difference": "none"
+    },
+    "FogPhase": {
+      "target": "fog.ogxLegacyFogPhase",
+      "difference": "none"
+    },
+    "MultiScatteringPhases": {
+      "target": "fog.ogxMultiScatteringPhases",
+      "difference": "none"
+    },
+    "textureSmooth": {
+      "target": "water.ogxTextureSmooth",
+      "difference": "none"
+    },
+    "GetWavesNormal": {
+      "target": "water.ogxWavesNormal",
+      "difference": "none"
+    },
+    "GetWaterParallaxCoord": {
+      "target": "water.ogxWaterParallax",
+      "difference": "none"
+    },
+    "FsrEasuTap": {
+      "target": "upscale.ogxFsrEasuTap",
+      "difference": "none"
+    },
+    "FsrEasuSet": {
+      "target": "upscale.ogxFsrEasuSet",
+      "difference": "none"
+    },
+    "FsrEasu": {
+      "target": "upscale.ogxFsrEasu",
+      "difference": "none"
+    },
+    "GTAOMultiBounce": {
+      "target": "gi.ogxAoMultiBounce",
+      "difference": "none"
+    },
+    "BilinearHeightSample": {
+      "target": "parallax.ogxParallaxHeightBilinear",
+      "difference": "none"
+    },
+    "physics_waveHeight": {
+      "target": "water.ogxOceanWaveHeight",
+      "difference": "none"
+    },
+    "physics_waveDirection": {
+      "target": "water.ogxOceanWaveDirection",
+      "difference": "none"
+    },
+    "physics_wavePixel": {
+      "target": "water.ogxOceanPixel",
+      "difference": "none"
+    },
+    "BlockLighting": {
+      "target": "surface.ogxBlockLight",
+      "difference": "none; host brightness and colors are explicit parameters"
+    },
+    "CurveBlockLightSky": {
+      "target": "surface.ogxCurveBlockLightSky",
+      "difference": "none"
+    },
+    "CurveBlockLightTorch": {
+      "target": "surface.ogxCurveBlockLightTorch",
+      "difference": "none"
+    },
+    "spotShape": {
+      "target": "surface.ogxSpotShape",
+      "difference": "none"
+    },
+    "NetherLighting": {
+      "target": "fog.ogxNetherBiomeLighting",
+      "difference": "none"
+    },
+    "NetherFogColor": {
+      "target": "fog.ogxNetherBiomeFogColor",
+      "difference": "none"
+    },
+    "RgbToHsv": {
+      "target": "math.ogxRgbToHsv",
+      "difference": "none"
+    },
+    "R2_samples": {
+      "target": "math.ogxR2Sample",
+      "difference": "none"
+    },
+    "SpiralSample": {
+      "target": "math.ogxSpiralSample",
+      "difference": "none"
+    },
+    "convertHandDepth_3": {
+      "target": "math.ogxConvertHandDepth3",
+      "difference": "none"
+    },
+    "lpvCurve": {
+      "target": "lpv.ogxLpvCurve",
+      "difference": "none"
+    },
+    "GetLpvBlockLight": {
+      "target": "lpv.ogxLpvBlockLight",
+      "difference": "none"
+    },
+    "GetLpvSkyLight": {
+      "target": "lpv.ogxLpvSkyLight",
+      "difference": "none"
+    },
+    "sqr": {
+      "target": "math.ogxSquare",
+      "difference": "none"
+    },
+    "cube": {
+      "target": "math.ogxSquare",
+      "difference": "none"
+    },
+    "max_of": {
+      "target": "math.ogxMaxVec3",
+      "difference": "none"
+    },
+    "min_of": {
+      "target": "math.ogxMinVec3",
+      "difference": "none"
+    },
+    "length_squared": {
+      "target": "math.ogxLengthSquared",
+      "difference": "none"
+    },
+    "normalize_safe": {
+      "target": "math.ogxNormalize",
+      "difference": "none"
+    },
+    "rcp_length": {
+      "target": "math.ogxSafeInvLength",
+      "difference": "none"
+    },
+    "linear_step": {
+      "target": "math.ogxRemapSaturate",
+      "difference": "none"
+    },
+    "hash22": {
+      "target": "noise.ogxHash22",
+      "difference": "none"
+    },
+    "GriAndEminShadowFix": {
+      "target": "shadow.ogxGriAndEminShadowFix",
+      "difference": "none"
+    },
+    "applyShadowBias": {
+      "target": "shadow.ogxApplyShadowBias",
+      "difference": "none"
+    },
+    "w0": {
+      "target": "math.ogxCubicWeight0",
+      "difference": "none"
+    },
+    "w1": {
+      "target": "math.ogxCubicWeight1",
+      "difference": "none"
+    },
+    "w2": {
+      "target": "math.ogxCubicWeight2",
+      "difference": "none"
+    },
+    "w3": {
+      "target": "math.ogxCubicWeight3",
+      "difference": "none"
+    },
+    "g0": {
+      "target": "math.ogxCubicWeightLow",
+      "difference": "none"
+    },
+    "g1": {
+      "target": "math.ogxCubicWeightHigh",
+      "difference": "none"
+    },
+    "h0": {
+      "target": "math.ogxCubicOffsetLow",
+      "difference": "none"
+    },
+    "h1": {
+      "target": "math.ogxCubicOffsetHigh",
+      "difference": "none"
+    },
+    "invLinZ": {
+      "target": "reflection.ogxReflectionLinearDepth",
+      "difference": "none"
+    },
+    "DH_invLinZ": {
+      "target": "reflection.ogxReflectionDhToScreenDepth",
+      "difference": "none"
+    },
+    "linZ": {
+      "target": "reflection.ogxReflectionLinearDepth",
+      "difference": "none"
+    },
+    "linZ2": {
+      "target": "reflection.ogxReflectionLinearDepth",
+      "difference": "none"
+    },
+    "R2_Sample": {
+      "target": "math.ogxR2Sample",
+      "difference": "none"
+    },
+    "fma2": {
+      "target": "math.ogxFma2",
+      "difference": "none"
+    },
+    "decodeVec2_16": {
+      "target": "color.ogxDecodeVec2x16",
+      "difference": "none"
+    },
+    "AABBintersection2": {
+      "target": "math.ogxRayBoxRange",
+      "difference": "none"
+    },
+    "NoisyStarField": {
+      "target": "atmosphere.ogxStarNoisyField",
+      "difference": "none"
+    },
+    "StableStarField": {
+      "target": "atmosphere.ogxStarsStable",
+      "difference": "none"
+    },
+    "starTemp": {
+      "target": "atmosphere.ogxStarTemperature",
+      "difference": "none"
+    },
+    "smoothfilter": {
+      "target": "sampling.ogxSmoothFilter",
+      "difference": "none"
+    },
+    "shadowsmoothfilter": {
+      "target": "sampling.ogxShadowSmoothFilter",
+      "difference": "none"
+    },
+    "sampleNearest": {
+      "target": "sampling.ogxSampleNearest",
+      "difference": "none"
+    },
+    "sampleRGSS": {
+      "target": "sampling.ogxRgssSample",
+      "difference": "none"
+    },
+    "sincos": {
+      "target": "math.ogxSinCos",
+      "difference": "none"
+    },
+    "circlemap": {
+      "target": "math.ogxCircleMap",
+      "difference": "none"
+    },
+    "circlemapL": {
+      "target": "math.ogxCircleMap",
+      "difference": "none"
+    },
+    "genUnitVector": {
+      "target": "math.ogxCosineHemisphere",
+      "difference": "none"
+    },
+    "getRotMat": {
+      "target": "math.ogxRotateMatrix",
+      "difference": "none"
+    },
+    "rsi": {
+      "target": "math.ogxRaySphereHit",
+      "difference": "none"
+    },
+    "HaltonSeq3": {
+      "target": "sampling.ogxHalton3",
+      "difference": "none"
+    },
+    "HaltonSeq2": {
+      "target": "sampling.ogxHalton2",
+      "difference": "none"
+    },
+    "rand": {
+      "target": "noise.ogxWhiteNoise",
+      "difference": "none"
+    },
+    "nrand": {
+      "target": "noise.ogxWhiteNoise",
+      "difference": "none"
+    },
+    "hash_aurora": {
+      "target": "noise.ogxHash13",
+      "difference": "none"
+    },
+    "hash31": {
+      "target": "noise.ogxHash13",
+      "difference": "none"
+    },
+    "hash11": {
+      "target": "noise.ogxHash13",
+      "difference": "none"
+    },
+    "hash": {
+      "target": "noise.ogxHash13",
+      "difference": "none"
+    },
+    "hash12": {
+      "target": "noise.ogxHash12",
+      "difference": "none"
+    },
+    "iqint2": {
+      "target": "noise.ogxIntegerHash3",
+      "difference": "none"
+    },
+    "mm2": {
+      "target": "math.ogxRotate2",
+      "difference": "none"
+    },
+    "rotate": {
+      "target": "math.ogxRotate2",
+      "difference": "none"
+    },
+    "luma": {
+      "target": "color.ogxLuminanceRec601",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "toLinear": {
+      "target": "color.ogxSrgbToLinear",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "Tonemap_Full_Reinhard": {
+      "target": "color.ogxTonemapReinhardFull",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "Full_Reinhard_Edit": {
+      "target": "color.ogxTonemapReinhardEdit",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "reinhard_jodie": {
+      "target": "color.ogxTonemapReinhardJodie",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "agxLook": {
+      "target": "color.ogxAgxLook",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "blackbody": {
+      "target": "color.ogxBlackbodyEclipse",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "Tonemap_Uchimura": {
+      "target": "color.ogxTonemapUchimuraExp",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "Tonemap_Uchimura_Modified": {
+      "target": "color.ogxTonemapUchimuraModified",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "ToneMap_AgX": {
+      "target": "color.ogxToneMapAgx",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "ToneMap_AgX_minimal": {
+      "target": "color.ogxToneMapAgxMinimal",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "ToneMap_AgX_minimal_merlin": {
+      "target": "color.ogxToneMapAgxMerlin",
+      "difference": "none; exact Eclipse / iterationT variant ported from reference"
+    },
+    "TextureLighting": {
+      "target": "surface.ogxItxTextureLighting",
+      "difference": "none; exact iterationT port with host values as explicit parameters"
+    },
+    "ApplyMaterial": {
+      "target": "surface.ogxApplyMaterialOverride",
+      "difference": "none; exact iterationT port with host values as explicit parameters"
+    },
+    "MaterialFromTex": {
+      "target": "surface.ogxItxMaterialFromTex",
+      "difference": "none; exact iterationT port with host values as explicit parameters"
+    },
+    "sky_rayleighPhase": {
+      "target": "atmosphere.ogxEclipseSkyRayleighPhase",
+      "difference": "none; exact Eclipse sky model with host constants as explicit parameters"
+    },
+    "sky_miePhase": {
+      "target": "atmosphere.ogxEclipseSkyMiePhase",
+      "difference": "none; exact Eclipse sky model with host constants as explicit parameters"
+    },
+    "sky_phase": {
+      "target": "atmosphere.ogxEclipseSkyPhase",
+      "difference": "none; exact Eclipse sky model with host constants as explicit parameters"
+    },
+    "sky_density": {
+      "target": "atmosphere.ogxEclipseSkyDensity",
+      "difference": "none; exact Eclipse sky model with host constants as explicit parameters"
+    },
+    "sky_airmass": {
+      "target": "atmosphere.ogxEclipseSkyAirmass",
+      "difference": "none; exact Eclipse sky model with host constants as explicit parameters"
+    },
+    "sky_opticalDepth": {
+      "target": "atmosphere.ogxEclipseSkyOpticalDepth",
+      "difference": "none; exact Eclipse sky model with host constants as explicit parameters"
+    },
+    "sky_transmittance": {
+      "target": "atmosphere.ogxEclipseSkyTransmittance",
+      "difference": "none; exact Eclipse sky model with host constants as explicit parameters"
+    },
+    "unproject": {
+      "target": "color.ogxAgxUnproject",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "primaries_to_matrix": {
+      "target": "color.ogxAgxPrimariesToMatrix",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "RotationToSlide": {
+      "target": "color.ogxAgxRotationToSlide",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "SlidePrimary": {
+      "target": "color.ogxAgxSlidePrimary",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "ComputeCompressionMatrix": {
+      "target": "color.ogxAgxComputeCompressionMatrix",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "open_domain_to_normalized_log2": {
+      "target": "color.ogxAgxOpenDomainToNormalizedLog2",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "equation_scale": {
+      "target": "color.ogxAgxEquationScale",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "equation_full_curve": {
+      "target": "color.ogxAgxEquationFullCurve",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "AgXConfigurable": {
+      "target": "color.ogxAgxConfigurable",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "AgXConfigurable1": {
+      "target": "color.ogxAgxConfigurable1",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "pcurve": {
+      "target": "planet.ogxEndSkyPCurve",
+      "difference": "none; exact iterationT port, matrix layout expanded to columns"
+    },
+    "Sequences_R1": {
+      "target": "math.ogxSequenceR1",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "Sequences_R2": {
+      "target": "math.ogxSequenceR2",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "tri": {
+      "target": "math.ogxEclipseTri",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "tri2": {
+      "target": "math.ogxEclipseTri2",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "bayerDither": {
+      "target": "math.ogxEclipseBayerDither",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "phaseRayleigh": {
+      "target": "math.ogxRayleighPhaseElek",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "fast_acos": {
+      "target": "math.ogxFastAcosEclipse",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "phaseEND": {
+      "target": "fog.ogxEndFogPhaseEclipse",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "phaseCloud": {
+      "target": "cloud.ogxCloudPhaseEclipse",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "BiomeFogDensity": {
+      "target": "fog.ogxBiomeFogDensityEclipse",
+      "difference": "none; exact Eclipse formula ported with explicit parameters"
+    },
+    "endFogPhase": {
+      "target": "fog.ogxEndVortexLightPhase",
+      "difference": "none; verified same constants and operation order"
+    },
+    "Blackbody": {
+      "target": "math.ogxBlackbody",
+      "difference": "none; verified same constants and operation order"
+    },
+    "FogDensities": {
+      "target": "weather.ogxFogDensities",
+      "difference": "none; verified same constants and operation order"
+    },
+    "reinhard": {
+      "target": "color.ogxTonemapReinhard",
+      "difference": "none; verified same constants and operation order"
+    },
+    "ToneMap_Hejl2015": {
+      "target": "color.ogxTonemapHejl",
+      "difference": "none; verified same constants and operation order"
+    },
+    "Tonemap_Lottes": {
+      "target": "color.ogxTonemapLottes",
+      "difference": "none; verified same constants and operation order"
+    },
+    "Tonemap_Xonk": {
+      "target": "color.ogxTonemapXonk",
+      "difference": "none; verified same constants and operation order"
+    },
+    "no_tonemapper": {
+      "target": "color.ogxTonemapNone",
+      "difference": "none; verified same constants and operation order"
+    },
+    "doIndirectLighting": {
+      "target": "surface.ogxDoIndirectLighting",
+      "difference": "none; verified same constants and operation order"
+    },
+    "HsvToRgb": {
+      "target": "color.ogxHsvToRgb",
+      "difference": "none; verified same constants and operation order"
+    },
+    "TorchScreenSpaceShadow": {
+      "target": "shadow.ogxScreenSpaceShadow",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GetWavesNormalFromTex": {
+      "target": "water.ogxWavesNormalFromTex",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SamplePreviousDepthBilinear": {
+      "target": "antialias.ogxTaaPrevDepthBilinear",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "CoCSpread": {
+      "target": "post.ogxDofCocSpread",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "PlanetEnd2": {
+      "target": "planet.ogxPlanetEnd",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "Calculate3DNoise": {
+      "target": "fog.ogxEnd3dNoise",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "RSM": {
+      "target": "gi.ogxGiRsm",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GI_SpatialFilter": {
+      "target": "gi.ogxGiSpatialFilter",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GroundTruthBasedAmbientOcclusion": {
+      "target": "gi.ogxGroundTruthAo",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleDensity": {
+      "target": "cloud_volume.ogxCumulusSampleDensity",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "NubisCumulus": {
+      "target": "cloud_volume.ogxCumulusMarch",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "HeightBasedNormal": {
+      "target": "parallax.ogxParallaxHeightNormal",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "ParallaxOcclusionMapping": {
+      "target": "parallax.ogxParallaxSmooth",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "CalculateSpecularReflections": {
+      "target": "reflection.ogxSpecularReflectionMix",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "Get3DNoise": {
+      "target": "noise.ogxFogNoise",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GetModulatedRainSpecular": {
+      "target": "water.ogxRainSpecular",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GetRainAnimationTex": {
+      "target": "water.ogxRainAnimationNormal",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "UnderwaterVolumetricFog": {
+      "target": "fog_volume.ogxUnderwaterFog",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GetWaves": {
+      "target": "water.ogxWaves",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "FidelityFX_CAS": {
+      "target": "upscale.ogxCas",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "FidelityFX_FSR1": {
+      "target": "upscale.ogxFsr1",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "LinearDepth_From_ScreenDepth": {
+      "target": "shadow.ogxShadowLinearDepth",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "triangWhiteNoise": {
+      "target": "noise.ogxTriangleNoise",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GetHandLight": {
+      "target": "surface.ogxHandLight",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SwirlAroundOrigin": {
+      "target": "fog.ogxEndVortexSwirl",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "VolumeBounds": {
+      "target": "fog.ogxEndVortexBounds",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "fogShape": {
+      "target": "fog.ogxEndVortexShape",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "LightSourceLighting": {
+      "target": "fog.ogxEndVortexLighting",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GetVolumetricFog": {
+      "target": "fog.ogxEndVortexFog",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleLpvLinear": {
+      "target": "lpv.ogxLpvDecodeSample",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "cloudVol": {
+      "target": "fog.ogxNetherFogCloudVolume",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "calculateRoughSpecular": {
+      "target": "math.ogxRoughSpecularDirection",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "getRainDensity": {
+      "target": "cloud.ogxCloudRainDensity",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "getWaveNormal": {
+      "target": "water.ogxWaterBumpNormal",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "ripples": {
+      "target": "water.ogxRainRipples",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GetSmoothCloudShadow": {
+      "target": "cloud.ogxGlobalCloudShadow",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleCurrColor": {
+      "target": "antialias.ogxTaaSampleCurrent",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleCurrColorFetch": {
+      "target": "antialias.ogxTaaFetchCurrent",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleCurrColorBicubic": {
+      "target": "antialias.ogxBicubicTexture4",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SamplePrevColor": {
+      "target": "antialias.ogxTaaSamplePrevious",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleDepthFetch": {
+      "target": "antialias.ogxTaaSampleDepthFetch",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SamplePrevDepthFetch": {
+      "target": "antialias.ogxTaaPrevDepthFetch",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleCurr": {
+      "target": "antialias.ogxTaaSampleCurrent",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleCurrFetch": {
+      "target": "antialias.ogxTaaFetchCurrent",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SampleCurrBicubic": {
+      "target": "antialias.ogxBicubicTexture4",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SamplePrevious": {
+      "target": "antialias.ogxTaaSamplePrevious",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "SamplePrevDepthMinMax3x3": {
+      "target": "antialias.ogxTaaPrevDepthMinmax",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "GetVariance3x3": {
+      "target": "antialias.ogxTaaVariance3x3",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "TemporalReprojection": {
+      "target": "antialias.ogxTaaReproject",
+      "difference": "none; verified line-by-line with host data as explicit parameters"
+    },
+    "VanillaFog": {
+      "target": "fog.ogxVanillaFog",
+      "difference": "none; verified same constants and sampling order"
+    },
+    "SelectionBox": {
+      "target": "fog.ogxSelectionBox",
+      "difference": "none; verified same constants and sampling order"
+    },
+    "GetLinearDepth": {
+      "target": "post.ogxDofLinearDepth",
+      "difference": "none; verified same constants and sampling order"
+    },
+    "GI_TemporalFilter": {
+      "target": "gi.ogxGiTemporalFilter",
+      "difference": "none; verified same constants and sampling order"
+    },
+    "densityAtPos": {
+      "target": "cloud.ogxCloudDensityAtPos",
+      "difference": "none; verified same constants and sampling order"
+    },
+    "densityAtPosFog": {
+      "target": "weather.ogxStormNoise",
+      "difference": "none; verified same constants and sampling order"
+    },
+    "getWaterHeightmap": {
+      "target": "water.ogxWaterBumpHeightmap",
+      "difference": "none; verified same constants and sampling order"
+    }
+  },
+  "mcGlue": {
+    "SevenSegment": {
+      "evidence": "就绪：调试叠加字形表，只服务屏幕数字"
+    },
+    "DecimalPoint": {
+      "evidence": "就绪：调试叠加小数点定位"
+    },
+    "PrintFloat": {
+      "evidence": "就绪：屏幕调试数字，不参与画面效果"
+    },
+    "PrintUintBinary": {
+      "evidence": "就绪：屏幕调试二进制，不参与画面效果"
+    },
+    "beginText": {
+      "evidence": "就绪：调试文字叠加的初始化"
+    },
+    "endText": {
+      "evidence": "就绪：调试文字叠加的合成"
+    },
+    "printChar": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printUnsignedInt": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printInt": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printFloat": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printBool": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printVec2": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printVec3": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printVec4": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printIvec2": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printIvec3": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printIvec4": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printUvec2": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printUvec3": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printUvec4": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "printLine": {
+      "evidence": "就绪：调试文字叠加"
+    },
+    "main": {
+      "evidence": "就绪：程序入口，只负责阶段组合"
+    },
+    "title": {
+      "evidence": "就绪：标题计数与屏幕文字，不参与画面效果"
+    },
+    "swapperlinZ2": {
+      "evidence": "就绪：只交换深度约定"
+    },
+    "toScreenSpace_DH": {
+      "evidence": "就绪：远景模组投影约定"
+    },
+    "toClipSpace3_DH": {
+      "evidence": "就绪：远景模组投影约定"
+    },
+    "DH_shadowProjectionTweak": {
+      "evidence": "就绪：远景阴影投影约定"
+    },
+    "project": {
+      "evidence": "就绪：矩阵投影约定"
+    },
+    "project_and_divide": {
+      "evidence": "就绪：矩阵投影约定"
+    },
+    "screen_to_view_space": {
+      "evidence": "就绪：屏幕到视空间约定"
+    },
+    "view_to_screen_space": {
+      "evidence": "就绪：视空间到屏幕约定"
+    },
+    "toClipSpace3": {
+      "evidence": "就绪：裁剪空间约定"
+    },
+    "toScreenSpace": {
+      "evidence": "就绪：屏幕空间约定"
+    },
+    "toScreenSpaceVector": {
+      "evidence": "就绪：屏幕空间方向约定"
+    },
+    "toWorldSpace": {
+      "evidence": "就绪：世界空间约定"
+    },
+    "toWorldSpaceCamera": {
+      "evidence": "就绪：相机空间约定"
+    },
+    "toShadowSpace": {
+      "evidence": "就绪：阴影空间约定"
+    },
+    "toShadowSpaceProjected": {
+      "evidence": "就绪：阴影空间约定"
+    },
+    "invertLinearizeDepthFast": {
+      "evidence": "就绪：深度约定"
+    },
+    "toScreenSpace2": {
+      "evidence": "就绪：屏幕空间约定"
+    },
+    "GetTexCoord": {
+      "evidence": "就绪：纹理坐标约定"
+    },
+    "ShadowScreenPos_From_WorldPos_WithoutZScaling": {
+      "evidence": "就绪：阴影坐标约定"
+    },
+    "ScreenPos_From_ViewPos_Raw": {
+      "evidence": "就绪：屏幕坐标约定"
+    },
+    "ViewPos_From_ScreenPos_Raw_DH": {
+      "evidence": "就绪：远景坐标约定"
+    },
+    "ScreenPos_From_ViewPos_DH": {
+      "evidence": "就绪：远景坐标约定"
+    },
+    "ScreenPos_From_ViewPos_Raw_DH": {
+      "evidence": "就绪：远景坐标约定"
+    },
+    "ScreenDepth_From_LinearDepth_DH": {
+      "evidence": "就绪：远景深度约定"
+    },
+    "ScreenDepth_From_DHScreenDepth": {
+      "evidence": "就绪：远景深度约定"
+    },
+    "BiomeVLFogColors": {
+      "evidence": "就绪：原版群系枚举到颜色表，非算法"
+    },
+    "GetVoxelBlock": {
+      "evidence": "就绪：Minecraft 体素编号约定"
+    },
+    "GetVoxelIndex": {
+      "evidence": "就绪：Minecraft 体素编号约定"
+    },
+    "voxelNormalIndex": {
+      "evidence": "就绪：Minecraft 体素编号约定"
+    },
+    "GetVoxelData": {
+      "evidence": "就绪：Minecraft 体素编号约定"
+    },
+    "SetVoxelBlock": {
+      "evidence": "就绪：Minecraft 体素写入约定"
+    },
+    "voxelEmission": {
+      "evidence": "就绪：方块编号到自发光"
+    },
+    "getVoxelEmission": {
+      "evidence": "就绪：方块编号到自发光"
+    },
+    "getPhotonicsEmission": {
+      "evidence": "就绪：方块编号到自发光"
+    },
+    "photonicsEmission": {
+      "evidence": "就绪：方块编号到自发光"
+    },
+    "GetLpvPosition": {
+      "evidence": "就绪：世界坐标到光传播体积坐标约定"
+    }
+  },
+  "approximate": {},
+  "missing": {}
+}

@@ -202,4 +202,105 @@ float3 ogxDoIndirectLighting(float3 lightColor, float3 minimumLightColor, float 
     return indirect; // 交回间接光。
 }
 
+// iterationT 的纹理自发光：硬编码方块光权重逐项固定，资源包模式与硬编码模式分开。
+// 参数 `mode`：0 只硬编码，1 只资源包，2 两者取较大；`overworld` 为假时整体乘十。
+float3 ogxItxTextureLighting(float3 albedo, float lightmap, float emissive, float glowstone,
+    float torch, float fire, float lava, float redstoneTorch, float oxidizedBulb, float soulFire,
+    float amethyst, float endPortal, float litHigh, float litMedium, float litLow, float particleLit,
+    float redstone, float emissiveBrightness, float textureBrightness, float torchBrightness,
+    float3 torchColor, int mode, bool overworld)
+{
+    emissive *= emissiveBrightness; // 参考实现先把资源包自发光乘整体亮度。
+    if (mode == 1) // 只用资源包自发光。
+    {
+        float scale = overworld ? 0.01 : 0.1; // 下界末地放大十倍。
+        return float3(emissive * torchBrightness * scale);
+    }
+    float hardcoded = glowstone * 0.016; // 荧石权重。
+    hardcoded += torch * 0.03; // 火把权重。
+    hardcoded += fire * 0.004; // 火焰权重。
+    hardcoded += lava * 0.012; // 岩浆权重。
+    hardcoded += redstoneTorch * 0.001; // 红石火把权重。
+    hardcoded += oxidizedBulb * 0.0002; // 氧化铜灯权重。
+    float3 lightColor = hardcoded > 0.0 ? torchColor : float3(1.0); // 只有前六类光源染成火把色。
+    hardcoded += soulFire * 0.001; // 灵魂火权重。
+    hardcoded += amethyst * 0.0003; // 紫水晶权重。
+    hardcoded += endPortal * 4.0; // 末地传送门权重。
+    hardcoded += litHigh * 0.02; // 高亮实体。
+    hardcoded += litMedium * 0.005; // 中亮实体。
+    hardcoded += litLow * 0.002; // 低亮实体。
+    hardcoded += particleLit * 0.01; // 受光粒子。
+    hardcoded += redstone * 0.2 * emissive; // 红石按自发光缩放。
+    hardcoded *= length(albedo); // 贴图越亮，硬编码发光越强。
+    float darkScale = overworld ? 1.0 : 10.0; // 下界末地的整体倍率。
+    if (mode == 2) return lightColor * (max(hardcoded * textureBrightness, emissive * 0.005) * torchBrightness * darkScale); // 两者取较大。
+    return lightColor * (hardcoded * textureBrightness * torchBrightness * darkScale); // 只用硬编码。
+}
+
+// iterationT 的材质覆盖：水、彩色玻璃、冰按优先级替换整套材质参数，并标记为光滑。
+// 为什么先水后玻璃再冰：参考实现按这个顺序覆盖，后写的一方获胜；不要改成 else-if。
+void ogxApplyMaterialOverride(inout OgxPbrMaterial material, float water, float glass, float ice, inout bool isSmooth)
+{
+    if (water > 0.5) // 水材质：粗糙度与金属度为零，反射率 0.02，全反射。
+    {
+        material.roughness = 0.0;
+        material.metalness = 0.0;
+        material.f0 = 0.02;
+        material.emissiveness = 0.0;
+        material.scattering = 0.0;
+        material.reflectionStrength = 1.0;
+        isSmooth = true;
+    }
+    if (glass > 0.5) // 彩色玻璃：反射率 0.042。
+    {
+        material.roughness = 0.0;
+        material.metalness = 0.0;
+        material.f0 = 0.042;
+        material.emissiveness = 0.0;
+        material.scattering = 0.0;
+        material.reflectionStrength = 1.0;
+        isSmooth = true;
+    }
+    if (ice > 0.5) // 冰：反射率 0.018。
+    {
+        material.roughness = 0.0;
+        material.metalness = 0.0;
+        material.f0 = 0.018;
+        material.emissiveness = 0.0;
+        material.scattering = 0.0;
+        material.reflectionStrength = 1.0;
+        isSmooth = true;
+    }
+}
+
+// iterationT 的 labPBR 材质解码：与 `ogxPbrMaterialFromTex` 相同，但不叠加 Omni 的水洼粗糙度。
+// 为什么单独保留：参考实现的每一行常数都是画面合同的一部分，水洼混合属于额外功能，
+// 不能悄悄改变参考路径的粗糙度。
+OgxPbrMaterial ogxItxMaterialFromTex(inout float3 baseTex, float4 specTex, float wet,
+    bool usePorosity, int pbrFormat, float defaultPorosity, float porosityAbsorption,
+    bool roughnessClamp, float emissivenessGamma, float sssStrength, float sssOffset)
+{
+    float porosity = defaultPorosity; // 默认孔隙率。
+    if (usePorosity && pbrFormat < 2) // 资源包自带孔隙率时才解码高六位。
+    {
+        porosity = ogxSaturate(specTex.b * (255.0 / 63.0) - step(64.0 / 255.0, specTex.b));
+    }
+    baseTex *= 1.0 - wet * ogxFastSqrt(porosity) * porosityAbsorption; // 吸水压暗。
+    OgxPbrMaterial material; // 逐项填写。
+    float rawSmoothness = lerp(specTex.r, 1.0, ogxSaturate(wet * (1.7 - porosity * 0.7))); // 湿面更光滑。
+    material.roughness = 1.0 - rawSmoothness; // 平滑度取反。
+    material.roughness *= material.roughness; // 平方集中高光。
+    float rawMetalness = specTex.g; // 绿通道金属度。
+    if (pbrFormat == 0) rawMetalness = ogxSaturate(rawMetalness + step(0.9, rawMetalness)); // labPBR 金属位拉满。
+    material.metalness = roughnessClamp ? ogxSaturate(rawMetalness * 1.1 - 0.1) : rawMetalness; // 限制模式。
+    material.f0 = rawMetalness * 0.96 + 0.04; // 反射率。
+    material.reflectionStrength = roughnessClamp ? ogxSaturate(2.0 - material.roughness * 5.0) : ogxSaturate(2.0 - material.roughness * 2.0); // 粗糙面反射衰减。
+    material.reflectionStrength = ogxSaturate(material.reflectionStrength + material.metalness * 1e10 + wet * 3.0); // 金属与湿面全反射。
+    material.emissiveness = specTex.a; // 透明通道自发光。
+    if (pbrFormat < 2) material.emissiveness -= step(1.0, material.emissiveness); // 满值表示无自发光。
+    material.emissiveness = pow(material.emissiveness, emissivenessGamma); // 对比重整。
+    material.scattering = pbrFormat < 2 ? ogxSaturate((specTex.b * 255.0 - 64.0) / 191.0) * sssStrength + sssOffset : 0.0; // 蓝通道剩余位是散射。
+    return material; // 交回材质。
+}
+
 #endif

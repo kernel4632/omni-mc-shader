@@ -420,4 +420,61 @@ void ogxBiomeFogDensity(float4 weights, inout float uniformDensity, inout float 
     cloudyDensity = lerp(cloudyDensity, biomeCloudy, blend); // 团雾朝群系值混合。
 }
 
+// Eclipse 的群系雾密度：把沼泽、丛林、黑森林、苍白花园、沙暴、雪暴六类分开加权。
+// 参考实现先算总权重，再分别写密度两个分量；沙暴高度密度为零，雪暴固定 0.01。
+void ogxBiomeFogDensityEclipse(inout float4 uniformDensity, inout float4 cloudyDensity,
+    float paleGarden, float jungles, float swamps, float darkForests, float sandStorm, float snowStorm,
+    float swampUniform, float jungleUniform, float darkForestUniform, float paleGardenUniform,
+    float swampCloudy, float jungleCloudy, float darkForestCloudy, float paleGardenCloudy, float maxDistance)
+{
+    float inBiome = clamp(paleGarden + jungles + swamps + darkForests + sandStorm + snowStorm, 0.0, 1.0); // 六类群系的总权重。
+    float2 density = float2(0.0); // 高度密度与团雾密度。
+    density.x = swamps * swampUniform + jungles * jungleUniform + darkForests * darkForestUniform
+              + sandStorm * 0.0 + snowStorm * 0.01; // 高度密度里沙暴为零、雪暴固定 0.01。
+    density.y = paleGarden * paleGardenCloudy + swamps * swampCloudy + jungles * jungleCloudy
+              + darkForests * darkForestCloudy + sandStorm * 0.5 + snowStorm * 0.5; // 团雾密度六类都参与。
+    uniformDensity = lerp(uniformDensity, float4(density.x), inBiome * maxDistance); // 高度密度混合。
+    cloudyDensity = lerp(cloudyDensity, float4(density.y), inBiome * maxDistance); // 团雾密度混合。
+}
+
+// Eclipse 末地雾的相函数：与云相函数同形，但常数用 3.14 而不是 pi，保留参考精度。
+float ogxEndFogPhaseEclipse(float x, float g)
+{
+    float gg = g * g; // g 的平方。
+    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考实现直接写 3.14。
+}
+
+// iterationT 的原版雾叠加：黑暗、失明、水下与岩浆四种状态分别压暗画面。
+// 为什么按状态分开：每种状态的距离范围与目标颜色不同，合并会改变边界。
+float3 ogxVanillaFog(float3 color, float dist, float farPlane, float darkness, float blindness,
+    int eyeInWater, float torchBrightness)
+{
+    if (darkness > 0.0) // 黑暗效果：远处逐步变黑。
+    {
+        color = lerp(color, float3(0.0), smoothstep(5.0, lerp(farPlane, 15.0, darkness), dist) * darkness);
+    }
+    if (blindness > 0.0) // 失明效果：更近距离变黑。
+    {
+        color = lerp(color, float3(0.0), smoothstep(1.5, lerp(farPlane, 4.5, blindness), dist) * blindness);
+    }
+    if (eyeInWater == 3) // 细雪或粉雪：近处压成深灰。
+    {
+        color = lerp(color, float3(0.03), smoothstep(0.0, 2.0, dist));
+    }
+    if (eyeInWater == 2) // 岩浆：近处压成暖橙。
+    {
+        color = lerp(color, float3(0.3721, 0.0775, 0.0024) * torchBrightness, smoothstep(0.0, 1.0, dist));
+    }
+    return color; // 返回叠加后的颜色。
+}
+
+// iterationT 的选择框：选中方块时用贴图色乘曝光统计值，覆盖原画面。
+float3 ogxSelectionBox(float3 color, float3 albedo, bool isSelection, float exposureEncoded, float exposureOutputFactor)
+{
+    if (!isSelection) return color; // 没有选中就不改。
+    float exposure = exposureEncoded * exposureEncoded * exposureEncoded * exposureEncoded; // CurveToLinear 的标量版。
+    exposure *= 1500.0 / exposureOutputFactor; // 参考实现的曝光缩放。
+    return albedo * exposure; // 选中框用贴图色乘曝光。
+}
+
 #endif

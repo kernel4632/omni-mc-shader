@@ -1,654 +1,708 @@
 {
-  "note": "参考函数到 omni-gfx 的人工对照表。只写确认过的对应关系；键是参考包里的函数名，值是 模块.函数。status 用来覆盖自动判定，必须写清证据。",
-  "mapped": {
-    "ACES": "color.ogxAces",
-    "ACESFilm": "color.ogxTonemapAcesFilm",
-    "AgX": "color.ogxAgx",
-    "AgXConfigurable": "color.ogxAgx",
-    "AgXConfigurable1": "color.ogxAgx",
-    "AgxDefaultContrastApprox": "color.ogxAgxContrast",
-    "agxDefaultContrastApprox": "color.ogxAgxContrast",
-    "agxLook": "color.ogxAdvancedColor",
-    "AlmostIdentity": "water.ogxAlmostIdentity",
-    "ApplyMaterial": "surface.ogxMaterialNormal",
-    "AtrousWaveletFilter": "reflection.ogxReflectionAtrousFilter",
-    "AxialGaussianBlur": "post.ogxAxialGaussianBlur",
-    "BayerTemproal": "sampling.ogxBayerTemporal",
-    "BicubicBlurNoise": "cloud.ogxBicubicBlurNoise",
-    "BicubicBlurTexture": "math.ogxBicubicBlurTexture",
-    "BicubicTexture": "math.ogxBicubicTexture",
-    "BicubicTextureVec4": "antialias.ogxBicubicTexture4",
-    "BilinearHeightSample": "parallax.ogxParallaxHeightBilinear",
-    "BilinearNoise": "cloud.ogxBilinearNoise",
-    "BlackBar": "color.ogxBlackBar",
-    "Blackbody": "math.ogxBlackbody",
-    "blackbody": "math.ogxBlackbody",
-    "BlackHole_AccretionDisc_Reflection": "accretion.ogxAccretionDisc",
-    "BlackHole_AccretionDisc_Stars": "accretion.ogxAccretionDisc",
-    "BlockLighting": "surface.ogxBlockLight",
-    "BloomDownSample": "post.ogxBloomDownsample",
-    "BlueNoise": "sampling.ogxBlueNoise",
-    "BlueNoiseTemproal": "sampling.ogxBlueNoiseTemporal",
-    "CalculateCameraVelocity": "gi.ogxGiCameraVelocity",
-    "CalculateCloudFBM": "fog.ogxCloudFbm",
-    "CalculateCloudFBM_LQ": "noise.ogxFbm3",
-    "CalculateStars": "atmosphere.ogxStarsStable",
-    "CalculateWaterCaustics": "water.ogxWaterCaustics",
-    "ClampRadius": "atmosphere.ogxClampRadius",
-    "CloudLighting": "cloud_volume.ogxCumulusLighting",
-    "CloudShadowFromTex": "cloud.ogxCloudShadowSample",
-    "CloudShadowTex": "cloud.ogxCloudShadowSample",
-    "ComputeCompressionMatrix": "color.ogxSaturationMatrix",
-    "CurveBlockLightSky": "surface.ogxCurveBlockLightSky",
-    "CurveBlockLightTorch": "surface.ogxCurveBlockLightTorch",
-    "CurveToLinear": "math.ogxCurveToLinear",
-    "DecodeNormal": "math.ogxDecodeNormal",
-    "DecodeNormalTex": "math.ogxDecodeNormalTex",
-    "Disc": "atmosphere.ogxDiscProfile",
-    "DistanceToBottomAtmosphereBoundary": "atmosphere.ogxAtmosphereDistanceToGround",
-    "DistanceToTopAtmosphereBoundary": "atmosphere.ogxAtmosphereDistanceToTop",
-    "DistortShadowScreenPos": "shadow.ogxDistortShadowPos",
-    "DoNightEye": "math.ogxDoNightEye",
-    "EncodeNormal": "math.ogxEncodeNormal",
-    "EndFog": "fog.ogxEndFogDensity",
-    "F_Schlick": "math.ogxFresnelSchlick",
-    "Fd_Burley": "math.ogxDiffuseBurley",
-    "FogDensity": "fog.ogxFogDensity",
-    "FogPhase": "fog.ogxFogPhase",
-    "FsrEasuSet": "upscale.ogxFsrEasuSet",
-    "FsrEasuTap": "upscale.ogxFsrEasuTap",
-    "Full_Reinhard_Edit": "color.ogxTonemapReinhard",
-    "GGX": "math.ogxDistributionGGX",
-    "GammaToLinear": "math.ogxGammaToLinear",
-    "GetCombinedTextureCoordFromUnitRange": "atmosphere_model.ogxAtmoCombinedTextureCoord",
-    "GetExtrapolatedSingleMieScattering": "atmosphere_model.ogxAtmoExtrapolatedMie",
-    "GetPlanarCloudsDensity": "cloud.ogxPlanarDensity",
-    "GetPlanarCloudsDistortion": "cloud.ogxPlanarDistortion",
-    "GetPlanarCloudsLightingDensity": "cloud.ogxPlanarLightingDensity",
-    "GetProfileDensityAbsorption": "atmosphere_model.ogxAtmoDensityAbsorption",
-    "GetProfileDensityRayleighMie": "atmosphere_model.ogxAtmoDensityRayleighMie",
-    "GetScatteringTextureUvwzFromRMuMuSNu": "atmosphere_model.ogxAtmoScatteringUvwz",
-    "GetSunAndSkyIrradiance": "atmosphere_model.ogxAtmoSunSkyIrradiance",
-    "GetTextureCoordFromUnitRange": "atmosphere.ogxSubTextureCoord",
-    "GetTransmittance": "atmosphere_model.ogxAtmoTransmittance",
-    "GetTransmittanceTextureUvFromRMu": "atmosphere_model.ogxAtmoTransmittanceUv",
-    "GetTransmittanceToSun": "atmosphere_model.ogxAtmoTransmittanceToSun",
-    "GetTransmittanceToTopAtmosphereBoundary": "atmosphere_model.ogxAtmoTransmittanceToTop",
-    "GetVariance3x3": "antialias.ogxTaaVariance3x3",
-    "GetWaterParallaxCoord": "water.ogxWaterParallax",
-    "GetWavesNormal": "water.ogxWavesNormal",
-    "GTAOMultiBounce": "gi.ogxAoMultiBounce",
-    "HaltonSeq2": "sampling.ogxHalton2",
-    "HaltonSeq3": "sampling.ogxHalton3",
-    "HableTonemap": "color.ogxTonemapHable",
-    "HenyeyGreenstein": "cloud.ogxHenyeyGreenstein",
-    "HsvToRgb": "color.ogxHsvToRgb",
-    "InterleavedGradientNoise": "math.ogxInterleavedGradientNoise",
-    "LinearDepth_From_ScreenDepth_DH": "reflection.ogxReflectionDhToScreenDepth",
-    "LinearToGamma": "math.ogxLinearToGamma",
-    "LinearTosRGB": "color.ogxLinearToSrgb",
-    "MaterialFromTex": "surface.ogxPbrMaterialFromTex",
-    "MiePhaseFunction": "math.ogxMiePhase",
-    "MultiScatteringPhases": "fog.ogxMultiScatteringPhases",
-    "NetherFogColor": "fog.ogxNetherBiomeFogColor",
-    "NetherLighting": "fog.ogxNetherBiomeLighting",
-    "NoisyStarField": "atmosphere.ogxStarNoisyField",
-    "None": "color.ogxTonemapNone",
-    "no_tonemapper": "color.ogxTonemapNone",
-    "OctWrap": "math.ogxOctWrap",
-    "Pack2x16": "math.ogxPack2x16",
-    "Pack2x8": "math.ogxPack2x8",
-    "PowderEffect": "fog.ogxFogPowder",
-    "ProjectSky": "atmosphere.ogxSkyProject",
-    "R2_Sample": "math.ogxR2Sample",
-    "RRTAndODTFit": "color.ogxRrtOdtFit",
-    "RayIntersectsGround": "atmosphere.ogxSphereRayIntersectsGround",
-    "RayPlaneIntersection": "math.ogxRayPlaneIntersection",
-    "RaySphereIntersection": "math.ogxRaySphereIntersection",
-    "RayleighPhaseFunction": "math.ogxRayleighPhase",
-    "RenderMoonDisc": "atmosphere.ogxMoonDiscReal",
-    "RenderMoonDiscReflection": "atmosphere.ogxMoonDiscReflection",
-    "RenderSunDisc": "atmosphere.ogxSunDisc",
-    "RgbToHsv": "math.ogxRgbToHsv",
-    "RotateMatrix": "math.ogxRotateMatrix",
-    "SafeSqrt": "atmosphere.ogxSafeSqrt",
-    "SampleCurrDepthDHFetchClosest3x3": "antialias.ogxTaaFetchCurrent",
-    "SampleCurrDepthFetchClosest3x3": "antialias.ogxTaaSampleCurrent",
-    "SampleDepthDHFetch": "antialias.ogxTaaPrevDepthFetch",
-    "SamplePrevDepthMinMax3x3": "antialias.ogxTaaPrevDepthMinmax",
-    "SampleVNDFGGX": "reflection.ogxSampleGgxVndf",
-    "sampleGGXVNDF": "reflection.ogxSampleGgxVndf",
-    "ScreenDepth_From_LinearDepth": "post.ogxScreenDepthFromLinearDepth",
-    "ScreenPos_From_ViewPos": "shadow.ogxShadowScreenPos",
-    "Sequences_R1": "math.ogxR2Sample",
-    "Sequences_R2": "math.ogxR2Sample",
-    "SetVoxelBlock": "voxel.ogxVoxelWriteIndex",
-    "ShadowScreenPos_From_WorldPos": "shadow.ogxShadowScreenPos",
-    "ShadowScreenPos_From_WorldPos_Distorted": "shadow.ogxShadowScreenPosDistorted",
-    "simpleScattering": "atmosphere.ogxAtmosphereSky",
-    "SpecularGGX": "math.ogxSpecularGGX",
-    "SpiralSample": "math.ogxSpiralSample",
-    "StableStarField": "atmosphere.ogxStarsStable",
-    "TemporalReprojection": "antialias.ogxTaaReproject",
-    "TextureLighting": "surface.ogxBlockLight",
-    "ToneMap_AgX": "color.ogxAgx",
-    "ToneMap_AgX_minimal": "color.ogxAgx",
-    "ToneMap_AgX_minimal_merlin": "color.ogxAgx",
-    "ToneMap_Hejl2015": "color.ogxTonemapHejl",
-    "Tonemap_Full_Reinhard": "color.ogxTonemapReinhard",
-    "Tonemap_Lottes": "color.ogxTonemapLottes",
-    "Tonemap_Uchimura": "color.ogxTonemapUchimura",
-    "Tonemap_Uchimura_Modified": "color.ogxTonemapUchimura",
-    "Unpack2x16": "math.ogxUnpack2x16",
-    "Unpack2x8": "math.ogxUnpack2x8",
-    "V_Schlick": "math.ogxVisibilitySchlick",
-    "ViewPos_From_ScreenPos": "gi.ogxGiViewPos",
-    "ViewPos_From_ScreenPos_DH": "gi.ogxGiViewPosDh",
-    "ViewPos_From_ScreenPos_Raw": "gi.ogxGiViewPos",
-    "Vignette": "post.ogxVignette",
-    "WarpSpace": "math.ogxWarpSpace",
-    "YCoCg_To_RGB": "antialias.ogxYCoCgToRgb",
-    "RGB_To_YCoCg": "antialias.ogxRgbToYCoCg",
-    "ambient_occlusion": "gi.ogxGroundTruthAo",
-    "applyShadowBias": "shadow.ogxApplyShadowBias",
-    "BiasShadowProjection": "shadow.ogxApplyShadowBias",
-    "atan2": "math.ogxAtan2",
-    "aurora": "atmosphere.ogxAurora",
-    "bayer2": "math.ogxBayer2",
-    "bayer4": "math.ogxBayer4",
-    "bayer8": "math.ogxBayer8",
-    "bayer64": "math.ogxBayer64",
-    "bayerDither": "math.ogxBayer8",
-    "cartToSphere": "math.ogxCircleMap",
-    "circlemap": "math.ogxCircleMap",
-    "circlemapL": "math.ogxCircleMap",
-    "clipAABB": "antialias.ogxClipAabb",
-    "cosineHemisphereSample": "math.ogxCosineHemisphere",
-    "convertHandDepth_3": "math.ogxConvertHandDepth3",
-    "frisvad": "math.ogxTangentBasis",
-    "genUnitVector": "math.ogxCosineHemisphere",
-    "hash11": "noise.ogxHash13",
-    "hash13": "noise.ogxHash13",
-    "hash12_alt": "noise.ogxHash12",
-    "hash2": "noise.ogxHash22",
-    "hash31": "noise.ogxHash13",
-    "hash": "noise.ogxHash13",
-    "hash_aurora": "noise.ogxHash13",
-    "normalize_safe": "math.ogxNormalize",
-    "perlin_gradient": "noise.ogxPerlinGradient2",
-    "phaseRayleigh": "math.ogxRayleighPhase",
-    "phaseCloud": "cloud.ogxHenyeyGreenstein",
-    "phaseEND": "fog.ogxEndVortexLightPhase",
-    "endFogPhase": "fog.ogxEndVortexLightPhase",
-    "physics_waveHeight": "water.ogxOceanWaveHeight",
-    "physics_waveDirection": "water.ogxOceanWaveDirection",
-    "physics_wavePixel": "water.ogxOceanPixel",
-    "planeIntersect": "math.ogxRayPlaneIntersection",
-    "primaries_to_matrix": "color.ogxSaturationMatrix",
-    "reinhard": "color.ogxTonemapReinhard",
-    "sky_airmass": "atmosphere.ogxAtmosphereOpticalDepth",
-    "sky_density": "atmosphere.ogxExponentialDensity",
-    "sky_miePhase": "math.ogxMiePhase",
-    "sky_opticalDepth": "atmosphere.ogxAtmosphereOpticalDepth",
-    "sky_phase": "fog.ogxFogPhase",
-    "sky_rayleighPhase": "math.ogxRayleighPhase",
-    "sky_transmittance": "atmosphere.ogxAtmosphereTransmittance",
-    "skyFromTex": "atmosphere_model.ogxAtmoSkyRadiance",
-    "sphereMap": "atmosphere.ogxSkyProject",
-    "sphereToCart": "atmosphere.ogxSkyUnproject",
-    "sphereToCarte": {
-      "target": "atmosphere.ogxSkyEquirect",
-      "evidence": "同一经纬投影：方向转零到一的贴图坐标"
-    },
-    "starTemp": "atmosphere.ogxStarTemperature",
-    "stars": "atmosphere.ogxStarsStable",
-    "texture_bicubic": "math.ogxBicubicTexture",
-    "texture_bicubic_offset": "math.ogxBicubicTexture",
-    "toLinear": "math.ogxGammaToLinear",
-    "unproject": "atmosphere.ogxSkyUnproject",
-    "volumetricsFromTex": "fog_volume.ogxFogCloudBicubic",
-    "voxelIndex": "voxel.ogxVoxelWriteIndex",
-    "traceQuarterVoxel": "voxel.ogxVoxelReflection",
-    "getRotMat": "math.ogxRotateMatrix",
-    "mat2_rotate_z": "math.ogxRotateMatrix",
-    "linear_step": "math.ogxRemapSaturate",
-    "clamp01": "math.ogxSaturate",
-    "clampNormal": "math.ogxNormalize",
-    "luma": "math.ogxLuminance",
-    "sqr": "math.ogxSquare",
-    "length_squared": "math.ogxLengthSquared",
-    "rcp_length": "math.ogxSafeInvLength",
-    "max_of": "math.ogxMaxVec3",
-    "min_of": "math.ogxMinVec3",
-    "AABBintersection": "math.ogxRayBoxIntersection",
-    "AABBintersection2": "math.ogxRayBoxRange",
-    "max3": "math.ogxMaxVec3",
-    "min3": "math.ogxMinVec3",
-    "sampleRGSS": "sampling.ogxRgssSample",
-    "shlickFresnelRoughness": "math.ogxFresnelSchlick",
-    "tangentToWorld": "math.ogxTangentBasis",
-    "TangentToWorld": "math.ogxTangentBasis",
-    "getPlanetShadow": "planet.ogxPlanetEnd",
-    "getCloudShadow": "cloud.ogxCloudShadow",
-    "GetCloudShadow": "cloud.ogxCloudShadow",
-    "getCloudScattering": "cloud.ogxCloudMarch",
-    "getCloudLighting": "cloud.ogxCloudLight",
-    "raymarchCloudSimple": "cloud.ogxCloudMarch",
-    "ApplySSRT": "reflection.ogxReflectionSceneColor",
-    "CleanVoxelSample": "voxel.ogxVoxelShade",
-    "ComputeVoxelShadowMap": "voxel.ogxVoxelWriteIndex",
-    "CoordBase": "math.ogxCircleMap",
-    "DH_invLinZ": "reflection.ogxReflectionDhToScreenDepth",
-    "invLinZ": "reflection.ogxReflectionLinearDepth",
-    "linZ": "reflection.ogxReflectionLinearDepth",
-    "linZ2": "reflection.ogxReflectionLinearDepth",
-    "normalize_hash": "noise.ogxHash22",
-    "nrand": "noise.ogxWhiteNoise",
-    "rand": "noise.ogxWhiteNoise",
-    "truncateNormal": "math.ogxNormalize",
-    "fast_acos": "math.ogxFastAcos",
-    "facos": "math.ogxFastAcos",
-    "physics_waveNormal": "water.ogxOceanWaveNormal",
-    "SetCloudPos": "cloud_volume.ogxCumulusSetPos",
-    "curveTop": "cloud.ogxCloudTopCurve",
-    "GetLpvBlockLight": "lpv.ogxLpvBlockLight",
-    "GetLpvSkyLight": "lpv.ogxLpvSkyLight",
-    "drawSun": "atmosphere.ogxSunDisc",
-    "drawMoon": "atmosphere.ogxMoonDiscDefault",
-    "drawRealMoon": "atmosphere.ogxMoonDiscReal",
-    "Iris_Lightningflash": "fog_volume.ogxFogLightning",
-    "Iris_Lightningflash_VLcloud": "cloud_volume.ogxCumulusLightning",
-    "Iris_Lightningflash_VLfog": "fog_volume.ogxFogLightning",
-    "equation_full_curve": "color.ogxAgx",
-    "equation_scale": "color.ogxAgx",
-    "RotationToSlide": "color.ogxAgx",
-    "SlidePrimary": "color.ogxAgx",
-    "open_domain_to_normalized_log2": "color.ogxAgx",
-    "pcurve": "color.ogxAgx",
-    "tri": "math.ogxTriangleWave",
-    "tri2": "math.ogxTriangleWave",
-    "cube": "math.ogxSquare",
-    "fma2": "math.ogxFma2",
-    "sincos": "math.ogxSinCos",
-    "rotate": "math.ogxRotate2",
-    "mm2": "math.ogxRotate2",
-    "reinhard_jodie": "color.ogxTonemapReinhard",
-    "curve": "color.ogxAgxContrast",
-    "BilateralUpscale_SSAO": {
-      "target": "gi.ogxBilateralUpscale",
-      "evidence": "四邻域按深度差剔除后升采样；参考实现的固定步长换成分辨率倍数参数"
-    },
-    "Tonemap_Xonk": {
-      "target": "color.ogxTonemapXonk",
-      "evidence": "同名曲线：先抬 1.3 次幂，再除以自身加 0.333"
-    },
-    "decodeVec2_16": {
-      "target": "color.ogxDecodeVec2x16",
-      "evidence": "同一组常数把打包值拆成两个十六位分量，不依赖浮点位模式"
-    },
-    "rsi": {
-      "target": "math.ogxRaySphereHit",
-      "evidence": "同一球面求交算式，未命中时同样返回两个负一"
-    },
-    "iqint2": {
-      "target": "noise.ogxIntegerHash3",
-      "evidence": "同一 Inigo Quilez 整数哈希：三轮右移异或再乘 1103515245"
-    },
-    "w0": {
-      "target": "math.ogxCubicWeight0",
-      "evidence": "同一三次 B 样条权重，常数逐项相同"
-    },
-    "w1": {
-      "target": "math.ogxCubicWeight1",
-      "evidence": "同一三次 B 样条权重，常数逐项相同"
-    },
-    "w2": {
-      "target": "math.ogxCubicWeight2",
-      "evidence": "同一三次 B 样条权重，常数逐项相同"
-    },
-    "w3": {
-      "target": "math.ogxCubicWeight3",
-      "evidence": "同一三次 B 样条权重，常数逐项相同"
-    },
-    "g0": {
-      "target": "math.ogxCubicWeightLow",
-      "evidence": "同一左侧两个权重之和"
-    },
-    "g1": {
-      "target": "math.ogxCubicWeightHigh",
-      "evidence": "同一右侧两个权重之和"
-    },
-    "h0": {
-      "target": "math.ogxCubicOffsetLow",
-      "evidence": "同一合并采样点的左偏移"
-    },
-    "h1": {
-      "target": "math.ogxCubicOffsetHigh",
-      "evidence": "同一合并采样点的右偏移"
-    },
-    "D_Walter": {
-      "target": "math.ogxDistributionGGX",
-      "evidence": "同一 GGX 分布公式与同一组常数，库里按行业名命名"
-    },
-    "R2_samples": {
-      "target": "math.ogxR2Sample",
-      "evidence": "同一 R2 低差异序列与同一组黄金比例常数"
-    },
-    "CalculateCoCRadius": {
-      "target": "post.ogxCocRadius",
-      "evidence": "同一薄透镜弥散圆公式，参数顺序一致"
-    },
-    "fp10Dither": {
-      "target": "post.ogxDitherFloat",
-      "evidence": "同一浮点抖动；调用时尾数位数取 (6,6,5)"
-    },
-    "fp16Dither": {
-      "target": "post.ogxDitherFloat",
-      "evidence": "同一浮点抖动；调用时尾数位数取 10"
-    },
-    "int8Dither": {
-      "target": "post.ogxDitherFixed",
-      "evidence": "同一定点抖动；调用时位数取 8"
-    },
-    "int10Dither": {
-      "target": "post.ogxDitherFixed",
-      "evidence": "同一定点抖动；调用时位数取 10"
-    },
-    "int16Dither": {
-      "target": "post.ogxDitherFixed",
-      "evidence": "同一定点抖动；调用时位数取 16"
-    },
-    "GetDistOffset": {
-      "target": "post.ogxGlareDistOffset",
-      "evidence": "同一桶形畸变偏移，桶形强度改为显式参数"
-    },
-    "flare": {
-      "target": "post.ogxGlareFlare",
-      "evidence": "同一带色散的软光斑，桶形强度改为显式参数"
-    },
-    "orb": {
-      "target": "post.ogxGlareOrb",
-      "evidence": "同一六连圆形光斑与末尾大光斑，桶形强度改为显式参数"
-    },
-    "ring": {
-      "target": "post.ogxGlareRing",
-      "evidence": "同一环状光环与三通道色散"
-    },
-    "H": {
-      "target": "atmosphere.ogxChandrasekharH",
-      "evidence": "同一钱德拉塞卡近似，算式逐项相同"
-    },
-    "ppss": {
-      "target": "atmosphere.ogxPlanetBrdf",
-      "evidence": "同一行星表面 BRDF：入射角曲线、两侧近似与相函数分母相同"
-    },
-    "skyCloudsFromTexBLUR": {
-      "target": "atmosphere.ogxSkyCloudsFromTex",
-      "evidence": "参考实现的 scaler 参数未参与计算，函数体与 skyCloudsFromTex 相同，库只保留一份"
-    }
+ "note": "参考函数到 omni-gfx 的人工对照表。只写确认过的对应关系；键是参考包里的函数名，值是 模块.函数。status 用来覆盖自动判定，必须写清证据。",
+ "mapped": {
+  "ACES": "color.ogxAces",
+  "ACESFilm": "color.ogxTonemapAcesFilm",
+  "AgX": "color.ogxAgx",
+  "AgXConfigurable": "color.ogxAgxConfigurable",
+  "AgXConfigurable1": "color.ogxAgxConfigurable1",
+  "AgxDefaultContrastApprox": "color.ogxAgxContrast",
+  "agxDefaultContrastApprox": "color.ogxAgxContrast",
+  "agxLook": "color.ogxAgxLook",
+  "AlmostIdentity": "water.ogxAlmostIdentity",
+  "ApplyMaterial": "surface.ogxApplyMaterialOverride",
+  "AtrousWaveletFilter": "reflection.ogxReflectionAtrousFilter",
+  "AxialGaussianBlur": "post.ogxAxialGaussianBlur",
+  "BayerTemproal": "sampling.ogxBayerTemporal",
+  "BicubicBlurNoise": "cloud.ogxBicubicBlurNoise",
+  "BicubicBlurTexture": "math.ogxBicubicBlurTexture",
+  "BicubicTexture": "math.ogxBicubicTexture",
+  "BicubicTextureVec4": "antialias.ogxBicubicTexture4",
+  "BilinearHeightSample": "parallax.ogxParallaxHeightBilinear",
+  "BilinearNoise": "cloud.ogxBilinearNoise",
+  "BlackBar": "color.ogxBlackBar",
+  "Blackbody": "math.ogxBlackbody",
+  "blackbody": "color.ogxBlackbodyEclipse",
+  "BlackHole_AccretionDisc_Reflection": "accretion.ogxAccretionDisc",
+  "BlackHole_AccretionDisc_Stars": "accretion.ogxAccretionDisc",
+  "BlockLighting": "surface.ogxBlockLight",
+  "BloomDownSample": "post.ogxBloomDownsample",
+  "BlueNoise": "sampling.ogxBlueNoise",
+  "BlueNoiseTemproal": "sampling.ogxBlueNoiseTemporal",
+  "CalculateCameraVelocity": "gi.ogxGiCameraVelocity",
+  "CalculateCloudFBM": "fog.ogxCloudFbm",
+  "CalculateCloudFBM_LQ": "noise.ogxFbm3",
+  "CalculateStars": "atmosphere.ogxStarsStable",
+  "CalculateWaterCaustics": "water.ogxWaterCaustics",
+  "ClampRadius": "atmosphere.ogxClampRadius",
+  "CloudLighting": "cloud_volume.ogxCumulusLighting",
+  "CloudShadowFromTex": "cloud.ogxCloudShadowSample",
+  "CloudShadowTex": "cloud.ogxCloudShadowSample",
+  "ComputeCompressionMatrix": "color.ogxAgxComputeCompressionMatrix",
+  "CurveBlockLightSky": "surface.ogxCurveBlockLightSky",
+  "CurveBlockLightTorch": "surface.ogxCurveBlockLightTorch",
+  "CurveToLinear": "math.ogxCurveToLinear",
+  "DecodeNormal": "math.ogxDecodeNormal",
+  "DecodeNormalTex": "math.ogxDecodeNormalTex",
+  "Disc": "atmosphere.ogxDiscProfile",
+  "DistanceToBottomAtmosphereBoundary": "atmosphere.ogxAtmosphereDistanceToGround",
+  "DistanceToTopAtmosphereBoundary": "atmosphere.ogxAtmosphereDistanceToTop",
+  "DistortShadowScreenPos": "shadow.ogxDistortShadowPos",
+  "DoNightEye": "math.ogxDoNightEye",
+  "EncodeNormal": "math.ogxEncodeNormal",
+  "EndFog": "fog.ogxEndFogDensity",
+  "F_Schlick": "math.ogxFresnelSchlick",
+  "Fd_Burley": "math.ogxDiffuseBurley",
+  "FogDensity": "fog.ogxFogDensity",
+  "FogPhase": "fog.ogxFogPhase",
+  "FsrEasuSet": "upscale.ogxFsrEasuSet",
+  "FsrEasuTap": "upscale.ogxFsrEasuTap",
+  "Full_Reinhard_Edit": "color.ogxTonemapReinhardEdit",
+  "GGX": "math.ogxDistributionGGX",
+  "GammaToLinear": "math.ogxGammaToLinear",
+  "GetCombinedTextureCoordFromUnitRange": "atmosphere_model.ogxAtmoCombinedTextureCoord",
+  "GetExtrapolatedSingleMieScattering": "atmosphere_model.ogxAtmoExtrapolatedMie",
+  "GetPlanarCloudsDensity": "cloud.ogxPlanarDensity",
+  "GetPlanarCloudsDistortion": "cloud.ogxPlanarDistortion",
+  "GetPlanarCloudsLightingDensity": "cloud.ogxPlanarLightingDensity",
+  "GetProfileDensityAbsorption": "atmosphere_model.ogxAtmoDensityAbsorption",
+  "GetProfileDensityRayleighMie": "atmosphere_model.ogxAtmoDensityRayleighMie",
+  "GetScatteringTextureUvwzFromRMuMuSNu": "atmosphere_model.ogxAtmoScatteringUvwz",
+  "GetSunAndSkyIrradiance": "atmosphere_model.ogxAtmoSunSkyIrradiance",
+  "GetTextureCoordFromUnitRange": "atmosphere.ogxSubTextureCoord",
+  "GetTransmittance": "atmosphere_model.ogxAtmoTransmittance",
+  "GetTransmittanceTextureUvFromRMu": "atmosphere_model.ogxAtmoTransmittanceUv",
+  "GetTransmittanceToSun": "atmosphere_model.ogxAtmoTransmittanceToSun",
+  "GetTransmittanceToTopAtmosphereBoundary": "atmosphere_model.ogxAtmoTransmittanceToTop",
+  "GetVariance3x3": "antialias.ogxTaaVariance3x3",
+  "GetWaterParallaxCoord": "water.ogxWaterParallax",
+  "GetWavesNormal": "water.ogxWavesNormal",
+  "GTAOMultiBounce": "gi.ogxAoMultiBounce",
+  "HaltonSeq2": "sampling.ogxHalton2",
+  "HaltonSeq3": "sampling.ogxHalton3",
+  "HableTonemap": "color.ogxTonemapHable",
+  "HenyeyGreenstein": "cloud.ogxHenyeyGreenstein",
+  "HsvToRgb": "color.ogxHsvToRgb",
+  "InterleavedGradientNoise": "math.ogxInterleavedGradientNoise",
+  "LinearDepth_From_ScreenDepth_DH": "reflection.ogxReflectionDhToScreenDepth",
+  "LinearToGamma": "math.ogxLinearToGamma",
+  "LinearTosRGB": "color.ogxLinearToSrgb",
+  "MaterialFromTex": "surface.ogxItxMaterialFromTex",
+  "MiePhaseFunction": "math.ogxMiePhase",
+  "MultiScatteringPhases": "fog.ogxMultiScatteringPhases",
+  "NetherFogColor": "fog.ogxNetherBiomeFogColor",
+  "NetherLighting": "fog.ogxNetherBiomeLighting",
+  "NoisyStarField": "atmosphere.ogxStarNoisyField",
+  "None": "color.ogxTonemapNone",
+  "no_tonemapper": "color.ogxTonemapNone",
+  "OctWrap": "math.ogxOctWrap",
+  "Pack2x16": "math.ogxPack2x16",
+  "Pack2x8": "math.ogxPack2x8",
+  "PowderEffect": "fog.ogxFogPowder",
+  "ProjectSky": "atmosphere.ogxSkyProject",
+  "R2_Sample": "math.ogxR2Sample",
+  "RRTAndODTFit": "color.ogxRrtOdtFit",
+  "RayIntersectsGround": "atmosphere.ogxSphereRayIntersectsGround",
+  "RayPlaneIntersection": "math.ogxRayPlaneIntersection",
+  "RaySphereIntersection": "math.ogxRaySphereIntersection",
+  "RayleighPhaseFunction": "math.ogxRayleighPhase",
+  "RenderMoonDisc": "atmosphere.ogxMoonDiscReal",
+  "RenderMoonDiscReflection": "atmosphere.ogxMoonDiscReflection",
+  "RenderSunDisc": "atmosphere.ogxSunDisc",
+  "RgbToHsv": "math.ogxRgbToHsv",
+  "RotateMatrix": "math.ogxRotateMatrix",
+  "SafeSqrt": "atmosphere.ogxSafeSqrt",
+  "SampleCurrDepthDHFetchClosest3x3": "antialias.ogxTaaFetchCurrent",
+  "SampleCurrDepthFetchClosest3x3": "antialias.ogxTaaSampleCurrent",
+  "SampleDepthDHFetch": "antialias.ogxTaaPrevDepthFetch",
+  "SamplePrevDepthMinMax3x3": "antialias.ogxTaaPrevDepthMinmax",
+  "SampleVNDFGGX": "reflection.ogxSampleGgxVndf",
+  "sampleGGXVNDF": "reflection.ogxSampleGgxVndf",
+  "ScreenDepth_From_LinearDepth": "post.ogxScreenDepthFromLinearDepth",
+  "ScreenPos_From_ViewPos": "shadow.ogxShadowScreenPos",
+  "Sequences_R1": "math.ogxSequenceR1",
+  "Sequences_R2": "math.ogxSequenceR2",
+  "SetVoxelBlock": "voxel.ogxVoxelWriteIndex",
+  "ShadowScreenPos_From_WorldPos": "shadow.ogxShadowScreenPos",
+  "ShadowScreenPos_From_WorldPos_Distorted": "shadow.ogxShadowScreenPosDistorted",
+  "simpleScattering": "atmosphere.ogxAtmosphereSky",
+  "SpecularGGX": "math.ogxSpecularGGX",
+  "SpiralSample": "math.ogxSpiralSample",
+  "StableStarField": "atmosphere.ogxStarsStable",
+  "TemporalReprojection": "antialias.ogxTaaReproject",
+  "TextureLighting": "surface.ogxItxTextureLighting",
+  "ToneMap_AgX": "color.ogxToneMapAgx",
+  "ToneMap_AgX_minimal": "color.ogxToneMapAgxMinimal",
+  "ToneMap_AgX_minimal_merlin": "color.ogxToneMapAgxMerlin",
+  "ToneMap_Hejl2015": "color.ogxTonemapHejl",
+  "Tonemap_Full_Reinhard": "color.ogxTonemapReinhardFull",
+  "Tonemap_Lottes": "color.ogxTonemapLottes",
+  "Tonemap_Uchimura": "color.ogxTonemapUchimuraExp",
+  "Tonemap_Uchimura_Modified": "color.ogxTonemapUchimuraModified",
+  "Unpack2x16": "math.ogxUnpack2x16",
+  "Unpack2x8": "math.ogxUnpack2x8",
+  "V_Schlick": "math.ogxVisibilitySchlick",
+  "ViewPos_From_ScreenPos": "gi.ogxGiViewPos",
+  "ViewPos_From_ScreenPos_DH": "gi.ogxGiViewPosDh",
+  "ViewPos_From_ScreenPos_Raw": "gi.ogxGiViewPos",
+  "Vignette": "post.ogxVignette",
+  "WarpSpace": "math.ogxWarpSpace",
+  "YCoCg_To_RGB": "antialias.ogxYCoCgToRgb",
+  "RGB_To_YCoCg": "antialias.ogxRgbToYCoCg",
+  "ambient_occlusion": "gi.ogxGroundTruthAo",
+  "applyShadowBias": "shadow.ogxApplyShadowBias",
+  "BiasShadowProjection": "shadow.ogxApplyShadowBias",
+  "atan2": "math.ogxAtan2",
+  "aurora": "atmosphere.ogxAurora",
+  "bayer2": "math.ogxBayer2",
+  "bayer4": "math.ogxBayer4",
+  "bayer8": "math.ogxBayer8",
+  "bayer64": "math.ogxBayer64",
+  "bayerDither": "math.ogxEclipseBayerDither",
+  "cartToSphere": "math.ogxCircleMap",
+  "circlemap": "math.ogxCircleMap",
+  "circlemapL": "math.ogxCircleMap",
+  "clipAABB": "antialias.ogxClipAabb",
+  "cosineHemisphereSample": "math.ogxCosineHemisphere",
+  "convertHandDepth_3": "math.ogxConvertHandDepth3",
+  "frisvad": "math.ogxTangentBasis",
+  "genUnitVector": "math.ogxCosineHemisphere",
+  "hash11": "noise.ogxHash13",
+  "hash13": "noise.ogxHash13",
+  "hash12_alt": "noise.ogxHash12",
+  "hash2": "noise.ogxHash22",
+  "hash31": "noise.ogxHash13",
+  "hash": "noise.ogxHash13",
+  "hash_aurora": "noise.ogxHash13",
+  "normalize_safe": "math.ogxNormalize",
+  "perlin_gradient": "noise.ogxPerlinGradient2",
+  "phaseRayleigh": "math.ogxRayleighPhaseElek",
+  "phaseCloud": "cloud.ogxCloudPhaseEclipse",
+  "phaseEND": "fog.ogxEndFogPhaseEclipse",
+  "endFogPhase": "fog.ogxEndVortexLightPhase",
+  "physics_waveHeight": "water.ogxOceanWaveHeight",
+  "physics_waveDirection": "water.ogxOceanWaveDirection",
+  "physics_wavePixel": "water.ogxOceanPixel",
+  "planeIntersect": "math.ogxRayPlaneIntersection",
+  "primaries_to_matrix": "color.ogxAgxPrimariesToMatrix",
+  "reinhard": "color.ogxTonemapReinhard",
+  "sky_airmass": "atmosphere.ogxEclipseSkyAirmass",
+  "sky_density": "atmosphere.ogxEclipseSkyDensity",
+  "sky_miePhase": "atmosphere.ogxEclipseSkyMiePhase",
+  "sky_opticalDepth": "atmosphere.ogxEclipseSkyOpticalDepth",
+  "sky_phase": "atmosphere.ogxEclipseSkyPhase",
+  "sky_rayleighPhase": "atmosphere.ogxEclipseSkyRayleighPhase",
+  "sky_transmittance": "atmosphere.ogxEclipseSkyTransmittance",
+  "skyFromTex": "atmosphere_model.ogxAtmoSkyRadiance",
+  "sphereMap": "atmosphere.ogxSkyProject",
+  "sphereToCart": "atmosphere.ogxSkyUnproject",
+  "sphereToCarte": {
+   "target": "atmosphere.ogxSkyEquirect",
+   "evidence": "同一经纬投影：方向转零到一的贴图坐标"
   },
-  "manual": {
-    "PrintFloat": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：按 `gl_FragCoord` 定位，用七段码表逐位拼出数字，只输出到屏幕"
-    },
-    "PrintUintBinary": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：按 `gl_FragCoord` 定位，把 32 位逐格画成七段数字"
-    },
-    "SevenSegment": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：按格子查七段码表，只给 `PrintFloat` 提供字形"
-    },
-    "DecimalPoint": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：返回小数点所在格子，只给 `PrintFloat` 提供字形"
-    },
-    "printChar": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：按 `text` 的字符位置与位图点亮单个字符的像素"
-    },
-    "beginText": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：初始化 `text` 叠加对象的位置、颜色与进制，不参与画面效果"
-    },
-    "endText": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：把 `text.result` 混进片元颜色，只在屏幕上叠字"
-    },
-    "printFloat": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：拆出整数与小数位后调用打印链，精度来自 `text.fpPrecision`"
-    },
-    "printVec2": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
-    },
-    "printVec3": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
-    },
-    "printVec4": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
-    },
-    "printInt": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：带负号地调用 `printUnsignedInt`"
-    },
-    "printBool": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：按真假打印 true 或 false 字符"
-    },
-    "printLine": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：把 `text.charPos` 移到下一行，只影响屏幕上文字的排版"
-    },
-    "printIvec2": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
-    },
-    "printIvec3": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
-    },
-    "printIvec4": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
-    },
-    "printUvec2": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
-    },
-    "printUvec3": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
-    },
-    "printUvec4": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
-    },
-    "printUnsignedInt": {
-      "status": "MC 专用",
-      "evidence": "调试叠加：按 `text.base` 逐位拆数字并调用 `printChar`"
-    },
-    "trace_wsr": {
-      "status": "MC 专用",
-      "evidence": "加权水面追踪主循环，读取体素影像与位置缓冲，依赖 Iris 自定义图像"
-    },
-    "ComputePhotonicsShadowMap": {
-      "status": "MC 专用",
-      "evidence": "写入 photonics 阴影贴图，需要 Iris SSBO 与图像写入权限"
-    },
-    "CleanPhotonicsSample": {
-      "status": "MC 专用",
-      "evidence": "读取 photonics 缓冲的采样清洗，依赖 SSBO 布局"
-    },
-    "getPhotonicsEmission": {
-      "status": "MC 专用",
-      "evidence": "从 photonics 缓冲读取发光数据，依赖 SSBO 布局"
-    },
-    "photonicsEmission": {
-      "status": "MC 专用",
-      "evidence": "同上，photonics 缓冲读出"
-    },
-    "SetVoxelBlockRaw": {
-      "status": "MC 专用",
-      "evidence": "写入体素影像，需要 imageStore 与 Iris 自定义图像"
-    },
-    "getVoxelEmission": {
-      "status": "MC 专用",
-      "evidence": "从体素影像读取发光，依赖自定义图像与方块映射"
-    },
-    "voxelEmission": {
-      "status": "MC 专用",
-      "evidence": "体素发光编码，依赖方块表"
-    },
-    "traceQuarterVoxelBlock": {
-      "status": "MC 专用",
-      "evidence": "体素影像步进，依赖自定义图像"
-    },
-    "GetVoxelBlock": {
-      "status": "MC 专用",
-      "evidence": "按坐标读取体素方块编号，依赖 Iris 自定义图像"
-    },
-    "GetVoxelData": {
-      "status": "MC 专用",
-      "evidence": "读体素影像数据，依赖自定义图像布局"
-    },
-    "CleanVoxelSample": {
-      "status": "MC 专用",
-      "evidence": "清洗体素采样，依赖自定义图像与材质掩码"
-    },
-    "LightSourceColors": {
-      "status": "MC 专用",
-      "evidence": "末地雾的方块光源配色，依赖方块光照与群系表"
-    },
-    "getReflectionVisibility": {
-      "status": "MC 专用",
-      "evidence": "读取阴影与深度缓冲判断反射可见度，依赖 shadowtex/depthtex"
-    },
-    "CalculateMasks": {
-      "status": "MC 专用",
-      "evidence": "函数体读取 gaux 缓冲与 mc_Entity 判定手部、粒子与半透明掩码"
-    },
-    "FixParticleMask": {
-      "status": "MC 专用",
-      "evidence": "按材质编号与实体编号修正粒子掩码，依赖 gaux 与 mc_Entity"
-    },
-    "sortIntersectionOpaque": {
-      "status": "MC 专用",
-      "evidence": "按深度排序不透明交点，依赖体素影像布局"
-    },
-    "fenceIntersection": {
-      "status": "MC 专用",
-      "evidence": "栅栏网格求交，读取体素方块编号"
-    },
-    "fenceIntersection2": {
-      "status": "MC 专用",
-      "evidence": "栅栏网格求交的第二种写法，读取体素方块编号"
-    },
-    "VolumeBounds": {
-      "status": "MC 专用",
-      "evidence": "末地雾体积边界，依赖末地主岛坐标与群系状态"
-    },
-    "DH_noise": {
-      "status": "MC 专用",
-      "evidence": "远景地形噪声，使用 DH 纹理坐标与投影约定"
-    },
-    "DH_shadowProjectionTweak": {
-      "status": "MC 专用",
-      "evidence": "远景阴影投影修正，依赖 dhProjection 与 dhFarPlane"
-    },
-    "GetTexCoord": {
-      "status": "MC 专用",
-      "evidence": "体素影像的纹理坐标换算，依赖自定义图像布局"
-    },
-    "voxelNormalIndex": {
-      "status": "MC 专用",
-      "evidence": "体素法线索引，依赖方块面表与影像编码"
-    },
-    "invertLinearizeDepthFast": {
-      "status": "MC 专用",
-      "evidence": "按 Iris 的深度约定反解线性深度，使用 gbufferProjectionInverse"
-    },
-    "swapperlinZ2": {
-      "status": "MC 专用",
-      "evidence": "交换两个线性深度的辅助函数，输入来自宿主深度缓冲"
-    },
-    "project": {
-      "status": "MC 专用",
-      "evidence": "PhotonGTAO 的投影步骤，输入来自 photonics SSBO"
-    },
-    "project_and_divide": {
-      "status": "MC 专用",
-      "evidence": "PhotonGTAO 的投影与齐次除法，输入来自 photonics SSBO"
-    },
-    "integrate_arc": {
-      "status": "MC 专用",
-      "evidence": "PhotonGTAO 的弧面积分，读取 photonics 采样缓冲"
-    },
-    "getRayOrigin": {
-      "status": "MC 专用",
-      "evidence": "体积云光线起点，依赖相机位置与视场内插"
-    },
-    "applySceneControllerParameters": {
-      "status": "MC 专用",
-      "evidence": "把场景控制器的选项写入全局，读取天光与天气等宿主状态"
-    },
-    "calcDistort": {
-      "status": "MC 专用",
-      "evidence": "阴影投影的扭曲坐标，依赖 shadowProjection 与阴影贴图约定"
-    },
-    "calculateHardShadows": {
-      "status": "MC 专用",
-      "evidence": "硬阴影比较，直接采样 shadowtex"
-    },
-    "calculateRoughSpecular": {
-      "status": "MC 专用",
-      "evidence": "粗糙高光，读取 gaux 材质与阴影贴图"
-    },
-    "GetRainAnimationTex": {
-      "status": "MC 专用",
-      "evidence": "读取游戏提供的涟漪动画贴图"
-    },
-    "GetModulatedRainSpecular": {
-      "status": "MC 专用",
-      "evidence": "按雨强调制高光，读取 rainStrength 与涟漪贴图"
-    },
-    "GetEndFogShadow": {
-      "status": "MC 专用",
-      "evidence": "末地雾的遮挡，采样宿主的阴影与末地主岛数据"
-    },
-    "GetCloudShadow": {
-      "status": "MC 专用",
-      "evidence": "函数体直接读取宿主符号：lightningBoltPosition、sunElevation；云层高度来自编译期配置 CloudLayer0_height 等"
-    }
+  "starTemp": "atmosphere.ogxStarTemperature",
+  "stars": "atmosphere.ogxStarsStable",
+  "texture_bicubic": "math.ogxBicubicTexture",
+  "texture_bicubic_offset": "math.ogxBicubicTexture",
+  "toLinear": "color.ogxSrgbToLinear",
+  "unproject": "color.ogxAgxUnproject",
+  "volumetricsFromTex": "fog_volume.ogxFogCloudBicubic",
+  "voxelIndex": "voxel.ogxVoxelWriteIndex",
+  "traceQuarterVoxel": "voxel.ogxVoxelReflection",
+  "getRotMat": "math.ogxRotateMatrix",
+  "mat2_rotate_z": "math.ogxRotateMatrix",
+  "linear_step": "math.ogxRemapSaturate",
+  "clamp01": "math.ogxSaturate",
+  "clampNormal": "math.ogxNormalize",
+  "luma": "color.ogxLuminanceRec601",
+  "sqr": "math.ogxSquare",
+  "length_squared": "math.ogxLengthSquared",
+  "rcp_length": "math.ogxSafeInvLength",
+  "max_of": "math.ogxMaxVec3",
+  "min_of": "math.ogxMinVec3",
+  "AABBintersection": "math.ogxRayBoxIntersection",
+  "AABBintersection2": "math.ogxRayBoxRange",
+  "max3": "math.ogxMaxVec3",
+  "min3": "math.ogxMinVec3",
+  "sampleRGSS": "sampling.ogxRgssSample",
+  "shlickFresnelRoughness": "math.ogxFresnelSchlick",
+  "tangentToWorld": "math.ogxTangentBasis",
+  "TangentToWorld": "math.ogxTangentBasis",
+  "getPlanetShadow": "planet.ogxPlanetEnd",
+  "getCloudShadow": "cloud.ogxCloudShadow",
+  "GetCloudShadow": "cloud.ogxCloudShadow",
+  "getCloudScattering": "cloud.ogxCloudMarch",
+  "getCloudLighting": "cloud.ogxCloudLight",
+  "raymarchCloudSimple": "cloud.ogxCloudMarch",
+  "ApplySSRT": "reflection.ogxReflectionSceneColor",
+  "CleanVoxelSample": "voxel.ogxVoxelShade",
+  "ComputeVoxelShadowMap": "voxel.ogxVoxelWriteIndex",
+  "CoordBase": "math.ogxCircleMap",
+  "DH_invLinZ": "reflection.ogxReflectionDhToScreenDepth",
+  "invLinZ": "reflection.ogxReflectionLinearDepth",
+  "linZ": "reflection.ogxReflectionLinearDepth",
+  "linZ2": "reflection.ogxReflectionLinearDepth",
+  "normalize_hash": "noise.ogxHash22",
+  "nrand": "noise.ogxWhiteNoise",
+  "rand": "noise.ogxWhiteNoise",
+  "truncateNormal": "math.ogxNormalize",
+  "fast_acos": "math.ogxFastAcosEclipse",
+  "facos": "math.ogxFastAcos",
+  "physics_waveNormal": "water.ogxOceanWaveNormal",
+  "SetCloudPos": "cloud_volume.ogxCumulusSetPos",
+  "curveTop": "cloud.ogxCloudTopCurve",
+  "GetLpvBlockLight": "lpv.ogxLpvBlockLight",
+  "GetLpvSkyLight": "lpv.ogxLpvSkyLight",
+  "drawSun": "atmosphere.ogxSunDisc",
+  "drawMoon": "atmosphere.ogxMoonDiscDefault",
+  "drawRealMoon": "atmosphere.ogxMoonDiscReal",
+  "Iris_Lightningflash": "fog_volume.ogxFogLightning",
+  "Iris_Lightningflash_VLcloud": "cloud_volume.ogxCumulusLightning",
+  "Iris_Lightningflash_VLfog": "fog_volume.ogxFogLightning",
+  "equation_full_curve": "color.ogxAgxEquationFullCurve",
+  "equation_scale": "color.ogxAgxEquationScale",
+  "RotationToSlide": "color.ogxAgxRotationToSlide",
+  "SlidePrimary": "color.ogxAgxSlidePrimary",
+  "open_domain_to_normalized_log2": "color.ogxAgxOpenDomainToNormalizedLog2",
+  "pcurve": "planet.ogxEndSkyPCurve",
+  "tri": "math.ogxEclipseTri",
+  "tri2": "math.ogxEclipseTri2",
+  "cube": "math.ogxSquare",
+  "fma2": "math.ogxFma2",
+  "sincos": "math.ogxSinCos",
+  "rotate": "math.ogxRotate2",
+  "mm2": "math.ogxRotate2",
+  "reinhard_jodie": "color.ogxTonemapReinhardJodie",
+  "curve": "color.ogxAgxContrast",
+  "BilateralUpscale_SSAO": {
+   "target": "gi.ogxBilateralUpscale",
+   "evidence": "四邻域按深度差剔除后升采样；参考实现的固定步长换成分辨率倍数参数"
   },
-  "modules": {
-    "math": "数学与通用工具",
-    "color": "颜色与色调映射",
-    "sampling": "采样与抖动",
-    "noise": "程序化噪声",
-    "atmosphere": "天空散射与日月星",
-    "atmosphere_model": "预计算大气查表",
-    "cloud": "云形状、光照与云影",
-    "cloud_volume": "体积云步进",
-    "fog": "雾与空气透视",
-    "fog_volume": "体积雾",
-    "water": "水面与海洋",
-    "shadow": "阴影与半影",
-    "gi": "全局光与遮蔽",
-    "reflection": "屏幕空间反射",
-    "post": "后期与泛光",
-    "antialias": "时间抗锯齿",
-    "surface": "方块光与材质",
-    "parallax": "视差",
-    "voxel": "体素反射",
-    "upscale": "升采样与锐化",
-    "weather": "天气与季节",
-    "lpv": "光传播体积",
-    "planet": "末地行星",
-    "accretion": "吸积盘"
+  "Tonemap_Xonk": {
+   "target": "color.ogxTonemapXonk",
+   "evidence": "同名曲线：先抬 1.3 次幂，再除以自身加 0.333"
+  },
+  "decodeVec2_16": {
+   "target": "color.ogxDecodeVec2x16",
+   "evidence": "同一组常数把打包值拆成两个十六位分量，不依赖浮点位模式"
+  },
+  "rsi": {
+   "target": "math.ogxRaySphereHit",
+   "evidence": "同一球面求交算式，未命中时同样返回两个负一"
+  },
+  "iqint2": {
+   "target": "noise.ogxIntegerHash3",
+   "evidence": "同一 Inigo Quilez 整数哈希：三轮右移异或再乘 1103515245"
+  },
+  "w0": {
+   "target": "math.ogxCubicWeight0",
+   "evidence": "同一三次 B 样条权重，常数逐项相同"
+  },
+  "w1": {
+   "target": "math.ogxCubicWeight1",
+   "evidence": "同一三次 B 样条权重，常数逐项相同"
+  },
+  "w2": {
+   "target": "math.ogxCubicWeight2",
+   "evidence": "同一三次 B 样条权重，常数逐项相同"
+  },
+  "w3": {
+   "target": "math.ogxCubicWeight3",
+   "evidence": "同一三次 B 样条权重，常数逐项相同"
+  },
+  "g0": {
+   "target": "math.ogxCubicWeightLow",
+   "evidence": "同一左侧两个权重之和"
+  },
+  "g1": {
+   "target": "math.ogxCubicWeightHigh",
+   "evidence": "同一右侧两个权重之和"
+  },
+  "h0": {
+   "target": "math.ogxCubicOffsetLow",
+   "evidence": "同一合并采样点的左偏移"
+  },
+  "h1": {
+   "target": "math.ogxCubicOffsetHigh",
+   "evidence": "同一合并采样点的右偏移"
+  },
+  "D_Walter": {
+   "target": "math.ogxDistributionGGX",
+   "evidence": "同一 GGX 分布公式与同一组常数，库里按行业名命名"
+  },
+  "R2_samples": {
+   "target": "math.ogxR2Sample",
+   "evidence": "同一 R2 低差异序列与同一组黄金比例常数"
+  },
+  "CalculateCoCRadius": {
+   "target": "post.ogxCocRadius",
+   "evidence": "同一薄透镜弥散圆公式，参数顺序一致"
+  },
+  "fp10Dither": {
+   "target": "post.ogxDitherFloat",
+   "evidence": "同一浮点抖动；调用时尾数位数取 (6,6,5)"
+  },
+  "fp16Dither": {
+   "target": "post.ogxDitherFloat",
+   "evidence": "同一浮点抖动；调用时尾数位数取 10"
+  },
+  "int8Dither": {
+   "target": "post.ogxDitherFixed",
+   "evidence": "同一定点抖动；调用时位数取 8"
+  },
+  "int10Dither": {
+   "target": "post.ogxDitherFixed",
+   "evidence": "同一定点抖动；调用时位数取 10"
+  },
+  "int16Dither": {
+   "target": "post.ogxDitherFixed",
+   "evidence": "同一定点抖动；调用时位数取 16"
+  },
+  "GetDistOffset": {
+   "target": "post.ogxGlareDistOffset",
+   "evidence": "同一桶形畸变偏移，桶形强度改为显式参数"
+  },
+  "flare": {
+   "target": "post.ogxGlareFlare",
+   "evidence": "同一带色散的软光斑，桶形强度改为显式参数"
+  },
+  "orb": {
+   "target": "post.ogxGlareOrb",
+   "evidence": "同一六连圆形光斑与末尾大光斑，桶形强度改为显式参数"
+  },
+  "ring": {
+   "target": "post.ogxGlareRing",
+   "evidence": "同一环状光环与三通道色散"
+  },
+  "H": {
+   "target": "atmosphere.ogxChandrasekharH",
+   "evidence": "同一钱德拉塞卡近似，算式逐项相同"
+  },
+  "ppss": {
+   "target": "atmosphere.ogxPlanetBrdf",
+   "evidence": "同一行星表面 BRDF：入射角曲线、两侧近似与相函数分母相同"
+  },
+  "skyCloudsFromTexBLUR": {
+   "target": "atmosphere.ogxSkyCloudsFromTex",
+   "evidence": "参考实现的 scaler 参数未参与计算，函数体与 skyCloudsFromTex 相同，库只保留一份"
+  },
+  "BiomeFogDensity": "fog.ogxBiomeFogDensityEclipse",
+  "TorchScreenSpaceShadow": "shadow.ogxScreenSpaceShadow",
+  "GetWavesNormalFromTex": "water.ogxWavesNormalFromTex",
+  "SamplePreviousDepthBilinear": "antialias.ogxTaaPrevDepthBilinear",
+  "CoCSpread": "post.ogxDofCocSpread",
+  "PlanetEnd2": "planet.ogxPlanetEnd",
+  "Calculate3DNoise": "fog.ogxEnd3dNoise",
+  "RSM": "gi.ogxGiRsm",
+  "GI_SpatialFilter": "gi.ogxGiSpatialFilter",
+  "GroundTruthBasedAmbientOcclusion": "gi.ogxGroundTruthAo",
+  "SampleDensity": "cloud_volume.ogxCumulusSampleDensity",
+  "NubisCumulus": "cloud_volume.ogxCumulusMarch",
+  "HeightBasedNormal": "parallax.ogxParallaxHeightNormal",
+  "ParallaxOcclusionMapping": "parallax.ogxParallaxSmooth",
+  "CalculateSpecularReflections": "reflection.ogxSpecularReflectionMix",
+  "Get3DNoise": "noise.ogxFogNoise",
+  "GetModulatedRainSpecular": "water.ogxRainSpecular",
+  "GetRainAnimationTex": "water.ogxRainAnimationNormal",
+  "UnderwaterVolumetricFog": "fog_volume.ogxUnderwaterFog",
+  "GetWaves": "water.ogxWaves",
+  "FidelityFX_CAS": "upscale.ogxCas",
+  "FidelityFX_FSR1": "upscale.ogxFsr1",
+  "LinearDepth_From_ScreenDepth": "shadow.ogxShadowLinearDepth",
+  "triangWhiteNoise": "noise.ogxTriangleNoise",
+  "GetHandLight": "surface.ogxHandLight",
+  "SwirlAroundOrigin": "fog.ogxEndVortexSwirl",
+  "VolumeBounds": "fog.ogxEndVortexBounds",
+  "fogShape": "fog.ogxEndVortexShape",
+  "LightSourceLighting": "fog.ogxEndVortexLighting",
+  "GetVolumetricFog": "fog.ogxEndVortexFog",
+  "SampleLpvLinear": "lpv.ogxLpvDecodeSample",
+  "cloudVol": "fog.ogxNetherFogCloudVolume",
+  "calculateRoughSpecular": "math.ogxRoughSpecularDirection",
+  "getRainDensity": "cloud.ogxCloudRainDensity",
+  "getWaveNormal": "water.ogxWaterBumpNormal",
+  "ripples": "water.ogxRainRipples",
+  "GetSmoothCloudShadow": "cloud.ogxGlobalCloudShadow",
+  "SampleCurrColor": "antialias.ogxTaaSampleCurrent",
+  "SampleCurrColorFetch": "antialias.ogxTaaFetchCurrent",
+  "SampleCurrColorBicubic": "antialias.ogxBicubicTexture4",
+  "SamplePrevColor": "antialias.ogxTaaSamplePrevious",
+  "SampleDepthFetch": "antialias.ogxTaaSampleDepthFetch",
+  "SamplePrevDepthFetch": "antialias.ogxTaaPrevDepthFetch",
+  "SampleCurr": "antialias.ogxTaaSampleCurrent",
+  "SampleCurrFetch": "antialias.ogxTaaFetchCurrent",
+  "SampleCurrBicubic": "antialias.ogxBicubicTexture4",
+  "SamplePrevious": "antialias.ogxTaaSamplePrevious",
+  "VanillaFog": "fog.ogxVanillaFog",
+  "SelectionBox": "fog.ogxSelectionBox",
+  "GetLinearDepth": "post.ogxDofLinearDepth",
+  "GI_TemporalFilter": "gi.ogxGiTemporalFilter",
+  "densityAtPos": "cloud.ogxCloudDensityAtPos",
+  "densityAtPosFog": "weather.ogxStormNoise",
+  "getWaterHeightmap": "water.ogxWaterBumpHeightmap"
+ },
+ "manual": {
+  "PrintFloat": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：按 `gl_FragCoord` 定位，用七段码表逐位拼出数字，只输出到屏幕"
+  },
+  "PrintUintBinary": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：按 `gl_FragCoord` 定位，把 32 位逐格画成七段数字"
+  },
+  "SevenSegment": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：按格子查七段码表，只给 `PrintFloat` 提供字形"
+  },
+  "DecimalPoint": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：返回小数点所在格子，只给 `PrintFloat` 提供字形"
+  },
+  "printChar": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：按 `text` 的字符位置与位图点亮单个字符的像素"
+  },
+  "beginText": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：初始化 `text` 叠加对象的位置、颜色与进制，不参与画面效果"
+  },
+  "endText": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：把 `text.result` 混进片元颜色，只在屏幕上叠字"
+  },
+  "printFloat": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：拆出整数与小数位后调用打印链，精度来自 `text.fpPrecision`"
+  },
+  "printVec2": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
+  },
+  "printVec3": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
+  },
+  "printVec4": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printFloat`，用逗号分隔"
+  },
+  "printInt": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：带负号地调用 `printUnsignedInt`"
+  },
+  "printBool": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：按真假打印 true 或 false 字符"
+  },
+  "printLine": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：把 `text.charPos` 移到下一行，只影响屏幕上文字的排版"
+  },
+  "printIvec2": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
+  },
+  "printIvec3": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
+  },
+  "printIvec4": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printInt`，用逗号分隔"
+  },
+  "printUvec2": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
+  },
+  "printUvec3": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
+  },
+  "printUvec4": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：逐分量调用 `printUnsignedInt`，用逗号分隔"
+  },
+  "printUnsignedInt": {
+   "status": "MC 专用",
+   "evidence": "调试叠加：按 `text.base` 逐位拆数字并调用 `printChar`"
+  },
+  "trace_wsr": {
+   "status": "MC 专用",
+   "evidence": "加权水面追踪主循环，读取体素影像与位置缓冲，依赖 Iris 自定义图像"
+  },
+  "ComputePhotonicsShadowMap": {
+   "status": "MC 专用",
+   "evidence": "写入 photonics 阴影贴图，需要 Iris SSBO 与图像写入权限"
+  },
+  "CleanPhotonicsSample": {
+   "status": "MC 专用",
+   "evidence": "读取 photonics 缓冲的采样清洗，依赖 SSBO 布局"
+  },
+  "getPhotonicsEmission": {
+   "status": "MC 专用",
+   "evidence": "从 photonics 缓冲读取发光数据，依赖 SSBO 布局"
+  },
+  "photonicsEmission": {
+   "status": "MC 专用",
+   "evidence": "同上，photonics 缓冲读出"
+  },
+  "SetVoxelBlockRaw": {
+   "status": "MC 专用",
+   "evidence": "写入体素影像，需要 imageStore 与 Iris 自定义图像"
+  },
+  "getVoxelEmission": {
+   "status": "MC 专用",
+   "evidence": "从体素影像读取发光，依赖自定义图像与方块映射"
+  },
+  "voxelEmission": {
+   "status": "MC 专用",
+   "evidence": "体素发光编码，依赖方块表"
+  },
+  "traceQuarterVoxelBlock": {
+   "status": "MC 专用",
+   "evidence": "体素影像步进，依赖自定义图像"
+  },
+  "GetVoxelBlock": {
+   "status": "MC 专用",
+   "evidence": "按坐标读取体素方块编号，依赖 Iris 自定义图像"
+  },
+  "GetVoxelData": {
+   "status": "MC 专用",
+   "evidence": "读体素影像数据，依赖自定义图像布局"
+  },
+  "CleanVoxelSample": {
+   "status": "MC 专用",
+   "evidence": "清洗体素采样，依赖自定义图像与材质掩码"
+  },
+  "LightSourceColors": {
+   "status": "MC 专用",
+   "evidence": "末地雾的方块光源配色，依赖方块光照与群系表"
+  },
+  "getReflectionVisibility": {
+   "status": "MC 专用",
+   "evidence": "读取阴影与深度缓冲判断反射可见度，依赖 shadowtex/depthtex"
+  },
+  "CalculateMasks": {
+   "status": "MC 专用",
+   "evidence": "函数体读取 gaux 缓冲与 mc_Entity 判定手部、粒子与半透明掩码"
+  },
+  "FixParticleMask": {
+   "status": "MC 专用",
+   "evidence": "按材质编号与实体编号修正粒子掩码，依赖 gaux 与 mc_Entity"
+  },
+  "sortIntersectionOpaque": {
+   "status": "MC 专用",
+   "evidence": "按深度排序不透明交点，依赖体素影像布局"
+  },
+  "fenceIntersection": {
+   "status": "MC 专用",
+   "evidence": "栅栏网格求交，读取体素方块编号"
+  },
+  "fenceIntersection2": {
+   "status": "MC 专用",
+   "evidence": "栅栏网格求交的第二种写法，读取体素方块编号"
+  },
+  "VolumeBounds": {
+   "status": "MC 专用",
+   "evidence": "末地雾体积边界，依赖末地主岛坐标与群系状态"
+  },
+  "DH_noise": {
+   "status": "MC 专用",
+   "evidence": "远景地形噪声，使用 DH 纹理坐标与投影约定"
+  },
+  "DH_shadowProjectionTweak": {
+   "status": "MC 专用",
+   "evidence": "远景阴影投影修正，依赖 dhProjection 与 dhFarPlane"
+  },
+  "GetTexCoord": {
+   "status": "MC 专用",
+   "evidence": "体素影像的纹理坐标换算，依赖自定义图像布局"
+  },
+  "voxelNormalIndex": {
+   "status": "MC 专用",
+   "evidence": "体素法线索引，依赖方块面表与影像编码"
+  },
+  "invertLinearizeDepthFast": {
+   "status": "MC 专用",
+   "evidence": "按 Iris 的深度约定反解线性深度，使用 gbufferProjectionInverse"
+  },
+  "swapperlinZ2": {
+   "status": "MC 专用",
+   "evidence": "交换两个线性深度的辅助函数，输入来自宿主深度缓冲"
+  },
+  "project": {
+   "status": "MC 专用",
+   "evidence": "PhotonGTAO 的投影步骤，输入来自 photonics SSBO"
+  },
+  "project_and_divide": {
+   "status": "MC 专用",
+   "evidence": "PhotonGTAO 的投影与齐次除法，输入来自 photonics SSBO"
+  },
+  "integrate_arc": {
+   "status": "MC 专用",
+   "evidence": "PhotonGTAO 的弧面积分，读取 photonics 采样缓冲"
+  },
+  "getRayOrigin": {
+   "status": "MC 专用",
+   "evidence": "体积云光线起点，依赖相机位置与视场内插"
+  },
+  "applySceneControllerParameters": {
+   "status": "MC 专用",
+   "evidence": "把场景控制器的选项写入全局，读取天光与天气等宿主状态"
+  },
+  "calcDistort": {
+   "status": "MC 专用",
+   "evidence": "阴影投影的扭曲坐标，依赖 shadowProjection 与阴影贴图约定"
+  },
+  "calculateHardShadows": {
+   "status": "MC 专用",
+   "evidence": "硬阴影比较，直接采样 shadowtex"
+  },
+  "calculateRoughSpecular": {
+   "status": "MC 专用",
+   "evidence": "粗糙高光，读取 gaux 材质与阴影贴图"
+  },
+  "GetRainAnimationTex": {
+   "status": "MC 专用",
+   "evidence": "读取游戏提供的涟漪动画贴图"
+  },
+  "GetModulatedRainSpecular": {
+   "status": "MC 专用",
+   "evidence": "按雨强调制高光，读取 rainStrength 与涟漪贴图"
+  },
+  "GetEndFogShadow": {
+   "status": "MC 专用",
+   "evidence": "末地雾的遮挡，采样宿主的阴影与末地主岛数据"
+  },
+  "GetCloudShadow": {
+   "status": "MC 专用",
+   "evidence": "函数体直接读取宿主符号：lightningBoltPosition、sunElevation；云层高度来自编译期配置 CloudLayer0_height 等"
   }
+ },
+ "modules": {
+  "math": "数学与通用工具",
+  "color": "颜色与色调映射",
+  "sampling": "采样与抖动",
+  "noise": "程序化噪声",
+  "atmosphere": "天空散射与日月星",
+  "atmosphere_model": "预计算大气查表",
+  "cloud": "云形状、光照与云影",
+  "cloud_volume": "体积云步进",
+  "fog": "雾与空气透视",
+  "fog_volume": "体积雾",
+  "water": "水面与海洋",
+  "shadow": "阴影与半影",
+  "gi": "全局光与遮蔽",
+  "reflection": "屏幕空间反射",
+  "post": "后期与泛光",
+  "antialias": "时间抗锯齿",
+  "surface": "方块光与材质",
+  "parallax": "视差",
+  "voxel": "体素反射",
+  "upscale": "升采样与锐化",
+  "weather": "天气与季节",
+  "lpv": "光传播体积",
+  "planet": "末地行星",
+  "accretion": "吸积盘"
+ }
 }

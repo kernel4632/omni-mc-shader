@@ -682,4 +682,66 @@ float ogxConvertHandDepth3(float depth, bool hand, float handDepth)
     return ndcDepth * 0.5 + 0.5; // 再转回零到一。
 }
 
+// iterationT 的一维 R1 序列：黄金比例步长，加半格避免从零开始。
+float ogxSequenceR1(float n)
+{
+    const float alpha = 1.0 / OGX_GOLDEN_RATIO; // 黄金比例倒数。
+    return fract(0.5 + n * alpha); // 加半格后取小数。
+}
+
+// iterationT 的二维 R2 序列：塑料常数的两个幂做步长。
+vec2 ogxSequenceR2(float n)
+{
+    vec2 alpha = 1.0 / vec2(OGX_PLASTIC_RATIO, OGX_PLASTIC_RATIO * OGX_PLASTIC_RATIO); // 两个步长。
+    return fract(0.5 + n * alpha); // 加半格后取小数。
+}
+
+// Eclipse 的三角波：先减半再取绝对值，夹在 0.01 到 0.49 之间避免端点。
+float ogxEclipseTri(float x)
+{
+    return clamp(abs(fract(x) - 0.5), 0.01, 0.49); // 参考实现的夹紧范围。
+}
+
+// Eclipse 的二维三角波：先分别算两个方向，再用第一个结果扰动第二个输入。
+vec2 ogxEclipseTri2(vec2 p)
+{
+    float triX = ogxEclipseTri(p.x); // 第一方向。
+    float triY = ogxEclipseTri(p.y); // 第二方向。
+    return vec2(triX + triY, ogxEclipseTri(triX + p.y)); // 参考实现的组合方式。
+}
+
+// Eclipse 的快速反余弦：三系数多项式加根号修正，和库默认的三次近似不同。
+float ogxFastAcosEclipse(float x)
+{
+    const float c0 = 1.57018; // 零点值。
+    const float c1 = -0.201877; // 一次项。
+    const float c2 = 0.0464619; // 二次项。
+    float ax = abs(x); // 对称化。
+    float result = (c2 * ax + c1) * ax + c0; // 多项式。
+    result *= sqrt(1.0 - ax); // 根号修正。
+    return x >= 0.0 ? result : OGX_PI - result; // 负半轴镜像。
+}
+
+// Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派。
+float ogxRayleighPhaseElek(float cosTheta)
+{
+    const float oneOverPi = 1.0 / OGX_PI; // 参考实现用 acos(-1) 求 pi。
+    vec2 mulAdd = vec2(0.1, 0.28) * oneOverPi; // 两个系数。
+    return cosTheta * mulAdd.x + mulAdd.y; // 线性相函数。
+}
+
+// Eclipse 的 4×4 Bayer 抖动：按像素坐标查表，返回零到一之间的阈值。
+// 为什么不用递归拜尔函数：递归构造出的是另一张矩阵，和参考的 16 项表不同。
+float ogxEclipseBayerDither(vec2 pixel)
+{
+    const float bayer[16] = float[16](
+        0.0 / 16.0, 8.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0,
+        12.0 / 16.0, 4.0 / 16.0, 14.0 / 16.0, 6.0 / 16.0,
+        3.0 / 16.0, 11.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0,
+        15.0 / 16.0, 7.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0); // 参考实现的 4×4 表。
+    int x = int(mod(pixel.x, 4.0)); // 横向格。
+    int y = int(mod(pixel.y, 4.0)); // 纵向格。
+    return bayer[x + y * 4]; // 按行优先取表。
+}
+
 #endif

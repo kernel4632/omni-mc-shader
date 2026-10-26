@@ -631,4 +631,79 @@ float ogxPlanetRingNoise(float position, sampler2D noiseTexture)
     return accum + octShift - 0.1; // 加上层间偏移并减去阈值。
 }
 
+// Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派做能量守恒。
+float ogxEclipseSkyRayleighPhase(float cosTheta)
+{
+    return cosTheta * (0.1 * OGX_INV_PI) + 0.28 * OGX_INV_PI; // 参考实现把两个常数都乘 1/pi。
+}
+
+// Eclipse 的米氏相函数：用 g 的平方与 1.5 次幂，和 Henyey-Greenstein 不是同一公式。
+float ogxEclipseSkyMiePhase(float cosTheta, float g)
+{
+    float gg = g * g; // 先算 g 的平方。
+    return (gg * -0.25 + 0.25) * OGX_INV_PI * pow(-(2.0 * g) * cosTheta + (gg + 1.0), -1.5); // 参考实现的负指数。
+}
+
+// Eclipse 的相函数对：第一分量瑞利，第二分量米氏。
+vec2 ogxEclipseSkyPhase(float cosTheta, float g)
+{
+    return vec2(ogxEclipseSkyRayleighPhase(cosTheta), ogxEclipseSkyMiePhase(cosTheta, g));
+}
+
+// Eclipse 的大气密度：瑞利与米氏共用一条指数，臭氧用两段指数围出峰值。
+// `planetRadius` 与 `scaleHeights` 由调用方给出，默认是 6731 公里与 8/1.2 公里。
+vec3 ogxEclipseSkyDensity(float centerDistance, float planetRadius, vec2 scaleHeights)
+{
+    vec2 inverseScaleHeights = 1.0 / scaleHeights; // 标高倒数。
+    vec2 rayleighMie = exp(centerDistance * -inverseScaleHeights + planetRadius * inverseScaleHeights); // 瑞利与米氏。
+    float ozone = exp(-max(0.0, (35000.0 - centerDistance) - planetRadius) * (1.0 / 5000.0)) // 臭氧上边界。
+                * exp(-max(0.0, (centerDistance - 35000.0) - planetRadius) * (1.0 / 15000.0)); // 臭氧下边界。
+    return vec3(rayleighMie, ozone); // 三个分量对应三种介质。
+}
+
+// Eclipse 的大气质量：沿视线固定步数积分密度，步长由射线长度决定。
+vec3 ogxEclipseSkyAirmass(vec3 position, vec3 direction, float rayLength, float steps,
+    float planetRadius, vec2 scaleHeights)
+{
+    float stepSize = rayLength * (1.0 / steps); // 每步长度。
+    vec3 increment = direction * stepSize; // 每步位移。
+    position += increment * 0.5; // 从半步处开始，避开端点。
+    vec3 airmass = vec3(0.0); // 累积密度。
+    for (int i = 0; i < steps; ++i, position += increment) // 固定步数。
+    {
+        airmass += ogxEclipseSkyDensity(length(position), planetRadius, scaleHeights); // 逐点累积密度。
+    }
+    return airmass * stepSize; // 乘步长得到光学路径。
+}
+
+// Eclipse 的大气质量射线版：先求与大气顶层的交点，再调用固定步数版。
+vec3 ogxEclipseSkyAirmassRay(vec3 position, vec3 direction, float steps,
+    float planetRadius, vec2 scaleHeights, float atmosphereRadius)
+{
+    float rayLength = dot(position, direction); // 投影长度。
+    rayLength = rayLength * rayLength + atmosphereRadius * atmosphereRadius - dot(position, position); // 判别式。
+    if (rayLength < 0.0) return vec3(0.0); // 射线不碰大气。
+    rayLength = sqrt(rayLength) - dot(position, direction); // 到交点的距离。
+    return ogxEclipseSkyAirmass(position, direction, rayLength, steps, planetRadius, scaleHeights); // 交给固定步数版。
+}
+
+// Eclipse 的光学厚度：三种介质的消光系数乘各自的大气质量。
+vec3 ogxEclipseSkyOpticalDepth(vec3 position, vec3 direction, float rayLength, float steps,
+    float planetRadius, vec2 scaleHeights,
+    vec3 coefficientRayleigh, vec3 coefficientMie, vec3 coefficientOzone)
+{
+    vec3 airmass = ogxEclipseSkyAirmass(position, direction, rayLength, steps, planetRadius, scaleHeights); // 三种介质的路径。
+    return coefficientRayleigh * airmass.x + coefficientMie * airmass.y + coefficientOzone * airmass.z; // 按介质加权。
+}
+
+// Eclipse 的透过率：把光学厚度换成以二为底的指数，和参考实现的 `exp(-od/ln2)` 等价。
+vec3 ogxEclipseSkyTransmittance(vec3 position, vec3 direction, float rayLength, float steps,
+    float planetRadius, vec2 scaleHeights,
+    vec3 coefficientRayleigh, vec3 coefficientMie, vec3 coefficientOzone)
+{
+    vec3 depth = ogxEclipseSkyOpticalDepth(position, direction, rayLength, steps, planetRadius, scaleHeights,
+        coefficientRayleigh, coefficientMie, coefficientOzone); // 先算光学厚度。
+    return exp2(-depth); // exp(-depth/ln2) 与 exp2(-depth) 等价。
+}
+
 #endif

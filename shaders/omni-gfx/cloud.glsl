@@ -421,4 +421,24 @@ vec4 ogxCloudShadowBlur(sampler2D shadowTex, ivec2 texel, ivec2 axis, ivec2 bord
     return blur; // 返回模糊后的云影贴图。
 }
 
+// Eclipse 的云相函数：和 Henyey-Greenstein 不是同一公式，分母固定除以 3.14。
+float ogxCloudPhaseEclipse(float x, float g)
+{
+    float gg = g * g; // g 的平方。
+    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考实现直接写 3.14。
+}
+
+// Eclipse 的云密度三线性取样：不做平滑，直接用小数部分在两层噪声之间插值。
+// 与 `ogxStormNoise` 的区别是后者先把小数部分做了 smoothstep，两者不能互换。
+float ogxCloudDensityAtPos(vec3 position, sampler2D noiseTexture, float noiseResolution)
+{
+    position /= 18.0; // 参考实现的世界尺度。
+    position.xz *= 0.5; // 横向再压一半。
+    vec3 cell = floor(position); // 整数格。
+    vec3 fraction = fract(position); // 小数部分。
+    vec2 uv = cell.xz + fraction.xz + cell.y * vec2(0.0, 193.0); // 三维转二维噪声坐标。
+    vec2 sample2 = textureLod(noiseTexture, uv / noiseResolution, 0.0).yx; // 取两个通道。
+    return mix(sample2.r, sample2.g, fraction.y); // 按纵向小数插值。
+}
+
 #endif

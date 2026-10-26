@@ -264,4 +264,10 @@ vec4 ogxTaaReproject(vec2 coord, vec3 velocity, float currDepthMin, sampler2D cu
     return vec4(ogxYCoCgToRgb(currColor), currDepthMin); // 返回颜色与代表深度。
 }
 
+// iterationT 的 TAA 当前深度取格：直接从深度纹理读一个像素，不插值。
+float ogxTaaSampleDepthFetch(sampler2D depthTexture, ivec2 coord)
+{
+    return texelFetch(depthTexture, coord, 0).x; // 深度纹理的红色通道。
+}
+
 #endif

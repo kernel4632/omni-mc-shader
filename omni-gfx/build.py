@@ -130,6 +130,18 @@ def command_parity() -> None:
     subprocess.run([sys.executable, str(script)], cwd=ROOT, check=True)  # 失败由脚本以非零状态报告。
 
 
+def command_strict_parity() -> None:
+    """生成严格对照 JSON 与中文摘要；状态来自人工台账，不按名字猜测。"""
+    script = LIB / "tools" / "parity_strict.py"  # 严格对照生成器。
+    subprocess.run([sys.executable, str(script)], cwd=ROOT, check=True)  # 目标不存在时脚本整体失败。
+
+
+def command_profiles() -> None:
+    """生成两个严格 profile 的 GLSL 并调用 glslang 编译。"""
+    script = LIB / "tools" / "profile.py"  # profile 生成器。
+    subprocess.run([sys.executable, str(script)], cwd=ROOT, check=True)  # 编译失败时非零退出。
+
+
 def main() -> None:
     """解析子命令并执行，未知参数由参数解析器统一拒绝。
 
@@ -149,6 +161,8 @@ def main() -> None:
     counter = sub.add_parser("count", help="统计各类代码行数")  # 只读统计。
     counter.add_argument("--json", action="store_true", help="输出机器可读结果")  # 方便写入记录。
     sub.add_parser("parity", help="重新生成函数级覆盖对照表")  # 只读参考源码与库源码。
+    sub.add_parser("strict-parity", help="生成严格函数对照 JSON 与中文摘要")  # 人工台账决定状态。
+    sub.add_parser("profiles", help="生成并编译 iterationT 与 Eclipse 两个严格 profile")  # 需要 glslang。
     args = parser.parse_args()  # 解析失败时参数解析器自行退出。
     if args.command == "generate":
         command_generate()
@@ -166,6 +180,10 @@ def main() -> None:
         command_count(args.json)
     elif args.command == "parity":
         command_parity()
+    elif args.command == "strict-parity":
+        command_strict_parity()
+    elif args.command == "profiles":
+        command_profiles()
     else:
         parser.print_help()  # 没有子命令时只显示帮助，不执行任何动作。
 

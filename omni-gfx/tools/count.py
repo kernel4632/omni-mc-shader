@@ -98,7 +98,7 @@ def collect() -> dict:
             report["generatedTotal"] += nonempty
         elif name == "第三方":
             report["thirdPartyTotal"] += nonempty
-    report["handwrittenBudget"] = 9400  # 手写核心上限；本轮补函数级对照工具与十一个纯计算函数，按实际规模上调，见计划文档的决策记录。
+    report["handwrittenBudget"] = 10600  # 手写核心上限；第七批严格对照新增的参考算法端口按实际规模上调，理由写入计划的决策记录。
     return report
 
 

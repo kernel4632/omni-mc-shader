@@ -1,4 +1,18 @@
 # 更新记录
+## 0.13.0
+
+严格函数对照与两个 profile：新增机器可读的 exact/approximate/mc_glue/missing 台账，按参考包分别生成并编译 GLSL，补齐一批此前被旧覆盖表掩盖的色调映射、AgX、天空与相函数差异。
+
+- 新增 `omni-gfx/tools/parity_strict.py` 与 `strict_review.json`：旧的 `parity_map.json` 只记录承接关系，新工具逐条校验目标存在，并输出 `omni-gfx/tools/parity_report.json`（ASCII 字段名）和 `docs/gfx-functions-strict.md`。当前 505 个参考函数中 exact 272、approximate 113、mc_glue 59、missing 61；这些数字是本次审计的真实结果，不再把同名映射直接当成同算法。
+- 新增 `omni-gfx/tools/profile.py` 与 `python omni-gfx/build.py profiles`：分别生成 `omni-gfx/profiles/iterationt/profile.frag` 与 `omni-gfx/profiles/eclipse/profile.frag`，各自调用本包的代表性函数，并用 `glslang` 独立链接通过；两份产物的行数与摘要不同，不做混用版本。
+- 颜色：新增 Eclipse 的 Rec.601 亮度、全范围/可编辑 Reinhard、Reinhard-Jodie、AgX look、完整/精简/Merlin 三套 AgX、Uchimura 指数肩部与曲线肩部、Eclipse 黑体拟合；新增 iterationT 的 AgX 可配置矩阵、色度反投影、主色滑动、压缩矩阵与完整曲线。旧的 `ogxAgx`、`ogxTonemapReinhard` 等近似实现保留给原有调用点，严格映射改指新函数。
+- 表面：新增 iterationT 的纹理自发光完整权重、材质覆盖（水/彩色玻璃/冰）与不叠加水洼的 labPBR 解码；`TextureLighting`、`ApplyMaterial`、`MaterialFromTex` 不再误指方块光或通用法线函数。
+- 天空与雾：新增 Eclipse 的瑞利/米氏相函数、大气密度、大气质量、光学厚度与透过率；新增群系雾密度六类权重、末地雾相函数、原版雾叠加与选择框曝光。新增 Eclipse 云密度三线性取样和云相函数。
+- 数学与采样：新增 R1/R2 序列、Eclipse 三角波与二维三角波、4×4 Bayer 抖动、Eclipse 快速反余弦、Elek 瑞利相函数；修正 `Sequences_R1/R2`、`bayerDither`、`tri`、`phaseRayleigh`、`fast_acos` 的严格映射。
+- MC 专用复核：`TorchScreenSpaceShadow`、TAA 取样、RSM、GTAO、GI 两级滤波、NUBIS 密度与步进、视差、反射合成、水下体积雾、末地雾与光传播体积等改为明确承接；调试叠加、坐标约定、群系枚举与体素编号保留 mc_glue 并逐条写理由。
+- 验证：`python omni-gfx/build.py generate`、`strict-parity`、`profiles`、`check`、`python build.py audit` 通过；`python build.py verify` 与 `python build.py compile` 结果见本次提交说明。未启动 Minecraft，游戏内画面、性能与兼容性仍未验证。
+- 限制：剩余 approximate/missing 主要是 Eclipse 的 Photonics、WSR 反射与体积云主循环，以及部分 iterationT 后期与 G-buffer 解码；严格报告逐条列出，不能当成已完成。
+
 ## 0.12.0
 
 光影验收 v5：太阳、天空、曝光、阴影、全局光、体积云与体积雾、水面按 iterationT 3.2.0 的实际链路重新对齐；修复大气表读取偏移，直接使用参考包的预计算大气表与云噪声，1280×720 仍保持约 60 帧。

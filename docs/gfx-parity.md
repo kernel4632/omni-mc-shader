@@ -11,7 +11,8 @@
 
 - `omni-gfx/src` 现有 24 个 Slang 模块。
 - `shaders/gfx/` 的 22 个旧 GLSL 文件已变成转发层，循环 0、纹理采样 0。
-- 模块级覆盖已完成；函数级逐条明细见 `docs/gfx-functions.md`（2026-10-25 由 `python omni-gfx/build.py parity` 从源码重建，505 个参考函数：已迁入 329、MC 专用 176、缺失 0、调试输出 0）。
+- 模块级覆盖已完成；函数级逐条明细见 `docs/gfx-functions.md`（2026-10-26 由 `python omni-gfx/build.py parity` 从源码重建，505 个参考函数：已迁入 378、MC 专用 127、缺失 0、调试输出 0）。
+- 严格对照另见 `docs/gfx-functions-strict.md` 与 `omni-gfx/tools/parity_report.json`：exact 272、approximate 113、mc_glue 59、missing 61。旧的“已迁入”只代表有承接函数，严格结论以这份新表为准。
 - 第五批把函数级缺口清零：20 个函数新进库（拜尔 16/32/128、月亮与天空盒双线性取像素、天空经纬投影与云图两级采样、双边升采样、Xonk 曲线、十六位分量解码、整数哈希、球面求交哨兵版、三次 B 样条权重八件），15 个按算法逐项对照到库内已有实现，1 个（`GetCloudShadow`）按宿主符号留在光影侧；采样器一律改为显式参数，不再以“库不绑定采样器”为由排除。
 - 没有启动 Minecraft，游戏内画面、性能与维度切换仍未验证。
 
@@ -78,3 +79,12 @@
 
 - 函数级缺口已清零（`docs/gfx-functions.md`：缺失 0、调试输出 0）。通用库承接 329 条、MC 专用 176 条；宿主依赖逐条列出符号，调试叠加逐条写明机制（`gl_FragCoord`、`text.`、`printChar` 链）。
 - 剩余未验证项只有实机：Minecraft 世界内画面、菜单、性能、Vulkan/Aperture 运行时与其他显卡；测试世界只能证明产物能编译、能出图、能在本机达到目标帧率。
+
+## 严格对照与两个 profile
+
+旧的函数级表只回答“由谁承接”，不能证明常数、采样顺序和颜色空间一致。2026-10-26 新增：
+
+- `omni-gfx/tools/strict_review.json`：人工严格台账，逐条写 exact、approximate、mc_glue 或 missing；只有逐行核对过的映射才进 exact。
+- `python omni-gfx/build.py strict-parity`：生成 `omni-gfx/tools/parity_report.json`（ASCII 字段名）与 `docs/gfx-functions-strict.md`。报告里的 exact 覆盖率按算法函数计算，不把菜单、坐标约定与调试叠加算进分母。
+- `python omni-gfx/build.py profiles`：生成 `omni-gfx/profiles/iterationt/profile.frag` 与 `omni-gfx/profiles/eclipse/profile.frag`，再用本机 `glslang` 分别编译。两个 profile 各自调用本包的代表性函数，不共享一个“混用”版本。
+- 当前严格统计以 `parity_report.json` 为准；未达到 exact 的条目逐条列在 `docs/gfx-functions-strict.md`，不能当成已完成。尤其是 Eclipse 的 Photonics、WSR 反射与体积云主循环，仍需要继续迁移。

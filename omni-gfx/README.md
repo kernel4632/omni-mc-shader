@@ -72,7 +72,7 @@ python omni-gfx/build.py spirv --download
 python omni-gfx/build.py count
 ```
 
-手写核心只统计 `src/`、`tools/` 与 `tests/`，上限 3000 行；测试世界单列，生成 GLSL 与第三方代码分开统计。
+手写核心只统计 `src/`、`tools/` 与 `tests/`，上限以 \omni-gfx/tools/count.py\ 为准；测试世界单列，生成 GLSL 与第三方代码分开统计。
 
 ## 函数级覆盖对照
 
@@ -80,7 +80,7 @@ python omni-gfx/build.py count
 python omni-gfx/build.py parity
 ```
 
-从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 329、MC 专用 176、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。
+从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 378、MC 专用 127、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。
 
 ## 已知边界
 
@@ -95,3 +95,11 @@ python omni-gfx/build.py parity
 ## 许可证
 
 本库许可证尚未由项目所有者确定，详见 `LICENSE`。开发期下载的 Slang、GLFW 与 PyOpenGL 不随库分发。
+
+## 严格对照与两个 profile
+
+\\powershell
+python omni-gfx/build.py strict-parity
+python omni-gfx/build.py profiles
+\\n
+\strict-parity\ 读取 \	ools/strict_review.json\，生成 \	ools/parity_report.json\ 与 \docs/gfx-functions-strict.md\；状态只允许 exact、approximate、mc_glue、missing。\profiles\ 分别生成 iterationT 与 Eclipse 的 \profile.frag\，并用本机 \glslang\ 独立编译。严格统计以报告为准，当前仍有 approximate 与 missing。

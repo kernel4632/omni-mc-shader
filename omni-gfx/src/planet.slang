@@ -113,4 +113,11 @@ void ogxPlanetEnd(inout float3 color, float3 eye, float3 rayDir, float3 lightDir
     color += ring * 0.012 * float3(1.0, 0.85, 0.60); // 环带偏暖黄叠到画面。
 }
 
+// iterationT 末地天空的 p 曲线：四次方乘一次线性衰减，末端回到零。
+float ogxEndSkyPCurve(float x)
+{
+    float x2 = x * x; // 平方。
+    return 12.207 * x2 * x2 * (1.0 - x); // 四次方乘剩余量。
+}
+
 #endif
