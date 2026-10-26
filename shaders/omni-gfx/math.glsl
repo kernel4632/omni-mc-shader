@@ -57,15 +57,21 @@ float ogxSquare(float x) { return x * x; }
 
 // 长度的平方：比较远近时不需要开方，省掉一次 sqrt。
 float ogxLengthSquared(vec3 v) { return dot(v, v); }
+// 二分量版本：参考包的光线求交与椭圆距离只用平面长度。
+float ogxLengthSquared(vec2 v) { return dot(v, v); }
 
 // 取倒数长度的安全版本：零向量返回零，避免除零产生 NaN 污染整条管线。
 float ogxSafeInvLength(vec3 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
+// 二分量版本，零向量同样退回零。
+float ogxSafeInvLength(vec2 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
 
 // 三角波：把任意输入折回零到一，周期二；噪声与条纹图案常用它代替正弦。
 float ogxTriangleWave(float x) { return 1.0 - abs((x * 0.5 - floor(x * 0.5)) * 2.0 - 1.0); }
 
 // 二维乘加：常数项的写法与参考源码一致，便于逐行核对。
 vec2 ogxFma2(vec2 a, vec2 b, vec2 c) { return a * b + c; }
+// 标量乘加：参考包的 `fma2` 只处理三个标量，保留同签名重载给旧调用点。
+float ogxFma2(float a, float b, float c) { return a * b + c; }
 
 // 同时给出正弦与余弦：极坐标采样需要两者，一次算出省掉一次三角函数。
 vec2 ogxSinCos(float angle) { return vec2(sin(angle), cos(angle)); }
@@ -96,6 +102,12 @@ vec3 ogxRemap(vec3 x, vec3 minOrigin, vec3 maxOrigin, vec3 minNew, vec3 maxNew)
 // 三分量里最小的一个，等价于先两两取小再合并。
 float ogxMinVec3(vec3 value) { return min(value.x, min(value.y, value.z)); }
 
+// 二分量的最小与最大：参考包对 2、3、4 分量各有一个同名重载，库补齐常用的两组。
+float ogxMinVec2(vec2 value) { return min(value.x, value.y); }
+float ogxMaxVec2(vec2 value) { return max(value.x, value.y); }
+float ogxMinVec4(vec4 value) { return min(min(value.x, value.y), min(value.z, value.w)); }
+float ogxMaxVec4(vec4 value) { return max(max(value.x, value.y), max(value.z, value.w)); }
+
 // 三分量里最大的一个，和上一函数配对使用。
 float ogxMaxVec3(vec3 value) { return max(value.x, max(value.y, value.z)); }
 
@@ -107,6 +119,15 @@ vec2 ogxCircleMap(float index, float count)
 {
     float angle = index * count * OGX_GOLDEN_ANGLE;
     return vec2(sin(angle), cos(angle)) * sqrt(index);
+}
+
+// 圆盘采样的三分量版本：前两个分量是方向，第三个分量是半径。
+// 为什么单独保留：Eclipse 的 `circlemapL` 用它直接取带长度的三维点，
+// 与二维 `circlemap` 只差返回类型；混用会把半径丢掉。
+vec3 ogxCircleMapL(float index, float count)
+{
+    float angle = index * count * OGX_GOLDEN_ANGLE;
+    return vec3(sin(angle), cos(angle), sqrt(index));
 }
 
 // 把零到一的样本序号变成圆盘上的螺旋采样点，给环境光遮蔽与反射做低差异分布。
@@ -133,6 +154,8 @@ vec3 ogxRoughSpecularDirection(float index, float alpha2, int steps)
 // 单位化向量，长度极小时用一个小分母兜底，避免着色点出现除零后的无穷值。
 // 比直接除以长度多一点开销，但水面与反射会在掠射角读到极短向量，必须兜底。
 vec3 ogxNormalize(vec3 vector) { return vector * inversesqrt(max(dot(vector, vector), 1e-10)); }
+// 二分量版本的归一化，供屏幕空间与平面方向使用。
+vec2 ogxNormalize(vec2 vector) { return vector * inversesqrt(max(dot(vector, vector), 1e-10)); }
 
 // GLSL 取模的语义：结果始终落在零到除数之间，负数也一样。
 // 为什么不用机器附带的余数函数：它的符号跟随被除数，负数会得到负值，跟 GLSL 的取模不同。
@@ -745,6 +768,63 @@ float ogxEclipseBayerDither(vec2 pixel)
     int x = int(mod(pixel.x, 4.0)); // 横向格。
     int y = int(mod(pixel.y, 4.0)); // 纵向格。
     return bayer[x + y * 4]; // 按行优先取表。
+}
+
+// Eclipse 的二维旋转矩阵：`mm2(a)` 返回绕原点旋转 `a` 弧度的二乘二矩阵。
+mat2 ogxRotate2Matrix(float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+    return mat2(c, s, -s, c);
+}
+
+// iterationT 的实体旋转矩阵：只绕前后轴转，供法线与切线一起旋转。
+mat2 ogxMat2RotateZ(float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+    return mat2(c, s, -s, c);
+}
+
+// Eclipse 的半球方向：两个零到一的随机数变成一个朝上的单位向量。
+vec3 ogxGenUnitVector(vec2 xy)
+{
+    xy.x *= 6.28318530718; // 横向角度乘一圈。
+    xy.y = xy.y * 2.0 - 1.0; // 纵向高度映射到负一到一。
+    return vec3(ogxSinCos(xy.x) * sqrt(1.0 - xy.y * xy.y), xy.y);
+}
+
+// Eclipse 的两向量旋转矩阵：把 `x` 转到 `y` 的方向，用于极光与天空基。
+// 参考实现按列填矩阵；这里保持同样的参数顺序，生成 GLSL 后列主序解释一致。
+mat3 ogxGetRotMat(vec3 x, vec3 y)
+{
+    float d = dot(x, y);
+    vec3 cr = cross(y, x);
+    float s = length(cr);
+    float id = 1.0 - d;
+    vec3 m = cr / s;
+    vec3 m2 = m * m * id + d;
+    vec3 sm = s * m;
+    vec3 w = (m.xy * id).xxy * m.yzz;
+    return mat3(
+        m2.x,     w.x - sm.z, w.y + sm.y,
+        w.x + sm.z, m2.y,     w.z - sm.x,
+        w.y - sm.y, w.z + sm.x, m2.z);
+}
+
+// Eclipse 的 Halton 二进序列：按位反转，返回一个零到一的低差异数。
+float ogxHaltonSeq2(int index)
+{
+    float r = 0.0;
+    float f = 1.0;
+    int i = index;
+    while (i > 0)
+    {
+        f /= 2.0;
+        r += f * float(i % 2);
+        i = int(float(i) / 2.0);
+    }
+    return r;
 }
 
 #endif

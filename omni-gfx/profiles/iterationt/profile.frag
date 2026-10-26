@@ -66,15 +66,21 @@ float ogxSquare(float x) { return x * x; }
 
 // 长度的平方：比较远近时不需要开方，省掉一次 sqrt。
 float ogxLengthSquared(vec3 v) { return dot(v, v); }
+// 二分量版本：参考包的光线求交与椭圆距离只用平面长度。
+float ogxLengthSquared(vec2 v) { return dot(v, v); }
 
 // 取倒数长度的安全版本：零向量返回零，避免除零产生 NaN 污染整条管线。
 float ogxSafeInvLength(vec3 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
+// 二分量版本，零向量同样退回零。
+float ogxSafeInvLength(vec2 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
 
 // 三角波：把任意输入折回零到一，周期二；噪声与条纹图案常用它代替正弦。
 float ogxTriangleWave(float x) { return 1.0 - abs((x * 0.5 - floor(x * 0.5)) * 2.0 - 1.0); }
 
 // 二维乘加：常数项的写法与参考源码一致，便于逐行核对。
 vec2 ogxFma2(vec2 a, vec2 b, vec2 c) { return a * b + c; }
+// 标量乘加：参考包的 `fma2` 只处理三个标量，保留同签名重载给旧调用点。
+float ogxFma2(float a, float b, float c) { return a * b + c; }
 
 // 同时给出正弦与余弦：极坐标采样需要两者，一次算出省掉一次三角函数。
 vec2 ogxSinCos(float angle) { return vec2(sin(angle), cos(angle)); }
@@ -105,6 +111,12 @@ vec3 ogxRemap(vec3 x, vec3 minOrigin, vec3 maxOrigin, vec3 minNew, vec3 maxNew)
 // 三分量里最小的一个，等价于先两两取小再合并。
 float ogxMinVec3(vec3 value) { return min(value.x, min(value.y, value.z)); }
 
+// 二分量的最小与最大：参考包对 2、3、4 分量各有一个同名重载，库补齐常用的两组。
+float ogxMinVec2(vec2 value) { return min(value.x, value.y); }
+float ogxMaxVec2(vec2 value) { return max(value.x, value.y); }
+float ogxMinVec4(vec4 value) { return min(min(value.x, value.y), min(value.z, value.w)); }
+float ogxMaxVec4(vec4 value) { return max(max(value.x, value.y), max(value.z, value.w)); }
+
 // 三分量里最大的一个，和上一函数配对使用。
 float ogxMaxVec3(vec3 value) { return max(value.x, max(value.y, value.z)); }
 
@@ -116,6 +128,15 @@ vec2 ogxCircleMap(float index, float count)
 {
     float angle = index * count * OGX_GOLDEN_ANGLE;
     return vec2(sin(angle), cos(angle)) * sqrt(index);
+}
+
+// 圆盘采样的三分量版本：前两个分量是方向，第三个分量是半径。
+// 为什么单独保留：Eclipse 的 `circlemapL` 用它直接取带长度的三维点，
+// 与二维 `circlemap` 只差返回类型；混用会把半径丢掉。
+vec3 ogxCircleMapL(float index, float count)
+{
+    float angle = index * count * OGX_GOLDEN_ANGLE;
+    return vec3(sin(angle), cos(angle), sqrt(index));
 }
 
 // 把零到一的样本序号变成圆盘上的螺旋采样点，给环境光遮蔽与反射做低差异分布。
@@ -142,6 +163,8 @@ vec3 ogxRoughSpecularDirection(float index, float alpha2, int steps)
 // 单位化向量，长度极小时用一个小分母兜底，避免着色点出现除零后的无穷值。
 // 比直接除以长度多一点开销，但水面与反射会在掠射角读到极短向量，必须兜底。
 vec3 ogxNormalize(vec3 vector) { return vector * inversesqrt(max(dot(vector, vector), 1e-10)); }
+// 二分量版本的归一化，供屏幕空间与平面方向使用。
+vec2 ogxNormalize(vec2 vector) { return vector * inversesqrt(max(dot(vector, vector), 1e-10)); }
 
 // GLSL 取模的语义：结果始终落在零到除数之间，负数也一样。
 // 为什么不用机器附带的余数函数：它的符号跟随被除数，负数会得到负值，跟 GLSL 的取模不同。
@@ -756,6 +779,63 @@ float ogxEclipseBayerDither(vec2 pixel)
     return bayer[x + y * 4]; // 按行优先取表。
 }
 
+// Eclipse 的二维旋转矩阵：`mm2(a)` 返回绕原点旋转 `a` 弧度的二乘二矩阵。
+mat2 ogxRotate2Matrix(float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+    return mat2(c, s, -s, c);
+}
+
+// iterationT 的实体旋转矩阵：只绕前后轴转，供法线与切线一起旋转。
+mat2 ogxMat2RotateZ(float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+    return mat2(c, s, -s, c);
+}
+
+// Eclipse 的半球方向：两个零到一的随机数变成一个朝上的单位向量。
+vec3 ogxGenUnitVector(vec2 xy)
+{
+    xy.x *= 6.28318530718; // 横向角度乘一圈。
+    xy.y = xy.y * 2.0 - 1.0; // 纵向高度映射到负一到一。
+    return vec3(ogxSinCos(xy.x) * sqrt(1.0 - xy.y * xy.y), xy.y);
+}
+
+// Eclipse 的两向量旋转矩阵：把 `x` 转到 `y` 的方向，用于极光与天空基。
+// 参考实现按列填矩阵；这里保持同样的参数顺序，生成 GLSL 后列主序解释一致。
+mat3 ogxGetRotMat(vec3 x, vec3 y)
+{
+    float d = dot(x, y);
+    vec3 cr = cross(y, x);
+    float s = length(cr);
+    float id = 1.0 - d;
+    vec3 m = cr / s;
+    vec3 m2 = m * m * id + d;
+    vec3 sm = s * m;
+    vec3 w = (m.xy * id).xxy * m.yzz;
+    return mat3(
+        m2.x,     w.x - sm.z, w.y + sm.y,
+        w.x + sm.z, m2.y,     w.z - sm.x,
+        w.y - sm.y, w.z + sm.x, m2.z);
+}
+
+// Eclipse 的 Halton 二进序列：按位反转，返回一个零到一的低差异数。
+float ogxHaltonSeq2(int index)
+{
+    float r = 0.0;
+    float f = 1.0;
+    int i = index;
+    while (i > 0)
+    {
+        f /= 2.0;
+        r += f * float(i % 2);
+        i = int(float(i) / 2.0);
+    }
+    return r;
+}
+
 #endif
 /*
 生成文件：颜色模块的 GLSL 330 版本，请勿手工修改。
@@ -836,6 +916,9 @@ vec3 ogxAces(vec3 color, bool abney)
     color = ogxApplyRows(OGX_AP1_BACK_0, OGX_AP1_BACK_1, OGX_AP1_BACK_2, color);
     return ogxLinearToGamma2(color);
 }
+
+// 参考包的 `ACES` 默认开启 Abney 效应校正；单参数重载让旧调用点保持原签名。
+vec3 ogxAces(vec3 color) { return ogxAces(color, true); }
 
 // AgX 对比度曲线：用六次多项式近似原查找表，省掉一张纹理。
 vec3 ogxAgxContrast(vec3 x)
@@ -1352,6 +1435,30 @@ mat4 ogxSaturationMatrix(float saturation)
         vec4(0.0, 0.0, 0.0, 1.0)); // 三个颜色通道加一行齐次坐标。
 }
 
+// 把三列矩阵换成 GLSL 的 mat3：参考包的三原色函数返回 mat3，调用方按矩阵乘向量。
+mat3 ogxAgxMat3ToMat3(OgxAgxMat3 m)
+{
+    return mat3(m.c0, m.c1, m.c2);
+}
+
+// 参考签名的三原色矩阵：内部仍用三列结构体，只在边界转成 mat3。
+mat3 ogxAgxPrimariesToMat3(vec2 xyRed, vec2 xyGreen, vec2 xyBlue, vec2 xyWhite)
+{
+    return ogxAgxMat3ToMat3(ogxAgxPrimariesToMatrix(xyRed, xyGreen, xyBlue, xyWhite));
+}
+
+// 参考签名的压缩矩阵，与上一函数配对。
+mat3 ogxAgxCompressionToMat3(vec2 xyRed, vec2 xyGreen, vec2 xyBlue, vec2 xyWhite)
+{
+    return ogxAgxMat3ToMat3(ogxAgxComputeCompressionMatrix(xyRed, xyGreen, xyBlue, xyWhite));
+}
+
+// 参考签名的 AgX 组合矩阵：无参数，返回 sRGB 到调整后空间的矩阵。
+mat3 ogxAgxConfigurable1Mat3()
+{
+    return ogxAgxMat3ToMat3(ogxAgxConfigurable1());
+}
+
 #endif
 /*
 生成文件：采样模块的 GLSL 330 版本，请勿手工修改。
@@ -1563,8 +1670,39 @@ float ogxHash13(vec3 p)
 float ogxHash12(vec2 p)
 {
     vec3 p3 = fract(vec3(p.x, p.y, p.x) * 0.1031); // 两个坐标扩成三个分量。
-    p3 += dot(p3, p3.yzx + 33.33); // 互相混合，打散相邻格点的规律。
+    p3 += dot(p3, p3.yzx + 19.19); // 参考实现的混合常数。
     return fract((p3.x + p3.y) * p3.z); // 零到一的伪随机数。
+}
+
+// 标量哈希：Eclipse 的 `hash11` 与 `hash_aurora` 是同一算式，保留两个名字给不同调用点。
+float ogxHash11(float p)
+{
+    p = fract(p * 0.1031);
+    p *= p + 33.33;
+    p *= p + p;
+    return fract(p);
+}
+
+// 标量哈希的极光别名：与 `hash11` 逐项相同，名字对应参考源码的用途。
+float ogxHashAurora(float p) { return ogxHash11(p); }
+
+// 三分量哈希：一个标量序号变成互相独立的三维随机值。
+vec3 ogxHash31(float p)
+{
+    vec3 p3 = fract(vec3(p) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xxy + p3.yzz) * p3.zyx);
+}
+
+// 二维坐标的整数哈希：先把两个坐标转成整数，再走三次整数混合。
+uvec3 ogxHashUint3(vec2 s)
+{
+    uvec3 x = uvec3(uint(s.x), uint(s.y), uint(s.x) ^ uint(s.y));
+    const uint k = 1103515245u;
+    x = ((x >> 8u) ^ x.yzx) * k;
+    x = ((x >> 8u) ^ x.yzx) * k;
+    x = ((x >> 8u) ^ x.yzx) * k;
+    return x;
 }
 
 // 二维向量哈希：把平面格点变成一个二维随机方向，供旋度噪声与雨点涟漪定位。
@@ -1637,6 +1775,9 @@ uvec3 ogxIntegerHash3(uvec3 x)
     x = ((x >> 8u) ^ x.yzx) * k; // 第三次：三轮之后三个分量的每一位都互相影响。
     return x; // 返回三个独立的整数随机值。
 }
+
+// Eclipse 的 `iqint2`：同一个整数混合器的独立入口，保留参考名字与常数。
+uvec3 ogxIqint2(uvec3 x) { return ogxIntegerHash3(x); }
 
 // 三维值噪声：八个格点各取哈希，再按平滑曲线插值。
 float ogxValueNoise3(vec3 p)
@@ -7068,6 +7209,12 @@ vec3 ogxClipAabb(vec3 average, vec3 variance, vec3 history, bool toCenter)
                             diff.z < -variance.z ? -variance.z / diff.z : 1.0); // 超出下界的比例。
     diff *= clipMax.x * clipMax.y * clipMax.z * clipMin.x * clipMin.y * clipMin.z; // 一次缩到范围内。
     return average + diff; // 返回裁剪后的历史。
+}
+
+// 参考包的三参数版本：默认不朝中心拉，逐分量裁剪；旧调用点不需要传开关。
+vec3 ogxClipAabb(vec3 average, vec3 variance, vec3 history)
+{
+    return ogxClipAabb(average, variance, history, false);
 }
 
 // 三次采样的五个支撑点：中心行列各取一次，比双线性更锐，代价是五次取样。

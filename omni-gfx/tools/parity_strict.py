@@ -1,42 +1,54 @@
-"""生成严格函数对照的机器可读 JSON，并暴露仍未逐行核对的算法。
+"""生成严格函数对照，并把“同名但签名不同”的假 exact 拦下来。
 
 调用位置：`python omni-gfx/build.py strict-parity`；修改参考包、库源码或
 `strict_review.json` 后重新运行。产物是 `omni-gfx/tools/parity_report.json`
 与 `docs/gfx-functions-strict.md`。
 
-为什么不能只看名字：
-    同名函数可能只是同一家族。例如 Eclipse 的 `ToneMap_AgX_minimal_merlin`
-    与库里的 `ogxAgx` 都叫 AgX，但动态范围端点和 `agxLook` 不同；把两者写成
-    exact 会让后续审查误以为颜色空间一致。因此严格结论只来自人工 ledger，
-    代码只负责校验目标存在、拼出证据行号并统计。
+为什么不再只看名字：
+    Eclipse 的 `circlemap` 返回二维向量，`circlemapL` 返回三维向量；旧台账把两者
+    都指向 `ogxCircleMap`（返回二维）却写成 exact。现在 exact 必须同时满足：
+        1. 返回类型、参数个数、参数类型与方向一致；
+        2. 采样调用的次数与顺序一致；
+        3. 参考用到的数值常数全部能在实现里找到。
 
-为什么默认不是 exact：
-    `parity_map.json` 的旧条目回答“由谁承接”，不回答“常数与采样顺序是否一致”。
-    没写进 `strict_review.json` 的映射一律先记为 approximate，避免把旧覆盖表
-    直接升级成严格结论。真正核对过的一对才写进 exact。
+为什么常数允许实现多出：
+    宿主层函数会把参考里的全局量（时间、湿度、屏幕尺寸）改成显式参数。这些参数
+    带进来的新常数不改变参考算式，因此宿主层允许“实现多出常数”，但参考常数一个
+    都不能少。通用库函数仍要求两边常数完全一致。
 
-为什么 mc_glue 要单独列：
-    菜单、属性表、实体编号与坐标约定不是算法，允许留在 Minecraft 侧；但它们
-    必须逐条写明理由。剩下的未映射函数默认记 missing，进入缺口清单。
+为什么沿调用图收集：
+    宿主层通常只写一行转发，算法在 `omni-gfx`。只看外层会把所有转发函数都判成
+    “没有常数、没有采样”，反而制造假 exact。调用图把真正的算式算进来。
+
+为什么先预处理：
+    参考包用 `#if MC_VERSION >= 11605` 在两个贴图通道间二选一。不预处理会把两个
+    分支的采样都算进去，得到虚假的采样数差异。默认配置取自参考包的 Settings 与
+    光影的 `profile.default`。
 """
 from __future__ import annotations
 
-import json  # 读写机器可读对照。
-import re  # 从函数体里统计采样次数，作为差异说明的一部分。
-import sys  # 目标不存在时以非零状态退出。
+import json  # 读写机器可读台账与报告。
+import sys  # 校验失败时以非零状态退出。
+from collections import defaultdict  # 按承接函数分组，检查多个参考函数指向同一实现。
 from pathlib import Path  # 统一定位参考包与库源码。
 
 ROOT = Path(__file__).resolve().parents[2]  # 仓库根目录。
 LIB = ROOT / "omni-gfx"  # 通用库目录。
-sys.path.insert(0, str(LIB / "tools"))  # 复用同名解析器，不复制括号匹配代码。
-import parity  # 参考包与库共用的函数解析器。
-MAP = LIB / "tools" / "parity_map.json"  # 旧的承接表。
-REVIEW = LIB / "tools" / "strict_review.json"  # 严格结论。
+sys.path.insert(0, str(LIB / "tools"))
+import parity  # 只复用“参考函数名单”的收集口径。
+import signature  # 签名、常数、采样与调用图解析。
+
+MAP = LIB / "tools" / "parity_map.json"  # 旧的承接表，仅作缺省目标参考。
+REVIEW = LIB / "tools" / "strict_review.json"  # 人工严格结论。
 REPORT = LIB / "tools" / "parity_report.json"  # 机器可读产物。
 DOC = ROOT / "docs" / "gfx-functions-strict.md"  # 人类可读摘要。
+VERSION = "11605"  # 默认按 1.16.5 以上的贴图布局预处理参考代码。
 
-SAMPLE = re.compile(r"\b(?:texture|textureLod|textureGrad|texelFetch|texture2D|texture3D|"
-                    r"SampleLevel|SampleGrad|Load|SampleCmpLevelZero)\b")  # 采样调用计数口径。
+REFERENCE_ROOTS = {
+    "iterationT": ROOT / "references/iterationT/shaders",
+    "Eclipse": ROOT / "references/Eclipse/shaders",
+}
+IMPL_PATHS = sorted((ROOT / "shaders").rglob("*.glsl")) + sorted((LIB / "src").glob("*.slang"))
 
 
 def load_json(path: Path) -> dict:
@@ -44,82 +56,201 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def function_index() -> dict[str, dict]:
-    """返回 `模块.函数` 到源码位置的索引，用来校验人工目标真实存在。"""
-    index = {}
-    for path in sorted((LIB / "src").glob("*.slang")):
-        for item in parity.parse_functions(path):
-            index[f"{path.stem}.{item['name']}"] = {
-                "path": path.relative_to(ROOT).as_posix(),
-                "line": item["line"],
-            }
-    return index
+def reference_environment() -> tuple[dict, dict, dict]:
+    """建立两份参考包的函数索引、常数表与预处理宏。
+
+    返回 `(index, constants, defines)`；键是包名。索引按函数名分组，同名重载都保留。
+    """
+    index, constants, defines = {}, {}, {}
+    for pack, root in REFERENCE_ROOTS.items():
+        paths = sorted(root.rglob("*.glsl"))
+        macro = signature.collect_defines(paths, {"MC_VERSION": VERSION})
+        defines[pack] = macro
+        index[pack] = signature.index_by_function_name(paths, macro)
+        constants[pack] = signature.global_constant_table(paths, macro)
+    return index, constants, defines
 
 
-def reference_rows() -> list[dict]:
-    """收集两份参考包的函数，同名跨包只保留第一次出现，统计口径与旧表一致。"""
-    mapping = load_json(MAP)
-    index = parity.library_index()
-    rows = parity.collect_reference()
-    parity.classify(rows, index, mapping)
-    return rows
+def implementation_environment() -> tuple[dict, dict, dict, dict]:
+    """建立宿主层与通用库的索引、常数表、预处理宏和路径索引。
+
+    宿主层优先使用 `shaders.properties` 的默认 profile；这样 `#ifdef OMNI_*`
+    分支与玩家默认看到的画面一致。通用库没有预处理器，宏表只影响宿主层。
+    """
+    defines = signature.read_profile_defines(ROOT / "shaders/shaders.properties")
+    defines["MC_VERSION"] = VERSION
+    defines = signature.collect_defines(sorted((ROOT / "shaders").rglob("*.glsl")), defines)
+    index = signature.index_by_function_name(IMPL_PATHS, defines)
+    constants = signature.global_constant_table(IMPL_PATHS, defines)
+    by_path = {}
+    for group in index.values():
+        for item in group:
+            by_path[f"{item['path']}:{item['name']}"] = item
+    return index, constants, defines, by_path
 
 
-def build_records(rows: list[dict], library: dict[str, dict], review: dict) -> tuple[list[dict], list[str]]:
-    """把参考函数、旧承接表与人工严格结论合并成一条条记录。"""
+def signature_of(item: dict) -> tuple:
+    """返回可比较的签名键：返回类型、参数方向与类型。"""
+    return (item["return"], tuple((p["direction"], p["type"]) for p in item["params"]))
+
+
+def pick_variant(refs: list[dict], candidates: list[dict]) -> tuple[dict, dict] | None:
+    """在参考重载与实现重载中选一对签名相同的组合。"""
+    for ref in refs:
+        for candidate in candidates:
+            if signature_of(ref) == signature_of(candidate):
+                return ref, candidate
+    return None
+
+
+def resolve_implementation(name: str, refs: list[dict], entry: dict,
+                           library: dict, path_index: dict, impl_index: dict) -> tuple[dict, dict, str] | None:
+    """给一条参考记录选实现：优先台账目标，其次宿主层同名同签名函数。
+
+    返回 `(参考重载, 实现, 层名)`。层名用于决定常数是否允许实现多出。
+    没有同签名候选时仍返回最接近的一对，让报告能写出具体差异，而不是只报“找不到”。
+    """
+    target = entry.get("target", "")
+    ledger = library.get(target) or library.get(target.split("#")[0]) or path_index.get(target)
+    if ledger is not None:
+        pair = pick_variant(refs, [ledger])
+        if pair:
+            return pair[0], pair[1], "library"
+    pair = pick_variant(refs, impl_index.get(name, []))
+    if pair:
+        return pair[0], pair[1], "host"
+    if ledger is not None:
+        return refs[0], ledger, "library"
+    candidates = impl_index.get(name, [])
+    if candidates:
+        return refs[0], candidates[0], "host"
+    return None
+
+
+def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[str]]:
+    """把参考函数、人工台账与自动核对合并成一条条记录。"""
+    ref_index, ref_constants, _ = reference_environment()
+    impl_index, impl_constants, _, path_index = implementation_environment()
+    library = signature.function_index(sorted((LIB / "src").glob("*.slang")))
     exact = review.get("exact", {})
     glue = review.get("mcGlue", {})
     approximate = review.get("approximate", {})
     missing = review.get("missing", {})
-    errors = []
+    errors: list[str] = []
     records = []
-    for row in rows:
+
+    for row in raw_rows:
         name = row["name"]
         source = f"{row['path']}:{row['line']}"
-        target = row["target"]
-        status = "approximate"
-        difference = "not reviewed line by line; old map only records the receiving function"
-        evidence = source
+        package = row["pack"]
+        refs = []
+        for pack in ("iterationT", "Eclipse"):
+            for item in ref_index[pack].get(name, []):
+                item["pack"] = pack
+                refs.append(item)
+        if not refs:
+            records.append(base_record(row, source, "mc_glue", "",
+                                       "参考默认配置未启用该函数，不参与画面", "inactive"))
+            continue
         if name in exact:
             entry = exact[name]
-            target = entry.get("target", target)
-            status = "exact"
-            difference = entry.get("difference", "none")
-        elif name in glue:
-            target = ""
-            status = "mc_glue"
-            difference = glue[name].get("evidence", "host-only glue")
-        elif name in approximate:
-            entry = approximate[name]
-            target = entry.get("target", target)
-            status = "approximate"
-            difference = entry.get("difference", "known approximate replacement")
-        elif name in missing:
-            target = ""
-            status = "missing"
-            difference = missing[name].get("evidence", "algorithm not migrated")
-        elif not target:
-            status = "missing"
-            difference = "no receiving function and no glue justification"
-        if target:
-            if target not in library:
-                errors.append(f"{name} -> {target}")
+            resolved = resolve_implementation(name, refs, entry, library, path_index, impl_index)
+            if resolved is None:
+                records.append(base_record(row, source, "approximate", entry.get("target", ""),
+                                           "找不到实现；台账目标不存在", ""))
                 continue
-            evidence = f"{source} -> {library[target]['path']}:{library[target]['line']}"
-        records.append({
-            "referenceFile": row["path"],
-            "referenceLine": row["line"],
-            "referenceFunction": name,
-            "package": row["pack"],
-            "profile": "iterationT" if row["pack"] == "iterationT" else "Eclipse",
-            "currentImplementation": target,
-            "status": status,
-            "algorithm": status != "mc_glue",
-            "difference": difference,
-            "evidencePath": evidence,
-            "referenceSamples": len(SAMPLE.findall(row["body"])),
-        })
+            ref, impl, layer = resolved
+            allow_extra = (layer == "host" or bool(entry.get("adapter"))) and "--strict-constants" not in sys.argv[1:]
+            result = signature.compare(ref, impl, ref_constants[ref["pack"]], impl_constants,
+                                       None, ref_index[ref["pack"]], impl_index, allow_extra)
+            status = "exact" if not result["issues"] else "approximate"
+            difference = "none" if status == "exact" else "; ".join(result["issues"])
+            records.append({
+                "referenceFile": ref["path"].replace("\\", "/"),
+                "referenceLine": ref["line"],
+                "referenceFunction": name,
+                "package": package,
+                "profile": "iterationT" if package == "iterationT" else "Eclipse",
+                "currentImplementation": impl["name"],
+                "implementationPath": impl["path"].replace("\\", "/"),
+                "implementationLine": impl["line"],
+                "layer": layer,
+                "status": status,
+                "algorithm": True,
+                "difference": difference,
+                "evidencePath": f"{ref['path'].replace(chr(92), '/')}:{ref['line']} -> "
+                                f"{impl['path'].replace(chr(92), '/')}:{impl['line']}",
+                "referenceSignature": result["referenceSignature"],
+                "implementationSignature": result["implementationSignature"],
+                "referenceSamples": result["referenceSamples"],
+                "implementationSamples": result["implementationSamples"],
+                "missingConstants": result["missingNumbers"],
+                "extraConstants": result["extraNumbers"],
+            })
+            continue
+        if name in glue:
+            records.append(base_record(row, source, "mc_glue", "", glue[name].get("evidence", "host-only glue"),
+                                       glue[name].get("category", "host")))
+            continue
+        if name in approximate:
+            entry = approximate[name]
+            record = base_record(row, source, "approximate", entry.get("target", ""),
+                                 entry.get("difference", "known approximate replacement"), "")
+            record["referenceSignature"] = entry.get("referenceSignature", "")
+            record["implementationSignature"] = entry.get("implementationSignature", "")
+            records.append(record)
+            continue
+        if name in missing:
+            records.append(base_record(row, source, "missing", "", missing[name].get("evidence", "算法未迁移"), ""))
+            continue
+        records.append(base_record(row, source, "approximate", "",
+                                   "没有同签名实现，旧承接表也没有给出可核对的目标", ""))
     return records, errors
+
+
+def base_record(row: dict, source: str, status: str, target: str, difference: str, category: str) -> dict:
+    """给非 exact 记录填统一字段，避免下游缺少键。"""
+    return {
+        "referenceFile": row["path"].replace("\\", "/"),
+        "referenceLine": row["line"],
+        "referenceFunction": row["name"],
+        "package": row["pack"],
+        "profile": "iterationT" if row["pack"] == "iterationT" else "Eclipse",
+        "currentImplementation": target,
+        "implementationPath": "",
+        "implementationLine": 0,
+        "layer": category,
+        "status": status,
+        "algorithm": status != "mc_glue",
+        "difference": difference,
+        "evidencePath": source,
+        "referenceSignature": "",
+        "implementationSignature": "",
+        "referenceSamples": [],
+        "implementationSamples": [],
+        "missingConstants": [],
+        "extraConstants": [],
+    }
+
+
+def check_single_target(records: list[dict]) -> list[str]:
+    """多个参考函数指向同一实现时，只允许两者的参考函数体与签名完全相同。"""
+    errors = []
+    groups = defaultdict(list)
+    for record in records:
+        if record["status"] != "exact":
+            continue
+        key = f"{record['implementationPath']}:{record['implementationLine']}:{record['currentImplementation']}"
+        groups[key].append(record)
+    for key, group in groups.items():
+        if len(group) < 2:
+            continue
+        signatures = {(r["referenceSignature"]) for r in group}
+        if len(signatures) == 1:
+            continue  # 同名同签名的真正别名可以共用一个实现。
+        names = "、".join(r["referenceFunction"] for r in group)
+        errors.append(f"多个参考函数共用 {key}：{names}")
+    return errors
 
 
 def summarize(records: list[dict]) -> dict:
@@ -129,9 +260,8 @@ def summarize(records: list[dict]) -> dict:
     by_package = {}
     for package in ("iterationT", "Eclipse"):
         subset = [r for r in records if r["package"] == package]
-        by_package[package] = {
-            status: sum(1 for r in subset if r["status"] == status) for status in statuses
-        }
+        by_package[package] = {status: sum(1 for r in subset if r["status"] == status)
+                               for status in statuses}
         by_package[package]["total"] = len(subset)
     algorithm = [r for r in records if r["algorithm"]]
     totals["referenceFunctions"] = len(records)
@@ -147,7 +277,7 @@ def render_doc(records: list[dict], summary: dict) -> str:
         "# 严格函数对照：iterationT、Eclipse 与 omni-gfx",
         "",
         "本文件由 `python omni-gfx/build.py strict-parity` 生成。机器可读版本在",
-        "`omni-gfx/tools/parity_report.json`，字段名固定为 ASCII。",
+        "`omni-gfx/tools/parity_report.json`。",
         "",
         "## 结论",
         "",
@@ -162,31 +292,41 @@ def render_doc(records: list[dict], summary: dict) -> str:
     for package, counts in summary["byPackage"].items():
         lines.append(f"| {package} | {counts['exact']} | {counts['approximate']} | "
                      f"{counts['mc_glue']} | {counts['missing']} |")
-    lines += ["", "## 未达 exact 的函数", "", "| 函数 | 包 | 状态 | 当前承接 | 差异 | 证据 |",
+    lines += ["", "## 未达 exact 的函数", "",
+              "| 函数 | 包 | 状态 | 参考签名 | 当前承接 | 差异 |",
               "| --- | --- | --- | --- | --- | --- |"]
     for row in records:
         if row["status"] == "exact":
             continue
         target = f"`{row['currentImplementation']}`" if row["currentImplementation"] else "—"
         difference = row["difference"].replace("|", "\\|")
-        evidence = row["evidencePath"]
         lines.append(f"| `{row['referenceFunction']}` | {row['package']} | {row['status']} | "
-                     f"{target} | {difference} | `{evidence}` |")
-    lines += ["", "## 重新生成", "", "```text", "python omni-gfx/build.py strict-parity", "```", ""]
+                     f"`{row['referenceSignature'] or '—'}` | {target} | {difference} |")
+    lines += ["", "## 判定口径", "",
+              "- exact：返回类型、参数个数、参数类型/方向、采样次数与顺序一致；"
+              "参考常数全部命中。",
+              "- 宿主层允许实现多出常数：显式化的时间、湿度、屏幕尺寸等参数会带入新常数；"
+              "通用库仍要求常数集合完全一致。",
+              "- approximate：有承接实现，但签名、常数或采样存在差异。",
+              "- mc_glue：入口、标题、调试文字、群系表或默认配置未启用的宿主代码。",
+              "- missing：既无承接实现，也无宿主理由。",
+              "", "## 重新生成", "", "```text", "python omni-gfx/build.py strict-parity", "```", ""]
     return "\n".join(lines)
 
 
 def main() -> None:
-    """入口：读取三份数据、校验目标、写 JSON 与中文摘要并打印统计。"""
+    """入口：读取台账、自动核对、写 JSON 与中文摘要并打印统计。
+
+    `--report` 只生成报告，不因 exact 未通过而退出；用于生成待迁移清单。
+    """
+    report_only = "--report" in sys.argv[1:]
     review = load_json(REVIEW)
-    library = function_index()
-    rows = reference_rows()
-    records, errors = build_records(rows, library, review)
-    if errors:
-        sys.exit("严格对照指向不存在的函数：\n" + "\n".join(errors))
+    raw_rows = parity.collect_reference()
+    records, errors = build_records(review, raw_rows)
+    errors.extend(check_single_target(records))
     summary = summarize(records)
     payload = {
-        "schemaVersion": 1,
+        "schemaVersion": 2,
         "generatedBy": "omni-gfx/tools/parity_strict.py",
         "statusValues": ["exact", "approximate", "mc_glue", "missing"],
         "summary": summary,
@@ -196,9 +336,13 @@ def main() -> None:
                       encoding="utf-8", newline="\n")
     DOC.write_text(render_doc(records, summary), encoding="utf-8", newline="\n")
     totals = summary["totals"]
+    if errors and not report_only:
+        sys.exit("严格对照未通过：\n" + "\n".join(errors[:40]))
     print(f"严格对照：{totals['referenceFunctions']} 个函数；exact {totals['exact']}，"
           f"approximate {totals['approximate']}，mc_glue {totals['mc_glue']}，"
           f"missing {totals['missing']}；产物 {REPORT.relative_to(ROOT)}")
+    if errors:
+        print("未通过的 exact 条目：\n" + "\n".join(errors[:20]))
 
 
 if __name__ == "__main__":

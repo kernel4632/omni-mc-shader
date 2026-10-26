@@ -5,20 +5,20 @@
     {
       "module": "math",
       "source": "omni-gfx/src/math.slang",
-      "sourceSha256": "81b58b12656cca6ff48c6c0cb12e87f6b005d0d73557a0ae98aa000f56bbc27f",
+      "sourceSha256": "e468fa0512f7a2010290c9a746137f293b287f063a32db7231c241983d188fda",
       "shader": "shaders/omni-gfx/math.glsl",
       "generated": "omni-gfx/generated/glsl/math.glsl",
-      "glslSha256": "574dff74daefd1f6e0decfaa995caa245dd77098888e314a78ed39e7f5444ce4",
-      "glslLines": 750
+      "glslSha256": "a11ab767758cd554feebdc7c0237e87d4309e4ec68699b2fb26220830725fcae",
+      "glslLines": 830
     },
     {
       "module": "color",
       "source": "omni-gfx/src/color.slang",
-      "sourceSha256": "d478f421f110de1548d27b70be51b07524965a765dc49d8299f2eba6f36ea594",
+      "sourceSha256": "e49202a8338e76d34114ab48618af1537f5e68b1e9d564fdaed4924213db5f3e",
       "shader": "shaders/omni-gfx/color.glsl",
       "generated": "omni-gfx/generated/glsl/color.glsl",
-      "glslSha256": "657bf012d184e374dfa00b1abbe5984ef87e1a54c813993104ce6417cb1b390d",
-      "glslLines": 596
+      "glslSha256": "f7e63c1cd109660d1b338f020dd799c4d6398cae472d03a3d6537434f1186711",
+      "glslLines": 623
     },
     {
       "module": "sampling",
@@ -32,11 +32,11 @@
     {
       "module": "noise",
       "source": "omni-gfx/src/noise.slang",
-      "sourceSha256": "aebdec9be64a8a8fda3c5599fb0c92101bbfd9d8ad9c91dbeec8c4eb44506fb3",
+      "sourceSha256": "aaf70dc8bbc5cd096a1543bf09f393cd4cb6d272ac7795e91d31516daca15ef6",
       "shader": "shaders/omni-gfx/noise.glsl",
       "generated": "omni-gfx/generated/glsl/noise.glsl",
-      "glslSha256": "ac499db8fc34d3c1046e1698f8633b5209657dc623ae6962275fdfe697eb1643",
-      "glslLines": 196
+      "glslSha256": "04d14203abd43785d2d7c25e686b3089fc17827be9364c68715a6e530992e47b",
+      "glslLines": 230
     },
     {
       "module": "atmosphere",
@@ -113,11 +113,11 @@
     {
       "module": "antialias",
       "source": "omni-gfx/src/antialias.slang",
-      "sourceSha256": "d80e8dd6bd2a42f9802fba3a231373ad9fdfb23a25a828d727f27e90c7d70b41",
+      "sourceSha256": "abf69d0de75e86e0c46525804071253a54348d9947dc3925042dbac4b9a5db9a",
       "shader": "shaders/omni-gfx/antialias.glsl",
       "generated": "omni-gfx/generated/glsl/antialias.glsl",
-      "glslSha256": "6d051bdc2e3b5b4a1e41cc783a7d8446d85f1a52b2d4859cc021aaf8e030de4c",
-      "glslLines": 273
+      "glslSha256": "df162bb0ff1457802d21eb68efd326d829b40e962ef80bd638519fdbf643652b",
+      "glslLines": 279
     },
     {
       "module": "weather",

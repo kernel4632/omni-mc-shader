@@ -1,0 +1,759 @@
+"""解析参考 GLSL 与库内 Slang 的函数签名，给严格对照提供可复核的机器证据。
+
+调用位置：`omni-gfx/tools/parity_strict.py`；修改参考包、库源码或解析规则后重新运行
+`python omni-gfx/build.py strict-parity`。本模块只读源码，不写任何文件。
+
+它回答四个问题：
+    1. 两个函数的返回类型是否同一种；
+    2. 参数个数、顺序、方向（in/out/inout）和类型是否同一种；
+    3. 采样调用的次数与顺序是否一致；
+    4. 函数体用到的数值常数（含具名常数）是否一致。
+
+为什么不能只比名字：
+    Eclipse 的 `circlemap` 返回二维向量，`circlemapL` 返回三维向量，两者只差一个
+    字母。旧工具按名字把它们都指向 `ogxCircleMap`（返回二维），审查表却写成 exact；
+    这种错误会让后续移植以为三维版本已经存在。签名比较能直接把它拦下来。
+
+为什么常数要解析具名常量：
+    参考源码写 `i * goldenAngle`，库里写 `i * OGX_GOLDEN_ANGLE`。只比字面量会漏掉
+    常数变化；只比名字又会把重命名当差异。这里把两边的常量算成数值再比，数值在
+    容差内才算一致。
+
+为什么采样只比次数与顺序：
+    参考包采样 `noisetex`，库函数把贴图作为参数传入，名字必然不同。贴图身份由调用方
+    保证，库函数能对齐的是“第几次采样、取样还是取像素”。顺序错了，画面就会换一个
+    结果，因此顺序必须严格一致。
+"""
+from __future__ import annotations
+
+import math  # 计算常量表达式和比较浮点容差。
+import re  # 解析签名、常数与采样调用。
+from pathlib import Path  # 统一使用路径对象。
+
+# 基础类型别名：GLSL 与 Slang 对同一种数据用不同拼写。
+TYPE_ALIASES = {
+    "vec2": "float2", "vec3": "float3", "vec4": "float4",
+    "ivec2": "int2", "ivec3": "int3", "ivec4": "int4",
+    "uvec2": "uint2", "uvec3": "uint3", "uvec4": "uint4",
+    "bvec2": "bool2", "bvec3": "bool3", "bvec4": "bool4",
+    "mat2": "float2x2", "mat3": "float3x3", "mat4": "float4x4",
+    "mat2x2": "float2x2", "mat3x3": "float3x3", "mat4x4": "float4x4",
+    "mat2x3": "float2x3", "mat2x4": "float2x4",
+    "mat3x2": "float3x2", "mat3x4": "float3x4",
+    "mat4x2": "float4x2", "mat4x3": "float4x3",
+    "sampler2d": "sampler2d", "sampler3d": "sampler3d", "samplercube": "samplercube",
+    "sampler2dshadow": "sampler2dshadow", "sampler2darray": "sampler2darray",
+}
+
+# 参数前的修饰词不是类型的一部分，但 in/out/inout 会改变调用约定，必须保留。
+QUALIFIERS = {"in", "out", "inout", "const", "highp", "mediump", "lowp", "precise"}
+
+# 采样调用分类：取样和取像素的代价、过滤方式与边界行为都不同，不能混为一谈。
+SAMPLE_CALLS = {
+    "texture": "sample", "texture2D": "sample", "texture3D": "sample",
+    "textureLod": "sample", "textureGrad": "sample", "textureCube": "sample",
+    "textureCubeLod": "sample", "Sample": "sample", "SampleLevel": "sample",
+    "SampleGrad": "sample", "SampleBias": "sample",
+    "texelFetch": "fetch", "Load": "fetch",
+    "textureGather": "gather", "Gather": "gather",
+}
+
+CALL_PATTERN = re.compile(r"\b([A-Za-z_]\w*)\s*\(")  # 函数调用候选。
+NUMBER_PATTERN = re.compile(r"(?<![\w.])[-+]?(?:\d+\.\d*|\.\d+|\d+)(?:[eE][-+]?\d+)?[fFuU]?(?![\w.])")
+BUILTIN_MATH = {"sqrt": math.sqrt, "rsqrt": lambda x: 1.0 / math.sqrt(x), "abs": abs,
+                "acos": math.acos, "asin": math.asin, "atan": math.atan, "cos": math.cos,
+                "sin": math.sin, "tan": math.tan, "exp": math.exp, "log": math.log,
+                "pow": math.pow, "floor": math.floor, "ceil": math.ceil,
+                "min": min, "max": max, "clamp": lambda x, a, b: min(max(x, a), b)}
+
+
+def normalize_type(raw: str) -> str:
+    """把类型文本统一成小写别名，去掉 const、精度和参数名残留。"""
+    text = re.sub(r"\[[^\]]*\]", "", raw)  # 数组长度不参与类型身份比较。
+    words = [word for word in re.split(r"\s+", text.strip()) if word]
+    words = [word for word in words if word not in QUALIFIERS]  # 修饰词另由参数方向描述。
+    if not words:
+        return ""
+    name = words[-1].lower()  # 参数名可能跟在类型后面，取最后一个词之前要先识别。
+    if name in TYPE_ALIASES:
+        return TYPE_ALIASES[name]
+    # Slang 的结构体名与 GLSL 的 struct 名可能不同，交给结构字段比较，不在这里下结论。
+    return words[0].lower()
+
+
+def split_top_level(text: str, separator: str = ",") -> list[str]:
+    """按顶层分隔符切分，括号里的逗号不当作参数分隔。"""
+    parts, depth, start = [], 0, 0
+    for index, char in enumerate(text):
+        if char in "([{":
+            depth += 1
+        elif char in ")]}":
+            depth -= 1
+        elif char == separator and depth == 0:
+            parts.append(text[start:index])
+            start = index + 1
+    parts.append(text[start:])
+    return [part.strip() for part in parts if part.strip()]
+
+
+def parse_params(text: str) -> list[dict]:
+    """解析参数表，保留方向、类型与名字；空参数表返回空列表。"""
+    params = []
+    for part in split_top_level(text):
+        cleaned = re.sub(r"//[^\n]*", " ", part)  # 行内注释不参与解析。
+        cleaned = cleaned.split("=")[0].strip()  # 默认值不影响签名身份。
+        words = [word for word in re.split(r"\s+", cleaned) if word]
+        direction = "in"
+        for word in words:
+            if word in ("out", "inout"):
+                direction = word
+        type_words = [word for word in words if word not in QUALIFIERS]
+        if not type_words:
+            continue
+        # 最后一个词通常是参数名；只有类型时（少见）也按类型处理。
+        if len(type_words) >= 2 and re.fullmatch(r"[A-Za-z_]\w*", type_words[-1]) and \
+                not type_words[-1].lower().startswith(("sampler", "vec", "mat", "float", "int", "uint", "bool")):
+            type_text = " ".join(type_words[:-1])
+        else:
+            type_text = " ".join(type_words)
+        params.append({"direction": direction, "type": normalize_type(type_text), "raw": cleaned})
+    return params
+
+
+def strip_comments(text: str) -> str:
+    """去掉注释但保留长度与换行，行号定位不会错位。"""
+    text = re.sub(r"/\*.*?\*/", lambda m: re.sub(r"[^\n]", " ", m.group(0)), text, flags=re.S)
+    return re.sub(r"//[^\n]*", lambda m: " " * len(m.group(0)), text)
+
+
+def evaluate_condition(expression: str, defines: dict[str, str]) -> bool:
+    """计算 `#if` 表达式；未知名字按零处理，和 C 预处理器一致。"""
+    text = expression.strip()
+    text = re.sub(r"defined\s*\(\s*(PROGRAM_[A-Za-z0-9_]+)\s*\)", "1", text)
+    text = re.sub(r"defined\s*\(\s*([A-Za-z_]\w*)\s*\)",
+                  lambda m: "1" if m.group(1) in defines else "0", text)
+    text = re.sub(r"defined\s+(PROGRAM_[A-Za-z0-9_]+)", "1", text)
+    text = re.sub(r"defined\s+([A-Za-z_]\w*)",
+                  lambda m: "1" if m.group(1) in defines else "0", text)
+    text = re.sub(r"\b(PROGRAM_[A-Za-z0-9_]+)\b", "1", text)
+    text = re.sub(r"\b([A-Za-z_]\w*)\b", lambda m: defines.get(m.group(1), "0") or "1", text)
+    text = re.sub(r"\btrue\b", "1", text)
+    text = re.sub(r"\bfalse\b", "0", text)
+    text = re.sub(r"(\d+)[uUfF]\b", r"\1", text)
+    text = text.replace("&&", " and ").replace("||", " or ")
+    text = re.sub(r"!(?!=)", " not ", text)
+    if re.search(r"[^0-9eE+\-*/().<>=! andornot\t]", text):
+        return False
+    try:
+        return bool(eval(text, {"__builtins__": {}}, {}))
+    except Exception:
+        return False
+
+
+def preprocess(text: str, defines: dict[str, str]) -> str:
+    """按默认宏配置去掉未选中的条件分支，保留行数以便行号仍然有效。
+
+    为什么需要它：参考包大量使用 `#if MC_VERSION >= 11605` 在两个贴图通道之间二选一。
+    不处理预处理器就会把两个分支的采样都算进去，严格对照会得到虚假的采样数差异。
+    """
+    out = []
+    stack: list[list[bool]] = []  # 每层保存 [父层是否有效, 当前分支是否有效, 是否已有分支命中]。
+    active = True
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        directive = stripped.startswith("#")
+        keep = active
+        if directive:
+            match = re.match(r"#\s*(\w+)\s*(.*)", stripped)
+            keyword = match.group(1) if match else ""
+            rest = match.group(2).strip() if match else ""
+            if keyword in ("if", "ifdef", "ifndef"):
+                parent = active
+                if keyword == "if":
+                    condition = evaluate_condition(rest, defines)
+                elif keyword == "ifdef":
+                    name = rest.split()[0] if rest else ""
+                    condition = name.startswith("PROGRAM_") or name in defines
+                else:
+                    name = rest.split()[0] if rest else ""
+                    condition = not (name.startswith("PROGRAM_") or name in defines)
+                stack.append([parent, condition, condition])
+                active = parent and condition
+                keep = False
+            elif keyword == "elif" and stack:
+                parent, _, seen = stack[-1]
+                condition = evaluate_condition(rest, defines) and not seen
+                stack[-1][1] = condition
+                stack[-1][2] = seen or condition
+                active = parent and condition
+                keep = False
+            elif keyword == "else" and stack:
+                parent, _, seen = stack[-1]
+                active = parent and not seen
+                stack[-1][1] = active
+                stack[-1][2] = True
+                keep = False
+            elif keyword == "endif" and stack:
+                parent, _, _ = stack.pop()
+                active = parent
+                keep = False
+        newline = "\n" if line.endswith("\n") else ""
+        out.append(line if keep else newline)
+    return "".join(out)
+
+
+def collect_defines(paths: list[Path], base: dict[str, str] | None = None) -> dict[str, str]:
+    """收集默认配置下的对象式宏；迭代三遍让条件里的宏也稳定下来。
+
+    头文件保护宏不能进入全局表：把 `#ifndef GUARD` 后面的 `#define GUARD` 当成普通
+    开关，会让第二次预处理把整个文件当成“已包含”而清空。这里识别紧跟的
+    `#ifndef` 同名字样并跳过。
+    """
+    defines = dict(base or {})
+    for _ in range(3):
+        updated = dict(defines)
+        for path in paths:
+            original = strip_comments(path.read_text(encoding="utf-8", errors="replace"))
+            guards = set()
+            previous = None
+            for line in original.splitlines():
+                stripped = line.strip()
+                match = re.match(r"#\s*ifndef\s+([A-Za-z_]\w*)", stripped)
+                if match:
+                    previous = match.group(1)
+                    guards.add(previous)
+                    continue
+                match = re.match(r"#\s*define\s+([A-Za-z_]\w*)", stripped)
+                if match and match.group(1) == previous:
+                    previous = None
+                elif stripped and not stripped.startswith("#"):
+                    previous = None
+            text = preprocess(original, defines)
+            for line in text.splitlines():
+                stripped = line.strip()
+                match = re.match(r"#\s*define\s+([A-Za-z_]\w*)(?:\s+([^\n]*))?$", stripped)
+                if not match:
+                    continue
+                name = match.group(1)
+                if name in guards:  # 头文件保护宏不向外传播。
+                    continue
+                updated[name] = (match.group(2) or "1").strip()
+        if updated == defines:
+            break
+        defines = updated
+    return defines
+
+
+def read_profile_defines(path: Path) -> dict[str, str]:
+    """从 `shaders.properties` 的默认 profile 读取选项开关，作为宿主层预处理配置。"""
+    defines: dict[str, str] = {}
+    text = path.read_text(encoding="utf-8", errors="replace")
+    match = re.search(r"(?m)^profile\.default\s*=\s*(.+)$", text)
+    if not match:
+        return defines
+    for token in match.group(1).split():
+        if token.startswith("!"):
+            defines[token[1:]] = "0"
+        elif "=" in token:
+            name, value = token.split("=", 1)
+            defines[name] = value
+        else:
+            defines[token] = "1"
+    return defines
+
+
+def parse_functions(path: Path, defines: dict[str, str] | None = None) -> list[dict]:
+    """解析一个源文件的函数定义，返回名字、行号、返回类型、参数与函数体。
+
+    判据与旧对照工具一致：行首是返回类型，名字后紧跟参数表，参数表右括号后只能有
+    空白再接左大括号。这样宏、控制流和函数声明不会被误认成定义。
+    传入 `defines` 时先按默认配置预处理，未选中的条件分支不会进入签名比较。
+    """
+    raw = path.read_text(encoding="utf-8", errors="replace")
+    text = strip_comments(preprocess(raw, defines) if defines is not None else raw)
+    found = []
+    for match in re.finditer(r"\b([A-Za-z_]\w*)\s*\(", text):
+        name = match.group(1)
+        if name in {"if", "for", "while", "switch", "return", "else", "do"}:
+            continue
+        line_start = text.rfind("\n", 0, match.start()) + 1
+        prefix = text[line_start:match.start()].strip()
+        if not prefix or prefix.startswith("#"):
+            continue
+        if any(char in prefix for char in "=;,+-*/"):
+            continue  # 赋值、声明残留或表达式不是返回类型。
+        words = prefix.split()
+        first = words[0]
+        lowered = first.lower()
+        known = lowered in TYPE_ALIASES or lowered in {
+            "void", "bool", "int", "uint", "float", "double", "float2", "float3", "float4",
+            "int2", "int3", "int4", "uint2", "uint3", "uint4", "bool2", "bool3", "bool4",
+            "float2x2", "float3x3", "float4x4", "float2x3", "float2x4", "float3x2",
+            "float3x4", "float4x2", "float4x3", "sampler2d", "sampler3d", "samplercube",
+        }
+        # 自定义结构体可能小写开头（例如 `gfx_atmosphere_model`）；前缀只有类型词时放行。
+        if first in {"if", "for", "while", "switch", "return", "else", "do"}:
+            continue
+        if not known and (len(words) > 2 or not re.fullmatch(r"[A-Za-z_]\w*", first)):
+            continue
+        if not known and len(words) == 1 and not first[:1].isupper() and "_" not in first:
+            continue
+        depth, index = 0, match.end() - 1
+        while index < len(text):
+            if text[index] == "(":
+                depth += 1
+            elif text[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            index += 1
+        if index >= len(text):
+            continue
+        rest = text[index + 1:]
+        brace = rest.find("{")
+        if brace < 0 or rest[:brace].strip():
+            continue
+        body_start = index + 1 + brace
+        depth, cursor = 0, body_start
+        while cursor < len(text):
+            if text[cursor] == "{":
+                depth += 1
+            elif text[cursor] == "}":
+                depth -= 1
+                if depth == 0:
+                    break
+            cursor += 1
+        if cursor >= len(text):
+            continue
+        found.append({
+            "name": name,
+            "line": text[:match.start()].count("\n") + 1,
+            "return": normalize_type(prefix),
+            "returnRaw": prefix,
+            "params": parse_params(text[match.end():index]),
+            "body": text[body_start:cursor + 1],
+            "bodyStart": body_start,
+            "bodyEnd": cursor + 1,
+        })
+    return found
+
+
+def function_index(paths: list[Path], defines: dict[str, str] | None = None) -> dict[str, dict]:
+    """建立 `模块.函数名` 到完整签名的索引；同名重载按出现顺序都保留。"""
+    index = {}
+    for path in sorted(paths):
+        for item in parse_functions(path, defines):
+            key = f"{path.stem}.{item['name']}"
+            variant = 1
+            while key in index:  # 重载不能互相覆盖，编号后分别参与比较。
+                variant += 1
+                key = f"{path.stem}.{item['name']}#{variant}"
+            item["path"] = path.as_posix()
+            index[key] = item
+    return index
+
+
+def global_constant_table(paths: list[Path], defines: dict[str, str] | None = None) -> dict[str, list[float]]:
+    """收集顶层常量，返回 名字 → 数值列表；向量常量按分量拆开。
+
+    只扫描函数体之外的内容，避免把局部常量当全局常量；同名常量值冲突时记为不可解析，
+    因为无法判断参考函数引用的究竟是哪一个。
+    """
+    table: dict[str, list[float] | None] = {}
+    for path in sorted(paths):
+        raw = path.read_text(encoding="utf-8", errors="replace")
+        text = strip_comments(preprocess(raw, defines) if defines is not None else raw)
+        for item in sorted(parse_functions(path, defines), key=lambda entry: -entry["bodyStart"]):
+            # 用空格覆盖函数体，保留换行与长度，后面的正则不会读到局部声明。
+            start, end = item["bodyStart"], item["bodyEnd"]
+            text = text[:start] + re.sub(r"[^\n]", " ", text[start:end]) + text[end:]
+        for match in re.finditer(r"(?m)^\s*(?:static\s+)?const\s+(?:\w+\s+)+([A-Za-z_]\w*)\s*=\s*([^;]+);", text):
+            name, expression = match.group(1), match.group(2)
+            value = evaluate_constant(expression, table)
+            if value is None:
+                table[name] = None
+            elif name in table and table[name] != value:
+                table[name] = None  # 同名不同值无法确定引用目标。
+            else:
+                table[name] = value
+        for match in re.finditer(r"(?m)^\s*#define\s+([A-Za-z_]\w*)\s+(.+)$", text):
+            name, expression = match.group(1), match.group(2).strip()
+            if "(" in expression.split("//")[0] and name in expression:
+                continue
+            value = evaluate_constant(expression, table)
+            if value is not None:
+                table[name] = value
+    return {name: value for name, value in table.items() if value is not None}
+
+
+def evaluate_constant(expression: str, table: dict) -> list[float] | None:
+    """把常量表达式算成数值列表；无法安全求值时返回 None，不猜结果。"""
+    text = expression.strip()
+    text = re.sub(r"//.*$", "", text).strip()
+    text = re.sub(r"\b(?:float|vec2|vec3|vec4|float2|float3|float4|mat2|mat3|mat4|"
+                  r"float2x2|float3x3|float4x4)\s*\(", "(", text)
+    text = re.sub(r"\bPI\b", f"({math.pi!r})", text)
+    text = re.sub(r"\bTAU\b", f"({math.tau!r})", text)
+    text = re.sub(r"(\d)[fFuU]\b", r"\1", text)  # 去掉 C 风格数字后缀。
+    # 把已知常量名字换成数值；长名字优先，避免 A 抢先匹配 AB。
+    for name in sorted(table, key=len, reverse=True):
+        value = table.get(name)
+        if value is None:
+            continue
+        replacement = "(" + "+".join(f"({number!r})" for number in value) + ")"
+        text = re.sub(rf"\b{re.escape(name)}\b", replacement, text)
+    if re.search(r"(?<![0-9.])[A-Za-z_]\w*", text):  # 还有未知名字就不猜；科学计数法的 e 不算名字。
+        unknown = set(re.findall(r"(?<![0-9.])[A-Za-z_]\w*", text)) - set(BUILTIN_MATH)
+        if unknown:
+            return None
+    # 只允许数字、运算符、括号、已知数学函数名与空白；不允许引号、方括号或属性链。
+    if re.search(r"[^0-9eE+\-*/().,\sA-Za-z_]", text) or "__" in text:
+        return None
+    try:
+        value = eval(text, {"__builtins__": {}}, dict(BUILTIN_MATH))  # 输入已限制为数字与数学函数。
+    except Exception:
+        return None
+    return flatten_numbers(value)
+
+
+def flatten_numbers(value) -> list[float] | None:
+    """把标量、向量或嵌套元组摊平成浮点列表；遇到非数字返回 None。"""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return [float(value)]
+    if isinstance(value, (list, tuple)):
+        result = []
+        for item in value:
+            part = flatten_numbers(item)
+            if part is None:
+                return None
+            result.extend(part)
+        return result
+    return None
+
+
+def local_constants(body: str, table: dict) -> dict[str, list[float]]:
+    """收集函数体内只赋值一次的局部常量，后续数字统计能解析这些名字。
+
+    参考代码常写 `float a = 2.51;` 再多次引用，而不是 `const`。只接受字面量或已解析
+    常量的表达式；后面被重新赋值的变量不能当常量，否则会把运行时的值算错。
+    """
+    local = {}
+    pattern = re.compile(
+        r"(?:const\s+)?(?:float|int|uint|float2|float3|float4|int2|int3|int4|"
+        r"vec2|vec3|vec4|ivec2|ivec3|ivec4)\s+([A-Za-z_]\w*)\s*=\s*([^;]+);")
+    for match in pattern.finditer(body):
+        name, expression = match.group(1), match.group(2)
+        rest = body[match.end():]
+        if re.search(rf"\b{re.escape(name)}\s*(?:[+\-*/]?=)", rest):
+            continue  # 后面还会变，不能当常量。
+        value = evaluate_constant(expression, {**table, **local})
+        if value is not None:
+            local[name] = value
+    return local
+
+
+def remove_local_declarations(body: str) -> str:
+    """把局部变量声明的类型与名字换成空格，保留右侧表达式。
+
+    为什么保留右侧：`float4 c = tex.SampleLevel(...);` 里的采样是真实采样，不能因为
+    它写在声明里就漏掉；只去掉 `float4 c =` 前缀即可。
+    """
+    pattern = re.compile(
+        r"(?:const\s+)?(?:float|int|uint|float2|float3|float4|int2|int3|int4|"
+        r"vec2|vec3|vec4|ivec2|ivec3|ivec4)\s+[A-Za-z_]\w*\s*=(?!=)")
+    return pattern.sub(lambda m: " " * len(m.group(0)), body)
+
+
+def numeric_signature(body: str, table: dict) -> tuple[list[float], list[str]]:
+    """返回函数体实际使用的数值列表与无法解析的名字。
+
+    做法：先摘掉局部常量声明，记住这些名字的数值；再把每个被引用的具名常量展开成
+    数值分量，最后收集剩下的字面量。这样参考写 `goldenAngle`、库里写
+    `OGX_GOLDEN_ANGLE` 时比较的是同一个数，而声明位置不同不会制造假差异。
+    """
+    local = local_constants(body, table)
+    scope = {**table, **local}
+    text = remove_local_declarations(body)  # 声明本身不计入使用次数。
+    values = []
+    unresolved = []
+    for match in re.finditer(r"\b[A-Za-z_]\w*\b", text):
+        name = match.group(0)
+        if name not in scope:
+            continue
+        before = text[max(0, match.start() - 1)]
+        after = text[match.end()] if match.end() < len(text) else ""
+        if before == "." or after == "(":  # 结构字段、swizzle 与函数名不是常量引用。
+            continue
+        values.extend(scope[name])
+        # 同一个名字只保留一次展开，避免重复计数；数值比较看的是集合内容。
+        text = text[:match.start()] + " " * len(name) + text[match.end():]
+    numbers = list(values)
+    for match in NUMBER_PATTERN.finditer(text):
+        raw = match.group(0)
+        try:
+            numbers.append(float(raw.rstrip("fFuU")))
+        except ValueError:
+            unresolved.append(raw)
+    return dedupe(numbers), unresolved
+
+
+def dedupe(values: list[float]) -> list[float]:
+    """排序并合并近似相等的数，只保留“用过哪些常数”，不把重复次数当差异。
+
+    为什么忽略次数：参考把 `0.6` 存进局部常量再引用三次，库可能直接内联三次；
+    次数不同不代表曲线不同，数值集合才是能复核的口径。
+    """
+    result: list[float] = []
+    for value in sorted(values):
+        if result and math.isclose(result[-1], value, rel_tol=2e-5, abs_tol=1e-7):
+            continue
+        result.append(value)
+    return result
+
+
+def sample_signature(body: str) -> list[str]:
+    """按源码顺序返回采样种类，例如 `sample`、`fetch`。"""
+    sequence = []
+    for match in CALL_PATTERN.finditer(body):
+        kind = SAMPLE_CALLS.get(match.group(1))
+        if kind:
+            sequence.append(kind)
+    return sequence
+
+
+# 语言内建函数不进入调用图：它们没有代码，也不会贡献采样或常数。
+BUILTINS = {
+    "abs", "acos", "all", "any", "asin", "atan", "bitfieldExtract", "ceil", "clamp", "cos",
+    "cosh", "cross", "degrees", "determinant", "distance", "dot", "equal", "exp", "exp2",
+    "faceforward", "floor", "fma", "fract", "frexp", "greaterThan", "greaterThanEqual",
+    "inverse", "inversesqrt", "isinf", "isnan", "ldexp", "length", "lessThan",
+    "lessThanEqual", "log", "log2", "matrixCompMult", "max", "min", "mix", "mod", "modf",
+    "normalize", "not", "notEqual", "pow", "radians", "reflect", "refract", "round",
+    "roundEven", "sign", "sin", "sinh", "smoothstep", "sqrt", "step", "tan", "tanh",
+    "texelFetch", "texture", "textureGrad", "textureLod", "textureSize", "transpose",
+    "trunc", "uintBitsToFloat", "floatBitsToUint", "asfloat", "asuint", "asint", "lerp",
+    "saturate", "static_cast", "reinterpret_cast",
+    "float2", "float3", "float4", "int2", "int3", "int4", "uint2", "uint3", "uint4",
+    "bool2", "bool3", "bool4", "float2x2", "float3x3", "float4x4",
+    "vec2", "vec3", "vec4", "ivec2", "ivec3", "ivec4", "uvec2", "uvec3", "uvec4",
+    "bvec2", "bvec3", "bvec4", "mat2", "mat3", "mat4",
+}
+
+
+def call_sites(body: str) -> list[tuple[str, int]]:
+    """按出现顺序返回函数调用名与实参个数，内建函数不计。"""
+    sites = []
+    for match in CALL_PATTERN.finditer(body):
+        name = match.group(1)
+        if name in BUILTINS or name in SAMPLE_CALLS or name in ("if", "for", "while", "switch"):
+            continue
+        depth, cursor = 0, match.end() - 1
+        while cursor < len(body):
+            if body[cursor] == "(":
+                depth += 1
+            elif body[cursor] == ")":
+                depth -= 1
+                if depth == 0:
+                    break
+            cursor += 1
+        inner = body[match.end():cursor]
+        args = 0 if not inner.strip() else 1
+        level = 0
+        for char in inner:
+            if char in "([{":
+                level += 1
+            elif char in ")]}":
+                level -= 1
+            elif char == "," and level == 0:
+                args += 1
+        sites.append((name, args))
+    return sites
+
+
+def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, list[float]],
+                 depth: int = 0, stack: tuple[str, ...] = (),
+                 cache: dict[tuple[str, int, str], tuple[list[float], list[str], list[str]]] | None = None
+                 ) -> tuple[list[float], list[str], list[str]]:
+    """沿调用图收集数值、采样顺序与无法解析的常量名。
+
+    为什么沿调用图：宿主层函数通常只有一行转发，算法在通用库里；只看外层会得到
+    “没有常数、没有采样”的假一致。调用图把真正的算式算进来，同时保留调用顺序。
+    结果按函数缓存；否则大气与光照的调用图会在每次比较时重复展开很多次。
+    """
+    cache = {} if cache is None else cache
+    key = (item.get("path", ""), item.get("line", 0), item["name"])
+    if key in cache:
+        return cache[key]
+    if key in stack:
+        return [], [], []
+    body = item["body"]
+    # 参数名和局部声明会遮蔽同名全局常量；不排除会把 `x`、`m` 这类常用名字误当常数。
+    parameter_names = {p["raw"].split()[-1] for p in item["params"] if p["raw"].split()}
+    declared_names = set(re.findall(
+        r"(?:const\s+)?(?:float|int|uint|bool|float2|float3|float4|int2|int3|int4|"
+        r"vec2|vec3|vec4|ivec2|ivec3|ivec4|mat2|mat3|mat4|float2x2|float3x3|float4x4|"
+        r"sampler2d|sampler3d|samplercube)\s+([A-Za-z_]\w*)\s*(?=[=;,\[])", body))
+    base_scope = {name: value for name, value in constants.items()
+                  if name not in parameter_names and name not in declared_names}
+    local = local_constants(body, base_scope)
+    scope = {**base_scope, **local}
+    text = remove_local_declarations(body)
+    numbers: list[float] = []
+    samples: list[str] = []
+    unresolved: list[str] = []
+    tokens: list[tuple[int, str, str, int]] = []
+    for match in CALL_PATTERN.finditer(text):
+        tokens.append((match.start(), "call", match.group(1), match.end() - 1))
+    for match in NUMBER_PATTERN.finditer(text):
+        tokens.append((match.start(), "number", match.group(0), match.end()))
+    for match in re.finditer(r"\b([A-Za-z_]\w*)\b", text):
+        name = match.group(1)
+        if name in scope:
+            tokens.append((match.start(), "constant", name, match.end()))
+    tokens.sort()
+    consumed: set[int] = set()
+    for position, kind, token, end in tokens:
+        if position in consumed:
+            continue
+        if kind == "number":
+            try:
+                numbers.append(float(token.rstrip("fFuU")))
+            except ValueError:
+                unresolved.append(token)
+            continue
+        if kind == "constant":
+            before = text[position - 1] if position else ""
+            after = text[end] if end < len(text) else ""
+            if before == "." or after == "(":
+                continue  # 结构字段或函数名不是常量引用。
+            numbers.extend(scope[token])
+            consumed.update(range(position, end))
+            continue
+        if token in SAMPLE_CALLS:
+            samples.append(SAMPLE_CALLS[token])
+            continue
+        # 函数调用：按实参个数挑同名重载；找不到时只当作未知调用跳过。
+        args = arguments_at(text, end)
+        candidates = [entry for entry in index.get(token, []) if len(entry["params"]) == args]
+        if not candidates or token in stack or depth >= 12:
+            continue
+        callee = candidates[0]  # 同名同参数个数的重载极少；仍有多个时取源码顺序第一个。
+        sub_numbers, sub_samples, sub_unresolved = collect_tree(
+            callee, index, constants, depth + 1, (*stack, key), cache)
+        numbers.extend(sub_numbers)
+        samples.extend(sub_samples)
+        unresolved.extend(sub_unresolved)
+    result = (numbers, samples, unresolved)
+    cache[key] = result
+    return result
+
+
+def arguments_at(text: str, open_paren: int) -> int:
+    """返回左括号处调用的实参个数；括号不配对时返回负一。"""
+    depth, cursor = 0, open_paren
+    while cursor < len(text):
+        if text[cursor] == "(":
+            depth += 1
+        elif text[cursor] == ")":
+            depth -= 1
+            if depth == 0:
+                break
+        cursor += 1
+    if cursor >= len(text):
+        return -1
+    inner = text[open_paren + 1:cursor]
+    if not inner.strip():
+        return 0
+    count, level = 1, 0
+    for char in inner:
+        if char in "([{":
+            level += 1
+        elif char in ")]}":
+            level -= 1
+        elif char == "," and level == 0:
+            count += 1
+    return count
+
+
+def index_by_function_name(paths: list[Path], defines: dict[str, str] | None = None) -> dict[str, list[dict]]:
+    """按函数名分组，供调用图按实参个数挑选重载。"""
+    index: dict[str, list[dict]] = {}
+    for path in sorted(paths):
+        for item in parse_functions(path, defines):
+            item["path"] = path.as_posix()
+            index.setdefault(item["name"], []).append(item)
+    return index
+
+
+def normalize_body(body: str) -> str:
+    """把函数体压成只含标识符与数字的文本，用于判断两个参考函数是否完全相同。"""
+    text = re.sub(r"\s+", "", body)
+    return text
+
+
+def compare(ref: dict, impl: dict, ref_constants: dict, lib_constants: dict,
+            structs: dict[str, list[str]] | None = None,
+            ref_index: dict[str, list[dict]] | None = None,
+            impl_index: dict[str, list[dict]] | None = None,
+            allow_extra_constants: bool = False) -> dict:
+    """比较两份签名与算式，返回可直接写进报告的差异列表与证据字段。
+
+    `ref_index` 与 `impl_index` 给出时沿调用图收集常数与采样；否则只比较函数体本身。
+    `allow_extra_constants` 用于宿主转发层：参考常数必须全部出现，实现多出的常量
+    可能来自显式化的宿主参数，不算缺失，但会记录在证据里供人工复核。
+    """
+    issues = []
+    if ref["return"] != impl["return"]:
+        issues.append(f"return {ref['returnRaw']} != {impl['returnRaw']}")
+    ref_params = [(p["direction"], p["type"]) for p in ref["params"]]
+    impl_params = [(p["direction"], p["type"]) for p in impl["params"]]
+    if len(ref_params) != len(impl_params):
+        issues.append(f"param count {len(ref_params)} != {len(impl_params)}")
+    else:
+        for index, (left, right) in enumerate(zip(ref_params, impl_params), start=1):
+            if left != right:
+                issues.append(f"param {index} {left[1]}/{left[0]} != {right[1]}/{right[0]}")
+    if ref_index is not None and impl_index is not None:
+        ref_numbers_raw, ref_samples, ref_unknown = collect_tree(ref, ref_index, ref_constants)
+        impl_numbers_raw, impl_samples, impl_unknown = collect_tree(impl, impl_index, lib_constants)
+        ref_numbers = dedupe(ref_numbers_raw)
+        impl_numbers = dedupe(impl_numbers_raw)
+    else:
+        ref_samples = sample_signature(ref["body"])
+        impl_samples = sample_signature(impl["body"])
+        ref_numbers, ref_unknown = numeric_signature(ref["body"], ref_constants)
+        impl_numbers, impl_unknown = numeric_signature(impl["body"], lib_constants)
+    if ref_samples != impl_samples:
+        issues.append(f"samples {ref_samples} != {impl_samples}")
+    missing = [value for value in ref_numbers
+               if not any(math.isclose(value, other, rel_tol=2e-5, abs_tol=1e-7) for other in impl_numbers)]
+    extra = [value for value in impl_numbers
+             if not any(math.isclose(value, other, rel_tol=2e-5, abs_tol=1e-7) for other in ref_numbers)]
+    if missing or (extra and not allow_extra_constants):
+        detail = []
+        if missing:
+            detail.append("missing " + ", ".join(f"{value:g}" for value in missing[:8]))
+        if extra and not allow_extra_constants:
+            detail.append("extra " + ", ".join(f"{value:g}" for value in extra[:8]))
+        issues.append("constants " + "; ".join(detail))
+    return {
+        "referenceSignature": signature_text(ref),
+        "implementationSignature": signature_text(impl),
+        "referenceSamples": ref_samples,
+        "implementationSamples": impl_samples,
+        "referenceNumbers": len(ref_numbers),
+        "implementationNumbers": len(impl_numbers),
+        "missingNumbers": [round(value, 12) for value in missing[:32]],
+        "extraNumbers": [round(value, 12) for value in extra[:32]],
+        "unresolved": sorted(set(ref_unknown + impl_unknown)),
+        "issues": issues,
+    }
+
+
+def signature_text(item: dict) -> str:
+    """把签名拼成一行，报告和文档直接展示。"""
+    params = ", ".join(f"{p['direction'] + ' ' if p['direction'] != 'in' else ''}{p['type']}"
+                       for p in item["params"])
+    return f"{item['return']} {item['name']}({params})"

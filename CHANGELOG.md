@@ -1,4 +1,14 @@
 # 更新记录
+## 0.15.1
+
+严格函数对照重建：旧工具只看名字，把返回类型不同的 `circlemapL`（vec3）错配到 `ogxCircleMap`（float2）仍标 exact。新工具同时解析返回类型、参数个数/类型/方向、常量集合与采样次数/顺序，按默认宏配置预处理条件分支，并沿调用图核对宿主转发层；不匹配的条目不能再写 exact。重建后 505 个参考函数中 exact 196、approximate 227、mc_glue 82、missing 0，旧台账的 481 exact 不再可信。
+- 新增 `omni-gfx/tools/signature.py`：GLSL/Slang 函数签名解析、`#if/#ifdef` 默认配置预处理、具名常量求值、采样序列与调用图收集；`parity_strict.py` 改为强制校验这些字段，exact 不通过就报错。
+- 修正假 exact：`circlemapL` 改指新 `ogxCircleMapL`；`hash11`、`hash31`、`hash`、`hash_aurora`、`iqint2` 不再共用 `ogxHash13`；`fma2`、`mm2`、`rotate`、`mat2_rotate_z`、`primaries_to_matrix`、`CompressionMatrix`、`AgXConfigurable1` 等改为独立同签名实现。
+- 修正 `ogxHash12` 的混合常数从 33.33 改为参考值 19.19；补 `ogxHash11`、`ogxHash31`、`ogxHashAurora`、`ogxHashUint3`、`ogxIqint2`、`ogxCircleMapL`、`ogxFma2` 标量重载、vec2/vec4 的最小最大与长度、`ogxRotate2Matrix`、`ogxMat2RotateZ`、`ogxGenUnitVector`、`ogxGetRotMat`、`ogxHaltonSeq2`、AgX 矩阵返回 mat3 的边界函数。
+- 统计口径：宿主层允许实现多出常数（显式化的时间、湿度、屏幕尺寸等参数），参考常数必须全部命中；通用库仍要求常数集合完全一致。默认配置未启用的参考函数记 `mc_glue/inactive`，不再当成缺失算法。
+- 已知差异：`srgbToLinear`、`blackbody`、`GetSkyRadiance` 等 227 个函数仍有常数、采样或签名差异；本轮没有把它们伪装成 exact，逐条原因写在 `docs/gfx-functions-strict.md`。
+- 验证：`python omni-gfx/build.py check`、`strict-parity`、`profiles`、`python build.py audit`、`python build.py verify`、`python build.py compile` 通过；未启动 Minecraft，游戏内画面、性能与兼容性仍未验证。
+
 ## 0.15.0
 
 严格函数覆盖收口：exact 从 378 增到 481，approximate 从 32 降到 0，missing 从 26 降到 0，mc_glue 从 69 降到 24；剩余 mc_glue 只有程序入口、标题、文字渲染与群系属性表。新增六个库模块并全部生成 GLSL 330、进入两个严格 profile。

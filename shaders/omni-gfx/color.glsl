@@ -78,6 +78,9 @@ vec3 ogxAces(vec3 color, bool abney)
     return ogxLinearToGamma2(color);
 }
 
+// 参考包的 `ACES` 默认开启 Abney 效应校正；单参数重载让旧调用点保持原签名。
+vec3 ogxAces(vec3 color) { return ogxAces(color, true); }
+
 // AgX 对比度曲线：用六次多项式近似原查找表，省掉一张纹理。
 vec3 ogxAgxContrast(vec3 x)
 {
@@ -591,6 +594,30 @@ mat4 ogxSaturationMatrix(float saturation)
         vec4(lumSat.g + satZero.yxy, 0.0),
         vec4(lumSat.b + satZero.yyx, 0.0),
         vec4(0.0, 0.0, 0.0, 1.0)); // 三个颜色通道加一行齐次坐标。
+}
+
+// 把三列矩阵换成 GLSL 的 mat3：参考包的三原色函数返回 mat3，调用方按矩阵乘向量。
+mat3 ogxAgxMat3ToMat3(OgxAgxMat3 m)
+{
+    return mat3(m.c0, m.c1, m.c2);
+}
+
+// 参考签名的三原色矩阵：内部仍用三列结构体，只在边界转成 mat3。
+mat3 ogxAgxPrimariesToMat3(vec2 xyRed, vec2 xyGreen, vec2 xyBlue, vec2 xyWhite)
+{
+    return ogxAgxMat3ToMat3(ogxAgxPrimariesToMatrix(xyRed, xyGreen, xyBlue, xyWhite));
+}
+
+// 参考签名的压缩矩阵，与上一函数配对。
+mat3 ogxAgxCompressionToMat3(vec2 xyRed, vec2 xyGreen, vec2 xyBlue, vec2 xyWhite)
+{
+    return ogxAgxMat3ToMat3(ogxAgxComputeCompressionMatrix(xyRed, xyGreen, xyBlue, xyWhite));
+}
+
+// 参考签名的 AgX 组合矩阵：无参数，返回 sRGB 到调整后空间的矩阵。
+mat3 ogxAgxConfigurable1Mat3()
+{
+    return ogxAgxMat3ToMat3(ogxAgxConfigurable1());
 }
 
 #endif

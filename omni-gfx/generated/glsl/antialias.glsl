@@ -61,6 +61,12 @@ vec3 ogxClipAabb(vec3 average, vec3 variance, vec3 history, bool toCenter)
     return average + diff; // 返回裁剪后的历史。
 }
 
+// 参考包的三参数版本：默认不朝中心拉，逐分量裁剪；旧调用点不需要传开关。
+vec3 ogxClipAabb(vec3 average, vec3 variance, vec3 history)
+{
+    return ogxClipAabb(average, variance, history, false);
+}
+
 // 三次采样的五个支撑点：中心行列各取一次，比双线性更锐，代价是五次取样。
 // `coord` 与 `texSize` 都是零到一坐标口径，返回四分量，透明度原样带回。
 vec4 ogxBicubicTexture4(sampler2D source, vec2 coord, vec2 texSize)

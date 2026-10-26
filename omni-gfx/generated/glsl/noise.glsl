@@ -32,8 +32,39 @@ float ogxHash13(vec3 p)
 float ogxHash12(vec2 p)
 {
     vec3 p3 = fract(vec3(p.x, p.y, p.x) * 0.1031); // 两个坐标扩成三个分量。
-    p3 += dot(p3, p3.yzx + 33.33); // 互相混合，打散相邻格点的规律。
+    p3 += dot(p3, p3.yzx + 19.19); // 参考实现的混合常数。
     return fract((p3.x + p3.y) * p3.z); // 零到一的伪随机数。
+}
+
+// 标量哈希：Eclipse 的 `hash11` 与 `hash_aurora` 是同一算式，保留两个名字给不同调用点。
+float ogxHash11(float p)
+{
+    p = fract(p * 0.1031);
+    p *= p + 33.33;
+    p *= p + p;
+    return fract(p);
+}
+
+// 标量哈希的极光别名：与 `hash11` 逐项相同，名字对应参考源码的用途。
+float ogxHashAurora(float p) { return ogxHash11(p); }
+
+// 三分量哈希：一个标量序号变成互相独立的三维随机值。
+vec3 ogxHash31(float p)
+{
+    vec3 p3 = fract(vec3(p) * vec3(0.1031, 0.1030, 0.0973));
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.xxy + p3.yzz) * p3.zyx);
+}
+
+// 二维坐标的整数哈希：先把两个坐标转成整数，再走三次整数混合。
+uvec3 ogxHashUint3(vec2 s)
+{
+    uvec3 x = uvec3(uint(s.x), uint(s.y), uint(s.x) ^ uint(s.y));
+    const uint k = 1103515245u;
+    x = ((x >> 8u) ^ x.yzx) * k;
+    x = ((x >> 8u) ^ x.yzx) * k;
+    x = ((x >> 8u) ^ x.yzx) * k;
+    return x;
 }
 
 // 二维向量哈希：把平面格点变成一个二维随机方向，供旋度噪声与雨点涟漪定位。
@@ -106,6 +137,9 @@ uvec3 ogxIntegerHash3(uvec3 x)
     x = ((x >> 8u) ^ x.yzx) * k; // 第三次：三轮之后三个分量的每一位都互相影响。
     return x; // 返回三个独立的整数随机值。
 }
+
+// Eclipse 的 `iqint2`：同一个整数混合器的独立入口，保留参考名字与常数。
+uvec3 ogxIqint2(uvec3 x) { return ogxIntegerHash3(x); }
 
 // 三维值噪声：八个格点各取哈希，再按平滑曲线插值。
 float ogxValueNoise3(vec3 p)
