@@ -2886,6 +2886,106 @@
         ]
       },
       "allowExtraConstants": true
+    },
+    "GetVolumetricClouds": {
+      "target": "cloud_eclipse.ogxEclipseGetVolumetricCloudsExact",
+      "refDefines": {
+        "OVERWORLD_SHADER": 1,
+        "END_SHADER": 0,
+        "NETHER_SHADER": 0,
+        "DISTANT_HORIZONS": 0,
+        "VOXY_PROGRAM": 0,
+        "CLOUDSHADOWSONLY": 0,
+        "AETHER_FLAG": 0,
+        "CloudLayer3": 1,
+        "CUMULONIMBUS": 1,
+        "CUMULONIMBUS_LIGHTNING": 1
+      },
+      "resources": {
+        "settings": "struct",
+        "cameraPos": "value",
+        "farPlane": "value",
+        "dhFarPlane": "value",
+        "modelViewInverse": "matrix",
+        "samples": "value",
+        "deferred": "value",
+        "skyGround": "value",
+        "skyBrightness": "value",
+        "terrainShadowOnClouds": "value",
+        "layer0Size": "value",
+        "layer1Size": "value",
+        "layer2Size": "value",
+        "layer3Size": "value",
+        "layer4Size": "value",
+        "auroraRgb": "value",
+        "auroraBrightness": "value",
+        "auroraAmount": "value",
+        "customLightningRgb": "value",
+        "noiseTexture": "texture",
+        "shadowTexture": "texture",
+        "shadowView": "matrix",
+        "shadowProjection": "matrix",
+        "shadowResolution": "value",
+        "shadowDistort": "value",
+        "skyTexture": "texture",
+        "texelSize": "value"
+      },
+      "bindings": {
+        "cameraPos": [
+          0,
+          0,
+          0
+        ],
+        "farPlane": 512.0,
+        "dhFarPlane": 0.0,
+        "samples": 10,
+        "deferred": false,
+        "skyGround": true,
+        "skyBrightness": 1.0,
+        "terrainShadowOnClouds": true,
+        "layer0Size": [
+          250,
+          130,
+          1,
+          100000
+        ],
+        "layer1Size": [
+          400,
+          280,
+          1,
+          100000
+        ],
+        "layer2Size": [
+          5000,
+          150000,
+          1
+        ],
+        "layer3Size": [
+          7000,
+          150000,
+          1
+        ],
+        "layer4Size": [
+          9000,
+          150000,
+          1
+        ],
+        "auroraRgb": [
+          2.25,
+          -0.5,
+          1.2
+        ],
+        "auroraBrightness": 1.0,
+        "auroraAmount": 1.0,
+        "customLightningRgb": [
+          0.63,
+          0.72,
+          1.0
+        ],
+        "shadowResolution": 2048.0,
+        "shadowDistort": 1.8
+      },
+      "allowExtraConstants": true
     }
   },
   "mcGlue": {
@@ -2971,29 +3071,25 @@
   "missing": {},
   "approximate": {},
   "referenceBroken": {
-    "GetVolumetricClouds": {
-      "target": "cloud_eclipse.ogxEclipseGetVolumetricCloudsExact",
-      "evidence": "参考 GetVolumetricClouds 依赖 CLOUDSHADOWSONLY、CloudLayer0..3、CUMULONIMBUS、CLOUD_SAMPLES、SKY_GROUND 与天空盒贴图，五层调用图按参考宿主配置展开为 7621 次采样；显式入口当前为 6796 次，采样顺序不一致，不能写 exact。实现见 cloud_eclipse 的显式五层入口。"
-    },
     "trace_wsr": {
       "target": "eclipse_specular.ogxEclipseTraceWsr",
-      "evidence": "参考正文调用 ph_intersects_world、ph_get_world_index；references/Eclipse/shaders/photonics/photonics.glsl 为 0 字节，仓库内没有这些定义，原文不能编译。实现按可执行语义用三维体素纹理给出 ogxEclipseTraceWsr。"
+      "evidence": "上游 Eclipse-Shader@26cfc431a9066a87040272fa0ae016ab88c06b9d 的 photonics/photonics.glsl 也是 0 字节（Git 空对象 e69de29b），唯一新增该文件的提交 dac7baa8 同样为空；ph_intersects_world、ph_get_world_index 等来自闭源 ARR 的 Photonics 模组，上游没有可恢复源码。实现按可执行语义用三维体素纹理给出 ogxEclipseTraceWsr。证据见 docs/eclipse-upstream.md。"
     },
     "photonicsReflection": {
       "target": "eclipse_specular.ogxEclipsePhotonicsReflection",
-      "evidence": "参考正文的 RayJob、translucentHit 与 trace_wsr 来自 0 字节的 photonics.glsl；没有这些声明，原文不能编译。实现见 ogxEclipsePhotonicsReflection。"
+      "evidence": "上游 Eclipse-Shader@26cfc431a9066a87040272fa0ae016ab88c06b9d 的 photonics.glsl 为 0 字节（Git 空对象 e69de29b），RayJob 与 translucentHit 字段由闭源 ARR 的 Photonics 模组注入，仓库内没有声明。实现见 ogxEclipsePhotonicsReflection。证据见 docs/eclipse-upstream.md。"
     },
     "sortIntersectionCutout": {
       "target": "eclipse_specular.ogxEclipseSortIntersectionCutout",
-      "evidence": "参考正文调用 GetTexCoord，而后者读的 voxelData 声明在 references/Eclipse/shaders/lib/voxel_common.glsl:5-7、12-14 被注释掉；调用图整体不能编译。实现用显式体素面纹理。"
+      "evidence": "参考调用 GetTexCoord；上游同提交的 lib/voxel_common.glsl 第 5-7、12-14 行也把 voxelData 声明注释掉，更早的 de987d9a 版本没有该声明，GetVoxelData/GetTexCoord 外层还要求从未定义的 adjnjawudiuwad。上游没有可恢复定义，调用图不能编译。实现用显式体素面纹理。证据见 docs/eclipse-upstream.md。"
     },
     "GetVoxelData": {
       "target": "voxel.ogxEclipseGetVoxelData",
-      "evidence": "voxelData 的唯一声明在 references/Eclipse/shaders/lib/voxel_common.glsl:5-7、12-14 被整段注释，参考正文编译时报未声明标识符。实现把同一 [voxelIndex][normalIndex] 布局装进二维只读纹理。"
+      "evidence": "voxelData 的唯一声明在上游 Eclipse-Shader@26cfc431a9066a87040272fa0ae016ab88c06b9d 的 lib/voxel_common.glsl:5-7、12-14 同样被注释，de987d9a 及更早版本没有声明；外层守卫里的 adjnjawudiuwad 从未定义。上游不可恢复，参考正文编译时报未声明标识符。实现把同一 [voxelIndex][normalIndex] 布局装进二维只读纹理。证据见 docs/eclipse-upstream.md。"
     },
     "GetTexCoord": {
       "target": "voxel.ogxEclipseGetTexCoord",
-      "evidence": "与 GetVoxelData 相同，参考正文读 voxel_common.glsl 中被注释掉的 voxelData SSBO 声明，原文不能编译。实现从显式二维体素面纹理解包贴图坐标。"
+      "evidence": "与 GetVoxelData 同一原因：上游同提交的 voxel_common.glsl 中 voxelData 声明仍被注释，仓库从未提供启用版本。实现从显式二维体素面纹理解包贴图坐标。证据见 docs/eclipse-upstream.md。"
     }
   }
 }

@@ -1,4 +1,12 @@
 # 更新记录
+## 0.16.0-dev.5
+
+严格函数对照第六轮：exact 从 473 增到 474，reference_broken 从 6 降到 5，approximate、missing 保持 0，mc_glue 保持 26。本轮解决 `GetVolumetricClouds` 的采样差异，并到上游核对五条损坏参考；上游同样没有可恢复源码，因此保留 reference_broken，不伪造 exact。
+- 新增 exact：`GetVolumetricClouds` 的参考五层调用图展开为 7621 次采样，实现补到同一数值。`ogxEclipseRaymarchCloud` 把上层云遮挡形状移回步进循环，按参考 `AURORA_LOCATION > 0` 分支每个样本重算（每层多 9 次 `getCloudShape`，共 135 次采样；积雨云多 285 次）；`ogxEclipseGetVolumetricClouds` 改为自己查天空盒，补回 1 次 `skyFromTex` 采样与 `SKY_GROUND` 间接光混合；严格入口按参考宿主配置写入五层高度、厚度、距离、极光与闪电颜色。逐层直接子调用的顺序与次数已核对：第 0、1、3、4 层各 73 次，积雨云 143 次，参考与实现相同。
+- 上游核对：`references/Eclipse` 与 `Merlin1809/Eclipse-Shader` 提交 `26cfc431a9066a87040272fa0ae016ab88c06b9d`（2026-04-10）逐字节一致，7 个文件的 Git 对象哈希全部相同。该提交 `photonics/photonics.glsl` 为 0 字节（Git 空对象 `e69de29b`），唯一新增该文件的提交 `dac7baa8` 也是空文件；`lib/voxel_common.glsl:5-7、12-14` 的 `voxelData` 声明同样被注释，更早的 `de987d9a` 版本没有该声明，消费方外层还要求从未定义的 `adjnjawudiuwad`。`ph_*` 与 `RayJob` 来自闭源 ARR 的 Photonics 模组，不能作为可复制参考。证据、URL 与许可证写在 `docs/eclipse-upstream.md`。
+- 保留 reference_broken：`GetVoxelData`、`GetTexCoord`、`sortIntersectionCutout`、`trace_wsr`、`photonicsReflection`。没有修改 `references/Eclipse` 原件，也没有把上游代码复制进交付物。
+- 验证：`python omni-gfx/build.py strict-parity` 为 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0，`GetVolumetricClouds` 与 `raymarchCloud` 的采样数为 7621/7621 与 193/193；`profiles` 两份 profile 编译通过；`python build.py audit`、`verify`（169 个入口、519 个选项、打包）与 `compile`（280 组唯一程序、0 错误）通过。未启动 Minecraft，游戏内画面、性能与其他显卡仍未验证。
+
 ## 0.16.0-dev.4
 
 严格函数对照第五轮：exact 从 468 增到 473，reference_broken 从 11 降到 6，approximate、missing 保持 0，mc_glue 保持 26。本轮把五个依赖宿主宏的体积雾与云函数改成参考默认分支的逐行端口，参考常数、循环次数与采样顺序逐项对齐。

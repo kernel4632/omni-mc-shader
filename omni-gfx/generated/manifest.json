@@ -275,11 +275,11 @@
     {
       "module": "cloud_eclipse",
       "source": "omni-gfx/src/cloud_eclipse.slang",
-      "sourceSha256": "8c408fb57493d9a1878b1bb872dc658f5fba1d844006b1331fcf1ad341f291a2",
+      "sourceSha256": "da6f4f08ef7c328a19b8d1a4e0112362e1f80f896caa60126626ad14566bd4a2",
       "shader": "shaders/omni-gfx/cloud_eclipse.glsl",
       "generated": "omni-gfx/generated/glsl/cloud_eclipse.glsl",
-      "glslSha256": "57d18d424e69ca75f13768a443cbc7398cf068c08ff158e1ddb744c335d0708b",
-      "glslLines": 1438
+      "glslSha256": "007e5e308e3e0d4d8c5b8a2b9c797ca5100f1979f46a3c2cf69b244a029ed413",
+      "glslLines": 1474
     },
     {
       "module": "eclipse_extra",
