@@ -23,6 +23,8 @@ Omni 通用图形库 Eclipse 高光与反射模块：体素求交、WSR/Photonic
 #include "voxel.slang"
 #include "eclipse_extra.slang"
 #include "eclipse_indirect.slang"
+#include "eclipse_sky.slang"
+#include "lpv.slang"
 #include "water.slang"
 #include "shadow.slang"
 
@@ -96,36 +98,39 @@ OgxEclipseRayHit ogxEclipseAabbIntersection2(float3 currPos, float3 reflectedVec
 }
 
 // 排序两个裁切体素交点：先取较近的，再用贴图 alpha 判断是否穿过去。
-// 裁剪命中排序的提前声明：入口放在定义之前。
+// 裁剪命中排序的提前声明：参考参数在前，体素面表、贴图、相机位置作为显式资源追加。
 void ogxEclipseSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, float3 stepDir,
-    float2 gtexSize, float2 texCoordOffset, float3 voxelPos, Sampler2D gtexture,
-    inout bool hit, inout float3 shiftedCurrPos, inout float3 stepAxis);
+    float2 gtexSize, float2 texCoordOffset, float3 voxelPos, inout bool hit,
+    inout float3 shiftedCurrPos, inout float3 stepAxis, Sampler2D gtexture,
+    Sampler2D voxelDataTexture, int voxelSize, float3 cameraWorldPos);
 
-// Eclipse 裁剪命中排序入口：参考签名不把方块贴图写进参数表，库把贴图作为显式资源。
+// Eclipse 裁剪命中排序入口：保留旧的参数顺序，方便现有调用方逐项迁移。
 void ogxItxSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, float3 stepDir,
     float2 gtexSize, float2 texCoordOffset, float3 voxelPos, inout bool hit,
-    inout float3 shiftedCurrPos, inout float3 stepAxis, Sampler2D gtexture)
+    inout float3 shiftedCurrPos, inout float3 stepAxis, Sampler2D gtexture,
+    Sampler2D voxelDataTexture, int voxelSize, float3 cameraWorldPos)
 {
     ogxEclipseSortIntersectionCutout(hit1, hit2, stepDir, gtexSize, texCoordOffset, voxelPos,
-        gtexture, hit, shiftedCurrPos, stepAxis);
+        hit, shiftedCurrPos, stepAxis, gtexture, voxelDataTexture, voxelSize, cameraWorldPos);
 }
 
 void ogxEclipseSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, float3 stepDir,
-    float2 gtexSize, float2 texCoordOffset, float3 voxelPos, Sampler2D gtexture,
-    inout bool hit, inout float3 shiftedCurrPos, inout float3 stepAxis)
+    float2 gtexSize, float2 texCoordOffset, float3 voxelPos, inout bool hit,
+    inout float3 shiftedCurrPos, inout float3 stepAxis, Sampler2D gtexture,
+    Sampler2D voxelDataTexture, int voxelSize, float3 cameraWorldPos)
 {
     bool useFirst = hit1.hit && (!hit2.hit || hit1.t < hit2.t); // 较近的优先。
     OgxEclipseRayHit firstHit = useFirst ? hit1 : hit2; // 第一命中。
     OgxEclipseRayHit secondHit = useFirst ? hit2 : hit1; // 第二命中。
     float2 texCoord; // 贴图坐标。
     float3 voxelNormal = -firstHit.stepAxis * stepDir; // 进入面法线。
-    ogxGetVoxelTexCoord(float4(0.0), texCoord); // 占位，真实面数据由调用方替换。
-    float3 wPos = firstHit.currPos; // 世界位置。
+    ogxEclipseGetTexCoord(int3(voxelPos), texCoord, voxelNormal, voxelDataTexture, voxelSize); // 从体素面表读贴图坐标。
+    float3 wPos = firstHit.currPos + cameraWorldPos; // 转成绝对世界位置。
     float2 sampleDir = firstHit.stepAxis.x * fract(wPos.zy) + firstHit.stepAxis.y * fract(wPos.xz)
         + firstHit.stepAxis.z * fract(wPos.xy); // 进入面内的采样方向。
     texCoord = lerp(texCoord + float2(0.0, texCoordOffset.y), texCoord - float2(0.0, texCoordOffset.y), sampleDir); // 纵向偏移。
     texCoord = lerp(texCoord + float2(texCoordOffset.x, 0.0), texCoord - float2(texCoordOffset.x, 0.0), sampleDir); // 横向偏移。
-    float sampleAlpha = gtexture.SampleLevel(texCoord, 0.0).a; // 参考实现的最近采样。
+    float sampleAlpha = gtexture.SampleLevel(texCoord, 0.0).a; // 参考实现的纹理采样。
     firstHit = sampleAlpha > 0.1 ? firstHit : secondHit; // 透明就穿到第二命中。
     hit = firstHit.hit;
     float fHit = float(hit);
@@ -446,6 +451,58 @@ void ogxEclipsePhotonicsReflectionShading(inout float4 color, float3 normal, flo
     }
 }
 
+// 严格参考签名的 Photonics 命中面着色：SSS 方块软化、矿石自发光与云影都照原分支保留。
+// 云影由场景阶段预先算好作为显式值传入，避免在反射着色里重复展开整棵云影调用树。
+void ogxEclipsePhotonicsReflectionShadingExact(inout float4 color, float3 normal, float3 worldPos, float noise,
+    float3 directLightColor, float3 ambientLightColor, int blockID, float skylightmap, float3 torchColor,
+    float3 lpvSample, float3 handLight, float torchAmount, float shadowDistance, float ambientBrightness,
+    float minLightAmount, float minLightAmountInside, float nightVision, float eyeBrightness, float cloudShadow,
+    float3 sunVector, Sampler2D opaqueShadowMap, Sampler2D translucentShadowMap, Sampler2D shadowcolor0,
+    float4x4 shadowView, float4x4 shadowProjection, float shadowMapResolution, float distortA, float distortB,
+    float distortK, float d0k, int shadowSampleCount, bool basicFilter, bool coloredShadows,
+    float emissiveBrightness, float emissiveCurve)
+{
+    float skyDir = normal.y * 0.5 + 0.5; // 法线朝上程度。
+    float2 lightmap = float2(0.0, skylightmap); // 光照图。
+    if (abs(blockID - 197) <= 1 || blockID == 242) lightmap.x = 1.0; // 岩浆块与海晶灯。
+    float skylight = lerp(0.08 + 0.92 * (1.0 - lightmap.y), 1.0, skyDir); // 天空光。
+    float3 indirectLighting = ogxEclipseDoIndirectLighting(ambientLightColor * skylight, float3(1.0),
+        lightmap.y, ambientBrightness, minLightAmount, minLightAmountInside, nightVision); // 间接光。
+    float3 playerPosition = worldPos; // 相机相对位置。
+    indirectLighting += ogxEclipseDoBlockLightLightingVoxelExact(torchColor, lightmap.x, lpvSample, handLight, torchAmount); // 方块光。
+    float shadowMapFalloff = smoothstep(0.0, 1.0, min(max(1.0 - length(playerPosition) / (shadowDistance + 16.0), 0.0) * 5.0, 1.0)); // 阴影距离淡出。
+    float sh = ogxEclipseComputePhotonicsShadowMap(directLightColor, playerPosition, shadowMapFalloff, noise, normal,
+        opaqueShadowMap, translucentShadowMap, shadowcolor0, shadowView, shadowProjection, shadowDistance,
+        shadowMapResolution, distortA, distortB, distortK, d0k, shadowSampleCount, basicFilter, coloredShadows, false); // 阴影。
+    float lightLeakFix = clamp(pow(eyeBrightness / 240.0 + lightmap.y, 2.0), 0.0, 1.0); // 漏光修正。
+    sh *= lightLeakFix;
+    sh *= cloudShadow; // 预先算好的云影。
+    float NdotL = clamp((-15.0 + dot(normal, sunVector) * 255.0) / 240.0, 0.0, 1.0); // 直射项。
+    if (blockID == 80 || blockID == 87 || blockID == 56 || blockID == 79 || blockID == 54 || blockID == 55
+        || blockID == 12 || blockID == 14 || blockID == 13 || blockID == 81 || blockID == 89 || blockID == 82
+        || blockID == 195 || (blockID >= 269 && blockID <= 274) || blockID == 409 || blockID == 401
+        || blockID == 102 || blockID == 101 || blockID == 103 || blockID == 11 || blockID == 15
+        || blockID == 282 || blockID == 21) NdotL = lerp(NdotL, 1.0, 0.25); // 植物与半透明方块的柔化。
+    float3 albedo = color.rgb; // 命中面底色。
+    color.rgb *= indirectLighting + directLightColor * sh * NdotL; // 合成光照。
+    float emissive = 0.0; // 自发光。
+    if (blockID >= 100 && blockID < 282) // 普通光源方块。
+    {
+        emissive = 0.5;
+        if (blockID == 266 || (blockID >= 276 && blockID <= 281)) emissive = 0.2; // 幽匿方块。
+        else if (blockID == 195) emissive = 2.3; // 发光地衣。
+        else if (blockID == 185) emissive = 1.5; // 哭泣的黑曜石。
+        else if (blockID == 105) emissive = 2.0; // 酿造台。
+        else if (blockID == 236) emissive = 1.0; // 重生锚。
+        else if (blockID == 101) emissive = 0.7; // 紫水晶芽。
+        else if (blockID == 103) emissive = 1.0; // 紫水晶簇。
+        else if (blockID == 244) emissive = 1.5; // 灵魂火。
+        emissive *= ogxGetVoxelEmission(albedo); // 自发光曲线。
+        emissive = clamp(emissive, 0.0, 1.0); // 夹紧。
+        ogxVoxelEmission(color.rgb, albedo, emissive, emissiveBrightness, emissiveCurve); // 混入自发光。
+    }
+}
+
 // Photonics 反射：先追踪体素，再给半透明与不透明命中着色，最后按雾吸收。
 vec4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHit translucentHits[10],
     uint translucentHitsCount, float3 reflectedVector, float3 flatNormal, float2 noise,
@@ -625,7 +682,7 @@ vec3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Npla
     float shlickFresnel = ogxEclipseShlickFresnelRoughness(VdotN, roughness); // 粗糙菲涅耳。
     albedo = f0 == 1.0 ? sqrt(albedo) : albedo; // 金属用底色。
     float3 metalAlbedoTint = isMetal ? albedo : float3(1.0); // 金属染色。
-    float3 hardCodedMetalsF0[8]; // ????????????????? GLSL 330?
+    float3 hardCodedMetalsF0[8]; // 参考的八种金属反射率，逐项赋值避免 GLSL 330 的数组构造限制。
     hardCodedMetalsF0[0] = float3(0.531228825312, 0.51235724246, 0.495828545714);
     hardCodedMetalsF0[1] = float3(0.944229966045, 0.77610211732, 0.373402004593);
     hardCodedMetalsF0[2] = float3(0.912298031535, 0.91385063144, 0.919680580954);
@@ -673,6 +730,109 @@ vec3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Npla
     return specular; // 交回高光。
 }
 
+// 严格参考签名的高光反射入口：背景天空、环境反射、太阳 GGX 与手电 GGX 的顺序照原程序。
+// 参考把天空图、屏幕图、深度图与相机矩阵当全局量；库把它们放在参数表尾部，算式不变。
+float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, float3 NplayerPos, float3 lightVec,
+    float2 noise, float3 flatNormal, float3 normal, float roughness, float f0, float3 albedo,
+    float3 diffuseLighting, float3 lightColor, float lightmap, bool isHand, bool isWater,
+    inout float reflectanceForAlpha, float4 flashLightStuff, Sampler2D skyTexture, float2 pixelSize,
+    float3 waterAbsorb, float eyeInWater, float sunSpecularMultiplier, float roughnessThreshold,
+    Sampler2D sceneTexture, Sampler2D depthTexture, float4x4 projection, float4x4 projectionInverse,
+    float4x4 modelView, float4x4 modelViewInverse, float4x4 previousProjection, float4x4 previousModelView,
+    float nearPlane, float farPlane, float3 cameraDelta, float renderScale, float2 texelSize,
+    float environmentQuality, float3 flashLightColor, bool handHeldLights, bool firstPersonCamera,
+    Usampler1D blockDataTexture, int heldItemId, int heldItemId2)
+{
+    lightmap = min(max(lightmap - 0.9, 0.0) / 0.1, 1.0); // 光照图重整。
+    lightmap *= lightmap;
+    lightmap = 1.0 - lightmap;
+    lightmap *= lightmap;
+    lightmap = 1.0 - lightmap;
+    roughness = 1.0 - roughness; // 粗糙度反转。
+    roughness *= roughness;
+    f0 = f0 == 0.0 ? 0.02 : f0; // 默认介电常数。
+    bool isMetal = f0 > 229.5 / 255.0; // 金属判定。
+    float3x3 basis = ogxEclipseFrisvad(normal); // 切线基。
+    float3 viewDir = -NplayerPos * basis; // 转到切线空间。
+    float3 reflectedVector = reflect(NplayerPos, normal); // 理想反射。
+    float VdotN = dot(-normalize(viewDir), float3(0.0, 0.0, 1.0)); // 视线与法线。
+    float shlickFresnel = ogxEclipseShlickFresnelRoughness(VdotN, roughness); // 粗糙菲涅耳。
+    albedo = f0 == 1.0 ? sqrt(albedo) : albedo; // 金属用底色。
+    float3 metalAlbedoTint = isMetal ? albedo : float3(1.0); // 金属染色。
+    float3 hardCodedMetalsF0[8]; // 参考实现的八种金属。
+    hardCodedMetalsF0[0] = float3(0.531228825312, 0.51235724246, 0.495828545714);
+    hardCodedMetalsF0[1] = float3(0.944229966045, 0.77610211732, 0.373402004593);
+    hardCodedMetalsF0[2] = float3(0.912298031535, 0.91385063144, 0.919680580954);
+    hardCodedMetalsF0[3] = float3(0.55559681715, 0.55453707574, 0.554779427513);
+    hardCodedMetalsF0[4] = float3(0.925952196272, 0.72090163805, 0.504154241735);
+    hardCodedMetalsF0[5] = float3(0.632483812932, 0.62593707362, 0.641478899539);
+    hardCodedMetalsF0[6] = float3(0.678849234658, 0.64240055565, 0.588409633571);
+    hardCodedMetalsF0[7] = float3(0.961999998804, 0.94946811207, 0.922115710997);
+    float3 hardCodedMetals = f0 == 1.0 ? albedo : hardCodedMetalsF0[int(clamp(f0 * 255.0 - 229.5, 0.0, 7.0))]; // 金属 f0。
+    float3 reflectance = isMetal ? hardCodedMetals : float3(f0); // 反射率。
+    float3 F0 = (reflectance + (1.0 - reflectance) * shlickFresnel) * metalAlbedoTint; // 菲涅耳。
+    reflectanceForAlpha = clamp(dot(F0, float3(0.3333333)), 0.0, 1.0); // 参考实现给水面用的反射率。
+    if (eyeInWater == 1 && isWater) // 水下看水面的斯涅尔窗。
+    {
+        float snellsWindow = min(max(0.54 - clamp(1.0 + VdotN, 0.0, 1.0), 0.0) / 0.1, 1.0);
+        snellsWindow = 1.0 - snellsWindow * snellsWindow;
+        snellsWindow *= snellsWindow * snellsWindow;
+        reflectanceForAlpha = f0 + (1.0 - f0) * snellsWindow;
+    }
+    float3 specular = diffuseLighting; // 高光结果。
+    float visibility = ogxEclipseGetReflectionVisibility(f0, roughness, roughnessThreshold); // 可见度。
+    vec4 environmentReflection = vec4(0.0); // 环境反射。
+    float backgroundReflectMask = lightmap; // 背景遮罩从光照图开始。
+    if (visibility < 1.0) // 只在需要时算反射。
+    {
+        float3 backgroundReflection = ogxEclipseSkyCloudsFromTex(reflectedVector, skyTexture, pixelSize).rgb / 1200.0; // 天空图。
+        if (eyeInWater == 1) backgroundReflection *= exp(-waterAbsorb * 15.0) * 2.0; // 水下吸收。
+        float3 backgroundTint = float3(1.0); // 背景染色。
+        environmentReflection = ogxEclipseGetEnvironmentReflections(reflectedVector, flatNormal, normal, playerPos,
+            viewPos, noise, isHand, roughness, backgroundReflectMask, backgroundTint, isWater, environmentQuality,
+            sceneTexture, depthTexture, projection, projectionInverse, modelView, modelViewInverse,
+            previousProjection, previousModelView, nearPlane, farPlane, cameraDelta, renderScale, texelSize, 0.0); // 屏幕空间反射。
+        backgroundReflection *= backgroundTint;
+        float3 darkened = isMetal ? diffuseLighting * (1.0 - environmentReflection.a) * (1.0 - lightmap) : diffuseLighting; // 金属压暗。
+        specular = lerp(darkened, backgroundReflection, backgroundReflectMask); // 背景反射。
+        specular = lerp(specular, environmentReflection.rgb, environmentReflection.a); // 环境反射。
+        specular = lerp(darkened, specular, F0); // 菲涅耳混合。
+        specular = lerp(specular, darkened, visibility); // 可见度回退。
+    }
+    vec3 lightSourceReflection = backgroundReflectMask * sunSpecularMultiplier * lightColor
+        * ogxEclipseGgx(normal, -NplayerPos, lightVec, roughness, reflectance, metalAlbedoTint); // 太阳 GGX。
+    specular += lightSourceReflection * (1.0 - environmentReflection.a);
+    vec3 flashLightReflection = flashLightColor * flashLightStuff.a
+        * ogxEclipseGgx(normal, -flashLightStuff.xyz, -flashLightStuff.xyz, roughness, reflectance, metalAlbedoTint); // 手电 GGX。
+    specular += flashLightReflection;
+    if (handHeldLights && !isHand && firstPersonCamera) // 手持光在反射里的高光。
+    {
+        if (heldItemId > 0) // 主手。
+        {
+            float3 shiftedViewPos = viewPos + float3(-0.25, 0.2, 0.0);
+            float3 shiftedPlayerPos = ogxMatrix3MulPoint(float3x3(modelViewInverse), shiftedViewPos)
+                + ogxMatrixTranslation(modelViewInverse) + cameraDelta;
+            float lightRange = 0.0;
+            float3 handLightCol = ogxEclipseGetHandLight(heldItemId, shiftedPlayerPos, lightRange,
+                blockDataTexture, float3(0.0));
+            if (lightRange > 0.0) specular += handLightCol * ogxEclipseGgx(normal, -shiftedPlayerPos, -shiftedPlayerPos,
+                roughness, reflectance, metalAlbedoTint);
+        }
+        if (heldItemId2 > 0) // 副手。
+        {
+            float3 shiftedViewPos = viewPos + float3(0.25, 0.2, 0.0);
+            float3 shiftedPlayerPos = ogxMatrix3MulPoint(float3x3(modelViewInverse), shiftedViewPos)
+                + ogxMatrixTranslation(modelViewInverse) + cameraDelta;
+            float lightRange = 0.0;
+            float3 handLightCol = ogxEclipseGetHandLight(heldItemId2, shiftedPlayerPos, lightRange,
+                blockDataTexture, float3(0.0));
+            if (lightRange > 0.0) specular += handLightCol * ogxEclipseGgx(normal, -shiftedPlayerPos, -shiftedPlayerPos,
+                roughness, reflectance, metalAlbedoTint);
+        }
+    }
+    return specular;
+}
+
 // 体素反射的当前参考实现：追踪主体在原程序里被整段注释，只剩背景遮罩与清空颜色。
 // 保留参数与输出，后续恢复追踪时调用方不用改接口。
 vec4 ogxEclipseVoxelReflection(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
@@ -680,6 +840,20 @@ vec4 ogxEclipseVoxelReflection(float3 reflectedVector, float3 flatNormal, float3
 {
     backgroundReflectMask = 1.0; // 参考实现固定回到背景反射。
     return vec4(0.0); // 参考实现的当前颜色输出。
+}
+
+// 严格参考签名的体素反射入口：参考正文的追踪整段被注释，实际只算光源颜色并返回零。
+// `lightSourceColor` 与 `averageSkyColor` 是参考全局 SSBO 的显式输入，缩放常数照原样保留。
+vec4 ogxEclipseVoxelReflectionExact(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
+    float noise, inout float backgroundReflectMask, float3 lightSourceColor, float3 averageSkyColor,
+    float ambientBrightness)
+{
+    float3 directLightColor = lightSourceColor / 1400.0; // 参考实现的直射光缩放。
+    float3 ambientLightColor = averageSkyColor / 900.0; // 参考实现的环境光缩放。
+    ambientLightColor *= ambientBrightness; // 环境光再乘环境亮度。
+    float4 color = float4(0.0); // 追踪主体被注释后只剩清空颜色。
+    backgroundReflectMask = 1.0; // 没有命中时回到背景反射。
+    return color; // 交回参考实现的当前输出。
 }
 
 // WSR 的 LPV 体积雾：沿视线指数步进，用三维密度图与 LPV 图累积照明。
@@ -710,6 +884,52 @@ vec4 ogxEclipseRaymarchWsrLpv(float3 origin, float3 endPos, float dither, Sample
         if (vanillaMask) sampleColor *= 1.0; // 原版遮罩由调用方预先乘进纹理。
         float3 lighting = sampleColor * lpvBrightness * 25.0 * exp(-5.0 * (1.0 - ogxLuminance(sampleColor))); // 参考实现的亮度曲线。
         lighting += handLight * torchAmount * lpvBrightness * 0.04; // 手持光。
+        color.rgb += (lighting - lighting * volumeCoeff) * color.a; // 累积散射。
+        color.a *= volumeCoeff; // 累积透过率。
+    }
+    return color; // 交回 LPV 雾。
+}
+
+// 严格参考签名的 LPV 雾入口：密度场、LPV 图与手持光表都作为显式资源。
+// 参考在循环里调用 cloudVol、GetLpvPosition、SampleLpvLinear 与 GetHandLight；
+// 这里把密度场换成三维纹理，LPV 采样用库里的精确实现，手持光走同一套字节拆包。
+float4 ogxEclipseRaymarchWsrLpvExact(float3 origin, float3 endPos, float dither,
+    Sampler3D densityTexture, Sampler3D lpvTexture, float3 cameraOffset, float lpvSize, float fadeLength,
+    float minDensity, int vlSamples, int sampleCount, float lpvBrightness, float torchAmount,
+    float caveDetection, float farPlane, float3 relativeEyePosition, Usampler1D blockDataTexture,
+    int heldItemId, int heldItemId2, int frameCounter, float2 blockSkyRange)
+{
+    if (length(origin - endPos) < 0.001) return float4(0.0, 0.0, 0.0, 1.0); // 空段直接返回。
+    float mult = float(vlSamples) / float(sampleCount) * 1.15; // 参考实现的样本数换算。
+    float minimumDensity = minDensity; // 参考实现的最低密度，由调用方按选项给出。
+    float3 lpvRayStart = endPos - origin - cameraOffset; // 相机相对射线。
+    float lpvRayLength = length(lpvRayStart); // 射线长度。
+    lpvRayStart *= min(lpvRayLength, min(256.0, farPlane)) / lpvRayLength; // 参考实现的距离上限。
+    lpvRayLength = length(lpvRayStart); // 截断后的长度。
+    vec4 color = vec4(0.0, 0.0, 0.0, 1.0); // 累积颜色与透过率。
+    const float expFactor = 11.0; // 指数步长。
+    for (int i = 0; i < sampleCount; i++) // 固定样本数。
+    {
+        float d = (pow(expFactor, float(i) + dither) / expFactor - 1.0 / expFactor) / (1.0 - 1.0 / expFactor); // 步进位置。
+        float dd = pow(expFactor, float(i) + dither) * log(expFactor) / float(sampleCount) / (expFactor - 1.0); // 步长导数。
+        float3 rayProgress = cameraOffset + d * lpvRayStart + origin; // 当前世界位置。
+        float density = 0.0; // 这一步的雾密度。
+        float minimumDensityNow = minimumDensity; // 洞穴里抬高最低密度。
+        if (caveDetection < 0.9999) density = densityTexture.SampleLevel(rayProgress, 0.0).r * (1.0 - caveDetection); // 密度场换成显式纹理。
+        minimumDensityNow += caveDetection * minimumDensity; // 洞穴补偿。
+        density = max(density / 1000.0, minimumDensityNow) * mult; // 参考实现的密度换算。
+        float volumeCoeff = exp(-dd * density * lpvRayLength); // 本段透过率。
+        float3 lpvPos = ogxGetLpvPositionExplicit(rayProgress, float3(0.0), lpvSize); // 体积坐标。
+        float3 cubicRadius = clamp(min(((lpvSize - 1.0) - lpvPos) / fadeLength, lpvPos / fadeLength), 0.0, 1.0); // 边缘淡出。
+        float lpvFade = cubicRadius.x * cubicRadius.y * cubicRadius.z; // 三轴乘积。
+        if (lpvFade < 0.01) break; // 走出体积就停。
+        float3 sampleColor = ogxItxSampleLpvLinear(lpvPos, lpvTexture, lpvTexture, frameCounter, lpvSize, blockSkyRange).rgb; // LPV 光色。
+        float3 lighting = sampleColor * lpvBrightness * 25.0
+            * exp(-5.0 * (1.0 - dot(sampleColor, float3(0.21, 0.72, 0.07)))); // 参考亮度曲线与亮度权重。
+        float lightRange = 0.0; // 手持光范围。
+        float3 handLight1 = ogxEclipseGetHandLight(heldItemId, rayProgress, lightRange, blockDataTexture, relativeEyePosition); // 主手。
+        float3 handLight2 = ogxEclipseGetHandLight(heldItemId2, rayProgress, lightRange, blockDataTexture, relativeEyePosition); // 副手。
+        lighting += (handLight1 + handLight2) * torchAmount * lpvBrightness * 0.04; // 手持光叠加。
         color.rgb += (lighting - lighting * volumeCoeff) * color.a; // 累积散射。
         color.a *= volumeCoeff; // 累积透过率。
     }

@@ -1,4 +1,13 @@
 # 更新记录
+## 0.16.0-dev.3
+
+严格函数对照第四轮：exact 从 459 增到 468，approximate 与 missing 保持 0，mc_glue 从 46 降到 26，新增 `reference_broken` 11 条。参考参数保持在前，纹理、矩阵、结构体与数值资源追加在后；参考常数与采样次数逐项核对。
+
+- 工具：`parity_strict.py` 新增 `refDefines`，按功能真实启用的分支重新预处理参考，避免 `first_branch` 把互斥的 `#ifdef/#else` 合并成参考里不存在的采样次数；新增 `resourceCalls`，把密度场、云影等显式纹理/数值输入声明为外部资源，不再把生产者的菜单常数算进消费者。`generate.py` 补一维纹理取格与 `Usampler1D` 转换。
+- 新增 exact：`ComputeVoxelShadowMap`、`voxelReflection`、`SetVoxelBlock`、`PopulateShadowVoxel`、`GetHandLight`、`raymarchWSR_LPV`、`photonicsReflectionShading`、`specularReflections`、`UnderwaterVolumetricFog`。体素写入改成显式接收目标格与编号；手持光表改成显式一维纹理，手工拆包保持参考的字节顺序；WSR 与高光入口把深度、阴影、LPV、天空与相机资源逐项传入。
+- reference_broken：`GetVoxelData`、`GetTexCoord` 的 `voxelData` 声明在 `voxel_common.glsl` 被整段注释，参考正文不能编译；`sortIntersectionCutout` 因调用它们同样不能编译。`trace_wsr` 与 `photonicsReflection` 依赖 0 字节的 `photonics/photonics.glsl`。其余 6 条（`VolumetricFog`、`GetVolumetricFog`、`raymarchWSRfog`、`WSRwaterVolumetrics`、`raymarchCloud`、`GetVolumetricClouds`）的参考正文依赖宿主程序头与 `settings.glsl` 的宏/uniform，单文件提取不能唯一恢复循环次数与采样分支；实现仍存在，未计为 exact。
+- 生成与验证：`python omni-gfx/build.py generate`、`python omni-gfx/build.py profiles`（两份 profile 编译通过）、`python omni-gfx/tools/parity_strict.py`（exact 468、approximate 0、reference_broken 11、mc_glue 26、missing 0）、`python build.py audit`、`python build.py verify`（160 个测试、审计、九组编译探针与打包）、`python build.py compile`（280 组唯一程序、0 错误）通过。没有把上述 11 条改写成 approximate，也没有说成已完成；游戏内画面、性能与其他显卡仍未验证。
+
 ## 0.16.0-dev.2
 
 严格函数对照第三轮：exact 从 423 增到 459，approximate 与 missing 保持 0，mc_glue 从 82 降到 46。本轮按参考正文逐条迁移，参考参数保持在前，纹理、矩阵、结构体与数值资源显式追加；参考常数、采样次数与顺序逐项核对。

@@ -1369,4 +1369,37 @@ float4 ogxEclipseCloudTransmittanceSimple(float2 dither, float3 lightDir, float2
     return float4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四层透过率。
 }
 
+// 严格参考签名的单层云步进入口：参考参数在前，云设置、相机与阴影资源追加在后。
+// 主体仍由 `ogxEclipseRaymarchCloud` 执行，入口只负责把显式参数重新排好。
+float4 ogxEclipseRaymarchCloudExact(int layerIndex, int samples, float3 rayPosition, float3 rayDirection,
+    float dither, float minHeight, float maxHeight, float3 sunVector, float3 moonVector, float3 sunScattering,
+    float3 moonScattering, float3 skyScattering, float referenceDistance, float3 sampledSkyCol,
+    inout float2 cloudPlaneDistance, float backScatterPhase, float4 phaseLevels, float backScatterPhase2,
+    float4 phaseLevels2, OgxEclipseCloudSettings settings, float3 cameraPos, bool terrainShadowOnClouds,
+    bool deferred, Sampler2D noiseTexture, Sampler2D shadowTexture, float4x4 shadowView,
+    float4x4 shadowProjection, float shadowResolution, float shadowDistort)
+{
+    return ogxEclipseRaymarchCloud(settings, layerIndex, samples, rayPosition, rayDirection, dither, minHeight,
+        maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance,
+        sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2,
+        cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection,
+        shadowResolution, shadowDistort); // 转调同一份层步进。
+}
+
+// 严格参考签名的体积云总入口：五个参考参数在前，相机、天空与阴影资源追加在后。
+float4 ogxEclipseGetVolumetricCloudsExact(float3 viewPos, float2 dither, float3 sunVector, float3 moonVector,
+    float3 directLightCol, float3 directLightCol2, float3 indirectLightCol, inout float cloudPlaneDistance,
+    inout float2 cloudDistance, OgxEclipseCloudSettings settings, float3 cameraPos, float3 sampledSkyCol,
+    float farPlane, float dhFarPlane, float4x4 modelViewInverse, int samples, bool deferred, bool skyGround,
+    float skyBrightness, bool terrainShadowOnClouds, float3 shadowCameraPos, Sampler2D noiseTexture,
+    Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float shadowResolution,
+    float shadowDistort)
+{
+    return ogxEclipseGetVolumetricClouds(settings, viewPos, dither, sunVector, moonVector, directLightCol,
+        directLightCol2, indirectLightCol, cloudPlaneDistance, cloudDistance, cameraPos, sampledSkyCol,
+        farPlane, dhFarPlane, modelViewInverse, samples, deferred, skyGround, skyBrightness,
+        terrainShadowOnClouds, shadowCameraPos, noiseTexture, shadowTexture, shadowView, shadowProjection,
+        shadowResolution, shadowDistort); // 转调五层总入口。
+}
+
 #endif

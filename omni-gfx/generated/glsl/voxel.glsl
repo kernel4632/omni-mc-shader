@@ -254,4 +254,87 @@ float ogxEclipseGetPhotonicsEmission(vec3 albedo)
     return emissive * 0.5; // 参考把自发光压到一半。
 }
 
+// 解码一个体素面的完整数据：脸表纹理的第 y 行是六个面，x 轴是一维体素下标。
+// 为什么把参考的 SSBO 换成二维纹理：参考的 `voxelData` 声明被注释掉，原文不能编译；
+// 这里把同一份 `[voxelIndex][normalIndex]` 数据装进只读纹理，取格语义保持不变。
+void ogxEclipseGetVoxelData(ivec3 voxelPos, inout vec2 texcoord, inout vec3 tintColor,
+    vec3 voxelNormal, inout vec2 lightmap, sampler2D voxelDataTexture, int voxelSize)
+{
+    int index = ogxVoxelIndex(voxelPos, voxelSize); // 三轴展开成一维格号。
+    int faceIndex = ogxVoxelNormalIndex(voxelNormal); // 法线映射到六个面之一。
+    vec4 blockTexture = texelFetch(voxelDataTexture, ivec2(index, faceIndex), 0); // 读该面的打包数据。
+    texcoord = ogxDecodeVec2_16(blockTexture.x); // 贴图坐标占第一个分量。
+    lightmap = ogxDecodeVec2(blockTexture.y); // 光照图占第二个分量。
+    lightmap = min(max(lightmap - 0.05, 0.0) * 1.06, 1.0); // 去掉底部一段并放大。
+    vec2 rgTint = ogxDecodeVec2(blockTexture.b); // 红绿染色占第三个分量。
+    tintColor = vec3(rgTint.x, blockTexture.a, rgTint.y); // 蓝色染色在第四分量。
+}
+
+// 只读体素贴图坐标：反射裁剪只需要第一个分量的十六位解包。
+void ogxEclipseGetTexCoord(ivec3 voxelPos, inout vec2 texcoord, vec3 voxelNormal,
+    sampler2D voxelDataTexture, int voxelSize)
+{
+    int index = ogxVoxelIndex(voxelPos, voxelSize); // 与完整解码共用同一套格号。
+    int faceIndex = ogxVoxelNormalIndex(voxelNormal); // 与完整解码共用同一套面号。
+    texcoord = ogxDecodeVec2_16(texelFetch(voxelDataTexture, ivec2(index, faceIndex), 0).x); // 只解第一个分量。
+}
+
+// 写入体素掩码：参考直接 imageStore，库把目标格与编号交给调用方显式接收。
+// 为什么用 out 参数：GLSL 330 没有三维可写图像，宿主的图像存储属于渲染器资源；
+// 这里保留参考的边界判断与写入值，调用方把结果刷进自己的图像或缓冲。
+void ogxEclipseSetVoxelBlock(ivec3 voxelPos, uint blockId, int voxelSize,
+    inout ivec3 writePos, inout uint writeId)
+{
+    if (clamp(voxelPos, ivec3(0), ivec3(voxelSize - 1)) != voxelPos) return; // 越界写入丢弃。
+    writePos = voxelPos; // 记录真正写入的格号。
+    writeId = blockId; // 记录写入的方块编号。
+}
+
+// 阴影体素写入：把参考的渲染阶段、实体编号与方块编号换成显式输入。
+// `terrainStage`、`entityStage`、`blockEntityStage` 由宿主按当前绘制阶段给出；
+// `writePos` 与 `writeId` 接收最终写入位置和编号，方便宿主刷新体素图。
+void ogxEclipsePopulateShadowVoxel(vec3 playerPos, vec3 eyeOffset, vec3 cameraFraction, vec3 midBlock,
+    bool terrainStage, bool entityStage, bool blockEntityStage, float blockEntityId,
+    float entityId, float currentRenderedItemId, float mcEntityX, int voxelSize,
+    bool lpvEntityLights, bool waterInteraction, inout ivec3 writePos, inout uint writeId)
+{
+    uint voxelId = 0u; // 默认没有方块。
+    vec3 originPos = playerPos; // 从玩家相对位置开始。
+    if (terrainStage) // 地形绘制阶段。
+    {
+        float blockID = mcEntityX; // 方块编号来自实体属性。
+        voxelId = uint(blockID + 0.5); // 参考先四舍五入再转整数。
+        if (voxelId == 0u) voxelId = 1u; // 无编号地形当作实心方块。
+        originPos += midBlock / 64.0; // 方块中点偏移六十四分之一格。
+    }
+    ivec3 voxelPos = ogxGetVoxelIndex(originPos + eyeOffset, cameraFraction, voxelSize); // 加上相机小数偏移。
+    if (lpvEntityLights && ((entityStage && (currentRenderedItemId > 0.0 || entityId > 0.0)) || blockEntityStage))
+    {
+        if (blockEntityStage) // 方块实体阶段。
+        {
+            if (blockEntityId > 0.0 && blockEntityId < 500.0 && blockEntityId != 267.0)
+                voxelId = uint(blockEntityId); // 附魔台不写入，避免遮挡书架光。
+        }
+        else if (currentRenderedItemId > 100.0 && currentRenderedItemId < 276.0) // 手持物品。
+        {
+            if (entityId != 1607.0 && entityId != 1601.0) // 物品展示框与玩家不写入。
+            {
+                voxelId = uint(currentRenderedItemId);
+                voxelId += 2000u; // 加偏移，避免与草的编号互相影响。
+            }
+        }
+        else // 只有会发光的实体写入。
+        {
+            if (entityId == 1603.0 || entityId == 1605.0 || entityId == 1606.0 || entityId == 1608.0
+                || entityId == 1611.0 || entityId == 1609.0)
+                voxelId = uint(entityId) + 2000u;
+        }
+    }
+    if (waterInteraction && ((entityStage && (currentRenderedItemId > 0.0 || entityId > 0.0)) || blockEntityStage))
+    {
+        if (entityId == 1612.0 || entityId == 1613.0) voxelId = uint(entityId) + 2000u; // 船与小船加入体素。
+    }
+    if (voxelId > 0u) ogxEclipseSetVoxelBlock(voxelPos, voxelId, voxelSize, writePos, writeId); // 最终写入。
+}
+
 #endif

@@ -35,6 +35,7 @@ Omni 通用图形库体积雾模块：密度、阳光方向吸收、沿视线步
 #include "/omni-gfx/shadow.glsl"
 #include "/omni-gfx/water.glsl"
 #include "/omni-gfx/color.glsl"
+#include "/omni-gfx/sampling.glsl"
 // 一帧体积雾需要的相机、光照与天气参数。
 struct OgxFogMedia
 {
@@ -343,6 +344,69 @@ vec3 ogxUnderwaterFog(vec3 startPos, vec3 endPos, vec3 worldDir, float globalClo
     result *= globalCloudShadow; // 按全局云影压暗。
     result += handFog * (range / float(steps)) * handLightScale; // 手持光不随阳光相位与云影变化，最后叠上。
     return result; // 返回光柱颜色。
+}
+
+// 严格参考签名的体积雾入口：参考参数在前，雾参数、纹理与选项资源追加在后。
+// 主体复用 `ogxVolumetricFog`；默认关闭团雾、体积光、云影与半透明染色，
+// 只保留参考默认路径的高度雾、阴影与单级相位。
+void ogxItxVolumetricFogExact(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir,
+    float globalCloudShadow, float fogTimeFactor, out float transmittance, OgxFogMedia media,
+    sampler2D noiseTexture, sampler2D shadowDepth0, sampler2D shadowDepth1, sampler2D shadowColor0,
+    sampler2D cloudShadowTexture, bool noisy, bool volumetricLighting, bool useCloudShadow,
+    bool useStained, bool useSolidShadow, bool indoor, bool caveMode, float heightA, float heightB,
+    float falloff, float sunAbsorption, int steps, int lightSteps, float lightStepLength, float dither)
+{
+    media.global_cloud_shadow = globalCloudShadow; // 参考的全局云影。
+    media.time_factor = fogTimeFactor; // 参考的雾时间因子。
+    ogxVolumetricFog(color, startPos, endPos, worldDir, media, noiseTexture, shadowDepth0, shadowDepth1,
+        shadowColor0, cloudShadowTexture, noisy, volumetricLighting, useCloudShadow, useStained,
+        useSolidShadow, indoor, caveMode, heightA, heightB, falloff, sunAbsorption, steps, lightSteps,
+        lightStepLength, dither, transmittance); // 转调同一份步进。
+}
+
+// 严格参考签名的水下体积雾：范围、步数、阴影与焦散顺序照 iterationT 原程序。
+// 参考的相机、阴影矩阵、波法线图与水色全部由调用方给出，循环内不读宿主全局量。
+vec3 ogxItxUnderwaterVolumetricFogExact(vec3 startPos, vec3 endPos, vec3 worldDir,
+    float globalCloudShadow, vec3 cameraOffset, vec3 shadowLightVector, sampler2D shadowDepth0,
+    mat4 shadowView, mat4 shadowProjection,
+    float shadowBias, sampler2D waveNormalTexture, vec2 pixelSize, vec2 screenExtent,
+    float causticsResolution, float causticsIor, vec3 sunColor, float sunIntensity,
+    float underwaterDensity, int steps, sampler2D noiseTexture, vec2 pixelCoord, float frameCounter,
+    bool waterAbsorption, float waterDensity)
+{
+    const float range = 40.0; // 光柱的累积范围。
+    float startDist = length(startPos); // 起点到相机的距离。
+    if (startDist > range) return vec3(0.0); // 起点已经在范围外。
+    endPos = mix(worldDir * range, endPos, step(length(endPos), range)); // 终点截断到范围内。
+    float rayDist = distance(startPos, endPos); // 范围内射线长度。
+    vec3 rayDir = (endPos - startPos) / rayDist; // 射线方向。
+    float stepLength = range / float(steps); // 每段长度。
+    float noise = ogxBlueNoiseTemporal(noiseTexture, ivec2(pixelCoord), int(frameCounter)).y; // 参考的蓝噪声抖动。
+    vec3 result = vec3(0.0); // 累加的光柱颜色。
+    for (float i = 0.0; i < float(steps); i++) // 沿视线逐步前进。
+    {
+        float rayLength = (i + noise) * stepLength; // 当前位置，含抖动量。
+        vec3 rayPos = startPos + rayDir * rayLength; // 相机相对世界位置。
+        if (startDist + rayLength > range || rayLength > rayDist) break; // 超出范围就停。
+        vec3 shadowPos = ogxShadowScreenPosDistorted(rayPos + cameraOffset, shadowView, shadowProjection, shadowBias); // 投到阴影图。
+        float shadowDepth = textureLod(shadowDepth0, shadowPos.xy, 0.0).x; // 默认路径读半透明深度图。
+        vec3 shadow = vec3(step(shadowPos.z + 1e-06, shadowDepth)); // 受光判定。
+        rayLength += startDist; // 距离补上起点偏移。
+        float caustics = ogxUnderwaterCaustics(rayPos + cameraOffset, shadowLightVector, waveNormalTexture,
+            pixelSize, screenExtent, causticsResolution, causticsIor); // 该点焦散强度。
+        shadow *= caustics * caustics * caustics; // 三次方让焦散更集中。
+        shadow /= max(3.0, rayLength * 0.1); // 越远越弱。
+        if (waterAbsorption) shadow *= pow(vec3(0.1, 0.6, 1.0) * 0.99, vec3(rayLength * 0.04 * waterDensity)); // 分波段吸收。
+        result += shadow; // 累加光柱。
+    }
+    result *= range / float(steps); // 取平均。
+    vec3 lightVector = refract(shadowLightVector, vec3(0.0, -1.0, 0.0), 1.0 / 1.2); // 阳光进入水面时弯折。
+    float lightDotView = dot(lightVector, worldDir); // 光方向与视线夹角。
+    float phase = ogxMiePhase(0.7, lightDotView); // 前向相位。
+    result *= sunColor * (0.04 * phase * sunIntensity * underwaterDensity); // 乘直射光色与强度。
+    if (waterAbsorption) result *= vec3(0.2, 0.65, 1.0); // 有水下雾时染成水色。
+    result *= globalCloudShadow; // 按全局云影压暗。
+    return result; // 交回光柱颜色。
 }
 
 // Eclipse 下界三段体积雾：羽流、雾霭与顶部烟在同一条视线上分开累加。

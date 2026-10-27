@@ -12,10 +12,11 @@ Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表
 #ifndef OGX_HELDLIGHT_INCLUDED
 #define OGX_HELDLIGHT_INCLUDED
 
-// 表面模块提供手电筒光斑与指向，阴影模块提供屏幕空间阴影，数学模块提供漫反射与高光。
+// 表面模块提供手电筒光斑与指向，阴影模块提供屏幕空间阴影，数学与颜色模块提供漫反射、高光与色彩转换。
 #include "surface.slang"
 #include "shadow.slang"
 #include "math.slang"
+#include "color.slang"
 
 // 手电筒模型的手持光：两个光源分别位于左右手，按光斑、距离衰减与漫反射累加。
 // `aimDir` 是光束指向，`heldLightShadow` 为真时每个光斑再乘屏幕空间阴影。
@@ -193,6 +194,28 @@ void ogxTorchSpecularHighlight(inout float3 color, float3 viewPos, float3 viewDi
             color += lightColor * albedo * (heldHighlight * (brightness * scale)); // 叠到颜色上。
         }
     }
+}
+
+// Eclipse 手持光：从方块光表的一维图里读颜色与范围，再按距离三次方衰减。
+// 参考用 `imgBlockData` 的 imageLoad 与内置的 unpackUnorm4x8；库把方块光表作为
+// 一维只读纹理传入，并按同样的字节顺序手工拆包，避免依赖 GLSL 4.0 的打包函数。
+float3 ogxEclipseGetHandLight(int itemId, float3 playerPos, inout float lightRange,
+    Usampler1D blockDataTexture, float3 relativeEyePosition)
+{
+    float3 lightFinal = float3(0.0); // 默认没有手持光。
+    uint blockData = blockDataTexture.Load(int2(itemId, 0)).r; // 读该物品的打包颜色与范围。
+    float4 lightColorRange = float4(float(blockData & 255u), float((blockData >> 8u) & 255u),
+        float((blockData >> 16u) & 255u), float((blockData >> 24u) & 255u)) / 255.0; // 四个字节还原成零到一。
+    lightRange = lightColorRange.a * 255.0; // 范围回到零到二百五十五。
+    if (lightRange > 0.0) // 只有带范围的物品才发光。
+    {
+        float3 lightColor = ogxSrgbToLinear(lightColorRange.rgb); // 颜色从 sRGB 换到线性。
+        float lightDist = length(playerPos + relativeEyePosition); // 手持光到表面的距离。
+        const float NoL = 1.0; // 参考实现固定为正面受光。
+        float falloff = pow(1.0 - lightDist / lightRange, 3.0); // 三次方衰减。
+        lightFinal = lightColor * NoL * max(falloff, 0.0); // 范围外为零。
+    }
+    return lightFinal; // 交回手持光颜色。
 }
 
 #endif

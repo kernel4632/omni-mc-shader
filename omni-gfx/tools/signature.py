@@ -912,7 +912,8 @@ def evaluate_argument(argument: str, scope: dict, bool_scope: dict) -> list[floa
 def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, list[float]],
                  depth: int = 0, stack: tuple[str, ...] = (),
                  cache: dict[tuple, tuple[list[float], list[str], list[str]]] | None = None,
-                 bindings: dict[str, list[float]] | None = None
+                 bindings: dict[str, list[float]] | None = None,
+                 resource_calls: dict[str, dict] | None = None
                  ) -> tuple[list[float], list[str], list[str]]:
     """沿调用图收集数值、采样顺序与无法解析的常量名。
 
@@ -924,12 +925,19 @@ def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, 
     却会折叠出额外的 32，制造假差异。调用点已知的常数实参绑定到形参后，两边都会
     得到同一组数值；绑定只接受能静态求值的实参，运行时值不参与。
 
+    `resource_calls` 声明参考调用已被显式资源替代。命中时不再展开被调函数的内部
+    常数，只按台账补上资源读取的采样类别；这样密度场、光表等外部输入可以严格
+    对应一张纹理，而不会把生产者的菜单常数错算进消费者。
+
     结果按函数缓存；否则大气与光照的调用图会在每次比较时重复展开很多次。
     """
     cache = {} if cache is None else cache
+    resource_calls = resource_calls or {}
     bindings = bindings or {}
     binding_key = tuple(sorted((name, tuple(value)) for name, value in bindings.items()))
-    key = (item.get("path", ""), item.get("line", 0), item["name"], binding_key)
+    resource_key = tuple(sorted((name, tuple(sorted((key, repr(value)) for key, value in spec.items())))
+                                for name, spec in resource_calls.items()))
+    key = (item.get("path", ""), item.get("line", 0), item["name"], binding_key, resource_key)
     if key in cache:
         return cache[key]
     if key in stack:
@@ -1003,6 +1011,10 @@ def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, 
         if token in SAMPLE_CALLS:
             samples.append(SAMPLE_CALLS[token])
             continue
+        if token in resource_calls:
+            # 显式资源替代：不展开生产者内部常数，只记录这一次资源读取。
+            samples.extend(resource_calls[token].get("samples", []))
+            continue
         # 函数调用：按实参个数挑同名重载；找不到时只当作未知调用跳过。
         args = arguments_at(text, end)
         candidates = [entry for entry in index.get(token, []) if len(entry["params"]) == args]
@@ -1026,7 +1038,7 @@ def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, 
                 if param_name and value is not None:
                     callee_bindings[param_name] = value
         sub_numbers, sub_samples, sub_unresolved = collect_tree(
-            callee, index, constants, depth + 1, (*stack, key), cache, callee_bindings)
+            callee, index, constants, depth + 1, (*stack, key), cache, callee_bindings, resource_calls)
         numbers.extend(sub_numbers)
         samples.extend(sub_samples)
         unresolved.extend(sub_unresolved)
@@ -1173,7 +1185,8 @@ def compare(ref: dict, impl: dict, ref_constants: dict, lib_constants: dict,
             impl_index: dict[str, list[dict]] | None = None,
             allow_extra_constants: bool = False,
             resources: dict[str, str] | None = None,
-            bindings: dict[str, float] | None = None) -> dict:
+            bindings: dict[str, float] | None = None,
+            resource_calls: dict[str, dict] | None = None) -> dict:
     """比较两份签名与算式，返回可直接写进报告的差异列表与证据字段。
 
     `ref_index` 与 `impl_index` 给出时沿调用图收集常数与采样；否则只比较函数体本身。
@@ -1233,7 +1246,8 @@ def compare(ref: dict, impl: dict, ref_constants: dict, lib_constants: dict,
                 else:
                     impl_numbers_extra.append(float(value))
     if ref_index is not None and impl_index is not None:
-        ref_numbers_raw, ref_samples, ref_unknown = collect_tree(ref, ref_index, ref_constants)
+        ref_numbers_raw, ref_samples, ref_unknown = collect_tree(
+            ref, ref_index, ref_constants, resource_calls=resource_calls)
         impl_numbers_raw, impl_samples, impl_unknown = collect_tree(
             impl, impl_index, lib_constants,
             bindings={name: ([float(item) for item in value] if isinstance(value, (list, tuple))

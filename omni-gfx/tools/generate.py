@@ -80,7 +80,8 @@ TYPE_WORDS = {
     "int4": "ivec4", "int3": "ivec3", "int2": "ivec2", "int": "int",
     "uint4": "uvec4", "uint3": "uvec3", "uint2": "uvec2", "uint": "uint",
     "Sampler3DShadow": "sampler3DShadow", "Usampler3D": "usampler3D", "Sampler3D": "sampler3D",
-}  # 三维纹理的句柄名也必须替换，体积云与体素追踪都靠它取格。
+    "Usampler1D": "usampler1D", "Sampler1D": "sampler1D",
+}  # 三维与一维纹理句柄也要替换，体积云、体素追踪与方块光表都靠它取格。
 
 # 逐项替换的语法差异；每项都配一条原因，方便新会话判断能不能扩展。
 # 表内每条都只做等价改写：改名字、改写法，不改算式与常数。
@@ -99,7 +100,9 @@ LOWERINGS = (
 # 生成器只认这两种取格写法，换别的形式会落到残留检查里报错。
 LOAD = re.compile(r"(\w+)\.Load\(\s*int3\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 坐标参数允许再套一层构造函数。
 # 三维纹理的层级是坐标的第四个分量，所以源码写 `int4`；GLSL 仍然把层级当独立参数。
-LOAD3D = re.compile(r"(\w+)\.Load\(\s*int4\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 只有体素追踪用三维取格。
+LOAD3D = re.compile(r"(\w+)\.Load\(\s*int4\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")
+# 一维纹理在 Slang 里用 `int2(位置, 层级)`，GLSL 的 texelFetch 只收一个整数位置。
+LOAD1D = re.compile(r"(\w+)\.Load\(\s*int2\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 只有体素追踪用三维取格。
 
 # 带细节层级的采样：Slang 用成员方法，GLSL 用自由函数；参数里允许一层括号，够放构造函数。
 SAMPLE_LEVEL = re.compile(r"(\w+)\.SampleLevel\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 参数里允许一层括号，够放构造函数。
@@ -112,7 +115,7 @@ SAMPLE_CMP = re.compile(r"(\w+)\.SampleCmpLevelZero\(\s*((?:[^(),]|\([^()]*\))+?
 
 # 生成文件里不能残留的 Slang 写法；漏掉一种就说明转换表需要补充。
 # 这里故意连注释一起检查，宁可多报也不要让半转换的代码进入光影包。
-LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler2D|Sampler3D|Usampler3D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(|\.SampleLevel\s*\(|\.SampleGrad\s*\(|\.SampleCmpLevelZero\s*\(")  # 成员采样与残留类型名都要拦住。
+LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler1D|Usampler1D|Sampler2D|Sampler3D|Usampler3D|lerp|asfloat|asuint|asint)\b|\.Load\s*\(|\.SampleLevel\s*\(|\.SampleGrad\s*\(|\.SampleCmpLevelZero\s*\(")  # 成员采样与残留类型名都要拦住。
 
 # 光影会把库嵌进自己的程序，库文件不能再声明语言版本。
 VERSION = re.compile(r"(?m)^\s*#version\b")
@@ -244,6 +247,7 @@ def _lower_text(text: str) -> str:
     text = _replace_loads(text)  # 任意嵌套的取格先换，避免复杂深度表达式漏转。
     text = _replace_sample_levels(text)  # 任意嵌套的采样层级写法也先换成 GLSL 自由函数。
     text = LOAD3D.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 三维取格先换，避免 `int4` 被当成残留写法。
+    text = LOAD1D.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 一维取格只保留位置与层级。
     text = LOAD.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 再换二维取格，此时 `int3` 还没改名。
     text = SAMPLE_CMP.sub(lambda m: f"textureLod({m[1]}, vec3({m[2]}, {m[3]}), 0.0)", text)  # 比较采样先展开成三分量坐标。
     text = SAMPLE_GRAD.sub(lambda m: f"textureGrad({m[1]}, {m[2]}, {m[3]}, {m[4]})", text)  # 带导数的采样换成 GLSL 自由函数。

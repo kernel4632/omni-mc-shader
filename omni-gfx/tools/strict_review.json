@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "note": "exact 必须逐行核对参考函数的常数、采样次数与顺序、颜色空间；近似替代必须写进 approximate，不能写成 exact。",
+  "schemaVersion": 2,
+  "note": "exact 必须逐行核对参考函数的常数、采样次数与顺序、颜色空间；近似替代必须写进 approximate，不能写成 exact。referenceBroken 记录参考正文自身缺声明或依赖无法单独恢复的宿主头/设置宏；实现仍必须存在，并在 evidence 写明依据。refDefines 用于按功能真实启用的分支重新解析参考，避免 first_branch 把互斥分支合并成参考里不存在的采样次数。",
   "exact": {
     "BlockLighting": {
       "target": "BlockLighting"
@@ -2170,6 +2170,326 @@
         "detailScale": 0.007,
         "detailStrength": 1
       }
+    },
+    "ComputeVoxelShadowMap": {
+      "target": "eclipse_specular.ogxEclipseComputeVoxelShadowMap",
+      "refDefines": {
+        "VOXEL_REFLECTIONS": 1,
+        "IS_LPV_ENABLED": 1,
+        "adjnjawudiuwad": 1,
+        "OVERWORLD_SHADER": 1,
+        "END_SHADER": 0
+      },
+      "resources": {
+        "opaqueShadowMap": "texture",
+        "translucentShadowMap": "texture",
+        "shadowcolor0": "texture",
+        "shadowView": "matrix",
+        "shadowProjection": "matrix",
+        "shadowDistance": "value",
+        "shadowMapResolution": "value",
+        "distortA": "value",
+        "distortB": "value",
+        "distortK": "value",
+        "d0k": "value",
+        "shadowSampleCount": "value",
+        "basicFilter": "value",
+        "coloredShadows": "value",
+        "endShader": "value",
+        "endShadowMatrix": "matrix",
+        "endShadowPerspective": "matrix"
+      },
+      "bindings": {
+        "shadowDistance": 128.0,
+        "shadowMapResolution": 2560.0,
+        "distortA": 0.25,
+        "distortB": 1.0,
+        "distortK": 1.8,
+        "d0k": 2.8125e-05,
+        "shadowSampleCount": 13,
+        "basicFilter": true,
+        "coloredShadows": false,
+        "endShader": false
+      },
+      "allowExtraConstants": true
+    },
+    "voxelReflection": {
+      "target": "eclipse_specular.ogxEclipseVoxelReflectionExact",
+      "refDefines": {
+        "VOXEL_REFLECTIONS": 1
+      },
+      "resources": {
+        "lightSourceColor": "value",
+        "averageSkyColor": "value",
+        "ambientBrightness": "value"
+      },
+      "bindings": {
+        "ambientBrightness": 1.0
+      }
+    },
+    "SetVoxelBlock": {
+      "target": "voxel.ogxEclipseSetVoxelBlock",
+      "resources": {
+        "voxelSize": "value",
+        "writePos": "value",
+        "writeId": "value"
+      },
+      "bindings": {
+        "voxelSize": 5
+      }
+    },
+    "PopulateShadowVoxel": {
+      "target": "voxel.ogxEclipsePopulateShadowVoxel",
+      "resources": {
+        "eyeOffset": "value",
+        "cameraFraction": "value",
+        "midBlock": "value",
+        "terrainStage": "value",
+        "entityStage": "value",
+        "blockEntityStage": "value",
+        "blockEntityId": "value",
+        "entityId": "value",
+        "currentRenderedItemId": "value",
+        "mcEntityX": "value",
+        "voxelSize": "value",
+        "lpvEntityLights": "value",
+        "waterInteraction": "value",
+        "writePos": "value",
+        "writeId": "value"
+      },
+      "bindings": {
+        "voxelSize": 5,
+        "lpvEntityLights": true,
+        "waterInteraction": true
+      }
+    },
+    "GetHandLight": {
+      "target": "heldlight.ogxEclipseGetHandLight",
+      "resources": {
+        "blockDataTexture": "texture",
+        "relativeEyePosition": "value"
+      },
+      "allowExtraConstants": true
+    },
+    "raymarchWSR_LPV": {
+      "target": "eclipse_specular.ogxEclipseRaymarchWsrLpvExact",
+      "refDefines": {
+        "VOXEL_REFLECTIONS": 1,
+        "IS_LPV_ENABLED": 1,
+        "OVERWORLD_SHADER": 1,
+        "END_SHADER": 0,
+        "PHOTONICS": 1,
+        "PHOTONICS_INCLUDED": 1,
+        "LPV_VL_FOG_ILLUMINATION_HANDHELD": 1,
+        "VOXY_PROGRAM": 0
+      },
+      "resources": {
+        "densityTexture": "texture",
+        "lpvTexture": "texture",
+        "cameraOffset": "value",
+        "lpvSize": "value",
+        "fadeLength": "value",
+        "minDensity": "value",
+        "vlSamples": "value",
+        "sampleCount": "value",
+        "lpvBrightness": "value",
+        "torchAmount": "value",
+        "caveDetection": "value",
+        "farPlane": "value",
+        "relativeEyePosition": "value",
+        "blockDataTexture": "texture",
+        "heldItemId": "value",
+        "heldItemId2": "value",
+        "frameCounter": "value",
+        "blockSkyRange": "value"
+      },
+      "bindings": {
+        "lpvSize": 128.0,
+        "fadeLength": 10.0,
+        "minDensity": 2.5e-05,
+        "vlSamples": 8,
+        "sampleCount": 3,
+        "lpvBrightness": 50.0,
+        "torchAmount": 1.0,
+        "frameCounter": 0,
+        "blockSkyRange": [
+          15.0,
+          15.0
+        ]
+      },
+      "resourceCalls": {
+        "cloudVol": {
+          "samples": [
+            "sample"
+          ],
+          "reason": "密度场改为显式三维纹理"
+        }
+      },
+      "allowExtraConstants": true
+    },
+    "photonicsReflectionShading": {
+      "target": "eclipse_specular.ogxEclipsePhotonicsReflectionShadingExact",
+      "refDefines": {
+        "VOXEL_REFLECTIONS": 1,
+        "IS_LPV_ENABLED": 1,
+        "adjnjawudiuwad": 1,
+        "OVERWORLD_SHADER": 1,
+        "END_SHADER": 0,
+        "PHOTONICS": 1,
+        "PHOTONICS_INCLUDED": 1
+      },
+      "resources": {
+        "torchColor": "value",
+        "lpvSample": "value",
+        "handLight": "value",
+        "torchAmount": "value",
+        "shadowDistance": "value",
+        "ambientBrightness": "value",
+        "minLightAmount": "value",
+        "minLightAmountInside": "value",
+        "nightVision": "value",
+        "eyeBrightness": "value",
+        "cloudShadow": "value",
+        "sunVector": "value",
+        "opaqueShadowMap": "texture",
+        "translucentShadowMap": "texture",
+        "shadowcolor0": "texture",
+        "shadowView": "matrix",
+        "shadowProjection": "matrix",
+        "shadowMapResolution": "value",
+        "distortA": "value",
+        "distortB": "value",
+        "distortK": "value",
+        "d0k": "value",
+        "shadowSampleCount": "value",
+        "basicFilter": "value",
+        "coloredShadows": "value",
+        "emissiveBrightness": "value",
+        "emissiveCurve": "value"
+      },
+      "bindings": {
+        "torchAmount": 1.0,
+        "shadowDistance": 128.0,
+        "ambientBrightness": 1.0,
+        "minLightAmount": 0.8,
+        "minLightAmountInside": 0.5,
+        "nightVision": 0.0,
+        "cloudShadow": 1.0,
+        "shadowMapResolution": 2560.0,
+        "distortA": 0.25,
+        "distortB": 1.0,
+        "distortK": 1.8,
+        "d0k": 2.8125e-05,
+        "shadowSampleCount": 13,
+        "basicFilter": true,
+        "coloredShadows": false,
+        "emissiveBrightness": 1.0,
+        "emissiveCurve": 1.0
+      },
+      "allowExtraConstants": true,
+      "resourceCalls": {
+        "GetCloudShadow": {
+          "samples": [],
+          "reason": "云影由场景阶段预先算好，作为显式值传入"
+        }
+      }
+    },
+    "specularReflections": {
+      "target": "eclipse_specular.ogxEclipseSpecularReflectionsExact",
+      "refDefines": {
+        "VOXEL_REFLECTIONS": 1,
+        "IS_LPV_ENABLED": 1,
+        "adjnjawudiuwad": 1,
+        "OVERWORLD_SHADER": 1,
+        "END_SHADER": 0,
+        "PHOTONICS": 0,
+        "PHOTONICS_INCLUDED": 0,
+        "VOXY_PROGRAM": 0
+      },
+      "resources": {
+        "skyTexture": "texture",
+        "pixelSize": "value",
+        "waterAbsorb": "value",
+        "eyeInWater": "value",
+        "sunSpecularMultiplier": "value",
+        "roughnessThreshold": "value",
+        "sceneTexture": "texture",
+        "depthTexture": "texture",
+        "projection": "matrix",
+        "projectionInverse": "matrix",
+        "modelView": "matrix",
+        "modelViewInverse": "matrix",
+        "previousProjection": "matrix",
+        "previousModelView": "matrix",
+        "nearPlane": "value",
+        "farPlane": "value",
+        "cameraDelta": "value",
+        "renderScale": "value",
+        "texelSize": "value",
+        "environmentQuality": "value",
+        "flashLightColor": "value",
+        "handHeldLights": "value",
+        "firstPersonCamera": "value",
+        "blockDataTexture": "texture",
+        "heldItemId": "value",
+        "heldItemId2": "value"
+      },
+      "bindings": {
+        "waterAbsorb": [
+          0.392389,
+          0.108329,
+          0.0660636
+        ],
+        "eyeInWater": 0.0,
+        "sunSpecularMultiplier": 1.0,
+        "roughnessThreshold": 30.0,
+        "renderScale": 1.0,
+        "environmentQuality": 0.5,
+        "flashLightColor": [
+          1.0,
+          0.9,
+          0.8
+        ],
+        "handHeldLights": true,
+        "firstPersonCamera": true
+      },
+      "allowExtraConstants": true
+    },
+    "UnderwaterVolumetricFog": {
+      "target": "fog_volume.ogxItxUnderwaterVolumetricFogExact",
+      "resources": {
+        "cameraOffset": "value",
+        "shadowLightVector": "value",
+        "shadowDepth0": "texture",
+        "shadowView": "matrix",
+        "shadowProjection": "matrix",
+        "shadowBias": "value",
+        "waveNormalTexture": "texture",
+        "pixelSize": "value",
+        "screenExtent": "value",
+        "causticsIor": "value",
+        "sunColor": "value",
+        "sunIntensity": "value",
+        "underwaterDensity": "value",
+        "steps": "value",
+        "waterAbsorption": "value",
+        "waterDensity": "value",
+        "noiseTexture": "texture",
+        "pixelCoord": "value",
+        "frameCounter": "value",
+        "causticsResolution": "value"
+      },
+      "bindings": {
+        "causticsResolution": 500.0,
+        "causticsIor": 1.2,
+        "sunIntensity": 1.0,
+        "underwaterDensity": 1.0,
+        "steps": 6,
+        "waterAbsorption": true,
+        "waterDensity": 1.0,
+        "shadowBias": 0.9
+      },
+      "allowExtraConstants": true
     }
   },
   "mcGlue": {
@@ -2245,73 +2565,59 @@
     "BiomeVLFogColors": {
       "evidence": "就绪：原版群系枚举到颜色表，非算法"
     },
-    "SetVoxelBlock": {
-      "evidence": "写 imgVoxelMask 图像，属于宿主图像存储；参考签名只给位置与编号，实际写入目标与体素缓冲布局由 Eclipse 程序提供，Omni 没有同名图像，证据见 omni-gfx/src/voxel.slang 的 ogxVoxelWriteIndex。"
-    },
-    "PopulateShadowVoxel": {
-      "evidence": "读取 renderStage、mc_Entity、entityId 等游戏渲染状态并写体素缓冲；这些是宿主状态，不能由参考的 float3 参数恢复，证据见 omni-gfx/src/voxel.slang 的 ogxPopulateShadowVoxelIndex 与 rendering/lpv.glsl。"
-    },
-    "photonicsReflection": {
-      "evidence": "Photonics 反射读取 Eclipse 的 photonics 光照表与阴影图；Omni 未接入 photonics 缓冲，默认反射走 SSR，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
-    "GetVolumetricFog": {
-      "evidence": "Eclipse 末地体积雾读取宿主闪电、雾层与远景缓冲；Omni 的末地体积雾接口是 EndVortexFog/EndFogLayers，证据见 shaders/rendering/world/end_fog.glsl。"
-    },
     "BiomeFogDensity": {
       "evidence": "群系雾密度表来自 Eclipse 的群系枚举与 SC_* 设置；Omni 的群系雾选项在 effects/weather/weather.glsl 与 effects/world/nether.glsl，证据见这些文件的 OMNI_* 群系雾宏。"
     },
-    "specularReflections": {
-      "evidence": "Eclipse 高光反射要读深度、法线、场景颜色、阴影与材质；参考签名有十七个参数但仍缺少缓冲，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
-    "UnderwaterVolumetricFog": {
-      "evidence": "水下体积雾要读深度、阴影贴图、噪声与水下介质参数；参考签名缺少这些缓冲，证据见 shaders/rendering/fog/underwater_fog.glsl 与 omni-gfx/src/fog_volume.slang。"
-    },
-    "VolumetricFog": {
-      "evidence": "体积雾要读深度、阴影、噪声、相机与介质参数；参考签名缺少这些缓冲，证据见 shaders/rendering/fog/volumetric.glsl 与 omni-gfx/src/fog_volume.slang。"
-    },
     "FogDensities": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "GetHandLight": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "GetVoxelData": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "GetTexCoord": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "ComputeVoxelShadowMap": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "sortIntersectionCutout": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?param count 9 != 10; constants missing 0.5, 1"
-    },
-    "voxelReflection": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "trace_wsr": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "raymarchWSR_LPV": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "raymarchWSRfog": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "WSRwaterVolumetrics": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "photonicsReflectionShading": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "raymarchCloud": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "GetVolumetricClouds": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+      "evidence": "就绪：Eclipse 的时段雾密度表，按世界时间在早晨、正午、傍晚、夜间四档之间取值；属于群系/天气属性表，不改变步进算法。Omni 的对应选项在 effects/weather/weather.glsl。"
     }
   },
   "missing": {},
-  "approximate": {}
+  "approximate": {},
+  "referenceBroken": {
+    "VolumetricFog": {
+      "target": "fog_volume.ogxItxVolumetricFogExact",
+      "evidence": "参考 VolumetricFog.glsl 正文引用 VFOG_NOISE_TYPE、VFOG_QUALITY、shadowtex0、noisetex 等只在 iterationT 程序头和 settings.glsl 中存在的宏与 uniform；单独提取该文件无法预处理，严格函数不能独立编译。实现见 fog_volume 的显式参数入口。"
+    },
+    "GetVolumetricFog": {
+      "target": "fog.ogxEndVortexFog",
+      "evidence": "Eclipse 在 end_fog、nether_fog、overworld_fog 三处定义同名不同签名的 GetVolumetricFog；严格台账按函数名只保留一个重载，无法用一条 exact 覆盖三个语义不同的实现。Omni 末地路径见 fog.ogxEndVortexFog。"
+    },
+    "raymarchWSRfog": {
+      "target": "eclipse_specular.ogxEclipseRaymarchWsrFog",
+      "evidence": "参考正文调用 cloudVol、BiomeVLFogColors、GetCloudShadow，并直接读 gbufferModelViewInverse、shadowtex0；这些名字散落在多个 lib 文件和程序 uniform 中，提取后的函数不是自包含编译单元。实现见 eclipse_specular 的 WSR 雾入口。"
+    },
+    "WSRwaterVolumetrics": {
+      "target": "eclipse_specular.ogxEclipseWsrWaterVolumetrics",
+      "evidence": "参考正文调用 cloudVol、waterCaustics、GetHandLight 与 BiomeVLFogColors，并直接读 shadowtex0/shadowcolor0、gbufferModelViewInverse；单文件提取无法确定这些 uniform 的布局。实现见 eclipse_specular 的水下体积入口。"
+    },
+    "raymarchCloud": {
+      "target": "cloud_eclipse.ogxEclipseRaymarchCloudExact",
+      "evidence": "参考正文依赖 CloudLayer0..4、CUMULONIMBUS、cloud_ShadowLevelOfDetail 等只在 settings.glsl 与程序头中展开的宏；单文件提取无法确定循环次数与采样分支，严格对照会得到参考里不存在的采样数。实现见 cloud_eclipse 的显式设置入口。"
+    },
+    "GetVolumetricClouds": {
+      "target": "cloud_eclipse.ogxEclipseGetVolumetricCloudsExact",
+      "evidence": "参考正文依赖 CloudLayer0..4、CUMULONIMBUS、CLOUD_SHADOW_AMOUNT 等设置宏和程序 uniform；提取后无法唯一确定五层循环与阴影分支。实现见 cloud_eclipse 的五层总入口。"
+    },
+    "trace_wsr": {
+      "target": "eclipse_specular.ogxEclipseTraceWsr",
+      "evidence": "参考正文调用 ph_intersects_world、ph_get_world_index 等 Photonics 函数；references/Eclipse/shaders/photonics/photonics.glsl 是 0 字节，仓库内没有这些定义，原文无法编译。实现按可执行语义用三维体素纹理给出 ogxEclipseTraceWsr。"
+    },
+    "photonicsReflection": {
+      "target": "eclipse_specular.ogxEclipsePhotonicsReflection",
+      "evidence": "参考正文的 RayJob、translucentHit 与 trace_wsr 来自空的 photonics 包含文件；没有这些声明，原文不能编译。实现见 ogxEclipsePhotonicsReflection。"
+    },
+    "sortIntersectionCutout": {
+      "target": "eclipse_specular.ogxEclipseSortIntersectionCutout",
+      "evidence": "参考正文调用 GetTexCoord，而后者读的 voxelData 声明被注释掉（voxel_common.glsl 的 voxelSSBO 块），调用图整体不能编译。实现用显式体素面纹理。"
+    },
+    "GetVoxelData": {
+      "target": "voxel.ogxEclipseGetVoxelData",
+      "evidence": "voxelData[...] 的唯一声明在 voxel_common.glsl 被整段注释，参考正文编译时报未声明标识符；用 glslang 对提取片段复核得到同样错误。实现把同一 [voxelIndex][normalIndex] 布局装进二维只读纹理。"
+    },
+    "GetTexCoord": {
+      "target": "voxel.ogxEclipseGetTexCoord",
+      "evidence": "与 GetVoxelData 相同，参考正文读 voxelData 的注释掉的 SSBO 声明，原文不能编译。实现从显式二维体素面纹理解包贴图坐标。"
+    }
+  }
 }

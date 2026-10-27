@@ -30,6 +30,7 @@ from __future__ import annotations
 import json  # 读写机器可读台账与报告。
 import sys  # 校验失败时以非零状态退出。
 from collections import defaultdict  # 按承接函数分组，检查多个参考函数指向同一实现。
+from functools import lru_cache  # 同一份参考配置只解析一次，避免重复扫描整棵参考树。
 from pathlib import Path  # 统一定位参考包与库源码。
 
 ROOT = Path(__file__).resolve().parents[2]  # 仓库根目录。
@@ -56,6 +57,9 @@ def load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+REFERENCE_DEFINES: dict[str, dict[str, str]] = {}  # 默认宏表，供按条目切换参考配置时复用。
+
+
 def reference_environment() -> tuple[dict, dict, dict]:
     """建立两份参考包的函数索引、常数表与预处理宏。
 
@@ -78,7 +82,26 @@ def reference_environment() -> tuple[dict, dict, dict]:
         raw_constants = signature.global_constant_table(paths)
         for name, value in raw_constants.items():
             constants[pack].setdefault(name, value)
+    REFERENCE_DEFINES.clear()
+    REFERENCE_DEFINES.update(defines)
     return index, constants, defines
+
+
+@lru_cache(maxsize=None)
+def reference_variant(pack: str, overrides_key: str) -> tuple[dict, dict]:
+    """按一条台账给出的宏覆盖重新解析参考包。
+
+    为什么需要：Eclipse 把体素反射整段放在默认关闭的 `#if` 里。`first_branch`
+    会把互相矛盾的 `#ifdef` 与 `#else` 同时保留，得到参考里并不存在的采样次数。
+    条目声明 `refDefines` 后，这里用同一份默认宏加上覆盖值重新预处理，只保留
+    该功能实际启用的分支；常数表也按同一份宏解析，选项数值不会错位。
+    """
+    overrides = json.loads(overrides_key)
+    macro = dict(REFERENCE_DEFINES[pack])
+    macro.update({name: str(value) for name, value in overrides.items()})
+    paths = sorted(REFERENCE_ROOTS[pack].rglob("*.glsl"))
+    return (signature.index_by_function_name(paths, macro),
+            signature.global_constant_table(paths, macro))
 
 
 def implementation_environment() -> tuple[dict, dict, dict, dict]:
@@ -183,6 +206,7 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
     library = signature.function_index(sorted((LIB / "src").glob("*.slang")))
     exact = review.get("exact", {})
     glue = review.get("mcGlue", {})
+    broken = review.get("referenceBroken", {})
     approximate = review.get("approximate", {})
     missing = review.get("missing", {})
     errors: list[str] = []
@@ -192,9 +216,41 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
         name = row["name"]
         source = f"{row['path']}:{row['line']}"
         package = row["pack"]
+        entry = exact.get(name) or broken.get(name) or {}
+        overrides = entry.get("refDefines")
+        overrides_key = json.dumps(overrides, sort_keys=True) if overrides else ""
+        if name in broken:
+            # 参考正文本身不能编译时不能伪造 exact。记录仍指向已迁移的实现，
+            # 但状态单独列出，并在差异栏写明缺哪个声明或哪段被注释掉。
+            record = base_record(row, source, "reference_broken", broken[name].get("target", ""),
+                                 broken[name].get("evidence", "参考正文不能编译"), "")
+            target = broken[name].get("target", "")
+            ledger = library.get(target) or library.get(target.rsplit("#", 1)[0]) if target else None
+            if ledger is None and target and ":" in target:
+                ledger = next(iter(impl_index.get(target.rsplit(":", 1)[1], [])), None)
+            if target and ledger is None:
+                errors.append(f"{name} 的 referenceBroken 目标不存在：{target}")
+            elif ledger is not None:
+                record["currentImplementation"] = ledger["name"]
+                record["implementationPath"] = ledger["path"].replace("\\", "/")
+                record["implementationLine"] = ledger["line"]
+                record["layer"] = "library"
+                record["evidencePath"] = f"{source} -> {ledger['path'].replace(chr(92), '/')}:{ledger['line']}"
+            records.append(record)
+            continue
         refs = []
+        # 条目可以声明参考宏覆盖，让默认关闭的功能按它自己的分支解析。没有覆盖时
+        # 继续使用全局默认索引，已有结论不受影响。
+        source_index = ref_index
+        source_constants = ref_constants
+        if overrides_key:
+            variant_index, variant_constants = reference_variant(package, overrides_key)
+            source_index = dict(ref_index)
+            source_constants = dict(ref_constants)
+            source_index[package] = variant_index
+            source_constants[package] = variant_constants
         for pack in ("iterationT", "Eclipse"):
-            for item in ref_index[pack].get(name, []):
+            for item in source_index[pack].get(name, []):
                 item["pack"] = pack
                 refs.append(item)
         if not refs:
@@ -202,7 +258,6 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
                                        "参考默认配置未启用该函数，不参与画面", "inactive"))
             continue
         if name in exact:
-            entry = exact[name]
             resolved = resolve_implementation(name, refs, entry, library, path_index, impl_index)
             if resolved is None:
                 records.append(base_record(row, source, "approximate", entry.get("target", ""),
@@ -230,9 +285,9 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
             result = None
             best_ref = ref
             for candidate in candidates or [ref]:
-                current = signature.compare(candidate, impl, ref_constants[candidate["pack"]], impl_constants,
-                                            impl_structs, ref_index[candidate["pack"]], impl_index, allow_extra,
-                                            resources, bindings)
+                current = signature.compare(candidate, impl, source_constants[candidate["pack"]], impl_constants,
+                                            impl_structs, source_index[candidate["pack"]], impl_index, allow_extra,
+                                            resources, bindings, entry.get("resourceCalls"))
                 if result is None or len(current["issues"]) < len(result["issues"]):
                     result = current
                     best_ref = candidate
@@ -263,6 +318,7 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
                 "missingConstants": result["missingNumbers"],
                 "extraConstants": result["extraNumbers"],
                 "resources": [{"name": name, "kind": kind} for name, kind in (resources or {}).items()],
+                "resourceCalls": entry.get("resourceCalls") or {},
             })
             continue
         if name in glue:
@@ -336,7 +392,7 @@ def check_single_target(records: list[dict]) -> list[str]:
 
 def summarize(records: list[dict]) -> dict:
     """按包与状态统计，给发布说明和缺口清单提供同一份数字。"""
-    statuses = ("exact", "approximate", "mc_glue", "missing")
+    statuses = ("exact", "approximate", "reference_broken", "mc_glue", "missing")
     totals = {status: sum(1 for r in records if r["status"] == status) for status in statuses}
     by_package = {}
     for package in ("iterationT", "Eclipse"):
@@ -364,15 +420,16 @@ def render_doc(records: list[dict], summary: dict) -> str:
         "",
         f"- 参考函数共 {totals['referenceFunctions']} 个；算法函数 {totals['algorithmFunctions']} 个。",
         f"- exact：{totals['exact']} 个；approximate：{totals['approximate']} 个；"
+        f"reference_broken：{totals['reference_broken']} 个；"
         f"mc_glue：{totals['mc_glue']} 个；missing：{totals['missing']} 个。",
         f"- exact 覆盖率（按算法函数）：{totals['exactCoverage'] * 100:.1f}%。",
         "",
-        "| 参考包 | exact | approximate | mc_glue | missing |",
-        "| --- | --- | --- | --- | --- |",
+        "| 参考包 | exact | approximate | reference_broken | mc_glue | missing |",
+        "| --- | --- | --- | --- | --- | --- |",
     ]
     for package, counts in summary["byPackage"].items():
         lines.append(f"| {package} | {counts['exact']} | {counts['approximate']} | "
-                     f"{counts['mc_glue']} | {counts['missing']} |")
+                     f"{counts['reference_broken']} | {counts['mc_glue']} | {counts['missing']} |")
     lines += ["", "## 未达 exact 的函数", "",
               "| 函数 | 包 | 状态 | 参考签名 | 当前承接 | 差异 |",
               "| --- | --- | --- | --- | --- | --- |"]
@@ -391,6 +448,8 @@ def render_doc(records: list[dict], summary: dict) -> str:
               "- 宿主层允许实现多出常数：显式化的时间、湿度、屏幕尺寸等参数会带入新常数；"
               "通用库仍要求常数集合完全一致，除非台账写明理由。",
               "- approximate：有承接实现，但签名、常数或采样存在差异。",
+              "- reference_broken：参考正文依赖被注释掉的全局声明或缺失的包含文件，"
+              "原文不能编译；实现按可执行语义迁移并记录编译证据，不能算 exact。",
               "- mc_glue：入口、标题、调试文字、群系表或默认配置未启用的宿主代码。",
               "- missing：既无承接实现，也无宿主理由。",
               "", "## 重新生成", "", "```text", "python omni-gfx/build.py strict-parity", "```", ""]
@@ -409,9 +468,9 @@ def main() -> None:
     errors.extend(check_single_target(records))
     summary = summarize(records)
     payload = {
-        "schemaVersion": 2,
+        "schemaVersion": 3,
         "generatedBy": "omni-gfx/tools/parity_strict.py",
-        "statusValues": ["exact", "approximate", "mc_glue", "missing"],
+        "statusValues": ["exact", "approximate", "reference_broken", "mc_glue", "missing"],
         "summary": summary,
         "records": records,
     }
@@ -422,8 +481,8 @@ def main() -> None:
     if errors and not report_only:
         sys.exit("严格对照未通过：\n" + "\n".join(errors[:40]))
     print(f"严格对照：{totals['referenceFunctions']} 个函数；exact {totals['exact']}，"
-          f"approximate {totals['approximate']}，mc_glue {totals['mc_glue']}，"
-          f"missing {totals['missing']}；产物 {REPORT.relative_to(ROOT)}")
+          f"approximate {totals['approximate']}，reference_broken {totals['reference_broken']}，"
+          f"mc_glue {totals['mc_glue']}，missing {totals['missing']}；产物 {REPORT.relative_to(ROOT)}")
     if errors:
         print("未通过的 exact 条目：\n" + "\n".join(errors[:20]))
 
