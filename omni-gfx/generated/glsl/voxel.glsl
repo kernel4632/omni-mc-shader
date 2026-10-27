@@ -245,4 +245,13 @@ uint ogxPopulateShadowVoxelIndex(vec3 playerPos, vec3 cameraOffset, ivec3 midBlo
     return voxelId; // 交回最终编号。
 }
 
+// Eclipse 自发光强度：把颜色转成 HSV，按饱和度与亮度估计发光，再压到一半。
+// 参考用全局 Albedo，库版本显式接收颜色；常数与参考一致。
+float ogxEclipseGetPhotonicsEmission(vec3 albedo)
+{
+    vec3 hsv = ogxRgbToHsv(albedo); // 发光只跟色相饱和度与亮度有关。
+    float emissive = smoothstep(0.05, 0.15, hsv.y) * pow(hsv.z, 3.5); // 低饱和颜色不算发光。
+    return emissive * 0.5; // 参考把自发光压到一半。
+}
+
 #endif

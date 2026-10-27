@@ -56,9 +56,10 @@ float ogxLinearDepthFromScreenDepth(float depth, float4x4 projectionInverse)
 // 米制距离换屏幕深度的函数在后期模块已有同式实现，这里不重复定义，避免同一编译单元重名。
 
 // 远景屏幕坐标与深度还原远景视空间位置：用完整矩阵乘，远景投影不一定只有对角项。
-float3 ogxViewPosFromScreenPosDh(float2 coord, float depth, float2 jitter, float jitterScale, float4x4 dhProjectionInverse, bool useJitter)
+// 为什么用完整矩阵：远景投影可能带非对角项，只取对角项会在视野边缘把位置放大或缩小。
+float3 ogxViewPosFromScreenPosDh(float2 coord, float depth, float2 taaJitter, bool useJitter, float4x4 dhProjectionInverse)
 {
-    if (useJitter) coord -= jitter * jitterScale; // 与近景相同的抖动修正。
+    if (useJitter) coord -= taaJitter * 0.5; // 参考只减半个抖动像素，与近景同一口径。
     float3 ndc = float3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
     float4 clip = float4(ndc, 1.0); // 齐次坐标。
     float4 view = float4(dhProjectionInverse[0][0] * clip.x + dhProjectionInverse[1][0] * clip.y + dhProjectionInverse[2][0] * clip.z + dhProjectionInverse[3][0] * clip.w,
@@ -68,25 +69,32 @@ float3 ogxViewPosFromScreenPosDh(float2 coord, float depth, float2 jitter, float
     return view.xyz / view.w; // 透视除法。
 }
 
-// 不做抖动修正的远景逆投影。
+// 不做抖动修正的远景逆投影：屏幕空间追踪已经自己处理过抖动，这里不能再减。
 float3 ogxViewPosFromScreenPosRawDh(float2 coord, float depth, float4x4 dhProjectionInverse)
 {
-    return ogxViewPosFromScreenPosDh(coord, depth, float2(0.0), 0.0, dhProjectionInverse, false); // 共用同一算式。
+    float3 ndc = float3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
+    float4 clip = float4(ndc, 1.0); // 齐次坐标。
+    float4 view = float4(dhProjectionInverse[0][0] * clip.x + dhProjectionInverse[1][0] * clip.y + dhProjectionInverse[2][0] * clip.z + dhProjectionInverse[3][0] * clip.w,
+                         dhProjectionInverse[0][1] * clip.x + dhProjectionInverse[1][1] * clip.y + dhProjectionInverse[2][1] * clip.z + dhProjectionInverse[3][1] * clip.w,
+                         dhProjectionInverse[0][2] * clip.x + dhProjectionInverse[1][2] * clip.y + dhProjectionInverse[2][2] * clip.z + dhProjectionInverse[3][2] * clip.w,
+                         dhProjectionInverse[0][3] * clip.x + dhProjectionInverse[1][3] * clip.y + dhProjectionInverse[2][3] * clip.z + dhProjectionInverse[3][3] * clip.w); // 与带抖动版本同一算式。
+    return view.xyz / view.w; // 透视除法。
 }
 
 // 远景视空间位置投到屏幕，可选补抖动。
-float3 ogxScreenPosFromViewPosDh(float3 viewPos, float2 jitter, float jitterScale, float4x4 dhProjection, bool useJitter)
+float3 ogxScreenPosFromViewPosDh(float3 viewPos, float2 taaJitter, bool useJitter, float4x4 dhProjection)
 {
     float3 screenPos = float3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + ogxMatrixTranslation(dhProjection); // 远景投影对角项与平移列。
     screenPos = screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法。
-    if (useJitter) screenPos.xy += jitter * jitterScale; // 补回抖动。
+    if (useJitter) screenPos.xy += taaJitter * 0.5; // 补回半个抖动像素。
     return screenPos;
 }
 
-// 不补抖动的远景投影。
+// 不补抖动的远景投影：追踪结果要落在未抖动的像素格上。
 float3 ogxScreenPosFromViewPosRawDh(float3 viewPos, float4x4 dhProjection)
 {
-    return ogxScreenPosFromViewPosDh(viewPos, float2(0.0), 0.0, dhProjection, false); // 共用同一算式。
+    float3 screenPos = float3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + ogxMatrixTranslation(dhProjection); // 远景投影对角项与平移列。
+    return screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法后回到零到一。
 }
 
 // 远景屏幕深度换米制距离。

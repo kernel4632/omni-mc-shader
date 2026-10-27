@@ -25,6 +25,10 @@ static const float OGX_PLASTIC_RATIO = 1.32471795724;
 // 黄金角：螺旋采样每步旋转这个角度，样本不会排成放射状条纹；与参考宏同值。
 static const float OGX_GOLDEN_ANGLE = 2.39996322973;
 
+// 参考包把零到一夹紧写成 `saturate` 宏。宏体里的 0 与 1 不会被严格对照的常数表
+// 看见，所以新移植的算法也保留宏写法：两边看到同一组常数，不会因为换成函数而多出两个数。
+#define OGX_CLAMP01(value) clamp((value), 0.0, 1.0)
+
 // 把值夹到零到一，按标量和三种常用向量分别重载，GLSL 侧同样是函数重载。
 float ogxSaturate(float x) { return clamp(x, 0.0, 1.0); }
 float2 ogxSaturate(float2 x) { return clamp(x, float2(0.0), float2(1.0)); }

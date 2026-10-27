@@ -58,7 +58,7 @@ SAMPLE_CALLS = {
     "textureLod": "sample", "textureGrad": "sample", "textureCube": "sample",
     "textureCubeLod": "sample", "Sample": "sample", "SampleLevel": "sample",
     "SampleGrad": "sample", "SampleBias": "sample",
-    "texelFetch": "fetch", "Load": "fetch",
+    "texelFetch": "fetch", "Load": "fetch", "imageLoad": "fetch",
     "textureGather": "gather", "Gather": "gather",
     "SampleCmpLevelZero": "sample", "SampleCmp": "sample",
 }

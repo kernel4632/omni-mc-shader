@@ -121,4 +121,23 @@ void ogxEclipseApplyGameplayEffects(inout vec3 color, vec2 texcoord, float noise
     }
 }
 
+// 场景控制器的默认参数：把云层覆盖与密度写进输出，雾系数固定为一。
+// 参考签名只有十个输出；库版本不再接收额外输入，直接给出参考默认值。
+void ogxEclipseApplySceneControllerDefaults(out float smallCumulusCoverage, out float smallCumulusDensity,
+    out float largeCumulusCoverage, out float largeCumulusDensity, out float altostratusCoverage,
+    out float altostratusDensity, out float cirrusCoverage, out float cirrusDensity,
+    out float fogA, out float fogB)
+{
+    smallCumulusCoverage = 1.0;
+    smallCumulusDensity = 0.5;
+    largeCumulusCoverage = 1.0;
+    largeCumulusDensity = 0.6;
+    altostratusCoverage = 0.6;
+    altostratusDensity = 0.1;
+    cirrusCoverage = 0.07;
+    cirrusDensity = 0.005;
+    fogA = 1.0;
+    fogB = 1.0;
+}
+
 #endif

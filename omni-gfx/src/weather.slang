@@ -163,4 +163,44 @@ void ogxFogDensities(inout float uniformDensity, inout float cloudyDensity, floa
     cloudyDensity *= morning * cloudyBands.x + noon * cloudyBands.y + evening * cloudyBands.z + night * cloudyBands.w; // 团雾同样。
 }
 
+// Eclipse 年周期颜色：按季节长度把四套颜色插值成当前颜色，只作用于使用染色索引的方块。
+// 参考签名是最终颜色、顶点色、树叶与植物标记；世界天数显式追加，色板常数照参考数值写死。
+void ogxYearCycleColorSeason(inout float3 finalColor, float3 glcolor, bool isLeaves, bool isPlants, float worldDay)
+{
+    float3 summerCol;
+    float3 autumnCol;
+    float3 winterCol;
+    float3 springCol;
+    if (isLeaves)
+    {
+        summerCol = float3(1.0, 1.0, 1.0);
+        autumnCol = float3(1.8, 0.9, 0.7);
+        winterCol = float3(1.2, 0.5, 1.0);
+        springCol = float3(1.0, 0.8, 0.8);
+    }
+    else
+    {
+        summerCol = float3(1.0, 1.0, 1.0);
+        autumnCol = float3(1.5, 1.0, 1.0);
+        winterCol = float3(1.2, 0.8, 1.0);
+        springCol = float3(1.0, 0.9, 1.1);
+    }
+    summerCol *= glcolor;
+    autumnCol *= glcolor;
+    winterCol *= glcolor;
+    springCol *= glcolor;
+    int seasonLength = 24;
+    float yearLoop = mod(worldDay + 0.0 * float(seasonLength), float(seasonLength) * 4.0);
+    float summerTime = clamp(yearLoop, 0, float(seasonLength)) / float(seasonLength);
+    float autumnTime = clamp(yearLoop - float(seasonLength), 0, float(seasonLength)) / float(seasonLength);
+    float winterTime = clamp(yearLoop - float(seasonLength) * 2.0, 0, float(seasonLength)) / float(seasonLength);
+    float springTime = clamp(yearLoop - float(seasonLength) * 3.0, 0, float(seasonLength)) / float(seasonLength);
+    float3 summerToFall = lerp(summerCol, autumnCol, summerTime);
+    float3 fallToWinter = lerp(summerToFall, winterCol, autumnTime);
+    float3 winterToSpring = lerp(fallToWinter, springCol, winterTime);
+    float3 springToSummer = lerp(winterToSpring, summerCol, springTime);
+    bool isTintIndex = isPlants || isLeaves;
+    if (isTintIndex) finalColor = springToSummer;
+}
+
 #endif

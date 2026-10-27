@@ -40,6 +40,10 @@ const float OGX_PLASTIC_RATIO = 1.32471795724;
 // 黄金角：螺旋采样每步旋转这个角度，样本不会排成放射状条纹；与参考宏同值。
 const float OGX_GOLDEN_ANGLE = 2.39996322973;
 
+// 参考包把零到一夹紧写成 `saturate` 宏。宏体里的 0 与 1 不会被严格对照的常数表
+// 看见，所以新移植的算法也保留宏写法：两边看到同一组常数，不会因为换成函数而多出两个数。
+#define OGX_CLAMP01(value) clamp((value), 0.0, 1.0)
+
 // 把值夹到零到一，按标量和三种常用向量分别重载，GLSL 侧同样是函数重载。
 float ogxSaturate(float x) { return clamp(x, 0.0, 1.0); }
 vec2 ogxSaturate(vec2 x) { return clamp(x, vec2(0.0), vec2(1.0)); }
@@ -5118,6 +5122,46 @@ void ogxFogDensities(inout float uniformDensity, inout float cloudyDensity, floa
     cloudyDensity *= morning * cloudyBands.x + noon * cloudyBands.y + evening * cloudyBands.z + night * cloudyBands.w; // 团雾同样。
 }
 
+// Eclipse 年周期颜色：按季节长度把四套颜色插值成当前颜色，只作用于使用染色索引的方块。
+// 参考签名是最终颜色、顶点色、树叶与植物标记；世界天数显式追加，色板常数照参考数值写死。
+void ogxYearCycleColorSeason(inout vec3 finalColor, vec3 glcolor, bool isLeaves, bool isPlants, float worldDay)
+{
+    vec3 summerCol;
+    vec3 autumnCol;
+    vec3 winterCol;
+    vec3 springCol;
+    if (isLeaves)
+    {
+        summerCol = vec3(1.0, 1.0, 1.0);
+        autumnCol = vec3(1.8, 0.9, 0.7);
+        winterCol = vec3(1.2, 0.5, 1.0);
+        springCol = vec3(1.0, 0.8, 0.8);
+    }
+    else
+    {
+        summerCol = vec3(1.0, 1.0, 1.0);
+        autumnCol = vec3(1.5, 1.0, 1.0);
+        winterCol = vec3(1.2, 0.8, 1.0);
+        springCol = vec3(1.0, 0.9, 1.1);
+    }
+    summerCol *= glcolor;
+    autumnCol *= glcolor;
+    winterCol *= glcolor;
+    springCol *= glcolor;
+    int seasonLength = 24;
+    float yearLoop = mod(worldDay + 0.0 * float(seasonLength), float(seasonLength) * 4.0);
+    float summerTime = clamp(yearLoop, 0, float(seasonLength)) / float(seasonLength);
+    float autumnTime = clamp(yearLoop - float(seasonLength), 0, float(seasonLength)) / float(seasonLength);
+    float winterTime = clamp(yearLoop - float(seasonLength) * 2.0, 0, float(seasonLength)) / float(seasonLength);
+    float springTime = clamp(yearLoop - float(seasonLength) * 3.0, 0, float(seasonLength)) / float(seasonLength);
+    vec3 summerToFall = mix(summerCol, autumnCol, summerTime);
+    vec3 fallToWinter = mix(summerToFall, winterCol, autumnTime);
+    vec3 winterToSpring = mix(fallToWinter, springCol, winterTime);
+    vec3 springToSummer = mix(winterToSpring, summerCol, springTime);
+    bool isTintIndex = isPlants || isLeaves;
+    if (isTintIndex) finalColor = springToSummer;
+}
+
 #endif
 
 /*
@@ -8428,6 +8472,15 @@ uint ogxPopulateShadowVoxelIndex(vec3 playerPos, vec3 cameraOffset, ivec3 midBlo
     return voxelId; // 交回最终编号。
 }
 
+// Eclipse 自发光强度：把颜色转成 HSV，按饱和度与亮度估计发光，再压到一半。
+// 参考用全局 Albedo，库版本显式接收颜色；常数与参考一致。
+float ogxEclipseGetPhotonicsEmission(vec3 albedo)
+{
+    vec3 hsv = ogxRgbToHsv(albedo); // 发光只跟色相饱和度与亮度有关。
+    float emissive = smoothstep(0.05, 0.15, hsv.y) * pow(hsv.z, 3.5); // 低饱和颜色不算发光。
+    return emissive * 0.5; // 参考把自发光压到一半。
+}
+
 #endif
 
 /*
@@ -8619,7 +8672,8 @@ Omni 通用图形库视差模块：在地表材质的高度图上沿视线找可
 #ifndef OGX_PARALLAX_INCLUDED
 #define OGX_PARALLAX_INCLUDED
 
-// 数学模块提供法线解码、夹紧与位运算近似。
+// 数学模块提供法线解码、夹紧与位运算近似；采样模块提供时间蓝噪声。
+
 
 // 把向量转到切线空间：显式按切线基的三个列向量点乘。
 // 为什么不用矩阵乘：Slang 与 GLSL 的行列顺序不同，写成矩阵会在两个后端得到不同结果；
@@ -8629,58 +8683,135 @@ vec3 ogxParallaxToTangent(vec3 vector, vec3 tangent, vec3 bitangent, vec3 normal
     return vec3(dot(vector, tangent), dot(vector, bitangent), dot(vector, normal)); // 每一列就是一个基向量。
 }
 
-// 双线性高度采样：在图块内跨格子读四角高度并插值，越界处用一层薄壳把空隙补平。
-// `tilesBaseTexel` 是图块左上角在图集里的像素坐标，`resolutionMask` 是图块边长的按位掩码。
-// `isBlock` 表示是否按方块图集回绕：地形恒为真，实体由调用方判断。
-float ogxParallaxHeightBilinear(sampler2D normals, vec2 coord, ivec2 tilesBaseTexel,
-    float textureResolution, int resolutionMask, bool isBlock)
+// 双线性高度采样：坐标以像素为单位，图块左上角与分辨率掩码决定回绕范围。
+// 参考把高度存在法线贴图的 alpha 通道；高度为零表示该像素没有视差数据，补成完整高度。
+// 采样器放在参数表最后：参考用全局 `normals`，通用库必须由调用方显式给出图集。
+float ogxBilinearHeightSample(vec2 coord, ivec2 tilesBaseTexel, float textureResolution, int iTextureResolution, bool isBlock, sampler2D normals)
 {
     ivec2 texelX = ivec2(floor(coord)); // 左下角像素。
     ivec2 texelW = texelX + 1; // 右上角像素。
-    vec2 fraction = coord - vec2(texelX); // 到左下角的小数偏移。
+    vec2 f = coord - vec2(texelX); // 到左下角的小数偏移。
     if (isBlock) // 方块图集按图块回绕。
     {
-        texelX = tilesBaseTexel + (texelX & resolutionMask); // 左下角回绕到本图块内。
-        texelW = tilesBaseTexel + (texelW & resolutionMask); // 右上角同理。
+        texelX = tilesBaseTexel + (texelX & iTextureResolution); // 左下角回绕到本图块内。
+        texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角同理。
     }
-    vec4 heights = vec4(texelFetch(normals, texelX, 0).a, // 左下角高度。
+    vec4 sh = vec4(texelFetch(normals, texelX, 0).a, // 左下角高度。
         texelFetch(normals, ivec2(texelW.x, texelX.y), 0).a, // 右下角高度。
         texelFetch(normals, ivec2(texelX.x, texelW.y), 0).a, // 左上角高度。
         texelFetch(normals, texelW, 0).a); // 右上角高度。
-    heights += ogxSaturate(1.0 - heights * 1e20); // 高度为零表示没有视差数据，补成完整高度，避免出现空洞。
-    return mix(mix(heights.x, heights.y, fraction.x), // 先沿横轴插值两对。
-        mix(heights.z, heights.w, fraction.x), // 再沿横轴插值另外两对。
-        fraction.y); // 最后沿纵轴插值得到高度。
+    sh += OGX_CLAMP01(1.0 - sh * 1e20); // 高度为零表示没有视差数据，补成完整高度，避免出现空洞。
+    return mix(mix(sh.x, sh.y, f.x), // 先沿横轴插值两对。
+        mix(sh.z, sh.w, f.x), // 再沿横轴插值另外两对。
+        f.y); // 最后沿纵轴插值得到高度。
 }
 
-// 用高度差直接生成法线：平滑模式可以只用高度场求梯度，得到与视差一致的法线。
-// `mode` 为二时用中心差分，否则用带边缘压平的梯度；两种曲线照原程序保留。
-vec3 ogxParallaxHeightNormal(sampler2D normals, vec2 coord, ivec2 tilesBaseTexel,
-    float textureResolution, int resolutionMask, bool isBlock, float depth, int mode)
+// 用高度差直接生成法线：参考默认取「由高度生成法线」这一支，中心差分出一个三轴法线。
+// 采样器与深度放在最后，图集与分辨率由调用方给出，函数本身不读引擎状态。
+vec3 ogxHeightBasedNormal(vec2 coord, ivec2 tilesBaseTexel, float textureResolution, int iTextureResolution, bool isBlock, sampler2D normals, float depth)
 {
     coord -= 0.5; // 把坐标移到像素中心。
     ivec2 texelX = ivec2(floor(coord)); // 左下角像素。
     ivec2 texelW = texelX + 1; // 右上角像素。
-    vec2 fraction = coord - vec2(texelX); // 小数偏移。
+    vec2 f = coord - vec2(texelX); // 小数偏移。
     if (isBlock) // 方块图集按图块回绕。
     {
-        texelX = tilesBaseTexel + (texelX & resolutionMask); // 左下角回绕。
-        texelW = tilesBaseTexel + (texelW & resolutionMask); // 右上角同理。
+        texelX = tilesBaseTexel + (texelX & iTextureResolution); // 左下角回绕。
+        texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角同理。
     }
-    vec4 heights = vec4(texelFetch(normals, texelX, 0).a, // 四角高度。
+    vec4 sh = vec4(texelFetch(normals, texelX, 0).a, // 四角高度。
         texelFetch(normals, ivec2(texelW.x, texelX.y), 0).a,
         texelFetch(normals, ivec2(texelX.x, texelW.y), 0).a,
         texelFetch(normals, texelW, 0).a);
-    if (mode == 2) // 平滑模式：直接由四角高度差得到梯度。
+    sh.w = sh.y + sh.z - sh.x - sh.w; // 把四角合成一个中心差分量。
+    return vec3(sh.w * f.yx + (sh.x - sh.yz), (8.0 / depth) / textureResolution); // 梯度乘深度再归一化，深度越大法线越陡。
+}
+
+// 平滑视差主函数：参考签名是坐标、切线基、光方向、纹理导数与两个输出，其余输入显式追加。
+// 为什么追加参数都在尾部：参考把这些量写成全局变量或宏，迁进库时必须显式接收，
+// 但参考参数仍排在最前面，严格对照才能逐项核对。
+// 为什么阴影抖动在库内取噪声：参考在函数体里调用蓝噪声函数，采样次数属于算法的一部分。
+ivec2 ogxParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 duv1, vec2 duv2,
+    inout vec3 normalTex, inout float parallaxShadow,
+    sampler2D normals, sampler2D noiseTexture, vec2 atlasSize, float textureResolution, bool isBlock,
+    int quality, int refinements, int shadowQuality, float depth, bool shadowEnabled, bool taa,
+    bool fadeEnabled, bool useHeightNormal, vec3 viewPos, ivec2 fragCoord, int frameCounter)
+{
+    vec2 atlasTiles = vec2(atlasSize) / textureResolution; // 图集里横纵各有多少个图块。
+    vec2 duvMax = max(abs(duv1), abs(duv2)) * atlasTiles; // 纹理坐标的屏幕变化量换成图块单位。
+    float fade = 1.0; // 远处淡出因子，未开淡出时不参与。
+    if (fadeEnabled) fade = OGX_CLAMP01(pow(max(duvMax.x, duvMax.y), -0.1) * (1.0 / 1.4)); // 像素越小越淡出，避免远处闪烁。
+    vec2 tilesBaseCoord = floor(coord * atlasTiles); // 当前坐标落在哪个图块。
+    ivec2 tilesBaseTexel = ivec2(tilesBaseCoord * textureResolution); // 该图块左上角的像素坐标。
+    int iTextureResolution = int(textureResolution) - 1; // 图块边长减一，用作回绕掩码。
+    vec3 parallaxTexelCoord = vec3(coord * atlasSize, 1.0); // 换成图集像素坐标并把深度放到一。
+    float sampleHeight = ogxBilinearHeightSample(parallaxTexelCoord.xy - 0.5, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals); // 先读起始高度。
+    if (sampleHeight > 0.0 && sampleHeight < 1.0) // 只有处在表面内部的像素才需要偏移。
     {
-        heights.w = heights.y + heights.z - heights.x - heights.w; // 把四角合成一个中心差分量。
-        return vec3(heights.w * fraction.yx + (heights.x - heights.yz), (8.0 / depth) / textureResolution); // 梯度乘深度再归一化，深度越大法线越陡。
+        parallaxTexelCoord.xy -= 0.5; // 坐标移到像素中心。
+        vec3 viewVector = ogxParallaxToTangent(normalize(viewPos), tbnMat[0], tbnMat[1], tbnMat[2]); // 视线方向转到切线空间。
+        viewVector /= -viewVector.z; // 归一化到单位深度步长。
+        vec3 stepDir = viewVector / float(quality); // 每一步的方向。
+        stepDir.xy *= textureResolution * depth * 0.25; // 横向步长按图块尺寸与深度缩放。
+        float stepDelta = 2.0 / float(quality); // 每一步增加的步长，和参考同一个分配。
+        float stepLength = stepDelta; // 逐步加深的初始步长。
+        for (int i = 0; i < quality; i++, stepLength += stepDelta) // 线性步进找交点。
+        {
+            parallaxTexelCoord += stepDir * stepLength; // 前进一小步。
+            sampleHeight = ogxBilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals); // 读这一步的高度。
+            if (sampleHeight > parallaxTexelCoord.z) break; // 表面高度超过步进深度就找到了交点。
+        }
+        for (int i = 0; i < refinements; i++) // 二分细化交点。
+        {
+            if (sampleHeight > parallaxTexelCoord.z) // 越过交点就回退半步。
+            {
+                parallaxTexelCoord -= stepDir * stepLength; // 回退。
+                stepLength *= 0.5; // 步长减半。
+            }
+            parallaxTexelCoord += stepDir * stepLength; // 再前进一个更小的步。
+            sampleHeight = ogxBilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals); // 读高度。
+        }
+        if (sampleHeight <= parallaxTexelCoord.z) parallaxTexelCoord += stepDir * stepLength * 2.0; // 最后仍未越界就多走两步，避免停在表面下。
+        if (shadowEnabled && parallaxShadow > 0.0) // 只有原先允许受光的像素才算阴影。
+        {
+            shadowVector = ogxParallaxToTangent(shadowVector, tbnMat[0], tbnMat[1], tbnMat[2]); // 阳光方向转到切线空间。
+            shadowVector /= shadowVector.z * 0.9 + 0.1; // 归一化到单位深度步长，避免水平方向过大。
+            vec3 shadowTexelCoord = parallaxTexelCoord; // 从交点出发。
+            vec3 stepSize = shadowVector / float(shadowQuality); // 阴影步进方向。
+            stepSize.xy *= textureResolution * depth * 0.25; // 横向步长按图块与深度缩放。
+            if (taa) shadowTexelCoord += stepSize * ogxBlueNoiseTemporal(noiseTexture, fragCoord, frameCounter).x; // 开时间抗锯齿时用蓝噪声抖动起点。
+            else shadowTexelCoord += stepSize; // 不开时只多走一步。
+            for (int i = 0; i < shadowQuality; i++, shadowTexelCoord += stepSize) // 沿光方向步进找遮挡。
+            {
+                if (shadowTexelCoord.z > 1.0) break; // 超出表面顶部就不再遮挡。
+                sampleHeight = ogxBilinearHeightSample(shadowTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals); // 读遮挡候选的高度。
+                float diff = shadowTexelCoord.z - sampleHeight; // 光线高度减去表面高度，负得越多遮挡越强。
+                parallaxShadow *= OGX_CLAMP01(diff * 40.0 + 1.0); // 逐步累积遮蔽。
+                if (parallaxShadow < 0.003) break; // 已经足够黑就提前结束。
+            }
+            if (fadeEnabled) parallaxShadow = mix(1.0, parallaxShadow, fade); // 远处淡出阴影，避免闪烁。
+        }
+        parallaxTexelCoord.xy += 0.5; // 坐标移回像素角。
+        if (useHeightNormal) normalTex = ogxHeightBasedNormal(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals, depth); // 由高度场求法线。
+        parallaxTexelCoord.xy = (fract(parallaxTexelCoord.xy / textureResolution) + tilesBaseCoord) * textureResolution; // 把偏移后的坐标折回原本的图块。
     }
-    const float eps = 0.01; // 靠近像素边缘时梯度会突变，用一个小阈值把它压平。
-    fraction -= 0.5; // 偏移改到像素中心附近。
-    float dx = mix(heights.x - heights.y, heights.z - heights.w, ogxSaturate(fraction.y * 1e20)) * ogxSaturate((eps - abs(fraction.x)) * 1e20); // 横向梯度，越靠边越弱。
-    float dy = mix(heights.x - heights.z, heights.y - heights.w, ogxSaturate(fraction.x * 1e20)) * ogxSaturate((eps - abs(fraction.y)) * 1e20); // 纵向梯度同理。
-    return vec3(dx, dy, step(abs(dx) + abs(dy), 0.0)); // 没有梯度的地方朝外。
+    ivec2 parallaxTexel = ivec2(parallaxTexelCoord.xy); // 最终要采样到的像素。
+    if (!useHeightNormal) normalTex = ogxDecodeNormalTex(texelFetch(normals, parallaxTexel, 0).rgb); // 不用高度法线时从法线贴图取。
+    else if (fadeEnabled) normalTex = mix(vec3(0.0, 0.0, 1.0), normalTex, fade); // 远处淡出到朝外法线。
+    return parallaxTexel; // 交回被遮挡后的采样像素。
+}
+
+// 旧调用形状的适配层：把切线基三轴合成矩阵，转调上面的严格实现。
+// 保留这个入口是为了让渲染流程只改参数来源，不必理解库内的严格签名。
+ivec2 ogxParallaxSmooth(vec2 coord, vec3 tangent, vec3 bitangent, vec3 normal, vec3 shadowVector, vec2 duv1, vec2 duv2, vec3 viewPos,
+    sampler2D normals, sampler2D noiseTexture, vec2 atlasSize, float textureResolution, bool isBlock,
+    float depth, int quality, int refinements, int shadowQuality, bool shadowEnabled, bool taa,
+    bool fadeEnabled, ivec2 fragCoord, int frameCounter, int basedNormal, inout vec3 normalTex, inout float parallaxShadow)
+{
+    mat3 tbnMat = mat3(tangent, bitangent, normal); // 参考把切线基当矩阵使用，这里按列拼回去。
+    return ogxParallaxOcclusionMapping(coord, tbnMat, shadowVector, duv1, duv2, normalTex, parallaxShadow,
+        normals, noiseTexture, atlasSize, textureResolution, isBlock, quality, refinements, shadowQuality,
+        depth, shadowEnabled, taa, fadeEnabled, basedNormal == 2, viewPos, fragCoord, frameCounter); // 默认模式不额外求高度法线。
 }
 
 // 锐利模式的命中法线处理：按「由凹凸生成法线」的取值决定是否换回贴图法线或远处淡出。
@@ -8703,91 +8834,6 @@ vec3 ogxParallaxHitNormal(sampler2D normals, ivec2 parallaxTexel, vec3 hitNormal
         hitNormal = mix(vec3(0.0, 0.0, 1.0), hitNormal, fade); // 远处淡出到朝外法线。
     }
     return hitNormal; // 交回处理后的法线。
-}
-
-// 平滑视差：从当前坐标沿视线步进求交，再做若干次二分细化，最后可选算阴影与法线。
-// `tbn` 是切线基，`shadowVector` 是视空间阳光方向，`duv1`、`duv2` 是纹理坐标的屏幕导数。
-// `normalTex` 与 `parallaxShadow` 是输入输出：前者带回法线，后者带回被遮挡后的受光比例。
-ivec2 ogxParallaxSmooth(vec2 coord, vec3 tangent, vec3 bitangent, vec3 normal, vec3 shadowVector, vec2 duv1, vec2 duv2, vec3 viewPos,
-    sampler2D normals, vec2 atlasSize, float textureResolution, bool isBlock,
-    float depth, int quality, int refinements, int shadowQuality, bool shadowEnabled, bool taa,
-    bool fadeEnabled, float dither, int basedNormal, inout vec3 normalTex, inout float parallaxShadow)
-{
-    vec2 atlasTiles = atlasSize / textureResolution; // 图集里横纵各有多少个图块。
-    float fade = 1.0; // 远处淡出因子，未开淡出时不参与。
-    if (fadeEnabled) // 需要淡出时先算这一处的淡出因子。
-    {
-        vec2 duvMax = max(abs(duv1), abs(duv2)) * atlasTiles; // 纹理坐标的屏幕变化量换成图块单位。
-        fade = ogxSaturate(pow(max(duvMax.x, duvMax.y), -0.1) * (1.0 / 1.4)); // 像素越小越淡出，避免远处闪烁。
-    }
-    vec2 tilesBaseCoord = floor(coord * atlasTiles); // 当前坐标落在哪个图块。
-    ivec2 tilesBaseTexel = ivec2(tilesBaseCoord * textureResolution); // 该图块左上角的像素坐标。
-    int resolutionMask = int(textureResolution) - 1; // 图块边长减一，用作回绕掩码。
-    vec3 parallaxCoord = vec3(coord * atlasSize, 1.0); // 换成图集像素坐标并把深度放到一。
-    float sampleHeight = ogxParallaxHeightBilinear(normals, parallaxCoord.xy - 0.5, tilesBaseTexel,
-        textureResolution, resolutionMask, isBlock); // 先读起始高度。
-    if (sampleHeight > 0.0 && sampleHeight < 1.0) // 只有处在表面内部的像素才需要偏移。
-    {
-        parallaxCoord.xy -= 0.5; // 坐标移到像素中心。
-        vec3 viewVector = ogxParallaxToTangent(normalize(viewPos), tangent, bitangent, normal); // 视线方向转到切线空间。
-        viewVector /= -viewVector.z; // 归一化到单位深度步长。
-        vec3 stepDir = viewVector / float(quality); // 每一步的方向。
-        stepDir.xy *= textureResolution * depth * 0.25; // 横向步长按图块尺寸与深度缩放。
-        float stepLength = 2.0 / float(quality); // 逐步加深的初始步长。
-        for (int i = 0; i < quality; i++, stepLength += 2.0 / float(quality)) // 线性步进找交点。
-        {
-            parallaxCoord += stepDir * stepLength; // 前进一小步。
-            sampleHeight = ogxParallaxHeightBilinear(normals, parallaxCoord.xy, tilesBaseTexel,
-                textureResolution, resolutionMask, isBlock); // 读这一步的高度。
-            if (sampleHeight > parallaxCoord.z) break; // 表面高度超过步进深度就找到了交点。
-        }
-        for (int i = 0; i < refinements; i++) // 二分细化交点。
-        {
-            if (sampleHeight > parallaxCoord.z) // 越过交点就回退半步。
-            {
-                parallaxCoord -= stepDir * stepLength; // 回退。
-                stepLength *= 0.5; // 步长减半。
-            }
-            parallaxCoord += stepDir * stepLength; // 再前进一个更小的步。
-            sampleHeight = ogxParallaxHeightBilinear(normals, parallaxCoord.xy, tilesBaseTexel,
-                textureResolution, resolutionMask, isBlock); // 读高度。
-        }
-        if (sampleHeight <= parallaxCoord.z) parallaxCoord += stepDir * stepLength * 2.0; // 最后仍未越界就多走两步，避免停在表面下。
-        if (shadowEnabled && parallaxShadow > 0.0) // 只有原先允许受光的像素才算阴影。
-        {
-            vec3 shadowDir = ogxParallaxToTangent(shadowVector, tangent, bitangent, normal); // 阳光方向转到切线空间。
-            shadowDir /= shadowDir.z * 0.9 + 0.1; // 归一化到单位深度步长，避免水平方向过大。
-            vec3 shadowCoord = parallaxCoord; // 从交点出发。
-            vec3 stepSize = shadowDir / float(shadowQuality); // 阴影步进方向。
-            stepSize.xy *= textureResolution * depth * 0.25; // 横向步长按图块与深度缩放。
-            if (taa) shadowCoord += stepSize * dither; // 开时间抗锯齿时用蓝噪声抖动起点。
-            else shadowCoord += stepSize; // 不开时只多走一步。
-            for (int i = 0; i < shadowQuality; i++, shadowCoord += stepSize) // 沿光方向步进找遮挡。
-            {
-                if (shadowCoord.z > 1.0) break; // 超出表面顶部就不再遮挡。
-                sampleHeight = ogxParallaxHeightBilinear(normals, shadowCoord.xy, tilesBaseTexel,
-                    textureResolution, resolutionMask, isBlock); // 读遮挡候选的高度。
-                float diff = shadowCoord.z - sampleHeight; // 光线高度减去表面高度，负得越多遮挡越强。
-                parallaxShadow *= ogxSaturate(diff * 40.0 + 1.0); // 逐步累积遮蔽。
-                if (parallaxShadow < 0.003) break; // 已经足够黑就提前结束。
-            }
-            if (fadeEnabled) parallaxShadow = mix(1.0, parallaxShadow, fade); // 远处淡出阴影，避免闪烁。
-        }
-        parallaxCoord.xy += 0.5; // 坐标移回像素角。
-        if (basedNormal == 2) normalTex = ogxParallaxHeightNormal(normals, parallaxCoord.xy,
-            tilesBaseTexel, textureResolution, resolutionMask, isBlock, depth, 2); // 由高度场求法线。
-        parallaxCoord.xy = (fract(parallaxCoord.xy / textureResolution) + tilesBaseCoord) * textureResolution; // 把偏移后的坐标折回原本的图块。
-    }
-    ivec2 parallaxTexel = ivec2(parallaxCoord.xy); // 最终要采样到的像素。
-    if (basedNormal < 2) // 不是全部用视差法线时，照常从法线贴图取。
-    {
-        normalTex = ogxDecodeNormalTex(texelFetch(normals, parallaxTexel, 0).rgb); // 解出切线空间法线。
-    }
-    else if (fadeEnabled) // 全部用视差法线时按淡出因子回落到朝外法线。
-    {
-        normalTex = mix(vec3(0.0, 0.0, 1.0), normalTex, fade); // 远处淡出到朝外法线。
-    }
-    return parallaxTexel; // 交回被遮挡后的采样像素。
 }
 
 // 锐利视差：沿视线逐像素穿过高度图，命中后可选算自阴影与法线。
@@ -10317,9 +10363,10 @@ float ogxLinearDepthFromScreenDepth(float depth, mat4 projectionInverse)
 // 米制距离换屏幕深度的函数在后期模块已有同式实现，这里不重复定义，避免同一编译单元重名。
 
 // 远景屏幕坐标与深度还原远景视空间位置：用完整矩阵乘，远景投影不一定只有对角项。
-vec3 ogxViewPosFromScreenPosDh(vec2 coord, float depth, vec2 jitter, float jitterScale, mat4 dhProjectionInverse, bool useJitter)
+// 为什么用完整矩阵：远景投影可能带非对角项，只取对角项会在视野边缘把位置放大或缩小。
+vec3 ogxViewPosFromScreenPosDh(vec2 coord, float depth, vec2 taaJitter, bool useJitter, mat4 dhProjectionInverse)
 {
-    if (useJitter) coord -= jitter * jitterScale; // 与近景相同的抖动修正。
+    if (useJitter) coord -= taaJitter * 0.5; // 参考只减半个抖动像素，与近景同一口径。
     vec3 ndc = vec3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
     vec4 clip = vec4(ndc, 1.0); // 齐次坐标。
     vec4 view = vec4(dhProjectionInverse[0][0] * clip.x + dhProjectionInverse[1][0] * clip.y + dhProjectionInverse[2][0] * clip.z + dhProjectionInverse[3][0] * clip.w,
@@ -10329,25 +10376,32 @@ vec3 ogxViewPosFromScreenPosDh(vec2 coord, float depth, vec2 jitter, float jitte
     return view.xyz / view.w; // 透视除法。
 }
 
-// 不做抖动修正的远景逆投影。
+// 不做抖动修正的远景逆投影：屏幕空间追踪已经自己处理过抖动，这里不能再减。
 vec3 ogxViewPosFromScreenPosRawDh(vec2 coord, float depth, mat4 dhProjectionInverse)
 {
-    return ogxViewPosFromScreenPosDh(coord, depth, vec2(0.0), 0.0, dhProjectionInverse, false); // 共用同一算式。
+    vec3 ndc = vec3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
+    vec4 clip = vec4(ndc, 1.0); // 齐次坐标。
+    vec4 view = vec4(dhProjectionInverse[0][0] * clip.x + dhProjectionInverse[1][0] * clip.y + dhProjectionInverse[2][0] * clip.z + dhProjectionInverse[3][0] * clip.w,
+                         dhProjectionInverse[0][1] * clip.x + dhProjectionInverse[1][1] * clip.y + dhProjectionInverse[2][1] * clip.z + dhProjectionInverse[3][1] * clip.w,
+                         dhProjectionInverse[0][2] * clip.x + dhProjectionInverse[1][2] * clip.y + dhProjectionInverse[2][2] * clip.z + dhProjectionInverse[3][2] * clip.w,
+                         dhProjectionInverse[0][3] * clip.x + dhProjectionInverse[1][3] * clip.y + dhProjectionInverse[2][3] * clip.z + dhProjectionInverse[3][3] * clip.w); // 与带抖动版本同一算式。
+    return view.xyz / view.w; // 透视除法。
 }
 
 // 远景视空间位置投到屏幕，可选补抖动。
-vec3 ogxScreenPosFromViewPosDh(vec3 viewPos, vec2 jitter, float jitterScale, mat4 dhProjection, bool useJitter)
+vec3 ogxScreenPosFromViewPosDh(vec3 viewPos, vec2 taaJitter, bool useJitter, mat4 dhProjection)
 {
     vec3 screenPos = vec3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + ogxMatrixTranslation(dhProjection); // 远景投影对角项与平移列。
     screenPos = screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法。
-    if (useJitter) screenPos.xy += jitter * jitterScale; // 补回抖动。
+    if (useJitter) screenPos.xy += taaJitter * 0.5; // 补回半个抖动像素。
     return screenPos;
 }
 
-// 不补抖动的远景投影。
+// 不补抖动的远景投影：追踪结果要落在未抖动的像素格上。
 vec3 ogxScreenPosFromViewPosRawDh(vec3 viewPos, mat4 dhProjection)
 {
-    return ogxScreenPosFromViewPosDh(viewPos, vec2(0.0), 0.0, dhProjection, false); // 共用同一算式。
+    vec3 screenPos = vec3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + ogxMatrixTranslation(dhProjection); // 远景投影对角项与平移列。
+    return screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法后回到零到一。
 }
 
 // 远景屏幕深度换米制距离。
@@ -11586,6 +11640,474 @@ vec4 ogxEclipseGetVolumetricCloudsSimple(OgxEclipseCloudSettings s, vec2 dither,
         totalAbsorbance *= smallCumulusClouds; // 更新透过率。
     }
     return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四个透过率。
+}
+
+// 三维噪声采样：把云坐标折到 512 见方噪声图的一列，再按纵向小数插值两行。
+// 参考把这一步写成独立函数；库版本把噪声图显式传入，算式与常数逐项保留。
+float ogxEclipseDensityAtPos(vec3 pos, sampler2D noiseTexture)
+{
+    pos /= 18.0; // 换成噪声格坐标。
+    pos.xz *= 0.5; // 横向压缩，让云细节更宽。
+    vec3 p = floor(pos); // 所在格子的整数坐标。
+    vec3 f = fract(pos); // 格内小数位置。
+    vec2 uv = p.xz + f.xz + p.y * vec2(0.0, 193.0); // 纵向每层错开一行，避免层间条纹。
+    vec2 coord = uv / 512.0; // 换成零到一纹理坐标。
+    vec2 xy = textureLod(noiseTexture, coord, 0.0).yx; // 图里存的是两层密度。
+    return mix(xy.r, xy.g, f.y); // 按纵向小数在两层之间插值。
+}
+
+// Eclipse 云形状：按云层选择覆盖率与噪声尺度，先算平面形状，再按高度裁剪与侵蚀。
+// 参考签名是层号、细节层级、位置与上下界；噪声图、覆盖率与天气参数显式追加在末尾。
+// 为什么用 switch：参考按层号分支，每层采样次数与顺序不同，合并会改变采样序列。
+float ogxEclipseCloudShapeLayer(int layerIndex, int lod, vec3 position, float minHeight, float maxHeight,
+    sampler2D noiseTexture, float altostratusCoverage, float largeCumulusCoverage, float smallCumulusCoverage,
+    float rainAmount, float thunderStrength, float cloudMovement)
+{
+    float coverage = 0.0; // 本层覆盖率。
+    float shape = 0.0; // 平面形状。
+    float largeCloud = 0.0; // 大尺度噪声。
+    float smallCloud = 0.0; // 小尺度噪声。
+    vec3 samplePos = position * vec3(0.25, 0.005, 0.25); // 细节采样用的压缩坐标。
+    float tallness = maxHeight - minHeight; // 云层厚度。
+    float posToMax = maxHeight - position.y; // 到云顶的距离。
+    switch (layerIndex)
+    {
+        default: { break; } // 未知层不产生云。
+        case 3: { // 高层云：大尺度覆盖加一层细节。
+            coverage = altostratusCoverage;
+            coverage += 0.4 * rainAmount;
+            coverage += 0.4 * thunderStrength;
+            largeCloud = textureLod(noiseTexture, (position.xz + cloudMovement * 20.0) / 100000.0 * 1.0, 0.0).b;
+            smallCloud = 1.0 - textureLod(noiseTexture, ((position.xz + vec2(-cloudMovement, cloudMovement) * 20.0) / 7500.0 - vec2(1.0 - largeCloud, -largeCloud) / 5.0) * 1.0, 0.0).b;
+            smallCloud = largeCloud + smallCloud * 0.4 * clamp(0.9 - largeCloud, 0.0, 1.0);
+            float val = coverage;
+            shape = min(max(val - smallCloud, 0.0) / sqrt(val), 1.0);
+            shape *= shape;
+            if (position.y < (-0.0001 * minHeight + 0.8) * minHeight) shape = 0.0; // 底部薄层压掉。
+            return shape;
+        }
+        case 1: { // 大积云：两张大尺度噪声相加。
+            coverage = largeCumulusCoverage;
+            coverage += 0.4 * rainAmount;
+            coverage += 0.4 * thunderStrength;
+            largeCloud = textureLod(noiseTexture, (samplePos.zx + cloudMovement * 3.0) / 10000.0 * 1.0, 0.0).b;
+            smallCloud = textureLod(noiseTexture, (samplePos.zx - cloudMovement * 3.0) / 2500.0 * 1.0, 0.0).b;
+            smallCloud = abs(largeCloud * -0.7) + smallCloud;
+            float val = coverage;
+            shape = min(max(val - smallCloud, 0.0) / sqrt(val), 1.0);
+            break;
+        }
+        case 0: { // 小积云：大尺度边缘直接参与形状。
+            coverage = smallCumulusCoverage;
+            coverage += 0.4 * rainAmount;
+            coverage += 0.4 * thunderStrength;
+            largeCloud = textureLod(noiseTexture, (samplePos.xz + cloudMovement) / 5000.0 * 1.0, 0.0).b;
+            smallCloud = 1.0 - textureLod(noiseTexture, (samplePos.xz - cloudMovement) / 500.0 * 1.0, 0.0).r;
+            smallCloud = abs(largeCloud - 0.6) + smallCloud * smallCloud;
+            float val = coverage;
+            shape = min(max(val - smallCloud, 0.0) / sqrt(val), 1.0);
+            break;
+        }
+    }
+    shape = min(min(shape, clamp(posToMax, 0, 1)), 1.0 - clamp(minHeight - position.y, 0, 1)); // 上下边界夹紧。
+    float bottomShape = 1.0 - pow(1.0 - min(max(position.y - minHeight, 0.0) / 25.0, 1.0), 5.0); // 底部圆角。
+    float topShape = min(max(posToMax, 0.0) / max(tallness, 1.0), 1.0); // 顶部收口。
+    topShape = min(exp(-0.5 * (1.0 - topShape)), 1.0 - pow(1.0 - topShape, 5.0));
+    shape = max((shape - 1.0) + topShape * bottomShape, 0.0); // 竖直包络。
+    if (shape > 0.001) // 只在有云的位置做细节侵蚀。
+    {
+        float erodeAmount = 0.5; // 侵蚀强度。
+        if (lod < 1) return max(shape - 0.27 * erodeAmount, 0.0); // 低细节层直接给均匀侵蚀。
+        samplePos.xz -= cloudMovement / 4.0; // 细节层随风偏移。
+        samplePos.xz += pow(max(position.y - (minHeight + 20.0), 0.0) / (max(tallness, 1.0) * 0.20), 1.5); // 越靠上越斜，云顶被吹偏。
+        float erosion = 0.0; // 侵蚀量。
+        float omShape = 1.0 - shape; // 形状的补值。
+        switch (layerIndex)
+        {
+            default: { break; }
+            case 0: { // 小积云细节。
+                erosion += (1.0 - ogxEclipseDensityAtPos(samplePos * 600.0 * 1.0 / 3.0, noiseTexture)) * sqrt(omShape);
+                float falloff = 1.0 - clamp(posToMax / (130.0 / 1.0), 0.0, 1.0);
+                erosion += abs(ogxEclipseDensityAtPos(samplePos * 600.0 * 1.0, noiseTexture) - falloff) * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.25);
+                erosion = erosion * erosion * erosion * erosion;
+                break;
+            }
+            case 1: { // 大积云细节。
+                erosion += (1.0 - ogxEclipseDensityAtPos(samplePos * 250.0 * 1.0 / 3.571428, noiseTexture)) * sqrt(omShape);
+                float falloff = 1.0 - clamp(posToMax / (280.0 / 1.0), 0.0, 1.0);
+                erosion += abs(ogxEclipseDensityAtPos(samplePos * 250.0 * 1.0, noiseTexture) - falloff) * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.5);
+                erosion = erosion * erosion * erosion * erosion;
+                break;
+            }
+        }
+        return max(shape - erosion * erodeAmount, 0.0);
+    }
+    else return 0.0;
+}
+
+// Eclipse 积雨云形状：大尺度正弦云团叠加很小的塔状云，输出形状与大云标记。
+// 参考签名是细节层级、位置与上下界；噪声图、相机位置、风、雷雨与积雨云强度显式追加。
+vec2 ogxEclipseCumulonimbusShapeLayer(int lod, vec3 position, float minHeight, float maxHeight,
+    sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float thunderStrength,
+    float cumulonimbusStrength)
+{
+	float largeCloud = 0.0;
+	float smallCloud = 0.0;
+
+	vec3 samplePos = position*vec3(1.0, 1.0/48.0, 1.0)/4.0;
+	float tallness = maxHeight - minHeight;
+	float posToMax = maxHeight - position.y;
+
+	float cumulonimbusScale = 1.0;
+	                                                                                                            
+	
+	                                     
+
+	                                                 
+	                                                                                                                              
+
+	largeCloud = (max(sin((samplePos.x - cloudMovement*10.0)/2700) * cos((samplePos.z - cloudMovement*10.0)/2700), 0.0));
+	largeCloud = mix(max(min(largeCloud - 0.25, 0.5)*2.0, 0.0), max(min(largeCloud, 0.25)*4.0, 0.0), thunderStrength);
+	float shape = largeCloud * smoothstep(5000.0, 10000.0, length(position - cameraWorldPos));
+	                           
+	
+	float isLarge = smoothstep(0.0, 1.0, shape);
+	                 
+
+	float bottomShape = 1.0-pow(1.0-min(max(position.y-minHeight,0.0) / 5.0, 1.0), 5.0);
+
+
+	float smallMaxHeight = (tallness*0.45 + minHeight);
+
+	float shape2 = 0.0;
+	if (position.y < smallMaxHeight) {
+	float smallTallness = smallMaxHeight - minHeight;
+	float posToMaxSmall = smallMaxHeight - position.y;
+
+	smallCloud = 1.0-textureLod(noiseTexture, (samplePos.xz - cloudMovement*4.0) / 1800.0 * cumulonimbusScale * 0.2, 0.0).r * smoothstep(smallMaxHeight, tallness*0.2+minHeight, position.y);
+	
+	shape2 = min(max(1.1 - smallCloud,0.0)/sqrt(1.1),1.0)  * smoothstep(5000.0, 7000.0, length(position - cameraWorldPos));
+
+	shape2 = min(min(shape2, clamp(smallMaxHeight - position.y,0,1)), 1.0 - clamp(minHeight - position.y,0,1));
+
+	float smallTopShape = min(max(posToMaxSmall,0.0) / max(smallTallness,1.0),1.0);
+	smallTopShape = min(exp(23 * (1.0-smallTopShape)), 	1.0-pow(1.0-smallTopShape,9.0));
+
+	shape2 = max((shape2 - 1.0) + smallTopShape * bottomShape, 0.0);
+	}
+
+
+	shape = min(min(shape, clamp(posToMax,0,1)), 1.0 - clamp(minHeight - position.y,0,1));
+
+	float topShape = min(max(posToMax,0.0) / max(tallness,1.0),1.0);
+	topShape = min(exp(-1.0 * (1.0-topShape)), 	1.0-pow(1.0-topShape,5.0));
+
+	float topShape2 = min(max(posToMax,0.0) / max(tallness,1.0),1.0); 
+
+	topShape2 = min(exp(-0.1 * (1.0-topShape2)), 	1.0-pow(1.0-topShape2,7.0));
+	
+	shape = max((shape - 1.0) + topShape * bottomShape + (1- topShape2) * bottomShape, 0.0);
+
+	shape = pow(shape, 1 + smoothstep(tallness*0.4+minHeight, tallness*0.8+minHeight, position.y));
+
+	shape += shape2;
+
+
+		shape *= pow(cumulonimbusStrength, mix(1.0, 6.0, smoothstep(tallness * 0.75 + minHeight, maxHeight, position.y)));
+
+
+	if(shape > 0.001){
+		if (lod < 1) return vec2(max(shape - 0.27*0.5,0.0), isLarge);
+
+		samplePos.xz -= cloudMovement/4.0;
+		samplePos.xz += pow( max(position.y - (minHeight+20.0), 0.0) / (max(tallness,1.0)*0.20), 1.5);
+
+		float omShape = 1.0 - shape;
+
+		float erosion = (1.0 - ogxEclipseDensityAtPos(samplePos * 190 * cumulonimbusScale*0.05, noiseTexture)) * sqrt(omShape);
+
+		float falloff = 1.0 - clamp((posToMax)/4600.0,0.0,1.0);
+
+		erosion += abs(ogxEclipseDensityAtPos(samplePos * 580 * cumulonimbusScale*0.05, noiseTexture) - falloff) * 0.65 * (omShape) * (1.0-falloff*0.5);
+
+		erosion = erosion*erosion*erosion*erosion*smoothstep(maxHeight+40.0, tallness*0.5+minHeight, position.y);
+		
+
+		return vec2(max(shape - erosion*0.5,0.0), isLarge);
+	} else return vec2(0.0, isLarge);
+}
+
+// Eclipse 闪电落点：用时间哈希选极坐标角度与半径，再把位置贴到积雨云层里。
+// 参考签名只有云层上下界；噪声图、相机位置、风、雷雨与积雨云强度显式追加，
+// 时间哈希与自定义落点常数直接写成参考数值，保持同一组常数。
+vec3 ogxEclipseLightningPositionBolt(float minHeight, float maxHeight,
+    sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float thunderStrength,
+    float cumulonimbusStrength, float lightningTimer)
+{
+    float angle = fract(sin(dot(vec2(lightningTimer, lightningTimer * 2.0), vec2(12.9898, 78.233))) * 43758.5453) * 6.28318530718; // 时间哈希转角度。
+    float rMin = 7000.0; // 最近落点半径。
+    float rMax = 13000.0; // 最远落点半径。
+    float radius = sqrt(mix(rMin * rMin, rMax * rMax, fract(sin(dot(vec2(lightningTimer + 1, (lightningTimer + 1) * 2.0), vec2(12.9898, 78.233))) * 43758.5453))); // 在环形区域里取半径。
+    vec3 lightningPos = vec3(radius * cos(angle), minHeight + 0.62 * (maxHeight - minHeight), radius * sin(angle)); // 极坐标转云层坐标。
+    float shapeAtLightningPos = ogxEclipseCumulonimbusShapeLayer(0, lightningPos, minHeight, maxHeight,
+        noiseTexture, cameraWorldPos, cloudMovement, thunderStrength, cumulonimbusStrength).x; // 落点处的积雨云形状。
+    float moveUp = 0.48; // 闪电起点抬到云层中上部。
+    lightningPos.y = minHeight + (maxHeight - minHeight) * moveUp; // 重算高度。
+    lightningPos.y -= cameraWorldPos.y; // 换成相机相对高度。
+    if (shapeAtLightningPos < 0.1) lightningPos = vec3(0.0); // 落点没有云就不闪。
+    lightningPos = vec3(100.0, 0.0, 0.0) - cameraWorldPos; // 参考默认的自定义落点。
+    return lightningPos; // 交回闪电位置。
+}
+
+// Eclipse 云相函数：Henyey-Greenstein 单峰前向散射，`g` 是各向异性，`x` 是夹角余弦。
+// 为什么单列一条：参考默认只启用这一种相位，带类型开关的旧实现会多出其它模型的常数。
+float ogxEclipsePhaseCloudHenyey(float g, float x)
+{
+    float gg = g * g; // 各向异性平方。
+    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考原式。
+}
+
+// Eclipse 降雨加成：当前云量加上雨与雷带来的额外覆盖，限制在一以内。
+// 参考把雨强与雷强当全局量；库版本显式接收，算式与常数不变。
+float ogxEclipseGetRainDensity(float currentDensity, float rainAmount, float thunderStrength)
+{
+    float extraDensity = min(currentDensity + rainAmount * 0.1 + thunderStrength * 0.1, 1.0); // 雨天云量更满。
+    return extraDensity; // 交回夹紧后的覆盖率。
+}
+
+// Eclipse 云影：从玩家位置沿太阳方向升到三层云底，各取一次云形状并按降雨加成叠加。
+// 参考签名只有玩家位置与太阳方向；云噪声、风、雨雷、三层覆盖与闪电状态显式追加。
+float ogxEclipseCloudShadowLayer(vec3 playerPos, vec3 sunVector,
+    sampler2D noiseTexture, vec4 lightningBoltPosition, float sunElevation,
+    float cloudMovement, float rainAmount, float thunderStrength,
+    float smallCumulusCoverage, float largeCumulusCoverage, float altostratusCoverage,
+    float smallCumulusRain, float largeCumulusRain, float altostratusRain)
+{
+    if (lightningBoltPosition.w > 0.0 && sunElevation < 0.0) // 夜里打闪电时不投云影，避免整片变黑。
+    {
+        return 1.0;
+    }
+    float totalShadow = ogxEclipseGetPlanetShadow(playerPos, sunVector); // 先算星球本身遮住多少阳光。
+    vec3 startPosition = playerPos; // 云影采样起点。
+    vec3 startOffset = sunVector / abs(sunVector.y); // 沿太阳方向升到云底所需的水平偏移。
+    float cloudShadows = 0.0; // 三层云影累加。
+    startPosition = playerPos + startOffset * max((250.0 + 20.0) - playerPos.y, 0.0); // 小积云底。
+    cloudShadows = ogxEclipseCloudShapeLayer(0, 0, startPosition, 250.0, 250.0 + 130.0 / 1.0,
+        noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+        rainAmount, thunderStrength, cloudMovement) * ogxEclipseGetRainDensity(smallCumulusRain, rainAmount, thunderStrength); // 小积云影。
+    startPosition = playerPos + startOffset * max((400.0 + 30.0) - playerPos.y, 0.0); // 大积云底。
+    cloudShadows += ogxEclipseCloudShapeLayer(1, 0, startPosition, 400.0, 400.0 + 280.0 / 1.0,
+        noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+        rainAmount, thunderStrength, cloudMovement) * ogxEclipseGetRainDensity(largeCumulusRain, rainAmount, thunderStrength); // 大积云影。
+    startPosition = playerPos + startOffset * max(5000.0 - playerPos.y, 0.0); // 高层云底。
+    cloudShadows += ogxEclipseCloudShapeLayer(3, 0, startPosition, 5000.0, 5000.0 + 5.0,
+        noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+        rainAmount, thunderStrength, cloudMovement) * altostratusRain * (1.0 - abs(sunVector.y)); // 高层云影随太阳高度变淡。
+    cloudShadows *= float(100.0) / 100.0; // 参考的云影总量比例。
+    totalShadow *= exp((cloudShadows * cloudShadows) * -200.0); // 云影越厚，透过率下降越快。
+    return totalShadow; // 交回阳光透过率。
+}
+
+// Eclipse 云内散射：沿太阳或月亮方向取几个云形状样本，累加成透过率。
+// 参考签名是层号、位置、日月方向、日月高度、抖动与密度；云层上下界与噪声等显式追加。
+// 为什么保留循环：采样次数由层号决定，参考也保留运行期循环，合并会改变采样顺序。
+float ogxEclipseCloudScatteringSamples(int layerIndex, vec3 rayPosition, vec3 sunVector, vec3 moonVector,
+    float sunElevation, float moonElevation, float dither, float density,
+    float minHeight, float maxHeight, sampler2D noiseTexture, vec3 cameraWorldPos,
+    float cloudMovement, float rainAmount, float thunderStrength, float cumulonimbusStrength,
+    float altostratusCoverage, float largeCumulusCoverage, float smallCumulusCoverage)
+{
+    int samples = 3; // 普通层三步。
+    int lod = 0; // 阴影只取低细节。
+    if (layerIndex == 2) samples = 7; // 积雨云更厚，多取几步。
+    if ((layerIndex == 3) || (layerIndex == 4)) samples = 2; // 高层云很薄，两步够用。
+    float shadow = 0.0; // 累积的云密度。
+    vec3 shadowRayPosition = vec3(0.0); // 采样位置。
+    float sunVis = smoothstep(-0.06, 0.01, sunElevation); // 太阳在地平线附近时逐渐变弱。
+    sunVis = sunVis * sunVis;
+    float moonVis = smoothstep(0.0, 0.075, -moonElevation); // 月亮同样处理。
+    moonVis = moonVis * moonVis;
+    moonVis *= smoothstep(0.06, -0.06, sunElevation); // 太阳升起后月亮光退场。
+    float isLarge = 80; // 积雨云步长。
+    vec3 lightVec = normalize(mix(moonVector, sunVector, smoothstep(-0.06, 0.06, sunElevation))); // 日月方向按太阳高度混合。
+    for (int i = 0; i < samples; i++)
+    {
+        if ((layerIndex == 3) || (layerIndex == 4))
+        {
+            shadowRayPosition = rayPosition + sunVector * sunVis * (0.25 + i * dither) * 200.0 + moonVector * moonVis * (0.25 + i * dither) * 200.0; // 高层云沿日月方向短步进。
+        }
+        else if ((layerIndex == 1) || (layerIndex == 0))
+        {
+            shadowRayPosition = rayPosition + lightVec * (0.25 + i + dither) * 20.0; // 积云二十米一步。
+        }
+        else
+        {
+            shadowRayPosition = rayPosition + lightVec * (0.5 + i + dither) * isLarge; // 积雨云按大范围步长。
+        }
+        if (layerIndex != 2)
+        {
+            shadow += ogxEclipseCloudShapeLayer(layerIndex, lod, shadowRayPosition, minHeight, maxHeight,
+                noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+                rainAmount, thunderStrength, cloudMovement) * density; // 普通云层取形状。
+        }
+        else
+        {
+            shadow += ogxEclipseCumulonimbusShapeLayer(lod, shadowRayPosition, minHeight, maxHeight,
+                noiseTexture, cameraWorldPos, cloudMovement, thunderStrength, cumulonimbusStrength).x * density; // 积雨云取形状。
+            isLarge *= 1.374; // 每步再拉远，减少远处重复采样。
+        }
+    }
+    return shadow; // 交回云内遮挡量。
+}
+
+// Eclipse 低成本云步进：只累计透过率，不做光照，供云影与远景使用。
+// 参考签名给层号、步数、位置与方向、抖动与上下界；噪声、天气与覆盖率显式追加。
+float ogxEclipseCloudAbsorbanceSimple(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
+    float dither, float minHeight, float maxHeight, vec3 startPos,
+    sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float rainAmount,
+    float thunderStrength, float cumulonimbusStrength, float altostratusCoverage,
+    float largeCumulusCoverage, float smallCumulusCoverage,
+    float altostratusRain, float largeCumulusRain, float smallCumulusRain)
+{
+    float totalAbsorbance = 1.0; // 累积透过率。
+    float distanceFactor = length(rayDirection); // 每步长度。
+    float densityTresholdCheck = 0.0; // 密度阈值，按层选择。
+    if (layerIndex == 0) densityTresholdCheck = 0.06;
+    if (layerIndex == 1 || layerIndex == 2) densityTresholdCheck = 0.02;
+    if (layerIndex == 3) densityTresholdCheck = 0.01;
+    densityTresholdCheck = mix(1e-5, densityTresholdCheck, dither); // 用抖动在极小值与阈值之间插值。
+    if (layerIndex == 3) // 高层云只做一次平面近似。
+    {
+        vec3 newPos = rayPosition - startPos;
+        float density = altostratusRain;
+        density *= smoothstep(150000.0, 150000.0 * 0.5, length(newPos)); // 超出距离后淡出。
+        if (density == 0.0) return totalAbsorbance;
+        bool ifAboveOrBelowPlane = max(mix(-1.0, 1.0, clamp(startPos.y - minHeight, 0.0, 1.0)) * normalize(rayDirection).y + 0.0001, 0.0) > 0.0; // 相机在云层上方或下方时就跳过。
+        if (ifAboveOrBelowPlane) return totalAbsorbance;
+        float shape = ogxEclipseCloudShapeLayer(layerIndex, 1, rayPosition, minHeight, maxHeight,
+            noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+            rainAmount, thunderStrength, cloudMovement);
+        float shapeWithDensity = shape * density;
+        if (shapeWithDensity > 1e-5)
+        {
+            float densityCoeff = exp(-distanceFactor * shapeWithDensity); // 单步吸收。
+            totalAbsorbance *= densityCoeff;
+        }
+        return totalAbsorbance;
+    }
+    if (layerIndex < 3) // 积云与积雨云按步数前进。
+    {
+        vec3 newPos = rayPosition - startPos;
+        float densityLarge = ogxEclipseGetRainDensity(largeCumulusRain, rainAmount, thunderStrength);
+        float density = 0.0;
+        if (layerIndex == 0) density = ogxEclipseGetRainDensity(smallCumulusRain, rainAmount, thunderStrength) * smoothstep(100000.0, 100000.0 * 0.5, length(newPos));
+        if (layerIndex == 1) density = ogxEclipseGetRainDensity(largeCumulusRain, rainAmount, thunderStrength) * smoothstep(100000.0, 100000.0 * 0.5, length(newPos));
+        if (layerIndex == 2) density = 0.8;
+        if (density < 0.01) return totalAbsorbance;
+        float tallness = maxHeight - minHeight;
+        for (int i = 0; i < samples; i++)
+        {
+            newPos = rayPosition - startPos;
+            float rayHeightInCloud = rayPosition.y - minHeight;
+            if (clamp(rayPosition.y - maxHeight, 0.0, 1.0) < 1.0 && clamp(rayHeightInCloud, 0.0, 1.0) > 0.0) // 只处理云层内部的采样。
+            {
+                float shape = 0.0;
+                float isLarge = 1.0;
+                if (layerIndex != 2)
+                {
+                    shape = ogxEclipseCloudShapeLayer(layerIndex, 1, rayPosition, minHeight, maxHeight,
+                        noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+                        rainAmount, thunderStrength, cloudMovement);
+                }
+                else
+                {
+                    vec2 cumulonimbusCloud = ogxEclipseCumulonimbusShapeLayer(1, rayPosition, minHeight, maxHeight,
+                        noiseTexture, cameraWorldPos, cloudMovement, thunderStrength, cumulonimbusStrength);
+                    shape = cumulonimbusCloud.x;
+                    isLarge = 1.0 + 4.0 * cumulonimbusCloud.y;
+                }
+                float shapeWithDensity = shape * density * isLarge;
+                float shapeWithDensityFaded = shape * density * pow(clamp((rayHeightInCloud) / (max(tallness, 1.0) * 0.25), 0.0, 1.0), 2.0); // 底部淡出。
+                if (shapeWithDensityFaded > 1e-5)
+                {
+                    float densityCoeff = exp(-distanceFactor * shapeWithDensityFaded);
+                    totalAbsorbance *= densityCoeff;
+                    if (totalAbsorbance < 1e-5) break; // 已经全黑就提前结束。
+                }
+            }
+            rayPosition += rayDirection; // 前进一步。
+        }
+    }
+    return totalAbsorbance; // 交回透过率。
+}
+
+// Eclipse 云影总入口的简单版：三层云各走一次低成本步进，乘成总透过率。
+// 参考签名是抖动、光照方向、偏移与起点；云噪声、天气、覆盖率与相机位置显式追加。
+vec4 ogxEclipseCloudTransmittanceSimple(vec2 dither, vec3 lightDir, vec2 offset, vec3 startPos,
+    sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float rainAmount,
+    float thunderStrength, float cumulonimbusStrength, float altostratusCoverage,
+    float largeCumulusCoverage, float smallCumulusCoverage,
+    float altostratusRain, float largeCumulusRain, float smallCumulusRain)
+{
+    float totalAbsorbance = 1.0; // 总透过率。
+    float heightRelativeToClouds = clamp(1.0 - max(cameraWorldPos.y - 250.0, 0.0) / 100.0, 0.0, 1.0); // 相机离云底越近，抬高越少。
+    vec3 normPlayerPos = lightDir; // 光照方向。
+    normPlayerPos.y += 0.03 * heightRelativeToClouds; // 地面视角把光线抬高一点。
+    int samples = 5; // 每层固定五步。
+    vec3 cloudDist = vec3(1.0); // 水平步长。
+    vec3 rayDirection; // 步进方向。
+    vec3 rayPosition; // 步进起点。
+    float cloudheight; // 云层厚度。
+    float minHeight; // 云底。
+    float maxHeight; // 云顶。
+    float altoStratusClouds = 1.0; // 高层云透过率。
+    cloudheight = 5.0;
+    minHeight = 5000.0;
+    maxHeight = cloudheight + minHeight;
+    cloudDist.xz = vec2(255.0);
+    rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist)); // 单步长度。
+    rayPosition = ogxEclipseGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 找到进入云层的起点。
+    rayPosition.xz += offset; // 阴影偏移。
+    altoStratusClouds = ogxEclipseCloudAbsorbanceSimple(3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
+        noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
+        altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+        altostratusRain, largeCumulusRain, smallCumulusRain); // 高层云。
+    totalAbsorbance *= altoStratusClouds;
+    float largeCumulusClouds = 1.0; // 大积云透过率。
+    if (totalAbsorbance > 1e-5)
+    {
+        cloudheight = 280.0;
+        minHeight = 400.0;
+        maxHeight = cloudheight + minHeight;
+        cloudDist.xz = vec2(255.0);
+        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 按步数均分厚度。
+        rayPosition = ogxEclipseGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight);
+        rayPosition.xz += offset;
+        largeCumulusClouds = ogxEclipseCloudAbsorbanceSimple(1, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
+            noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
+            altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+            altostratusRain, largeCumulusRain, smallCumulusRain); // 大积云。
+        totalAbsorbance *= largeCumulusClouds;
+    }
+    float smallCumulusClouds = 1.0; // 小积云透过率。
+    if (totalAbsorbance > 1e-5)
+    {
+        cloudheight = 130.0 / 1.0;
+        minHeight = 250.0;
+        maxHeight = cloudheight + minHeight;
+        minHeight = 250.0 - 350.0; // 参考把小积云底向下扩了三百五十米。
+        maxHeight = cloudheight + minHeight;
+        cloudDist.xz = vec2(255.0);
+        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples));
+        rayPosition = ogxEclipseGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight);
+        rayPosition.xz += offset;
+        smallCumulusClouds = ogxEclipseCloudAbsorbanceSimple(0, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
+            noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
+            altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+            altostratusRain, largeCumulusRain, smallCumulusRain); // 小积云。
+        totalAbsorbance *= smallCumulusClouds;
+    }
+    return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四层透过率。
 }
 
 #endif
@@ -13721,8 +14243,9 @@ Omni 通用图形库 Eclipse 漫反射补充模块：手持光阴影、方块光
 可复制示例：
     float shadow = ogxEclipseSsrtHandlightShadows(viewPos, false, lightDir, noise, normal, false,
         modelViewInverse, nearPlane, farPlane, 1.0, depthTex, projection, 10.0, 0.0015, 0.3);
-    vec3 flashlight = ogxEclipseCalculateFlashlight(texcoord, viewPos, albedo, normal,
-        specularData, false, viewWidth, viewHeight, noiseTex, 0.5, 30.0, 0.2, 0.4, 0.7, 1.0, 0.5, 20.0, 1.0);
+    vec3 flashlight = ogxEclipseCalculateFlashlight(texcoord, viewPos, normal, albedo,
+        specularData, false, noiseTex, modelViewInverse, previousModelView, cameraWorldPos,
+        previousCameraWorldPos, centerDepthSmooth, projectionInverse, 32.0, 1.0, 1.0, 2.0, 1.0, 0.9, 0.8);
 设计原因与取舍：
     参考实现直接读 `depthtex2`、`gbufferModelViewInverse` 与手电菜单。库把深度图、矩阵、尺寸与
     手电颜色全部改成显式参数；分支、常数和采样顺序保持参考实现。
@@ -13735,39 +14258,45 @@ Omni 通用图形库 Eclipse 漫反射补充模块：手持光阴影、方块光
 
 
 // 手持光屏幕空间阴影：沿光线方向在深度图里步进，撞到遮挡就压暗。
-// `quality` 为 0 时用十步，否则二十步；步长与参考实现的固定除数相同。
-vec2 ogxEclipseDiffuseTexelSize(sampler2D tex) { return vec2(textureSize(tex, 0)); }
-
+// 参考固定十步；远近景各取一张深度图，两条分支都写在函数体里，采样次数与参考一致。
 float ogxEclipseSsrtHandlightShadows(vec3 viewPos, bool depthCheck, vec3 lightDir, float noise,
     vec3 normals, bool hand, mat4 modelViewInverse, float nearPlane, float farPlane,
-    float renderScale, sampler2D depthTexture, mat4 projection, mat4 projectionInverse,
-    float samples, float divisor, float strength)
+    float renderScale, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projection,
+    mat4 dhProjection, float dhVoxyNearPlane, float dhVoxyFarPlane, float texelSize, float strength)
 {
     if (hand) return 1.0; // 手部不投手持光阴影。
-    vec3 worldLightDir = normalize(ogxMatrix3MulPoint(mat3(modelViewInverse), lightDir)); // 光方向转世界。
+    vec3 worldLightDir = normalize(ogxMatrixMulPoint(modelViewInverse, lightDir)); // 光方向转世界，参考连平移一起乘。
     float NdotL = smoothstep(0.0, 0.2, abs(dot(normals, worldLightDir))); // 法线朝向的软边。
     float shadows = 1.0; // 阴影结果。
-    float sampleCount = samples > 10.0 ? 20.0 : 10.0; // 参考实现的质量档。
-    float div = samples > 10.0 ? 0.0005 : 0.0015; // 固定步长除数。
+    float samples = 10.0; // 参考固定十步。
+    float div = 0.0015; // 固定步长除数。
     float _near = nearPlane; // 近平面。
     float _far = farPlane * 4.0; // 远平面放大四倍。
-    if (depthCheck) // 远景使用远景矩阵。
+    if (depthCheck) // 远景使用远景裁剪参数。
     {
-        _near = nearPlane;
-        _far = farPlane;
+        _near = dhVoxyNearPlane;
+        _far = dhVoxyFarPlane;
     }
-    vec3 position = ogxToClipSpace3(viewPos, projection); // 起点投到裁剪空间。
+    vec3 position = ogxToClipSpace3Dh(viewPos, depthCheck, projection, dhProjection); // 起点投到裁剪空间。
     float rayLength = ((viewPos.z + lightDir.z * _far * sqrt(3.0)) > -_near)
         ? (-_near - viewPos.z) / lightDir.z : _far * sqrt(3.0); // 射线长度。
-    vec3 direction = ogxToClipSpace3(viewPos + lightDir * rayLength, projection) - position; // 裁剪空间方向。
+    vec3 direction = ogxToClipSpace3Dh(viewPos + lightDir * rayLength, depthCheck, projection, dhProjection) - position; // 裁剪空间方向。
     direction.xyz /= max(max(abs(direction.x) / div, abs(direction.y) / div), 400.0); // 固定步长。
     direction *= 6.0; // 参考实现的步数放大。
     position.xy *= renderScale;
     direction.xy *= renderScale;
     vec3 newPos = position + direction * noise; // 加抖动。
-    for (int i = 0; i < int(sampleCount); i++) // 固定步数。
+    for (int i = 0; i < int(samples); i++) // 固定步数。
     {
-        float samplePos = texelFetch(depthTexture, ivec2(newPos.xy / ogxEclipseDiffuseTexelSize(depthTexture)), 0).r; // 读深度。
+        float samplePos;
+        if (depthCheck) // 远景深度图。
+        {
+            samplePos = texelFetch(dhDepthTexture, ivec2(newPos.xy / texelSize), 0).x;
+        }
+        else // 近景深度图。
+        {
+            samplePos = texelFetch(depthTexture, ivec2(newPos.xy / texelSize), 0).x;
+        }
         if (samplePos < newPos.z && samplePos > 0.0) // 被遮挡。
         {
             shadows = 0.0;
@@ -13805,14 +14334,18 @@ vec3 ogxEclipseDoBlockLightLighting(vec3 lightColor, float lightmap, vec3 lpvSam
 
 // 手电光：把屏幕位置换成手电筒锥，再按距离、圆斑与镜头脏污叠出光斑。
 // `specularData` 返回方向与强度，供高光阶段复用。
-vec3 ogxEclipseCalculateFlashlight(vec2 texcoord, vec3 viewPos, vec3 albedo, vec3 normal,
-    out vec4 specularData, bool hand, float viewWidth, float viewHeight, sampler2D noiseTexture,
-    float range, float brightnessFalloff, float size, float red, float green, float blue,
-    float brightness, float centerDepth, float time)
+// 参考签名是屏幕坐标、视空间位置、法线与底色；矩阵、相机位置、深度图与手电参数显式追加。
+vec3 ogxEclipseCalculateFlashlight(vec2 texcoord, vec3 viewPos, vec3 normal, vec3 albedo,
+    out vec4 specularData, bool hand, sampler2D noiseTexture, mat4 modelViewInverse,
+    mat4 previousModelView, vec3 cameraWorldPos, vec3 previousCameraWorldPos,
+    float centerDepthSmooth, mat4 projectionInverse, float range, float brightnessFalloff,
+    float brightness, float size, float red, float green, float blue)
 {
     float forwardOffset = 0.5; // 参考实现的前向偏移。
     vec3 shiftedViewPos = viewPos + vec3(-0.25, 0.2, 0.0); // 手电在视线左上方。
-    vec3 shiftedPlayerPos = shiftedViewPos; // 相机相对位置。
+    vec3 shiftedPlayerPos = ogxMatrix3MulPoint(mat3(modelViewInverse), shiftedViewPos) + ogxMatrixTranslation(modelViewInverse)
+        + (cameraWorldPos - previousCameraWorldPos) * 3.0; // 相机相对位置并补上相机移动。
+    shiftedViewPos = ogxMatrix3MulPoint(mat3(previousModelView), shiftedPlayerPos) + ogxMatrixTranslation(previousModelView); // 换到上一帧视空间，避免手电抖动。
     vec2 scaledViewPos = shiftedViewPos.xy / max(-shiftedViewPos.z - forwardOffset, 1e-7); // 投到屏幕。
     float linearDistance = length(shiftedPlayerPos); // 到手电的距离。
     float shiftedLinearDistance = length(scaledViewPos); // 屏幕距离。
@@ -13830,6 +14363,13 @@ vec3 ogxEclipseCalculateFlashlight(vec2 texcoord, vec3 viewPos, vec3 albedo, vec
         diffuse = vec3(0.0);
         specularData = vec4(0.0);
     }
+    float lightWidth = 1.0 + linearDistance * 3.0; // 手电在屏幕上的覆盖宽度。
+    vec3 pointPos = ogxToScreenSpace(vec3(texcoord, centerDepthSmooth), projectionInverse) + vec3(-0.25, 0.2, 0.0); // 命中点换回视空间。
+    pointPos = ogxMatrix3MulPoint(mat3(modelViewInverse), pointPos); // 换到相机相对世界位置。
+    float flashLightHitPoint = distance(pointPos, shiftedPlayerPos); // 命中点到手电的距离。
+    float indirectFlashLight = exp(-10.0 * (1.0 - clamp(1.0 - length(shiftedViewPos.xy) / lightWidth, 0.0, 1.0))); // 屏幕范围的柔光。
+    indirectFlashLight *= pow(clamp(1.0 - flashLightHitPoint / lightWidth, 0.0, 1.0), 2.0); // 越远越弱。
+    diffuse += albedo / 150.0 * indirectFlashLight * lightFalloff; // 被照表面的间接反光。
     return diffuse * vec3(red, green, blue); // 按手电颜色输出。
 }
 
@@ -13956,6 +14496,25 @@ void ogxEclipseApplyGameplayEffects(inout vec3 color, vec2 texcoord, float noise
         }
         if (isDead) color = distortedLuma * 0.35; // 死亡画面。
     }
+}
+
+// 场景控制器的默认参数：把云层覆盖与密度写进输出，雾系数固定为一。
+// 参考签名只有十个输出；库版本不再接收额外输入，直接给出参考默认值。
+void ogxEclipseApplySceneControllerDefaults(out float smallCumulusCoverage, out float smallCumulusDensity,
+    out float largeCumulusCoverage, out float largeCumulusDensity, out float altostratusCoverage,
+    out float altostratusDensity, out float cirrusCoverage, out float cirrusDensity,
+    out float fogA, out float fogB)
+{
+    smallCumulusCoverage = 1.0;
+    smallCumulusDensity = 0.5;
+    largeCumulusCoverage = 1.0;
+    largeCumulusDensity = 0.6;
+    altostratusCoverage = 0.6;
+    altostratusDensity = 0.1;
+    cirrusCoverage = 0.07;
+    cirrusDensity = 0.005;
+    fogA = 1.0;
+    fogB = 1.0;
 }
 
 #endif

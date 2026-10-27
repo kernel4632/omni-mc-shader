@@ -47,21 +47,15 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 	#else
 		bool fadeEnabled = false; // 不做远处淡出。
 	#endif
-	#ifdef OMNI_TAA // 开时间抗锯齿时用蓝噪声抖动阴影起点。
+	#ifdef OMNI_TAA // 开时间抗锯齿时把抖动所需数据交给库，由库在算法内部取蓝噪声。
 		bool taa = true; // 逐像素抖动。
-		#if OMNI_PARALLAX_SHADOW // 只有开启视差阴影才需要取噪声。
-			float parallaxDither = BlueNoiseTemporal().x; // 每帧变化的抖动值。
-		#else
-			float parallaxDither = 0.0; // 阴影关闭时占位。
-		#endif
 	#else
 		bool taa = false; // 不开时只多走一步。
-		float parallaxDither = 0.0; // 占位，不会被读取。
 	#endif
-	return gfx_parallax_smooth(coord, tbnMat, shadowVector, duv1, duv2, viewPos, normals,
+	return gfx_parallax_smooth(coord, tbnMat, shadowVector, duv1, duv2, viewPos, normals, noisetex,
 		parallaxAtlasSize, parallaxResolution, parallaxIsBlock, OMNI_PARALLAX_DEPTH, OMNI_PARALLAX_QUALITY,
 		OMNI_PARALLAX_MAX_REFINEMENTS, OMNI_PARALLAX_SHADOW_QUALITY, bool(OMNI_PARALLAX_SHADOW), taa,
-		fadeEnabled, parallaxDither, OMNI_PARALLAX_BASED_NORMAL, normalTex, parallaxShadow); // 步进循环在通用库。
+		fadeEnabled, ivec2(gl_FragCoord.xy), frameCounter, OMNI_PARALLAX_BASED_NORMAL, normalTex, parallaxShadow); // 步进循环在通用库。
 }
 #elif OMNI_PARALLAX_MODE == 1 // 锐利模式：逐像素穿越图块，保持像素外观。
 // 锐利视差：沿视线逐像素穿过高度图，命中后可选算自阴影与法线。

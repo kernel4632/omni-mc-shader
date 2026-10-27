@@ -1767,6 +1767,360 @@
     },
     "sortIntersectionOpaque": {
       "target": "eclipse_specular.ogxEclipseSortIntersectionOpaque"
+    },
+    "swapperlinZ2": {
+      "target": "camera.ogxSwapperlinZ2"
+    },
+    "getVoxelEmission": {
+      "target": "voxel.ogxGetVoxelEmission"
+    },
+    "getRayOrigin": {
+      "target": "cloud_eclipse.ogxEclipseGetRayOrigin"
+    },
+    "getCloudLighting": {
+      "target": "cloud_eclipse.ogxEclipseGetCloudLighting"
+    },
+    "ViewPos_From_ScreenPos_DH": {
+      "target": "camera.ogxViewPosFromScreenPosDh",
+      "resources": {
+        "taaJitter": "value",
+        "useJitter": "value",
+        "dhProjectionInverse": "matrix"
+      }
+    },
+    "ViewPos_From_ScreenPos_Raw_DH": {
+      "target": "camera.ogxViewPosFromScreenPosRawDh",
+      "resources": {
+        "dhProjectionInverse": "matrix"
+      }
+    },
+    "ScreenPos_From_ViewPos_DH": {
+      "target": "camera.ogxScreenPosFromViewPosDh",
+      "resources": {
+        "taaJitter": "value",
+        "useJitter": "value",
+        "dhProjection": "matrix"
+      }
+    },
+    "ScreenPos_From_ViewPos_Raw_DH": {
+      "target": "camera.ogxScreenPosFromViewPosRawDh",
+      "resources": {
+        "dhProjection": "matrix"
+      }
+    },
+    "LinearDepth_From_ScreenDepth_DH": {
+      "target": "camera.ogxLinearDepthFromScreenDepthDh",
+      "resources": {
+        "dhProjectionInverse": "matrix"
+      }
+    },
+    "ScreenDepth_From_LinearDepth_DH": {
+      "target": "camera.ogxScreenDepthFromLinearDepthDh",
+      "resources": {
+        "dhProjectionInverse": "matrix"
+      }
+    },
+    "ScreenDepth_From_DHScreenDepth": {
+      "target": "camera.ogxScreenDepthFromDhScreenDepth",
+      "resources": {
+        "dhProjectionInverse": "matrix",
+        "projectionInverse": "matrix"
+      }
+    },
+    "FidelityFX_FSR1": {
+      "target": "upscale.ogxItxFsr1",
+      "resources": {
+        "upscaledTex": "texture",
+        "sharpness": "value",
+        "denoise": "value"
+      },
+      "bindings": {
+        "sharpness": 5
+      },
+      "allowExtraConstants": true
+    },
+    "BilinearHeightSample": {
+      "target": "parallax.ogxBilinearHeightSample",
+      "resources": {
+        "normals": "texture"
+      }
+    },
+    "HeightBasedNormal": {
+      "target": "parallax.ogxHeightBasedNormal",
+      "resources": {
+        "normals": "texture",
+        "depth": "value"
+      },
+      "bindings": {
+        "depth": 1
+      }
+    },
+    "ParallaxOcclusionMapping": {
+      "target": "parallax.ogxParallaxOcclusionMapping",
+      "resources": {
+        "normals": "texture",
+        "noiseTexture": "texture",
+        "atlasSize": "value",
+        "textureResolution": "value",
+        "isBlock": "value",
+        "quality": "value",
+        "refinements": "value",
+        "shadowQuality": "value",
+        "depth": "value",
+        "shadowEnabled": "value",
+        "taa": "value",
+        "fadeEnabled": "value",
+        "useHeightNormal": "value",
+        "viewPos": "value",
+        "fragCoord": "value",
+        "frameCounter": "value"
+      },
+      "bindings": {
+        "quality": 40,
+        "refinements": 12,
+        "shadowQuality": 20,
+        "textureResolution": 16,
+        "depth": 1
+      },
+      "allowExtraConstants": true
+    },
+    "RSM": {
+      "target": "gi.ogxItxRsm",
+      "resources": {
+        "view": "struct",
+        "shadowDepth0": "texture",
+        "shadowDepth1": "texture",
+        "shadowColor0": "texture",
+        "shadowColor1": "texture",
+        "radius": "value",
+        "steps": "value",
+        "falloff": "value",
+        "shadowMapResolution": "value",
+        "shadowBias": "value",
+        "noiseTexture": "texture",
+        "texelCoord": "value",
+        "frame": "value",
+        "useSolidShadow": "value",
+        "leakFix": "value",
+        "underwater": "value"
+      },
+      "bindings": {
+        "radius": 7,
+        "steps": 16,
+        "falloff": 1.1,
+        "shadowMapResolution": 2048,
+        "shadowBias": 0.9,
+        "useSolidShadow": false,
+        "leakFix": true
+      }
+    },
+    "GI_SpatialFilter": {
+      "target": "gi.ogxItxGiSpatialFilter",
+      "resources": {
+        "coord": "value",
+        "view": "struct",
+        "historyTexture": "texture",
+        "renderScale": "value"
+      },
+      "bindings": {
+        "renderScale": 0.5
+      }
+    },
+    "getCloudShape": {
+      "target": "cloud_eclipse.ogxEclipseCloudShapeLayer",
+      "resources": {
+        "noiseTexture": "texture",
+        "altostratusCoverage": "value",
+        "largeCumulusCoverage": "value",
+        "smallCumulusCoverage": "value",
+        "thunderStrength": "value",
+        "cloudMovement": "value",
+        "rainAmount": "value"
+      }
+    },
+    "getCumulonimbusShape": {
+      "target": "cloud_eclipse.ogxEclipseCumulonimbusShapeLayer",
+      "resources": {
+        "noiseTexture": "texture",
+        "cloudMovement": "value",
+        "thunderStrength": "value",
+        "cumulonimbusStrength": "value",
+        "cameraWorldPos": "value"
+      }
+    },
+    "getLightningPosition": {
+      "target": "cloud_eclipse.ogxEclipseLightningPositionBolt",
+      "resources": {
+        "noiseTexture": "texture",
+        "cloudMovement": "value",
+        "thunderStrength": "value",
+        "cumulonimbusStrength": "value",
+        "lightningTimer": "value",
+        "cameraWorldPos": "value"
+      }
+    },
+    "phaseCloud": {
+      "target": "cloud_eclipse.ogxEclipsePhaseCloudHenyey"
+    },
+    "GetCloudShadow": {
+      "target": "cloud_eclipse.ogxEclipseCloudShadowLayer",
+      "resources": {
+        "noiseTexture": "texture",
+        "lightningBoltPosition": "value",
+        "sunElevation": "value",
+        "cloudMovement": "value",
+        "thunderStrength": "value",
+        "smallCumulusCoverage": "value",
+        "largeCumulusCoverage": "value",
+        "altostratusCoverage": "value",
+        "smallCumulusRain": "value",
+        "largeCumulusRain": "value",
+        "altostratusRain": "value",
+        "rainAmount": "value"
+      }
+    },
+    "getCloudScattering": {
+      "target": "cloud_eclipse.ogxEclipseCloudScatteringSamples",
+      "resources": {
+        "noiseTexture": "texture",
+        "minHeight": "value",
+        "maxHeight": "value",
+        "cloudMovement": "value",
+        "thunderStrength": "value",
+        "cumulonimbusStrength": "value",
+        "altostratusCoverage": "value",
+        "largeCumulusCoverage": "value",
+        "smallCumulusCoverage": "value",
+        "cameraWorldPos": "value",
+        "rainAmount": "value"
+      }
+    },
+    "raymarchCloudSimple": {
+      "target": "cloud_eclipse.ogxEclipseCloudAbsorbanceSimple",
+      "resources": {
+        "noiseTexture": "texture",
+        "cloudMovement": "value",
+        "thunderStrength": "value",
+        "cumulonimbusStrength": "value",
+        "altostratusCoverage": "value",
+        "largeCumulusCoverage": "value",
+        "smallCumulusCoverage": "value",
+        "altostratusRain": "value",
+        "largeCumulusRain": "value",
+        "smallCumulusRain": "value",
+        "cameraWorldPos": "value",
+        "rainAmount": "value"
+      }
+    },
+    "GetVolumetricCloudsSimple": {
+      "target": "cloud_eclipse.ogxEclipseCloudTransmittanceSimple",
+      "resources": {
+        "noiseTexture": "texture",
+        "cloudMovement": "value",
+        "thunderStrength": "value",
+        "cumulonimbusStrength": "value",
+        "altostratusCoverage": "value",
+        "largeCumulusCoverage": "value",
+        "smallCumulusCoverage": "value",
+        "altostratusRain": "value",
+        "largeCumulusRain": "value",
+        "smallCumulusRain": "value",
+        "cameraWorldPos": "value",
+        "rainAmount": "value"
+      }
+    },
+    "voxelEmission": {
+      "target": "voxel.ogxVoxelEmission",
+      "resources": {
+        "emissiveBrightness": "value",
+        "emissiveCurve": "value"
+      },
+      "bindings": {
+        "emissiveBrightness": 1,
+        "emissiveCurve": 2
+      }
+    },
+    "photonicsEmission": {
+      "target": "voxel.ogxVoxelEmission",
+      "resources": {
+        "emissiveBrightness": "value",
+        "emissiveCurve": "value"
+      },
+      "bindings": {
+        "emissiveBrightness": 1,
+        "emissiveCurve": 2
+      }
+    },
+    "getPhotonicsEmission": {
+      "target": "voxel.ogxEclipseGetPhotonicsEmission"
+    },
+    "applySceneControllerParameters": {
+      "target": "eclipse_scene.ogxEclipseApplySceneControllerDefaults"
+    },
+    "traceQuarterVoxel": {
+      "target": "eclipse_specular.ogxEclipseTraceQuarterVoxel",
+      "resources": {
+        "quarterVoxelMask": "texture",
+        "side": "value"
+      }
+    },
+    "YearCycleColor": {
+      "target": "weather.ogxYearCycleColorSeason",
+      "resources": {
+        "worldDay": "value"
+      }
+    },
+    "GetVoxelBlock": {
+      "target": "voxel.ogxItxGetVoxelBlock",
+      "resources": {
+        "voxelMask": "texture"
+      },
+      "allowExtraConstants": true
+    },
+    "calculateFlashlight": {
+      "target": "eclipse_diffuse.ogxEclipseCalculateFlashlight",
+      "resources": {
+        "noiseTexture": "texture",
+        "modelViewInverse": "matrix",
+        "previousModelView": "matrix",
+        "centerDepthSmooth": "value",
+        "projectionInverse": "matrix",
+        "range": "value",
+        "brightnessFalloff": "value",
+        "brightness": "value",
+        "size": "value",
+        "red": "value",
+        "green": "value",
+        "blue": "value",
+        "cameraWorldPos": "value",
+        "previousCameraWorldPos": "value"
+      },
+      "bindings": {
+        "range": 32,
+        "red": 1,
+        "green": 0.9,
+        "blue": 0.8
+      }
+    },
+    "SSRT_Handlight_Shadows": {
+      "target": "eclipse_diffuse.ogxEclipseSsrtHandlightShadows",
+      "resources": {
+        "modelViewInverse": "matrix",
+        "nearPlane": "value",
+        "farPlane": "value",
+        "renderScale": "value",
+        "depthTexture": "texture",
+        "dhDepthTexture": "texture",
+        "projection": "matrix",
+        "dhProjection": "matrix",
+        "dhVoxyNearPlane": "value",
+        "dhVoxyFarPlane": "value",
+        "texelSize": "value",
+        "strength": "value"
+      },
+      "bindings": {
+        "strength": 0.95
+      }
     }
   },
   "mcGlue": {
@@ -1872,68 +2226,11 @@
     "VolumetricFog": {
       "evidence": "体积雾要读深度、阴影、噪声、相机与介质参数；参考签名缺少这些缓冲，证据见 shaders/rendering/fog/volumetric.glsl 与 omni-gfx/src/fog_volume.slang。"
     },
-    "RSM": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?资源结构体 giview 没有定义"
-    },
-    "GI_SpatialFilter": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?资源结构体 giview 没有定义"
-    },
-    "BilinearHeightSample": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "HeightBasedNormal": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "ParallaxOcclusionMapping": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "FidelityFX_FSR1": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "ViewPos_From_ScreenPos_DH": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "ViewPos_From_ScreenPos_Raw_DH": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "ScreenPos_From_ViewPos_DH": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "ScreenPos_From_ViewPos_Raw_DH": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "LinearDepth_From_ScreenDepth_DH": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "ScreenDepth_From_LinearDepth_DH": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "ScreenDepth_From_DHScreenDepth": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "YearCycleColor": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
     "FogDensities": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "swapperlinZ2": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "SSRT_Handlight_Shadows": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     },
     "GetHandLight": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "calculateFlashlight": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "applySceneControllerParameters": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "GetVoxelBlock": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?samples [] != ['fetch']; constants extra 0"
     },
     "GetVoxelData": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
@@ -1941,20 +2238,11 @@
     "GetTexCoord": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     },
-    "getVoxelEmission": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "voxelEmission": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
     "ComputeVoxelShadowMap": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     },
     "sortIntersectionCutout": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?param count 9 != 10; constants missing 0.5, 1"
-    },
-    "traceQuarterVoxel": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     },
     "voxelReflection": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
@@ -1971,49 +2259,13 @@
     "WSRwaterVolumetrics": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     },
-    "getPhotonicsEmission": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "photonicsEmission": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
     "photonicsReflectionShading": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "getCloudShape": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?samples ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample"
-    },
-    "getCumulonimbusShape": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "getLightningPosition": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "GetCloudShadow": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?samples ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', '"
-    },
-    "getRayOrigin": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "phaseCloud": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "getCloudScattering": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "getCloudLighting": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     },
     "raymarchCloud": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     },
     "GetVolumetricClouds": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "raymarchCloudSimple": {
-      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
-    },
-    "GetVolumetricCloudsSimple": {
       "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     }
   },

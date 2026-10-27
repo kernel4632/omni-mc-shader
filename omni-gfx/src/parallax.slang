@@ -11,8 +11,9 @@ Omni 通用图形库视差模块：在地表材质的高度图上沿视线找可
 #ifndef OGX_PARALLAX_INCLUDED
 #define OGX_PARALLAX_INCLUDED
 
-// 数学模块提供法线解码、夹紧与位运算近似。
+// 数学模块提供法线解码、夹紧与位运算近似；采样模块提供时间蓝噪声。
 #include "math.slang"
+#include "sampling.slang"
 
 // 把向量转到切线空间：显式按切线基的三个列向量点乘。
 // 为什么不用矩阵乘：Slang 与 GLSL 的行列顺序不同，写成矩阵会在两个后端得到不同结果；
@@ -22,58 +23,135 @@ float3 ogxParallaxToTangent(float3 vector, float3 tangent, float3 bitangent, flo
     return float3(dot(vector, tangent), dot(vector, bitangent), dot(vector, normal)); // 每一列就是一个基向量。
 }
 
-// 双线性高度采样：在图块内跨格子读四角高度并插值，越界处用一层薄壳把空隙补平。
-// `tilesBaseTexel` 是图块左上角在图集里的像素坐标，`resolutionMask` 是图块边长的按位掩码。
-// `isBlock` 表示是否按方块图集回绕：地形恒为真，实体由调用方判断。
-float ogxParallaxHeightBilinear(Sampler2D normals, float2 coord, int2 tilesBaseTexel,
-    float textureResolution, int resolutionMask, bool isBlock)
+// 双线性高度采样：坐标以像素为单位，图块左上角与分辨率掩码决定回绕范围。
+// 参考把高度存在法线贴图的 alpha 通道；高度为零表示该像素没有视差数据，补成完整高度。
+// 采样器放在参数表最后：参考用全局 `normals`，通用库必须由调用方显式给出图集。
+float ogxBilinearHeightSample(float2 coord, int2 tilesBaseTexel, float textureResolution, int iTextureResolution, bool isBlock, Sampler2D normals)
 {
     int2 texelX = int2(floor(coord)); // 左下角像素。
     int2 texelW = texelX + 1; // 右上角像素。
-    float2 fraction = coord - float2(texelX); // 到左下角的小数偏移。
+    float2 f = coord - float2(texelX); // 到左下角的小数偏移。
     if (isBlock) // 方块图集按图块回绕。
     {
-        texelX = tilesBaseTexel + (texelX & resolutionMask); // 左下角回绕到本图块内。
-        texelW = tilesBaseTexel + (texelW & resolutionMask); // 右上角同理。
+        texelX = tilesBaseTexel + (texelX & iTextureResolution); // 左下角回绕到本图块内。
+        texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角同理。
     }
-    float4 heights = float4(normals.Load(int3(texelX, 0)).a, // 左下角高度。
+    float4 sh = float4(normals.Load(int3(texelX, 0)).a, // 左下角高度。
         normals.Load(int3(int2(texelW.x, texelX.y), 0)).a, // 右下角高度。
         normals.Load(int3(int2(texelX.x, texelW.y), 0)).a, // 左上角高度。
         normals.Load(int3(texelW, 0)).a); // 右上角高度。
-    heights += ogxSaturate(1.0 - heights * 1e20); // 高度为零表示没有视差数据，补成完整高度，避免出现空洞。
-    return lerp(lerp(heights.x, heights.y, fraction.x), // 先沿横轴插值两对。
-        lerp(heights.z, heights.w, fraction.x), // 再沿横轴插值另外两对。
-        fraction.y); // 最后沿纵轴插值得到高度。
+    sh += OGX_CLAMP01(1.0 - sh * 1e20); // 高度为零表示没有视差数据，补成完整高度，避免出现空洞。
+    return lerp(lerp(sh.x, sh.y, f.x), // 先沿横轴插值两对。
+        lerp(sh.z, sh.w, f.x), // 再沿横轴插值另外两对。
+        f.y); // 最后沿纵轴插值得到高度。
 }
 
-// 用高度差直接生成法线：平滑模式可以只用高度场求梯度，得到与视差一致的法线。
-// `mode` 为二时用中心差分，否则用带边缘压平的梯度；两种曲线照原程序保留。
-float3 ogxParallaxHeightNormal(Sampler2D normals, float2 coord, int2 tilesBaseTexel,
-    float textureResolution, int resolutionMask, bool isBlock, float depth, int mode)
+// 用高度差直接生成法线：参考默认取「由高度生成法线」这一支，中心差分出一个三轴法线。
+// 采样器与深度放在最后，图集与分辨率由调用方给出，函数本身不读引擎状态。
+float3 ogxHeightBasedNormal(float2 coord, int2 tilesBaseTexel, float textureResolution, int iTextureResolution, bool isBlock, Sampler2D normals, float depth)
 {
     coord -= 0.5; // 把坐标移到像素中心。
     int2 texelX = int2(floor(coord)); // 左下角像素。
     int2 texelW = texelX + 1; // 右上角像素。
-    float2 fraction = coord - float2(texelX); // 小数偏移。
+    float2 f = coord - float2(texelX); // 小数偏移。
     if (isBlock) // 方块图集按图块回绕。
     {
-        texelX = tilesBaseTexel + (texelX & resolutionMask); // 左下角回绕。
-        texelW = tilesBaseTexel + (texelW & resolutionMask); // 右上角同理。
+        texelX = tilesBaseTexel + (texelX & iTextureResolution); // 左下角回绕。
+        texelW = tilesBaseTexel + (texelW & iTextureResolution); // 右上角同理。
     }
-    float4 heights = float4(normals.Load(int3(texelX, 0)).a, // 四角高度。
+    float4 sh = float4(normals.Load(int3(texelX, 0)).a, // 四角高度。
         normals.Load(int3(int2(texelW.x, texelX.y), 0)).a,
         normals.Load(int3(int2(texelX.x, texelW.y), 0)).a,
         normals.Load(int3(texelW, 0)).a);
-    if (mode == 2) // 平滑模式：直接由四角高度差得到梯度。
+    sh.w = sh.y + sh.z - sh.x - sh.w; // 把四角合成一个中心差分量。
+    return float3(sh.w * f.yx + (sh.x - sh.yz), (8.0 / depth) / textureResolution); // 梯度乘深度再归一化，深度越大法线越陡。
+}
+
+// 平滑视差主函数：参考签名是坐标、切线基、光方向、纹理导数与两个输出，其余输入显式追加。
+// 为什么追加参数都在尾部：参考把这些量写成全局变量或宏，迁进库时必须显式接收，
+// 但参考参数仍排在最前面，严格对照才能逐项核对。
+// 为什么阴影抖动在库内取噪声：参考在函数体里调用蓝噪声函数，采样次数属于算法的一部分。
+int2 ogxParallaxOcclusionMapping(float2 coord, float3x3 tbnMat, float3 shadowVector, float2 duv1, float2 duv2,
+    inout float3 normalTex, inout float parallaxShadow,
+    Sampler2D normals, Sampler2D noiseTexture, float2 atlasSize, float textureResolution, bool isBlock,
+    int quality, int refinements, int shadowQuality, float depth, bool shadowEnabled, bool taa,
+    bool fadeEnabled, bool useHeightNormal, float3 viewPos, int2 fragCoord, int frameCounter)
+{
+    float2 atlasTiles = float2(atlasSize) / textureResolution; // 图集里横纵各有多少个图块。
+    float2 duvMax = max(abs(duv1), abs(duv2)) * atlasTiles; // 纹理坐标的屏幕变化量换成图块单位。
+    float fade = 1.0; // 远处淡出因子，未开淡出时不参与。
+    if (fadeEnabled) fade = OGX_CLAMP01(pow(max(duvMax.x, duvMax.y), -0.1) * (1.0 / 1.4)); // 像素越小越淡出，避免远处闪烁。
+    float2 tilesBaseCoord = floor(coord * atlasTiles); // 当前坐标落在哪个图块。
+    int2 tilesBaseTexel = int2(tilesBaseCoord * textureResolution); // 该图块左上角的像素坐标。
+    int iTextureResolution = int(textureResolution) - 1; // 图块边长减一，用作回绕掩码。
+    float3 parallaxTexelCoord = float3(coord * atlasSize, 1.0); // 换成图集像素坐标并把深度放到一。
+    float sampleHeight = ogxBilinearHeightSample(parallaxTexelCoord.xy - 0.5, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals); // 先读起始高度。
+    if (sampleHeight > 0.0 && sampleHeight < 1.0) // 只有处在表面内部的像素才需要偏移。
     {
-        heights.w = heights.y + heights.z - heights.x - heights.w; // 把四角合成一个中心差分量。
-        return float3(heights.w * fraction.yx + (heights.x - heights.yz), (8.0 / depth) / textureResolution); // 梯度乘深度再归一化，深度越大法线越陡。
+        parallaxTexelCoord.xy -= 0.5; // 坐标移到像素中心。
+        float3 viewVector = ogxParallaxToTangent(normalize(viewPos), tbnMat[0], tbnMat[1], tbnMat[2]); // 视线方向转到切线空间。
+        viewVector /= -viewVector.z; // 归一化到单位深度步长。
+        float3 stepDir = viewVector / float(quality); // 每一步的方向。
+        stepDir.xy *= textureResolution * depth * 0.25; // 横向步长按图块尺寸与深度缩放。
+        float stepDelta = 2.0 / float(quality); // 每一步增加的步长，和参考同一个分配。
+        float stepLength = stepDelta; // 逐步加深的初始步长。
+        for (int i = 0; i < quality; i++, stepLength += stepDelta) // 线性步进找交点。
+        {
+            parallaxTexelCoord += stepDir * stepLength; // 前进一小步。
+            sampleHeight = ogxBilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals); // 读这一步的高度。
+            if (sampleHeight > parallaxTexelCoord.z) break; // 表面高度超过步进深度就找到了交点。
+        }
+        for (int i = 0; i < refinements; i++) // 二分细化交点。
+        {
+            if (sampleHeight > parallaxTexelCoord.z) // 越过交点就回退半步。
+            {
+                parallaxTexelCoord -= stepDir * stepLength; // 回退。
+                stepLength *= 0.5; // 步长减半。
+            }
+            parallaxTexelCoord += stepDir * stepLength; // 再前进一个更小的步。
+            sampleHeight = ogxBilinearHeightSample(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals); // 读高度。
+        }
+        if (sampleHeight <= parallaxTexelCoord.z) parallaxTexelCoord += stepDir * stepLength * 2.0; // 最后仍未越界就多走两步，避免停在表面下。
+        if (shadowEnabled && parallaxShadow > 0.0) // 只有原先允许受光的像素才算阴影。
+        {
+            shadowVector = ogxParallaxToTangent(shadowVector, tbnMat[0], tbnMat[1], tbnMat[2]); // 阳光方向转到切线空间。
+            shadowVector /= shadowVector.z * 0.9 + 0.1; // 归一化到单位深度步长，避免水平方向过大。
+            float3 shadowTexelCoord = parallaxTexelCoord; // 从交点出发。
+            float3 stepSize = shadowVector / float(shadowQuality); // 阴影步进方向。
+            stepSize.xy *= textureResolution * depth * 0.25; // 横向步长按图块与深度缩放。
+            if (taa) shadowTexelCoord += stepSize * ogxBlueNoiseTemporal(noiseTexture, fragCoord, frameCounter).x; // 开时间抗锯齿时用蓝噪声抖动起点。
+            else shadowTexelCoord += stepSize; // 不开时只多走一步。
+            for (int i = 0; i < shadowQuality; i++, shadowTexelCoord += stepSize) // 沿光方向步进找遮挡。
+            {
+                if (shadowTexelCoord.z > 1.0) break; // 超出表面顶部就不再遮挡。
+                sampleHeight = ogxBilinearHeightSample(shadowTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals); // 读遮挡候选的高度。
+                float diff = shadowTexelCoord.z - sampleHeight; // 光线高度减去表面高度，负得越多遮挡越强。
+                parallaxShadow *= OGX_CLAMP01(diff * 40.0 + 1.0); // 逐步累积遮蔽。
+                if (parallaxShadow < 0.003) break; // 已经足够黑就提前结束。
+            }
+            if (fadeEnabled) parallaxShadow = lerp(1.0, parallaxShadow, fade); // 远处淡出阴影，避免闪烁。
+        }
+        parallaxTexelCoord.xy += 0.5; // 坐标移回像素角。
+        if (useHeightNormal) normalTex = ogxHeightBasedNormal(parallaxTexelCoord.xy, tilesBaseTexel, textureResolution, iTextureResolution, isBlock, normals, depth); // 由高度场求法线。
+        parallaxTexelCoord.xy = (fract(parallaxTexelCoord.xy / textureResolution) + tilesBaseCoord) * textureResolution; // 把偏移后的坐标折回原本的图块。
     }
-    const float eps = 0.01; // 靠近像素边缘时梯度会突变，用一个小阈值把它压平。
-    fraction -= 0.5; // 偏移改到像素中心附近。
-    float dx = lerp(heights.x - heights.y, heights.z - heights.w, ogxSaturate(fraction.y * 1e20)) * ogxSaturate((eps - abs(fraction.x)) * 1e20); // 横向梯度，越靠边越弱。
-    float dy = lerp(heights.x - heights.z, heights.y - heights.w, ogxSaturate(fraction.x * 1e20)) * ogxSaturate((eps - abs(fraction.y)) * 1e20); // 纵向梯度同理。
-    return float3(dx, dy, step(abs(dx) + abs(dy), 0.0)); // 没有梯度的地方朝外。
+    int2 parallaxTexel = int2(parallaxTexelCoord.xy); // 最终要采样到的像素。
+    if (!useHeightNormal) normalTex = ogxDecodeNormalTex(normals.Load(int3(parallaxTexel, 0)).rgb); // 不用高度法线时从法线贴图取。
+    else if (fadeEnabled) normalTex = lerp(float3(0.0, 0.0, 1.0), normalTex, fade); // 远处淡出到朝外法线。
+    return parallaxTexel; // 交回被遮挡后的采样像素。
+}
+
+// 旧调用形状的适配层：把切线基三轴合成矩阵，转调上面的严格实现。
+// 保留这个入口是为了让渲染流程只改参数来源，不必理解库内的严格签名。
+int2 ogxParallaxSmooth(float2 coord, float3 tangent, float3 bitangent, float3 normal, float3 shadowVector, float2 duv1, float2 duv2, float3 viewPos,
+    Sampler2D normals, Sampler2D noiseTexture, float2 atlasSize, float textureResolution, bool isBlock,
+    float depth, int quality, int refinements, int shadowQuality, bool shadowEnabled, bool taa,
+    bool fadeEnabled, int2 fragCoord, int frameCounter, int basedNormal, inout float3 normalTex, inout float parallaxShadow)
+{
+    float3x3 tbnMat = float3x3(tangent, bitangent, normal); // 参考把切线基当矩阵使用，这里按列拼回去。
+    return ogxParallaxOcclusionMapping(coord, tbnMat, shadowVector, duv1, duv2, normalTex, parallaxShadow,
+        normals, noiseTexture, atlasSize, textureResolution, isBlock, quality, refinements, shadowQuality,
+        depth, shadowEnabled, taa, fadeEnabled, basedNormal == 2, viewPos, fragCoord, frameCounter); // 默认模式不额外求高度法线。
 }
 
 // 锐利模式的命中法线处理：按「由凹凸生成法线」的取值决定是否换回贴图法线或远处淡出。
@@ -96,91 +174,6 @@ float3 ogxParallaxHitNormal(Sampler2D normals, int2 parallaxTexel, float3 hitNor
         hitNormal = lerp(float3(0.0, 0.0, 1.0), hitNormal, fade); // 远处淡出到朝外法线。
     }
     return hitNormal; // 交回处理后的法线。
-}
-
-// 平滑视差：从当前坐标沿视线步进求交，再做若干次二分细化，最后可选算阴影与法线。
-// `tbn` 是切线基，`shadowVector` 是视空间阳光方向，`duv1`、`duv2` 是纹理坐标的屏幕导数。
-// `normalTex` 与 `parallaxShadow` 是输入输出：前者带回法线，后者带回被遮挡后的受光比例。
-int2 ogxParallaxSmooth(float2 coord, float3 tangent, float3 bitangent, float3 normal, float3 shadowVector, float2 duv1, float2 duv2, float3 viewPos,
-    Sampler2D normals, float2 atlasSize, float textureResolution, bool isBlock,
-    float depth, int quality, int refinements, int shadowQuality, bool shadowEnabled, bool taa,
-    bool fadeEnabled, float dither, int basedNormal, inout float3 normalTex, inout float parallaxShadow)
-{
-    float2 atlasTiles = atlasSize / textureResolution; // 图集里横纵各有多少个图块。
-    float fade = 1.0; // 远处淡出因子，未开淡出时不参与。
-    if (fadeEnabled) // 需要淡出时先算这一处的淡出因子。
-    {
-        float2 duvMax = max(abs(duv1), abs(duv2)) * atlasTiles; // 纹理坐标的屏幕变化量换成图块单位。
-        fade = ogxSaturate(pow(max(duvMax.x, duvMax.y), -0.1) * (1.0 / 1.4)); // 像素越小越淡出，避免远处闪烁。
-    }
-    float2 tilesBaseCoord = floor(coord * atlasTiles); // 当前坐标落在哪个图块。
-    int2 tilesBaseTexel = int2(tilesBaseCoord * textureResolution); // 该图块左上角的像素坐标。
-    int resolutionMask = int(textureResolution) - 1; // 图块边长减一，用作回绕掩码。
-    float3 parallaxCoord = float3(coord * atlasSize, 1.0); // 换成图集像素坐标并把深度放到一。
-    float sampleHeight = ogxParallaxHeightBilinear(normals, parallaxCoord.xy - 0.5, tilesBaseTexel,
-        textureResolution, resolutionMask, isBlock); // 先读起始高度。
-    if (sampleHeight > 0.0 && sampleHeight < 1.0) // 只有处在表面内部的像素才需要偏移。
-    {
-        parallaxCoord.xy -= 0.5; // 坐标移到像素中心。
-        float3 viewVector = ogxParallaxToTangent(normalize(viewPos), tangent, bitangent, normal); // 视线方向转到切线空间。
-        viewVector /= -viewVector.z; // 归一化到单位深度步长。
-        float3 stepDir = viewVector / float(quality); // 每一步的方向。
-        stepDir.xy *= textureResolution * depth * 0.25; // 横向步长按图块尺寸与深度缩放。
-        float stepLength = 2.0 / float(quality); // 逐步加深的初始步长。
-        for (int i = 0; i < quality; i++, stepLength += 2.0 / float(quality)) // 线性步进找交点。
-        {
-            parallaxCoord += stepDir * stepLength; // 前进一小步。
-            sampleHeight = ogxParallaxHeightBilinear(normals, parallaxCoord.xy, tilesBaseTexel,
-                textureResolution, resolutionMask, isBlock); // 读这一步的高度。
-            if (sampleHeight > parallaxCoord.z) break; // 表面高度超过步进深度就找到了交点。
-        }
-        for (int i = 0; i < refinements; i++) // 二分细化交点。
-        {
-            if (sampleHeight > parallaxCoord.z) // 越过交点就回退半步。
-            {
-                parallaxCoord -= stepDir * stepLength; // 回退。
-                stepLength *= 0.5; // 步长减半。
-            }
-            parallaxCoord += stepDir * stepLength; // 再前进一个更小的步。
-            sampleHeight = ogxParallaxHeightBilinear(normals, parallaxCoord.xy, tilesBaseTexel,
-                textureResolution, resolutionMask, isBlock); // 读高度。
-        }
-        if (sampleHeight <= parallaxCoord.z) parallaxCoord += stepDir * stepLength * 2.0; // 最后仍未越界就多走两步，避免停在表面下。
-        if (shadowEnabled && parallaxShadow > 0.0) // 只有原先允许受光的像素才算阴影。
-        {
-            float3 shadowDir = ogxParallaxToTangent(shadowVector, tangent, bitangent, normal); // 阳光方向转到切线空间。
-            shadowDir /= shadowDir.z * 0.9 + 0.1; // 归一化到单位深度步长，避免水平方向过大。
-            float3 shadowCoord = parallaxCoord; // 从交点出发。
-            float3 stepSize = shadowDir / float(shadowQuality); // 阴影步进方向。
-            stepSize.xy *= textureResolution * depth * 0.25; // 横向步长按图块与深度缩放。
-            if (taa) shadowCoord += stepSize * dither; // 开时间抗锯齿时用蓝噪声抖动起点。
-            else shadowCoord += stepSize; // 不开时只多走一步。
-            for (int i = 0; i < shadowQuality; i++, shadowCoord += stepSize) // 沿光方向步进找遮挡。
-            {
-                if (shadowCoord.z > 1.0) break; // 超出表面顶部就不再遮挡。
-                sampleHeight = ogxParallaxHeightBilinear(normals, shadowCoord.xy, tilesBaseTexel,
-                    textureResolution, resolutionMask, isBlock); // 读遮挡候选的高度。
-                float diff = shadowCoord.z - sampleHeight; // 光线高度减去表面高度，负得越多遮挡越强。
-                parallaxShadow *= ogxSaturate(diff * 40.0 + 1.0); // 逐步累积遮蔽。
-                if (parallaxShadow < 0.003) break; // 已经足够黑就提前结束。
-            }
-            if (fadeEnabled) parallaxShadow = lerp(1.0, parallaxShadow, fade); // 远处淡出阴影，避免闪烁。
-        }
-        parallaxCoord.xy += 0.5; // 坐标移回像素角。
-        if (basedNormal == 2) normalTex = ogxParallaxHeightNormal(normals, parallaxCoord.xy,
-            tilesBaseTexel, textureResolution, resolutionMask, isBlock, depth, 2); // 由高度场求法线。
-        parallaxCoord.xy = (fract(parallaxCoord.xy / textureResolution) + tilesBaseCoord) * textureResolution; // 把偏移后的坐标折回原本的图块。
-    }
-    int2 parallaxTexel = int2(parallaxCoord.xy); // 最终要采样到的像素。
-    if (basedNormal < 2) // 不是全部用视差法线时，照常从法线贴图取。
-    {
-        normalTex = ogxDecodeNormalTex(normals.Load(int3(parallaxTexel, 0)).rgb); // 解出切线空间法线。
-    }
-    else if (fadeEnabled) // 全部用视差法线时按淡出因子回落到朝外法线。
-    {
-        normalTex = lerp(float3(0.0, 0.0, 1.0), normalTex, fade); // 远处淡出到朝外法线。
-    }
-    return parallaxTexel; // 交回被遮挡后的采样像素。
 }
 
 // 锐利视差：沿视线逐像素穿过高度图，命中后可选算自阴影与法线。
