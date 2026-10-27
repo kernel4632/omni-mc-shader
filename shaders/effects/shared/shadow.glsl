@@ -80,7 +80,7 @@ const float shadowDistance = 192.0; // [64.0 96.0 128.0 192.0 256.0 384.0 512.0 
 #include "/common/math.glsl"
 #include "/common/noise.glsl"
 // 投影、比较与半影算法来自通用库，本文件只保留宿主矩阵与阴影图接线。
-#include "/omni-gfx/shadow.glsl"
+#include "/omni-gfx/shadow/shadow.glsl"
 // 材质掩码与手部/玩家判断由绑定层提供，阴影不需要整个表面材质效果。
 #include "/bind/gbuffer.glsl"
 

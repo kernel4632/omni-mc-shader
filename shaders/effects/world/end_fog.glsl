@@ -27,7 +27,7 @@
 // 末地涡旋雾的纯计算放在通用库，这里只传时间、采样器与画质参数。
 // 阳光、天光、底光与火把亮度由共享光照文件统一定义。
 #include "/effects/shared/light.glsl"
-#include "/omni-gfx/fog.glsl"
+#include "/omni-gfx/fog/fog.glsl"
 // 相机位置与动画时间由绑定层整理，效果文件不再直接读宿主输入。
 #include "/bind/camera.glsl"
 #include "/bind/time.glsl"

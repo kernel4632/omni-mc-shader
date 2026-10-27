@@ -1,6 +1,6 @@
 /*
 生成文件：采样模块的 GLSL 330 版本，请勿手工修改。
-源文件在库的源码目录中的同名模块，改动后运行构建脚本的生成命令。
+源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
 用途：Minecraft 光影直接引入；同一份源还会生成 SPIR-V 供独立程序使用。
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
 */
@@ -171,6 +171,44 @@ float ogxHalton3(int index)
         fraction /= 3.0;
     }
     return result;
+}
+
+// 笛卡尔坐标转球面纹理坐标。
+vec3 ogxEclipseCartToSphere(vec2 coord)
+{
+    coord.y = 1.0 - coord.y; // 翻转纵轴。
+    coord *= vec2(2.0 * OGX_PI, OGX_PI); // 换成角度。
+    vec2 lon = vec2(sin(coord.x), cos(coord.x)) * sin(coord.y); // 经度方向。
+    return vec3(lon.x, cos(coord.y), lon.y); // 单位球方向。
+}
+
+// 球面方向转笛卡尔纹理坐标。
+vec2 ogxEclipseSphereToCart(vec3 dir)
+{
+    float lonlat = atan(-dir.x, -dir.z); // 经度。
+    return vec2(lonlat / (2.0 * OGX_PI) + 0.5, 0.5 * dir.y + 0.5); // 与上一函数互逆。
+}
+
+// 三角白噪声：中心化后开方，得到更适合抖动的分布。
+float ogxEclipseTriangWhiteNoise(vec2 n, float frameTime)
+{
+    float t = fract(frameTime); // 帧内小数。
+    float rnd = fract(sin(dot(n + 0.07 * t, vec2(12.9898, 78.233))) * 43758.5453); // 白噪声。
+    float center = rnd * 2.0 - 1.0; // 中心化。
+    rnd = center * inversesqrt(abs(center) + 1e-20); // 开方。
+    rnd = max(-1.0, rnd); // 下限。
+    return rnd - sign(center); // 三角分布。
+}
+
+// 按浮点尾数位抖动颜色：十位、十六位与整数八九十十六位各一版。
+vec3 ogxEclipseDither(vec3 color, vec2 texCoord, float frameTime, int mode)
+{
+    float dither = ogxEclipseTriangWhiteNoise(texCoord, frameTime); // 抖动值。
+    if (mode == 0) return color + dither * exp2(-vec3(6.0, 6.0, 5.0)) * exp2(floor(log2(color))); // 十位尾数。
+    if (mode == 1) return color + dither * exp2(-10.0) * exp2(floor(log2(color))); // 十六位尾数。
+    if (mode == 2) return color + dither * exp2(-8.0); // 八位整数。
+    if (mode == 3) return color + dither * exp2(-10.0); // 十位整数。
+    return color + dither * exp2(-16.0); // 十六位整数。
 }
 
 #endif

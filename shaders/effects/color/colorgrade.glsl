@@ -64,7 +64,7 @@
 
 // 共用数学：提供 `saturate` 等基础函数，本文件的分段染色与曲线都用到它。
 #include "/common/math.glsl"
-#include "/omni-gfx/post.glsl"
+#include "/omni-gfx/post/post.glsl"
 
 // --- 亮度曲线：按通道把暗部与亮部拉开或收回 ---
 // 暗部曲线：在零点附近抬起一段抛物线，`OMNI_LUMINANCE_CURVE_LOWER` 为正时暗部变亮，为零时整条曲线为零。

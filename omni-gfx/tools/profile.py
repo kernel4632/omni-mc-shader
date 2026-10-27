@@ -62,14 +62,19 @@ PROFILES = {
 }  # 两个 profile 的编译期开关与各自的代表性函数；两组函数不会互相混用。
 
 MODULES = (
-    "math", "color", "sampling", "noise", "atmosphere", "atmosphere_model",
-    "cloud", "cloud_volume", "water", "fog", "fog_volume", "shadow", "gi",
-    "reflection", "post", "antialias", "weather", "surface", "voxel",
-    "upscale", "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
-    "itx_extra", "planar", "camera", "itx_taa", "cloud_eclipse", "eclipse_extra",
-    "eclipse_sky", "itx_end", "eclipse_indirect", "eclipse_specular",
-    "eclipse_diffuse", "eclipse_scene",
-)  # 与生成器模块表一致；顺序固定，展开结果可复现。
+    "math", "color", "sampling", "sampling/anisotropic", "noise", "camera", "surface", "water", "upscale",
+    "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
+    "atmosphere/atmosphere", "atmosphere/model", "atmosphere/sky",
+    "cloud/cloud", "cloud/volume", "cloud/eclipse", "cloud/planar",
+    "fog/fog", "fog/volume", "shadow/shadow", "shadow/eclipse",
+    "voxel/voxel", "voxel/trace",
+    "gi/gi", "gi/diffuse", "gi/indirect", "gi/ambientocclusion",
+    "reflection/reflection", "reflection/wsr", "reflection/photonics", "reflection/specular",
+    "post/post", "post/exposure", "post/scene", "lens/lens",
+    "antialias/antialias", "antialias/taa", "antialias/fxaa",
+    "weather/weather", "weather/rain", "weather/lightning",
+    "world/end", "world/portal",
+)  # 与生成器模块表一致；顺序按效果依赖排列，展开结果可复现。
 
 
 def _expand(name: str, stack: tuple[str, ...], seen: set[str]) -> str:
@@ -87,7 +92,8 @@ def _expand(name: str, stack: tuple[str, ...], seen: set[str]) -> str:
     def replace(match: re.Match) -> str:
         reference = match.group(1)
         if reference.startswith("/omni-gfx/") and reference.endswith(".glsl"):
-            return _expand(Path(reference).stem, (*stack, name), seen)
+            module = reference[len("/omni-gfx/"):-len(".glsl")]
+            return _expand(module, (*stack, name), seen)
         raise ValueError(f"{name} 引用了非库文件：{reference}")
 
     return INCLUDE.sub(replace, text)

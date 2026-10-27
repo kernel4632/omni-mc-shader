@@ -389,16 +389,23 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
     return found
 
 
-def function_index(paths: list[Path], defines: dict[str, str] | None = None) -> dict[str, dict]:
-    """建立 `模块.函数名` 到完整签名的索引；同名重载按出现顺序都保留。"""
+def function_index(paths: list[Path], defines: dict[str, str] | None = None,
+                   root: Path | None = None) -> dict[str, dict]:
+    """建立 `模块.函数名` 到完整签名的索引；同名重载按出现顺序都保留。
+
+    `root` 给出时必须位于所有路径的上级；模块名取相对路径，因此
+    `src/cloud/eclipse.slang` 的键是 `cloud/eclipse.ogx...`，不会把变体文件
+    误当成顶层模块。省略 `root` 时退回文件名词干。
+    """
     index = {}
     for path in sorted(paths):
+        module = path.relative_to(root).with_suffix("").as_posix() if root else path.stem
         for item in parse_functions(path, defines):
-            key = f"{path.stem}.{item['name']}"
+            key = f"{module}.{item['name']}"
             variant = 1
             while key in index:  # 重载不能互相覆盖，编号后分别参与比较。
                 variant += 1
-                key = f"{path.stem}.{item['name']}#{variant}"
+                key = f"{module}.{item['name']}#{variant}"
             item["path"] = path.as_posix()
             index[key] = item
     return index

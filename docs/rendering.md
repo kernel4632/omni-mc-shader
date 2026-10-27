@@ -92,15 +92,15 @@ Iris 的执行顺序是：阴影 → 不透明几何 → deferred 0–8 → 半�
 
 | 序号 | 位置 | 循环做什么 | 归属 |
 | --- | --- | --- | --- |
-| 1 | `cloud/planar.glsl` 的 `PlanarClouds` | 沿光方向四步估计云内光照遮挡 | 已迁库：`ogxPlanarCloudLightingDepth`（`omni-gfx/src/cloud.slang`） |
-| 2 | `fog/landscattering.glsl` | 四段估大气光学厚度 | 已迁库：`ogxAtmoSimpleScattering`（`atmosphere_model.slang`） |
+| 1 | `cloud/planar.glsl` 的 `PlanarClouds` | 沿光方向四步估计云内光照遮挡 | 已迁库：`ogxPlanarCloudLightingDepth`（`omni-gfx/src/cloud/planar.slang`） |
+| 2 | `fog/landscattering.glsl` | 四段估大气光学厚度 | 已迁库：`ogxAtmoSimpleScattering`（`omni-gfx/src/atmosphere/model.slang`） |
 | 3 | `water/waves.glsl` 的 `physics_waveHeight` | 迭代正弦叠出波高 | 已迁库：`ogxOceanWaveSum` 与 `ogxOceanWaveHeight`（`water.slang`） |
 | 4 | `water/waves.glsl` 的 `physics_wavePixel` | 同一套迭代正弦，另外累加方向 | 已迁库：与第 3 项共用同一个函数 |
 | 5 | `ground/grass_geometry.glsl` 的 `b` 循环 | 同一处摊开若干片草 | 留阶段层 |
 | 6 | `ground/grass_geometry.glsl` 的 `j` 循环 | 一片草叶分成几段 | 留阶段层 |
 | 7 | `ground/grass_geometry.glsl` 的 `i` 循环 | 每段三个顶点 | 留阶段层 |
 | 8 | `ground/terrain_surface.glsl` 的 `SampleAnisotropic` | 沿特征向量在方块图集上取样 | 留阶段层 |
-| 9 | `world/nether.glsl` 的 `NetherVolumetricFog` | 下界体积雾沿视线步进 | 已迁库：`ogxNetherVolumetricFog`（`fog_volume.slang`） |
+| 9 | `world/nether.glsl` 的 `NetherVolumetricFog` | 下界体积雾沿视线步进 | 已迁库：`ogxNetherVolumetricFog`（`omni-gfx/src/fog/volume.slang`） |
 | 10 | `celestial.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
 | 11 | `terrain.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
 | 12 | `entities.glsl` 的 `EndPortalColor` | 末地传送门叠十六层 | 已迁效果层：`effects/entity/entity.glsl` |

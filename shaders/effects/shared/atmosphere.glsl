@@ -53,7 +53,7 @@
 #include "/effects/shared/suncolor.glsl"
 #include "/effects/shared/skyscatter.glsl"
 // 查表公式、球面几何与相位函数都在通用库；本文件只填参数与选贴图。
-#include "/omni-gfx/atmosphere_model.glsl"
+#include "/omni-gfx/atmosphere/model.glsl"
 
 // 一点一六点五以后大气数据挂在八号画面，更早的版本挂在二号深度上；只能整段选一个采样器。
 #if MC_VERSION >= 11605

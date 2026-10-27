@@ -24,7 +24,7 @@
 */
 #ifdef OMNI_CLOUD_DENSITY_PASS // 由 effects/cloud/cloud.glsl 在三维云噪声可用的阶段打开；其它程序整段不编译。
 // 云的光照相位、顶部曲线与体积云主循环放在通用库；只在需要云密度的阶段引入。
-#include "/omni-gfx/cloud_volume.glsl"
+#include "/omni-gfx/cloud/volume.glsl"
 #if OMNI_CLOUD_CUMULONIMBUS == 1 // 中档积雨云要读雷暴强度；Iris 内建量，本程序里 `storm.glsl` 不参与编译，所以在此声明。
 uniform float thunderStrength; // 雷暴强度，零到一，已由加载器平滑；零表示没有雷暴。
 #endif

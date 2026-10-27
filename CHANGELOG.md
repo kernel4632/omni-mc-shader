@@ -1,4 +1,12 @@
 # 更新记录
+## 0.16.0-dev.9
+
+结构重构第四批：`omni-gfx/src` 按实际效果重新组织，来源包名不再充当顶层模块。
+- 模块归位：`itx_extra` 拆到 `lens/lens`、`post/exposure`、`antialias/fxaa`、`sampling/anisotropic`、`weather/rain`、`world/portal`、`atmosphere/model`；`eclipse_extra` 拆到 `gi/ambientocclusion`、`shadow/eclipse`、`fog/fog`、`sampling`、`weather/lightning`、`voxel/trace`、`reflection/specular`；`eclipse_specular` 拆到 `reflection/wsr`、`reflection/photonics`、`reflection/specular`、`shadow/eclipse`、`voxel/trace`；`cloud_eclipse` 移到 `cloud/eclipse`。对焦与镜头光斑、曝光与泛光、雨纹与闪电、GTAO、WSR/Photonics 高光、体素求交、末地与传送门各自回到对应效果文件夹。
+- 源与产物：`omni-gfx/src` 现有 48 个模块，`shaders/omni-gfx` 按同名文件夹生成 48 份 GLSL，只有一份产物；生成器、profile、探针、严格对照与人工对照表的目标路径同步更新。旧的平铺模块文件已删除，`generate` 会清理生成目录里的过期模块。
+- 实现不变：函数体、常数与采样顺序逐项保留；机器对比 HEAD 的 779 个顶层函数体，缺失 0、新增 0、改动 0。`sampling/anisotropic.slang` 单独成文件，避免导数函数进入顶点与阴影程序。
+- 数量：选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；严格统计 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 不变。
+- 验证：`python build.py audit` 通过 499 个代码文件；`python build.py verify` 通过 160 个测试、审计、九组编译探针与打包；`python build.py compile` 通过 280 组唯一程序 0 错误；`python omni-gfx/build.py strict-parity` 与 `profiles` 通过，`iterationt` 15511 行、`eclipse` 15510 行；手写核心 18699 行，低于 18800 上限。未启动 Minecraft，游戏内画面、菜单、性能与其他显卡仍未验证。
 ## 0.16.0-dev.8
 
 结构重构第三批：建立 `effects/shared/` 共享主体，效果页面之间不再互相引用，跨页面与共享反向引用均为 0。

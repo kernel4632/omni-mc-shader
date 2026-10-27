@@ -196,6 +196,7 @@ MC 光影编译 + 同场景对比
 - 2026-10-26 新增光影验证场景 `omni-gfx/examples/lighting`：简单湖盆、两种金属与三种电介质球、方块、石台、立石、水面、体积雾与体积云；太阳颜色取大气透过率，三级 CSM/PCSS 与接触阴影、半分辨率遮蔽与颜色反弹、平面反射与吸收/泡沫、六步阴影雾、TAA、泛光与 ACES/AgX。1280×720 本机 Intel Arc 120 帧平均 28.02 毫秒（约 35.7 帧每秒），截图 `.dev/omni-gfx/world-lighting.png`，与 Bierstadt Lake（CC0）和 Moraine Lake（Public Domain）的并排图 `.dev/omni-gfx/world-lighting-comparison.png`。云仍偏扁平的层积云，光柱很弱，详见 `omni-gfx/docs/verification.md`。
 - 2026-10-26 验证边界：`omni-gfx/build.py check` 只审计测试世界实际编译的 GLSL；Python 示例与资源准备脚本不进入光影 ZIP，也不参与库注释比例。手写核心 9267 行，低于 9400 上限。
 - 2026-10-27 删除 `shaders/gfx/` 纯转发层：248 个直通函数改为直接调用 `ogx` 名字，泛光链排布、反射主流程、切线基与视差调用放回所属效果或 `common/`。效果文件只引用 `shaders/omni-gfx/`，生成产物只保留这一份。
+- 2026-10-28 按实际效果重排 `omni-gfx/src`：`itx_extra`、`eclipse_extra`、`eclipse_specular`、`cloud_eclipse` 等来源名不再作为顶层模块；对焦与光斑进 `lens`，曝光与泛光进 `post/exposure`，FXAA 进 `antialias/fxaa`，各向异性过滤进 `sampling/anisotropic`，雨纹与闪电进 `weather`，GTAO 进 `gi/ambientocclusion`，WSR/Photonics/高光进 `reflection`，体素求交进 `voxel/trace`，Eclipse 层状云进 `cloud/eclipse`，末地与传送门进 `world`。函数实现、常数、采样顺序与 474 条 exact 未变；源与生成 GLSL 一一对应，生成目录只保留一份产物。
 - 下一步：把库内的 Eclipse 程序化雨点、阴影修补、水面高度/焦散与四季函数接到光影选项（需要先定默认画面与选项命名）；为 `voxel` 补整数三维纹理探针；阶段 5（完整 SPIR-V 演示管线）与阶段 6（文档、许可证、示例与发布）。
 
 ## 十四、决策记录
@@ -221,3 +222,4 @@ MC 光影编译 + 同场景对比
 | 2026-10-26 | 手写核心上限从 9400 行上调到 10600 行：新增严格函数对照 JSON、两个 profile 的生成与编译，以及 Eclipse 与 iterationT 的色调映射、AgX 配置、天空密度/相函数、云相函数与 TAA 取样端口；上调只对应实际迁入的参考算法与验证工具，不删效果 |
 | 2026-10-27 | 手写核心上限从 18200 行上调到 18600 行：体积雾、末地涡旋雾、WSR 空气雾/水下体积与单层云步进按参考逐行端口，补齐宿主宏展开后的采样顺序与常数；上调只对应严格对照通过的五个入口，`GetVolumetricClouds` 因五层调用图采样数仍不一致继续留在 `reference_broken`，不伪造 exact |
 | 2026-10-27 | 手写核心 18374 行，仍低于 18600 上限：体积云总入口补回天空盒采样并把上层遮挡移回步进循环，7621 次采样与逐层调用顺序对齐后转为 exact；上游同提交核对确认另外五条损坏参考没有可恢复定义，保留 reference_broken，证据见 `docs/eclipse-upstream.md` |
+| 2026-10-28 | 手写核心上限从 18600 行上调到 18800 行：按实际效果拆分多出九个源文件头与一个 `sampling/anisotropic` 子文件；上调只对应结构拆分带来的文件头，不改变算法行数、选项或功能 |

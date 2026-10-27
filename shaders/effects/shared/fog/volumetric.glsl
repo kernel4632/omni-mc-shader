@@ -45,7 +45,7 @@ vec3 FogLpvStep(vec3 fog_pos, float integral, out bool done){
 // 体积雾的密度、光照与阴影主循环在通用库。
 // 阳光、天光、底光与火把亮度由共享光照文件统一定义。
 #include "/effects/shared/light.glsl"
-#include "/omni-gfx/fog_volume.glsl"
+#include "/omni-gfx/fog/volume.glsl"
 
 // 体积雾入口：先算基础密度与天气，再把所有参数交给通用库一次完成步进。
 void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, float globalCloudShadow, float fogTimeFactor, out float transmittance){

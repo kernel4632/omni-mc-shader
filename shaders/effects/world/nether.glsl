@@ -53,7 +53,7 @@
   所以它仍返回 `vec3` 只叠加散射，透射率未接，见两个重载各自的说明。
 */
 // 下界单格雾密度放在通用库，这里只传噪声纹理。
-#include "/omni-gfx/fog.glsl"
+#include "/omni-gfx/fog/fog.glsl"
 // 动画时间由绑定层提供，效果文件不直接读宿主时间。
 #include "/bind/time.glsl"
 

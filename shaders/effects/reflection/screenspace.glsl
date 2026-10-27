@@ -125,7 +125,7 @@ vec3 OmniReflectionVolumeFog(vec3 color, vec3 startWorld, vec3 endWorld, vec3 ra
 // 追踪、天空与体素回退、反射雾的主流程在通用库。
 
 // 屏幕空间追踪、方向生成与降噪都在生成库；本文件只保留宿主合成流程。
-#include "/omni-gfx/reflection.glsl"
+#include "/omni-gfx/reflection/reflection.glsl"
 // 数学模块提供饱和、法线解码与曲线编码。
 #include "/omni-gfx/math.glsl"
 
@@ -438,7 +438,7 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 // 材质提供 `Material` 结构，反射合并要读它的金属度与反射强度。
 #include "/effects/shared/surface.glsl"
 // 反射合并使用通用库的菲涅耳与水吸收。
-#include "/omni-gfx/reflection.glsl"
+#include "/omni-gfx/reflection/reflection.glsl"
 
 // 反射合并：把三号画面的反射按菲涅耳与金属度混合进底色。
 // 输入是场景色、视线方向、法线、底色、水的吸收与材质；就地把反射混进场景色。

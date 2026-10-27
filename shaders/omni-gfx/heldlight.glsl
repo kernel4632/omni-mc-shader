@@ -1,6 +1,6 @@
 /*
 生成文件：手持光模块的 GLSL 330 版本，请勿手工修改。
-源文件在库的源码目录中的同名模块，改动后运行构建脚本的生成命令。
+源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
 用途：Minecraft 光影直接引入；同一份源还会生成 SPIR-V 供独立程序使用。
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
 */
@@ -20,7 +20,7 @@ Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表
 
 // 表面模块提供手电筒光斑与指向，阴影模块提供屏幕空间阴影，数学与颜色模块提供漫反射、高光与色彩转换。
 #include "/omni-gfx/surface.glsl"
-#include "/omni-gfx/shadow.glsl"
+#include "/omni-gfx/shadow/shadow.glsl"
 #include "/omni-gfx/math.glsl"
 #include "/omni-gfx/color.glsl"
 // 手电筒模型的手持光：两个光源分别位于左右手，按光斑、距离衰减与漫反射累加。

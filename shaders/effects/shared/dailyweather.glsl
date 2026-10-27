@@ -55,7 +55,7 @@
 // 共用数学：提供 `fract`、`mod`、`clamp` 等小工具，重复引入由守卫去重。
 #include "/common/math.glsl"
 // 每日天气哈希的纯计算放在通用库。
-#include "/omni-gfx/weather.glsl"
+#include "/omni-gfx/weather/weather.glsl"
 
 #if OMNI_DAILY_WEATHER // 关闭时下面整段不参与编译，默认画面与原来一致。
 

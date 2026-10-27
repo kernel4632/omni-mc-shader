@@ -6,15 +6,15 @@
 ## 结论
 
 - 参考函数共 505 个（同名跨包只算一次）：iterationT 240 个，Eclipse 265 个。
-- 已迁入：378 个。
-- MC 专用：127 个。
+- 已迁入：401 个。
+- MC 专用：104 个。
 - 缺失：0 个。
 - 调试输出：0 个。
 
 | 参考包 | 已迁入 | MC 专用 | 缺失 | 调试输出 |
 | --- | --- | --- | --- | --- |
-| iterationT | 204 | 36 | 0 | 0 |
-| Eclipse | 174 | 91 | 0 | 0 |
+| iterationT | 217 | 23 | 0 | 0 |
+| Eclipse | 184 | 81 | 0 | 0 |
 
 ## 判定口径
 
@@ -38,42 +38,42 @@
 | `BlockLighting` | 3 | `surface.ogxBlockLight` | 已迁入 | 承接算法：方块光与材质 |
 | `TextureLighting` | 28 | `surface.ogxItxTextureLighting` | 已迁入 | 承接算法：方块光与材质 |
 | `spotShape` | 77 | `surface.ogxSpotShape` | 已迁入 | 同名迁移：方块光与材质 |
-| `TorchScreenSpaceShadow` | 88 | `shadow.ogxScreenSpaceShadow` | 已迁入 | 承接算法：阴影与半影 |
-| `HeldLighting` | 162 | — | MC 专用 | 函数体直接读取宿主符号：`heldBlockLightValue` |
-| `TorchSpecularHighlight` | 283 | — | MC 专用 | 函数体直接读取宿主符号：`heldBlockLightValue` |
+| `TorchScreenSpaceShadow` | 88 | `shadow/shadow.ogxScreenSpaceShadow` | 已迁入 | 承接算法：阴影与半影 |
+| `HeldLighting` | 162 | `heldlight.ogxHeldLighting` | 已迁入 | 同名迁移：heldlight |
+| `TorchSpecularHighlight` | 283 | `heldlight.ogxTorchSpecularHighlight` | 已迁入 | 同名迁移：heldlight |
 
 `references/iterationT/shaders/Lib/BasicFounctions/NetherColor.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `NetherLighting` | 10 | `fog.ogxNetherBiomeLighting` | 已迁入 | 承接算法：雾与空气透视 |
-| `NetherFogColor` | 19 | `fog.ogxNetherBiomeFogColor` | 已迁入 | 承接算法：雾与空气透视 |
+| `NetherLighting` | 10 | `fog/fog.ogxNetherBiomeLighting` | 已迁入 | 承接算法：雾与空气透视 |
+| `NetherFogColor` | 19 | `fog/fog.ogxNetherBiomeFogColor` | 已迁入 | 承接算法：雾与空气透视 |
 
 `references/iterationT/shaders/Lib/BasicFounctions/PrecomputedAtmosphere.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `ClampRadius` | 40 | `atmosphere.ogxClampRadius` | 已迁入 | 承接算法：天空散射与日月星 |
-| `SafeSqrt` | 44 | `atmosphere.ogxSafeSqrt` | 已迁入 | 承接算法：天空散射与日月星 |
-| `RenderSunDisc` | 48 | `atmosphere.ogxSunDisc` | 已迁入 | 承接算法：天空散射与日月星 |
-| `RenderMoonDisc` | 60 | `atmosphere.ogxMoonDiscReal` | 已迁入 | 承接算法：天空散射与日月星 |
-| `RenderMoonDiscReflection` | 70 | `atmosphere.ogxMoonDiscReflection` | 已迁入 | 承接算法：天空散射与日月星 |
-| `DistanceToTopAtmosphereBoundary` | 85 | `atmosphere.ogxAtmosphereDistanceToTop` | 已迁入 | 承接算法：天空散射与日月星 |
-| `DistanceToBottomAtmosphereBoundary` | 93 | `atmosphere.ogxAtmosphereDistanceToGround` | 已迁入 | 承接算法：天空散射与日月星 |
-| `RayIntersectsGround` | 101 | `atmosphere.ogxSphereRayIntersectsGround` | 已迁入 | 承接算法：天空散射与日月星 |
-| `GetProfileDensityRayleighMie` | 114 | `atmosphere_model.ogxAtmoDensityRayleighMie` | 已迁入 | 承接算法：预计算大气查表 |
-| `GetProfileDensityAbsorption` | 121 | `atmosphere_model.ogxAtmoDensityAbsorption` | 已迁入 | 承接算法：预计算大气查表 |
-| `GetTextureCoordFromUnitRange` | 135 | `atmosphere.ogxSubTextureCoord` | 已迁入 | 承接算法：天空散射与日月星 |
-| `GetCombinedTextureCoordFromUnitRange` | 139 | `atmosphere_model.ogxAtmoCombinedTextureCoord` | 已迁入 | 承接算法：预计算大气查表 |
-| `GetScatteringTextureUvwzFromRMuMuSNu` | 144 | `atmosphere_model.ogxAtmoScatteringUvwz` | 已迁入 | 承接算法：预计算大气查表 |
-| `GetTransmittanceTextureUvFromRMu` | 188 | `atmosphere_model.ogxAtmoTransmittanceUv` | 已迁入 | 承接算法：预计算大气查表 |
-| `GetTransmittanceToTopAtmosphereBoundary` | 205 | `atmosphere_model.ogxAtmoTransmittanceToTop` | 已迁入 | 承接算法：预计算大气查表 |
-| `GetTransmittance` | 217 | `atmosphere_model.ogxAtmoTransmittance` | 已迁入 | 承接算法：预计算大气查表 |
-| `GetTransmittanceToSun` | 239 | `atmosphere_model.ogxAtmoTransmittanceToSun` | 已迁入 | 承接算法：预计算大气查表 |
-| `GetExtrapolatedSingleMieScattering` | 257 | `atmosphere_model.ogxAtmoExtrapolatedMie` | 已迁入 | 承接算法：预计算大气查表 |
+| `ClampRadius` | 40 | `atmosphere/atmosphere.ogxClampRadius` | 已迁入 | 承接算法：天空散射与日月星 |
+| `SafeSqrt` | 44 | `atmosphere/atmosphere.ogxSafeSqrt` | 已迁入 | 承接算法：天空散射与日月星 |
+| `RenderSunDisc` | 48 | `atmosphere/atmosphere.ogxSunDisc` | 已迁入 | 承接算法：天空散射与日月星 |
+| `RenderMoonDisc` | 60 | `atmosphere/atmosphere.ogxMoonDiscReal` | 已迁入 | 承接算法：天空散射与日月星 |
+| `RenderMoonDiscReflection` | 70 | `atmosphere/atmosphere.ogxMoonDiscReflection` | 已迁入 | 承接算法：天空散射与日月星 |
+| `DistanceToTopAtmosphereBoundary` | 85 | `atmosphere/atmosphere.ogxAtmosphereDistanceToTop` | 已迁入 | 承接算法：天空散射与日月星 |
+| `DistanceToBottomAtmosphereBoundary` | 93 | `atmosphere/atmosphere.ogxAtmosphereDistanceToGround` | 已迁入 | 承接算法：天空散射与日月星 |
+| `RayIntersectsGround` | 101 | `atmosphere/atmosphere.ogxSphereRayIntersectsGround` | 已迁入 | 承接算法：天空散射与日月星 |
+| `GetProfileDensityRayleighMie` | 114 | `atmosphere/model.ogxAtmoDensityRayleighMie` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetProfileDensityAbsorption` | 121 | `atmosphere/model.ogxAtmoDensityAbsorption` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetTextureCoordFromUnitRange` | 135 | `atmosphere/atmosphere.ogxSubTextureCoord` | 已迁入 | 承接算法：天空散射与日月星 |
+| `GetCombinedTextureCoordFromUnitRange` | 139 | `atmosphere/model.ogxAtmoCombinedTextureCoord` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetScatteringTextureUvwzFromRMuMuSNu` | 144 | `atmosphere/model.ogxAtmoScatteringUvwz` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetTransmittanceTextureUvFromRMu` | 188 | `atmosphere/model.ogxAtmoTransmittanceUv` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetTransmittanceToTopAtmosphereBoundary` | 205 | `atmosphere/model.ogxAtmoTransmittanceToTop` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetTransmittance` | 217 | `atmosphere/model.ogxAtmoTransmittance` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetTransmittanceToSun` | 239 | `atmosphere/model.ogxAtmoTransmittanceToSun` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetExtrapolatedSingleMieScattering` | 257 | `atmosphere/model.ogxAtmoExtrapolatedMie` | 已迁入 | 承接算法：预计算大气查表 |
 | `GetCombinedScattering` | 268 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex` |
 | `GetIrradiance` | 300 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex` |
-| `GetSunAndSkyIrradiance` | 325 | `atmosphere_model.ogxAtmoSunSkyIrradiance` | 已迁入 | 承接算法：预计算大气查表 |
+| `GetSunAndSkyIrradiance` | 325 | `atmosphere/model.ogxAtmoSunSkyIrradiance` | 已迁入 | 承接算法：预计算大气查表 |
 | `GetSkyRadiance` | 348 | — | MC 专用 | 函数体直接读取宿主符号：`wetness` |
 | `GetSkyRadianceToPoint` | 428 | — | MC 专用 | 函数体直接读取宿主符号：`wetness` |
 
@@ -81,8 +81,8 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `VariablePenumbraShadow` | 3 | `shadow.ogxVariablePenumbraShadow` | 已迁入 | 同名迁移：阴影与半影 |
-| `ScreenSpaceShadow` | 158 | `shadow.ogxScreenSpaceShadow` | 已迁入 | 同名迁移：阴影与半影 |
+| `VariablePenumbraShadow` | 3 | `shadow/shadow.ogxVariablePenumbraShadow` | 已迁入 | 同名迁移：阴影与半影 |
+| `ScreenSpaceShadow` | 158 | `shadow/shadow.ogxScreenSpaceShadow` | 已迁入 | 同名迁移：阴影与半影 |
 | `GetWavesNormalFromTex` | 238 | `water.ogxWavesNormalFromTex` | 已迁入 | 承接算法：水面与海洋 |
 | `CalculateWaterCaustics` | 257 | `water.ogxWaterCaustics` | 已迁入 | 承接算法：水面与海洋 |
 
@@ -90,35 +90,35 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `RGB_To_YCoCg` | 19 | `antialias.ogxRgbToYCoCg` | 已迁入 | 承接算法：时间抗锯齿 |
-| `YCoCg_To_RGB` | 23 | `antialias.ogxYCoCgToRgb` | 已迁入 | 承接算法：时间抗锯齿 |
+| `RGB_To_YCoCg` | 19 | `antialias/antialias.ogxRgbToYCoCg` | 已迁入 | 承接算法：时间抗锯齿 |
+| `YCoCg_To_RGB` | 23 | `antialias/antialias.ogxYCoCgToRgb` | 已迁入 | 承接算法：时间抗锯齿 |
 | `BicubicTexture` | 28 | `math.ogxBicubicTexture` | 已迁入 | 承接算法：数学与通用工具 |
-| `SampleCurrColor` | 57 | `antialias.ogxTaaSampleCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleCurrColorFetch` | 61 | `antialias.ogxTaaFetchCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleCurrColorBicubic` | 65 | `antialias.ogxBicubicTexture4` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SamplePrevColor` | 69 | `antialias.ogxTaaSamplePrevious` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleDepthFetch` | 77 | `antialias.ogxTaaSampleDepthFetch` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleCurrDepthFetchClosest3x3` | 81 | `antialias.ogxTaaSampleCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SamplePrevDepthFetch` | 95 | `antialias.ogxTaaPrevDepthFetch` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SamplePrevDepthMinMax3x3` | 99 | `antialias.ogxTaaPrevDepthMinmax` | 已迁入 | 承接算法：时间抗锯齿 |
-| `GetVariance3x3` | 117 | `antialias.ogxTaaVariance3x3` | 已迁入 | 承接算法：时间抗锯齿 |
-| `clipAABB` | 143 | `antialias.ogxClipAabb` | 已迁入 | 承接算法：时间抗锯齿 |
-| `TemporalReprojection` | 169 | `antialias.ogxTaaReproject` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleDepthDHFetch` | 213 | `antialias.ogxTaaPrevDepthFetch` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleCurrDepthDHFetchClosest3x3` | 217 | `antialias.ogxTaaFetchCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
-| `CalculateCameraVelocity` | 231 | `gi.ogxGiCameraVelocity` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `SampleCurrColor` | 57 | `antialias/antialias.ogxTaaSampleCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleCurrColorFetch` | 61 | `antialias/antialias.ogxTaaFetchCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleCurrColorBicubic` | 65 | `antialias/antialias.ogxBicubicTexture4` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SamplePrevColor` | 69 | `antialias/antialias.ogxTaaSamplePrevious` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleDepthFetch` | 77 | `antialias/antialias.ogxTaaSampleDepthFetch` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleCurrDepthFetchClosest3x3` | 81 | `antialias/antialias.ogxTaaSampleCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SamplePrevDepthFetch` | 95 | `antialias/antialias.ogxTaaPrevDepthFetch` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SamplePrevDepthMinMax3x3` | 99 | `antialias/antialias.ogxTaaPrevDepthMinmax` | 已迁入 | 承接算法：时间抗锯齿 |
+| `GetVariance3x3` | 117 | `antialias/antialias.ogxTaaVariance3x3` | 已迁入 | 承接算法：时间抗锯齿 |
+| `clipAABB` | 143 | `antialias/antialias.ogxClipAabb` | 已迁入 | 承接算法：时间抗锯齿 |
+| `TemporalReprojection` | 169 | `antialias/antialias.ogxTaaReproject` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleDepthDHFetch` | 213 | `antialias/antialias.ogxTaaPrevDepthFetch` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleCurrDepthDHFetchClosest3x3` | 217 | `antialias/antialias.ogxTaaFetchCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
+| `CalculateCameraVelocity` | 231 | `gi/gi.ogxGiCameraVelocity` | 已迁入 | 承接算法：全局光与遮蔽 |
 | `main` | 331 | — | MC 专用 | 函数体直接读取宿主符号：`colortex` |
 
 `references/iterationT/shaders/Lib/BasicFounctions/TAA_Nether.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `BicubicTextureVec4` | 56 | `antialias.ogxBicubicTexture4` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleCurr` | 84 | `antialias.ogxTaaSampleCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleCurrFetch` | 91 | `antialias.ogxTaaFetchCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SampleCurrBicubic` | 98 | `antialias.ogxBicubicTexture4` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SamplePreviousDepthBilinear` | 105 | `antialias.ogxTaaPrevDepthBilinear` | 已迁入 | 承接算法：时间抗锯齿 |
-| `SamplePrevious` | 119 | `antialias.ogxTaaSamplePrevious` | 已迁入 | 承接算法：时间抗锯齿 |
+| `BicubicTextureVec4` | 56 | `antialias/antialias.ogxBicubicTexture4` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleCurr` | 84 | `antialias/antialias.ogxTaaSampleCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleCurrFetch` | 91 | `antialias/antialias.ogxTaaFetchCurrent` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SampleCurrBicubic` | 98 | `antialias/antialias.ogxBicubicTexture4` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SamplePreviousDepthBilinear` | 105 | `antialias/antialias.ogxTaaPrevDepthBilinear` | 已迁入 | 承接算法：时间抗锯齿 |
+| `SamplePrevious` | 119 | `antialias/antialias.ogxTaaSamplePrevious` | 已迁入 | 承接算法：时间抗锯齿 |
 
 `references/iterationT/shaders/Lib/BasicFounctions/TemporalNoise.glsl`
 
@@ -132,8 +132,8 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `VanillaFog` | 3 | `fog.ogxVanillaFog` | 已迁入 | 承接算法：雾与空气透视 |
-| `SelectionBox` | 14 | `fog.ogxSelectionBox` | 已迁入 | 承接算法：雾与空气透视 |
+| `VanillaFog` | 3 | `fog/fog.ogxVanillaFog` | 已迁入 | 承接算法：雾与空气透视 |
+| `SelectionBox` | 14 | `fog/fog.ogxSelectionBox` | 已迁入 | 承接算法：雾与空气透视 |
 
 `references/iterationT/shaders/Lib/GbufferData.glsl`
 
@@ -142,7 +142,7 @@
 | `CurveBlockLightSky` | 3 | `surface.ogxCurveBlockLightSky` | 已迁入 | 承接算法：方块光与材质 |
 | `CurveBlockLightTorch` | 11 | `surface.ogxCurveBlockLightTorch` | 已迁入 | 承接算法：方块光与材质 |
 | `MaterialFromTex` | 70 | `surface.ogxItxMaterialFromTex` | 已迁入 | 承接算法：方块光与材质 |
-| `GetGbufferData` | 131 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex` |
+| `GetGbufferData` | 131 | `gbuffer.ogxGetGbufferData` | 已迁入 | 同名迁移：gbuffer |
 | `CalculateMasks` | 208 | — | MC 专用 | 函数体读取 gaux 缓冲与 mc_Entity 判定手部、粒子与半透明掩码 |
 | `FixParticleMask` | 250 | — | MC 专用 | 按材质编号与实体编号修正粒子掩码，依赖 gaux 与 mc_Entity |
 | `ApplyMaterial` | 275 | `surface.ogxApplyMaterialOverride` | 已迁入 | 承接算法：方块光与材质 |
@@ -166,45 +166,45 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `BloomDownSample` | 20 | `post.ogxBloomDownsample` | 已迁入 | 承接算法：后期与泛光 |
-| `AxialGaussianBlur` | 41 | `post.ogxAxialGaussianBlur` | 已迁入 | 承接算法：后期与泛光 |
+| `BloomDownSample` | 20 | `post/post.ogxBloomDownsample` | 已迁入 | 承接算法：后期与泛光 |
+| `AxialGaussianBlur` | 41 | `post/post.ogxAxialGaussianBlur` | 已迁入 | 承接算法：后期与泛光 |
 | `BicubicBlurTexture` | 64 | `math.ogxBicubicBlurTexture` | 已迁入 | 承接算法：数学与通用工具 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/CloudShadow.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `CloudShadowFromTex` | 28 | `cloud.ogxCloudShadowSample` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `GetSmoothCloudShadow` | 55 | `cloud.ogxGlobalCloudShadow` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `CloudShadowFromTex` | 28 | `cloud/cloud.ogxCloudShadowSample` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `GetSmoothCloudShadow` | 55 | `cloud/cloud.ogxGlobalCloudShadow` | 已迁入 | 承接算法：云形状、光照与云影 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/DOF.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `CalculateCoCRadius` | 3 | `post.ogxCocRadius` | 已迁入 | 同一薄透镜弥散圆公式，参数顺序一致 |
-| `GetLinearDepth` | 7 | `post.ogxDofLinearDepth` | 已迁入 | 承接算法：后期与泛光 |
-| `GetFocus` | 19 | — | MC 专用 | 函数体直接读取宿主符号：`colortex` |
-| `CoCSpread` | 29 | `post.ogxDofCocSpread` | 已迁入 | 承接算法：后期与泛光 |
-| `DepthOfField` | 76 | `post.ogxDepthOfField` | 已迁入 | 同名迁移：后期与泛光 |
+| `CalculateCoCRadius` | 3 | `post/post.ogxCocRadius` | 已迁入 | 同一薄透镜弥散圆公式，参数顺序一致 |
+| `GetLinearDepth` | 7 | `post/post.ogxDofLinearDepth` | 已迁入 | 承接算法：后期与泛光 |
+| `GetFocus` | 19 | `lens/lens.ogxGetFocus` | 已迁入 | 同名迁移：lens/lens |
+| `CoCSpread` | 29 | `post/post.ogxDofCocSpread` | 已迁入 | 承接算法：后期与泛光 |
+| `DepthOfField` | 76 | `post/post.ogxDepthOfField` | 已迁入 | 同名迁移：后期与泛光 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/EndSky.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `CalculateStars` | 12 | `atmosphere.ogxStarsStable` | 已迁入 | 承接算法：天空散射与日月星 |
-| `H` | 48 | `atmosphere.ogxChandrasekharH` | 已迁入 | 同一钱德拉塞卡近似，算式逐项相同 |
-| `ppss` | 57 | `atmosphere.ogxPlanetBrdf` | 已迁入 | 同一行星表面 BRDF：入射角曲线、两侧近似与相函数分母相同 |
-| `Disc` | 67 | `atmosphere.ogxDiscProfile` | 已迁入 | 承接算法：天空散射与日月星 |
+| `CalculateStars` | 12 | `atmosphere/atmosphere.ogxStarsStable` | 已迁入 | 承接算法：天空散射与日月星 |
+| `H` | 48 | `atmosphere/atmosphere.ogxChandrasekharH` | 已迁入 | 同一钱德拉塞卡近似，算式逐项相同 |
+| `ppss` | 57 | `atmosphere/atmosphere.ogxPlanetBrdf` | 已迁入 | 同一行星表面 BRDF：入射角曲线、两侧近似与相函数分母相同 |
+| `Disc` | 67 | `atmosphere/atmosphere.ogxDiscProfile` | 已迁入 | 承接算法：天空散射与日月星 |
 | `PlanetEnd2` | 72 | `planet.ogxPlanetEnd` | 已迁入 | 承接算法：末地行星 |
 | `RotateMatrix` | 239 | `math.ogxRotateMatrix` | 已迁入 | 承接算法：数学与通用工具 |
 | `WarpSpace` | 255 | `math.ogxWarpSpace` | 已迁入 | 承接算法：数学与通用工具 |
-| `Calculate3DNoise` | 269 | `fog.ogxEnd3dNoise` | 已迁入 | 承接算法：雾与空气透视 |
-| `CalculateCloudFBM` | 279 | `fog.ogxCloudFbm` | 已迁入 | 承接算法：雾与空气透视 |
+| `Calculate3DNoise` | 269 | `fog/fog.ogxEnd3dNoise` | 已迁入 | 承接算法：雾与空气透视 |
+| `CalculateCloudFBM` | 279 | `fog/fog.ogxCloudFbm` | 已迁入 | 承接算法：雾与空气透视 |
 | `CalculateCloudFBM_LQ` | 297 | `noise.ogxFbm3` | 已迁入 | 承接算法：程序化噪声 |
 | `pcurve` | 315 | `planet.ogxEndSkyPCurve` | 已迁入 | 承接算法：末地行星 |
 | `BlackHole_AccretionDisc_Stars` | 320 | `accretion.ogxAccretionDisc` | 已迁入 | 承接算法：吸积盘 |
 | `BlackHole_AccretionDisc_Reflection` | 429 | `accretion.ogxAccretionDisc` | 已迁入 | 承接算法：吸积盘 |
-| `EndFog` | 531 | `fog.ogxEndFogDensity` | 已迁入 | 承接算法：雾与空气透视 |
+| `EndFog` | 531 | `fog/fog.ogxEndFogDensity` | 已迁入 | 承接算法：雾与空气透视 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/FsrEASU.glsl`
 
@@ -218,53 +218,53 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `GroundTruthBasedAmbientOcclusion` | 3 | `gi.ogxGroundTruthAo` | 已迁入 | 承接算法：全局光与遮蔽 |
-| `GTAOMultiBounce` | 140 | `gi.ogxAoMultiBounce` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `GroundTruthBasedAmbientOcclusion` | 3 | `gi/gi.ogxGroundTruthAo` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `GTAOMultiBounce` | 140 | `gi/gi.ogxAoMultiBounce` | 已迁入 | 承接算法：全局光与遮蔽 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/GlobalIllumination.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `RSM` | 9 | `gi.ogxGiRsm` | 已迁入 | 承接算法：全局光与遮蔽 |
-| `GI_TemporalFilter` | 188 | `gi.ogxGiTemporalFilter` | 已迁入 | 承接算法：全局光与遮蔽 |
-| `GI_SpatialFilter` | 325 | `gi.ogxGiSpatialFilter` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `RSM` | 9 | `gi/gi.ogxGiRsm` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `GI_TemporalFilter` | 188 | `gi/gi.ogxGiTemporalFilter` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `GI_SpatialFilter` | 325 | `gi/gi.ogxGiSpatialFilter` | 已迁入 | 承接算法：全局光与遮蔽 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/LensGlareFlare.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `GetDistOffset` | 10 | `post.ogxGlareDistOffset` | 已迁入 | 同一桶形畸变偏移，桶形强度改为显式参数 |
-| `flare` | 22 | `post.ogxGlareFlare` | 已迁入 | 同一带色散的软光斑，桶形强度改为显式参数 |
-| `orb` | 33 | `post.ogxGlareOrb` | 已迁入 | 同一六连圆形光斑与末尾大光斑，桶形强度改为显式参数 |
-| `ring` | 51 | `post.ogxGlareRing` | 已迁入 | 同一环状光环与三通道色散 |
-| `LensFlare` | 61 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
+| `GetDistOffset` | 10 | `post/post.ogxGlareDistOffset` | 已迁入 | 同一桶形畸变偏移，桶形强度改为显式参数 |
+| `flare` | 22 | `post/post.ogxGlareFlare` | 已迁入 | 同一带色散的软光斑，桶形强度改为显式参数 |
+| `orb` | 33 | `post/post.ogxGlareOrb` | 已迁入 | 同一六连圆形光斑与末尾大光斑，桶形强度改为显式参数 |
+| `ring` | 51 | `post/post.ogxGlareRing` | 已迁入 | 同一环状光环与三通道色散 |
+| `LensFlare` | 61 | `lens/lens.ogxLensFlare` | 已迁入 | 同名迁移：lens/lens |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/MotionBlur.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `MotionBlur` | 49 | `post.ogxMotionBlur` | 已迁入 | 同名迁移：后期与泛光 |
+| `MotionBlur` | 49 | `post/post.ogxMotionBlur` | 已迁入 | 同名迁移：后期与泛光 |
 | `title` | 100 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex`、`gbufferModelView` |
-| `GetExposureTiles` | 167 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`viewWidth`、`viewHeight` |
+| `GetExposureTiles` | 167 | `post/exposure.ogxGetExposureTiles` | 已迁入 | 同名迁移：post/exposure |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `HenyeyGreenstein` | 3 | `cloud.ogxHenyeyGreenstein` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `curveTop` | 10 | `cloud.ogxCloudTopCurve` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `SampleDensity` | 15 | `cloud_volume.ogxCumulusSampleDensity` | 已迁入 | 承接算法：体积云步进 |
-| `SetCloudPos` | 64 | `cloud_volume.ogxCumulusSetPos` | 已迁入 | 承接算法：体积云步进 |
-| `CloudLighting` | 73 | `cloud_volume.ogxCumulusLighting` | 已迁入 | 承接算法：体积云步进 |
-| `NubisCumulus` | 108 | `cloud_volume.ogxCumulusMarch` | 已迁入 | 承接算法：体积云步进 |
-| `CloudShadowTex` | 212 | `cloud.ogxCloudShadowSample` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `HenyeyGreenstein` | 3 | `cloud/cloud.ogxHenyeyGreenstein` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `curveTop` | 10 | `cloud/cloud.ogxCloudTopCurve` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `SampleDensity` | 15 | `cloud/volume.ogxCumulusSampleDensity` | 已迁入 | 承接算法：体积云步进 |
+| `SetCloudPos` | 64 | `cloud/volume.ogxCumulusSetPos` | 已迁入 | 承接算法：体积云步进 |
+| `CloudLighting` | 73 | `cloud/volume.ogxCumulusLighting` | 已迁入 | 承接算法：体积云步进 |
+| `NubisCumulus` | 108 | `cloud/volume.ogxCumulusMarch` | 已迁入 | 承接算法：体积云步进 |
+| `CloudShadowTex` | 212 | `cloud/cloud.ogxCloudShadowSample` | 已迁入 | 承接算法：云形状、光照与云影 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/Parallax.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `BilinearHeightSample` | 7 | `parallax.ogxParallaxHeightBilinear` | 已迁入 | 承接算法：视差 |
-| `HeightBasedNormal` | 39 | `parallax.ogxParallaxHeightNormal` | 已迁入 | 承接算法：视差 |
+| `BilinearHeightSample` | 7 | `parallax.ogxBilinearHeightSample` | 已迁入 | 承接算法：视差 |
+| `HeightBasedNormal` | 39 | `parallax.ogxHeightBasedNormal` | 已迁入 | 承接算法：视差 |
 | `ParallaxOcclusionMapping` | 80 | `parallax.ogxParallaxSmooth` | 已迁入 | 承接算法：视差 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/PhysicsOceans.glsl`
@@ -280,12 +280,12 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `BicubicBlurNoise` | 3 | `cloud.ogxBicubicBlurNoise` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `BilinearNoise` | 27 | `cloud.ogxBilinearNoise` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `GetPlanarCloudsDistortion` | 32 | `cloud.ogxPlanarDistortion` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `GetPlanarCloudsDensity` | 42 | `cloud.ogxPlanarDensity` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `GetPlanarCloudsLightingDensity` | 74 | `cloud.ogxPlanarLightingDensity` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `PlanarClouds` | 106 | — | MC 专用 | 函数体直接读取宿主符号：`frameTimeCounter`、`wetness`、`cameraPosition` |
+| `BicubicBlurNoise` | 3 | `cloud/cloud.ogxBicubicBlurNoise` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `BilinearNoise` | 27 | `cloud/cloud.ogxBilinearNoise` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `GetPlanarCloudsDistortion` | 32 | `cloud/cloud.ogxPlanarDistortion` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `GetPlanarCloudsDensity` | 42 | `cloud/cloud.ogxPlanarDensity` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `GetPlanarCloudsLightingDensity` | 74 | `cloud/cloud.ogxPlanarLightingDensity` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `PlanarClouds` | 106 | `cloud/planar.ogxPlanarClouds` | 已迁入 | 同名迁移：cloud/planar |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/PrintFloat.glsl`
 
@@ -300,15 +300,15 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `AtrousWaveletFilter` | 3 | `reflection.ogxReflectionAtrousFilter` | 已迁入 | 承接算法：屏幕空间反射 |
+| `AtrousWaveletFilter` | 3 | `reflection/reflection.ogxReflectionAtrousFilter` | 已迁入 | 承接算法：屏幕空间反射 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/Reflections/SSR.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `ProjectSky` | 113 | `atmosphere.ogxSkyProject` | 已迁入 | 承接算法：天空散射与日月星 |
-| `sampleGGXVNDF` | 139 | `reflection.ogxSampleGgxVndf` | 已迁入 | 承接算法：屏幕空间反射 |
-| `CalculateSpecularReflections` | 160 | `reflection.ogxSpecularReflectionMix` | 已迁入 | 承接算法：屏幕空间反射 |
+| `ProjectSky` | 113 | `atmosphere/atmosphere.ogxSkyProject` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sampleGGXVNDF` | 139 | `reflection/reflection.ogxSampleGgxVndf` | 已迁入 | 承接算法：屏幕空间反射 |
+| `CalculateSpecularReflections` | 160 | `reflection/reflection.ogxSpecularReflectionMix` | 已迁入 | 承接算法：屏幕空间反射 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/Ripple.glsl`
 
@@ -317,25 +317,25 @@
 | `Get3DNoise` | 3 | `noise.ogxFogNoise` | 已迁入 | 承接算法：程序化噪声 |
 | `GetModulatedRainSpecular` | 14 | — | MC 专用 | 按雨强调制高光，读取 rainStrength 与涟漪贴图 |
 | `GetRainAnimationTex` | 26 | — | MC 专用 | 读取游戏提供的涟漪动画贴图 |
-| `GetRainNormal` | 33 | — | MC 专用 | 函数体直接读取宿主符号：`gaux`、`noisetex`、`frameTimeCounter`、`rainStrength` |
+| `GetRainNormal` | 33 | `weather/rain.ogxGetRainNormal` | 已迁入 | 同名迁移：weather/rain |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `UnderwaterVolumetricFog` | 39 | `fog_volume.ogxUnderwaterFog` | 已迁入 | 承接算法：体积雾 |
+| `UnderwaterVolumetricFog` | 39 | `fog/volume.ogxUnderwaterFog` | 已迁入 | 承接算法：体积雾 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `PowderEffect` | 3 | `fog.ogxFogPowder` | 已迁入 | 承接算法：雾与空气透视 |
-| `FogPhase` | 8 | `fog.ogxFogPhase` | 已迁入 | 承接算法：雾与空气透视 |
-| `MultiScatteringPhases` | 12 | `fog.ogxMultiScatteringPhases` | 已迁入 | 承接算法：雾与空气透视 |
-| `FogDensity` | 34 | `fog.ogxFogDensity` | 已迁入 | 承接算法：雾与空气透视 |
-| `VolumetricFog` | 69 | `fog_volume.ogxVolumetricFog` | 已迁入 | 同名迁移：体积雾 |
-| `simpleScattering` | 275 | `atmosphere.ogxAtmosphereSky` | 已迁入 | 承接算法：天空散射与日月星 |
-| `LandAtmosphericScattering` | 300 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`isEyeInWater`、`wetness`、`eyeBrightness`、`cameraPosition`、`gbufferModelView`、`gl_FragCoord` |
+| `PowderEffect` | 3 | `fog/fog.ogxFogPowder` | 已迁入 | 承接算法：雾与空气透视 |
+| `FogPhase` | 8 | `fog/fog.ogxFogPhase` | 已迁入 | 承接算法：雾与空气透视 |
+| `MultiScatteringPhases` | 12 | `fog/fog.ogxMultiScatteringPhases` | 已迁入 | 承接算法：雾与空气透视 |
+| `FogDensity` | 34 | `fog/fog.ogxFogDensity` | 已迁入 | 承接算法：雾与空气透视 |
+| `VolumetricFog` | 69 | `fog/volume.ogxVolumetricFog` | 已迁入 | 同名迁移：体积雾 |
+| `simpleScattering` | 275 | `atmosphere/atmosphere.ogxAtmosphereSky` | 已迁入 | 承接算法：天空散射与日月星 |
+| `LandAtmosphericScattering` | 300 | `atmosphere/model.ogxLandAtmosphericScattering` | 已迁入 | 同名迁移：预计算大气查表 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/WaterWaves.glsl`
 
@@ -356,13 +356,13 @@
 | `AgxDefaultContrastApprox` | 55 | `color.ogxAgxContrast` | 已迁入 | 承接算法：颜色与色调映射 |
 | `AgX` | 59 | `color.ogxAgx` | 已迁入 | 承接算法：颜色与色调映射 |
 | `None` | 80 | `color.ogxTonemapNone` | 已迁入 | 承接算法：颜色与色调映射 |
-| `MergeBloom` | 84 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex`、`biome`、`isEyeInWater`、`blindness`、`wetness`、`eyeBrightness` |
-| `GetExposureValue` | 177 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`nightVision` |
-| `Vignette` | 206 | `post.ogxVignette` | 已迁入 | 承接算法：后期与泛光 |
+| `MergeBloom` | 84 | `post/exposure.ogxMergeBloom` | 已迁入 | 同名迁移：post/exposure |
+| `GetExposureValue` | 177 | `post/exposure.ogxGetExposureValue` | 已迁入 | 同名迁移：post/exposure |
+| `Vignette` | 206 | `post/post.ogxVignette` | 已迁入 | 承接算法：后期与泛光 |
 | `FidelityFX_CAS` | 272 | `upscale.ogxCas` | 已迁入 | 承接算法：升采样与锐化 |
 | `FidelityFX_FSR1` | 380 | `upscale.ogxFsr1` | 已迁入 | 承接算法：升采样与锐化 |
 | `BlackBar` | 472 | `color.ogxBlackBar` | 已迁入 | 承接算法：颜色与色调映射 |
-| `Fxaa` | 481 | — | MC 专用 | 函数体直接读取宿主符号：`colortex` |
+| `Fxaa` | 481 | `antialias/fxaa.ogxFxaa` | 已迁入 | 同名迁移：antialias/fxaa |
 
 `references/iterationT/shaders/Lib/Programs/Gbuffers/DH_Terrain_FS.glsl`
 
@@ -374,7 +374,7 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `LinearDepth_From_ScreenDepth` | 39 | `shadow.ogxShadowLinearDepth` | 已迁入 | 承接算法：阴影与半影 |
+| `LinearDepth_From_ScreenDepth` | 39 | `shadow/shadow.ogxShadowLinearDepth` | 已迁入 | 承接算法：阴影与半影 |
 
 `references/iterationT/shaders/Lib/Programs/Gbuffers/Entities_FS.glsl`
 
@@ -394,22 +394,22 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `SampleAnisotropic` | 57 | — | MC 专用 | 函数体直接读取宿主符号：`normals`、`atlasSize` |
+| `SampleAnisotropic` | 57 | `sampling/anisotropic.ogxSampleAnisotropic` | 已迁入 | 同名迁移：sampling/anisotropic |
 
 `references/iterationT/shaders/Lib/Uniform/GbufferTransforms.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `ViewPos_From_ScreenPos` | 1 | `gi.ogxGiViewPos` | 已迁入 | 承接算法：全局光与遮蔽 |
-| `ViewPos_From_ScreenPos_Raw` | 10 | `gi.ogxGiViewPos` | 已迁入 | 承接算法：全局光与遮蔽 |
-| `ScreenPos_From_ViewPos` | 16 | `shadow.ogxShadowScreenPos` | 已迁入 | 承接算法：阴影与半影 |
+| `ViewPos_From_ScreenPos` | 1 | `gi/gi.ogxGiViewPos` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `ViewPos_From_ScreenPos_Raw` | 10 | `gi/gi.ogxGiViewPos` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `ScreenPos_From_ViewPos` | 16 | `shadow/shadow.ogxShadowScreenPos` | 已迁入 | 承接算法：阴影与半影 |
 | `ScreenPos_From_ViewPos_Raw` | 25 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
-| `ScreenDepth_From_LinearDepth` | 35 | `post.ogxScreenDepthFromLinearDepth` | 已迁入 | 承接算法：后期与泛光 |
-| `ViewPos_From_ScreenPos_DH` | 42 | `gi.ogxGiViewPosDh` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `ScreenDepth_From_LinearDepth` | 35 | `post/post.ogxScreenDepthFromLinearDepth` | 已迁入 | 承接算法：后期与泛光 |
+| `ViewPos_From_ScreenPos_DH` | 42 | `gi/gi.ogxGiViewPosDh` | 已迁入 | 承接算法：全局光与遮蔽 |
 | `ViewPos_From_ScreenPos_Raw_DH` | 51 | — | MC 专用 | 函数体直接读取宿主符号：`dhProjection` |
 | `ScreenPos_From_ViewPos_DH` | 57 | — | MC 专用 | 函数体直接读取宿主符号：`dhProjection` |
 | `ScreenPos_From_ViewPos_Raw_DH` | 66 | — | MC 专用 | 函数体直接读取宿主符号：`dhProjection` |
-| `LinearDepth_From_ScreenDepth_DH` | 71 | `reflection.ogxReflectionDhToScreenDepth` | 已迁入 | 承接算法：屏幕空间反射 |
+| `LinearDepth_From_ScreenDepth_DH` | 71 | `reflection/reflection.ogxReflectionDhToScreenDepth` | 已迁入 | 承接算法：屏幕空间反射 |
 | `ScreenDepth_From_LinearDepth_DH` | 76 | — | MC 专用 | 函数体直接读取宿主符号：`dhProjection` |
 | `ScreenDepth_From_DHScreenDepth` | 81 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection`、`dhProjection` |
 
@@ -417,10 +417,10 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `ShadowScreenPos_From_WorldPos_Distorted` | 3 | `shadow.ogxShadowScreenPosDistorted` | 已迁入 | 承接算法：阴影与半影 |
-| `ShadowScreenPos_From_WorldPos` | 14 | `shadow.ogxShadowScreenPos` | 已迁入 | 承接算法：阴影与半影 |
+| `ShadowScreenPos_From_WorldPos_Distorted` | 3 | `shadow/shadow.ogxShadowScreenPosDistorted` | 已迁入 | 承接算法：阴影与半影 |
+| `ShadowScreenPos_From_WorldPos` | 14 | `shadow/shadow.ogxShadowScreenPos` | 已迁入 | 承接算法：阴影与半影 |
 | `ShadowScreenPos_From_WorldPos_WithoutZScaling` | 21 | — | MC 专用 | 函数体直接读取宿主符号：`shadowModelView` |
-| `DistortShadowScreenPos` | 28 | `shadow.ogxDistortShadowPos` | 已迁入 | 承接算法：阴影与半影 |
+| `DistortShadowScreenPos` | 28 | `shadow/shadow.ogxDistortShadowPos` | 已迁入 | 承接算法：阴影与半影 |
 
 `references/iterationT/shaders/Lib/Utilities.glsl`
 
@@ -496,34 +496,34 @@
 | `view_to_screen_space` | 87 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
 | `integrate_arc` | 104 | — | MC 专用 | PhotonGTAO 的弧面积分，读取 photonics 采样缓冲 |
 | `calculate_maximum_horizon_angle` | 109 | — | MC 专用 | 函数体直接读取宿主符号：`depthtex` |
-| `ambient_occlusion` | 145 | `gi.ogxGroundTruthAo` | 已迁入 | 承接算法：全局光与遮蔽 |
+| `ambient_occlusion` | 145 | `gi/gi.ogxGroundTruthAo` | 已迁入 | 承接算法：全局光与遮蔽 |
 
 `references/Eclipse/shaders/lib/ROBOBO_sky.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `sky_rayleighPhase` | 38 | `atmosphere.ogxEclipseSkyRayleighPhase` | 已迁入 | 承接算法：天空散射与日月星 |
-| `sky_miePhase` | 43 | `atmosphere.ogxEclipseSkyMiePhase` | 已迁入 | 承接算法：天空散射与日月星 |
-| `sky_phase` | 48 | `atmosphere.ogxEclipseSkyPhase` | 已迁入 | 承接算法：天空散射与日月星 |
-| `sky_density` | 52 | `atmosphere.ogxEclipseSkyDensity` | 已迁入 | 承接算法：天空散射与日月星 |
-| `sky_airmass` | 61 | `atmosphere.ogxEclipseSkyAirmass` | 已迁入 | 承接算法：天空散射与日月星 |
-| `sky_opticalDepth` | 82 | `atmosphere.ogxEclipseSkyOpticalDepth` | 已迁入 | 承接算法：天空散射与日月星 |
-| `sky_transmittance` | 89 | `atmosphere.ogxEclipseSkyTransmittance` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sky_rayleighPhase` | 38 | `atmosphere/atmosphere.ogxEclipseSkyRayleighPhase` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sky_miePhase` | 43 | `atmosphere/atmosphere.ogxEclipseSkyMiePhase` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sky_phase` | 48 | `atmosphere/atmosphere.ogxEclipseSkyPhase` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sky_density` | 52 | `atmosphere/atmosphere.ogxEclipseSkyDensity` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sky_airmass` | 61 | `atmosphere/atmosphere.ogxEclipseSkyAirmass` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sky_opticalDepth` | 82 | `atmosphere/atmosphere.ogxEclipseSkyOpticalDepth` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sky_transmittance` | 89 | `atmosphere/atmosphere.ogxEclipseSkyTransmittance` | 已迁入 | 承接算法：天空散射与日月星 |
 | `calculateAtmosphere` | 95 | — | MC 专用 | 函数体直接读取宿主符号：`eyeAltitude`、`cameraPosition` |
 
 `references/Eclipse/shaders/lib/Shadow_Params.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `BiasShadowProjection` | 20 | `shadow.ogxApplyShadowBias` | 已迁入 | 承接算法：阴影与半影 |
+| `BiasShadowProjection` | 20 | `shadow/shadow.ogxApplyShadowBias` | 已迁入 | 承接算法：阴影与半影 |
 | `calcDistort` | 27 | — | MC 专用 | 阴影投影的扭曲坐标，依赖 shadowProjection 与阴影贴图约定 |
 
 `references/Eclipse/shaders/lib/Shadows.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `GriAndEminShadowFix` | 4 | `shadow.ogxGriAndEminShadowFix` | 已迁入 | 同名迁移：阴影与半影 |
-| `applyShadowBias` | 16 | `shadow.ogxApplyShadowBias` | 已迁入 | 承接算法：阴影与半影 |
+| `GriAndEminShadowFix` | 4 | `shadow/shadow.ogxGriAndEminShadowFix` | 已迁入 | 同名迁移：阴影与半影 |
+| `applyShadowBias` | 16 | `shadow/shadow.ogxApplyShadowBias` | 已迁入 | 承接算法：阴影与半影 |
 
 `references/Eclipse/shaders/lib/aurora.glsl`
 
@@ -534,7 +534,7 @@
 | `tri` | 43 | `math.ogxEclipseTri` | 已迁入 | 承接算法：数学与通用工具 |
 | `tri2` | 47 | `math.ogxEclipseTri2` | 已迁入 | 承接算法：数学与通用工具 |
 | `triNoise2d` | 53 | — | MC 专用 | 函数体直接读取宿主符号：`frameTimeCounter` |
-| `aurora` | 77 | `atmosphere.ogxAurora` | 已迁入 | 承接算法：天空散射与日月星 |
+| `aurora` | 77 | `atmosphere/atmosphere.ogxAurora` | 已迁入 | 承接算法：天空散射与日月星 |
 
 `references/Eclipse/shaders/lib/bayer_matrix.glsl`
 
@@ -552,10 +552,10 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `YearCycleColor` | 19 | `weather.ogxYearCycleColor` | 已迁入 | 同名迁移：天气与季节 |
-| `BiomeFogDensity` | 135 | `fog.ogxBiomeFogDensityEclipse` | 已迁入 | 承接算法：雾与空气透视 |
+| `YearCycleColor` | 19 | `weather/weather.ogxYearCycleColor` | 已迁入 | 同名迁移：天气与季节 |
+| `BiomeFogDensity` | 135 | `fog/fog.ogxBiomeFogDensityEclipse` | 已迁入 | 承接算法：雾与空气透视 |
 | `BiomeVLFogColors` | 151 | — | MC 专用 | 函数体直接读取宿主符号：`biome` |
-| `FogDensities` | 173 | `weather.ogxFogDensities` | 已迁入 | 同名迁移：天气与季节 |
+| `FogDensities` | 173 | `weather/weather.ogxFogDensities` | 已迁入 | 同名迁移：天气与季节 |
 
 `references/Eclipse/shaders/lib/color_dither.glsl`
 
@@ -563,11 +563,11 @@
 | --- | --- | --- | --- | --- |
 | `nrand` | 2 | `noise.ogxWhiteNoise` | 已迁入 | 承接算法：程序化噪声 |
 | `triangWhiteNoise` | 7 | `noise.ogxTriangleNoise` | 已迁入 | 承接算法：程序化噪声 |
-| `fp10Dither` | 19 | `post.ogxDitherFloat` | 已迁入 | 同一浮点抖动；调用时尾数位数取 (6,6,5) |
-| `fp16Dither` | 26 | `post.ogxDitherFloat` | 已迁入 | 同一浮点抖动；调用时尾数位数取 10 |
-| `int8Dither` | 33 | `post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 8 |
-| `int10Dither` | 38 | `post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 10 |
-| `int16Dither` | 43 | `post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 16 |
+| `fp10Dither` | 19 | `post/post.ogxDitherFloat` | 已迁入 | 同一浮点抖动；调用时尾数位数取 (6,6,5) |
+| `fp16Dither` | 26 | `post/post.ogxDitherFloat` | 已迁入 | 同一浮点抖动；调用时尾数位数取 10 |
+| `int8Dither` | 33 | `post/post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 8 |
+| `int10Dither` | 38 | `post/post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 10 |
+| `int16Dither` | 43 | `post/post.ogxDitherFixed` | 已迁入 | 同一定点抖动；调用时位数取 16 |
 
 `references/Eclipse/shaders/lib/color_transforms.glsl`
 
@@ -615,15 +615,15 @@
 | `iqint2` | 45 | `noise.ogxIntegerHash3` | 已迁入 | 同一 Inigo Quilez 整数哈希：三轮右移异或再乘 1103515245 |
 | `hash` | 56 | `noise.ogxHash13` | 已迁入 | 承接算法：程序化噪声 |
 | `LightSourcePosition` | 69 | — | MC 专用 | 函数体直接读取宿主符号：`colortex` |
-| `densityAtPosFog` | 95 | `weather.ogxStormNoise` | 已迁入 | 承接算法：天气与季节 |
-| `SwirlAroundOrigin` | 110 | `fog.ogxEndVortexSwirl` | 已迁入 | 承接算法：雾与空气透视 |
+| `densityAtPosFog` | 95 | `weather/weather.ogxStormNoise` | 已迁入 | 承接算法：天气与季节 |
+| `SwirlAroundOrigin` | 110 | `fog/fog.ogxEndVortexSwirl` | 已迁入 | 承接算法：雾与空气透视 |
 | `VolumeBounds` | 122 | — | MC 专用 | 末地雾体积边界，依赖末地主岛坐标与群系状态 |
-| `fogShape` | 144 | `fog.ogxEndVortexShape` | 已迁入 | 承接算法：雾与空气透视 |
-| `endFogPhase` | 169 | `fog.ogxEndVortexLightPhase` | 已迁入 | 承接算法：雾与空气透视 |
+| `fogShape` | 144 | `fog/fog.ogxEndVortexShape` | 已迁入 | 承接算法：雾与空气透视 |
+| `endFogPhase` | 169 | `fog/fog.ogxEndVortexLightPhase` | 已迁入 | 承接算法：雾与空气透视 |
 | `LightSourceColors` | 182 | — | MC 专用 | 末地雾的方块光源配色，依赖方块光照与群系表 |
-| `LightSourceLighting` | 198 | `fog.ogxEndVortexLighting` | 已迁入 | 承接算法：雾与空气透视 |
-| `phaseEND` | 215 | `fog.ogxEndFogPhaseEclipse` | 已迁入 | 承接算法：雾与空气透视 |
-| `GetVolumetricFog` | 219 | `fog.ogxEndVortexFog` | 已迁入 | 承接算法：雾与空气透视 |
+| `LightSourceLighting` | 198 | `fog/fog.ogxEndVortexLighting` | 已迁入 | 承接算法：雾与空气透视 |
+| `phaseEND` | 215 | `fog/fog.ogxEndFogPhaseEclipse` | 已迁入 | 承接算法：雾与空气透视 |
+| `GetVolumetricFog` | 219 | `fog/fog.ogxEndVortexFog` | 已迁入 | 承接算法：雾与空气透视 |
 | `GetEndFogShadow` | 321 | — | MC 专用 | 末地雾的遮挡，采样宿主的阴影与末地主岛数据 |
 
 `references/Eclipse/shaders/lib/gameplay_effects.glsl`
@@ -647,25 +647,25 @@
 | `cosineHemisphereSample` | 6 | `math.ogxCosineHemisphere` | 已迁入 | 承接算法：数学与通用工具 |
 | `TangentToWorld` | 16 | `math.ogxTangentBasis` | 已迁入 | 承接算法：数学与通用工具 |
 | `SpiralSample` | 23 | `math.ogxSpiralSample` | 已迁入 | 承接算法：数学与通用工具 |
-| `BilateralUpscale_SSAO` | 43 | `gi.ogxBilateralUpscale` | 已迁入 | 四邻域按深度差剔除后升采样；参考实现的固定步长换成分辨率倍数参数 |
+| `BilateralUpscale_SSAO` | 43 | `gi/gi.ogxBilateralUpscale` | 已迁入 | 四邻域按深度差剔除后升采样；参考实现的固定步长换成分辨率倍数参数 |
 | `rayTrace_GI` | 99 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex` |
 | `convertHandDepth_3` | 145 | `math.ogxConvertHandDepth3` | 已迁入 | 承接算法：数学与通用工具 |
 | `RT_alternate` | 153 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex`、`gbufferModelView`、`viewWidth`、`viewHeight` |
-| `ApplySSRT` | 219 | `reflection.ogxReflectionSceneColor` | 已迁入 | 承接算法：屏幕空间反射 |
+| `ApplySSRT` | 219 | `reflection/reflection.ogxReflectionSceneColor` | 已迁入 | 承接算法：屏幕空间反射 |
 
 `references/Eclipse/shaders/lib/lightning_stuff.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `Iris_Lightningflash` | 8 | `fog_volume.ogxFogLightning` | 已迁入 | 承接算法：体积雾 |
-| `Iris_Lightningflash_VLcloud` | 31 | `cloud_volume.ogxCumulusLightning` | 已迁入 | 承接算法：体积云步进 |
-| `Iris_Lightningflash_VLfog` | 44 | `fog_volume.ogxFogLightning` | 已迁入 | 承接算法：体积雾 |
+| `Iris_Lightningflash` | 8 | `fog/volume.ogxFogLightning` | 已迁入 | 承接算法：体积雾 |
+| `Iris_Lightningflash_VLcloud` | 31 | `cloud/volume.ogxCumulusLightning` | 已迁入 | 承接算法：体积云步进 |
+| `Iris_Lightningflash_VLfog` | 44 | `fog/volume.ogxFogLightning` | 已迁入 | 承接算法：体积雾 |
 
 `references/Eclipse/shaders/lib/lpv_common.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `GetLpvPosition` | 12 | — | MC 专用 | 函数体直接读取宿主符号：`cameraPosition` |
+| `GetLpvPosition` | 12 | `camera.ogxGetLpvPosition` | 已迁入 | 同名迁移：camera |
 
 `references/Eclipse/shaders/lib/lpv_render.glsl`
 
@@ -680,26 +680,26 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `cloudVol` | 15 | `fog.ogxNetherFogCloudVolume` | 已迁入 | 承接算法：雾与空气透视 |
+| `cloudVol` | 15 | `fog/fog.ogxNetherFogCloudVolume` | 已迁入 | 承接算法：雾与空气透视 |
 
 `references/Eclipse/shaders/lib/overworld_fog.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
 | `phaseRayleigh` | 54 | `math.ogxRayleighPhaseElek` | 已迁入 | 承接算法：数学与通用工具 |
-| `fogPhase` | 59 | `fog.ogxFogPhase` | 已迁入 | 同名迁移：雾与空气透视 |
+| `fogPhase` | 59 | `fog/fog.ogxFogPhase` | 已迁入 | 同名迁移：雾与空气透视 |
 
 `references/Eclipse/shaders/lib/projections.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `toClipSpace3` | 14 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
-| `toScreenSpace` | 18 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
-| `toScreenSpaceVector` | 25 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
-| `toWorldSpace` | 32 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferModelView` |
-| `toWorldSpaceCamera` | 37 | — | MC 专用 | 函数体直接读取宿主符号：`cameraPosition`、`gbufferModelView` |
-| `toShadowSpace` | 42 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferModelView`、`shadowModelView` |
-| `toShadowSpaceProjected` | 52 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferModelView`、`shadowModelView` |
+| `toClipSpace3` | 14 | `camera.ogxToClipSpace3` | 已迁入 | 同名迁移：camera |
+| `toScreenSpace` | 18 | `camera.ogxToScreenSpace` | 已迁入 | 同名迁移：camera |
+| `toScreenSpaceVector` | 25 | `camera.ogxToScreenSpaceVector` | 已迁入 | 同名迁移：camera |
+| `toWorldSpace` | 32 | `camera.ogxToWorldSpace` | 已迁入 | 同名迁移：camera |
+| `toWorldSpaceCamera` | 37 | `camera.ogxToWorldSpaceCamera` | 已迁入 | 同名迁移：camera |
+| `toShadowSpace` | 42 | `camera.ogxToShadowSpace` | 已迁入 | 同名迁移：camera |
+| `toShadowSpaceProjected` | 52 | `camera.ogxToShadowSpaceProjected` | 已迁入 | 同名迁移：camera |
 
 `references/Eclipse/shaders/lib/ripples.glsl`
 
@@ -719,10 +719,10 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `drawSun` | 3 | `atmosphere.ogxSunDisc` | 已迁入 | 承接算法：天空散射与日月星 |
-| `sphereMap` | 10 | `atmosphere.ogxSkyProject` | 已迁入 | 承接算法：天空散射与日月星 |
-| `drawMoon` | 27 | `atmosphere.ogxMoonDiscDefault` | 已迁入 | 承接算法：天空散射与日月星 |
-| `drawRealMoon` | 58 | `atmosphere.ogxMoonDiscReal` | 已迁入 | 承接算法：天空散射与日月星 |
+| `drawSun` | 3 | `atmosphere/atmosphere.ogxSunDisc` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sphereMap` | 10 | `atmosphere/atmosphere.ogxSkyProject` | 已迁入 | 承接算法：天空散射与日月星 |
+| `drawMoon` | 27 | `atmosphere/atmosphere.ogxMoonDiscDefault` | 已迁入 | 承接算法：天空散射与日月星 |
+| `drawRealMoon` | 58 | `atmosphere/atmosphere.ogxMoonDiscReal` | 已迁入 | 承接算法：天空散射与日月星 |
 | `w0` | 69 | `math.ogxCubicWeight0` | 已迁入 | 同一三次 B 样条权重，常数逐项相同 |
 | `w1` | 74 | `math.ogxCubicWeight1` | 已迁入 | 同一三次 B 样条权重，常数逐项相同 |
 | `w2` | 79 | `math.ogxCubicWeight2` | 已迁入 | 同一三次 B 样条权重，常数逐项相同 |
@@ -733,33 +733,33 @@
 | `h1` | 104 | `math.ogxCubicOffsetHigh` | 已迁入 | 同一合并采样点的右偏移 |
 | `texture_bicubic` | 109 | `math.ogxBicubicTexture` | 已迁入 | 承接算法：数学与通用工具 |
 | `texture_bicubic_offset` | 133 | `math.ogxBicubicTexture` | 已迁入 | 承接算法：数学与通用工具 |
-| `sphereToCarte` | 166 | `atmosphere.ogxSkyEquirect` | 已迁入 | 同一经纬投影：方向转零到一的贴图坐标 |
-| `skyFromTex` | 171 | `atmosphere_model.ogxAtmoSkyRadiance` | 已迁入 | 承接算法：预计算大气查表 |
-| `skyCloudsFromTex` | 186 | `atmosphere.ogxSkyCloudsFromTex` | 已迁入 | 同名迁移：天空散射与日月星 |
-| `skyCloudsFromTexBLUR` | 195 | `atmosphere.ogxSkyCloudsFromTex` | 已迁入 | 参考实现的 scaler 参数未参与计算，函数体与 skyCloudsFromTex 相同，库只保留一份 |
-| `skyCloudsFromTexLOD` | 210 | `atmosphere.ogxSkyCloudsFromTexLod` | 已迁入 | 同名迁移：天空散射与日月星 |
-| `volumetricsFromTex` | 229 | `fog_volume.ogxFogCloudBicubic` | 已迁入 | 承接算法：体积雾 |
+| `sphereToCarte` | 166 | `atmosphere/atmosphere.ogxSkyEquirect` | 已迁入 | 同一经纬投影：方向转零到一的贴图坐标 |
+| `skyFromTex` | 171 | `atmosphere/model.ogxAtmoSkyRadiance` | 已迁入 | 承接算法：预计算大气查表 |
+| `skyCloudsFromTex` | 186 | `atmosphere/atmosphere.ogxSkyCloudsFromTex` | 已迁入 | 同名迁移：天空散射与日月星 |
+| `skyCloudsFromTexBLUR` | 195 | `atmosphere/atmosphere.ogxSkyCloudsFromTex` | 已迁入 | 参考实现的 scaler 参数未参与计算，函数体与 skyCloudsFromTex 相同，库只保留一份 |
+| `skyCloudsFromTexLOD` | 210 | `atmosphere/atmosphere.ogxSkyCloudsFromTexLod` | 已迁入 | 同名迁移：天空散射与日月星 |
+| `volumetricsFromTex` | 229 | `fog/volume.ogxFogCloudBicubic` | 已迁入 | 承接算法：体积雾 |
 
 `references/Eclipse/shaders/lib/specular.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `invLinZ` | 1 | `reflection.ogxReflectionLinearDepth` | 已迁入 | 承接算法：屏幕空间反射 |
-| `DH_invLinZ` | 5 | `reflection.ogxReflectionDhToScreenDepth` | 已迁入 | 承接算法：屏幕空间反射 |
-| `linZ` | 9 | `reflection.ogxReflectionLinearDepth` | 已迁入 | 承接算法：屏幕空间反射 |
-| `linZ2` | 13 | `reflection.ogxReflectionLinearDepth` | 已迁入 | 承接算法：屏幕空间反射 |
+| `invLinZ` | 1 | `reflection/reflection.ogxReflectionLinearDepth` | 已迁入 | 承接算法：屏幕空间反射 |
+| `DH_invLinZ` | 5 | `reflection/reflection.ogxReflectionDhToScreenDepth` | 已迁入 | 承接算法：屏幕空间反射 |
+| `linZ` | 9 | `reflection/reflection.ogxReflectionLinearDepth` | 已迁入 | 承接算法：屏幕空间反射 |
+| `linZ2` | 13 | `reflection/reflection.ogxReflectionLinearDepth` | 已迁入 | 承接算法：屏幕空间反射 |
 | `frisvad` | 17 | `math.ogxTangentBasis` | 已迁入 | 承接算法：数学与通用工具 |
 | `CoordBase` | 29 | `math.ogxCircleMap` | 已迁入 | 承接算法：数学与通用工具 |
 | `R2_Sample` | 35 | `math.ogxR2Sample` | 已迁入 | 承接算法：数学与通用工具 |
 | `fma2` | 40 | `math.ogxFma2` | 已迁入 | 承接算法：数学与通用工具 |
-| `SampleVNDFGGX` | 44 | `reflection.ogxSampleGgxVndf` | 已迁入 | 承接算法：屏幕空间反射 |
+| `SampleVNDFGGX` | 44 | `reflection/reflection.ogxSampleGgxVndf` | 已迁入 | 承接算法：屏幕空间反射 |
 | `GGX` | 75 | `math.ogxDistributionGGX` | 已迁入 | 承接算法：数学与通用工具 |
 | `shlickFresnelRoughness` | 95 | `math.ogxFresnelSchlick` | 已迁入 | 承接算法：数学与通用工具 |
 | `invertLinearizeDepthFast` | 108 | — | MC 专用 | 按 Iris 的深度约定反解线性深度，使用 gbufferProjectionInverse |
 | `rayTraceSpeculars` | 113 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex` |
-| `toScreenSpace2` | 248 | — | MC 专用 | 函数体直接读取宿主符号：`gbufferProjection` |
+| `toScreenSpace2` | 248 | `camera.ogxToScreenSpace2` | 已迁入 | 同名迁移：camera |
 | `GetVoxelBlock` | 262 | — | MC 专用 | 按坐标读取体素方块编号，依赖 Iris 自定义图像 |
-| `voxelIndex` | 266 | `voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
+| `voxelIndex` | 266 | `voxel/voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
 | `voxelNormalIndex` | 270 | — | MC 专用 | 体素法线索引，依赖方块面表与影像编码 |
 | `decodeVec2_16` | 274 | `color.ogxDecodeVec2x16` | 已迁入 | 同一组常数把打包值拆成两个十六位分量，不依赖浮点位模式 |
 | `GetVoxelData` | 280 | — | MC 专用 | 读体素影像数据，依赖自定义图像布局 |
@@ -767,7 +767,7 @@
 | `getVoxelEmission` | 294 | — | MC 专用 | 从体素影像读取发光，依赖自定义图像与方块映射 |
 | `voxelEmission` | 300 | — | MC 专用 | 体素发光编码，依赖方块表 |
 | `CleanVoxelSample` | 308 | — | MC 专用 | 清洗体素采样，依赖自定义图像与材质掩码 |
-| `ComputeVoxelShadowMap` | 331 | `voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
+| `ComputeVoxelShadowMap` | 331 | `voxel/voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
 | `planeIntersect` | 441 | `math.ogxRayPlaneIntersection` | 已迁入 | 承接算法：数学与通用工具 |
 | `AABBintersection` | 459 | `math.ogxRayBoxIntersection` | 已迁入 | 承接算法：数学与通用工具 |
 | `AABBintersection2` | 488 | `math.ogxRayBoxRange` | 已迁入 | 承接算法：数学与通用工具 |
@@ -775,8 +775,8 @@
 | `sortIntersectionOpaque` | 540 | — | MC 专用 | 按深度排序不透明交点，依赖体素影像布局 |
 | `fenceIntersection` | 552 | — | MC 专用 | 栅栏网格求交，读取体素方块编号 |
 | `fenceIntersection2` | 561 | — | MC 专用 | 栅栏网格求交的第二种写法，读取体素方块编号 |
-| `traceQuarterVoxel` | 578 | `voxel.ogxVoxelReflection` | 已迁入 | 承接算法：体素反射 |
-| `voxelReflection` | 616 | `voxel.ogxVoxelReflection` | 已迁入 | 同名迁移：体素反射 |
+| `traceQuarterVoxel` | 578 | `voxel/voxel.ogxVoxelReflection` | 已迁入 | 承接算法：体素反射 |
+| `voxelReflection` | 616 | `voxel/voxel.ogxVoxelReflection` | 已迁入 | 同名迁移：体素反射 |
 | `CleanPhotonicsSample` | 1079 | — | MC 专用 | 读取 photonics 缓冲的采样清洗，依赖 SSBO 布局 |
 | `ComputePhotonicsShadowMap` | 1102 | — | MC 专用 | 写入 photonics 阴影贴图，需要 Iris SSBO 与图像写入权限 |
 | `trace_wsr` | 1222 | — | MC 专用 | 加权水面追踪主循环，读取体素影像与位置缓冲，依赖 Iris 自定义图像 |
@@ -797,13 +797,13 @@
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
 | `hash13` | 5 | `noise.ogxHash13` | 已迁入 | 承接算法：程序化噪声 |
-| `NoisyStarField` | 13 | `atmosphere.ogxStarNoisyField` | 已迁入 | 承接算法：天空散射与日月星 |
-| `StableStarField` | 22 | `atmosphere.ogxStarsStable` | 已迁入 | 承接算法：天空散射与日月星 |
+| `NoisyStarField` | 13 | `atmosphere/atmosphere.ogxStarNoisyField` | 已迁入 | 承接算法：天空散射与日月星 |
+| `StableStarField` | 22 | `atmosphere/atmosphere.ogxStarsStable` | 已迁入 | 承接算法：天空散射与日月星 |
 | `hash12_alt` | 46 | `noise.ogxHash12` | 已迁入 | 承接算法：程序化噪声 |
-| `starTemp` | 48 | `atmosphere.ogxStarTemperature` | 已迁入 | 承接算法：天空散射与日月星 |
-| `starplane` | 52 | `atmosphere.ogxStarPlane` | 已迁入 | 同名迁移：天空散射与日月星 |
-| `starbox` | 82 | `atmosphere.ogxStarBox` | 已迁入 | 同名迁移：天空散射与日月星 |
-| `stars` | 93 | `atmosphere.ogxStarsStable` | 已迁入 | 承接算法：天空散射与日月星 |
+| `starTemp` | 48 | `atmosphere/atmosphere.ogxStarTemperature` | 已迁入 | 承接算法：天空散射与日月星 |
+| `starplane` | 52 | `atmosphere/atmosphere.ogxStarPlane` | 已迁入 | 同名迁移：天空散射与日月星 |
+| `starbox` | 82 | `atmosphere/atmosphere.ogxStarBox` | 已迁入 | 同名迁移：天空散射与日月星 |
+| `stars` | 93 | `atmosphere/atmosphere.ogxStarsStable` | 已迁入 | 承接算法：天空散射与日月星 |
 
 `references/Eclipse/shaders/lib/texFiltering.glsl`
 
@@ -856,7 +856,7 @@
 | `calculateHardShadows` | 111 | — | MC 专用 | 硬阴影比较，直接采样 shadowtex |
 | `genUnitVector` | 117 | `math.ogxCosineHemisphere` | 已迁入 | 承接算法：数学与通用工具 |
 | `cartToSphere` | 127 | `math.ogxCircleMap` | 已迁入 | 承接算法：数学与通用工具 |
-| `sphereToCart` | 134 | `atmosphere.ogxSkyUnproject` | 已迁入 | 承接算法：天空散射与日月星 |
+| `sphereToCart` | 134 | `atmosphere/atmosphere.ogxSkyUnproject` | 已迁入 | 承接算法：天空散射与日月星 |
 | `getRotMat` | 139 | `math.ogxRotateMatrix` | 已迁入 | 承接算法：数学与通用工具 |
 | `rsi` | 162 | `math.ogxRaySphereHit` | 已迁入 | 同一球面求交算式，未命中时同样返回两个负一 |
 | `HaltonSeq3` | 172 | `sampling.ogxHalton3` | 已迁入 | 承接算法：采样与抖动 |
@@ -868,8 +868,8 @@
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
 | `rand` | 49 | `noise.ogxWhiteNoise` | 已迁入 | 承接算法：程序化噪声 |
-| `getRainDensity` | 55 | `cloud.ogxCloudRainDensity` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `densityAtPos` | 62 | `cloud.ogxCloudDensityAtPos` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `getRainDensity` | 55 | `cloud/cloud.ogxCloudRainDensity` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `densityAtPos` | 62 | `cloud/cloud.ogxCloudDensityAtPos` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `hash2` | 79 | `noise.ogxHash22` | 已迁入 | 承接算法：程序化噪声 |
 | `normalize_hash` | 85 | `noise.ogxHash22` | 已迁入 | 承接算法：程序化噪声 |
 | `perlin_gradient` | 89 | `noise.ogxPerlinGradient2` | 已迁入 | 承接算法：程序化噪声 |
@@ -880,20 +880,20 @@
 | `getPlanetShadow` | 404 | `planet.ogxPlanetEnd` | 已迁入 | 承接算法：末地行星 |
 | `GetCloudShadow` | 412 | — | MC 专用 | 函数体直接读取宿主符号：lightningBoltPosition、sunElevation；云层高度来自编译期配置 CloudLayer0_height 等 |
 | `getRayOrigin` | 464 | — | MC 专用 | 体积云光线起点，依赖相机位置与视场内插 |
-| `phaseCloud` | 491 | `cloud.ogxCloudPhaseEclipse` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `getCloudScattering` | 512 | `cloud.ogxCloudMarch` | 已迁入 | 承接算法：云形状、光照与云影 |
-| `getCloudLighting` | 578 | `cloud.ogxCloudLight` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `phaseCloud` | 491 | `cloud/cloud.ogxCloudPhaseEclipse` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `getCloudScattering` | 512 | `cloud/cloud.ogxCloudMarch` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `getCloudLighting` | 578 | `cloud/cloud.ogxCloudLight` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `raymarchCloud` | 628 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`shadowcolor`、`cameraPosition`、`shadowModelView`、`lightningBoltPosition`、`sunElevation` |
 | `GetVolumetricClouds` | 960 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`cameraPosition`、`gbufferModelView`、`sunElevation` |
-| `raymarchCloudSimple` | 1385 | `cloud.ogxCloudMarch` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `raymarchCloudSimple` | 1385 | `cloud/cloud.ogxCloudMarch` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `GetVolumetricCloudsSimple` | 1493 | — | MC 专用 | 函数体直接读取宿主符号：`cameraPosition` |
 
 `references/Eclipse/shaders/lib/voxel_write.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `GetVoxelIndex` | 1 | — | MC 专用 | 函数体直接读取宿主符号：`cameraPosition` |
-| `SetVoxelBlock` | 19 | `voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
+| `GetVoxelIndex` | 1 | `voxel/voxel.ogxGetVoxelIndex` | 已迁入 | 同名迁移：体素反射 |
+| `SetVoxelBlock` | 19 | `voxel/voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
 | `PopulateShadowVoxel` | 89 | — | MC 专用 | 函数体直接读取宿主符号：`mc_Entity`、`entityId`、`blockEntityId`、`blockEntity` |
 
 `references/Eclipse/shaders/lib/waterBump.glsl`

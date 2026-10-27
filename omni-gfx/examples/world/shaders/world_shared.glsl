@@ -11,21 +11,21 @@
 // 噪声：云、雾与水面细节。
 #include "/omni-gfx/noise.glsl"
 // 大气：天空与空气透视。
-#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
 // 水面：波法线与水面着色。
 #include "/omni-gfx/water.glsl"
 // 雾：低空体积雾。
-#include "/omni-gfx/fog.glsl"
+#include "/omni-gfx/fog/fog.glsl"
 // 阴影：PCSS 软阴影与级联选择。
-#include "/omni-gfx/shadow.glsl"
+#include "/omni-gfx/shadow/shadow.glsl"
 // 全局光：地平线遮蔽与多弹射。
-#include "/omni-gfx/gi.glsl"
+#include "/omni-gfx/gi/gi.glsl"
 // 反射：屏幕空间追踪与九点降噪。
-#include "/omni-gfx/reflection.glsl"
+#include "/omni-gfx/reflection/reflection.glsl"
 // 后期：泛光核、亮度曲线与颗粒。
-#include "/omni-gfx/post.glsl"
+#include "/omni-gfx/post/post.glsl"
 // 抗锯齿：时间重投影与历史裁剪。
-#include "/omni-gfx/antialias.glsl"
+#include "/omni-gfx/antialias/antialias.glsl"
 // 颜色：色调映射曲线。
 #include "/omni-gfx/color.glsl"
 

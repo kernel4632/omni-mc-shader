@@ -13,7 +13,7 @@ Omni 通用图形库行星模块：用解析射线画出整颗行星、光环与
 
 // 数学提供求交、圆盘剖面与色温，大气提供米氏相位与行星双向反射。
 #include "math.slang"
-#include "atmosphere.slang"
+#include "atmosphere/atmosphere.slang"
 
 // 画一整颗行星：先与地表球求交，再叠光环与大气，最后把环带的遮挡乘回天空。
 // `eye` 是相机在行星坐标系里的位置，`rayDir` 是视线，`lightDir` 是光方向。

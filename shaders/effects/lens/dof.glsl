@@ -15,7 +15,7 @@
   这样通用库可以脱离 Minecraft 单独使用，而选项名与默认值保持不变。
 */
 // 通用库提供弥散圆、镜头倍数、深度换算与完整散焦循环。
-#include "/omni-gfx/post.glsl"
+#include "/omni-gfx/post/post.glsl"
 
 // 基准镜头：五十毫米、f/2.8。取默认值时镜头倍数正好为一，画面与移植前一致。
 const float DoF_RefFocal = 50.0; // 基准焦距，毫米。

@@ -107,7 +107,7 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 // 暗角曲线放在通用库，这里只传入画面纵横比与选项。
-#include "/omni-gfx/post.glsl"
+#include "/omni-gfx/post/post.glsl"
 #include "/effects/shared/antialias.glsl"
 #include "/common/noise.glsl"
 

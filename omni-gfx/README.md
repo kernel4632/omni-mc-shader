@@ -2,7 +2,7 @@
 
 Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Minecraft 光影可直接 `#include` 的 GLSL 330，并用同一份源生成 SPIR-V 作为编译验证产物。
 
-当前完成阶段 0–3 的核心部分：构建链、`math` / `color` / `sampling` 三个基础模块，以及 `noise` / `atmosphere` / `cloud` / `water` / `fog` 五个效果模块。测试世界已经改为直接使用生成的 GLSL，能在不启动 Minecraft 的情况下出图、截图和记录帧时；场景包含带材质与逐角遮蔽的体素地形、树木与草叶、三级方向光 PCSS 阴影、体积云与时间累积、屏幕空间反射与折射、空气透视与时间抗锯齿。函数级覆盖对照见 `docs/gfx-functions.md`。
+当前完成阶段 0–3 的核心部分：构建链、`math` / `color` / `sampling` 三个基础模块，以及按效果分文件夹的 `atmosphere` / `cloud` / `fog` / `water` / `shadow` / `gi` / `reflection` / `post` / `antialias` / `weather` / `world` 等效果模块。测试世界已经改为直接使用生成的 GLSL，能在不启动 Minecraft 的情况下出图、截图和记录帧时；场景包含带材质与逐角遮蔽的体素地形、树木与草叶、三级方向光 PCSS 阴影、体积云与时间累积、屏幕空间反射与折射、空气透视与时间抗锯齿。函数级覆盖对照见 `docs/gfx-functions.md`。
 
 最近一次 1280×720 固定机位：平均 24.1 毫秒（约 41 帧每秒），截图 `.dev/omni-gfx/world-realistic.png`，帧时 `.dev/omni-gfx/perf-realistic.json`。
 
@@ -10,8 +10,9 @@ Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Mine
 
 | 路径 | 用途 |
 | --- | --- |
-| `src/` | Slang 源文件，唯一手写算法来源 |
-| `shaders/omni-gfx/` | 自动生成的 GLSL，唯一产物位置 |
+| `src/` | Slang 源文件，按效果分文件夹，唯一手写算法来源 |
+| `src/<效果>/` | 复杂效果的主体与变体子文件，例如 `cloud/eclipse.slang`、`reflection/wsr.slang` |
+| `shaders/omni-gfx/` | 自动生成的 GLSL，目录与源文件夹一致，唯一产物位置 |
 | `generated/spirv/` | 本机生成的 SPIR-V 与清单，二进制不提交 |
 | `examples/world/` | 不启动 Minecraft 的程序化测试世界 |
 | `tests/` | GPU 等值测试、Slang 编译探针、离线回归 |
@@ -29,7 +30,7 @@ python omni-gfx/build.py check
 
 ```glsl
 // 通用库大气模块：天空散射与空气透视由 Slang 源生成。
-#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
 
 vec3 sky = ogxAtmosphereSky(ogxAtmosphereEarth(), 0.03, viewDir, sunDir, 8);
 ```
@@ -80,7 +81,7 @@ python omni-gfx/build.py count
 python omni-gfx/build.py parity
 ```
 
-从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 481、MC 专用 24、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。严格结论以 `tools/parity_report.json` 为准：exact 481、approximate 0、missing 0、mc_glue 24。
+从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 401、MC 专用 104、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。严格结论以 `tools/parity_report.json` 为准：exact 474、approximate 0、missing 0、reference_broken 5、mc_glue 26。
 
 ## 已知边界
 
@@ -102,4 +103,4 @@ python omni-gfx/build.py parity
 python omni-gfx/build.py strict-parity
 python omni-gfx/build.py profiles
 \\n
-\strict-parity\ 读取 \	ools/strict_review.json\，生成 \	ools/parity_report.json\ 与 \docs/gfx-functions-strict.md\；状态只允许 exact、approximate、mc_glue、missing。\profiles\ 分别生成 iterationT 与 Eclipse 的 \profile.frag\，并用本机 \glslang\ 独立编译。严格统计以报告为准：当前 exact 481、approximate 0、missing 0、mc_glue 24，剩下的 mc_glue 只有程序入口、标题、文字渲染与群系属性表。
+\strict-parity\ 读取 \	ools/strict_review.json\，生成 \	ools/parity_report.json\ 与 \docs/gfx-functions-strict.md\；状态只允许 exact、approximate、mc_glue、missing。\profiles\ 分别生成 iterationT 与 Eclipse 的 \profile.frag\，并用本机 \glslang\ 独立编译。严格统计以报告为准：当前 exact 474、approximate 0、reference_broken 5、missing 0、mc_glue 26，剩下的 mc_glue 只有程序入口、标题、文字渲染与群系属性表。模块按实际效果组织，`itx_extra`、`eclipse_extra`、`eclipse_specular`、`cloud_eclipse` 等来源名已经拆进 `post`、`lens`、`sampling`、`gi`、`shadow`、`fog`、`weather`、`reflection`、`voxel`、`cloud`，不再作为顶层模块。

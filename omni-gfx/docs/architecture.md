@@ -4,11 +4,11 @@
 
 ## 一、唯一源与两份产物
 
-`omni-gfx/src/*.slang` 是唯一手写算法源。构建分两条路：
+`omni-gfx/src/**/*.slang` 是唯一手写算法源，按实际效果分文件夹。构建分两条路：
 
 ```text
-src/math.slang ─┬─ 生成器转换 ─→ shaders/omni-gfx/math.glsl  （唯一 GLSL 产物）
-                └─ slangc 探针 ─→ generated/spirv/math.spv    （编译验证产物）
+src/cloud/eclipse.slang ─┬─ 生成器转换 ─→ shaders/omni-gfx/cloud/eclipse.glsl  （唯一 GLSL 产物）
+                         └─ slangc 探针 ─→ generated/spirv/cloud/eclipse.spv    （编译验证产物）
 ```
 
 GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang 自带的 GLSL 后端。原因是实测后端输出 `#version 450`、把函数改名为 `toneMap_0` 并附带自己的 `main()`，无法作为库被光影 `#include`。降级表只覆盖本项目实际使用的差异：
@@ -31,29 +31,52 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | --- | --- | --- |
 | `math.slang` | 常数、夹紧、亮度、三角近似、编码、GGX、黑体、求交、噪声、拜尔、切线基、矩阵列展开、空间扭曲、光斑曲线、R2 采样、余弦半球、手部深度换算 | 无 |
 | `color.slang` | 伽马、ACES、AgX、高级调色、暗视觉、白平衡、黑边 | `math` |
-| `sampling.slang` | 蓝噪声、时间抖动、拜尔时间抖动 | `math` |
-| `noise.slang` | 整数哈希、二维向量哈希、二维与三维值噪声、二维梯度噪声与旋度、分形叠加、域扭曲、查表式雾噪声 | `math` |
-| `atmosphere.slang` | 球面几何、瑞利与米氏密度、光学厚度、单次散射天空、空气透视、太阳圆盘、星场与日月圆盘 | `math` |
-| `cloud.slang` | 球壳求交、程序化云密度、朝阳光照、沿视线步进、云影、平面云扭曲与多层密度 | `math`、`noise` |
-| `water.slang` | 方向波法线、菲涅尔、吸收、折射偏移、GGX 高光、岸线泡沫、水面合成、水位波与水体雾、迭代海洋、涟漪混合、泡沫、Eclipse 雨点与水面高度/焦散 | `math`、`noise` |
-| `fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分、下界五群系配色、群系雾色与密度 | `math`、`noise` |
-| `shadow.slang` | 阴影投影与边缘压缩、屏幕空间阴影、级联选择、PCSS 遮挡物搜索、可变半影与透光散射、Eclipse 阴影修补 | `math` |
-| `gi.slang` | 地平线遮蔽、反射阴影图反弹、历史重投影、时间滤波、七乘七空间滤波、多弹射 | `math`、`shadow` |
-| `reflection.slang` | 可见法线采样、屏幕空间追踪、菲涅耳合并、九点小波降噪 | `math` |
-| `post.slang` | 泛光核、三次升采样、亮度曲线、暗角、颗粒、景深、动态模糊、分块测光 | `math` |
-| `antialias.slang` | YCoCg、历史邻域裁剪、三次采样、时间重投影 | `math` |
-| `weather.slang` | 雨雪随风偏移、植被与季节、暴风噪声与染色、每日天气哈希、四季上色、时段雾密度 | `math` |
-| `surface.slang` | 方块光曲线、材质法线与遮蔽、火把光、自发光、labPBR 材质解码、Eclipse 间接光、光斑、手持光 | `math` |
-| `parallax.slang` | 高度采样、平滑与锐利视差、自阴影、高度场法线 | `math` |
-| `voxel.slang` | 三维逐格步进、半透明染色、植物穿透、铁块镜面弹射、写入索引与边界 | `math`、`color` |
+| `sampling.slang` | 蓝噪声、时间抖动、拜尔时间抖动、平滑过滤、旋转网格超采样、球面映射、颜色抖动 | `math` |
+| `sampling/anisotropic.slang` | 各向异性椭圆核、长轴步进、法线与材质加权 | `math` |
+| `noise.slang` | 整数哈希、二维向量哈希、值噪声、梯度噪声与旋度、分形叠加、域扭曲 | `math` |
+| `camera.slang` | 深度与视空间还原、投影、手部深度换算 | `math` |
+| `surface.slang` | 方块光曲线、材质法线与遮蔽、火把光、自发光、labPBR 材质解码 | `math` |
+| `water.slang` | 波法线、菲涅尔、吸收、折射、GGX、岸线泡沫、水面合成、水体雾、焦散 | `math`、`noise` |
 | `upscale.slang` | FSR 边缘方向重采样、对比度自适应锐化 | `math` |
+| `parallax.slang` | 高度采样、平滑与锐利视差、自阴影、高度场法线 | `math`、`sampling` |
 | `planet.slang` | 末地行星本体、光环、大气 | `math`、`atmosphere` |
 | `accretion.slang` | 吸积盘积分、空间扭曲、圆环辉光、多普勒 | `math`、`fog` |
-| `atmosphere_model.slang` | 预计算大气的坐标、透过率、散射、辐照度与简化散射 | `atmosphere`、`math`、`color` |
-| `cloud_volume.slang` | 体积云形状、光照、步进、闪电与云影贴图 | `cloud`、`math` |
-| `fog_volume.slang` | 体积雾密度、光照吸收、步进、暴风、水下光柱、下界三段烟 | `fog`、`weather`、`shadow`、`water`、`color` |
 | `lpv.slang` | 光传播体积的取样解码、写入编码、亮度曲线、边缘淡出与合成 | `color`、`math` |
-
+| `gbuffer.slang` | 延迟缓冲材质编号与遮罩解码 | `surface`、`math` |
+| `heldlight.slang` | 手持光形状、方向、漫反射与遮挡 | `surface`、`shadow`、`math`、`color` |
+| `atmosphere/atmosphere.slang` | 球面几何、瑞利与米氏密度、单次散射天空、空气透视、太阳圆盘、星场 | `math`、`color` |
+| `atmosphere/model.slang` | 预计算大气坐标、透过率、散射、辐照度、简化散射与陆地空气透视 | `atmosphere`、`math`、`color`、`shadow` |
+| `atmosphere/sky.slang` | Eclipse 日月圆盘、球面映射、双三次采样、天空盒查表、大气积分与极光 | `math`、`atmosphere` |
+| `cloud/cloud.slang` | 球壳求交、程序化云密度、朝阳光照、沿视线步进、云影与平面云 | `math`、`noise` |
+| `cloud/volume.slang` | 体积云形状、光照、步进、闪电与云影贴图 | `cloud`、`color`、`math` |
+| `cloud/eclipse.slang` | Eclipse 五层云形状、云影、朝光散射与主步进循环 | `cloud`、`atmosphere/sky`、`math` |
+| `cloud/planar.slang` | iterationT 平面云密度与光照深度 | `cloud`、`math`、`atmosphere/model` |
+| `fog/fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分、雾相位与末地雾阴影 | `math`、`noise` |
+| `fog/volume.slang` | 体积雾密度、光照吸收、步进、暴风、水下光柱与下界烟 | `fog`、`weather`、`shadow`、`water`、`color`、`sampling` |
+| `shadow/shadow.slang` | 阴影投影与边缘压缩、屏幕空间阴影、级联、PCSS、可变半影 | `math` |
+| `shadow/eclipse.slang` | Eclipse 阴影边缘压缩、投影偏差、硬阴影、轨道旋转与体素阴影图 | `math`、`voxel/trace` |
+| `voxel/voxel.slang` | 三维逐格步进、半透明染色、植物穿透、铁块镜面弹射 | `math`、`color` |
+| `voxel/trace.slang` | 射线任务、包围盒、栅栏、裁剪排序、四分之一体素与螺旋采样 | `math`、`voxel` |
+| `gi/gi.slang` | 地平线遮蔽、反射阴影图反弹、历史重投影、时间与空间滤波、多弹射 | `math`、`shadow`、`sampling` |
+| `gi/diffuse.slang` | 手持光屏幕空间阴影、方块光曲线与手电光 | `camera`、`math` |
+| `gi/indirect.slang` | 余弦半球采样、切线基、屏幕空间 GI、双边上采样与 SSGI 合成 | `camera`、`math`、`reflection` |
+| `gi/ambientocclusion.slang` | Eclipse GTAO 弧段积分、最大水平角与多切片遮蔽 | `camera`、`math` |
+| `reflection/reflection.slang` | 可见法线采样、屏幕空间追踪、菲涅耳合并、九点小波降噪 | `math` |
+| `reflection/wsr.slang` | WSR 体素追踪、屏幕空间反射、LPV 雾、空气雾与水下体积 | `math`、`voxel/trace`、`shadow/eclipse`、`fog`、`water`、`weather/lightning`、`lpv`、`heldlight`、`gi/indirect` |
+| `reflection/photonics.slang` | Photonics 命中面着色、方块光、云影与半透明反射合成 | `math`、`voxel`、`shadow/eclipse`、`gi/diffuse`、`gi/indirect` |
+| `reflection/specular.slang` | GGX、可见法线采样、粗糙菲涅耳、反射可见度与高光合成 | `math`、`heldlight`、`atmosphere/sky`、`reflection/wsr` |
+| `post/post.slang` | 泛光核、三次升采样、亮度曲线、暗角、颗粒、景深、动态模糊、分块测光、远景噪点 | `math`、`noise`、`sampling`、`shadow` |
+| `post/exposure.slang` | 自动曝光分块统计、曝光值与泛光合并 | `math`、`shadow` |
+| `post/scene.slang` | 受伤、入水与着火画面效果、场景控制参数 | `math` |
+| `lens/lens.slang` | 对焦距离、桶形光斑、彩色鬼影、环形眩光与太阳眩光 | `math`、`shadow` |
+| `antialias/antialias.slang` | YCoCg、历史邻域裁剪、三次采样、时间重投影 | `math` |
+| `antialias/taa.slang` | 三乘三最近深度、远景深度与相机速度 | `camera`、`math` |
+| `antialias/fxaa.slang` | 亮度梯度边缘方向与 FXAA 内插 | 无 |
+| `weather/weather.slang` | 雨雪随风偏移、植被与季节、暴风噪声与染色、每日天气哈希 | `math` |
+| `weather/rain.slang` | 三层动画雨纹、降水分布与湿润度更新 | `math` |
+| `weather/lightning.slang` | 闪电照亮表面、云与雾，末地光源位置与颜色 | `math` |
+| `world/end.slang` | iterationT 末地星空、行星 BRDF、黑洞吸积盘与云影查表 | `math`、`fog`、`cloud`、`planet` |
+| `world/portal.slang` | 末地传送门十六层旋转、缩放与平移矩阵 | `math` |
 规则：
 
 - 函数统一 `ogx` 前缀，宏统一 `OGX_` 前缀，守卫统一 `OGX_*_INCLUDED`。
@@ -68,7 +91,7 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 
 `shaders/omni-gfx/` 是 Iris 实际读取的位置，也是唯一的 GLSL 产物；不再保留镜像副本。
 
-SPIR-V 由 `tests/probes/*.slang` 编译，探针调用每个模块的全部公开函数。产物在 `generated/spirv/`，`.spv` 与清单被忽略规则排除，不入仓库；换机器后运行 `python omni-gfx/build.py spirv --download` 重新生成。清单记录编译器版本 `2026.20`、大小与 SHA-256。
+SPIR-V 由 `tests/probes/**/*.slang` 编译，目录与源模块一致，每个模块一个探针。产物在 `generated/spirv/`，`.spv` 与清单被忽略规则排除，不入仓库；换机器后运行 `python omni-gfx/build.py spirv --download` 重新生成。清单记录编译器版本 `2026.20`、大小与 SHA-256。
 
 ## 四、测试世界
 
@@ -145,4 +168,4 @@ SPIR-V 由 `tests/probes/*.slang` 编译，探针调用每个模块的全部公�
 - 三维纹理用 `Sampler3D`，取格写 `tex.Load(int3(pixel, level))`；生成器把它降级成 `texelFetch`。
 - 结构体字段沿用旧下划线命名，宿主逐字段赋值不用改；新写的结构体用驼峰命名。
 
-SPIR-V 覆盖：22 个模块探针编译通过，`voxel` 因为持有整数三维纹理（`usampler3D`）暂缺探针，命令会跳过并列出；这不影响 GLSL 路径与光影编译。
+SPIR-V 覆盖：48 个模块各有探针；整数三维纹理（`usampler3D`）在 `voxel` 与 `voxel/trace` 探针里显式绑定。

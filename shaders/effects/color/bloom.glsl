@@ -47,7 +47,7 @@
   `OMNI_UNDERWATER_FOG_BLOOM` 对应同一处的水下分支（Eclipse `UNDERWATER_BLOOMY_FOG`）：Omni 水下不跑体积雾，
   改用水体的距离吸收当引导，倍率单独可调，默认零、画面不变。
 */
-#include "/omni-gfx/post.glsl"
+#include "/omni-gfx/post/post.glsl"
 // 颜色曲线、亮度与共享数学，以及做深度换算的坐标函数都要先引入。
 #include "/common/uniforms.glsl"
 // 降雨强度由绑定层提供，泛光强度按雨势提升。

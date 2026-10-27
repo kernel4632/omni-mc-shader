@@ -325,7 +325,7 @@ class EffectTests(unittest.TestCase):
         shadow = support.code("effects/shared/shadow.glsl")  # 阴影主体。
         self.assertIn("VariablePenumbraShadow", shadow)  # 半影阴影独立成函数。
         self.assertIn("OMNI_VARIABLE_PENUMBRA_SHADOWS", shadow)  # 开关作为参数交给通用库。
-        self.assertIn("ogxVariablePenumbraShadow", support.text("omni-gfx/shadow.glsl"))  # 通用库按参数决定是否估计遮挡物距离。
+        self.assertIn("ogxVariablePenumbraShadow", support.text("omni-gfx/shadow/shadow.glsl"))  # 通用库按参数决定是否估计遮挡物距离。
         self.assertIn("OMNI_SHADOW_MAP_BIAS", shadow)  # 偏置参与投影压缩。
 
     def test_screen_space_shadow_and_colored_shadow(self):
@@ -365,7 +365,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniLightningVolume", atmosphere)  # 闪电对体积云与体积雾的照明也在这里定义。
         self.assertIn("OMNI_AURORA_STRENGTH", atmosphere)  # 极光强度传入通用库。
         self.assertIn("OMNI_RAINBOW_STRENGTH", atmosphere)  # 彩虹强度传入通用库。
-        sky_gfx = support.text("../omni-gfx/src/atmosphere.slang")  # 天空算法已迁到生成库的 Slang 源。
+        sky_gfx = support.text("../omni-gfx/src/atmosphere/atmosphere.slang")  # 天空算法已迁到生成库的 Slang 源。
         self.assertIn("* strength", sky_gfx)  # 极光与彩虹的强度参与着色。
         cloud = support.code("effects/cloud/volumetric.glsl")  # 体积云主体。
         self.assertIn("omniLightningVolume", cloud)  # 体积云接到闪电照明。
@@ -495,7 +495,7 @@ class EffectTests(unittest.TestCase):
         reflection = support.code("effects/reflection/reflection.glsl")  # 反射入口（选项在这里）。
         self.assertIn("screenspace.glsl", reflection)  # 入口按引入顺序展开屏幕空间反射算法。
         screenspace = support.code("effects/reflection/screenspace.glsl")  # 屏幕空间反射算法（按算法从入口拆出）。
-        reflection_library = support.text("omni-gfx/reflection.glsl")  # 通用库里的反射主流程。
+        reflection_library = support.text("omni-gfx/reflection/reflection.glsl")  # 通用库里的反射主流程。
         self.assertIn("ogxScreenSpaceTrace", reflection_library)  # 屏幕空间追踪的循环已迁到生成库。
         self.assertIn("SpecularReflections", screenspace)  # 反射主流程由通用库提供，效果文件只填参数。
         self.assertIn("CalculateSpecularReflections", screenspace)  # 镜面反射独立成函数。

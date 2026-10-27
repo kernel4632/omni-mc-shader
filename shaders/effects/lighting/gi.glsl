@@ -20,7 +20,7 @@
 // 通用库提供反弹、历史重投影、时间滤波与空间滤波。
 // 阳光泄漏修正属于共享光照选项。
 #include "/effects/shared/light.glsl"
-#include "/omni-gfx/gi.glsl"
+#include "/omni-gfx/gi/gi.glsl"
 // 远景深度贴图选择：没有远景模组时用近景深度占位，通用库按开关决定是否读取。
 #ifdef DISTANT_HORIZONS
 	#define OMNI_GI_DH_DEPTH dhDepthTex0 // 远景深度贴图。

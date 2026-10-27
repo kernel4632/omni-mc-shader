@@ -55,7 +55,7 @@ const float drynessHalflife = 50.0; // [10.0 20.0 30.0 50.0 75.0 100.0 150.0 200
   雨遮罩写进零号画面的透明通道，读取端靠它判断雨落在画面哪一层，而不是靠世界位置猜。
 */
 // 雨雪随风偏移放在通用库，这里只传入相机、时间与选项。
-#include "/omni-gfx/weather.glsl"
+#include "/omni-gfx/weather/weather.glsl"
 // 宿主输入统一由绑定层整理：时间、相机位置与露天标记不再散落在效果里。
 #include "/bind/time.glsl"
 #include "/bind/camera.glsl"

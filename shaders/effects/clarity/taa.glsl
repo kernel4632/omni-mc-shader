@@ -15,7 +15,7 @@
 设计原因与取舍：邻域统计、历史裁剪与时间混合在 `gfx/antialias.glsl`，这里只保留相机速度与
     选项换算；相机速度要区分远景、手与材质编号，属于宿主参数转换，仍留在效果层。
 */
-#include "/omni-gfx/antialias.glsl"
+#include "/omni-gfx/antialias/antialias.glsl"
 
 // 颜色空间转换的兼容入口：其他文件可能按旧名字调用。
 vec3 RGB_To_YCoCg(vec3 color) { return ogxRgbToYCoCg(color); }

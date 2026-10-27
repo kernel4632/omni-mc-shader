@@ -60,7 +60,7 @@
 // 共用数学：提供 `clamp`、`exp2`、`floor`、`fract`、`mix`、`texture` 等小工具，重复引入由守卫去重。
 #include "/common/math.glsl"
 // 暴风噪声与颜色、每日天气哈希的纯计算放在通用库。
-#include "/omni-gfx/weather.glsl"
+#include "/omni-gfx/weather/weather.glsl"
 // 每日天气：提供当天的云量与雾密度，逐日轮换；本文件是天气文件夹里已经接进体积雾程序的入口，
 // 所以在这里引入它，让每日匀雾能借暴风雾这条通道进入画面，同时让整个模块随雾程序一起编译。
 #include "/effects/shared/dailyweather.glsl"

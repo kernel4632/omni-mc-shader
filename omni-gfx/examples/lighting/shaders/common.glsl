@@ -11,21 +11,21 @@
 #include "/omni-gfx/sampling.glsl"
 // 噪声与云：三维形状、平面云与多次散射光照。
 #include "/omni-gfx/noise.glsl"
-#include "/omni-gfx/cloud.glsl"
-#include "/omni-gfx/cloud_volume.glsl"
+#include "/omni-gfx/cloud/cloud.glsl"
+#include "/omni-gfx/cloud/volume.glsl"
 // 大气、雾、水与阴影：天空散射、空气透视、吸收、PCSS 与级联选择。
-#include "/omni-gfx/atmosphere.glsl"
-#include "/omni-gfx/fog.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
+#include "/omni-gfx/fog/fog.glsl"
 #include "/omni-gfx/water.glsl"
-#include "/omni-gfx/shadow.glsl"
+#include "/omni-gfx/shadow/shadow.glsl"
 // 全局光、反射、后期与时间抗锯齿。
-#include "/omni-gfx/gi.glsl"
-#include "/omni-gfx/reflection.glsl"
-#include "/omni-gfx/post.glsl"
-#include "/omni-gfx/antialias.glsl"
+#include "/omni-gfx/gi/gi.glsl"
+#include "/omni-gfx/reflection/reflection.glsl"
+#include "/omni-gfx/post/post.glsl"
+#include "/omni-gfx/antialias/antialias.glsl"
 #include "/omni-gfx/color.glsl"
 // 预计算大气查表：太阳与天空颜色直接来自 iterationT 的同一份数据。
-#include "/omni-gfx/atmosphere_model.glsl"
+#include "/omni-gfx/atmosphere/model.glsl"
 
 uniform vec3 uSunDirection; // 指向太阳的单位向量，所有阶段共用。
 uniform vec3 uSunColor; // 太阳色度倾向；叠在大气透过率之上，默认接近白色。

@@ -168,4 +168,42 @@ float ogxHalton3(int index)
     return result;
 }
 
+// 笛卡尔坐标转球面纹理坐标。
+float3 ogxEclipseCartToSphere(float2 coord)
+{
+    coord.y = 1.0 - coord.y; // 翻转纵轴。
+    coord *= float2(2.0 * OGX_PI, OGX_PI); // 换成角度。
+    float2 lon = float2(sin(coord.x), cos(coord.x)) * sin(coord.y); // 经度方向。
+    return float3(lon.x, cos(coord.y), lon.y); // 单位球方向。
+}
+
+// 球面方向转笛卡尔纹理坐标。
+float2 ogxEclipseSphereToCart(float3 dir)
+{
+    float lonlat = atan(-dir.x, -dir.z); // 经度。
+    return float2(lonlat / (2.0 * OGX_PI) + 0.5, 0.5 * dir.y + 0.5); // 与上一函数互逆。
+}
+
+// 三角白噪声：中心化后开方，得到更适合抖动的分布。
+float ogxEclipseTriangWhiteNoise(float2 n, float frameTime)
+{
+    float t = fract(frameTime); // 帧内小数。
+    float rnd = fract(sin(dot(n + 0.07 * t, float2(12.9898, 78.233))) * 43758.5453); // 白噪声。
+    float center = rnd * 2.0 - 1.0; // 中心化。
+    rnd = center * rsqrt(abs(center) + 1e-20); // 开方。
+    rnd = max(-1.0, rnd); // 下限。
+    return rnd - sign(center); // 三角分布。
+}
+
+// 按浮点尾数位抖动颜色：十位、十六位与整数八九十十六位各一版。
+float3 ogxEclipseDither(float3 color, float2 texCoord, float frameTime, int mode)
+{
+    float dither = ogxEclipseTriangWhiteNoise(texCoord, frameTime); // 抖动值。
+    if (mode == 0) return color + dither * exp2(-float3(6.0, 6.0, 5.0)) * exp2(floor(log2(color))); // 十位尾数。
+    if (mode == 1) return color + dither * exp2(-10.0) * exp2(floor(log2(color))); // 十六位尾数。
+    if (mode == 2) return color + dither * exp2(-8.0); // 八位整数。
+    if (mode == 3) return color + dither * exp2(-10.0); // 十位整数。
+    return color + dither * exp2(-16.0); // 十六位整数。
+}
+
 #endif

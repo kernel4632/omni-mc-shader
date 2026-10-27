@@ -19,7 +19,7 @@
     太阳圆盘最后乘 `omniSunTint()`，太阳色与辐照倍率由 `effects/sky/suncolor.glsl` 提供。
 */
 // 日月圆盘的纯形状计算放在通用库，这里只传方向与尺寸档位。
-#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
 // 太阳圆盘要乘太阳色与辐照倍率，选项在共享太阳色文件里。
 #include "/effects/shared/suncolor.glsl"
 

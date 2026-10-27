@@ -43,7 +43,7 @@
 #include "/bind/world.glsl"
 #include "/common/math.glsl"
 // 极光与彩虹的纯公式放在通用库。
-#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
 // 共享大气同时带来太阳色、散射倍率与查表接口；闪电照明单独成共享文件，三个效果共用同一事件。
 #include "/effects/shared/atmosphere.glsl"
 #include "/effects/shared/lightning.glsl"

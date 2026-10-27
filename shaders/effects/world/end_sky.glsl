@@ -26,7 +26,7 @@
 // 行星表面与环带的纯公式放在通用库。
 // 星空类型与天空贴图选项由共享天空贴图主体定义。
 #include "/effects/shared/skyview.glsl"
-#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
 #include "/omni-gfx/planet.glsl"
 
 // --- 星空：与主世界共用同一份 Eclipse 星场，来源 Eclipse `lib/stars.glsl`（经 `effects/sky/sky.glsl`） ---

@@ -16,12 +16,12 @@
 调用前提：由 `effects/fog/fog.glsl` 引入，且已先引入 `common/math.glsl`、`effects/shadow/shadow.glsl`、
   `effects/sky/sky.glsl` 并声明相机与阴影相关全局量；本文件不重复引入。
 关键设计原因与取舍：`LandAtmosphericScattering` 的调用点是加色，所以它就地改画面；阴影遮蔽与室内衰减都按开关折叠。
-    瑞利与米氏相函数来自 `/omni-gfx/atmosphere.glsl`（由 Slang 源生成），公式和常数与旧 `gfx_` 实现一致；
+    瑞利与米氏相函数来自 `/omni-gfx/atmosphere/atmosphere.glsl`（由 Slang 源生成），公式和常数与旧 `gfx_` 实现一致；
     引入生成库不改变数值，只把公共算法收回唯一来源。
 */
 
 // 生成库大气：相函数与密度剖面由 Slang 源生成，下面的散射计算改用同一份实现。
-#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
 
 // 简化的单次散射：沿阳光方向取几段估光学厚度，算出这段空气加到视线上的散射色。
 // 输入是相机、视线方向、散射距离、受光距离与光源方向；返回叠加的散射颜色。

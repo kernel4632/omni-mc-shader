@@ -17,7 +17,7 @@
 设计原因与取舍：遮蔽与全局光互相独立、开关也各自独立，拆成两个文件后可分别阅读和关闭。
 */
 // 多弹射补偿放在通用库，这里只传入遮蔽与底色。
-#include "/omni-gfx/gi.glsl"
+#include "/omni-gfx/gi/gi.glsl"
 // 地平线遮蔽：沿视线做多切片搜索最大地平线角，积分出半球被挡住的比重。
 // 调用前提：`texCoord`、`gbufferProjection`、`depthtex1` 已声明；采样循环在通用库。
 float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){

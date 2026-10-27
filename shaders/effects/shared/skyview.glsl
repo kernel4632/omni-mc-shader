@@ -33,7 +33,7 @@
 // @option {"label":{"zh_cn":"彩色星点","en_us":"Colored Stars"},"description":{"zh_cn":"改用带星温的彩色星场（Eclipse 的 `starbox`）；关闭时是 Eclipse 默认的白色星点，只在星星类型为点状时生效。","en_us":"Uses the star-temperature colored field (Eclipse `starbox`); off keeps Eclipse's default white stars; only used with the Dots star type."}}
 #define OMNI_STARS_COLORED 0 // [0 1]
 // 天空盒方向与纹素换算放在通用库，这里只传单面边长。
-#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
 // 把天空盒三维贴图上的一个纹素坐标反解成世界方向，与 `ProjectSky` 互为逆。
 vec3 UnprojectSky(vec2 texel, float tileSize){
 	return ogxSkyUnproject(texel, tileSize); // 转发到通用库。

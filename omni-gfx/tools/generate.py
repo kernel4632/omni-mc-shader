@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import hashlib  # 清单记录源文件与产物摘要，便于核对是否过期。
+import posixpath  # 模块引用按斜杠路径规范化，Windows 与 Linux 生成相同文本。
 import re  # 只替换完整单词，避免把更长标识符拆坏。
 from functools import lru_cache  # 同一次构建里重复读取同一模块时复用转换结果。
 from pathlib import Path  # 项目内路径统一按相对位置计算。
@@ -21,54 +22,69 @@ ROOT = LIB.parent  # 仓库根目录，用于写入光影包。
 SRC = LIB / "src"  # Slang 源文件目录，唯一手写算法来源。
 SHADER_OUT = ROOT / "shaders" / "omni-gfx"  # 唯一生成位置，Minecraft 直接引入。
 MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳。
-MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog",
-           "shadow", "gi", "reflection", "post", "antialias",
-           "weather", "surface", "voxel", "upscale", "parallax",
-           "planet", "accretion", "atmosphere_model", "cloud_volume", "fog_volume",
-           "lpv", "gbuffer", "heldlight", "itx_extra", "planar", "camera", "itx_taa", "cloud_eclipse",
-           "eclipse_extra", "eclipse_sky", "itx_end", "eclipse_indirect", "eclipse_specular",
-           "eclipse_diffuse", "eclipse_scene")  # 阶段一二的核心模块、阶段三的九个效果模块、第二批迁移的独立模块与第三批的补充模块。
+MODULES = ("math", "color", "sampling", "sampling/anisotropic", "noise", "camera", "surface", "water", "upscale",
+           "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
+           "atmosphere/atmosphere", "atmosphere/model", "atmosphere/sky",
+           "cloud/cloud", "cloud/volume", "cloud/eclipse", "cloud/planar",
+           "fog/fog", "fog/volume", "shadow/shadow", "shadow/eclipse",
+           "voxel/voxel", "voxel/trace",
+           "gi/gi", "gi/diffuse", "gi/indirect", "gi/ambientocclusion",
+           "reflection/reflection", "reflection/wsr", "reflection/photonics", "reflection/specular",
+           "post/post", "post/exposure", "post/scene", "lens/lens",
+           "antialias/antialias", "antialias/taa", "antialias/fxaa",
+           "weather/weather", "weather/rain", "weather/lightning",
+           "world/end", "world/portal")  # 按实际效果组织；多文件效果使用同名文件夹，清单顺序固定。
 
 # 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
 DISPLAY = {
     "math": "数学",
     "color": "颜色",
     "sampling": "采样",
+    "sampling/anisotropic": "各向异性过滤",
     "noise": "噪声",
-    "atmosphere": "大气",
-    "cloud": "云",
-    "water": "水面",
-    "fog": "雾",
-    "shadow": "阴影",
-    "gi": "全局光",
-    "reflection": "反射",
-    "post": "后期",
-    "antialias": "抗锯齿",
-    "weather": "天气",
+    "camera": "相机变换",
     "surface": "表面",
-    "voxel": "体素",
+    "water": "水面",
     "upscale": "放大",
     "parallax": "视差",
     "planet": "行星",
     "accretion": "吸积盘",
-    "atmosphere_model": "大气查表",
-    "cloud_volume": "体积云",
-    "fog_volume": "体积雾",
     "lpv": "光传播体积",
     "gbuffer": "延迟缓冲",
     "heldlight": "手持光",
-    "itx_extra": "补充后期",
-    "planar": "平面云",
-    "camera": "相机变换",
-    "itx_taa": "时间取样",
-    "cloud_eclipse": "Eclipse 体积云",
-    "eclipse_extra": "Eclipse 补充",
-    "eclipse_sky": "Eclipse 天空",
-    "itx_end": "iterationT 末地",
-    "eclipse_indirect": "Eclipse 间接光",
-    "eclipse_specular": "Eclipse 高光",
-    "eclipse_diffuse": "Eclipse 漫反射",
-    "eclipse_scene": "Eclipse 场景",
+    "atmosphere/atmosphere": "大气",
+    "atmosphere/model": "大气查表",
+    "atmosphere/sky": "天空",
+    "cloud/cloud": "云",
+    "cloud/volume": "体积云",
+    "cloud/eclipse": "层状体积云",
+    "cloud/planar": "平面云",
+    "fog/fog": "雾",
+    "fog/volume": "体积雾",
+    "shadow/shadow": "阴影",
+    "shadow/eclipse": "阴影补充",
+    "voxel/voxel": "体素",
+    "voxel/trace": "体素求交",
+    "gi/gi": "全局光",
+    "gi/diffuse": "漫反射光照",
+    "gi/indirect": "间接光",
+    "gi/ambientocclusion": "环境光遮蔽",
+    "reflection/reflection": "反射",
+    "reflection/wsr": "WSR 反射",
+    "reflection/photonics": "Photonics 反射",
+    "reflection/specular": "高光",
+    "post/post": "后期",
+    "post/exposure": "曝光与泛光",
+    "post/scene": "画面效果",
+    "lens/lens": "镜头",
+    "antialias/antialias": "抗锯齿",
+    "antialias/taa": "时间取样",
+    "antialias/fxaa": "FXAA",
+    "weather/weather": "天气",
+    "weather/rain": "雨纹",
+    "weather/lightning": "闪电",
+    "world/end": "末地",
+    "world/portal": "末地传送门",
 }  # 每个生成文件头里的中文模块名，顺序与模块表一致。
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。
@@ -135,15 +151,17 @@ def _replace_types(text: str) -> str:
     return text  # 返回替换后的整段文本。
 
 
-def _resolve_include(match: re.Match) -> str:
+def _resolve_include(match: re.Match, name: str) -> str:
     """把 Slang 的相对引用改成光影根路径引用。
 
-    `math.slang` 生成后位于 `/omni-gfx/math.glsl`，采样与颜色模块都靠它取共用常数。
+    `name` 是当前模块的路径；`../math.slang` 先按当前目录规范化成模块名，
+    再换成 `/omni-gfx/...`。只允许引用清单内的模块，拼错时立刻报出。
     """
-    name = match[1]  # 引用里的模块名，例如数学模块。
-    if name not in MODULES:  # 只允许引用真实生成的模块，拼错时立刻报出。
-        raise ValueError(f"未知模块引用：{name}")
-    return f'#include "/omni-gfx/{name}.glsl"'
+    reference = match[1]  # 引用里的相对路径，例如 `../math.slang`。
+    target = posixpath.normpath(posixpath.join(posixpath.dirname(name), reference))  # 规范化斜杠路径。
+    if target not in MODULES:  # 只允许引用真实生成的模块，拼错时立刻报出。
+        raise ValueError(f"未知模块引用：{name} -> {reference}")
+    return f'#include "/omni-gfx/{target}.glsl"'
 
 
 def _replace_loads(text: str) -> str:
@@ -237,7 +255,7 @@ def _replace_sample_levels(text: str) -> str:
         text = text[:match.start()] + f"textureLod({match[1]}, {parts[0]}, {parts[1]})" + text[index:]
 
 
-def _lower_text(text: str) -> str:
+def _lower_text(text: str, name: str) -> str:
     """执行全部语法转换，并在返回前确认没有残留 Slang 写法。
 
     顺序有讲究：先换类型与关键字，再换纹理取像素，最后检查残留。
@@ -254,7 +272,7 @@ def _lower_text(text: str) -> str:
     text = _replace_types(text)  # 类型名随后统一。
     for pattern, replacement, _reason in LOWERINGS:  # 逐项处理函数名与关键字。
         text = pattern.sub(replacement, text)
-    text = INCLUDE.sub(_resolve_include, text)  # 模块引用改成光影根路径。
+    text = INCLUDE.sub(lambda match: _resolve_include(match, name), text)  # 模块引用改成光影根路径。
     leftover = LEFTOVER.search(text)  # 注释和代码一起查，宁可多报也不放过。
     if leftover:
         raise ValueError(f"有未转换的 Slang 写法：{leftover.group(0)}")
@@ -272,7 +290,7 @@ def _header(name: str) -> str:
     return (
         "/*\n"
         f"生成文件：{DISPLAY[name]}模块的 GLSL 330 版本，请勿手工修改。\n"
-        "源文件在库的源码目录中的同名模块，改动后运行构建脚本的生成命令。\n"
+        "源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。\n"
         "用途：Minecraft 光影直接引入；同一份源还会生成 SPIR-V 供独立程序使用。\n"
         "生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。\n"
         "*/\n"
@@ -289,8 +307,8 @@ def module_text(name: str) -> str:
     `name` 必须是 `MODULES` 里的模块；读取失败或转换失败都直接抛错，
     不返回半成品，调用方因此可以信任返回的文本就是可写入的最终产物。
     """
-    source = (SRC / f"{name}.slang").read_text(encoding="utf-8")  # 唯一手写来源。
-    body = _lower_text(source)  # 先转换，失败时不会写任何文件。
+    source = (SRC / f"{name}.slang").read_text(encoding="utf-8")  # 唯一手写来源，允许按效果分文件夹。
+    body = _lower_text(source, name)  # 先转换，失败时不会写任何文件。
     return _header(name) + body  # 说明放在源文件注释之前。
 
 
@@ -311,9 +329,14 @@ def write_modules() -> list[Path]:
 
     写入使用固定换行和 UTF-8，保证不同平台生成相同字节。
     清单只记录摘要与大小，不记录时间，重复生成不会产生无意义差异。
+    旧布局留下的模块文件会先删除，保证生成位置只有一份当前产物。
     """
     written: list[Path] = []  # 记录本次真正写过的文件，便于命令行汇报。
     texts = outputs()  # 生成失败会在写入前抛出，不会留下半套文件。
+    expected = set(texts)  # 当前模块应有的产物路径。
+    for stale in sorted(SHADER_OUT.rglob("*.glsl")):  # 只清理生成目录里的旧 GLSL。
+        if stale not in expected:
+            stale.unlink()  # 模块已改名或拆分时移除旧文件，避免两份产物并存。
     for path, text in sorted(texts.items()):  # 排序让写入顺序稳定。
         path.parent.mkdir(parents=True, exist_ok=True)  # 首次生成时创建目录。
         path.write_text(text, encoding="utf-8", newline="\n")  # 固定换行，避免平台差异。
@@ -364,5 +387,9 @@ def check_modules() -> None:
     manifest = MANIFEST.read_text(encoding="utf-8") if MANIFEST.is_file() else None  # 清单同样要核对。
     if manifest != manifest_text():
         stale.append(MANIFEST.relative_to(ROOT).as_posix())
+    expected = set(outputs())  # 当前模块应有的产物路径。
+    for extra in sorted(SHADER_OUT.rglob("*.glsl")):  # 生成目录不能留下旧模块文件。
+        if extra not in expected:
+            stale.append(extra.relative_to(ROOT).as_posix())
     if stale:
         raise ValueError("omni-gfx 生成文件已过期，请运行构建脚本的生成命令：" + "、".join(stale))

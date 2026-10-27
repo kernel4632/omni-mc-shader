@@ -12,9 +12,9 @@
 
 // --- 效果实现：宿主输入、参数换算与阶段入口 ---
 // Eclipse 实时天空的密度与路径函数在生成库，需要显式引入。
-#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere/atmosphere.glsl"
 // 极光噪声在 Eclipse 天空模块，和实时天空共用同一份生成库。
-#include "/omni-gfx/eclipse_sky.glsl"
+#include "/omni-gfx/atmosphere/sky.glsl"
 /*
 天空散射：给预计算大气的瑞利散射与米氏散射一组逐通道系数倍率，再给整个天空辐射一个亮度倍率。
 来源：Eclipse `lib/settings.glsl:382`（`Sky_Brightness`）与 `:385-390`（`sky_coefficientRayleighR/G/B`、`sky_coefficientMieR/G/B`）。

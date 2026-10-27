@@ -146,12 +146,17 @@ def parse_functions(path: Path) -> list[dict]:
 
 
 def library_index() -> dict[str, str]:
-    """返回 小写函数名 → `模块.函数` 的索引，供同名直配使用。"""
+    """返回 小写函数名 → `模块.函数` 的索引，供同名直配使用。
+
+    模块名取 `src` 下的相对路径，文件夹会出现在键里；这样 `cloud/eclipse`
+    这类变体文件不会和顶层模块重名。
+    """
     index = {}  # 名字到下标的映射。
-    for path in sorted((LIB / "src").glob("*.slang")):  # 逐个模块。
+    for path in sorted((LIB / "src").rglob("*.slang")):  # 逐个模块。
+        module = path.relative_to(LIB / "src").with_suffix("").as_posix()
         for item in parse_functions(path):  # 逐个函数定义。
             key = item["name"][3:].lower() if item["name"].startswith("ogx") else item["name"].lower()  # 去掉统一前缀再比。
-            index.setdefault(key, f"{path.stem}.{item['name']}")  # 同名重载只留第一个。
+            index.setdefault(key, f"{module}.{item['name']}")  # 同名重载只留第一个。
     return index  # 供判定与自检使用。
 
 

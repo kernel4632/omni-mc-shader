@@ -29,7 +29,7 @@
 // 世界天数 `worldDay` 由加载器提供，已在 `common/uniforms.glsl` 声明，这里不重复声明。
 #include "/common/uniforms.glsl"
 // 植被判断与季节上色放在通用库，这里只传入游戏日与选项。
-#include "/omni-gfx/weather.glsl"
+#include "/omni-gfx/weather/weather.glsl"
 // 植被程度：顶点色里绿色比红、蓝多出越多，越像群系染过的植被；白色方块与偏蓝的水都得零。
 float omniFoliage(vec3 vertexColor){
 	return ogxFoliage(vertexColor); // 转发到通用库。

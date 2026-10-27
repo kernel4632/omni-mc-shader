@@ -19,7 +19,7 @@
 // 屏幕空间阴影的步进循环在通用库，光斑形状与光束指向也在通用库。
 // 光照强度属于共享选项，本效果按同一档位读取。
 #include "/effects/shared/light.glsl"
-#include "/omni-gfx/shadow.glsl"
+#include "/omni-gfx/shadow/shadow.glsl"
 #include "/omni-gfx/surface.glsl"
 // --- 手电筒光斑形状：按光线与指向的夹角给出一束光的强度分布 ---
 // 为什么用曲线两次叠加：主瓣给中心亮区，副瓣给一点点外圈余晖；再乘一圈环形暗环，让光斑边界更像手电筒。

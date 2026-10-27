@@ -126,9 +126,11 @@ class OmniGfxTests(unittest.TestCase):
     def test_phase3_effects_are_generated(self):
         """阶段三的九个效果模块都要有真正被调用的入口函数。"""
         expected = {
-            "atmosphere": "ogxAtmosphereSky", "cloud": "ogxCloudMarch", "water": "ogxWaterShade", "fog": "ogxFogMarch",
-            "shadow": "ogxVariablePenumbraShadow", "gi": "ogxGroundTruthAo", "reflection": "ogxScreenSpaceTrace",
-            "post": "ogxBloomDownsample", "antialias": "ogxTaaReproject",
+            "atmosphere/atmosphere": "ogxAtmosphereSky", "cloud/cloud": "ogxCloudMarch",
+            "water": "ogxWaterShade", "fog/fog": "ogxFogMarch",
+            "shadow/shadow": "ogxVariablePenumbraShadow", "gi/gi": "ogxGroundTruthAo",
+            "reflection/reflection": "ogxScreenSpaceTrace",
+            "post/post": "ogxBloomDownsample", "antialias/antialias": "ogxTaaReproject",
         }  # 每个效果一个入口函数。
         for name, symbol in expected.items():
             with self.subTest(module=name):
@@ -148,9 +150,9 @@ class OmniGfxTests(unittest.TestCase):
     def test_minecraft_program_uses_generated_atmosphere(self):
         """合成程序的大气散射必须调用生成库，避免两套公式各自漂移。"""
         text = (ROOT / "shaders" / "effects" / "shared" / "fog" / "landscattering.glsl").read_text(encoding="utf-8")  # 真实消费者。
-        self.assertIn('#include "/omni-gfx/atmosphere.glsl"', text)  # 生成库必须在引用边界内。
+        self.assertIn('#include "/omni-gfx/atmosphere/atmosphere.glsl"', text)  # 生成库必须在引用边界内。
         self.assertIn("ogxAtmoSimpleScattering(", text)  # 四段散射已迁到生成库的查表模块。
-        library = (ROOT / "omni-gfx" / "src" / "atmosphere_model.slang").read_text(encoding="utf-8")  # 库里的唯一算式。
+        library = (ROOT / "omni-gfx" / "src" / "atmosphere" / "model.slang").read_text(encoding="utf-8")  # 库里的唯一算式。
         self.assertIn("ogxRayleighPhase(", library)  # 瑞利相函数来自生成库。
         self.assertIn("ogxMiePhase(", library)  # 米氏相函数来自生成库。
 

@@ -16,7 +16,7 @@
     本文件只传反射图、深度图、法线图与像素大小，半径与是否抖动仍由调用方决定。
 */
 // 反射小波滤波在通用库。
-#include "/omni-gfx/reflection.glsl"
+#include "/omni-gfx/reflection/reflection.glsl"
 // --- composite3 / composite4：反射小波滤波 ---
 #if defined OMNI_COMPOSITE3_PASS || defined OMNI_COMPOSITE4_PASS
 // 反射滤波：用九点小波核按法线与深度相似度加权，抹掉屏幕反射的噪点同时保住反射边界。

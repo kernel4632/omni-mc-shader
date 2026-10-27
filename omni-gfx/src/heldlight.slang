@@ -14,7 +14,7 @@ Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表
 
 // 表面模块提供手电筒光斑与指向，阴影模块提供屏幕空间阴影，数学与颜色模块提供漫反射、高光与色彩转换。
 #include "surface.slang"
-#include "shadow.slang"
+#include "shadow/shadow.slang"
 #include "math.slang"
 #include "color.slang"
 

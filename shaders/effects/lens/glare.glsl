@@ -14,7 +14,7 @@
 设计原因与取舍：眩光与光斑共用同一批光点和色散取样，合在一个文件；两者各自带开关，关闭时整段不编译。
 */
 // 眩光与光斑的形状计算放在通用库，这里只传屏幕位置、太阳位置与畸变强度。
-#include "/omni-gfx/post.glsl"
+#include "/omni-gfx/post/post.glsl"
 // --- 镜头眩光与光斑 ---
 // 只在开启眩光或光斑时编译这一段。
 #if OMNI_LENS_GLARE || OMNI_LENS_FLARE

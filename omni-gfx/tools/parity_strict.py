@@ -49,7 +49,7 @@ REFERENCE_ROOTS = {
     "iterationT": ROOT / "references/iterationT/shaders",
     "Eclipse": ROOT / "references/Eclipse/shaders",
 }
-IMPL_PATHS = sorted((ROOT / "shaders").rglob("*.glsl")) + sorted((LIB / "src").glob("*.slang"))
+IMPL_PATHS = sorted((ROOT / "shaders").rglob("*.glsl")) + sorted((LIB / "src").rglob("*.slang"))
 
 
 def load_json(path: Path) -> dict:
@@ -203,7 +203,7 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
     ref_index, ref_constants, _ = reference_environment()
     impl_index, impl_constants, impl_defines, path_index = implementation_environment()
     impl_structs = signature.struct_definitions(IMPL_PATHS, impl_defines)
-    library = signature.function_index(sorted((LIB / "src").glob("*.slang")))
+    library = signature.function_index(sorted((LIB / "src").rglob("*.slang")), root=LIB / "src")
     exact = review.get("exact", {})
     glue = review.get("mcGlue", {})
     broken = review.get("referenceBroken", {})

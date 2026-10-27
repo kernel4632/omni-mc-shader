@@ -101,7 +101,7 @@
 // 强光压缩算法放在通用库里，本文件只保留选项、曝光统计与调用。
 #include "/omni-gfx/color.glsl"
 // 自动曝光的分块统计也在通用后期库，本文件只填参数。
-#include "/omni-gfx/post.glsl"
+#include "/omni-gfx/post/post.glsl"
 // 全屏调试开关属于共享画面状态，调色、泛光与原版雾都从这里取同一份定义。
 #include "/effects/shared/screen.glsl"
 
