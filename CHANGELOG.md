@@ -1,16 +1,17 @@
 # 更新记录
 ## 0.16.0-dev.2
 
-严格函数对照第三轮：exact 从 423 增到 457，approximate 与 missing 保持 0，mc_glue 从 82 降到 48。本轮按参考正文逐条迁移，参考参数保持在前，纹理、矩阵、结构体与数值资源显式追加；参考常数、采样次数与顺序逐项核对。
+严格函数对照第三轮：exact 从 423 增到 459，approximate 与 missing 保持 0，mc_glue 从 82 降到 46。本轮按参考正文逐条迁移，参考参数保持在前，纹理、矩阵、结构体与数值资源显式追加；参考常数、采样次数与顺序逐项核对。
 
 - 工具：`signature.py` 把 `imageLoad` 与 `texelFetch` 同样计入一次取像素，体素掩码读取不再因为参考用图像写入而被判成零次；新增 `OGX_CLAMP01` 宏，与参考的 `saturate` 宏保持同一常数口径，避免库函数多出 0 与 1。
 - 相机与后期：七个远景坐标与深度函数改为直接照参考公式实现，显式接收远景投影矩阵与 TAA 抖动；`ogxItxFsr1` 指向参考 FSR1，锐化量取参考默认值。
 - 视差：`BilinearHeightSample`、`HeightBasedNormal`、`ParallaxOcclusionMapping` 迁入通用库，图集采样器、分辨率、步数与阴影参数显式化，阴影抖动改在库内取蓝噪声，采样次数与参考 298 次一致；`ogxParallaxSmooth` 保留为适配层。
 - 全局光：`RSM` 与 `GI_SpatialFilter` 直接指向已有库实现，补全显式资源与默认绑定，RSM 的 49 次取像素与空间滤波的 98 次采样逐项对齐。
 - Eclipse 云：新增或对齐 `getCloudShape`、`getCumulonimbusShape`、`getLightningPosition`、`GetCloudShadow`、`getCloudScattering`、`phaseCloud`、`raymarchCloudSimple`、`GetVolumetricCloudsSimple`；新增库内 `densityAtPos` 与降雨密度函数，云层高度、细节尺度与阈值全部按参考数值写死。
+- iterationT 云密度与光照：新增 ogxItxCloudSampleDensity 与 ogxItxCloudLighting，三张噪声图与天气尺度显式传入，参考的覆盖率与细节常数按默认值绑定。
 - 体素与其他：`voxelEmission`、`photonicsEmission`、`getPhotonicsEmission`、`traceQuarterVoxel`、`GetVoxelBlock`、`YearCycleColor`、`applySceneControllerParameters` 迁入；`swapperlinZ2`、`getVoxelEmission`、`getRayOrigin`、`getCloudLighting` 经复核本来就是逐行一致，改为 exact。
 - 生成与编译：`python omni-gfx/build.py generate`、`python omni-gfx/build.py profiles` 两份 profile 编译通过；`python build.py verify` 见本次提交说明；`python build.py compile` 结果见提交说明。
-- 剩余：mc_glue 仍有 48 条。其中约 25 条是程序入口、标题、调试文字与群系/属性表；其余集中在 `VolumetricFog`、`UnderwaterVolumetricFog`、Eclipse 体积云主循环、WSR/Photonics、体素写回与高光反射，仍缺逐行移植。没有把这些条目改写成 approximate，也没有把差异说成已完成；游戏内画面、性能与其他显卡仍未验证。
+- 剩余：mc_glue 仍有 46 条。其中约 25 条是程序入口、标题、调试文字与群系/属性表；其余集中在 `VolumetricFog`、`UnderwaterVolumetricFog`、Eclipse 体积云主循环、WSR/Photonics、体素写回与高光反射，仍缺逐行移植。没有把这些条目改写成 approximate，也没有把差异说成已完成；游戏内画面、性能与其他显卡仍未验证。
 
 ## 0.16.0-dev.1
 

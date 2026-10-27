@@ -2121,6 +2121,55 @@
       "bindings": {
         "strength": 0.95
       }
+    },
+    "SampleDensity": {
+      "target": "cloud_volume.ogxItxCloudSampleDensity",
+      "resources": {
+        "baseNoise": "texture",
+        "detailNoise": "texture",
+        "curlNoise": "texture",
+        "baseScale": "value",
+        "coverageOffset": "value",
+        "clearCoverage": "value",
+        "rainCoverage": "value",
+        "detailScale": "value",
+        "detailStrength": "value",
+        "wetness": "value"
+      },
+      "bindings": {
+        "baseScale": 0.0007,
+        "coverageOffset": 0.68,
+        "clearCoverage": 0.28,
+        "rainCoverage": 0.96,
+        "detailScale": 0.007,
+        "detailStrength": 1
+      }
+    },
+    "CloudLighting": {
+      "target": "cloud_volume.ogxItxCloudLighting",
+      "resources": {
+        "baseNoise": "texture",
+        "detailNoise": "texture",
+        "curlNoise": "texture",
+        "worldShadowVector": "value",
+        "wetness": "value",
+        "baseScale": "value",
+        "coverageOffset": "value",
+        "clearCoverage": "value",
+        "rainCoverage": "value",
+        "detailScale": "value",
+        "detailStrength": "value",
+        "colorShadowlight": "value",
+        "colorSkylight": "value"
+      },
+      "bindings": {
+        "baseScale": 0.0007,
+        "coverageOffset": 0.68,
+        "clearCoverage": 0.28,
+        "rainCoverage": 0.96,
+        "detailScale": 0.007,
+        "detailStrength": 1
+      }
     }
   },
   "mcGlue": {
@@ -2213,12 +2262,6 @@
     },
     "specularReflections": {
       "evidence": "Eclipse 高光反射要读深度、法线、场景颜色、阴影与材质；参考签名有十七个参数但仍缺少缓冲，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
-    "CloudLighting": {
-      "evidence": "体积云光照要读三维基础/细节噪声、卷曲噪声、媒体参数与光照方向；参考签名缺少这些宿主资源，证据见 shaders/rendering/cloud/volumetric.glsl 与 omni-gfx/src/cloud_volume.slang。"
-    },
-    "SampleDensity": {
-      "evidence": "体积云密度要读三维噪声、卷曲噪声与媒体参数；参考签名只有云坐标、方向和是否细节，证据见 shaders/rendering/cloud/volumetric.glsl。"
     },
     "UnderwaterVolumetricFog": {
       "evidence": "水下体积雾要读深度、阴影贴图、噪声与水下介质参数；参考签名缺少这些缓冲，证据见 shaders/rendering/fog/underwater_fog.glsl 与 omni-gfx/src/fog_volume.slang。"

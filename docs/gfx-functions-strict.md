@@ -5,13 +5,13 @@
 
 ## 结论
 
-- 参考函数共 505 个；算法函数 457 个。
-- exact：457 个；approximate：0 个；mc_glue：48 个；missing：0 个。
+- 参考函数共 505 个；算法函数 459 个。
+- exact：459 个；approximate：0 个；mc_glue：46 个；missing：0 个。
 - exact 覆盖率（按算法函数）：100.0%。
 
 | 参考包 | exact | approximate | mc_glue | missing |
 | --- | --- | --- | --- | --- |
-| iterationT | 230 | 0 | 10 | 0 |
+| iterationT | 232 | 0 | 8 | 0 |
 | Eclipse | 227 | 0 | 38 | 0 |
 
 ## 未达 exact 的函数
@@ -20,8 +20,6 @@
 | --- | --- | --- | --- | --- | --- |
 | `main` | iterationT | mc_glue | `—` | — | 就绪：程序入口，只负责阶段组合 |
 | `title` | iterationT | mc_glue | `—` | — | 就绪：标题计数与屏幕文字，不参与画面效果 |
-| `SampleDensity` | iterationT | mc_glue | `—` | — | 体积云密度要读三维噪声、卷曲噪声与媒体参数；参考签名只有云坐标、方向和是否细节，证据见 shaders/rendering/cloud/volumetric.glsl。 |
-| `CloudLighting` | iterationT | mc_glue | `—` | — | 体积云光照要读三维基础/细节噪声、卷曲噪声、媒体参数与光照方向；参考签名缺少这些宿主资源，证据见 shaders/rendering/cloud/volumetric.glsl 与 omni-gfx/src/cloud_volume.slang。 |
 | `SevenSegment` | iterationT | mc_glue | `—` | — | 就绪：调试叠加字形表，只服务屏幕数字 |
 | `DecimalPoint` | iterationT | mc_glue | `—` | — | 就绪：调试叠加小数点定位 |
 | `PrintFloat` | iterationT | mc_glue | `—` | — | 就绪：屏幕调试数字，不参与画面效果 |

@@ -9,19 +9,19 @@
   ],
   "summary": {
     "totals": {
-      "exact": 457,
+      "exact": 459,
       "approximate": 0,
-      "mc_glue": 48,
+      "mc_glue": 46,
       "missing": 0,
       "referenceFunctions": 505,
-      "algorithmFunctions": 457,
+      "algorithmFunctions": 459,
       "exactCoverage": 1.0
     },
     "byPackage": {
       "iterationT": {
-        "exact": 230,
+        "exact": 232,
         "approximate": 0,
-        "mc_glue": 10,
+        "mc_glue": 8,
         "missing": 0,
         "total": 240
       },
@@ -5547,26 +5547,77 @@
       "resources": []
     },
     {
-      "referenceFile": "references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl",
+      "referenceFile": "D:/kernyr/shader/Omni/references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl",
       "referenceLine": 15,
       "referenceFunction": "SampleDensity",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "implementationPath": "",
-      "implementationLine": 0,
-      "layer": "host",
-      "status": "mc_glue",
-      "algorithm": false,
-      "difference": "\u4f53\u79ef\u4e91\u5bc6\u5ea6\u8981\u8bfb\u4e09\u7ef4\u566a\u58f0\u3001\u5377\u66f2\u566a\u58f0\u4e0e\u5a92\u4f53\u53c2\u6570\uff1b\u53c2\u8003\u7b7e\u540d\u53ea\u6709\u4e91\u5750\u6807\u3001\u65b9\u5411\u548c\u662f\u5426\u7ec6\u8282\uff0c\u8bc1\u636e\u89c1 shaders/rendering/cloud/volumetric.glsl\u3002",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl:15",
-      "referenceSignature": "",
-      "implementationSignature": "",
-      "referenceSamples": [],
-      "implementationSamples": [],
+      "currentImplementation": "ogxItxCloudSampleDensity",
+      "implementationPath": "D:/kernyr/shader/Omni/omni-gfx/src/cloud_volume.slang",
+      "implementationLine": 250,
+      "layer": "library",
+      "status": "exact",
+      "algorithm": true,
+      "difference": "none",
+      "evidencePath": "D:/kernyr/shader/Omni/references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl:15 -> D:/kernyr/shader/Omni/omni-gfx/src/cloud_volume.slang:250",
+      "referenceSignature": "float2 SampleDensity(float4, float3, bool)",
+      "implementationSignature": "float2 ogxItxCloudSampleDensity(float4, float3, bool, sampler3d, sampler3d, sampler2d, float, float, float, float, float, float, float)",
+      "referenceSamples": [
+        "sample",
+        "sample",
+        "sample",
+        "sample"
+      ],
+      "implementationSamples": [
+        "sample",
+        "sample",
+        "sample",
+        "sample"
+      ],
       "missingConstants": [],
       "extraConstants": [],
-      "resources": []
+      "resources": [
+        {
+          "name": "baseNoise",
+          "kind": "texture"
+        },
+        {
+          "name": "detailNoise",
+          "kind": "texture"
+        },
+        {
+          "name": "curlNoise",
+          "kind": "texture"
+        },
+        {
+          "name": "baseScale",
+          "kind": "value"
+        },
+        {
+          "name": "coverageOffset",
+          "kind": "value"
+        },
+        {
+          "name": "clearCoverage",
+          "kind": "value"
+        },
+        {
+          "name": "rainCoverage",
+          "kind": "value"
+        },
+        {
+          "name": "detailScale",
+          "kind": "value"
+        },
+        {
+          "name": "detailStrength",
+          "kind": "value"
+        },
+        {
+          "name": "wetness",
+          "kind": "value"
+        }
+      ]
     },
     {
       "referenceFile": "D:/kernyr/shader/Omni/references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl",
@@ -5593,26 +5644,121 @@
       "resources": []
     },
     {
-      "referenceFile": "references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl",
+      "referenceFile": "D:/kernyr/shader/Omni/references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl",
       "referenceLine": 73,
       "referenceFunction": "CloudLighting",
       "package": "iterationT",
       "profile": "iterationT",
-      "currentImplementation": "",
-      "implementationPath": "",
-      "implementationLine": 0,
-      "layer": "host",
-      "status": "mc_glue",
-      "algorithm": false,
-      "difference": "\u4f53\u79ef\u4e91\u5149\u7167\u8981\u8bfb\u4e09\u7ef4\u57fa\u7840/\u7ec6\u8282\u566a\u58f0\u3001\u5377\u66f2\u566a\u58f0\u3001\u5a92\u4f53\u53c2\u6570\u4e0e\u5149\u7167\u65b9\u5411\uff1b\u53c2\u8003\u7b7e\u540d\u7f3a\u5c11\u8fd9\u4e9b\u5bbf\u4e3b\u8d44\u6e90\uff0c\u8bc1\u636e\u89c1 shaders/rendering/cloud/volumetric.glsl \u4e0e omni-gfx/src/cloud_volume.slang\u3002",
-      "evidencePath": "references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl:73",
-      "referenceSignature": "",
-      "implementationSignature": "",
-      "referenceSamples": [],
-      "implementationSamples": [],
+      "currentImplementation": "ogxItxCloudLighting",
+      "implementationPath": "D:/kernyr/shader/Omni/omni-gfx/src/cloud_volume.slang",
+      "implementationLine": 290,
+      "layer": "library",
+      "status": "exact",
+      "algorithm": true,
+      "difference": "none",
+      "evidencePath": "D:/kernyr/shader/Omni/references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl:73 -> D:/kernyr/shader/Omni/omni-gfx/src/cloud_volume.slang:290",
+      "referenceSignature": "float3 CloudLighting(float3, float2, float, float, float2, float2, float4, float3, float, float)",
+      "implementationSignature": "float3 ogxItxCloudLighting(float3, float2, float, float, float2, float2, float4, float3, float, float, sampler3d, sampler3d, sampler2d, float3, float, float, float, float, float, float, float, float3, float3)",
+      "referenceSamples": [
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample"
+      ],
+      "implementationSamples": [
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample",
+        "sample"
+      ],
       "missingConstants": [],
       "extraConstants": [],
-      "resources": []
+      "resources": [
+        {
+          "name": "baseNoise",
+          "kind": "texture"
+        },
+        {
+          "name": "detailNoise",
+          "kind": "texture"
+        },
+        {
+          "name": "curlNoise",
+          "kind": "texture"
+        },
+        {
+          "name": "worldShadowVector",
+          "kind": "value"
+        },
+        {
+          "name": "wetness",
+          "kind": "value"
+        },
+        {
+          "name": "baseScale",
+          "kind": "value"
+        },
+        {
+          "name": "coverageOffset",
+          "kind": "value"
+        },
+        {
+          "name": "clearCoverage",
+          "kind": "value"
+        },
+        {
+          "name": "rainCoverage",
+          "kind": "value"
+        },
+        {
+          "name": "detailScale",
+          "kind": "value"
+        },
+        {
+          "name": "detailStrength",
+          "kind": "value"
+        },
+        {
+          "name": "colorShadowlight",
+          "kind": "value"
+        },
+        {
+          "name": "colorSkylight",
+          "kind": "value"
+        }
+      ]
     },
     {
       "referenceFile": "D:/kernyr/shader/Omni/references/iterationT/shaders/Lib/IndividualFounctions/NUBIS.glsl",
