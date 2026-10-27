@@ -41,9 +41,19 @@ void ogxApplyShadowBias(inout float3 projectedShadowPosition, float3 shadowNorma
     projectedShadowPosition += shadowNormal * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
 }
 
+// Eclipse 的阴影偏差入口：参考签名保留 playerPos 但内部不使用，几何法线经阴影相机旋转后推坐标。
+// 为什么把矩阵显式传入：参考实现读 shadowModelView，库不绑定宿主矩阵。
+void ogxItxApplyShadowBias(inout float3 projectedShadowPosition, float3 playerPos, float3 geoNormals,
+    float3x3 shadowNormalMatrix, float shadowDistance, float shadowMapResolution)
+{
+    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个阴影像素对应的世界尺度。
+    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远误差越大。
+    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大。
+    projectedShadowPosition += ogxMatrix3MulPoint(shadowNormalMatrix, geoNormals) * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
+}
+
 // 黄金角的正弦与余弦：螺旋采样每步旋转这个角度，样本才不会排成放射状条纹。
-static const float OGX_SHADOW_GOLDEN_COS = -0.737368878;
-static const float OGX_SHADOW_GOLDEN_SIN = 0.675490294;
+float2 ogxShadowGoldenRotation() { return float2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); }
 
 // 阴影相机空间里的位置：先做视图变换，再按正交投影缩放并把深度折半。
 // 为什么深度取半：阴影图存的是裁剪空间到零到一的压缩值，后面所有比较都按同一尺度进行。
@@ -274,11 +284,12 @@ float3 ogxVariablePenumbraShadow(float3 worldPos, float3 worldNormal, float sunl
         float rSteps = 1.0 / sssQuality; // 次数倒数，用来归一化半径与结果。
         float angle = noise.x * 6.28318530718; // 初始角度取随机，避免所有像素从同一方向起步。
         float2 rot = float2(cos(angle), sin(angle)); // 当前旋转方向。
+        float2 golden = ogxShadowGoldenRotation(); // 黄金角的正弦与余弦，循环外只算一次。
         float scatteringDepth = 0.0; // 累计散射深度。
         for (float i = 0.0; i < sssQuality; i++) // 逐次采样阴影图，累计遮挡厚度。
         {
-            rot = float2(OGX_SHADOW_GOLDEN_COS * rot.x + OGX_SHADOW_GOLDEN_SIN * rot.y,
-                         -OGX_SHADOW_GOLDEN_SIN * rot.x + OGX_SHADOW_GOLDEN_COS * rot.y); // 每步旋转黄金角。
+            rot = float2(golden.x * rot.x + golden.y * rot.y,
+                         -golden.y * rot.x + golden.x * rot.y); // 每步旋转黄金角。
             float radius = (i + noise.y) * rSteps; // 半径从随机相位起步，样本不重叠。
             float2 offset = rot * spread * radius; // 当前采样偏移。
             float sampleDepth = shadowDepth0.SampleLevel(shadowScreenPosRaw.xy + offset, 0.0).x; // 读取该点遮挡深度。
@@ -329,10 +340,11 @@ float3 ogxVariablePenumbraShadow(float3 worldPos, float3 worldNormal, float sunl
             float rSteps = 1.0 / vpsQuality; // 次数倒数。
             float angle = noise.y * 6.28318530718; // 初始角度取随机。
             float2 rot = float2(cos(angle), sin(angle)); // 当前旋转方向。
+            float2 golden = ogxShadowGoldenRotation(); // 黄金角的正弦与余弦，循环外只算一次。
             for (float i = 0.0; i < vpsQuality; i++) // 逐次采样阴影图求未遮挡比例。
             {
-                rot = float2(OGX_SHADOW_GOLDEN_COS * rot.x + OGX_SHADOW_GOLDEN_SIN * rot.y,
-                             -OGX_SHADOW_GOLDEN_SIN * rot.x + OGX_SHADOW_GOLDEN_COS * rot.y); // 每步旋转黄金角。
+                rot = float2(golden.x * rot.x + golden.y * rot.y,
+                             -golden.y * rot.x + golden.x * rot.y); // 每步旋转黄金角。
                 float radius = sqrt((i + noise.x) * rSteps); // 平方根半径让样本在圆面上均匀分布。
                 float2 offset = rot * radius * sampleSpread; // 当前采样偏移。
                 float3 sampleCoord = float3(shadowScreenPos.xy + offset, shadowScreenPos.z); // 采样坐标。
@@ -409,13 +421,14 @@ float ogxPcssVisibility(Sampler2D shadowMap, float3 shadowCoord, float texelSize
     float searchRadiusTexels, float filterRadiusTexels, float bias, int searchSteps, int filterSteps, float dither)
 {
     float2 rot = float2(cos(dither * 6.28318530718), sin(dither * 6.28318530718)); // 起始旋转角按抖动错开。
+    float2 golden = ogxShadowGoldenRotation(); // 黄金角的正弦与余弦，两个循环共用。
     float blockerSum = 0.0; // 遮挡物深度累加。
     float blockerCount = 0.0; // 遮挡物样本数。
     float searchRadius = searchRadiusTexels * texelSize; // 遮挡物搜索半径，换算到纹理坐标。
     for (int i = 0; i < searchSteps; i++) // 第一步：找遮挡物。
     {
-        rot = float2(OGX_SHADOW_GOLDEN_COS * rot.x + OGX_SHADOW_GOLDEN_SIN * rot.y,
-                     -OGX_SHADOW_GOLDEN_SIN * rot.x + OGX_SHADOW_GOLDEN_COS * rot.y); // 每步旋转黄金角。
+        rot = float2(golden.x * rot.x + golden.y * rot.y,
+                     -golden.y * rot.x + golden.x * rot.y); // 每步旋转黄金角。
         float radius = sqrt((float(i) + 0.5) / float(searchSteps)) * searchRadius; // 圆面均匀分布的半径。
         float sampleDepth = shadowMap.SampleLevel(shadowCoord.xy + rot * radius, 0.0).x; // 读该点的最近深度。
         if (sampleDepth < shadowCoord.z - bias) // 只有比接收点更近的样本才是遮挡物。
@@ -434,8 +447,8 @@ float ogxPcssVisibility(Sampler2D shadowMap, float3 shadowCoord, float texelSize
     float visible = 0.0; // 受光样本数。
     for (int i = 0; i < filterSteps; i++) // 第二步：按半影宽度做百分比过滤。
     {
-        rot = float2(OGX_SHADOW_GOLDEN_COS * rot.x + OGX_SHADOW_GOLDEN_SIN * rot.y,
-                     -OGX_SHADOW_GOLDEN_SIN * rot.x + OGX_SHADOW_GOLDEN_COS * rot.y); // 继续旋转同一个螺旋。
+        rot = float2(golden.x * rot.x + golden.y * rot.y,
+                     -golden.y * rot.x + golden.x * rot.y); // 继续旋转同一个螺旋。
         float radius = sqrt((float(i) + 0.5) / float(filterSteps)) * filterRadius; // 过滤半径。
         float sampleDepth = shadowMap.SampleLevel(shadowCoord.xy + rot * radius, 0.0).x; // 读深度。
         visible += step(shadowCoord.z - bias, sampleDepth); // 接收点不深于该样本就算受光。

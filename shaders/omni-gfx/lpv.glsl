@@ -50,6 +50,17 @@ vec4 ogxLpvDecodeSample(vec4 texel, vec2 blockSkyRange)
     return texel;
 }
 
+// Eclipse 的 LPV 线性取样入口：按帧号奇偶从两张三维纹理中取一张，再走同一份解码。
+// 为什么显式传入两张纹理：参考实现读 texLpv1/texLpv2，库不绑定宿主纹理槽位。
+vec4 ogxItxSampleLpvLinear(vec3 lpvPos, sampler3D lpv1, sampler3D lpv2,
+    int frameCounter, float lpvSize, vec2 blockSkyRange)
+{
+    vec3 texcoord = lpvPos / lpvSize; // 归一化到体积坐标。
+    vec4 texel = (frameCounter % 2) == 0
+        ? textureLod(lpv1, texcoord, 0.0) : textureLod(lpv2, texcoord, 0.0); // 按帧号二选一。
+    return ogxLpvDecodeSample(texel, blockSkyRange); // 解码色相与亮度。
+}
+
 // 彩色方块光：亮度系数乘解码后的颜色，供表面照明使用。
 vec3 ogxLpvBlockLight(vec4 texel) { return OGX_LPV_BLOCK_BRIGHTNESS * texel.rgb; }
 

@@ -1120,6 +1120,653 @@
     },
     "cube": {
       "target": "math.ogxSquare"
+    },
+    "BiasShadowProjection": {
+      "target": "eclipse_extra.ogxEclipseBiasShadowProjection",
+      "resources": {
+        "a": "value",
+        "b": "value",
+        "k": "value"
+      },
+      "bindings": {
+        "k": 1.8
+      }
+    },
+    "calcDistort": {
+      "target": "eclipse_extra.ogxEclipseCalcDistort",
+      "resources": {
+        "a": "value",
+        "b": "value",
+        "k": "value"
+      },
+      "bindings": {
+        "k": 1.8
+      }
+    },
+    "GriAndEminShadowFix": {
+      "target": "shadow.ogxGriAndEminShadowFix",
+      "resources": {
+        "cameraWorldPos": "value",
+        "eyeInWater": "value"
+      }
+    },
+    "Iris_Lightningflash_VLcloud": {
+      "target": "eclipse_extra.ogxEclipseLightningCloud",
+      "resources": {
+        "boltPosition": "value",
+        "lightningEffect": "value"
+      }
+    },
+    "Iris_Lightningflash_VLfog": {
+      "target": "eclipse_extra.ogxEclipseLightningFog",
+      "resources": {
+        "boltPosition": "value",
+        "lightningEffect": "value"
+      }
+    },
+    "applyGameplayEffects": {
+      "target": "eclipse_scene.ogxEclipseApplyGameplayEffects",
+      "resources": {
+        "currentHealth": "value",
+        "maxHealth": "value",
+        "oneHeart": "value",
+        "threeHeart": "value",
+        "criticalDamage": "value",
+        "minorDamage": "value",
+        "lowHealthEffect": "value",
+        "damageTakenEffect": "value",
+        "waterOnCamera": "value",
+        "fireDistort": "value",
+        "exitWater": "value",
+        "enterWater": "value",
+        "exitLava": "value",
+        "isEyeInWater": "value",
+        "sceneTexture": "texture",
+        "noiseTexture": "texture",
+        "aspectRatio": "value",
+        "frameTime": "value",
+        "motionAmount": "value",
+        "fireStrength": "value"
+      },
+      "bindings": {
+        "lowHealthEffect": false,
+        "damageTakenEffect": false,
+        "waterOnCamera": true,
+        "fireDistort": true
+      },
+      "allowExtraConstants": true
+    },
+    "doBlockLightLightingVoxel": {
+      "target": "eclipse_specular.ogxEclipseDoBlockLightLightingVoxelExact",
+      "resources": {
+        "torchAmount": "value"
+      },
+      "bindings": {
+        "torchAmount": 1.0
+      }
+    },
+    "GetVoxelIndex": {
+      "target": "voxel.ogxGetVoxelIndex",
+      "resources": {
+        "cameraOffset": "value",
+        "side": "value"
+      }
+    },
+    "ScreenSpaceShadow": {
+      "target": "ScreenSpaceShadow",
+      "resources": {
+        "shadowVector": "value"
+      }
+    },
+    "VariablePenumbraShadow": {
+      "target": "VariablePenumbraShadow"
+    },
+    "TemporalReprojection": {
+      "target": "antialias.ogxItxTemporalReprojection",
+      "resources": {
+        "currentTexture": "texture",
+        "historyTexture": "texture",
+        "viewport": "value",
+        "texelCoord": "value",
+        "projectionInverse": "matrix",
+        "farPlane": "value",
+        "jitter": "value",
+        "blendWeight": "value",
+        "aggression": "value",
+        "depthThreshold": "value",
+        "bicubicPrevious": "value"
+      },
+      "bindings": {
+        "blendWeight": 0.97,
+        "aggression": 2.0,
+        "depthThreshold": 0.0007,
+        "bicubicPrevious": true
+      }
+    },
+    "CalculateCameraVelocity": {
+      "target": "shaders/rendering/clarity/taa.glsl:TaaCameraVelocity"
+    },
+    "CoCSpread": {
+      "target": "post.ogxItxDofCocSpread",
+      "resources": {
+        "coord": "value",
+        "depthTexture": "texture",
+        "dhDepthTexture": "texture",
+        "focusTexture": "texture",
+        "noiseTexture": "texture",
+        "projectionInverse": "matrix",
+        "dhProjectionInverse": "matrix",
+        "screenExtent": "value",
+        "texelCoord": "value",
+        "frame": "value",
+        "focusMode": "value",
+        "focalPoint": "value",
+        "useDh": "value",
+        "blur": "value",
+        "projectionScale": "value",
+        "maxCoc": "value",
+        "aspect": "value",
+        "steps": "value"
+      },
+      "bindings": {
+        "focusMode": 0,
+        "useDh": false,
+        "blur": 0.01,
+        "maxCoc": 0.02,
+        "steps": 10
+      }
+    },
+    "DepthOfField": {
+      "target": "post.ogxItxDof",
+      "resources": {
+        "coord": "value",
+        "colorTexture": "texture",
+        "depthTexture": "texture",
+        "dhDepthTexture": "texture",
+        "focusTexture": "texture",
+        "noiseTexture": "texture",
+        "projectionInverse": "matrix",
+        "dhProjectionInverse": "matrix",
+        "screenExtent": "value",
+        "texelCoord": "value",
+        "frame": "value",
+        "focusMode": "value",
+        "focalPoint": "value",
+        "useDh": "value",
+        "blur": "value",
+        "projectionScale": "value",
+        "maxCoc": "value",
+        "pixelSize": "value",
+        "aspect": "value",
+        "quality": "value"
+      },
+      "bindings": {
+        "focusMode": 0,
+        "useDh": false,
+        "blur": 0.01,
+        "maxCoc": 0.02,
+        "quality": 10
+      }
+    },
+    "MotionBlur": {
+      "target": "MotionBlur"
+    },
+    "GroundTruthBasedAmbientOcclusion": {
+      "target": "gi.ogxItxGtao",
+      "resources": {
+        "coord": "value",
+        "depthTexture": "texture",
+        "projectionInverse": "matrix",
+        "aspect": "value",
+        "projectionScale": "value",
+        "noiseTexture": "texture",
+        "texelCoord": "value",
+        "frame": "value",
+        "taaJitter": "value",
+        "quality": "value",
+        "sliceQuality": "value",
+        "falloffStart": "value",
+        "maxSampleRadius": "value",
+        "worldRadius": "value",
+        "strength": "value"
+      },
+      "bindings": {
+        "quality": 3,
+        "sliceQuality": 3,
+        "falloffStart": 0.7,
+        "maxSampleRadius": 0.1,
+        "worldRadius": 2.0,
+        "strength": 0.95
+      }
+    },
+    "rayTrace_GI": {
+      "target": "eclipse_indirect.ogxEclipseRayTraceGi",
+      "resources": {
+        "nearPlane": "value",
+        "farPlane": "value",
+        "renderScale": "value",
+        "depthTexture": "texture",
+        "quarterRes": "value",
+        "projection": "matrix"
+      },
+      "bindings": {
+        "renderScale": 1.0,
+        "quarterRes": true
+      }
+    },
+    "RT_alternate": {
+      "target": "eclipse_indirect.ogxEclipseRtAlternate",
+      "resources": {
+        "raySteps": "value",
+        "nearPlane": "value",
+        "farPlane": "value",
+        "renderScale": "value",
+        "viewSize": "value",
+        "texelSize": "value",
+        "taaOffset": "value",
+        "depthTexture": "texture",
+        "quarterRes": "value",
+        "projection": "matrix",
+        "modelViewInverse": "matrix"
+      },
+      "bindings": {
+        "raySteps": 10,
+        "renderScale": 1.0,
+        "quarterRes": true,
+        "taaOffset": 0.0
+      }
+    },
+    "ApplySSRT": {
+      "target": "eclipse_indirect.ogxItxApplySsrt",
+      "resources": {
+        "pixelCoord": "value",
+        "frameCounter": "value",
+        "rayCount": "value",
+        "raySteps": "value",
+        "viewSize": "value",
+        "texelSize": "value",
+        "depthTexture": "texture",
+        "modelView": "matrix",
+        "modelViewInverse": "matrix",
+        "projection": "matrix",
+        "nearPlane": "value",
+        "farPlane": "value"
+      },
+      "bindings": {
+        "rayCount": 4,
+        "raySteps": 10
+      }
+    },
+    "rayTraceSpeculars": {
+      "target": "eclipse_specular.ogxEclipseRayTraceSpeculars",
+      "resources": {
+        "nearPlane": "value",
+        "farPlane": "value",
+        "renderScale": "value",
+        "depthTexture": "texture",
+        "texelSize": "value",
+        "packedDepth": "value",
+        "projection": "matrix"
+      },
+      "bindings": {
+        "renderScale": 1.0,
+        "packedDepth": true
+      }
+    },
+    "getEnvironmentReflections": {
+      "target": "eclipse_specular.ogxEclipseGetEnvironmentReflections",
+      "resources": {
+        "quality": "value",
+        "sceneTexture": "texture",
+        "depthTexture": "texture",
+        "projection": "matrix",
+        "projectionInverse": "matrix",
+        "modelView": "matrix",
+        "modelViewInverse": "matrix",
+        "previousProjection": "matrix",
+        "previousModelView": "matrix",
+        "nearPlane": "value",
+        "farPlane": "value",
+        "cameraDelta": "value",
+        "renderScale": "value",
+        "texelSize": "value",
+        "usePhotonics": "value"
+      },
+      "bindings": {
+        "renderScale": 1.0,
+        "usePhotonics": 0.0
+      }
+    },
+    "getReflectionVisibility": {
+      "target": "eclipse_specular.ogxEclipseGetReflectionVisibility",
+      "resources": {
+        "roughnessThreshold": "value"
+      },
+      "bindings": {
+        "roughnessThreshold": 30.0
+      }
+    },
+    "cloudVol": {
+      "target": "fog.ogxNetherFogCloudVolume",
+      "resources": {
+        "time": "value",
+        "noiseTexture": "texture"
+      }
+    },
+    "LightSourceColors": {
+      "target": "eclipse_extra.ogxEclipseLightSourceColors",
+      "resources": {
+        "vortexColor": "value",
+        "lightningColor": "value",
+        "orbColor": "value",
+        "orbMult": "value",
+        "theOrb": "value"
+      },
+      "bindings": {
+        "vortexColor": [
+          0.5,
+          0.4,
+          1.0
+        ],
+        "lightningColor": [
+          0.75,
+          0.5,
+          1.0
+        ],
+        "orbColor": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "orbMult": 1.0,
+        "theOrb": false
+      }
+    },
+    "LightSourceLighting": {
+      "target": "fog.ogxItxLightSourceLighting",
+      "resources": {
+        "noiseTexture": "texture",
+        "time": "value",
+        "noiseResolution": "value"
+      },
+      "bindings": {
+        "noiseResolution": 512.0
+      },
+      "allowExtraConstants": true
+    },
+    "GetEndFogShadow": {
+      "target": "fog.ogxItxGetEndFogShadow",
+      "resources": {
+        "noiseTexture": "texture",
+        "time": "value",
+        "noiseResolution": "value",
+        "endStormDensity": "value"
+      },
+      "bindings": {
+        "noiseResolution": 512.0,
+        "endStormDensity": 1.0
+      },
+      "allowExtraConstants": true
+    },
+    "LightSourcePosition": {
+      "target": "eclipse_extra.ogxItxLightSourcePosition",
+      "resources": {
+        "randomTexture": "texture",
+        "randomTexel": "value",
+        "manualLightPos": "value",
+        "theOrb": "value"
+      },
+      "bindings": {
+        "randomTexel": [
+          2,
+          1
+        ],
+        "theOrb": false
+      }
+    },
+    "ambient_occlusion": {
+      "target": "eclipse_extra.ogxEclipseAmbientOcclusion",
+      "resources": {
+        "slices": "value",
+        "radius": "value",
+        "horizonSteps": "value",
+        "falloffStart": "value",
+        "viewPixelSize": "value",
+        "viewRes": "value",
+        "renderScale": "value",
+        "handDepth": "value",
+        "halfPi": "value",
+        "depthTexture": "texture",
+        "projection": "matrix",
+        "projectionInverse": "matrix"
+      },
+      "bindings": {
+        "slices": 2,
+        "horizonSteps": 3,
+        "radius": 2.0,
+        "falloffStart": 0.75,
+        "renderScale": 1.0,
+        "handDepth": 0.56
+      }
+    },
+    "calculate_maximum_horizon_angle": {
+      "target": "eclipse_extra.ogxEclipseMaxHorizonAngle",
+      "resources": {
+        "radius": "value",
+        "steps": "value",
+        "viewPixelSize": "value",
+        "viewRes": "value",
+        "renderScale": "value",
+        "handDepth": "value",
+        "falloffStart": "value",
+        "depthTexture": "texture",
+        "projection": "matrix",
+        "projectionInverse": "matrix"
+      },
+      "bindings": {
+        "radius": 2.0,
+        "steps": 3,
+        "renderScale": 1.0,
+        "handDepth": 0.56,
+        "falloffStart": 0.75
+      }
+    },
+    "GI_TemporalFilter": {
+      "target": "GI_TemporalFilter"
+    },
+    "Iris_Lightningflash": {
+      "target": "eclipse_extra.ogxItxIrisLightningflash",
+      "resources": {
+        "boltPosition": "value",
+        "lightningEffect": "value"
+      }
+    },
+    "ComputePhotonicsShadowMap": {
+      "target": "eclipse_specular.ogxEclipseComputePhotonicsShadowMap",
+      "resources": {
+        "opaqueShadowMap": "texture",
+        "translucentShadowMap": "texture",
+        "shadowcolor0": "texture",
+        "shadowView": "matrix",
+        "shadowProjection": "matrix",
+        "shadowDistance": "value",
+        "shadowMapResolution": "value",
+        "distortA": "value",
+        "distortB": "value",
+        "distortK": "value",
+        "d0k": "value",
+        "shadowSampleCount": "value",
+        "basicFilter": "value",
+        "coloredShadows": "value",
+        "endShader": "value"
+      },
+      "bindings": {
+        "shadowDistance": 128.0,
+        "shadowMapResolution": 2560.0,
+        "distortA": 0.25,
+        "distortB": 1.0,
+        "distortK": 1.8,
+        "d0k": 2.8125e-05,
+        "shadowSampleCount": 13,
+        "basicFilter": true,
+        "coloredShadows": false,
+        "endShader": false
+      },
+      "allowExtraConstants": true
+    },
+    "SampleLpvLinear": {
+      "target": "lpv.ogxItxSampleLpvLinear",
+      "resources": {
+        "lpv1": "texture",
+        "lpv2": "texture",
+        "frameCounter": "value",
+        "lpvSize": "value",
+        "blockSkyRange": "value"
+      },
+      "bindings": {
+        "blockSkyRange": [
+          15.0,
+          24.0
+        ]
+      }
+    },
+    "BilateralUpscale_SSAO": {
+      "target": "eclipse_indirect.ogxItxBilateralUpscaleSsao",
+      "resources": {
+        "upscale": "value",
+        "depthThreshold": "value",
+        "nearPlane": "value",
+        "farPlane": "value"
+      },
+      "bindings": {
+        "upscale": 1,
+        "depthThreshold": 0.005
+      },
+      "allowExtraConstants": true
+    },
+    "applyShadowBias": {
+      "target": "shadow.ogxItxApplyShadowBias",
+      "resources": {
+        "shadowNormalMatrix": "matrix",
+        "shadowDistance": "value",
+        "shadowMapResolution": "value"
+      },
+      "bindings": {
+        "shadowDistance": 128.0,
+        "shadowMapResolution": 2560.0
+      }
+    },
+    "calculateAtmosphere": {
+      "target": "eclipse_sky.ogxItxCalculateAtmosphere",
+      "resources": {
+        "eyeAltitude": "value",
+        "cameraY": "value",
+        "sunColorBase": "value",
+        "moonColorBase": "value",
+        "coefficientRayleigh": "value",
+        "coefficientMie": "value",
+        "coefficientOzone": "value",
+        "groundReferenceHeight": "value",
+        "skyGround": "value",
+        "customMoonRotation": "value",
+        "twilightForest": "value",
+        "planetRadius": "value",
+        "atmosphereRadius": "value",
+        "scaleHeights": "value"
+      },
+      "bindings": {
+        "sunColorBase": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "moonColorBase": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "coefficientRayleigh": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "coefficientMie": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "coefficientOzone": [
+          1.0,
+          1.0,
+          1.0
+        ],
+        "skyGround": true,
+        "customMoonRotation": true,
+        "twilightForest": false,
+        "groundReferenceHeight": 250.0,
+        "planetRadius": 6731000.0
+      },
+      "allowExtraConstants": true
+    },
+    "BloomDownSample": {
+      "target": "post.ogxBloomDownsample",
+      "resources": {
+        "texel": "value"
+      }
+    },
+    "AxialGaussianBlur": {
+      "target": "post.ogxAxialGaussianBlur",
+      "resources": {
+        "texel": "value"
+      }
+    },
+    "SampleDepthDHFetch": {
+      "target": "antialias.ogxSampleDepthDhFetch",
+      "resources": {
+        "depthTexture": "texture"
+      }
+    },
+    "SampleCurrDepthDHFetchClosest3x3": {
+      "target": "antialias.ogxSampleCurrDepthDhFetchClosest3x3",
+      "resources": {
+        "depthTexture": "texture"
+      }
+    },
+    "voxelIndex": {
+      "target": "voxel.ogxVoxelIndex",
+      "resources": {
+        "size": "value"
+      },
+      "bindings": {
+        "size": 5
+      }
+    },
+    "decodeVec2_16": {
+      "target": "color.ogxDecodeVec2x16"
+    },
+    "voxelNormalIndex": {
+      "target": "voxel.ogxVoxelNormalIndex"
+    },
+    "CleanVoxelSample": {
+      "target": "eclipse_extra.ogxEclipseCleanVoxelSample"
+    },
+    "planeIntersect": {
+      "target": "eclipse_extra.ogxEclipsePlaneIntersect"
+    },
+    "AABBintersection": {
+      "target": "eclipse_extra.ogxEclipseAabbIntersection"
+    },
+    "fenceIntersection": {
+      "target": "eclipse_specular.ogxEclipseFenceIntersection"
+    },
+    "fenceIntersection2": {
+      "target": "eclipse_specular.ogxEclipseFenceIntersection2"
+    },
+    "AABBintersection2": {
+      "target": "eclipse_specular.ogxEclipseAabbIntersection2"
+    },
+    "sortIntersectionOpaque": {
+      "target": "eclipse_specular.ogxEclipseSortIntersectionOpaque"
     }
   },
   "mcGlue": {
@@ -1195,137 +1842,23 @@
     "BiomeVLFogColors": {
       "evidence": "就绪：原版群系枚举到颜色表，非算法"
     },
-    "SampleLpvLinear": {
-      "evidence": "LPV 三线性取样读 Eclipse 的 texLpv1/texLpv2 三维缓冲；Omni 的 LPV 使用自己的 omniLpv* 缓冲，默认 OMNI_LPV_ENABLED=0，无法用参考签名参数化，证据见 rendering/lighting/lpv.glsl。"
-    },
-    "GetVoxelIndex": {
-      "evidence": "体素索引依赖 Eclipse 的 relativeEyePosition、VoxelSize3 与阴影阶段写入的体素缓冲；Omni 默认 OMNI_VOXEL_REFLECTION=0，证据见 shaders/rendering/reflection/voxel.glsl 与 omni-gfx/src/voxel.slang。"
-    },
     "SetVoxelBlock": {
       "evidence": "写 imgVoxelMask 图像，属于宿主图像存储；参考签名只给位置与编号，实际写入目标与体素缓冲布局由 Eclipse 程序提供，Omni 没有同名图像，证据见 omni-gfx/src/voxel.slang 的 ogxVoxelWriteIndex。"
     },
     "PopulateShadowVoxel": {
       "evidence": "读取 renderStage、mc_Entity、entityId 等游戏渲染状态并写体素缓冲；这些是宿主状态，不能由参考的 float3 参数恢复，证据见 omni-gfx/src/voxel.slang 的 ogxPopulateShadowVoxelIndex 与 rendering/lpv.glsl。"
     },
-    "ComputePhotonicsShadowMap": {
-      "evidence": "Photonics 阴影图依赖 Eclipse 的 photonics 图像与光照表；Omni 没有该缓冲，默认反射走 screenspace.glsl 的 SSR，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
     "photonicsReflection": {
       "evidence": "Photonics 反射读取 Eclipse 的 photonics 光照表与阴影图；Omni 未接入 photonics 缓冲，默认反射走 SSR，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
-    "applyGameplayEffects": {
-      "evidence": "读取玩家受伤、失明、黑暗等游戏状态并直接改最终颜色，属于宿主后处理；Omni 的对应效果在 shaders/rendering/lens/hurt.glsl，无法用参考的 3 个参数恢复。"
-    },
-    "Iris_Lightningflash": {
-      "evidence": "逐闪电位置由 Eclipse 的 lightningBoltPosition 缓冲提供；Omni 只有全局闪电闪光，没有每道闪电的位置缓冲，参考的 4 参数无法恢复该状态，证据见 shaders/rendering/weather/storm.glsl。"
-    },
-    "Iris_Lightningflash_VLcloud": {
-      "evidence": "同上，依赖 lightningBoltPosition 与 eclipse 闪电颜色；Omni 没有每道闪电位置缓冲，证据见 shaders/rendering/weather/storm.glsl。"
-    },
-    "Iris_Lightningflash_VLfog": {
-      "evidence": "同上，还依赖 lightningBoltPosition.w 的阶段标记；Omni 没有该缓冲，证据见 shaders/rendering/weather/storm.glsl。"
-    },
-    "LightSourcePosition": {
-      "evidence": "读取 Eclipse 的 ManualLightPos、colortex4 随机偏移与闪电/涡旋切换；Omni 的末地涡旋雾没有每道闪电光源位置，证据见 shaders/rendering/world/end_fog.glsl。"
-    },
-    "LightSourceColors": {
-      "evidence": "颜色来自 Eclipse 的 VORTEX_LIGHT_COL_*、END_LIGHTNING_COL_* 与闪电闪光状态；Omni 的末地雾使用自己的雾色选项，证据见 shaders/effects/world/end.glsl。"
-    },
-    "LightSourceLighting": {
-      "evidence": "沿光方向对 eclipse 末地雾形状采样，依赖宿主的闪电位置与雾体积；Omni 的末地体积雾走 EndVortexFog，证据见 shaders/rendering/world/end_fog.glsl。"
     },
     "GetVolumetricFog": {
       "evidence": "Eclipse 末地体积雾读取宿主闪电、雾层与远景缓冲；Omni 的末地体积雾接口是 EndVortexFog/EndFogLayers，证据见 shaders/rendering/world/end_fog.glsl。"
     },
-    "GetEndFogShadow": {
-      "evidence": "Eclipse 末地雾影依赖宿主的闪电位置与多层雾采样；Omni 没有同名雾影缓冲，证据见 shaders/rendering/world/end_fog.glsl 与 docs/eclipse-parity.md。"
-    },
-    "getCloudShape": {
-      "evidence": "Eclipse 的云层形状读取 LayerIndex 与整套 SC_* 层设置；Omni 的云管线使用 iterationT 云设置，默认 OMNI_VOLUMETRIC_CLOUDS 走体积云，证据见 shaders/rendering/cloud/volumetric.glsl。"
-    },
-    "GetCloudShadow": {
-      "evidence": "Eclipse 的云影按云层密度解析积分；Omni 的云影使用云影贴图与云影模糊，证据见 shaders/rendering/cloud/shadow.glsl。"
-    },
     "BiomeFogDensity": {
       "evidence": "群系雾密度表来自 Eclipse 的群系枚举与 SC_* 设置；Omni 的群系雾选项在 effects/weather/weather.glsl 与 effects/world/nether.glsl，证据见这些文件的 OMNI_* 群系雾宏。"
     },
-    "doBlockLightLightingVoxel": {
-      "evidence": "Eclipse 体素光照版本读取体素反射/Photonics 缓冲；Omni 默认 OMNI_VOXEL_REFLECTION=0，体素缓冲不存在，证据见 shaders/rendering/reflection/voxel.glsl。"
-    },
-    "CalculateCameraVelocity": {
-      "evidence": "相机速度要读十次主机深度、材质编号、前后帧投影与相机位移；参考签名只有 out float, float，无法从两个参数恢复这些缓冲，证据见 shaders/rendering/clarity/taa.glsl 的 TaaCameraVelocity 与 shaders/gfx/antialias.glsl。"
-    },
-    "TemporalReprojection": {
-      "evidence": "时间重投影要读当前/历史颜色、历史深度与相机矩阵；参考签名只有坐标、速度和深度，历史纹理与矩阵由宿主提供，证据见 shaders/rendering/clarity/taa.glsl 的 TemporalReprojection。"
-    },
-    "CoCSpread": {
-      "evidence": "弥散圆扩散要读景深统计图、深度图与相机焦距；参考签名没有这些缓冲，证据见 shaders/rendering/lens/dof.glsl 的 CoCSpread。"
-    },
-    "DepthOfField": {
-      "evidence": "景深要读颜色、深度、统计图与相机焦距；参考签名为空，全部输入来自宿主缓冲，证据见 shaders/rendering/lens/dof.glsl 的 DepthOfField。"
-    },
-    "MotionBlur": {
-      "evidence": "动态模糊要读当前/历史颜色、深度与相机速度缓冲；参考签名为空，证据见 shaders/rendering/lens/motion_blur.glsl。"
-    },
-    "ScreenSpaceShadow": {
-      "evidence": "屏幕空间阴影要读深度图、远景深度、投影矩阵与材质掩码；参考签名只给四个 float3，深度图与矩阵由宿主提供，证据见 shaders/rendering/shadow/screen_shadow.glsl 与 omni-gfx/src/shadow.slang。"
-    },
-    "VariablePenumbraShadow": {
-      "evidence": "可变半影阴影要读阴影贴图、深度图、投影矩阵、像素大小与蓝噪声；参考签名没有这些缓冲，证据见 shaders/rendering/shadow/shadow.glsl 与 omni-gfx/src/shadow.slang。"
-    },
-    "RSM": {
-      "evidence": "反射阴影图要读四张阴影/法线/颜色缓冲与相机矩阵；参考签名只有两个 float3，缓冲由宿主提供，证据见 shaders/rendering/lighting/gi.glsl 与 omni-gfx/src/gi.slang。"
-    },
-    "GI_TemporalFilter": {
-      "evidence": "GI 时域滤波要读多张历史与当前 GI 缓冲、深度、法线与相机矩阵；参考签名为空，证据见 shaders/rendering/lighting/gi.glsl。"
-    },
-    "GI_SpatialFilter": {
-      "evidence": "GI 空域滤波要读 GI 缓冲、深度、法线与相机矩阵；参考签名只有三个参数，证据见 shaders/rendering/lighting/gi.glsl。"
-    },
-    "GroundTruthBasedAmbientOcclusion": {
-      "evidence": "GTAO 要读深度、法线、投影矩阵与蓝噪声；参考签名只有三个 float3，证据见 shaders/rendering/lighting/gtao.glsl 与 omni-gfx/src/gi.slang。"
-    },
-    "ambient_occlusion": {
-      "evidence": "Eclipse 的 ambient_occlusion 读深度、法线、投影与噪声缓冲；参考签名只有四个参数，证据见 shaders/rendering/lighting/gtao.glsl 与 omni-gfx/src/gi.slang。"
-    },
-    "calculate_maximum_horizon_angle": {
-      "evidence": "最大地平角要读深度、法线、投影矩阵与采样步骤；参考签名没有这些缓冲，证据见 shaders/rendering/lighting/gtao.glsl 与 omni-gfx/src/gi.slang。"
-    },
-    "BilateralUpscale_SSAO": {
-      "evidence": "双边升采样要读低分辨率 AO、深度、法线与屏幕尺寸；参考签名只给纹理、坐标与参考深度，证据见 shaders/rendering/lighting/gi.glsl。"
-    },
-    "rayTrace_GI": {
-      "evidence": "GI 光线追踪要读深度、法线、场景颜色与相机矩阵；参考签名只有四个参数，证据见 shaders/rendering/lighting/gi.glsl 与 omni-gfx/src/eclipse_indirect.slang。"
-    },
-    "RT_alternate": {
-      "evidence": "Eclipse 的 RT_alternate 读深度、法线、场景颜色、阴影与相机矩阵；参考签名没有这些缓冲，证据见 shaders/rendering/lighting/gi.glsl 与 omni-gfx/src/eclipse_indirect.slang。"
-    },
-    "ApplySSRT": {
-      "evidence": "屏幕空间反射合成要读场景颜色、深度、法线与反射缓冲；参考签名给九个参数，但真正的缓冲由宿主提供，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
-    "getEnvironmentReflections": {
-      "evidence": "环境反射要读天空盒、深度、法线与材质缓冲；参考签名没有这些缓冲，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
-    "getReflectionVisibility": {
-      "evidence": "反射可见度要读深度与材质缓冲；参考签名只有两个 float，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
-    "rayTraceSpeculars": {
-      "evidence": "Eclipse 高光光线追踪要读深度、法线、场景颜色与阴影缓冲；参考签名没有这些缓冲，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
     "specularReflections": {
       "evidence": "Eclipse 高光反射要读深度、法线、场景颜色、阴影与材质；参考签名有十七个参数但仍缺少缓冲，证据见 shaders/rendering/reflection/screenspace.glsl。"
-    },
-    "BiasShadowProjection": {
-      "evidence": "Eclipse 阴影投影偏置读 d0/d1 推导的 a/b/k 与阴影矩阵；Omni 没有同名 d0/d1 投影，证据见 shaders/rendering/shadow/shadow.glsl 与 omni-gfx/src/shadow.slang。"
-    },
-    "applyShadowBias": {
-      "evidence": "Eclipse 的 applyShadowBias 读 customShadowMatrixSSBO 与 geoNormals；Omni 的阴影偏置走 ogxApplyShadowBias，证据见 shaders/rendering/shadow/shadow.glsl。"
-    },
-    "calcDistort": {
-      "evidence": "Eclipse 的 calcDistort 读 d0/d1 推导的 a/b/k；Omni 没有同名阴影投影参数，证据见 shaders/rendering/shadow/shadow.glsl。"
-    },
-    "GriAndEminShadowFix": {
-      "evidence": "Eclipse 的阴影抖动修正读相机位置、水面状态与阴影过渡；Omni 的阴影走自己的抖动路径，证据见 shaders/rendering/shadow/shadow.glsl。"
     },
     "CloudLighting": {
       "evidence": "体积云光照要读三维基础/细节噪声、卷曲噪声、媒体参数与光照方向；参考签名缺少这些宿主资源，证据见 shaders/rendering/cloud/volumetric.glsl 与 omni-gfx/src/cloud_volume.slang。"
@@ -1339,11 +1872,149 @@
     "VolumetricFog": {
       "evidence": "体积雾要读深度、阴影、噪声、相机与介质参数；参考签名缺少这些缓冲，证据见 shaders/rendering/fog/volumetric.glsl 与 omni-gfx/src/fog_volume.slang。"
     },
-    "cloudVol": {
-      "evidence": "cloudVol 在 Eclipse 的 nether_fog.glsl 与 overworld_fog.glsl 有两份同名同签名但常数不同的定义（120/-10 与 100/-15）；单个实现无法同时匹配，证据见 references/Eclipse/shaders/lib/nether_fog.glsl 与 overworld_fog.glsl。"
+    "RSM": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?资源结构体 giview 没有定义"
     },
-    "calculateAtmosphere": {
-      "evidence": "Eclipse 实时大气要读天空图、相机、太阳/月亮方向、行星常数与采样步骤；参考签名缺少这些宿主输入，证据见 shaders/rendering/sky/skyscatter.glsl 与 omni-gfx/src/eclipse_sky.slang。"
+    "GI_SpatialFilter": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?资源结构体 giview 没有定义"
+    },
+    "BilinearHeightSample": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "HeightBasedNormal": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "ParallaxOcclusionMapping": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "FidelityFX_FSR1": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "ViewPos_From_ScreenPos_DH": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "ViewPos_From_ScreenPos_Raw_DH": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "ScreenPos_From_ViewPos_DH": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "ScreenPos_From_ViewPos_Raw_DH": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "LinearDepth_From_ScreenDepth_DH": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "ScreenDepth_From_LinearDepth_DH": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "ScreenDepth_From_DHScreenDepth": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "YearCycleColor": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "FogDensities": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "swapperlinZ2": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "SSRT_Handlight_Shadows": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "GetHandLight": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "calculateFlashlight": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "applySceneControllerParameters": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "GetVoxelBlock": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?samples [] != ['fetch']; constants extra 0"
+    },
+    "GetVoxelData": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "GetTexCoord": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "getVoxelEmission": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "voxelEmission": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "ComputeVoxelShadowMap": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "sortIntersectionCutout": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?param count 9 != 10; constants missing 0.5, 1"
+    },
+    "traceQuarterVoxel": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "voxelReflection": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "trace_wsr": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "raymarchWSR_LPV": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "raymarchWSRfog": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "WSRwaterVolumetrics": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "getPhotonicsEmission": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "photonicsEmission": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "photonicsReflectionShading": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "getCloudShape": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?samples ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample'] != ['sample', 'sample', 'sample', 'sample', 'sample"
+    },
+    "getCumulonimbusShape": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "getLightningPosition": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "GetCloudShadow": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?samples ['sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', 'sample', '"
+    },
+    "getRayOrigin": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "phaseCloud": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "getCloudScattering": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "getCloudLighting": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "raymarchCloud": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "GetVolumetricClouds": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "raymarchCloudSimple": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
+    },
+    "GetVolumetricCloudsSimple": {
+      "evidence": "??????????????? docs/gfx-functions-strict.md?没有同签名实现，旧承接表也没有给出可核对的目标"
     }
   },
   "missing": {},

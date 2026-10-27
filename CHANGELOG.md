@@ -1,4 +1,17 @@
 # 更新记录
+## 0.16.0-dev.1
+
+严格函数对照第二轮：exact 从 373 增到 423，approximate 保持 0，missing 保持 0，mc_glue 从 132 降到 82。本轮把“参考签名没有缓冲”从分类理由改成实现约束：库函数可以显式追加纹理、矩阵、结构体与宿主数值参数，但追加项必须在台账声明、类型匹配并在函数体使用；参考常数、采样次数与顺序仍逐项核对。
+
+- 工具：`signature.py` 支持尾部显式资源参数、参考参数前缀比较、资源类型与使用检查、布尔绑定、向量绑定、`bool(...)`/`int(...)` 转换、同名局部量按最近声明展开、条件编译第一分支读取默认未启用的参考函数、Eclipse 结构体短名与库内 `Ogx` 前缀类型别名；`parity_strict.py` 支持按资源前缀选实现并记录资源清单。
+- 测试：新增显式纹理资源、未声明追加参数、未使用资源、绑定值补常数四类规则测试；测试总数 160，源码审计与中文注释比例通过。
+- 阴影与 TAA：`VariablePenumbraShadow`、`ScreenSpaceShadow`、`BiasShadowProjection`、`calcDistort`、`GriAndEminShadowFix`、`applyShadowBias`、`TemporalReprojection`、`CalculateCameraVelocity`、`CoCSpread`、`DepthOfField`、`MotionBlur` 迁入严格对照；TAA 当前/历史采样改为可裁剪块，资源参数显式化。
+- 全局光与环境遮蔽：`RSM`、`GI_TemporalFilter`、`GI_SpatialFilter`、`GroundTruthBasedAmbientOcclusion`、`ambient_occlusion`、`calculate_maximum_horizon_angle` 迁入；补蓝噪声与显式矩阵参数，七乘七空间滤波偏移表逐项列出。
+- Eclipse 反射与雾：`rayTrace_GI`、`RT_alternate`、`ApplySSRT`、`rayTraceSpeculars`、`getEnvironmentReflections`、`getReflectionVisibility`、`applyGameplayEffects`、`Iris_Lightningflash`、`LightSourcePosition`、`LightSourceColors`、`LightSourceLighting`、`GetEndFogShadow`、`cloudVol`、`calculateAtmosphere` 迁入；新增末地光源、雾形状与大气资源入口。
+- 其他：`GetVoxelIndex`、`GetVoxelBlock`、`voxelIndex`、`voxelNormalIndex`、`decodeVec2_16`、`CleanVoxelSample`、`planeIntersect`、`AABBintersection`、`fenceIntersection`、`fenceIntersection2`、`AABBintersection2`、`sortIntersectionOpaque`、`SampleLpvLinear`、`ComputePhotonicsShadowMap`、`BloomDownSample`、`AxialGaussianBlur`、`SampleDepthDHFetch`、`SampleCurrDepthDHFetchClosest3x3`、`FidelityFX_FSR1` 与七个 DH 坐标函数迁入。
+- 生成与编译：显式数组改成 GLSL 330 可接受的逐项赋值；补函数提前声明；`python omni-gfx/build.py profiles` 两份 profile 编译通过；`python build.py verify` 160 个测试、审计、9 组编译探针与打包通过；`python build.py compile` 280 组唯一程序 0 错误。
+- 未完成：mc_glue 仍有 82 条。其中约 25 条是程序入口、标题、调试文字与群系/属性表；其余集中在 Parallax、Eclipse 体积云、WSR/Photonics、体素写回、`GetVolumetricFog`、`VolumetricFog`、`UnderwaterVolumetricFog`、`specularReflections`、`photonicsReflection` 等仍依赖宿主缓冲或未完成逐行移植的函数。本轮没有把它们标成 exact，也没有把差异写成已完成；游戏内画面、性能与其他显卡仍未验证。
+
 ## 0.15.2
 
 严格函数对照收口：505 个参考函数中 exact 从 199 增到 373，approximate 从 224 降到 0，missing 保持 0，mc_glue 132（逐条证据在 `omni-gfx/tools/strict_review.json` 与 `docs/gfx-functions-strict.md`）。本轮不是把差异直接改名成 exact：先把对照工具的常数、分支、循环和同名重载判断修正，再按参考签名补宿主重载、显式参数适配或改回参考常数/采样顺序。

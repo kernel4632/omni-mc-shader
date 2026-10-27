@@ -146,6 +146,15 @@ float3 ogxCas(Sampler2D colorTex, float3 sampleE, int2 texelCoord, float sharpne
 }
 
 // 放大后的锐化：邻域布局与上面相同，样本取自放大输出画面，用于压低放大带来的软边。
+// FSR1 的提前声明：入口放在定义之前。
+float3 ogxFsr1(Sampler2D upscaledTex, int2 texelCoord, float sharpness, bool denoise);
+
+// Eclipse FSR1 入口：参考签名只给像素坐标，源纹理与锐化参数由宿主提供。
+float3 ogxItxFsr1(int2 texelCoord, Sampler2D upscaledTex, float sharpness, bool denoise)
+{
+    return ogxFsr1(upscaledTex, texelCoord, sharpness, denoise);
+}
+
 float3 ogxFsr1(Sampler2D upscaledTex, int2 texelCoord, float sharpness, bool denoise)
 {
     float3 sampleE = upscaledTex.Load(int3(texelCoord + int2(0, 0), 0)).rgb; // 中心样本。

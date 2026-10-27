@@ -110,6 +110,27 @@ float ogxEclipseTriNoise2d(float2 coord, float time)
 }
 
 // 单层云形状：按层号走参考实现的分支，返回零到一的密度。
+// 云层形状与云影的提前声明：入口放在定义之前。
+float ogxEclipseGetCloudShape(OgxEclipseCloudSettings s, int layerIndex, int lod, float3 position,
+    float minHeight, float maxHeight, Sampler2D noiseTexture);
+float ogxEclipseGetCloudShadow(OgxEclipseCloudSettings s, float3 playerPos, float3 sunVector,
+    int cloudShadowAmount, float cumulonimbusScale, float3 cameraPos, Sampler2D noiseTexture);
+
+// Eclipse 云层形状入口：参考签名只带层号、细节层级、位置与高度范围，云设置与噪声由宿主提供。
+float ogxItxGetCloudShape(int layerIndex, int lod, float3 position, float minHeight, float maxHeight,
+    OgxEclipseCloudSettings s, Sampler2D noiseTexture)
+{
+    return ogxEclipseGetCloudShape(s, layerIndex, lod, position, minHeight, maxHeight, noiseTexture);
+}
+
+// Eclipse 云影入口：参考签名只给世界位置与太阳方向，云设置、相机与噪声由宿主提供。
+float ogxItxGetCloudShadow(float3 playerPos, float3 sunVector, OgxEclipseCloudSettings s,
+    int cloudShadowAmount, float cumulonimbusScale, float3 cameraPos, Sampler2D noiseTexture)
+{
+    return ogxEclipseGetCloudShadow(s, playerPos, sunVector, cloudShadowAmount, cumulonimbusScale,
+        cameraPos, noiseTexture);
+}
+
 float ogxEclipseGetCloudShape(OgxEclipseCloudSettings s, int layerIndex, int lod, float3 position,
     float minHeight, float maxHeight, Sampler2D noiseTexture)
 {

@@ -28,6 +28,8 @@ const float OGX_INV_PI = 0.31830988618;
 // 帧间抖动用的两个无理步长，让相邻帧的偏移尽量不重合。
 const float OGX_GOLDEN_RATIO = 1.61803398875;
 const float OGX_PLASTIC_RATIO = 1.32471795724;
+// 黄金角：螺旋采样每步旋转这个角度，样本不会排成放射状条纹；与参考宏同值。
+const float OGX_GOLDEN_ANGLE = 2.39996322973;
 
 // 把值夹到零到一，按标量和三种常用向量分别重载，GLSL 侧同样是函数重载。
 float ogxSaturate(float x) { return clamp(x, 0.0, 1.0); }
@@ -112,7 +114,6 @@ float ogxMaxVec4(vec4 value) { return max(max(value.x, value.y), max(value.z, va
 float ogxMaxVec3(vec3 value) { return max(value.x, max(value.y, value.z)); }
 
 // 黄金角：圆周除以黄金比的平方，圆盘点列靠它错开方向，相邻两个点不会撞在一起。
-const float OGX_GOLDEN_ANGLE = 2.39996322973;
 
 // 圆盘内均匀分布的第 `index` 个采样点：角度按黄金角步进，半径取平方根保证面积均匀。
 vec2 ogxCircleMap(float index, float count)
@@ -760,11 +761,23 @@ float ogxRayleighPhaseElek(float cosTheta)
 // 为什么不用递归拜尔函数：递归构造出的是另一张矩阵，和参考的 16 项表不同。
 float ogxEclipseBayerDither(vec2 pixel)
 {
-    const float bayer[16] = float[16](
-        0.0 / 16.0, 8.0 / 16.0, 2.0 / 16.0, 10.0 / 16.0,
-        12.0 / 16.0, 4.0 / 16.0, 14.0 / 16.0, 6.0 / 16.0,
-        3.0 / 16.0, 11.0 / 16.0, 1.0 / 16.0, 9.0 / 16.0,
-        15.0 / 16.0, 7.0 / 16.0, 13.0 / 16.0, 5.0 / 16.0); // 参考实现的 4×4 表。
+    float bayer[16]; // ????? 4?4 ????????? GLSL 330?
+    bayer[0] = 0.0/16.0;
+    bayer[1] = 8.0/16.0;
+    bayer[2] = 2.0/16.0;
+    bayer[3] = 10.0/16.0;
+    bayer[4] = 12.0/16.0;
+    bayer[5] = 4.0/16.0;
+    bayer[6] = 14.0/16.0;
+    bayer[7] = 6.0/16.0;
+    bayer[8] = 3.0/16.0;
+    bayer[9] = 11.0/16.0;
+    bayer[10] = 1.0/16.0;
+    bayer[11] = 9.0/16.0;
+    bayer[12] = 15.0/16.0;
+    bayer[13] = 7.0/16.0;
+    bayer[14] = 13.0/16.0;
+    bayer[15] = 5.0/16.0; // 参考实现的 4×4 表。
     int x = int(mod(pixel.x, 4.0)); // 横向格。
     int y = int(mod(pixel.y, 4.0)); // 纵向格。
     return bayer[x + y * 4]; // 按行优先取表。

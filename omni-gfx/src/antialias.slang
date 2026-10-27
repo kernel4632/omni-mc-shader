@@ -106,15 +106,16 @@ float ogxTaaScreenDepth(float depth, float4x4 projectionInverse)
 // 读当前帧颜色；`packedDepth` 为真时透明度是屏幕深度，读完换成米制，供下界历史使用。
 float4 ogxTaaSampleCurrent(Sampler2D colorTexture, float2 coord, float2 viewport, float4x4 projectionInverse, bool packedDepth, bool bicubic)
 {
+    float4 data; // 先取颜色；分支写成块，严格对照才能按布尔参数裁掉未选中的采样。
+    if (bicubic) { data = ogxBicubicTexture4(colorTexture, coord, viewport); }
+    else { data = colorTexture.SampleLevel(coord, 0.0); }
     if (packedDepth) // 下界把颜色与深度放在同一张图。
     {
-        float4 data = bicubic ? ogxBicubicTexture4(colorTexture, coord, viewport) : colorTexture.SampleLevel(coord, 0.0); // 取颜色与深度。
         data.rgb = ogxRgbToYCoCg(data.rgb); // 颜色转亮度色差空间。
         data.a = ogxTaaLinearDepth(data.a, projectionInverse); // 深度换米制。
         return data; // 交回四分量。
     }
-    float3 color = bicubic ? ogxBicubicTexture4(colorTexture, coord, viewport).rgb : colorTexture.SampleLevel(coord, 0.0).rgb; // 取当前帧颜色。
-    return float4(ogxRgbToYCoCg(color), 0.0); // 深度占位为零。
+    return float4(ogxRgbToYCoCg(data.rgb), 0.0); // 深度占位为零。
 }
 
 // 精确读当前帧纹素；邻域方差统计用，整数坐标不会混入邻居颜色。
@@ -146,20 +147,22 @@ float2 ogxTaaPrevDepthBilinear(Sampler2D historyTexture, float2 coord, float2 vi
 // 读上一帧历史颜色与参考深度；`packedDepth` 为真时从透明度解包参考深度。
 float4 ogxTaaSamplePrevious(Sampler2D historyTexture, float2 coord, float2 viewport, float4x4 projectionInverse, bool packedDepth, bool bicubic)
 {
+    float4 data; // 先取历史颜色；分支写成块，严格对照才能按布尔参数裁掉未选中的采样。
+    if (bicubic) { data = ogxBicubicTexture4(historyTexture, coord, viewport); }
+    else { data = historyTexture.SampleLevel(coord, 0.0); }
     if (packedDepth) // 下界历史带参考深度。
     {
-        float3 color = bicubic ? ogxBicubicTexture4(historyTexture, coord, viewport).rgb : historyTexture.SampleLevel(coord, 0.0).rgb; // 取历史颜色。
         float prevDepth = ogxTaaPrevDepthBilinear(historyTexture, coord, viewport).x; // 解包上一帧参考深度。
-        return float4(ogxRgbToYCoCg(color), ogxTaaLinearDepth(prevDepth, projectionInverse)); // 颜色与米制参考深度。
+        return float4(ogxRgbToYCoCg(data.rgb), ogxTaaLinearDepth(prevDepth, projectionInverse)); // 颜色与米制参考深度。
     }
-    float3 color = bicubic ? ogxBicubicTexture4(historyTexture, coord, viewport).rgb : historyTexture.SampleLevel(coord, 0.0).rgb; // 取历史颜色。
-    return float4(ogxRgbToYCoCg(color), 0.0); // 参考深度占位。
+    return float4(ogxRgbToYCoCg(data.rgb), 0.0); // 参考深度占位。
 }
 
 // 读上一帧某个纹素的参考深度；普通维度存在透明度，下界从打包值里取第二个分量。
 float ogxTaaPrevDepthFetch(Sampler2D historyTexture, int2 coord, bool packedDepth)
 {
-    return packedDepth ? ogxUnpack2x16(historyTexture.Load(int3(coord, 0)).a).y : historyTexture.Load(int3(coord, 0)).w; // 按存储方式取深度。
+    if (packedDepth) { return ogxUnpack2x16(historyTexture.Load(int3(coord, 0)).a).y; } // 下界从打包值取第二个分量。
+    return historyTexture.Load(int3(coord, 0)).w; // 主世界直接读透明度通道。
 }
 
 // 取上一帧三乘三邻域的参考深度最小与最大值，供深度一致性判断。
@@ -265,10 +268,65 @@ float4 ogxTaaReproject(float2 coord, float3 velocity, float currDepthMin, Sample
     return float4(ogxYCoCgToRgb(currColor), currDepthMin); // 返回颜色与代表深度。
 }
 
-// iterationT 的 TAA 当前深度取格：直接从深度纹理读一个像素，不插值。
+// iterationT 的远景单点深度：参考签名不带纹理，库把深度图作为显式资源。
+float ogxSampleDepthDhFetch(int2 coord, Sampler2D depthTexture)
+{
+    return depthTexture.Load(int3(coord, 0)).x; // 精确读一个像素。
+}
+
+// iterationT 的远景最近三乘三深度：九个像素取最小值，避免细缝把背景深度拉远。
+float ogxSampleCurrDepthDhFetchClosest3x3(int2 coord, Sampler2D depthTexture)
+{
+    float d0 = ogxSampleDepthDhFetch(coord + int2(-1, -1), depthTexture); // 左上。
+    float d1 = ogxSampleDepthDhFetch(coord + int2(0, -1), depthTexture); // 上。
+    float d2 = ogxSampleDepthDhFetch(coord + int2(1, -1), depthTexture); // 右上。
+    float d3 = ogxSampleDepthDhFetch(coord + int2(-1, 0), depthTexture); // 左。
+    float d4 = ogxSampleDepthDhFetch(coord + int2(0, 0), depthTexture); // 中。
+    float d5 = ogxSampleDepthDhFetch(coord + int2(1, 0), depthTexture); // 右。
+    float d6 = ogxSampleDepthDhFetch(coord + int2(-1, 1), depthTexture); // 左下。
+    float d7 = ogxSampleDepthDhFetch(coord + int2(0, 1), depthTexture); // 下。
+    float d8 = ogxSampleDepthDhFetch(coord + int2(1, 1), depthTexture); // 右下。
+    return min(d0, min(d1, min(d2, min(d3, min(d4, min(d5, min(d6, min(d7, d8)))))))); // 九点最小。
+}
+
+// iterationT 时间重投影：当前帧颜色、三乘三方差、历史颜色与历史深度按参考顺序混合。
+// 为什么单独一份：合并版 `ogxTaaReproject` 还带下界打包、微模糊等扩展，默认路径的
+// 采样顺序与参考不同；严格对照需要一条只走主世界参考分支的入口。
+float4 ogxItxTemporalReprojection(float2 coord, float3 velocity, float currDepthMin,
+    Sampler2D currentTexture, Sampler2D historyTexture, float2 viewport, int2 texelCoord,
+    float4x4 projectionInverse, float farPlane, float2 jitter, float blendWeight,
+    float aggression, float depthThreshold, bool bicubicPrevious)
+{
+    float2 unjitterCoord = coord + jitter * 0.5; // 撤销本帧抖动，取样回到真实位置。
+    float4 currData = ogxTaaSampleCurrent(currentTexture, unjitterCoord, viewport, projectionInverse, false, false); // 当前帧颜色，转亮度色差。
+    float3 currColor = currData.rgb; // 当前帧颜色。
+    float3 avgColor = currColor; // 邻域均值占位。
+    float3 crossAvgColor = currColor; // 十字均值占位。
+    float2 referenceMinmax = float2(0.0); // 主世界不用参考深度范围。
+    float3 variance = ogxTaaVariance3x3(texelCoord, currColor, currentTexture, projectionInverse, false,
+        aggression, avgColor, crossAvgColor, referenceMinmax); // 九邻域方差与两个均值。
+    float2 prevCoord = coord - velocity.xy; // 退回上一帧屏幕位置。
+    float3 prevColor = ogxTaaSamplePrevious(historyTexture, prevCoord, viewport, projectionInverse,
+        false, bicubicPrevious).rgb; // 上一帧历史颜色。
+    prevColor = ogxClipAabb(avgColor, variance, prevColor); // 把历史裁进当前邻域。
+    float blend = blendWeight; // 历史混合权重。
+    float2 pixelVelocity = abs(fract(velocity.xy * viewport) - 0.5) * 2.0; // 以像素为单位的运动量。
+    blend *= sqrt(pixelVelocity.x * pixelVelocity.y) * 0.25 + 0.75; // 运动越大越信当前帧。
+    blend *= float(ogxEqual(ogxSaturate(coord), coord)); // 出屏坐标不混历史。
+    float2 prevDepth = ogxTaaPrevDepthMinmax(historyTexture, prevCoord, viewport, false); // 上一帧九邻域参考深度。
+    float currDist = ogxTaaLinearDepth(currDepthMin, projectionInverse); // 当前深度换成米制。
+    float threshold = max(depthThreshold - currDist / farPlane * 0.2 * depthThreshold, 1e-5); // 越远阈值越小。
+    blend *= step(prevDepth.x - currDepthMin + velocity.z, threshold); // 历史更深一侧的一致性。
+    blend *= step(currDepthMin - velocity.z - prevDepth.y, threshold); // 历史更浅一侧的一致性。
+    currColor = lerp(crossAvgColor, currColor, ogxSaturate(blend * 5.0 - 0.5)); // 低权重时更靠十字均值。
+    currColor = lerp(currColor, prevColor, blend); // 按权重混入历史。
+    currColor = ogxYCoCgToRgb(currColor); // 回到 RGB。
+    return float4(currColor, currDepthMin); // 带回代表深度。
+}
+
 float ogxTaaSampleDepthFetch(Sampler2D depthTexture, int2 coord)
 {
-    return depthTexture.Load(int3(coord, 0)).x; // 深度纹理的红色通道。
+    return depthTexture.Load(int3(coord, 0)).x; // ??????????
 }
 
 #endif

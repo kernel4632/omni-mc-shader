@@ -132,6 +132,15 @@ float4 ogxVoxelReflection(float3 originWorld, float3 rayDirWorld, float3 surface
 }
 
 // 体素编号：从三维掩码直接取格，并按参考实现取两千以内的编号。
+// 体素块读取的提前声明：入口放在定义之前。
+uint ogxGetVoxelBlock(Usampler3D voxelMask, int3 voxelPos);
+
+// Eclipse 体素块读取入口：参考签名只给坐标，三维体素图作为显式资源传入。
+uint ogxItxGetVoxelBlock(int3 voxelPos, Usampler3D voxelMask)
+{
+    return ogxGetVoxelBlock(voxelMask, voxelPos); // 转调同一个三维取像素。
+}
+
 uint ogxGetVoxelBlock(Usampler3D voxelMask, int3 voxelPos)
 {
     return voxelMask.Load(int4(voxelPos, 0)).r % 2000u; // 参考实现的编号掩码。

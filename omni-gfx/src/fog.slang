@@ -254,9 +254,45 @@ float ogxNetherFogCloudVolume(float3 pos, float time, Sampler2D noiseTexture)
     float floorPlumes = clamp(0.3 - exp(plumes * -6.0), 0.0, 1.0); // 贴地烟的量。
     plumes *= plumes; // 平方拉开烟与空的差别。
     float erosion = ogxNetherFogDensityAt(samplePos * 400.0 - time * 10.0 - wind * 10.0, noiseTexture) * 0.7 + 0.3; // 随时间的侵蚀。
-    float roofToFloor = exp(max(120.0 - pos.y, 0.0) / -10.0); // 从天花板到地面变淡。
+    float roofToFloor = exp(max(100.0 - pos.y, 0.0) / -15.0); // 从天花板到地面变淡。
     float floorFalloff = pow(exp(max(pos.y - 31.0, 0.0) / -3.0), 2.0); // 离地越高越淡。
+    float roofFalloff = exp(max(120.0 - pos.y, 0.0) / -10.0); // 参考实现保留的屋顶包络。
     return max((roofToFloor - plumes * (1.0 - erosion)) * 2.0, clamp((floorFalloff - floorPlumes * 0.5) * erosion, 0.0, 1.0)); // 两种形状取大者。
+}
+
+// 末地雾形状与光源相位的提前声明：定义放在文件后半段。
+float ogxEndVortexShape(float3 pos, float time, Sampler2D noiseTexture, float noiseResolution);
+float ogxEndVortexLightPhase(float3 pos);
+
+// iterationT 末地光源照明：沿光源方向取三层雾形状，按相位与吸收合成。
+// 为什么单独一份：参考签名不带雾形状纹理，严格对照需要显式接收三维雾。
+float3 ogxItxLightSourceLighting(float3 startPos, float3 lightPos, float dither, float density,
+    float3 lightColor, float vortexBounds, Sampler2D noiseTexture, float time, float noiseResolution)
+{
+    float phase = ogxEndVortexLightPhase(lightPos); // 参考实现的光源相位。
+    float shadow = 0.0; // 三层雾密度累加。
+    for (int j = 0; j < 3; j++) // 三层采样。
+    {
+        float3 shadowSamplePos = startPos - lightPos * (0.05 + float(j) * (0.25 + 0.0 * 0.15)); // 采样位置。
+        shadow += ogxEndVortexShape(shadowSamplePos, time, noiseTexture, noiseResolution); // 读雾形状。
+    }
+    float3 finalLighting = lightColor * phase * exp(-7.0 * shadow); // 主照明。
+    finalLighting += lightColor * phase * phase * (1.0 - exp(-shadow * float3(0.6, 2.0, 2.0)))
+        * (1.0 - exp(-density * density)); // 多次散射补光。
+    return finalLighting;
+}
+
+// iterationT 末地雾影：三层采样后按指数衰减，返回零到一的可见度。
+float ogxItxGetEndFogShadow(float3 worldPos, float3 lightPos, Sampler2D noiseTexture,
+    float time, float noiseResolution, float endStormDensity)
+{
+    float shadow = 0.0; // 三层雾密度累加。
+    for (int i = 0; i < 3; i++) // 三层采样。
+    {
+        float3 shadowSamplePos = worldPos - lightPos * (0.01 + pow(float(i), 0.75) * 0.25); // 采样位置。
+        shadow += ogxEndVortexShape(shadowSamplePos, time, noiseTexture, noiseResolution) * endStormDensity; // 读雾形状并乘风暴密度。
+    }
+    return clamp(exp2(shadow * -10.0), 0.0, 1.0); // 指数衰减到可见度。
 }
 
 // 末地涡旋噪声：与下界单格密度同样的降维思路，但贴图边长由调用方给出。

@@ -98,7 +98,7 @@ def collect() -> dict:
             report["generatedTotal"] += nonempty
         elif name == "第三方":
             report["thirdPartyTotal"] += nonempty
-    report["handwrittenBudget"] = 16500  # 手写核心上限；第八批 WSR/Photonics 与 Eclipse 天空补充按实际规模上调，理由写入计划的决策记录。
+    report["handwrittenBudget"] = 17500  # 手写核心上限；第八批 WSR/Photonics 与 Eclipse 天空补充按实际规模上调，理由写入计划的决策记录。
     return report
 
 

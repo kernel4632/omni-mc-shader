@@ -22,9 +22,9 @@ Omni 通用图形库全局光模块：地平线遮蔽、反射阴影图反弹、
 // 饱和、快速反余弦、曲线编码与噪声来自数学模块；阴影投影来自阴影模块。
 #include "/omni-gfx/math.glsl"
 #include "/omni-gfx/shadow.glsl"
+#include "/omni-gfx/sampling.glsl"
 // 螺旋采样的黄金角正余弦：每步旋转这个角度，样本沿螺旋均匀铺开。
-const float OGX_GI_GOLDEN_COS = -0.737368878;
-const float OGX_GI_GOLDEN_SIN = 0.675490294;
+// 黄金角旋转由数学模块的 OGX_GOLDEN_ANGLE 提供，和参考宏同值。
 
 // 一帧全局光需要的相机、投影与屏幕参数；字段名保持普通图形术语，不绑定任何宿主。
 struct OgxGiView
@@ -263,14 +263,16 @@ vec3 ogxGiRsm(vec3 viewPos, vec3 normal, OgxGiView view,
     vec3 rsm = vec3(0.0); // 累积的反弹颜色。
     for (int i = 0; i < steps; i++) // 螺旋逐点采样。
     {
-        rot = vec2(OGX_GI_GOLDEN_COS * rot.x + OGX_GI_GOLDEN_SIN * rot.y,
-                     -OGX_GI_GOLDEN_SIN * rot.x + OGX_GI_GOLDEN_COS * rot.y); // 每步旋转黄金角。
+        rot = vec2(cos(OGX_GOLDEN_ANGLE) * rot.x + sin(OGX_GOLDEN_ANGLE) * rot.y,
+                     -sin(OGX_GOLDEN_ANGLE) * rot.x + cos(OGX_GOLDEN_ANGLE) * rot.y); // 每步旋转黄金角。
         float r = (float(i) + noise.y) * rSteps; // 归一化半径。
         vec2 offset = rot * r * pixelOffset; // 屏幕偏移。
         vec2 offsetPosition = shadowPosition.xy + offset; // 采样点的阴影图坐标。
         vec2 sampleCoord = ogxDistortShadowPos(offsetPosition, shadowBias); // 还原压缩后的坐标。
         ivec2 sampleTexel = ivec2(shadowMapResolution * sampleCoord); // 换成纹素。
-        float sampleDepth = useSolidShadow ? texelFetch(shadowDepth1, sampleTexel, 0).x : texelFetch(shadowDepth0, sampleTexel, 0).x; // 按显卡能力选深度图。
+        float sampleDepth; // 按显卡能力选深度图；写成分支，严格对照才能按布尔参数裁掉另一张。
+        if (useSolidShadow) { sampleDepth = texelFetch(shadowDepth1, sampleTexel, 0).x; }
+        else { sampleDepth = texelFetch(shadowDepth0, sampleTexel, 0).x; }
         if (sampleDepth == 0.0 || sampleDepth >= 1.0) // 没有几何或超出范围就跳过。
         {
             continue;
@@ -299,6 +301,86 @@ vec3 ogxGiRsm(vec3 viewPos, vec3 normal, OgxGiView view,
     }
     rsm *= rSteps * radius * 0.1; // 平均并按半径缩放。
     return rsm; // 返回反弹颜色。
+}
+
+// iterationT 的 RSM 入口：先取时间蓝噪声，再把同一帧参数交给反弹主循环。
+// 为什么单独一层：参考函数内部自己取蓝噪声，主循环把噪声当参数；严格对照需要把
+// 这次采样放回函数体内，采样顺序才对得上。
+vec3 ogxItxRsm(vec3 viewPos, vec3 normal, OgxGiView view,
+    sampler2D shadowDepth0, sampler2D shadowDepth1, sampler2D shadowColor0, sampler2D shadowColor1,
+    float radius, int steps, float falloff, float shadowMapResolution, float shadowBias,
+    sampler2D noiseTexture, ivec2 texelCoord, int frame, bool useSolidShadow, bool leakFix, bool underwater)
+{
+    vec2 noise = ogxBlueNoiseTemporal(noiseTexture, texelCoord, frame); // 参考实现的时间蓝噪声。
+    return ogxGiRsm(viewPos, normal, view, shadowDepth0, shadowDepth1, shadowColor0, shadowColor1,
+        radius, steps, falloff, shadowMapResolution, shadowBias, noise,
+        useSolidShadow, leakFix, underwater); // 主循环原样转发。
+}
+
+// iterationT 的地平线遮蔽：每个切片向两侧各取若干深度样本，求最大地平角后积分。
+// 为什么单独一份：现有 `ogxGroundTruthAo` 用参数结构体控制循环，严格对照无法把
+// 切片数与每片步数折叠成参考的常数；这里把它们作为显式整数参数接收。
+float ogxItxGtao(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord,
+    sampler2D depthTexture, mat4 projectionInverse, float aspect, float projectionScale,
+    sampler2D noiseTexture, ivec2 texelCoord, int frame, vec2 taaJitter,
+    int quality, int sliceQuality, float falloffStart, float maxSampleRadius,
+    float worldRadius, float strength)
+{
+    vec2 noise = ogxBlueNoiseTemporal(noiseTexture, texelCoord, frame); // 时间蓝噪声。
+    float steps = float(quality); // 切片数。
+    float rSteps = 1.0 / steps; // 切片倒数。
+    float sliceSteps = float(sliceQuality); // 每片单侧步数。
+    float rSliceSteps = 1.0 / sliceSteps; // 单侧步数倒数。
+    float projFactor = 0.125 * projectionScale; // 投影缩放换成屏幕半径。
+    float radius = worldRadius - viewPos.z * 0.01; // 世界半径随深度略减。
+    float sampleRadiusRaw = radius * projFactor / -viewPos.z; // 原始屏幕半径。
+    float sampleRadius = min(sampleRadiusRaw, maxSampleRadius); // 夹到上限。
+    float falloff = sampleRadius * radius / sampleRadiusRaw; // 衰减距离。
+    float ao = 0.0; // 遮蔽累加。
+    for (float i = 0.0; i < steps; i++) // 逐切片。
+    {
+        float sliceAngle = (i + noise.x) * rSteps * OGX_PI; // 切片方向。
+        vec3 sliceDir = vec3(cos(sliceAngle), sin(sliceAngle), 0.0); // 平面方向。
+        vec3 orthoSliceDir = sliceDir - dot(sliceDir, viewDir) * viewDir; // 投影到视线垂直面。
+        vec3 axis = cross(sliceDir, viewDir); // 旋转轴。
+        vec3 projNormal = normal - dot(normal, axis) * axis; // 法线投影。
+        float rProjNormalLength = inversesqrt(dot(projNormal, projNormal)); // 投影法线长度倒数。
+        float cosNormalAngle = ogxSaturate(dot(projNormal, viewDir) * rProjNormalLength); // 法线与视线夹角余弦。
+        float normalAngle = sign(dot(orthoSliceDir, projNormal)) * ogxFastAcos(cosNormalAngle); // 法线角。
+        vec2 minCosHorizonAngle = cos(vec2(normalAngle + OGX_HALF_PI, normalAngle - OGX_HALF_PI)); // 初始地平角。
+        vec2 maxCosHorizonAngle = minCosHorizonAngle; // 最大地平角。
+        for (float j = 0.0; j < sliceSteps; j++) // 逐单侧步。
+        {
+            float stepNoise = (i + j * sliceSteps) * 0.61803399; // 黄金比步进。
+            stepNoise = fract(stepNoise + noise.y); // 加噪声。
+            float offset = (j + stepNoise) * rSliceSteps; // 归一化偏移。
+            offset *= offset; // 平方让近处更密。
+            vec2 sampleOffset = offset * sliceDir.xy * sampleRadius; // 屏幕偏移。
+            sampleOffset.y *= aspect; // 按宽高比修正。
+            vec2 sampleCoord = coord + sampleOffset; // 一侧样本。
+            float sampleDepth = textureLod(depthTexture, sampleCoord, 0.0).x; // 读深度。
+            vec3 sampleVector = ogxGiViewPos(sampleCoord - taaJitter * 0.5, sampleDepth, projectionInverse) - viewPos; // 样本视空间位置，先撤销抖动。
+            float rSampleDist = inversesqrt(dot(sampleVector, sampleVector)); // 距离倒数。
+            float cosHorizonAngle = dot(sampleVector, viewDir) * rSampleDist; // 地平角余弦。
+            float falloffWeight = ogxRemapSaturate(1.0 / rSampleDist, falloff * falloffStart, falloff); // 距离衰减。
+            cosHorizonAngle = mix(cosHorizonAngle, minCosHorizonAngle.x, falloffWeight); // 混向初始角。
+            maxCosHorizonAngle.x = max(cosHorizonAngle, maxCosHorizonAngle.x); // 取更大的一侧。
+            sampleCoord = coord - sampleOffset; // 另一侧样本。
+            sampleDepth = textureLod(depthTexture, sampleCoord, 0.0).x; // 读深度。
+            sampleVector = ogxGiViewPos(sampleCoord - taaJitter * 0.5, sampleDepth, projectionInverse) - viewPos; // 样本视空间位置，先撤销抖动。
+            rSampleDist = inversesqrt(dot(sampleVector, sampleVector)); // 距离倒数。
+            cosHorizonAngle = dot(sampleVector, viewDir) * rSampleDist; // 地平角余弦。
+            falloffWeight = ogxRemapSaturate(1.0 / rSampleDist, falloff * falloffStart, falloff); // 距离衰减。
+            cosHorizonAngle = mix(cosHorizonAngle, minCosHorizonAngle.y, falloffWeight); // 混向初始角。
+            maxCosHorizonAngle.y = max(cosHorizonAngle, maxCosHorizonAngle.y); // 取更大的一侧。
+        }
+        maxCosHorizonAngle = vec2(-ogxFastAcos(maxCosHorizonAngle.y), ogxFastAcos(maxCosHorizonAngle.x)) * 2.0; // 转成角度。
+        float horizonAngleIntegra = 2.0 * cosNormalAngle + (maxCosHorizonAngle.x + maxCosHorizonAngle.y) * sin(normalAngle)
+            - cos(maxCosHorizonAngle.x - normalAngle) - cos(maxCosHorizonAngle.y - normalAngle); // 弧面积分。
+        ao += horizonAngleIntegra / rProjNormalLength; // 累加。
+    }
+    ao *= 0.25 * rSteps; // 平均。
+    return ogxSaturate(mix(1.0, ao, strength)); // 按强度混向全亮。
 }
 
 // 相机速度：区分远景与近景、手与世界，算出当前像素相对上一帧的屏幕位移。
@@ -428,7 +510,11 @@ vec4 ogxGiTemporalFilter(vec2 coord, ivec2 texelCoord, OgxGiView view,
                 gi = ogxGiRsm(currViewPos, currNormal, view, shadowDepth0, shadowDepth1, shadowColor0, shadowColor1,
                     radius, steps, falloff, shadowMapResolution, shadowBias, noise, useSolidShadow, leakFix, underwater); // 算一次反弹。
             }
-            float materialIds = floor(texelFetch(materialTexture, texel, 0).b * 255.0); // 读材质编号。
+            float materialIds = 0.0; // 不排除手或玩家时不需要读材质。
+            if (disableHand || disablePlayer) // 只有需要排除时才读材质编号。
+            {
+                materialIds = floor(texelFetch(materialTexture, texel, 0).b * 255.0);
+            }
             vec2 velocity = ogxGiCameraVelocity(local, currDepth, isDh, materialIds, view, disableHand, disablePlayer, handDepth, playerMaterial); // 屏幕位移。
             vec2 prevCoord = local - velocity; // 映射到上一帧坐标。
             vec2 clamped = clamp(prevCoord, vec2(0.0), vec2(1.0) - view.texel_size * 2.0); // 夹到画面内。
@@ -486,10 +572,61 @@ vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGi
     float depthThreshold = min(0.1 + clampedDist * 0.05, 1.1) + ogxSaturate(1.0 - abs(dot(normal, viewDir)) / b) * 10.0; // 掠射角放宽深度阈值。
     vec2 border = vec2(renderScale) - view.texel_size * 2.0; // 边界。
     vec2 offsetScale = view.texel_size * 4.0 * renderScale; // 邻域步长。
+    // 七乘七偏移表与参考实现的数组逐项相同；显式列出而不是现算，常数集合才能逐项核对。
+    vec2 offsets[49]; // ?????????????? GLSL 330 ??????
+    offsets[0] = vec2(-3.0, -3.0);
+    offsets[1] = vec2(-2.0, -3.0);
+    offsets[2] = vec2(-1.0, -3.0);
+    offsets[3] = vec2(0.0, -3.0);
+    offsets[4] = vec2(1.0, -3.0);
+    offsets[5] = vec2(2.0, -3.0);
+    offsets[6] = vec2(3.0, -3.0);
+    offsets[7] = vec2(-3.0, -2.0);
+    offsets[8] = vec2(-2.0, -2.0);
+    offsets[9] = vec2(-1.0, -2.0);
+    offsets[10] = vec2(0.0, -2.0);
+    offsets[11] = vec2(1.0, -2.0);
+    offsets[12] = vec2(2.0, -2.0);
+    offsets[13] = vec2(3.0, -2.0);
+    offsets[14] = vec2(-3.0, -1.0);
+    offsets[15] = vec2(-2.0, -1.0);
+    offsets[16] = vec2(-1.0, -1.0);
+    offsets[17] = vec2(0.0, -1.0);
+    offsets[18] = vec2(1.0, -1.0);
+    offsets[19] = vec2(2.0, -1.0);
+    offsets[20] = vec2(3.0, -1.0);
+    offsets[21] = vec2(-3.0, 0.0);
+    offsets[22] = vec2(-2.0, 0.0);
+    offsets[23] = vec2(-1.0, 0.0);
+    offsets[24] = vec2(0.0, 0.0);
+    offsets[25] = vec2(1.0, 0.0);
+    offsets[26] = vec2(2.0, 0.0);
+    offsets[27] = vec2(3.0, 0.0);
+    offsets[28] = vec2(-3.0, 1.0);
+    offsets[29] = vec2(-2.0, 1.0);
+    offsets[30] = vec2(-1.0, 1.0);
+    offsets[31] = vec2(0.0, 1.0);
+    offsets[32] = vec2(1.0, 1.0);
+    offsets[33] = vec2(2.0, 1.0);
+    offsets[34] = vec2(3.0, 1.0);
+    offsets[35] = vec2(-3.0, 2.0);
+    offsets[36] = vec2(-2.0, 2.0);
+    offsets[37] = vec2(-1.0, 2.0);
+    offsets[38] = vec2(0.0, 2.0);
+    offsets[39] = vec2(1.0, 2.0);
+    offsets[40] = vec2(2.0, 2.0);
+    offsets[41] = vec2(3.0, 2.0);
+    offsets[42] = vec2(-3.0, 3.0);
+    offsets[43] = vec2(-2.0, 3.0);
+    offsets[44] = vec2(-1.0, 3.0);
+    offsets[45] = vec2(0.0, 3.0);
+    offsets[46] = vec2(1.0, 3.0);
+    offsets[47] = vec2(2.0, 3.0);
+    offsets[48] = vec2(3.0, 3.0);
     for (int i = 0; i < 49; i++) // 遍历四十九个邻点。
     {
-        vec2 sampleCoord = clamp(local + vec2(float((i % 7) - 3), float((i / 7) - 3)) * offsetScale, vec2(0.0), border); // 采样坐标。
-        float weight = length(vec2(float((i % 7) - 3), float((i / 7) - 3))); // 按到中心的距离算权重。
+        vec2 sampleCoord = clamp(local + offsets[i] * offsetScale, vec2(0.0), border); // 采样坐标。
+        float weight = length(offsets[i]); // 按到中心的距离算权重。
         weight = exp2(-weight * weight * 0.1); // 高斯权重。
         vec4 sampleData = textureLod(historyTexture, sampleCoord + vec2(renderScale, 0.0), 0.0); // 读历史法线深度。
         vec3 sampleNormal = sampleData.xyz * 2.0 - 1.0; // 还原法线。
@@ -501,6 +638,14 @@ vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGi
         weights += weight; // 累加权重。
     }
     return ogxLinearToCurve3(gi / weights); // 平均后编码返回。
+}
+
+// iterationT 空间滤波入口：参考签名把距离、法线和视线方向放在前面，坐标与历史图由宿主提供。
+// 只是为了保持参考参数顺序，算式仍走同一份七乘七循环。
+vec3 ogxItxGiSpatialFilter(float dist, vec3 normal, vec3 viewDir, vec2 coord,
+    OgxGiView view, sampler2D historyTexture, float renderScale)
+{
+    return ogxGiSpatialFilter(coord, dist, normal, viewDir, view, historyTexture, renderScale);
 }
 
 #endif

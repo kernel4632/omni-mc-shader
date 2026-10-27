@@ -182,15 +182,14 @@ vec3 ogxEclipseCalculateAtmosphere(vec3 background, vec3 viewVector, vec3 upVect
     vec3 moonVector, float eyeAltitude, float cameraY, vec3 sunColorBase, vec3 moonColorBase,
     vec3 coefficientRayleigh, vec3 coefficientMie, vec3 coefficientOzone,
     int iSteps, float noise, float groundReferenceHeight, bool skyGround, bool customMoonRotation,
-    bool twilightForest, out vec2 pid, out vec3 transmittance)
+    bool twilightForest, out vec2 pid, out vec3 transmittance, float planetRadius,
+    float atmosphereRadius, vec2 scaleHeights)
 {
     const int jSteps = 4; // 太阳与月亮阴影的固定步数。
-    const float planetRadius = 6731e3; // 行星半径，米。
-    const float atmosphereRadius = planetRadius + 110e3; // 大气顶半径。
-    const float atmosphereRadiusSquared = atmosphereRadius * atmosphereRadius; // 大气顶半径平方。
-    const vec2 scaleHeights = vec2(8.0e3, 1.2e3); // 瑞利与米氏标高。
-    const vec2 inverseScaleHeights = 1.0 / scaleHeights; // 标高倒数。
-    const vec2 scaledPlanetRadius = planetRadius * inverseScaleHeights; // 参考实现的缩放半径。
+    const float rLOG2 = 1.44269504089; // 以二为底的指数换底常数。
+    float atmosphereRadiusSquared = atmosphereRadius * atmosphereRadius; // 大气顶半径平方。
+    vec2 inverseScaleHeights = 1.0 / scaleHeights; // 标高倒数。
+    vec2 scaledPlanetRadius = planetRadius * inverseScaleHeights; // 参考实现的缩放半径。
 
     float planetGround; // 行星地面在地平线附近的暗化。
     if (skyGround) // 使用与参考实现相同的云层参考高度暗化。
@@ -255,7 +254,7 @@ vec3 ogxEclipseCalculateAtmosphere(vec3 background, vec3 viewVector, vec3 upVect
         if (density.y > 1e35) break; // 数值爆掉时提前停止。
         vec3 stepAirmass = density * stepSize; // 本段光学路径。
         vec3 stepOpticalDepth = coefficientRayleigh * stepAirmass.x + coefficientMie * stepAirmass.y + coefficientOzone * stepAirmass.z; // 本段光学厚度。
-        vec3 stepTransmittance = exp2(-stepOpticalDepth / log(2.0)); // 本段透过率。
+        vec3 stepTransmittance = exp2(-stepOpticalDepth * rLOG2); // 本段透过率。
         vec3 stepTransmittedFraction = clamp((stepTransmittance - 1.0) / -stepOpticalDepth, 0.0, 1.0); // 本段可散射比例。
         vec3 stepScatteringVisible = transmittance * stepTransmittedFraction; // 可见散射。
 
@@ -268,13 +267,13 @@ vec3 ogxEclipseCalculateAtmosphere(vec3 background, vec3 viewVector, vec3 upVect
         vec3 moonScattering = coefficientRayleigh * stepAirmass.x * phaseMoon.x + coefficientMie * stepAirmass.y * phaseMoon.y; // 月亮瑞利与米氏散射。
         if (skyGround) // 参考实现的天空地面分支只影响太阳项。
         {
-            scatteringSun += sunScattering * stepScatteringVisible * exp2(-sunOpticalDepth / log(2.0)) * planetGround;
+            scatteringSun += sunScattering * stepScatteringVisible * exp2(-sunOpticalDepth * rLOG2) * planetGround;
         }
         else
         {
-            scatteringSun += sunScattering * stepScatteringVisible * exp2(-sunOpticalDepth / log(2.0));
+            scatteringSun += sunScattering * stepScatteringVisible * exp2(-sunOpticalDepth * rLOG2);
         }
-        scatteringMoon += moonScattering * stepScatteringVisible * exp2(-moonOpticalDepth / log(2.0));
+        scatteringMoon += moonScattering * stepScatteringVisible * exp2(-moonOpticalDepth * rLOG2);
         scatteringAmbient += (coefficientRayleigh * stepAirmass.x + coefficientMie * stepAirmass.y) * stepScatteringVisible * lowSun;
         transmittance *= stepTransmittance; // 累积透过率。
     }
@@ -370,6 +369,22 @@ vec3 ogxEclipseAurora(vec3 dir, int samples, float noise, float moonY, float sun
     if (moonLight) aurora *= smoothstep(0.1, 0.0, moonY); // 月亮模式下被月光压制。
     aurora *= smoothstep(0.0, -0.1, sunY); // 太阳升起后消失。
     return aurora * atmosphereGround * amount * brightness; // 叠加到背景。
+}
+
+// Eclipse 实时大气入口：参考签名把两个输出放在第 6、7 位，库的主函数放在末尾。
+// 这里按参考顺序转发，调用方不需要知道库内部的重排。
+vec3 ogxItxCalculateAtmosphere(vec3 background, vec3 viewVector, vec3 upVector,
+    vec3 sunVector, vec3 moonVector, out vec2 pid, out vec3 transmittance,
+    int iSteps, float noise, float eyeAltitude, float cameraY, vec3 sunColorBase,
+    vec3 moonColorBase, vec3 coefficientRayleigh, vec3 coefficientMie,
+    vec3 coefficientOzone, float groundReferenceHeight, bool skyGround,
+    bool customMoonRotation, bool twilightForest, float planetRadius, float atmosphereRadius,
+    vec2 scaleHeights)
+{
+    return ogxEclipseCalculateAtmosphere(background, viewVector, upVector, sunVector, moonVector,
+        eyeAltitude, cameraY, sunColorBase, moonColorBase, coefficientRayleigh, coefficientMie,
+        coefficientOzone, iSteps, noise, groundReferenceHeight, skyGround, customMoonRotation,
+        twilightForest, pid, transmittance, planetRadius, atmosphereRadius, scaleHeights);
 }
 
 #endif

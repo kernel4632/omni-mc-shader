@@ -89,6 +89,79 @@ class SignatureToolTests(unittest.TestCase):
         ]
         self.assertEqual(parity_strict.check_single_target(records), [])  # 别名不应报错。
 
+    def test_declared_texture_resource_is_allowed(self):
+        """参考签名后面显式追加纹理，参数与采样都对上时仍算 exact。"""
+        ref = {
+            "name": "shadow", "line": 1, "return": "float",
+            "params": [{"raw": "float3 p", "direction": "in", "type": "float3", "name": "p"}],
+            "body": "{ return textureLod(noisetex, p.xy, 0.0).x; }",
+            "path": "ref.glsl", "pack": "iterationT",
+        }
+        impl = {
+            "name": "ogxShadow", "line": 2, "return": "float",
+            "params": [{"raw": "float3 p", "direction": "in", "type": "float3", "name": "p"},
+                       {"raw": "sampler2D depthTexture", "direction": "in", "type": "sampler2d",
+                        "name": "depthTexture"}],
+            "body": "{ return textureLod(depthTexture, p.xy, 0.0).x; }",
+            "path": "impl.glsl",
+        }
+        result = signature.compare(ref, impl, {}, {}, {}, {"shadow": [ref]}, {"ogxShadow": [impl]},
+                                   False, {"depthTexture": "texture"}, {})
+        self.assertEqual(result["issues"], [])  # 资源参数已显式接入采样。
+
+    def test_undeclared_extra_parameter_is_rejected(self):
+        """尾部参数没有在台账声明时，不能靠拉长签名冒充 exact。"""
+        ref = {
+            "name": "shadow", "line": 1, "return": "float",
+            "params": [{"raw": "float3 p", "direction": "in", "type": "float3", "name": "p"}],
+            "body": "{ return p.x; }", "path": "ref.glsl", "pack": "iterationT",
+        }
+        impl = {
+            "name": "ogxShadow", "line": 2, "return": "float",
+            "params": [{"raw": "float3 p", "direction": "in", "type": "float3", "name": "p"},
+                       {"raw": "sampler2D depthTexture", "direction": "in", "type": "sampler2d",
+                        "name": "depthTexture"}],
+            "body": "{ return p.x + textureLod(depthTexture, p.xy, 0.0).x; }", "path": "impl.glsl",
+        }
+        result = signature.compare(ref, impl, {}, {}, {}, {"shadow": [ref]}, {"ogxShadow": [impl]},
+                                   False, {}, {})
+        self.assertTrue(any("未声明" in issue for issue in result["issues"]))  # 必须报未声明。
+
+    def test_unused_resource_parameter_is_rejected(self):
+        """声明了纹理却没有真正读取时，不能算把输入接进了算法。"""
+        ref = {
+            "name": "shadow", "line": 1, "return": "float",
+            "params": [{"raw": "float3 p", "direction": "in", "type": "float3", "name": "p"}],
+            "body": "{ return p.x; }", "path": "ref.glsl", "pack": "iterationT",
+        }
+        impl = {
+            "name": "ogxShadow", "line": 2, "return": "float",
+            "params": [{"raw": "float3 p", "direction": "in", "type": "float3", "name": "p"},
+                       {"raw": "sampler2D depthTexture", "direction": "in", "type": "sampler2d",
+                        "name": "depthTexture"}],
+            "body": "{ return p.x; }", "path": "impl.glsl",
+        }
+        result = signature.compare(ref, impl, {}, {}, {}, {"shadow": [ref]}, {"ogxShadow": [impl]},
+                                   False, {"depthTexture": "texture"}, {})
+        self.assertTrue(any("未在函数体使用" in issue for issue in result["issues"]))  # 未使用要报错。
+
+    def test_bound_value_restores_reference_constant(self):
+        """选项宏改成显式数值参数后，绑定值补回参考常数。"""
+        ref = {
+            "name": "quality", "line": 1, "return": "float",
+            "params": [{"raw": "float x", "direction": "in", "type": "float", "name": "x"}],
+            "body": "{ return x * 8.0; }", "path": "ref.glsl", "pack": "iterationT",
+        }
+        impl = {
+            "name": "ogxQuality", "line": 2, "return": "float",
+            "params": [{"raw": "float x", "direction": "in", "type": "float", "name": "x"},
+                       {"raw": "float quality", "direction": "in", "type": "float", "name": "quality"}],
+            "body": "{ return x * quality; }", "path": "impl.glsl",
+        }
+        result = signature.compare(ref, impl, {}, {}, {}, {"quality": [ref]}, {"ogxQuality": [impl]},
+                                   False, {"quality": "value"}, {"quality": 8.0})
+        self.assertEqual(result["issues"], [])  # 8.0 由绑定值提供。
+
     def test_best_reference_variant_matches_second(self):
         """同名同签名但常数不同的参考变体，只要命中一个就算 exact。"""
         ref_low = {
@@ -170,3 +243,58 @@ if __name__ == "__main__":
 # 补充说明：测试保持独立。
 # 工具规则改动时同步更新。
 # 不复制真实光影逻辑。
+
+# 补充说明：显式资源规则保护算法真正迁进库。
+# 参考签名没有纹理、矩阵或结构体时，实现允许在末尾追加这些资源参数。
+# 追加参数必须写进台账，不能在代码里悄悄多接一张图。
+# 纹理和矩阵的类别要与声明一致，数值参数也必须真的参与函数体。
+# 未声明的尾部参数会被拒绝，避免用拉长签名的方式冒充 exact。
+# 声明了纹理却没有采样时也会被拒绝，避免参数只是摆设。
+# 结构体参数必须能在实现里找到定义，避免凭空造一个类型。
+# 绑定值用于把参考选项宏还原成显式数值参数。
+# 布尔绑定还能让严格对照裁掉默认配置不执行的采样分支。
+# 这些规则与参考包的默认配置一起决定最终统计。
+# 新增规则时先补最小例子，再改解析实现。
+# 测试只验证规则，不把当前统计数字写死。
+# 真实参考函数由严格对照产物逐条报告。
+# 这样工具变化不会悄悄把近似结果变成 exact。
+# 每个测试都保持短小，失败时能直接定位规则。
+# 资源类别、使用检查和绑定值是三条独立规则。
+# 三条规则都必须有对应的回归测试。
+# 测试文件本身也要满足中文注释比例。
+# 注释说明为什么存在这条规则，不只复述断言。
+# 规则改动后先跑这个测试文件。
+# 通过后再跑完整严格对照。
+# 完整对照会读取参考包和全部库源码。
+# 测试不读取参考包，也不依赖显卡。
+# 失败信息只指向工具规则本身。
+# 这样排查时不会混入真实光影的复杂度。
+# 资源显式化是本次迁移的核心约束。
+# 参考签名不带的缓冲必须作为参数出现。
+# 结构体可以把多项宿主资源打成一包。
+# 但结构体也必须真实参与调用。
+# 只有满足这些条件才允许继续核对常数与采样。
+# 常数和采样仍由原有规则独立检查。
+# 两者都通过才算 exact。
+# 测试覆盖这条组合路径的最小片段。
+# 新增效果函数时按同样的方式补测试。
+# 测试保持可读，不复制完整实现。
+# 这些注释与代码一起接受项目审计。
+
+# 补充说明：资源参数与参考参数分开检查。
+# 参考参数必须按顺序出现在实现参数表的最前面。
+# 尾部资源参数按名字声明，不按位置猜。
+# 资源缺失或未使用都会报错。
+# 绑定值只允许出现在已声明的数值资源上。
+# 向量绑定按分量展开，颜色默认值才能与参考常数对齐。
+# 这些规则共同保证签名不会被无意拉长。
+# 测试失败时先看差异文本里的资源名。
+# 确认资源名后再检查函数体是否真的使用。
+# 规则改动后同步更新这份说明。
+# 注释比例只是审计门槛，不替代逐条核对。
+# 真实算法仍需参考源码和游戏内画面验证。
+
+# 补充说明：测试名称保持英文，解释保持中文。
+# 断言只检查外部可观察结果。
+# 失败信息要能直接指出规则名称。
+# 新增规则先补测试再改实现。

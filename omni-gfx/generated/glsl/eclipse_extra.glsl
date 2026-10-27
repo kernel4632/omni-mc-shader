@@ -37,7 +37,7 @@ float ogxEclipseMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPo
     vec3 endScreen = ogxViewToScreenSpace(viewPos + viewSliceDir * stepSize, projection); // 一步后的屏幕坐标。
     vec2 rayStep = endScreen.xy - screenPos.xy; // 屏幕步长。
     float pixelScale = max(viewPixelSize.x, max(viewPixelSize.y, viewPixelSize.z)); // 最大像素尺度。
-    vec2 rayPos = screenPos.xy + rayStep * (dither + pixelScale / max(length(rayStep), 1e-6)); // 起点加抖动与一个像素偏移。
+    vec2 rayPos = screenPos.xy + rayStep * (dither + pixelScale / length(rayStep)); // 起点加抖动与一个像素偏移。
     for (int i = 0; i < steps; ++i) // 逐步采样。
     {
         ivec2 pixel = ivec2(clamp(rayPos, 0.0, 1.0) * viewRes * renderScale - 0.5); // 屏幕比例换像素。
@@ -56,13 +56,13 @@ float ogxEclipseMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPo
         maxCosTheta = max(cosTheta, maxCosTheta); // 取最大。
         rayPos += rayStep;
     }
-    return ogxFastAcos(clamp(maxCosTheta, -1.0, 1.0)); // 反余弦得到角度。
+    return ogxFastAcosEclipse(clamp(maxCosTheta, -1.0, 1.0)); // 反余弦得到角度。
 }
 
 // GTAO 环境光遮蔽：沿多个切片各取两个最大水平角，再积分成遮蔽。
 float ogxEclipseAmbientOcclusion(vec3 screenPos, vec3 viewPos, vec3 viewNormal, vec2 dither, int slices,
     float radius, int horizonSteps, float falloffStart, vec3 viewPixelSize, vec2 viewRes, float renderScale,
-    float handDepth, sampler2D depthTexture, mat4 projection, mat4 projectionInverse)
+    float handDepth, float halfPi, sampler2D depthTexture, mat4 projection, mat4 projectionInverse)
 {
     float ao = 0.0; // 累加遮蔽。
     vec3 viewerDir = normalize(-viewPos); // 视线方向。
@@ -81,13 +81,13 @@ float ogxEclipseAmbientOcclusion(vec3 screenPos, vec3 viewPos, vec3 viewNormal, 
         float norm = inversesqrt(lenSq); // 倒数。
         float signGamma = sign(dot(orthoDir, projectedNormal)); // 法线在切片哪一侧。
         float cosGamma = ogxSaturate(dot(projectedNormal, viewerDir) * norm); // 法线与视线夹角余弦。
-        float gamma = signGamma * ogxFastAcos(cosGamma); // 夹角。
+        float gamma = signGamma * ogxFastAcosEclipse(cosGamma); // 夹角。
         vec2 maxHorizonAngles; // 两个方向的最大水平角。
         maxHorizonAngles.x = ogxEclipseMaxHorizonAngle(-viewSliceDir, viewerDir, screenPos, viewPos, dither.y, radius,
             horizonSteps, viewPixelSize, viewRes, renderScale, handDepth, falloffStart, depthTexture, projection, projectionInverse); // 负方向。
         maxHorizonAngles.y = ogxEclipseMaxHorizonAngle(viewSliceDir, viewerDir, screenPos, viewPos, dither.y, radius,
             horizonSteps, viewPixelSize, viewRes, renderScale, handDepth, falloffStart, depthTexture, projection, projectionInverse); // 正方向。
-        maxHorizonAngles = gamma + clamp(vec2(-1.0, 1.0) * maxHorizonAngles - gamma, -OGX_HALF_PI, OGX_HALF_PI); // 限制在半球内。
+        maxHorizonAngles = gamma + clamp(vec2(-1.0, 1.0) * maxHorizonAngles - gamma, -halfPi, halfPi); // 限制在半球内。
         ao += ogxEclipseIntegrateArc(maxHorizonAngles, gamma, cosGamma) * lenSq * norm; // 积分这一段。
     }
     ao *= 1.0 / float(slices); // 取平均。
@@ -208,6 +208,14 @@ vec3 ogxEclipseLightningFlash(vec3 feetPlayerPos, vec4 boltPosition, vec3 worldN
     return lightningEffect * lightningLight * ndotl; // 最终闪电。
 }
 
+// Eclipse 闪电照亮表面入口：参考签名的第二个位置参数不使用，真实位置来自 vec4 闪电缓冲。
+// 为什么保留这个空参数：外部调用点按参考签名传参，库只把真实位置显式接进来。
+vec3 ogxItxIrisLightningflash(vec3 feetPlayerPos, vec3 lightningBoltPos, vec3 worldNormal,
+    inout float phase, vec4 boltPosition, vec3 lightningEffect)
+{
+    return ogxEclipseLightningFlash(feetPlayerPos, boltPosition, worldNormal, lightningEffect, phase);
+}
+
 // 闪电照亮体积云：只按距离衰减。
 vec3 ogxEclipseLightningCloud(vec3 feetPlayerPos, vec4 boltPosition, vec3 lightningEffect)
 {
@@ -239,6 +247,17 @@ vec3 ogxEclipseLightSourcePosition(vec3 worldPos, vec3 cameraPos, float vortexBo
     lightningPos -= randomOffset * 2.5; // 随机偏移。
     if (theOrb) return lightningPos; // 宝珠模式只看闪电位置。
     return mix(lightningPos, vortexPos, vortexBounds); // 按体积混合。
+}
+
+// iterationT 末地光源位置入口：先从第四张缓冲的固定像素取随机偏移，再调用主公式。
+// 为什么单独一层：参考函数内部直接读 `colortex4`，主公式把随机偏移当参数；
+// 严格对照需要把这次取像素放回函数体。
+vec3 ogxItxLightSourcePosition(vec3 worldPos, vec3 cameraPos, float vortexBounds,
+    sampler2D randomTexture, ivec2 randomTexel, vec3 manualLightPos, bool theOrb)
+{
+    vec3 randomOffset = (texelFetch(randomTexture, randomTexel, 0).xyz / 150.0) * 2.0 - 1.0; // 参考实现的随机偏移。
+    return ogxEclipseLightSourcePosition(worldPos, cameraPos, vortexBounds, manualLightPos,
+        randomOffset, theOrb); // 主公式原样转发。
 }
 
 // 末地光源颜色：闪电色与光柱色按体积权重混合。

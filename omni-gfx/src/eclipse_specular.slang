@@ -59,7 +59,7 @@ struct OgxEclipseTranslucentHit
 // 屏幕空间高光追踪的提前声明：环境反射函数会先调用它，定义放在文件后半段。
 float3 ogxEclipseRayTraceSpeculars(float3 dir, float3 position, float dither, float quality, bool hand,
     inout float reflectionLength, inout bool depthCheck, float nearPlane, float farPlane, float renderScale,
-    Sampler2D depthTexture, float4x4 projection, float4x4 projectionInverse);
+    Sampler2D depthTexture, float2 texelSize, bool packedDepth, float4x4 projection);
 
 // 构造一个体素射线任务。
 OgxEclipseRayJob ogxEclipseRayJob(float3 origin, float3 direction){
@@ -96,6 +96,20 @@ OgxEclipseRayHit ogxEclipseAabbIntersection2(float3 currPos, float3 reflectedVec
 }
 
 // 排序两个裁切体素交点：先取较近的，再用贴图 alpha 判断是否穿过去。
+// 裁剪命中排序的提前声明：入口放在定义之前。
+void ogxEclipseSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, float3 stepDir,
+    float2 gtexSize, float2 texCoordOffset, float3 voxelPos, Sampler2D gtexture,
+    inout bool hit, inout float3 shiftedCurrPos, inout float3 stepAxis);
+
+// Eclipse 裁剪命中排序入口：参考签名不把方块贴图写进参数表，库把贴图作为显式资源。
+void ogxItxSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, float3 stepDir,
+    float2 gtexSize, float2 texCoordOffset, float3 voxelPos, inout bool hit,
+    inout float3 shiftedCurrPos, inout float3 stepAxis, Sampler2D gtexture)
+{
+    ogxEclipseSortIntersectionCutout(hit1, hit2, stepDir, gtexSize, texCoordOffset, voxelPos,
+        gtexture, hit, shiftedCurrPos, stepAxis);
+}
+
 void ogxEclipseSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, float3 stepDir,
     float2 gtexSize, float2 texCoordOffset, float3 voxelPos, Sampler2D gtexture,
     inout bool hit, inout float3 shiftedCurrPos, inout float3 stepAxis)
@@ -355,6 +369,22 @@ float3 ogxEclipseDoBlockLightLightingVoxel(float3 lightColor, float lightmap, fl
     return blockLight * torchAmount; // 参考实现的亮度缩放。
 }
 
+// 参考签名版的方块光体素曲线：只保留 `specular.glsl` 默认分支里的光照图曲线。
+// 为什么单独一份：增强版还会混入 LPV 与手持光，默认路径的常数集合会多出参考没有的值；
+// 严格对照需要一个只做参考算式的入口，调用方按需选择增强版或这一份。
+float3 ogxEclipseDoBlockLightLightingVoxelExact(float3 lightColor, float lightmap, float3 lpvSample,
+    float3 handLight, float torchAmount)
+{
+    lightmap = clamp(lightmap, 0.0, 1.0); // 参考实现先把光照图夹到合法范围。
+    float lightmapBrightspot = min(max(lightmap - 0.7, 0.0) * 3.3333, 1.0); // 高亮区线性起点。
+    lightmapBrightspot *= lightmapBrightspot * lightmapBrightspot; // 三次方让高亮区收窄。
+    float lightmapLight = 1.0 - sqrt(1.0 - lightmap); // 平方根曲线。
+    lightmapLight *= lightmapLight; // 再平方，暗部抬升更明显。
+    float lightmapCurve = lerp(lightmapLight, 2.5, lightmapBrightspot); // 高亮区混向固定亮度。
+    float3 blockLight = lightmapCurve * lightColor; // 光照图乘方块光颜色。
+    return blockLight * torchAmount; // 参考实现最后乘火把亮度。
+}
+
 // 间接光：Eclipse 的 `doIndirectLighting`，把光照图曲线乘到环境光上。
 float3 ogxEclipseDoIndirectLighting(float3 lightColor, float3 minimumLightColor, float lightmap,
     float ambientBrightness, float minLightAmount, float minLightAmountInside, float nightVision)
@@ -475,7 +505,6 @@ vec4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHi
 // 反射可见度：按 f0 与粗糙度判断高光是否值得显示，避免粗糙金属被反射糊满。
 float ogxEclipseGetReflectionVisibility(float f0, float roughness, float roughnessThreshold)
 {
-    if (roughnessThreshold < 1.0) return 0.0; // 阈值太低就没有反射。
     float thresholdValue = roughnessThreshold / 100.0; // 参考实现的百分比。
     float dialectrics = max(f0 * 255.0 - 26.0, 0.0) / 229.0; // 非金属比例。
     float value = 0.35; // 第一段阈值。
@@ -496,13 +525,14 @@ float ogxEclipseGetReflectionVisibility(float f0, float roughness, float roughne
 // 环境反射：屏幕空间追踪加历史重投影，天空回退由调用方在 `backgroundReflection` 里处理。
 vec4 ogxEclipseGetEnvironmentReflections(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
     float3 viewPos, float2 noise, bool isHand, float roughness, inout float backgroundReflectMask,
-    inout float3 backgroundTint, float quality, Sampler2D sceneTexture, Sampler2D depthTexture,
+    inout float3 backgroundTint, bool isEyeInWater, float quality, Sampler2D sceneTexture, Sampler2D depthTexture,
     float4x4 projection, float4x4 projectionInverse, float4x4 modelView, float4x4 modelViewInverse,
     float4x4 previousProjection, float4x4 previousModelView, float nearPlane, float farPlane,
     float3 cameraDelta, float renderScale, float2 texelSize, float usePhotonics)
 {
     vec4 reflection = vec4(0.0); // 反射结果。
     float reflectionLength = 0.0; // 反射长度。
+    quality = quality > 0.0 ? quality : 30.0; // 参考实现的默认前向 SSR 质量。
     if (usePhotonics > 0.5) // Photonics 路径。
     {
         if (dot(reflectedVector, flatNormal) < 0.0) return reflection; // 射线朝表面内侧。
@@ -511,7 +541,7 @@ vec4 ogxEclipseGetEnvironmentReflections(float3 reflectedVector, float3 flatNorm
     bool depthCheck = false; // 深度检查。
     float3 raytracePos = ogxEclipseRayTraceSpeculars(ogxMatrix3MulPoint(float3x3(modelView), reflectedVector), viewPos,
         noise.y, quality, isHand, reflectionLength, depthCheck, nearPlane, farPlane, renderScale,
-        depthTexture, projection, projectionInverse); // 屏幕空间追踪。
+        depthTexture, texelSize, true, projection); // 屏幕空间追踪，读四分之一分辨率打包深度。
     if (raytracePos.z > 1.00001) return reflection; // 没命中。
     reflectionLength = min(max(reflectionLength - 0.1, 0.0) / 0.9, 1.0); // 参考实现的长度重整。
     float lod = lerp(0.0, 6.0 * (1.0 - exp(-15.0 * sqrt(roughness))), 1.0 - pow(1.0 - reflectionLength, 5.0)); // 粗糙度决定层级。
@@ -521,7 +551,7 @@ vec4 ogxEclipseGetEnvironmentReflections(float3 reflectedVector, float3 flatNorm
     if (previousPosition.x > 0.0 && previousPosition.y > 0.0 && previousPosition.x < 1.0 && previousPosition.y < 1.0)
     {
         if (raytracePos.z > 0.9999999) backgroundReflectMask = 1.0; // 天空命中。
-        reflection.a = raytracePos.z > 0.9999999 ? 1.0 : 1.0; // 参考实现的主世界分支。
+        reflection.a = raytracePos.z > 0.9999999 ? (isHand || isEyeInWater ? 1.0 : 0.0) : 1.0; // 天空命中只有手或水下才当作反射。
         reflection.rgb = sceneTexture.SampleLevel(previousPosition.xy, lod).rgb; // 读历史颜色。
     }
     return reflection; // 交回反射。
@@ -530,7 +560,7 @@ vec4 ogxEclipseGetEnvironmentReflections(float3 reflectedVector, float3 flatNorm
 // 屏幕空间高光追踪：参考实现的 `rayTraceSpeculars`，支持远景矩阵与手部跳过。
 float3 ogxEclipseRayTraceSpeculars(float3 dir, float3 position, float dither, float quality, bool hand,
     inout float reflectionLength, inout bool depthCheck, float nearPlane, float farPlane, float renderScale,
-    Sampler2D depthTexture, float4x4 projection, float4x4 projectionInverse)
+    Sampler2D depthTexture, float2 texelSize, bool packedDepth, float4x4 projection)
 {
     const float biasAmount = 0.0001; // 深度偏差。
     float3 clipPosition = ogxToClipSpace3(position, projection); // 起点。
@@ -544,14 +574,16 @@ float3 ogxEclipseRayTraceSpeculars(float3 dir, float3 position, float dither, fl
     clipPosition.xy *= renderScale;
     stepv.xy *= renderScale;
     float3 spos = clipPosition + stepv * (dither * 0.5 + 0.5); // 起点加抖动。
-    spos += float3(0.5 * texelFetchSize(depthTexture), 0.0); // 半像素偏移。
+    spos += float3(0.5 * texelSize, 0.0); // 半像素偏移。
     float minZ = spos.z - 0.00025 / ogxEclipseLinZ(spos.z, nearPlane, farPlane); // 深度下界。
     float maxZ = spos.z; // 深度上界。
     float3 hitPos = float3(1.1); // 默认没有命中。
     for (int i = 0; i <= int(quality); i++) // 固定步数。
     {
         if (!hand && (spos.x < 0.0 || spos.x > 1.0 || spos.y < 0.0 || spos.y > 1.0)) return float3(1.1); // 手部允许出屏。
-        float sp = depthTexture.Load(int3(int2(spos.xy / texelFetchSize(depthTexture)), 0)).r; // 读深度。
+        float sp; // 屏幕深度；打包格式从 alpha 通道解码。
+        if (packedDepth) { sp = ogxEclipseInvLinZ(sqrt(depthTexture.Load(int3(int2(spos.xy / texelSize / 4.0), 0)).a / 65000.0), nearPlane, farPlane); }
+        else { sp = depthTexture.Load(int3(int2(spos.xy / texelSize), 0)).r; }
         if (sp < max(minZ, maxZ) && sp > min(minZ, maxZ)) // 命中。
         {
             hitPos = float3(spos.xy / renderScale, sp);
@@ -593,15 +625,15 @@ vec3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Npla
     float shlickFresnel = ogxEclipseShlickFresnelRoughness(VdotN, roughness); // 粗糙菲涅耳。
     albedo = f0 == 1.0 ? sqrt(albedo) : albedo; // 金属用底色。
     float3 metalAlbedoTint = isMetal ? albedo : float3(1.0); // 金属染色。
-    float3 hardCodedMetalsF0[8] = float3[8](
-        float3(0.531228825312, 0.51235724246, 0.495828545714),
-        float3(0.944229966045, 0.77610211732, 0.373402004593),
-        float3(0.912298031535, 0.91385063144, 0.919680580954),
-        float3(0.55559681715, 0.55453707574, 0.554779427513),
-        float3(0.925952196272, 0.72090163805, 0.504154241735),
-        float3(0.632483812932, 0.62593707362, 0.641478899539),
-        float3(0.678849234658, 0.64240055565, 0.588409633571),
-        float3(0.961999998804, 0.94946811207, 0.922115710997)); // 参考实现的八种金属。
+    float3 hardCodedMetalsF0[8]; // ????????????????? GLSL 330?
+    hardCodedMetalsF0[0] = float3(0.531228825312, 0.51235724246, 0.495828545714);
+    hardCodedMetalsF0[1] = float3(0.944229966045, 0.77610211732, 0.373402004593);
+    hardCodedMetalsF0[2] = float3(0.912298031535, 0.91385063144, 0.919680580954);
+    hardCodedMetalsF0[3] = float3(0.55559681715, 0.55453707574, 0.554779427513);
+    hardCodedMetalsF0[4] = float3(0.925952196272, 0.72090163805, 0.504154241735);
+    hardCodedMetalsF0[5] = float3(0.632483812932, 0.62593707362, 0.641478899539);
+    hardCodedMetalsF0[6] = float3(0.678849234658, 0.64240055565, 0.588409633571);
+    hardCodedMetalsF0[7] = float3(0.961999998804, 0.94946811207, 0.922115710997); // 参考实现的八种金属。
     float3 hardCodedMetals = f0 == 1.0 ? albedo : hardCodedMetalsF0[int(clamp(f0 * 255.0 - 229.5, 0.0, 7.0))]; // 金属 f0。
     float3 reflectance = isMetal ? hardCodedMetals : float3(f0); // 反射率。
     float3 F0 = (reflectance + (1.0 - reflectance) * shlickFresnel) * metalAlbedoTint; // 菲涅耳。
@@ -618,9 +650,9 @@ vec3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Npla
         {
             environmentReflection = ogxEclipseGetEnvironmentReflections(reflectedVector, flatNormal, normal,
                 playerPos, viewPos, noise, isHand, roughness, backgroundReflectMask, backgroundTint,
-                1.0, sceneTexture, depthTexture, projection, projectionInverse, modelView, modelViewInverse,
+                false, 1.0, sceneTexture, depthTexture, projection, projectionInverse, modelView, modelViewInverse,
                 previousProjection, previousModelView, nearPlane, farPlane, cameraDelta, renderScale,
-                texelSize, 0.0); // 不用 Photonics。
+                texelSize, 0.0); // 不用 Photonics；主世界默认不在水里。
             specular = lerp(specular, environmentReflection.rgb, environmentReflection.a); // 合并环境反射。
         }
         specular = lerp(darkened, specular, F0); // 按菲涅耳混合。

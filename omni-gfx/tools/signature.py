@@ -43,6 +43,10 @@ TYPE_ALIASES = {
     "mat4x2": "float4x2", "mat4x3": "float4x3",
     "sampler2d": "sampler2d", "sampler3d": "sampler3d", "samplercube": "samplercube",
     "sampler2dshadow": "sampler2dshadow", "sampler2darray": "sampler2darray",
+    # 库里的结构体带 Ogx 前缀，参考包直接用短名；类型身份相同，字段由人工核对。
+    "ogxeclipserayhit": "rayhit", "ogxeclipserayjob": "rayjob",
+    "ogxeclipsetranslucenthit": "translucenthit",
+    "ogxmaterialmask": "materialmask", "ogxgiview": "giview",
 }
 
 # 参数前的修饰词不是类型的一部分，但 in/out/inout 会改变调用约定，必须保留。
@@ -65,7 +69,8 @@ BUILTIN_MATH = {"sqrt": math.sqrt, "rsqrt": lambda x: 1.0 / math.sqrt(x), "abs":
                 "acos": math.acos, "asin": math.asin, "atan": math.atan, "cos": math.cos,
                 "sin": math.sin, "tan": math.tan, "exp": math.exp, "log": math.log,
                 "pow": math.pow, "floor": math.floor, "ceil": math.ceil,
-                "min": min, "max": max, "clamp": lambda x, a, b: min(max(x, a), b)}
+                "min": min, "max": max, "clamp": lambda x, a, b: min(max(x, a), b),
+                "int": int, "uint": int}
 
 
 def normalize_type(raw: str) -> str:
@@ -117,7 +122,9 @@ def parse_params(text: str) -> list[dict]:
             type_text = " ".join(type_words[:-1])
         else:
             type_text = " ".join(type_words)
-        params.append({"direction": direction, "type": normalize_type(type_text), "raw": cleaned})
+        name = type_words[-1] if len(type_words) >= 2 else ""
+        params.append({"direction": direction, "type": normalize_type(type_text), "raw": cleaned,
+                       "name": name})
     return params
 
 
@@ -209,6 +216,39 @@ def preprocess(text: str, defines: dict[str, str]) -> str:
     return "".join(out)
 
 
+def preprocess_first_branch(text: str) -> str:
+    """保留每个条件编译的第一分支，用来读取默认配置未启用的参考函数。
+
+    为什么需要：体素、Photonics 与调试函数常被 `#ifdef` 整段包住，默认预处理后
+    函数根本不存在。严格对照仍要核对它们的算式；这里固定选第一分支，作为“功能
+    开启时”的唯一变体，避免把 `#else` 的两套采样混在一起。
+    """
+    out = []
+    stack: list[bool] = []
+    active = True
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        keyword = ""
+        if stripped.startswith("#"):
+            match = re.match(r"#\s*(\w+)", stripped)
+            keyword = match.group(1) if match else ""
+        if keyword in ("if", "ifdef", "ifndef"):
+            stack.append(active)
+            active = True
+            keep = False
+        elif keyword in ("elif", "else"):
+            active = False
+            keep = False
+        elif keyword == "endif" and stack:
+            active = stack.pop()
+            keep = False
+        else:
+            keep = active
+        newline = "\n" if line.endswith("\n") else ""
+        out.append(line if keep else newline)
+    return "".join(out)
+
+
 def collect_defines(paths: list[Path], base: dict[str, str] | None = None) -> dict[str, str]:
     """收集默认配置下的对象式宏；迭代三遍让条件里的宏也稳定下来。
 
@@ -269,7 +309,8 @@ def read_profile_defines(path: Path) -> dict[str, str]:
     return defines
 
 
-def parse_functions(path: Path, defines: dict[str, str] | None = None) -> list[dict]:
+def parse_functions(path: Path, defines: dict[str, str] | None = None,
+                    first_branch: bool = False) -> list[dict]:
     """解析一个源文件的函数定义，返回名字、行号、返回类型、参数与函数体。
 
     判据与旧对照工具一致：行首是返回类型，名字后紧跟参数表，参数表右括号后只能有
@@ -277,7 +318,10 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None) -> list[d
     传入 `defines` 时先按默认配置预处理，未选中的条件分支不会进入签名比较。
     """
     raw = path.read_text(encoding="utf-8", errors="replace")
-    text = strip_comments(preprocess(raw, defines) if defines is not None else raw)
+    if first_branch:
+        text = strip_comments(preprocess_first_branch(raw))
+    else:
+        text = strip_comments(preprocess(raw, defines) if defines is not None else raw)
     found = []
     for match in re.finditer(r"\b([A-Za-z_]\w*)\s*\(", text):
         name = match.group(1)
@@ -403,6 +447,14 @@ def evaluate_constant(expression: str, table: dict) -> list[float] | None:
     if text == "false":
         return [0.0]
     text = re.sub(r"//.*$", "", text).strip()
+    ternary = split_ternary(text)
+    if ternary is not None:
+        condition, when_true, when_false = ternary
+        bool_table = {name: bool(value[0]) for name, value in table.items()
+                      if value is not None and len(value) == 1}
+        value = evaluate_bool_expression(condition, bool_table)
+        if value is not None:
+            text = when_true if value else when_false
     text = re.sub(r"\b(?:float|vec2|vec3|vec4|float2|float3|float4|mat2|mat3|mat4|"
                   r"float2x2|float3x3|float4x4)\s*\(", "(", text)
     text = re.sub(r"\bPI\b", f"({math.pi!r})", text)
@@ -587,6 +639,21 @@ def split_bool_operator(text: str, operator: str) -> list[str]:
     return parts
 
 
+def nearest_declaration(text: str, position: int, name: str) -> str | None:
+    """在循环前找同名局部声明的右侧表达式，解决同名局部量在不同作用域重复声明。
+
+    参考函数里 SSS 循环和 VPS 循环都写 `const float steps = ...`，但取值不同。
+    只按名字查全局作用域会把两个循环都算成后一个值，采样次数因此失真。
+    这里从循环位置向前找最近一次声明，取它自己的右侧表达式。
+    """
+    pattern = re.compile(
+        rf"(?:const\s+)?(?:float|int|uint)\s+{re.escape(name)}\s*=\s*([^;]+);")
+    last = None
+    for match in pattern.finditer(text, 0, position):
+        last = match
+    return last.group(1).strip() if last else None
+
+
 def unroll_constant_loops(body: str, scope: dict) -> str:
     """把边界能静态求值的 `for` 循环按迭代次数展开，供采样与常数统计使用。
 
@@ -603,7 +670,14 @@ def unroll_constant_loops(body: str, scope: dict) -> str:
         changed = False
         for match in reversed(list(pattern.finditer(text))):
             start_value = evaluate_constant(match.group(2), scope)
-            end_value = evaluate_constant(match.group(4), scope)
+            end_expression = match.group(4).strip()
+            end_value = None
+            if re.fullmatch(r"[A-Za-z_]\w*", end_expression):
+                declaration = nearest_declaration(text, match.start(), end_expression)
+                if declaration is not None:
+                    end_value = evaluate_constant(declaration, scope)
+            if end_value is None:
+                end_value = evaluate_constant(end_expression, scope)
             if not start_value or not end_value or len(start_value) != 1 or len(end_value) != 1:
                 continue
             start, end = start_value[0], end_value[0]
@@ -813,6 +887,28 @@ def call_sites(body: str) -> list[tuple[str, int]]:
     return sites
 
 
+def evaluate_argument(argument: str, scope: dict, bool_scope: dict) -> list[float] | None:
+    """把调用实参算成常数；支持 `bool(...)`、`int(...)` 这类显式转换。
+
+    Host 层常把选项宏写成 `bool(OMNI_COLORED_SHADOWS)`。直接求值会失败，循环和
+    分支因此无法折叠，严格对照会把另一种配置的采样也算进来。这里先剥掉转换，
+    用内部表达式的数值决定真假；只处理能静态求值的实参。
+    """
+    value = evaluate_constant(argument, scope)
+    if value is not None:
+        return value
+    text = argument.strip()
+    match = re.fullmatch(r"(?:bool|int|uint)\s*\((.*)\)", text, flags=re.S)
+    if match:
+        inner = evaluate_constant(match.group(1).strip(), scope)
+        if inner is not None and len(inner) == 1:
+            return [1.0 if inner[0] != 0.0 else 0.0]
+    bool_value = evaluate_bool_expression(argument, bool_scope)
+    if bool_value is not None:
+        return [1.0 if bool_value else 0.0]
+    return None
+
+
 def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, list[float]],
                  depth: int = 0, stack: tuple[str, ...] = (),
                  cache: dict[tuple, tuple[list[float], list[str], list[str]]] | None = None,
@@ -852,14 +948,17 @@ def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, 
     bound_names = {name for name in bindings if name in parameter_names}
     base_scope.update({name: value for name, value in bindings.items()
                        if name in parameter_names and param_types.get(name) != 'bool'})
-    local = local_constants(body, base_scope)
-    scope = {**base_scope, **local}
     # 布尔实参与局部布尔量单独记录：它们决定 `if` 分支是否在默认配置下执行，
     # 不能混进数值常数集合，否则 0 和 1 会被误当成算式常数。
     bool_bindings = {}
     for name, value in bindings.items():
         if name in parameter_names and param_types.get(name) == 'bool' and len(value) == 1:
             bool_bindings[name] = bool(value[0])
+    # 布尔实参在分支裁剪里按真假使用；计算局部常量时也给出 1/0，
+    # 否则 `bool ? 13 / 2 : 1` 这类循环次数无法折叠。
+    numeric_bool_scope = {name: [1.0 if value else 0.0] for name, value in bool_bindings.items()}
+    local = local_constants(body, {**base_scope, **numeric_bool_scope})
+    scope = {**base_scope, **local}
     bool_scope = local_bools(body, bool_bindings)
     body = prune_static_branches(body, bool_scope)
     body = unroll_constant_loops(body, scope)
@@ -907,19 +1006,23 @@ def collect_tree(item: dict, index: dict[str, list[dict]], constants: dict[str, 
         # 函数调用：按实参个数挑同名重载；找不到时只当作未知调用跳过。
         args = arguments_at(text, end)
         candidates = [entry for entry in index.get(token, []) if len(entry["params"]) == args]
+        if len(candidates) > 1:
+            # 同名同参数个数的重载优先取调用者所在文件的定义。参考包的
+            # `CalculateCameraVelocity` 在 TAA 与 MotionBlur 各有一份，参数个数相同但
+            # 类型不同；只按参数个数取第一个会把十次深度采样算进动态模糊。
+            same_file = [entry for entry in candidates
+                         if Path(entry.get("path", "")).name == Path(item.get("path", "")).name]
+            if same_file:
+                candidates = same_file
         if not candidates or token in stack or depth >= 12:
             continue
-        callee = candidates[0]  # 同名同参数个数的重载极少；仍有多个时取源码顺序第一个。
+        callee = candidates[0]  # 同名同参数个数的重载极少；仍有多个时取同文件或源码顺序第一个。
         arg_texts = argument_texts(text, end)
         callee_bindings = {}
         if len(arg_texts) == len(callee["params"]):
             for param, arg in zip(callee["params"], arg_texts):
                 param_name = param["raw"].split()[-1] if param["raw"].split() else ""
-                value = evaluate_constant(arg, scope)
-                if value is None:
-                    bool_value = evaluate_bool_expression(arg, bool_scope)
-                    if bool_value is not None:
-                        value = [1.0 if bool_value else 0.0]
+                value = evaluate_argument(arg, scope, bool_scope)
                 if param_name and value is not None:
                     callee_bindings[param_name] = value
         sub_numbers, sub_samples, sub_unresolved = collect_tree(
@@ -975,11 +1078,12 @@ def arguments_at(text: str, open_paren: int) -> int:
     return count
 
 
-def index_by_function_name(paths: list[Path], defines: dict[str, str] | None = None) -> dict[str, list[dict]]:
+def index_by_function_name(paths: list[Path], defines: dict[str, str] | None = None,
+                           first_branch: bool = False) -> dict[str, list[dict]]:
     """按函数名分组，供调用图按实参个数挑选重载。"""
     index: dict[str, list[dict]] = {}
     for path in sorted(paths):
-        for item in parse_functions(path, defines):
+        for item in parse_functions(path, defines, first_branch):
             item["path"] = path.as_posix()
             index.setdefault(item["name"], []).append(item)
     return index
@@ -991,31 +1095,152 @@ def normalize_body(body: str) -> str:
     return text
 
 
+TEXTURE_PREFIXES = ("sampler", "usampler", "isampler")
+MATRIX_TYPES = {"float2x2", "float3x3", "float4x4", "float2x3", "float2x4",
+                "float3x2", "float3x4", "float4x2", "float4x3"}
+
+
+def is_texture_type(type_name: str) -> bool:
+    """判断参数类型是否为纹理句柄；采样器在库外由调用方绑定。"""
+    return type_name.startswith(TEXTURE_PREFIXES)
+
+
+def is_matrix_type(type_name: str) -> bool:
+    """判断参数类型是否为矩阵；矩阵来自相机或阴影阶段。"""
+    return type_name in MATRIX_TYPES
+
+
+def struct_definitions(paths: list[Path], defines: dict[str, str] | None = None) -> dict[str, list[str]]:
+    """收集结构体字段类型，供“资源结构体必须含纹理或矩阵”检查使用。"""
+    table: dict[str, list[str]] = {}
+    for path in sorted(paths):
+        raw = path.read_text(encoding="utf-8", errors="replace")
+        text = strip_comments(preprocess(raw, defines) if defines is not None else raw)
+        for match in re.finditer(r"\bstruct\s+([A-Za-z_]\w*)\s*\{", text):
+            name = match.group(1)
+            brace = text.find("{", match.start())
+            end = matching_delimiter(text, brace, "{", "}")
+            if end < 0:
+                continue
+            fields = []
+            for line in text[brace + 1:end].split(";"):
+                cleaned = line.strip()
+                if not cleaned:
+                    continue
+                words = [word for word in re.split(r"\s+", cleaned) if word not in QUALIFIERS]
+                if len(words) >= 2:
+                    fields.append(normalize_type(" ".join(words[:-1])))
+            table[name.lower()] = fields
+            table[normalize_type(name)] = fields
+    return table
+
+
+def resource_issue(param: dict, kind: str, impl: dict, structs: dict[str, list[str]]) -> str | None:
+    """检查一个新增参数是否真的属于已声明的宿主资源。
+
+    允许四类资源：纹理、矩阵、结构体与显式数值。结构体必须至少含一个纹理或矩阵
+    字段，避免把普通业务数据伪装成资源参数；任何新增参数都必须在函数体里出现，
+    否则只是把签名撑长，没有把输入真正接进算法。
+    """
+    name = param.get("name", "")
+    if not name:
+        return f"资源参数缺少名字：{param['raw']}"
+    if not re.search(rf"\b{re.escape(name)}\b", impl["body"]):
+        return f"资源参数未在函数体使用：{name}"
+    if kind == "texture":
+        if not is_texture_type(param["type"]):
+            return f"资源参数 {name} 不是纹理：{param['type']}"
+        return None
+    if kind == "matrix":
+        if not is_matrix_type(param["type"]):
+            return f"资源参数 {name} 不是矩阵：{param['type']}"
+        return None
+    if kind == "struct":
+        fields = structs.get(param["type"], [])
+        if not fields:
+            return f"资源结构体 {param['type']} 没有定义"
+        return None
+    if kind == "value":
+        if is_texture_type(param["type"]) or is_matrix_type(param["type"]):
+            return f"数值资源 {name} 实际是纹理或矩阵：{param['type']}"
+        return None
+    return f"未知资源类别：{name}={kind}"
+
+
 def compare(ref: dict, impl: dict, ref_constants: dict, lib_constants: dict,
             structs: dict[str, list[str]] | None = None,
             ref_index: dict[str, list[dict]] | None = None,
             impl_index: dict[str, list[dict]] | None = None,
-            allow_extra_constants: bool = False) -> dict:
+            allow_extra_constants: bool = False,
+            resources: dict[str, str] | None = None,
+            bindings: dict[str, float] | None = None) -> dict:
     """比较两份签名与算式，返回可直接写进报告的差异列表与证据字段。
 
     `ref_index` 与 `impl_index` 给出时沿调用图收集常数与采样；否则只比较函数体本身。
     `allow_extra_constants` 用于宿主转发层：参考常数必须全部出现，实现多出的常量
     可能来自显式化的宿主参数，不算缺失，但会记录在证据里供人工复核。
+
+    `resources` 给出参考签名之后允许追加的宿主资源参数，键是参数名，值是
+    texture/matrix/struct/value。参考参数必须逐项出现在实现参数表的最前面；
+    追加参数必须有声明、在函数体使用，纹理与矩阵的类型还要对得上。这样算法可以
+    在库里显式接收阴影图、深度图和相机矩阵，而不是把整个效果藏在宿主胶水里。
+    `bindings` 给新增数值参数提供默认值。参考里的选项宏通常是常数，显式参数化后
+    常数会消失；绑定值必须真的出现在参考常数集合里，才允许补回实现侧。
     """
     issues = []
     if ref["return"] != impl["return"]:
         issues.append(f"return {ref['returnRaw']} != {impl['returnRaw']}")
     ref_params = [(p["direction"], p["type"]) for p in ref["params"]]
     impl_params = [(p["direction"], p["type"]) for p in impl["params"]]
-    if len(ref_params) != len(impl_params):
-        issues.append(f"param count {len(ref_params)} != {len(impl_params)}")
+    if resources is None:
+        if len(ref_params) != len(impl_params):
+            issues.append(f"param count {len(ref_params)} != {len(impl_params)}")
+        else:
+            for index, (left, right) in enumerate(zip(ref_params, impl_params), start=1):
+                if left != right:
+                    issues.append(f"param {index} {left[1]}/{left[0]} != {right[1]}/{right[0]}")
     else:
-        for index, (left, right) in enumerate(zip(ref_params, impl_params), start=1):
-            if left != right:
-                issues.append(f"param {index} {left[1]}/{left[0]} != {right[1]}/{right[0]}")
+        if len(impl_params) < len(ref_params):
+            issues.append(f"param count {len(ref_params)} > {len(impl_params)}")
+        else:
+            for index, (left, right) in enumerate(zip(ref_params, impl_params), start=1):
+                if left != right:
+                    issues.append(f"param {index} {left[1]}/{left[0]} != {right[1]}/{right[0]}")
+            declared = dict(resources)
+            extras = impl["params"][len(ref["params"]):]
+            present = {param.get("name", "") for param in extras}
+            for name in declared:
+                if name not in present:
+                    issues.append(f"资源参数不存在：{name}")
+            table = structs or {}
+            for param in extras:
+                name = param.get("name", "")
+                if name not in declared:
+                    issues.append(f"未声明的追加参数：{name}")
+                    continue
+                problem = resource_issue(param, declared[name], impl, table)
+                if problem:
+                    issues.append(problem)
+            impl_numbers_extra = []
+            for name, value in (bindings or {}).items():
+                if name not in declared:
+                    issues.append(f"绑定值没有对应资源参数：{name}")
+                    continue
+                if isinstance(value, bool):
+                    continue
+                if isinstance(value, (list, tuple)):
+                    impl_numbers_extra.extend(float(item) for item in value)
+                else:
+                    impl_numbers_extra.append(float(value))
     if ref_index is not None and impl_index is not None:
         ref_numbers_raw, ref_samples, ref_unknown = collect_tree(ref, ref_index, ref_constants)
-        impl_numbers_raw, impl_samples, impl_unknown = collect_tree(impl, impl_index, lib_constants)
+        impl_numbers_raw, impl_samples, impl_unknown = collect_tree(
+            impl, impl_index, lib_constants,
+            bindings={name: ([float(item) for item in value] if isinstance(value, (list, tuple))
+                             else [1.0 if value is True else 0.0 if value is False else float(value)])
+                      for name, value in (bindings or {}).items()})
+        if resources is not None:
+            impl_numbers_raw = list(impl_numbers_raw) + impl_numbers_extra
         ref_numbers = dedupe(ref_numbers_raw)
         impl_numbers = dedupe(impl_numbers_raw)
     else:

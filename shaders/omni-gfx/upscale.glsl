@@ -151,6 +151,15 @@ vec3 ogxCas(sampler2D colorTex, vec3 sampleE, ivec2 texelCoord, float sharpness,
 }
 
 // 放大后的锐化：邻域布局与上面相同，样本取自放大输出画面，用于压低放大带来的软边。
+// FSR1 的提前声明：入口放在定义之前。
+vec3 ogxFsr1(sampler2D upscaledTex, ivec2 texelCoord, float sharpness, bool denoise);
+
+// Eclipse FSR1 入口：参考签名只给像素坐标，源纹理与锐化参数由宿主提供。
+vec3 ogxItxFsr1(ivec2 texelCoord, sampler2D upscaledTex, float sharpness, bool denoise)
+{
+    return ogxFsr1(upscaledTex, texelCoord, sharpness, denoise);
+}
+
 vec3 ogxFsr1(sampler2D upscaledTex, ivec2 texelCoord, float sharpness, bool denoise)
 {
     vec3 sampleE = texelFetch(upscaledTex, texelCoord + ivec2(0, 0), 0).rgb; // 中心样本。

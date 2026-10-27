@@ -66,8 +66,18 @@ def reference_environment() -> tuple[dict, dict, dict]:
         paths = sorted(root.rglob("*.glsl"))
         macro = signature.collect_defines(paths, {"MC_VERSION": VERSION})
         defines[pack] = macro
-        index[pack] = signature.index_by_function_name(paths, macro)
+        active = signature.index_by_function_name(paths, macro)
+        # 默认配置未启用的函数被预处理器整段删掉；再按“第一分支”解析一次，
+        # 只补缺失的名字，活动函数仍使用默认配置，避免改变已有严格结论。
+        raw = signature.index_by_function_name(paths, first_branch=True)
+        for name, items in raw.items():
+            if name not in active:
+                active[name] = items
+        index[pack] = active
         constants[pack] = signature.global_constant_table(paths, macro)
+        raw_constants = signature.global_constant_table(paths)
+        for name, value in raw_constants.items():
+            constants[pack].setdefault(name, value)
     return index, constants, defines
 
 
@@ -116,20 +126,45 @@ def pick_variant(refs: list[dict], candidates: list[dict]) -> tuple[dict, dict] 
     return None
 
 
+def pick_resource_variant(refs: list[dict], candidates: list[dict]) -> tuple[dict, dict] | None:
+    """选一对“参考签名是前缀、实现尾部追加资源参数”的组合。
+
+    为什么单独一条路径：参考函数经常不把阴影图、深度图或相机矩阵写进参数表，
+    这些输入由宿主全局量提供。显式迁进库后实现签名会更长，但它仍然是同一个算法；
+    只要参考参数逐项出现在最前面，尾部参数再由台账声明为资源，就可以继续严格核对。
+    """
+    for ref in refs:
+        ref_params = [(p["direction"], p["type"]) for p in ref["params"]]
+        for candidate in candidates:
+            if candidate["return"] != ref["return"]:
+                continue
+            candidate_params = [(p["direction"], p["type"]) for p in candidate["params"]]
+            if len(candidate_params) < len(ref_params):
+                continue
+            if candidate_params[:len(ref_params)] == ref_params:
+                return ref, candidate
+    return None
+
+
 def resolve_implementation(name: str, refs: list[dict], entry: dict,
                            library: dict, path_index: dict, impl_index: dict) -> tuple[dict, dict, str] | None:
-    """给一条参考记录选实现：优先台账目标，其次宿主层同名同签名函数。
+    """给一条参考记录选实现：优先台账目标，其次宿主层同名函数。
 
     返回 `(参考重载, 实现, 层名)`。层名用于决定常数是否允许实现多出。
     没有同签名候选时仍返回最接近的一对，让报告能写出具体差异，而不是只报“找不到”。
+    台账声明 resources 时允许实现尾部追加显式资源参数。
     """
     target = entry.get("target", "")
+    resources = entry.get("resources")
+    picker = pick_resource_variant if resources is not None else pick_variant
     ledger = library.get(target) or library.get(target.split("#")[0]) or path_index.get(target)
+    if ledger is None and ":" in target:
+        ledger = next(iter(impl_index.get(target.rsplit(":", 1)[1], [])), None)
     if ledger is not None:
-        pair = pick_variant(refs, [ledger])
+        pair = picker(refs, [ledger])
         if pair:
             return pair[0], pair[1], "library"
-    pair = pick_variant(refs, impl_index.get(name, []))
+    pair = picker(refs, impl_index.get(name, []))
     if pair:
         return pair[0], pair[1], "host"
     if ledger is not None:
@@ -143,7 +178,8 @@ def resolve_implementation(name: str, refs: list[dict], entry: dict,
 def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[str]]:
     """把参考函数、人工台账与自动核对合并成一条条记录。"""
     ref_index, ref_constants, _ = reference_environment()
-    impl_index, impl_constants, _, path_index = implementation_environment()
+    impl_index, impl_constants, impl_defines, path_index = implementation_environment()
+    impl_structs = signature.struct_definitions(IMPL_PATHS, impl_defines)
     library = signature.function_index(sorted((LIB / "src").glob("*.slang")))
     exact = review.get("exact", {})
     glue = review.get("mcGlue", {})
@@ -173,19 +209,30 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
                                            "找不到实现；台账目标不存在", ""))
                 continue
             ref, impl, layer = resolved
-            allow_extra = (layer == "host" or bool(entry.get("adapter"))) and "--strict-constants" not in sys.argv[1:]
+            resources = entry.get("resources")
+            bindings = entry.get("bindings") or {}
+            allow_extra = (layer == "host" or bool(entry.get("adapter"))
+                           or bool(entry.get("allowExtraConstants"))) \
+                and "--strict-constants" not in sys.argv[1:]
             # 参考包有时在不同目录定义同名同签名的变体（例如 `luma` 的 Rec.601 与
             # 另一套权重）。实现只要与其中一个变体完全一致就算 exact，不能因为排序
             # 先读到另一个变体就误判。
-            impl_signature = (impl["return"], tuple((p["direction"], p["type"]) for p in impl["params"]))
-            candidates = [item for item in refs
-                          if (item["return"], tuple((p["direction"], p["type"]) for p in item["params"]))
-                          == impl_signature]
+            candidates = []
+            for item in refs:
+                item_params = [(p["direction"], p["type"]) for p in item["params"]]
+                if resources is None:
+                    if (item["return"], item_params) == (impl["return"],
+                                                         [(p["direction"], p["type"]) for p in impl["params"]]):
+                        candidates.append(item)
+                elif item["return"] == impl["return"] and \
+                        [(p["direction"], p["type"]) for p in impl["params"]][:len(item_params)] == item_params:
+                    candidates.append(item)
             result = None
             best_ref = ref
             for candidate in candidates or [ref]:
                 current = signature.compare(candidate, impl, ref_constants[candidate["pack"]], impl_constants,
-                                            None, ref_index[candidate["pack"]], impl_index, allow_extra)
+                                            impl_structs, ref_index[candidate["pack"]], impl_index, allow_extra,
+                                            resources, bindings)
                 if result is None or len(current["issues"]) < len(result["issues"]):
                     result = current
                     best_ref = candidate
@@ -215,6 +262,7 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
                 "implementationSamples": result["implementationSamples"],
                 "missingConstants": result["missingNumbers"],
                 "extraConstants": result["extraNumbers"],
+                "resources": [{"name": name, "kind": kind} for name, kind in (resources or {}).items()],
             })
             continue
         if name in glue:
@@ -259,6 +307,7 @@ def base_record(row: dict, source: str, status: str, target: str, difference: st
         "implementationSamples": [],
         "missingConstants": [],
         "extraConstants": [],
+        "resources": [],
     }
 
 
@@ -335,10 +384,12 @@ def render_doc(records: list[dict], summary: dict) -> str:
         lines.append(f"| `{row['referenceFunction']}` | {row['package']} | {row['status']} | "
                      f"`{row['referenceSignature'] or '—'}` | {target} | {difference} |")
     lines += ["", "## 判定口径", "",
-              "- exact：返回类型、参数个数、参数类型/方向、采样次数与顺序一致；"
-              "参考常数全部命中。",
+              "- exact：返回类型、参数类型/方向、采样次数与顺序一致；参考常数全部命中。",
+              "- 显式资源：参考签名是实现的参数前缀；尾部追加的纹理、矩阵、结构体或数值"
+              "必须在台账声明、在函数体使用，纹理/矩阵类型要对得上。这样参考没带缓冲的"
+              "算法仍能迁进通用库，而不是留在宿主胶水里。",
               "- 宿主层允许实现多出常数：显式化的时间、湿度、屏幕尺寸等参数会带入新常数；"
-              "通用库仍要求常数集合完全一致。",
+              "通用库仍要求常数集合完全一致，除非台账写明理由。",
               "- approximate：有承接实现，但签名、常数或采样存在差异。",
               "- mc_glue：入口、标题、调试文字、群系表或默认配置未启用的宿主代码。",
               "- missing：既无承接实现，也无宿主理由。",
