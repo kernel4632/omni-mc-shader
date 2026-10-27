@@ -37,7 +37,7 @@
 #ifdef OMNI_VERTEX
 
 		// 焦散法线只需要一个被拉长的整屏四边形，与延迟零号共用同一份顶点。
-		#include "/effects/water/caustics_vertex.glsl"
+		#include "/rendering/caustics_vertex.glsl"
 
 #endif
 

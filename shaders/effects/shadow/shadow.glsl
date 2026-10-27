@@ -79,7 +79,7 @@ const float shadowDistance = 192.0; // [64.0 96.0 128.0 192.0 256.0 384.0 512.0 
 #include "/common/math.glsl"
 #include "/common/noise.glsl"
 // 投影、比较与半影算法来自通用库，本文件只保留宿主矩阵与阴影图接线。
-#include "/gfx/shadow.glsl"
+#include "/omni-gfx/shadow.glsl"
 
 // --- 阴影图坐标：世界位置投向阴影相机 ---
 // 三个函数只差一处：是否做边缘压缩，以及是否把深度按投影缩放；分开写让调用方按用途挑选，不在函数里加开关。
@@ -108,22 +108,22 @@ const float shadowDistance = 192.0; // [64.0 96.0 128.0 192.0 256.0 384.0 512.0 
 	                                      vec4(rotInverse[2], 0.0),
 	                                      vec4(-shadowInterval.xy, 100 - shadowInterval.z, 1.0)); // 末地阴影相机的逆矩阵，供世界位置还原。
 	// 投到阴影相机并做边缘压缩，压缩让阴影图边缘分辨率更高。
-	vec3 ShadowScreenPos_From_WorldPos_Distorted(vec3 worldPos){ return gfx_shadow_screen_pos_distorted(worldPos, shadowModelViewEnd, shadowProjection, OMNI_SHADOW_MAP_BIAS); }
+	vec3 ShadowScreenPos_From_WorldPos_Distorted(vec3 worldPos){ return ogxShadowScreenPosDistorted(worldPos, shadowModelViewEnd, shadowProjection, OMNI_SHADOW_MAP_BIAS); }
 	// 投到阴影相机，不做边缘压缩。
-	vec3 ShadowScreenPos_From_WorldPos(vec3 worldPos){ return gfx_shadow_screen_pos(worldPos, shadowModelViewEnd, shadowProjection); }
+	vec3 ShadowScreenPos_From_WorldPos(vec3 worldPos){ return ogxShadowScreenPos(worldPos, shadowModelViewEnd, shadowProjection); }
 	// 投到阴影相机，不做边缘压缩；与上一个函数相同，名字保留原程序写法的差异。
-	vec3 ShadowScreenPos_From_WorldPos_WithoutZScaling(vec3 worldPos){ return gfx_shadow_screen_pos(worldPos, shadowModelViewEnd, shadowProjection); }
+	vec3 ShadowScreenPos_From_WorldPos_WithoutZScaling(vec3 worldPos){ return ogxShadowScreenPos(worldPos, shadowModelViewEnd, shadowProjection); }
 	// 对已经算好的阴影图坐标再补一次边缘压缩，读取端补压缩用。
-	vec2 DistortShadowScreenPos(vec2 shadowPos){ return gfx_distort_shadow_pos(shadowPos, OMNI_SHADOW_MAP_BIAS); }
+	vec2 DistortShadowScreenPos(vec2 shadowPos){ return ogxDistortShadowPos(shadowPos, OMNI_SHADOW_MAP_BIAS); }
 #else // 主世界与下界：使用加载器给的普通阴影相机矩阵。
 	// 投到阴影相机并做边缘压缩，压缩让阴影图边缘分辨率更高。
-	vec3 ShadowScreenPos_From_WorldPos_Distorted(vec3 worldPos){ return gfx_shadow_screen_pos_distorted(worldPos, shadowModelView, shadowProjection, OMNI_SHADOW_MAP_BIAS); }
+	vec3 ShadowScreenPos_From_WorldPos_Distorted(vec3 worldPos){ return ogxShadowScreenPosDistorted(worldPos, shadowModelView, shadowProjection, OMNI_SHADOW_MAP_BIAS); }
 	// 投到阴影相机，不做边缘压缩。
-	vec3 ShadowScreenPos_From_WorldPos(vec3 worldPos){ return gfx_shadow_screen_pos(worldPos, shadowModelView, shadowProjection); }
+	vec3 ShadowScreenPos_From_WorldPos(vec3 worldPos){ return ogxShadowScreenPos(worldPos, shadowModelView, shadowProjection); }
 	// 投到阴影相机，不做边缘压缩；与上一个函数相同，名字保留原程序写法的差异。
-	vec3 ShadowScreenPos_From_WorldPos_WithoutZScaling(vec3 worldPos){ return gfx_shadow_screen_pos(worldPos, shadowModelView, shadowProjection); }
+	vec3 ShadowScreenPos_From_WorldPos_WithoutZScaling(vec3 worldPos){ return ogxShadowScreenPos(worldPos, shadowModelView, shadowProjection); }
 	// 对已经算好的阴影图坐标再补一次边缘压缩，读取端补压缩用。
-	vec2 DistortShadowScreenPos(vec2 shadowPos){ return gfx_distort_shadow_pos(shadowPos, OMNI_SHADOW_MAP_BIAS); }
+	vec2 DistortShadowScreenPos(vec2 shadowPos){ return ogxDistortShadowPos(shadowPos, OMNI_SHADOW_MAP_BIAS); }
 #endif // 末地与主世界的坐标函数二选一结束。
 
 // 可变半影阴影按深度比较采样 `shadowtex1`（`sampler2DShadow`），只有把它声明为比较采样器的程序才编译这一段：
@@ -159,7 +159,7 @@ vec3 VariablePenumbraShadow(vec3 worldPos, vec3 worldNormal, float sunlight, vec
 	#else // 主世界与下界用加载器矩阵。
 		mat4 shadowView = shadowModelView; // 普通阴影相机视图。
 	#endif
-	return gfx_variable_penumbra_shadow(worldPos, worldNormal, sunlight, albedo, scatteringStrength,
+	return ogxVariablePenumbraShadow(worldPos, worldNormal, sunlight, albedo, scatteringStrength,
 		mask.hand, mask.leaves, mask.grass, gbufferModelViewInverse[3].xyz, gbufferModelViewInverse[2].xyz,
 		shadowView, shadowProjection, shadowtex0, shadowtex1, shadowcolor0, shadowMapResolution, shadowDistance,
 		far, OMNI_SHADOW_MAP_BIAS, noise, bool(OMNI_VARIABLE_PENUMBRA_SHADOWS), bool(OMNI_COLORED_SHADOWS),

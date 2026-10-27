@@ -31,11 +31,9 @@ Minecraft 光影只读 GLSL 文本，不认 Slang。因此：
 ```text
 Omni/
 ├─ shaders/                     现有 Minecraft 光影包（消费者）
-│  ├─ omni-gfx/                 构建生成的 GLSL，MC 直接 include
-│  └─ gfx/                      旧 GLSL 库，迁移完成前保留
+│  └─ omni-gfx/                 构建生成的 GLSL，MC 直接 include
 ├─ omni-gfx/                    独立库
 │  ├─ src/                      Slang 源文件（唯一手写算法源）
-│  ├─ generated/glsl/           自动生成，给 Iris
 │  ├─ generated/spirv/          自动生成，给 Vulkan/Aperture
 │  ├─ examples/world/           不启动 MC 的测试世界
 │  ├─ tests/                    截图对比、性能、边界
@@ -170,12 +168,12 @@ MC 光影编译 + 同场景对比
 - 不重写 Minecraft 的菜单和选项系统；
 - 不承诺首发支持所有引擎；
 - 不宣称“世界第一个通用图形库”；
-- 不在迁移完成前删除现有 `shaders/gfx` 或破坏 MC 光影。
+- 不在迁移完成前删除现有 `shaders/gfx` 或破坏 MC 光影；迁移完成后的删除已按结构计划执行。
 
 ## 十三、当前状态与下一步
 
 - 当前版本以 `VERSION` 为准；MC 光影包已有九页菜单、519 个选项、280 组程序和 4 套预设。
-- `shaders/gfx/` 是旧 GLSL 原型，约 4k 行，迁移完成前保留。
+- `shaders/gfx/` 已删除；效果文件直接引用 `shaders/omni-gfx/`，不再保留第二份转发层。
 - 2026-10-24 完成阶段 0–2：根目录 `omni-gfx/` 骨架、Slang 源、GLSL 330 生成、SPIR-V 探针、`math` / `color` / `sampling` 迁移、程序化测试世界（天空、地形、水面、云、可移动相机、截图与帧时）。
 - 2026-10-24 完成阶段 3 的第一批效果迁移：`noise`、`atmosphere`、`cloud`、`water`、`fog` 五个 Slang 模块；测试世界改用生成的 GLSL，加入单次散射大气、24 步程序化体积云、方向波水面、软高度图阴影、云影、空气透视与低空雾。
 - 生成库已接入 `shaders/effects/color/post_tonemap.glsl`（`composite14` 的色调映射）与 `shaders/effects/fog/landscattering.glsl`（合成程序的瑞利与米氏相函数）；离线全量编译 280 组程序通过。
@@ -197,6 +195,7 @@ MC 光影编译 + 同场景对比
 - 2026-10-26 测试世界重建为连续山谷湖盆场景：`assets/` 增加 CC0 草甸/泥土/岩石/湿沙/腐殖土/树皮贴图与 1K 全景天空，`terrain.py` 改为连续高度场，`vegetation.py` 生成树线、灌木、草丛、野花与岩石，`render.py` 使用三级 CSM、平面反射、TAA、自动曝光、景深、泛光与调色。1280×720 本机 Intel Arc 120 帧平均 23.2 毫秒（约 43.1 帧每秒），截图 `.dev/omni-gfx/world-photoreal.png`，与 NPS 公共领域照片的并排图 `.dev/omni-gfx/world-comparison.png`。**画面仍未达到照片级**：树冠是程序化团块、岸线与远山偏规整、水体反射低分辨率；体积云模块保留在库中，但测试世界改用 HDR 天空，理由与差距写入 `omni-gfx/docs/verification.md`。
 - 2026-10-26 新增光影验证场景 `omni-gfx/examples/lighting`：简单湖盆、两种金属与三种电介质球、方块、石台、立石、水面、体积雾与体积云；太阳颜色取大气透过率，三级 CSM/PCSS 与接触阴影、半分辨率遮蔽与颜色反弹、平面反射与吸收/泡沫、六步阴影雾、TAA、泛光与 ACES/AgX。1280×720 本机 Intel Arc 120 帧平均 28.02 毫秒（约 35.7 帧每秒），截图 `.dev/omni-gfx/world-lighting.png`，与 Bierstadt Lake（CC0）和 Moraine Lake（Public Domain）的并排图 `.dev/omni-gfx/world-lighting-comparison.png`。云仍偏扁平的层积云，光柱很弱，详见 `omni-gfx/docs/verification.md`。
 - 2026-10-26 验证边界：`omni-gfx/build.py check` 只审计测试世界实际编译的 GLSL；Python 示例与资源准备脚本不进入光影 ZIP，也不参与库注释比例。手写核心 9267 行，低于 9400 上限。
+- 2026-10-27 删除 `shaders/gfx/` 纯转发层：248 个直通函数改为直接调用 `ogx` 名字，泛光链排布、反射主流程、切线基与视差调用放回所属效果或 `common/`。效果文件只引用 `shaders/omni-gfx/`，生成产物只保留这一份。
 - 下一步：把库内的 Eclipse 程序化雨点、阴影修补、水面高度/焦散与四季函数接到光影选项（需要先定默认画面与选项命名）；为 `voxel` 补整数三维纹理探针；阶段 5（完整 SPIR-V 演示管线）与阶段 6（文档、许可证、示例与发布）。
 
 ## 十四、决策记录

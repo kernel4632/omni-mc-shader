@@ -16,12 +16,12 @@
     本文件只把七号画面、屏幕尺寸、折射率与两个焦散选项接进去，画面参数与原来一致。
 */
 // 焦散的折射投影与九次采样在通用库。
-#include "/gfx/water.glsl"
+#include "/omni-gfx/water.glsl"
 
 // --- 焦散法线：从七号画面的方块里读出波法线 ---
 // 七号画面左下角最多五百像素见方，存的是水面波法线；读取时用折射方向把世界位置投到这个方块里。
 vec3 GetWavesNormalFromTex(vec3 position, vec3 shadowLightVector){
-	return gfx_waves_normal_from_tex(position, shadowLightVector, colortex7, pixelSize, screenSize,
+	return ogxWavesNormalFromTex(position, shadowLightVector, colortex7, pixelSize, screenSize,
 		CAUSTICS_TEX_RESOLUTION, WATER_REFRACT_IOR); // 一次调用完成折射投影与法线解码。
 }
 
@@ -29,7 +29,7 @@ vec3 GetWavesNormalFromTex(vec3 position, vec3 shadowLightVector){
 // 输入是相机相对世界位置；把阳光按水面折射后向水下投，用波面法线判断光线是否汇聚，汇聚处更亮。
 float CalculateWaterCaustics(vec3 worldPos, vec3 shadowLightVector){
 	vec2 dither = BlueNoiseTemporal(); // 每帧变化的抖动，打散采样花纹。
-	return gfx_water_caustics(worldPos, shadowLightVector, cameraPosition, colortex7, pixelSize, screenSize,
+	return ogxWaterCaustics(worldPos, shadowLightVector, cameraPosition, colortex7, pixelSize, screenSize,
 		CAUSTICS_TEX_RESOLUTION, WATER_REFRACT_IOR, dither, isEyeInWater != 0,
 		OMNI_WATER_CAUSTICS_BRIGHTNESS, OMNI_WATER_CAUSTICS_POWER); // 一次调用完成九次采样与亮度重整。
 }

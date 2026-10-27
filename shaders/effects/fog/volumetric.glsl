@@ -43,11 +43,11 @@ vec3 FogLpvStep(vec3 fog_pos, float integral, out bool done){
 #endif
 
 // 体积雾的密度、光照与阴影主循环在通用库。
-#include "/gfx/fog_volume.glsl"
+#include "/omni-gfx/fog_volume.glsl"
 
 // 体积雾入口：先算基础密度与天气，再把所有参数交给通用库一次完成步进。
 void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, float globalCloudShadow, float fogTimeFactor, out float transmittance){
-	gfx_fog_media media; // 本帧雾参数。
+	OgxFogMedia media; // 本帧雾参数。
 	media.camera_position = cameraPosition; // 相机绝对世界位置。
 	media.light_vector = worldShadowVector; // 指向光源的单位向量。
 	media.light_color = colorShadowlight; // 直射光色。
@@ -174,7 +174,7 @@ void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, 
 	#else
 		const bool useSolidShadow = false; // 读零号深度。
 	#endif
-	gfx_volumetric_fog(color, startPos, endPos, worldDir, media, noisetex, shadowtex0, shadowtex1, shadowcolor0,
+	ogxVolumetricFog(color, startPos, endPos, worldDir, media, noisetex, shadowtex0, shadowtex1, shadowcolor0,
 		colortex2, OMNI_VFOG_NOISE_TYPE != 0, volumetricLighting, useCloudShadow, useStained, useSolidShadow, indoor, caveMode,
 		OMNI_VFOG_HEIGHT, OMNI_VFOG_HEIGHT_2, OMNI_VFOG_FALLOFF, OMNI_VFOG_SUNLIGHT_ABSORPTION, steps,
 		VFOG_SUNLIGHT_STEPS, VFOG_SUNLIGHT_STEPLENGTH, dither, transmittance); // 一次调用完成整段步进。

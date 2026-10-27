@@ -15,7 +15,7 @@
     是否强制局部无降水、积水模式各档的差别都写在函数里，选项仍在入口定义。
 */
 // 雨雾高光与雨点动画的纯公式放在通用库。
-#include "/gfx/water.glsl"
+#include "/omni-gfx/water.glsl"
 // 降雨、雪天与干燥群系标记由绑定层整理，涟漪只接收普通数值。
 #include "/bind/weather.glsl"
 // 雨点动画的当前帧由累计秒数换算。
@@ -26,12 +26,12 @@
 
 // 雨雾高光调制：三层噪声叠加后归一，让雨中的高光随时间轻微变化。
 float GetModulatedRainSpecular(vec3 pos){
-	return gfx_rain_specular(pos, noisetex); // 三层噪声公式在通用库。
+	return ogxRainSpecular(pos, noisetex); // 三层噪声公式在通用库。
 }
 
 // 读一张雨点动画贴图并转成带符号的法线，指数控制边缘锐度。
 vec2 GetRainAnimationTex(sampler2D texSampler, vec2 coord, float rp){
-	return gfx_rain_animation_normal(texSampler, coord, rp); // 转发到通用库。
+	return ogxRainAnimationNormal(texSampler, coord, rp); // 转发到通用库。
 }
 
 // 雨点法线：按动画相位在贴图上采样，三层按降雨强弱叠加。

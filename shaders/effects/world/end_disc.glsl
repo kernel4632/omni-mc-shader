@@ -18,7 +18,7 @@
   本文件只选天空版或反射版的步数、起点与噪声幂次，并决定是否叠星空；星空仍属末地天空业务，留在效果层。
 */
 // 吸积盘积分在通用库。
-#include "/gfx/accretion.glsl"
+#include "/omni-gfx/accretion.glsl"
 // 吸积盘的云噪声随时间流动，时间从绑定层取。
 #include "/bind/time.glsl"
 
@@ -29,7 +29,7 @@ void BlackHole_AccretionDisc_Stars(inout vec3 color, in vec3 rayDir, in vec3 lig
 	#else // 否则用屏幕空间的固定噪声。
 		float noise = InterleavedGradientNoise(gl_FragCoord.xy); // 交错梯度噪声。
 	#endif
-	vec4 disc = gfx_accretion_disc(rayDir, lightDir, noise, noisetex, bind_time().seconds, 50, 3.0, 4,
+	vec4 disc = ogxAccretionDisc(rayDir, lightDir, noise, noisetex, bind_time().seconds, 50, 3.0, 4,
 		OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE != 0, OMNI_ACCRETIONDISC_DOPPLER_EFFECT != 0); // 天空版五十步、起点三米、噪声四次方。
 
 	#if OMNI_STAR_TYPE > 0 // 打开星空才画星星。
@@ -43,7 +43,7 @@ void BlackHole_AccretionDisc_Stars(inout vec3 color, in vec3 rayDir, in vec3 lig
 // --- 吸积盘（反射版）：步进更少，供屏幕反射的假天空回退使用 ---
 void BlackHole_AccretionDisc_Reflection(inout vec3 color, in vec3 rayDir, in vec3 lightDir){
 	float noise = BlueNoiseTemporal().x; // 每帧变化的噪声；反射版始终用时间噪声。
-	vec4 disc = gfx_accretion_disc(rayDir, lightDir, noise, noisetex, bind_time().seconds, 30, 4.0, 5,
+	vec4 disc = ogxAccretionDisc(rayDir, lightDir, noise, noisetex, bind_time().seconds, 30, 4.0, 5,
 		OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE != 0, OMNI_ACCRETIONDISC_DOPPLER_EFFECT != 0); // 反射版三十步、起点四米、噪声五次方。
 
 	color *= disc.a; // 前面天光被吃掉。

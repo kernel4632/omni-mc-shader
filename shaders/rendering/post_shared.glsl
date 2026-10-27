@@ -1,8 +1,8 @@
 /*
-效果文件 `effects/clarity/post_shared.glsl`：玩家选项、宿主参数换算、阶段组合与说明集中在这里，菜单由 options.py 扫描本文件生成。
-调用位置：`rendering/` 下的绘制主体按需引用本文件；同目录的其它效果文件补充分阶段实现。
-可复制示例：`#include "/effects/clarity/post_shared.glsl"`，随后调用下方保留原名的效果入口。
-设计原因与取舍：选项、参数换算与阶段组合同属一个效果，放在一处才找得到、改得动；算式在生成的 `omni-gfx` 库，本文件不复制。
+阶段胶水 `rendering/post_shared.glsl`：后期各程序共用的片元全局量只在这里声明一次。
+调用位置：`rendering/post_fragment_deps.glsl`、`post_pass7.glsl`、`post_pass14.glsl`、`post_pass15.glsl`、`post_pass16.glsl` 按需引入。
+可复制示例：`#include "/rendering/post_shared.glsl"`，之后直接使用 `texelCoord`、`texCoord` 与光色全局量。
+设计原因与取舍：这些声明属于绘制阶段约定，不是某个效果自己的算法；放回 `rendering/` 才能让效果文件只关心自己的参数与调用。
 */
 #ifndef OMNI_POST_SHARED_INCLUDED
 #define OMNI_POST_SHARED_INCLUDED

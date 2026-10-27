@@ -64,21 +64,21 @@
 
 // 共用数学：提供 `saturate` 等基础函数，本文件的分段染色与曲线都用到它。
 #include "/common/math.glsl"
-#include "/gfx/post.glsl"
+#include "/omni-gfx/post.glsl"
 
 // --- 亮度曲线：按通道把暗部与亮部拉开或收回 ---
 // 暗部曲线：在零点附近抬起一段抛物线，`OMNI_LUMINANCE_CURVE_LOWER` 为正时暗部变亮，为零时整条曲线为零。
-float OmniLowerCurve(float x) { return gfx_lower_curve(x); }
+float OmniLowerCurve(float x) { return ogxLowerCurve(x); }
 
 // 亮部曲线：在一附近抬起一段抛物线，`OMNI_LUMINANCE_CURVE_UPPER` 为正时亮部更亮，为零时整条曲线为零。
-float OmniUpperCurve(float x) { return gfx_upper_curve(x); }
+float OmniUpperCurve(float x) { return ogxUpperCurve(x); }
 
 // 亮度曲线整体：三个通道各自叠加一条暗部曲线与一条亮部曲线，通道独立处理所以不会串色。
-vec3 OmniLuminanceCurve(vec3 color) { return gfx_luminance_curve(color, OMNI_LUMINANCE_CURVE_LOWER, OMNI_LUMINANCE_CURVE_UPPER); }
+vec3 OmniLuminanceCurve(vec3 color) { return ogxLuminanceCurve(color, OMNI_LUMINANCE_CURVE_LOWER, OMNI_LUMINANCE_CURVE_UPPER); }
 
 // --- 分段染色：暗部、中间调、高光各乘一个目标色与倍率，再按亮度权重叠加 ---
 // 目标色：把三个通道的取值归一化成方向；三者都接近零时没有方向，返回零，避免归一化除以零。
-vec3 OmniGradeTarget(float red, float green, float blue) { return gfx_grade_target(red, green, blue); }
+vec3 OmniGradeTarget(float red, float green, float blue) { return ogxGradeTarget(red, green, blue); }
 
 // 分段染色主体：按三通道平均亮度把每个像素分到暗部、中间调、高光三段，各段乘自己的目标与倍率。
 // 为什么用平均亮度而不是感知亮度：此处沿用 Eclipse 原写法，三通道各占三分之一，改权重会改变分段边界。

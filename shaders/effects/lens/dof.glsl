@@ -15,7 +15,7 @@
   这样通用库可以脱离 Minecraft 单独使用，而选项名与默认值保持不变。
 */
 // 通用库提供弥散圆、镜头倍数、深度换算与完整散焦循环。
-#include "/gfx/post.glsl"
+#include "/omni-gfx/post.glsl"
 
 // 基准镜头：五十毫米、f/2.8。取默认值时镜头倍数正好为一，画面与移植前一致。
 const float DoF_RefFocal = 50.0; // 基准焦距，毫米。
@@ -48,7 +48,7 @@ vec2 DoFNoise(){
 
 // 前景弥散范围：把当前点深度、镜头换算与搜索次数交给通用库，返回归一化弥散。
 float CoCSpread(){
-	float lensFactor = gfx_dof_lens_factor(OMNI_DOF_FOCAL_LENGTH, OMNI_DOF_APERTURE, DoF_RefFocal, DoF_RefAperture); // 焦距光圈换算。
+	float lensFactor = ogxDofLensFactor(OMNI_DOF_FOCAL_LENGTH, OMNI_DOF_APERTURE, DoF_RefFocal, DoF_RefAperture); // 焦距光圈换算。
 	#ifdef DISTANT_HORIZONS // 有远景时允许改读远景深度。
 		const bool useDh = true; // 启用远景分支。
 		mat4 dofDhProjectionInverse = dhProjectionInverse; // 远景逆投影。
@@ -56,14 +56,14 @@ float CoCSpread(){
 		const bool useDh = false; // 关闭远景分支。
 		mat4 dofDhProjectionInverse = gbufferProjectionInverse; // 占位，不会被读取。
 	#endif
-	return gfx_dof_coc_spread(texCoord, depthtex0, OMNI_DOF_DH_DEPTH, gbufferProjectionInverse, dofDhProjectionInverse, useDh,
+	return ogxDofCocSpread(texCoord, depthtex0, OMNI_DOF_DH_DEPTH, gbufferProjectionInverse, dofDhProjectionInverse, useDh,
 		GetFocus(), OMNI_DOF_BLUR, gbufferProjection[1][1], lensFactor, OMNI_DOF_MAX_COC, aspectRatio,
 		int(OMNI_DOF_COCSPREAD_QUALITY), DoFNoise()); // 一次调用完成整段螺旋搜索。
 }
 
 // 散焦合成：通用库按弥散范围取样，返回曲线编码颜色；下界额外回写散焦后的深度。
 vec4 DepthOfField(){
-	float lensFactor = gfx_dof_lens_factor(OMNI_DOF_FOCAL_LENGTH, OMNI_DOF_APERTURE, DoF_RefFocal, DoF_RefAperture); // 焦距光圈换算。
+	float lensFactor = ogxDofLensFactor(OMNI_DOF_FOCAL_LENGTH, OMNI_DOF_APERTURE, DoF_RefFocal, DoF_RefAperture); // 焦距光圈换算。
 	#ifdef DISTANT_HORIZONS // 有远景时允许改读远景深度。
 		const bool useDh = true; // 启用远景分支。
 		mat4 dofDhProjectionInverse = dhProjectionInverse; // 远景逆投影。
@@ -76,7 +76,7 @@ vec4 DepthOfField(){
 	#else // 主世界与末地不需要深度。
 		const bool storeDepth = false; // 透明度留零。
 	#endif
-	return gfx_depth_of_field(texCoord, colortex1, depthtex0, OMNI_DOF_DH_DEPTH, gbufferProjectionInverse, dofDhProjectionInverse, useDh,
+	return ogxDepthOfField(texCoord, colortex1, depthtex0, OMNI_DOF_DH_DEPTH, gbufferProjectionInverse, dofDhProjectionInverse, useDh,
 		GetFocus(), OMNI_DOF_BLUR, gbufferProjection[1][1], lensFactor, OMNI_DOF_MAX_COC, pixelSize, aspectRatio,
 		int(OMNI_DOF_QUALITY), OMNI_DOF_CATSEYE != 0, OMNI_DOF_CATSEYE_MIDPOINT, OMNI_DOF_CATSEYE_STRENGTH,
 		OMNI_DOF_ANAMORPHIC_RATIO, OMNI_DOF_DISPERSION_MULT, storeDepth, DoFNoise()); // 一次调用完成整段散焦。

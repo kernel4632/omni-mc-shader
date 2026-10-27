@@ -38,7 +38,7 @@ vec3 UnderwaterVolumetricFog(vec3 startPos, vec3 endPos, vec3 worldDir, float gl
 	#if defined OMNI_LPV_FOG_LIGHT && defined OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER // 雾照明-水下手持光开启时。
 		handLightScale = OMNI_LPV_VL_FOG_ILLUMINATION_BRIGHTNESS * 0.0004; // 亮度按 Eclipse 的系数换算。
 	#endif
-	return gfx_underwater_fog(startPos, endPos, worldDir, globalCloudShadow,
+	return ogxUnderwaterFog(startPos, endPos, worldDir, globalCloudShadow,
 		cameraPosition, worldShadowVector, shadowtex0, shadowtex1, useSolidShadow,
 		shadowModelView, shadowProjection, OMNI_SHADOW_MAP_BIAS,
 		colortex7, pixelSize, screenSize, CAUSTICS_TEX_RESOLUTION, WATER_REFRACT_IOR,

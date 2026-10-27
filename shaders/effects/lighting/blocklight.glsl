@@ -111,7 +111,7 @@ vec3 BlockLighting(float lightmap, vec3 ao, MaterialMask mask){
 	#else
 		const bool overworld = false; // 下界末地没有阳光，常数放大十倍。
 	#endif
-	return gfx_block_light(lightmap, ao, lightSourceMask, colorTorchlight, OMNI_TORCHLIGHT_BRIGHTNESS, overworld); // 一次调用完成方块光。
+	return ogxBlockLight(lightmap, ao, lightSourceMask, colorTorchlight, OMNI_TORCHLIGHT_BRIGHTNESS, overworld); // 一次调用完成方块光。
 }
 
 // --- 纹理自发光：按材质掩码给发光方块与受光实体补自发光 ---
@@ -126,7 +126,7 @@ vec3 TextureLighting(vec3 albedo, float lightmap, float emissiveness, MaterialMa
 		const bool overworld = false; // 下界末地放大十倍。
 	#endif
 	#if OMNI_TEXTURE_EMISSIVENESS_MODE == 1 // 仅资源包模式：只用自发光强度，不看方块类型。
-		return gfx_texture_emissive(albedo, emissive, 0.0, false, colorTorchlight, OMNI_TORCHLIGHT_BRIGHTNESS,
+		return ogxTextureEmissive(albedo, emissive, 0.0, false, colorTorchlight, OMNI_TORCHLIGHT_BRIGHTNESS,
 			OMNI_TEXTURE_BRIGHTNESS, 1, overworld); // 一次调用完成资源包自发光。
 	#else // 硬编码与相加模式：先把各类方块的硬编码发光累加成一个强度。
 		float blockLightingMask  = 	mask.glowstone 			* 0.016; // 荧石。
@@ -144,7 +144,7 @@ vec3 TextureLighting(vec3 albedo, float lightmap, float emissiveness, MaterialMa
 			  blockLightingMask += 	mask.entitiesLitLow 	* 0.002; // 低亮实体。
 			  blockLightingMask += 	mask.particlelit 		* 0.01; // 受光粒子。
 			  blockLightingMask += 	mask.redstone 			* 0.2 * emissive; // 红石线随资源包自发光变亮。
-		return gfx_texture_emissive(albedo, emissive, blockLightingMask, torchTinted, colorTorchlight, OMNI_TORCHLIGHT_BRIGHTNESS,
+		return ogxTextureEmissive(albedo, emissive, blockLightingMask, torchTinted, colorTorchlight, OMNI_TORCHLIGHT_BRIGHTNESS,
 			OMNI_TEXTURE_BRIGHTNESS, OMNI_TEXTURE_EMISSIVENESS_MODE, overworld); // 一次调用完成硬编码与相加模式。
 	#endif
 }

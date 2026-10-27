@@ -38,7 +38,7 @@
 
 		// 焦散法线只需要一个被拉长的整屏四边形，缩放让波法线方块与分辨率无关。
 		// 主世界在延迟零号算焦散，末地把同一段放到延迟一号，所以两支共用同一份顶点。
-		#include "/effects/water/caustics_vertex.glsl"
+		#include "/rendering/caustics_vertex.glsl"
 
 #endif
 

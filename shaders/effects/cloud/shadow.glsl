@@ -22,7 +22,7 @@
 #include "/bind/camera.glsl"
 #include "/bind/weather.glsl"
 // 云影的投影、三次模糊、全局统计与高斯模糊在通用库。
-#include "/gfx/cloud.glsl"
+#include "/omni-gfx/cloud.glsl"
 
 // 云影贴图取值：把世界坐标投到云影贴图，采样后按天气在晴天与雨天两档之间混合。
 float CloudShadowFromTex(vec3 worldPos, vec3 shadowLightVector){
@@ -37,7 +37,7 @@ float CloudShadowFromTex(vec3 worldPos, vec3 shadowLightVector){
 		const bool fadeAngle = false; // 不淡出。
 	#endif
 	float shadowTexSize = floor(min(cameraData.screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)); // 云影贴图实际边长。
-	return gfx_cloud_shadow(colortex2, worldPos, shadowLightVector, cameraData.position.y, OMNI_CLOUD_SHADOW_RANGE,
+	return ogxCloudShadowSample(colortex2, worldPos, shadowLightVector, cameraData.position.y, OMNI_CLOUD_SHADOW_RANGE,
 		cameraData.screenSize, cameraData.pixelSize, shadowTexSize, weather.wetness, OMNI_RAIN_SHADOW, fadeAngle); // 一次调用完成投影、采样与天气混合。
 }
 
@@ -53,7 +53,7 @@ float GetSmoothCloudShadow(){
 	#else // 否则用纯天气估一个值。
 		const bool fromTexture = false; // 不读贴图。
 	#endif
-	return gfx_global_cloud_shadow(colortex2, ivec2(40, cameraData.screenSize.y - 1.0), weather.wetness, OMNI_RAIN_SHADOW, fromTexture); // 一次调用取全局云影。
+	return ogxGlobalCloudShadow(colortex2, ivec2(40, cameraData.screenSize.y - 1.0), weather.wetness, OMNI_RAIN_SHADOW, fromTexture); // 一次调用取全局云影。
 }
 
 // 云影横向或纵向高斯模糊：原程序横纵两个程序各写一份只差采样轴，合并成一个函数，名字加云影前缀。
@@ -61,6 +61,6 @@ float GetSmoothCloudShadow(){
 vec4 CloudShadowAxialBlur(ivec2 texelCoord, ivec2 axis){
 	vec2 screenExtent = bind_camera().screenSize; // 画面尺寸只读一次。
 	ivec4 shadowTexBorder = ivec4(screenExtent - floor(min(screenExtent.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)), screenExtent - 1.0); // 云影贴图的边界，采样要夹在里面。
-	return gfx_cloud_shadow_blur(colortex2, texelCoord, axis, shadowTexBorder.xy, shadowTexBorder.zw); // 一次调用完成七点高斯模糊。
+	return ogxCloudShadowBlur(colortex2, texelCoord, axis, shadowTexBorder.xy, shadowTexBorder.zw); // 一次调用完成七点高斯模糊。
 }
 #endif // OMNI_CLOUD_SHADOW_INCLUDED

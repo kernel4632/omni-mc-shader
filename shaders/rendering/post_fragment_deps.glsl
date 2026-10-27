@@ -10,7 +10,7 @@
 #define OMNI_POST_FRAGMENT_DEPS_INCLUDED
 
 // 后期共享声明，全项目只声明一次。
-#include "/effects/clarity/post_shared.glsl"
+#include "/rendering/post_shared.glsl"
 // 材质编号（并提供视差与材质选项）。
 #include "/effects/ground/material.glsl"
 // 提供 `OMNI_TAA` 与时间抗锯齿选项，并带入坐标换算。

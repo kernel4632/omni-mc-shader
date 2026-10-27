@@ -19,29 +19,29 @@
     太阳圆盘最后乘 `omniSunTint()`，太阳色与辐照倍率由 `effects/sky/suncolor.glsl` 提供。
 */
 // 日月圆盘的纯形状计算放在通用库，这里只传方向与尺寸档位。
-#include "/gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere.glsl"
 
 // 太阳圆盘：视线越接近太阳方向越亮，边缘由平滑曲线收口。
 vec3 RenderSunDisc(vec3 worldDir, vec3 sunDir){
-	return vec3(1.1114, 0.9756, 0.9133) * gfx_sun_disc(worldDir, sunDir) * omniSunTint(); // 太阳偏暖的白底再乘太阳色与辐照倍率，默认全一不改画面。
+	return vec3(1.1114, 0.9756, 0.9133) * ogxSunDisc(worldDir, sunDir, 5e-5, 4e4) * omniSunTint(); // 太阳偏暖的白底再乘太阳色与辐照倍率，默认全一不改画面。
 }
 // 月亮圆盘：形状同太阳，但边缘更硬、亮度单独交给选项。
 // 真实月亮模式改用 Eclipse 的尺寸档位：角半径由 `OMNI_MOON_SIZE_SETTING` 换算，来源 `composite1.fsh:1785-1786`。
 float RenderMoonDisc(vec3 worldDir, vec3 moonDir){
 	#ifdef OMNI_REALMOON
-		float disc = gfx_moon_disc_real(worldDir, moonDir, OMNI_MOON_SIZE_SETTING); // 档位越大圆盘越大。
+		float disc = ogxMoonDiscReal(worldDir, moonDir, OMNI_MOON_SIZE_SETTING); // 档位越大圆盘越大。
 		#ifdef OMNI_MOON_NORMALS
 			// 起伏明暗需要 Eclipse 自带的月面法线贴图，本项目没有该贴图，退回程序圆盘不额外调制。
 			disc *= 1.0; // 保留现有遮罩。
 		#endif
 		return disc; // 返回零到一的亮度。
 	#else
-		return gfx_moon_disc_default(worldDir, moonDir); // 默认的小而硬的圆盘。
+		return ogxMoonDiscDefault(worldDir, moonDir); // 默认的小而硬的圆盘。
 	#endif
 }
 // 反射里的月亮圆盘：反射天空盒分辨率低，用更大的角半径换取可见。
 float RenderMoonDiscReflection(vec3 worldDir, vec3 moonDir){
-	return gfx_moon_disc_reflection(worldDir, moonDir); // 转发到通用库。
+	return ogxMoonDiscReflection(worldDir, moonDir); // 转发到通用库。
 }
 // --- Eclipse 日月绘制兼容层：参考直接返回带颜色的光斑并压暗星点 ---
 vec3 drawMoon(vec3 worldSunVec, vec3 playerPos, vec3 color, inout vec3 occludeStars){

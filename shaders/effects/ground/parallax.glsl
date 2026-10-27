@@ -17,7 +17,7 @@
 #define OMNI_EFFECT_GROUND_PARALLAX_INCLUDED // 置上标记。
 // 视差用到共用数学（解码法线）与通用视差算法，显式引入而不依赖调用顺序。
 #include "/common/math.glsl"
-#include "/gfx/parallax.glsl"
+#include "/omni-gfx/parallax.glsl"
 // 视差阴影在开时间抗锯齿时用蓝噪声抖动起点。
 #if OMNI_PARALLAX_MODE > 0 && OMNI_PARALLAX_SHADOW && defined OMNI_TAA
 #include "/common/noise.glsl"
@@ -52,7 +52,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 	#else
 		bool taa = false; // 不开时只多走一步。
 	#endif
-	return gfx_parallax_smooth(coord, tbnMat, shadowVector, duv1, duv2, viewPos, normals, noisetex,
+	return ogxParallaxSmooth(coord, tbnMat[0], tbnMat[1], tbnMat[2], shadowVector, duv1, duv2, viewPos, normals, noisetex,
 		parallaxAtlasSize, parallaxResolution, parallaxIsBlock, OMNI_PARALLAX_DEPTH, OMNI_PARALLAX_QUALITY,
 		OMNI_PARALLAX_MAX_REFINEMENTS, OMNI_PARALLAX_SHADOW_QUALITY, bool(OMNI_PARALLAX_SHADOW), taa,
 		fadeEnabled, ivec2(gl_FragCoord.xy), frameCounter, OMNI_PARALLAX_BASED_NORMAL, normalTex, parallaxShadow); // 步进循环在通用库。
@@ -77,7 +77,7 @@ ivec2 ParallaxOcclusionMapping(vec2 coord, mat3 tbnMat, vec3 shadowVector, vec2 
 	#else
 		bool fadeEnabled = false; // 不做远处淡出。
 	#endif
-	return gfx_parallax_sharp(coord, tbnMat, shadowVector, duv1, duv2, viewPos, normals,
+	return ogxParallaxSharp(coord, tbnMat[0], tbnMat[1], tbnMat[2], shadowVector, duv1, duv2, viewPos, normals,
 		parallaxAtlasSize, parallaxResolution, parallaxIsBlock, OMNI_PARALLAX_DEPTH, OMNI_PARALLAX_QUALITY,
 		OMNI_PARALLAX_SHADOW_QUALITY, bool(OMNI_PARALLAX_SHADOW), fadeEnabled,
 		OMNI_PARALLAX_BASED_NORMAL, hitNormal, parallaxShadow); // 逐像素步进在通用库。

@@ -24,8 +24,8 @@
   星空不再单独维护一份，与主世界共用同一份 Eclipse 星场，星点形态在两个维度保持一致，也避免复制代码。
 */
 // 行星表面与环带的纯公式放在通用库。
-#include "/gfx/atmosphere.glsl"
-#include "/gfx/planet.glsl"
+#include "/omni-gfx/atmosphere.glsl"
+#include "/omni-gfx/planet.glsl"
 
 // --- 星空：与主世界共用同一份 Eclipse 星场，来源 Eclipse `lib/stars.glsl`（经 `effects/sky/sky.glsl`） ---
 // 为什么共用：用户要求末地星空也换成 Eclipse 的实现，而主世界已把星场核换成 Eclipse；
@@ -49,7 +49,7 @@ float Disc(float a, float s, float h){ return ogxDiscProfile(a, s, h); }
 // 行星本体：算法在通用库，本函数只把末地的全局量接过去。
 // 为什么保留同名入口：合成零号与末地反射都按这个名字调用，绑定层换实现不影响绘制主体。
 void PlanetEnd2(inout vec3 color, in vec3 eye, in vec3 rayDir, in vec3 lightDir){
-	gfx_planet_end(color, eye, rayDir, lightDir, worldShadowVector, timeFactor, planetShadow, noisetex); // 行星与光环在通用库。
+	ogxPlanetEnd(color, eye, rayDir, lightDir, worldShadowVector, timeFactor, planetShadow, noisetex); // 行星与光环在通用库。
 }
 
 

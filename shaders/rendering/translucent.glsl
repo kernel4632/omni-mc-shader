@@ -200,7 +200,7 @@ void main(){
 	vec2 duv2 = dFdy(texCoord); // 纹理坐标纵向屏幕变化。
 	
 	#ifndef OMNI_TERRAIN_VS_TBN // 顶点没提供切线基时现场构造。
-		mat3 tbn = gfx_tangent_basis(dFdx(viewPos), dFdy(viewPos), duv1, duv2); // 由屏幕导数构造切线基。
+		mat3 tbn = omniTangentBasis(dFdx(viewPos), dFdy(viewPos), duv1, duv2); // 由屏幕导数构造切线基。
 	#endif
 
 
@@ -372,7 +372,7 @@ void main(){
 // 切线基：始终用屏幕导数推出来。
 	vec2 duv1 = dFdx(texCoord); // 纹理坐标横向屏幕变化。
 	vec2 duv2 = dFdy(texCoord); // 纹理坐标纵向屏幕变化。
-	mat3 tbn = gfx_tangent_basis(dFdx(viewPos), dFdy(viewPos), duv1, duv2); // 由屏幕导数构造切线基。
+	mat3 tbn = omniTangentBasis(dFdx(viewPos), dFdy(viewPos), duv1, duv2); // 由屏幕导数构造切线基。
 
 
 // 底色：贴图色乘顶点色。

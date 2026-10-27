@@ -17,21 +17,21 @@
 调用前提：云与云层选项由 `effects/cloud/cloud.glsl` 定义；三维云噪声采样器由延迟程序打开；
     闪电照明由 `effects/sky/atmosphere.glsl` 提供；球面求交与曲线由 `common/math.glsl` 提供。
 设计原因与取舍：步进与光照主循环在 `gfx/cloud.glsl`，这里只把晴雨、附加层与每日天气换算成
-    `gfx_cloud_media`，并在步进结果上补空气透视；这样通用库不读取任何选项或宿主纹理。
+    `OgxCumulusMedia`，并在步进结果上补空气透视；这样通用库不读取任何选项或宿主纹理。
     采样数上限仍按 `OMNI_CLOUD_SAMPLES - ...` 与 `marchingSteps * OMNI_CLOUD_QUALITY` 的口径换算；
     闪电照明沿用 `omniLightningVolume` 的竖直光柱公式，采样点按 `marchingPos - cameraPosition`
     换到相机相对坐标，具体计算已随主循环放进通用库。
 */
 #ifdef OMNI_CLOUD_DENSITY_PASS // 由 effects/cloud/cloud.glsl 在三维云噪声可用的阶段打开；其它程序整段不编译。
 // 云的光照相位、顶部曲线与体积云主循环放在通用库；只在需要云密度的阶段引入。
-#include "/gfx/cloud_volume.glsl"
+#include "/omni-gfx/cloud_volume.glsl"
 #if OMNI_CLOUD_CUMULONIMBUS == 1 // 中档积雨云要读雷暴强度；Iris 内建量，本程序里 `storm.glsl` 不参与编译，所以在此声明。
 uniform float thunderStrength; // 雷暴强度，零到一，已由加载器平滑；零表示没有雷暴。
 #endif
 
 // 把当前选项、光色与天气打包成一层云的参数；附加层只改海拔、受光、密度与云量。
-gfx_cloud_media CloudMedia(vec2 cloudAltitude, vec2 lightingStrength, float cloudScale, float cloudDensityOption, float cloudCoverage){
-	gfx_cloud_media media; // 一层云的参数。
+OgxCumulusMedia CloudMedia(vec2 cloudAltitude, vec2 lightingStrength, float cloudScale, float cloudDensityOption, float cloudCoverage){
+	OgxCumulusMedia media; // 一层云的参数。
 	media.wind = vec3(0.0); // 风在调用处填，先给零。
 	media.camera_position = cameraPosition; // 相机绝对世界位置。
 	media.light_color = colorShadowlight; // 直射光色。
@@ -58,10 +58,10 @@ gfx_cloud_media CloudMedia(vec2 cloudAltitude, vec2 lightingStrength, float clou
 // 体积云步进核心：调用通用库，再把云色按空气透视融进天空。
 // `color` 是已经算好的天空颜色（会被就地修改），`worldDir` 是单位方向，`camera` 是米制相机位置。
 void NubisCloudLayer(inout vec3 color, vec3 worldDir, vec2 cloudAltitude, vec3 windDirection, vec3 camera, vec2 noise, out float cloudTransmittance, vec2 lightingStrength, float cloudScale, float cloudDensityOption, float cloudCoverage){
-	gfx_cloud_media media = CloudMedia(cloudAltitude, lightingStrength, cloudScale, cloudDensityOption, cloudCoverage); // 本层参数。
+	OgxCumulusMedia media = CloudMedia(cloudAltitude, lightingStrength, cloudScale, cloudDensityOption, cloudCoverage); // 本层参数。
 	media.wind = windDirection; // 风的方向与速度。
 	vec3 hitOffset; // 平均命中位置，相机相对方向。
-	vec4 layer = gfx_cloud_layer(worldDir, media, noise, hitOffset, colortex4, colortex6, noisetex,
+	vec4 layer = ogxCumulusMarch(worldDir, media, noise, hitOffset, colortex4, colortex6, noisetex,
 		OMNI_CLOUD_SAMPLES, OMNI_CLOUD_QUALITY, worldShadowVector, OMNI_CLOUD_BASE_NOISE_SCALE,
 		OMNI_CLOUD_COVERAGE_NOISE_OFFSET, OMNI_CLOUD_DETAILED_NOISE_SCALE, OMNI_CLOUD_DETAILED_NOISE_STRENGTH); // 一次调用完成步进与光照。
 	cloudTransmittance = layer.a; // 云留下的透过率。
@@ -175,9 +175,9 @@ void NubisExtraLayers(inout vec3 color, vec3 worldDir, vec3 windDirection, vec3 
 
 // 云影贴图：从地表坐标沿光方向投到云层，取两处云密度合成阴影值。
 float CloudShadowTex(vec2 coord, vec2 cloudAltitude, vec3 windDirection){
-	gfx_cloud_media media = CloudMedia(cloudAltitude, vec2(0.0), 1.0, 0.0, mix(OMNI_CLOUD_CLEAR_COVERAGE, OMNI_CLOUD_RAIN_COVERAGE, wetness)); // 云影只需要云量与风。
+	OgxCumulusMedia media = CloudMedia(cloudAltitude, vec2(0.0), 1.0, 0.0, mix(OMNI_CLOUD_CLEAR_COVERAGE, OMNI_CLOUD_RAIN_COVERAGE, wetness)); // 云影只需要云量与风。
 	media.wind = windDirection; // 风的方向。
-	return gfx_cloud_shadow_tex(coord, media, worldShadowVector, OMNI_CLOUD_SHADOW_RANGE, colortex4, noisetex,
+	return ogxCumulusShadowTex(coord, media, worldShadowVector, OMNI_CLOUD_SHADOW_RANGE, colortex4, noisetex,
 		OMNI_CLOUD_BASE_NOISE_SCALE, OMNI_CLOUD_COVERAGE_NOISE_OFFSET, OMNI_CLOUD_DETAILED_NOISE_SCALE, OMNI_CLOUD_DETAILED_NOISE_STRENGTH); // 一次调用完成云影。
 }
 

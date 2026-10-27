@@ -7,8 +7,7 @@
 `omni-gfx/src/*.slang` 是唯一手写算法源。构建分两条路：
 
 ```text
-src/math.slang ─┬─ 生成器转换 ─→ shaders/omni-gfx/math.glsl  （Iris 直接 include）
-                ├─ 生成器转换 ─→ generated/glsl/math.glsl     （独立库镜像）
+src/math.slang ─┬─ 生成器转换 ─→ shaders/omni-gfx/math.glsl  （唯一 GLSL 产物）
                 └─ slangc 探针 ─→ generated/spirv/math.spv    （编译验证产物）
 ```
 
@@ -67,7 +66,7 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 
 `tools/generate.py` 的输出不含时间戳，同一份源每次生成相同字节。`generated/manifest.json` 记录每个模块的源摘要、产物摘要和行数；`build.py check` 与测试都会比较磁盘内容，过期时列出具体路径。
 
-`shaders/omni-gfx/` 是 Iris 实际读取的位置，`generated/glsl/` 是镜像。两处必须逐字节相同，测试会直接比较。
+`shaders/omni-gfx/` 是 Iris 实际读取的位置，也是唯一的 GLSL 产物；不再保留镜像副本。
 
 SPIR-V 由 `tests/probes/*.slang` 编译，探针调用每个模块的全部公开函数。产物在 `generated/spirv/`，`.spv` 与清单被忽略规则排除，不入仓库；换机器后运行 `python omni-gfx/build.py spirv --download` 重新生成。清单记录编译器版本 `2026.20`、大小与 SHA-256。
 
@@ -132,15 +131,15 @@ SPIR-V 由 `tests/probes/*.slang` 编译，探针调用每个模块的全部公�
 - 需要纹理过滤时，先设计显式的采样器与纹理坐标接口，再迁移双三次函数；当前效果模块只收纯计算，反射色由调用方传入。
 - 第三批已经把平滑过滤、最近点取样与旋转网格超采样做成 `sampling` 的显式接口（导数由调用方传入），因此这条扩展点只剩“接到光影选项”这一步。
 - SPIR-V 从“模块探针”升级为“完整演示管线”时，把顶点/片元入口写成 Slang，并保留 GLSL 生成路径。
-- Minecraft 的接入点目前是 `rendering/fog/landscattering.glsl` 的相函数：它引入生成的 `atmosphere` 模块并调用 `ogxRayleighPhase` / `ogxMiePhase`，数值与旧实现逐项一致；`python build.py compile` 覆盖全部程序。
+- Minecraft 的接入点目前是 `effects/fog/landscattering.glsl` 的相函数：它引入生成的 `atmosphere` 模块并调用 `ogxRayleighPhase` / `ogxMiePhase`，数值与旧实现逐项一致；`python build.py compile` 覆盖全部程序。
 
 ## 七、第二批迁移（2026-10-25）
 
-`shaders/gfx/` 里的算法已经全部迁入 `src/`，该目录只剩 23 个适配层与一份说明。适配层保留旧函数名、旧宏、结构体字段与输出参数，宿主调用点完全不动。
+第二批迁移时 `shaders/gfx/` 只剩 23 个适配层；2026-10-27 这些适配层已删除，效果文件直接引用 `shaders/omni-gfx/`，不再保留第二层转发。
 
 规则补充：
 
-- 算法模块只收纯计算；需要按步回调宿主的地方（雾照明、水下手持光、反射主流程的天空与体素钩子）用钩子宏或直接留在适配层，并在文件头写明原因。
+- 算法模块只收纯计算；需要按步回调宿主的地方（雾照明、水下手持光、反射主流程的天空与体素钩子）用钩子宏或直接留在所属效果文件，并在文件头写明原因。
 - 不能用作形参名的保留字：`sample` 在 GLSL 4.0 以后是插值限定符，430 的计算程序会直接报语法错误，统一改叫 `texel` 或 `value`。
 - 切线空间转换用三个显式点乘（`ogxParallaxToTangent`），矩阵乘向量用 `ogxMatrix3MulPoint` / `ogxMatrixMulPoint`，向量乘矩阵用 `ogxApplyRows`；不再写 `v * M`，因为 Slang 不支持这种写法，而 GLSL 与 Slang 的行列顺序又不同。
 - 三维纹理用 `Sampler3D`，取格写 `tex.Load(int3(pixel, level))`；生成器把它降级成 `texelFetch`。

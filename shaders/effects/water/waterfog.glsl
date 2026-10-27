@@ -15,14 +15,14 @@
     本文件只读眼睛水深、竖直轴、湿润度与选项，然后调用一次通用库，数值与原来逐字一致。
 */
 // 水下与水后雾的公式在通用库。
-#include "/gfx/water.glsl"
+#include "/omni-gfx/water.glsl"
 
 // 水下与水后雾：按距离做分波段衰减并向雾色靠拢。
 // 参数里的 `occludedWater` 表示视线被半透明玻璃挡住的水，`totalInternalReflection` 表示发生全反射。
 // 为什么区分是否在水下：水面之上看水下与整只眼睛浸在水里，雾色与散射方向都不同。
 void WaterFog(inout vec3 color, vec3 viewDir, float opaqueDist, float waterDist, vec3 normal, MaterialMask mask, float occludedWater, float waterSkylight, float totalInternalReflection, vec3 shadowLightVector, vec3 shadowlightColorInput, vec3 skylightColorInput){
 	float eyeWaterDepth = saturate(float(eyeBrightnessSmooth.y) / 120.0 - 0.8); // 眼睛离水面的深度感，由天空光反推。
-	color = gfx_water_fog(color, viewDir, opaqueDist, waterDist, normal, mask.ice, mask.stainedGlass, mask.hand,
+	color = ogxWaterFog(color, viewDir, opaqueDist, waterDist, normal, mask.ice, mask.stainedGlass, mask.hand,
 		occludedWater, waterSkylight, totalInternalReflection, shadowLightVector, shadowlightColorInput, skylightColorInput,
 		gbufferModelView[1].xyz, eyeWaterDepth, wetness, WATER_REFRACT_IOR, OMNI_WATER_FOG_DENSITY, isEyeInWater != 0); // 一次调用完成水雾合成。
 }

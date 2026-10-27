@@ -39,11 +39,11 @@ float ScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, MaterialMask ma
 	#endif
 
 	#ifdef DISTANT_HORIZONS // 有远景时先看近景深度，近景是天空才查远景。
-		return gfx_sun_screen_shadow(viewPos, viewDir, normal, shadowVector, fov, absorption, mask.grass + mask.leaves, mask.grass,
+		return ogxSunScreenShadow(viewPos, viewDir, normal, shadowVector, fov, absorption, mask.grass + mask.leaves, mask.grass,
 			depthtex1, dhDepthTex1, gbufferProjection, gbufferProjectionInverse, dhProjectionInverse, max(pixelSize.x, pixelSize.y),
 			0.06 * shadowDistance / shadowMapResolution, offsetCoord, noise, true, 12); // 十二步，步长递增。
 	#else
-		return gfx_sun_screen_shadow(viewPos, viewDir, normal, shadowVector, fov, absorption, mask.grass + mask.leaves, mask.grass,
+		return ogxSunScreenShadow(viewPos, viewDir, normal, shadowVector, fov, absorption, mask.grass + mask.leaves, mask.grass,
 			depthtex1, depthtex1, gbufferProjection, gbufferProjectionInverse, gbufferProjectionInverse, max(pixelSize.x, pixelSize.y),
 			0.06 * shadowDistance / shadowMapResolution, offsetCoord, noise, false, 12); // 没有远景时用近景深度占位。
 	#endif

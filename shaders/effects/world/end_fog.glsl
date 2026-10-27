@@ -25,7 +25,7 @@
   所以同一段雾用两个函数名区分，见末尾两个函数的说明。
 */
 // 末地涡旋雾的纯计算放在通用库，这里只传时间、采样器与画质参数。
-#include "/gfx/fog.glsl"
+#include "/omni-gfx/fog.glsl"
 // 相机位置与动画时间由绑定层整理，效果文件不再直接读宿主输入。
 #include "/bind/camera.glsl"
 #include "/bind/time.glsl"
@@ -52,7 +52,7 @@ vec4 EndVortexFog(vec3 worldDir, float viewDist){
 	#endif
 	vec3 vortexColor = vec3(OMNI_END_VORTEX_LIGHT_R, OMNI_END_VORTEX_LIGHT_G, OMNI_END_VORTEX_LIGHT_B) * 0.25; // 光柱颜色，零点二五是原程序的缩放。
 	vec3 ambientColor = vec3(OMNI_END_VORTEX_AMBIENT_R, OMNI_END_VORTEX_AMBIENT_G, OMNI_END_VORTEX_AMBIENT_B); // 雾内环境光颜色。
-	return gfx_end_vortex_fog(bind_camera().position, worldDir, viewDist, dither, SAMPLECOUNT, expFactor, maxDist,
+	return ogxEndVortexFog(bind_camera().position, worldDir, viewDist, dither, SAMPLECOUNT, expFactor, maxDist,
 		vortexColor, ambientColor, OMNI_END_VORTEX_STORM_DENSITY, 0.001 * OMNI_END_VORTEX_HAZE_DENSITY,
 		bind_time().seconds, noisetex, float(noiseTextureResolution), 1e-3 * OMNI_SUNLIGHT_INTENSITY); // 全部纯计算转交通用库。
 }
@@ -68,7 +68,7 @@ vec4 EndFogLayers(float dist, vec3 worldDir){
 	float angleX = -1.57079633 + (0.2 * sin(timeFactor + 3.0) - 0.1) - 0.008 * sin(timeFactor + 4.7); // 俯仰角，比行星多一项。
 	float angleY = timeFactor; // 偏航角。
 
-	float density = gfx_end_fog_density(worldDir, dist, VdotL, angleX, angleY, planetShadow,
+	float density = ogxEndFogDensity(worldDir, dist, VdotL, angleX, angleY, planetShadow,
 		OMNI_END_FOG_STORM_DENSITY, OMNI_END_FOG_HAZE_DENSITY); // 解析雾的密度在通用库计算，两个选项在这里传入。
 	vec3 fog = vec3(density * 1e-5 * OMNI_SUNLIGHT_INTENSITY); // 解析雾的贡献，换算到管线单位并乘阳光强度。
 

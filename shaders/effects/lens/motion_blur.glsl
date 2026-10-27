@@ -17,7 +17,7 @@
 设计原因与取舍：模糊采样与相机速度是同一套位移计算，放一起；是否抖动的开关照 iterationT 原样。
 */
 // 模糊取样循环放在通用后期库，本文件只判断哪些像素参与并传入位移。
-#include "/gfx/post.glsl"
+#include "/omni-gfx/post.glsl"
 // 手部深度与玩家编号判断在绑定层，避免这里再写一份阈值。
 #include "/bind/gbuffer.glsl"
 // --- 相机动态模糊 ---
@@ -62,7 +62,7 @@ vec3 MotionBlur(){
 	#else
 		bool dither = false; // 不加抖动。
 	#endif
-	return gfx_motion_blur(colortex7, texCoord, texelCoord, gl_FragCoord.xy, velocity,
+	return ogxMotionBlur(colortex7, texCoord, texelCoord, gl_FragCoord.xy, velocity,
 		OMNI_MOTION_BLUR_SHUTTER_ANGLE, int(OMNI_MOTION_BLUR_QUALITY), dither); // 取样循环在通用库里。
 }
 

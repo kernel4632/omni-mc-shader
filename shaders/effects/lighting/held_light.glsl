@@ -17,8 +17,8 @@
     手电筒模式与火把模式的分支、指针平滑、阴影品质都照 iterationT 原样。
 */
 // 屏幕空间阴影的步进循环在通用库，光斑形状与光束指向也在通用库。
-#include "/gfx/shadow.glsl"
-#include "/gfx/surface.glsl"
+#include "/omni-gfx/shadow.glsl"
+#include "/omni-gfx/surface.glsl"
 // --- 手电筒光斑形状：按光线与指向的夹角给出一束光的强度分布 ---
 // 为什么用曲线两次叠加：主瓣给中心亮区，副瓣给一点点外圈余晖；再乘一圈环形暗环，让光斑边界更像手电筒。
 float spotShape(float r){
@@ -46,10 +46,10 @@ float TorchScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shado
 	#endif
 
 	#ifdef DISTANT_HORIZONS // 有远景时，近景是天空才改用远景深度。
-		return gfx_screen_space_shadow(viewPos, viewDir, normal, shadowDir, depthtex1, dhDepthTex1, gbufferProjection, gbufferProjectionInverse,
+		return ogxScreenSpaceShadow(viewPos, viewDir, normal, shadowDir, depthtex1, dhDepthTex1, gbufferProjection, gbufferProjectionInverse,
 			dhProjectionInverse, max(pixelSize.x, pixelSize.y), offsetCoord, noise, true, omniHeldShadowSteps, OMNI_HELDLIGHT_SHADOW_STRENGTH); // 一次调用完成屏幕步进。
 	#else
-		return gfx_screen_space_shadow(viewPos, viewDir, normal, shadowDir, depthtex1, depthtex1, gbufferProjection, gbufferProjectionInverse,
+		return ogxScreenSpaceShadow(viewPos, viewDir, normal, shadowDir, depthtex1, depthtex1, gbufferProjection, gbufferProjectionInverse,
 			gbufferProjectionInverse, max(pixelSize.x, pixelSize.y), offsetCoord, noise, false, omniHeldShadowSteps, OMNI_HELDLIGHT_SHADOW_STRENGTH); // 没有远景时用近景深度占位。
 	#endif
 }

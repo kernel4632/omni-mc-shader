@@ -8,7 +8,7 @@
 #define OMNI_BIND_WORLD_BIOME_INCLUDED
 #include "/effects/world/biome.glsl"
 // 群系雾色与雾密度的加权混合在通用库，本文件只把四个权重与选项常量传进去。
-#include "/gfx/fog.glsl"
+#include "/omni-gfx/fog.glsl"
 /*
 群系特色环境：按玩家所在生物群系，给体积雾换一套雾色与雾密度，来源是 Eclipse 的每群系环境（`PER_BIOME_ENVIRONMENT`）。
 调用位置：

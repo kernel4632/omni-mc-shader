@@ -27,7 +27,7 @@
 // 输入是相机、视线方向、散射距离、受光距离与光源方向；返回叠加的散射颜色。
 // 四段累加与密度剖面在生成库，本文件只把当前大气常数填进结构体。
 vec3 simpleScattering(vec3 camera, vec3 worldDir, float dist, float shadowDist, vec3 lightVector){
-	return gfx_atmo_simple_scattering(omniAtmosphereModel(), camera, worldDir, dist, shadowDist, lightVector); // 实现在生成库。
+	return ogxAtmoSimpleScattering(omniAtmosphereModel(), camera, worldDir, dist, shadowDist, lightVector); // 实现在生成库。
 }
 
 // 地面大气散射：给地表方向的视线补一层空气散射，阴影区按选项削弱。
@@ -62,7 +62,7 @@ void LandAtmosphericScattering(inout vec3 color, in float dist, vec3 startPos, v
 				float noise = bayer64(gl_FragCoord.xy);
 			#endif
 
-			float occluded = gfx_shadow_segment_occlusion(shadowStart, shadowEnd, shadowtex0, int(OMNI_LANDSCATTERING_SHADOW_QUALITY),
+			float occluded = ogxShadowSegmentOcclusion(shadowStart, shadowEnd, shadowtex0, int(OMNI_LANDSCATTERING_SHADOW_QUALITY),
 				noise, OMNI_SHADOW_MAP_BIAS, length(endPos - startPos)); // 一次调用统计被挡住的米数。
 
 			shadowDist = max(shadowDist - occluded, 0.0); // 按被挡比例缩短受光距离。

@@ -29,18 +29,18 @@
 // 世界天数 `worldDay` 由加载器提供，已在 `common/uniforms.glsl` 声明，这里不重复声明。
 #include "/common/uniforms.glsl"
 // 植被判断与季节上色放在通用库，这里只传入游戏日与选项。
-#include "/gfx/weather.glsl"
+#include "/omni-gfx/weather.glsl"
 // 植被程度：顶点色里绿色比红、蓝多出越多，越像群系染过的植被；白色方块与偏蓝的水都得零。
 float omniFoliage(vec3 vertexColor){
-	return gfx_foliage(vertexColor); // 转发到通用库。
+	return ogxFoliage(vertexColor); // 转发到通用库。
 }
 // 季节上色：植被按一年的相位混入秋色，再按选项整体偏暖或偏冷；非植被原样返回。
 // 调用前提：只在地形片元调用，`vertexColor` 是加载器给该顶点的顶点色。
 vec3 omniSeason(vec3 albedo, vec3 vertexColor){
 	#if OMNI_SEASONS // 关闭时只传假值，库里原样返回。
-		return gfx_season(albedo, vertexColor, fract(float(worldDay) / 24.0), OMNI_SEASON_TINT, true);
+		return ogxSeason(albedo, vertexColor, fract(float(worldDay) / 24.0), OMNI_SEASON_TINT, true);
 	#else
-		return gfx_season(albedo, vertexColor, 0.0, OMNI_SEASON_TINT, false);
+		return ogxSeason(albedo, vertexColor, 0.0, OMNI_SEASON_TINT, false);
 	#endif
 }
 #endif // OMNI_EFFECT_WEATHER_SEASON_INCLUDED

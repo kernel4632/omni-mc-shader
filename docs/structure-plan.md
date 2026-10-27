@@ -56,6 +56,8 @@ shaders/
 
 ## 五、迁移顺序
 
+下表是早期计划，其中 `gfx/` 是历史名称；实际算法已迁到 `omni-gfx/src`，转发层在 0.16.0-dev.7 删除。
+
 | 批次 | 内容 | 验收 |
 | --- | --- | --- |
 | 1 | 建 `gfx/color.glsl`，把 ACES、AgX、无压缩从 `effects/color/color.glsl` 搬走 | 全量编译通过，画面不变 |
@@ -163,3 +165,4 @@ shaders/
   `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','gfx','effects','world0','world1','world-1')})"`
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。另用 8 个代表入口比较重构前后的展开代码，去注释、引用与声明后语句集合完全一致。
 - 已完成（0.16.0-dev.6）：按效果唯一归属重排。98 个按效果命名的阶段片段从 `rendering/<页>/` 移回 `effects/<页>/`，44 个选项文件与同名实现合并；`bind/ground/material.glsl` 的材质解码并入 `effects/ground/material.glsl`；`rendering/` 只留 42 个程序主体与阶段胶水。选项仍为 519 个、入口 269 个、唯一程序 280 组、测试 160 个；只移动与合并，没有删除效果、选项、默认值或测试。新口径：`bind/` 385 行（6 个文件）、`rendering/` 2941 行（41 个文件）、`effects/` 6250 行（101 个文件）。
+- 已完成（0.16.0-dev.7）：删除 `shaders/gfx/` 纯转发层。248 个直通函数改为直接调用生成的 `ogx` 名字，泛光链排布、反射主流程、切线基与视差调用放回所属效果或 `common/`；效果文件直接 `#include "/omni-gfx/..."`。生成 GLSL 只保留 `shaders/omni-gfx/` 一份，删除 `omni-gfx/generated/glsl/` 镜像。选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；`effects/` 6490 行（99 个文件），`rendering/` 2992 行（43 个文件）。`post_shared` 与 `caustics_vertex` 属于阶段胶水，已回到 `rendering/`。验证：`audit` 通过 447 个代码文件，`verify` 通过 160 个测试、9 组探针与打包，`compile` 通过 280 组唯一程序，`strict-parity` 为 474 exact / 5 reference_broken / 26 mc_glue / 0 missing，`profiles` 两份通过。

@@ -1,7 +1,7 @@
 """把 `omni-gfx/src` 里的 Slang 模块生成给 Iris 使用的 GLSL 330 文本。
 
 调用位置：`omni-gfx/build.py generate` 与测试都会调用 `module_text`；
-生成的 GLSL 同时写入 `shaders/omni-gfx/` 和 `omni-gfx/generated/glsl/`。
+生成的 GLSL 只写入 `shaders/omni-gfx/`，不再保留第二份镜像。
 
 设计原因与取舍：
     Slang 自带的 GLSL 后端只输出带入口点的完整程序，函数会被改名并带有 `#version 450`，
@@ -19,8 +19,7 @@ from pathlib import Path  # 项目内路径统一按相对位置计算。
 LIB = Path(__file__).resolve().parent.parent  # omni-gfx 根目录。
 ROOT = LIB.parent  # 仓库根目录，用于写入光影包。
 SRC = LIB / "src"  # Slang 源文件目录，唯一手写算法来源。
-SHADER_OUT = ROOT / "shaders" / "omni-gfx"  # Minecraft 直接引入的位置。
-GENERATED_OUT = LIB / "generated" / "glsl"  # 独立库查看与分发的副本。
+SHADER_OUT = ROOT / "shaders" / "omni-gfx"  # 唯一生成位置，Minecraft 直接引入。
 MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳。
 MODULES = ("math", "color", "sampling", "noise", "atmosphere", "cloud", "water", "fog",
            "shadow", "gi", "reflection", "post", "antialias",
@@ -298,14 +297,12 @@ def module_text(name: str) -> str:
 def outputs() -> dict[Path, str]:
     """返回全部待写入文件及文本，供写入和过期检查共用。
 
-    同一份文本写两个位置：光影包需要它，独立库也要能单独查看。
-    两处内容必须完全一致，避免测试通过而游戏读到旧副本。
+    只写光影包需要的一份，避免同一份生成代码出现两个副本。
     """
     result: dict[Path, str] = {}  # 路径到文本的映射，按模块顺序填充。
     for name in MODULES:  # 每个模块生成一次，避免重复读取源文件。
         text = module_text(name)
-        result[SHADER_OUT / f"{name}.glsl"] = text  # 光影包内的正式位置。
-        result[GENERATED_OUT / f"{name}.glsl"] = text  # 独立库内的镜像位置。
+        result[SHADER_OUT / f"{name}.glsl"] = text  # 唯一生成位置。
     return result
 
 
@@ -340,15 +337,13 @@ def manifest_text(texts: dict[Path, str] | None = None) -> str:
     for name in MODULES:  # 一个模块一条记录，顺序固定。
         source = SRC / f"{name}.slang"  # 模块源文件。
         source_bytes = source.read_bytes()  # 按字节计算摘要，不受换行转换影响。
-        shader_path = SHADER_OUT / f"{name}.glsl"  # 公开产物路径。
-        generated_path = GENERATED_OUT / f"{name}.glsl"  # 镜像产物路径。
+        shader_path = SHADER_OUT / f"{name}.glsl"  # 唯一产物路径。
         shader_text = texts[shader_path]  # 与写入内容完全相同的文本。
         entries.append({
             "module": name,
             "source": source.relative_to(ROOT).as_posix(),
             "sourceSha256": hashlib.sha256(source_bytes).hexdigest(),
             "shader": shader_path.relative_to(ROOT).as_posix(),
-            "generated": generated_path.relative_to(ROOT).as_posix(),
             "glslSha256": hashlib.sha256(shader_text.encode("utf-8")).hexdigest(),
             "glslLines": len(shader_text.splitlines()),
         })

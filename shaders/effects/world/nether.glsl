@@ -53,7 +53,7 @@
   所以它仍返回 `vec3` 只叠加散射，透射率未接，见两个重载各自的说明。
 */
 // 下界单格雾密度放在通用库，这里只传噪声纹理。
-#include "/gfx/fog.glsl"
+#include "/omni-gfx/fog.glsl"
 // 动画时间由绑定层提供，效果文件不直接读宿主时间。
 #include "/bind/time.glsl"
 
@@ -88,13 +88,13 @@ vec4 NetherFogColor(){
 // 一格噪声密度：把世界坐标折成三维格子再查二维噪声图，得到零到一的基础密度。
 // 为什么用二维图模拟三维：噪声图已烘好一层分布，采样代价低，也保证全屏可重复。
 float NetherFogDensityAt(vec3 pos){
-	return gfx_nether_fog_density_at(pos, noisetex); // 转发到通用库。
+	return ogxNetherFogDensityAt(pos, noisetex); // 转发到通用库。
 }
 
 // 体积雾原始密度：叠上被时间侵蚀的羽流形状、贴地烟与高度衰减，返回零附近的密度。
 // 为什么随高度变化：下界烟从地面升起、被天花板压住，越高越稀，密度必须带高度包络。
 float NetherFogCloudVolume(vec3 pos){
-	return gfx_nether_fog_cloud_volume(pos, bind_time().seconds, noisetex); // 时间与噪声纹理交给库。
+	return ogxNetherFogCloudVolume(pos, bind_time().seconds, noisetex); // 时间与噪声纹理交给库。
 }
 
 // 当前像素的视空间射线方向：屏幕上任意深度的点都在同一条从相机出发的射线上，归一后就是方向。

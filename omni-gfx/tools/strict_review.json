@@ -702,10 +702,12 @@
       "target": "VanillaFog"
     },
     "CurveBlockLightSky": {
-      "target": "CurveBlockLightSky"
+      "target": "surface:ogxCurveBlockLightSky",
+      "allowExtraConstants": true
     },
     "CurveBlockLightTorch": {
-      "target": "CurveBlockLightTorch"
+      "target": "surface:ogxCurveBlockLightTorch",
+      "allowExtraConstants": true
     },
     "GetGbufferData": {
       "target": "GetGbufferData"
@@ -1062,10 +1064,11 @@
       "target": "stars"
     },
     "smoothfilter": {
-      "target": "smoothfilter"
+      "target": "sampling:ogxSmoothFilter",
+      "allowExtraConstants": true
     },
     "shadowsmoothfilter": {
-      "target": "shadowsmoothfilter"
+      "target": "sampling:ogxShadowSmoothFilter"
     },
     "sampleRGSS": {
       "target": "sampleRGSS"
@@ -2491,7 +2494,6 @@
       },
       "allowExtraConstants": true
     },
-
     "VolumetricFog": {
       "target": "fog_volume.ogxItxVolumetricFogExact",
       "resources": {

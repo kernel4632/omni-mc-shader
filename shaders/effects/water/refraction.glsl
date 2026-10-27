@@ -26,7 +26,7 @@ vec2 RefractionScreenCoord(MaterialMask mask, vec3 normal, vec3 worldPos, vec3 v
 		waveNormal = GetWavesNormal(worldPos + cameraPosition, step(0.05, NdotU) * 18.0).xzy; // 波法线换到竖直轴朝上。
 	}
 	// 相机矩阵、投影与厚度显式传入，公式在通用库。
-	return gfx_water_refraction_coord(mask.water > 0.5, normal, viewPos, waveNormal, mat3(gbufferModelView), gbufferProjection, waterDeep, waterDist, screenInput);
+	return ogxWaterRefractionCoord(mask.water > 0.5, normal, viewPos, waveNormal, mat3(gbufferModelView), gbufferProjection, waterDeep, waterDist, screenInput);
 }
 
 // --- 水面折射：把采样坐标偏移一次再读回场景色 ---

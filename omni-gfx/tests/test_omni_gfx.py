@@ -38,13 +38,13 @@ class OmniGfxTests(unittest.TestCase):
         """磁盘上的 GLSL 与清单必须和当前 Slang 源一致。"""
         generate.check_modules()  # 过期时抛出并列出所有路径。
 
-    def test_shader_copy_matches_library_copy(self):
-        """光影包里的副本与独立库里的副本必须逐字节相同。"""
+    def test_generated_library_has_single_copy(self):
+        """生成 GLSL 只保留光影包里的这一份，不再维护镜像副本。"""
+        self.assertFalse((LIB / "generated" / "glsl").exists())  # 镜像目录重新出现说明又生成了第二份。
         for name in generate.MODULES:
-            shader = (ROOT / "shaders" / "omni-gfx" / f"{name}.glsl").read_text(encoding="utf-8")
-            mirror = (LIB / "generated" / "glsl" / f"{name}.glsl").read_text(encoding="utf-8")
+            shader = ROOT / "shaders" / "omni-gfx" / f"{name}.glsl"
             with self.subTest(module=name):
-                self.assertEqual(shader, mirror)  # 两处不一致时游戏会读到旧代码。
+                self.assertTrue(shader.is_file())  # 唯一产物必须存在。
 
     def test_no_slang_syntax_left(self):
         """生成文本不能残留 Slang 类型名、取像素写法或静态常量前缀。"""
@@ -135,19 +135,21 @@ class OmniGfxTests(unittest.TestCase):
                 self.assertIn(symbol, generate.module_text(name))  # 生成文本缺少入口函数说明模块没有接入。
 
     def test_minecraft_uses_generated_effect_modules(self):
-        """光影侧的每个适配层都要引用生成的库，避免旧实现继续各写一套。"""
-        adapters = sorted((ROOT / "shaders" / "gfx").glob("*.glsl"))  # 全部适配层，而不是一份手写清单。
-        self.assertTrue(adapters)  # 目录为空说明路径写错，不能当作通过。
-        for path in adapters:
-            text = path.read_text(encoding="utf-8")  # 只读适配层本身，不展开引用。
-            with self.subTest(module=path.stem):
-                self.assertIn(f'#include "/omni-gfx/{path.stem}.glsl"', text)  # 实现必须来自生成库。
+        """光影效果直接引用生成的库，旧 gfx 转发层已经删除。"""
+        effects = sorted((ROOT / "shaders" / "effects").rglob("*.glsl"))  # 效果文件是生成库的真实消费者。
+        self.assertTrue(effects)  # 目录为空说明路径写错，不能当作通过。
+        includes = []
+        for path in effects:
+            text = path.read_text(encoding="utf-8")  # 只读效果文件本身，不展开引用。
+            includes.extend(re.findall(r'#include\s+"(/omni-gfx/[\w./-]+\.glsl)"', text))
+        self.assertTrue(includes)  # 没有引用生成库说明效果仍在手写算法。
+        self.assertFalse((ROOT / "shaders" / "gfx").exists())  # 转发层不能重新出现。
 
     def test_minecraft_program_uses_generated_atmosphere(self):
         """合成程序的大气散射必须调用生成库，避免两套公式各自漂移。"""
         text = (ROOT / "shaders" / "effects" / "fog" / "landscattering.glsl").read_text(encoding="utf-8")  # 真实消费者。
         self.assertIn('#include "/omni-gfx/atmosphere.glsl"', text)  # 生成库必须在引用边界内。
-        self.assertIn("gfx_atmo_simple_scattering(", text)  # 四段散射已迁到生成库的查表模块。
+        self.assertIn("ogxAtmoSimpleScattering(", text)  # 四段散射已迁到生成库的查表模块。
         library = (ROOT / "omni-gfx" / "src" / "atmosphere_model.slang").read_text(encoding="utf-8")  # 库里的唯一算式。
         self.assertIn("ogxRayleighPhase(", library)  # 瑞利相函数来自生成库。
         self.assertIn("ogxMiePhase(", library)  # 米氏相函数来自生成库。

@@ -22,7 +22,6 @@ class EffectTests(unittest.TestCase):
     def test_fixed_smoothstep_edges_are_ordered(self):
         """效果目录里的固定阈值必须严格递增；`end.glsl` 的下降遮罩按 iterationT 保留并在此登记。"""
         files = sorted((build.SHADERS / "bind").rglob("*.glsl"))  # 输入适配层全部检查。
-        files += sorted((build.SHADERS / "gfx").rglob("*.glsl"))  # 通用库全部检查。
         files += sorted((build.SHADERS / "effects").rglob("*.glsl"))  # 每个效果自己的选项、换算与阶段入口。
         self.assertGreaterEqual(len(files), 20, f"效果阶段与通用文件只有 {len(files)} 个，遍历范围可能写错")  # 少于下限说明匹配规则失效，直接失败而不是假通过。
         checked = 0  # 统计真正读到公式的文件数，佐证不是空跑。
@@ -326,7 +325,7 @@ class EffectTests(unittest.TestCase):
         shadow = support.code("effects/shadow/shadow.glsl")  # 阴影主体。
         self.assertIn("VariablePenumbraShadow", shadow)  # 半影阴影独立成函数。
         self.assertIn("OMNI_VARIABLE_PENUMBRA_SHADOWS", shadow)  # 开关作为参数交给通用库。
-        self.assertIn("variable_penumbra", support.text("gfx/shadow.glsl"))  # 通用库按参数决定是否估计遮挡物距离。
+        self.assertIn("ogxVariablePenumbraShadow", support.text("omni-gfx/shadow.glsl"))  # 通用库按参数决定是否估计遮挡物距离。
         self.assertIn("OMNI_SHADOW_MAP_BIAS", shadow)  # 偏置参与投影压缩。
 
     def test_screen_space_shadow_and_colored_shadow(self):
@@ -494,9 +493,9 @@ class EffectTests(unittest.TestCase):
         reflection = support.code("effects/reflection/reflection.glsl")  # 反射入口（选项在这里）。
         self.assertIn("screenspace.glsl", reflection)  # 入口按引入顺序展开屏幕空间反射算法。
         screenspace = support.code("effects/reflection/screenspace.glsl")  # 屏幕空间反射算法（按算法从入口拆出）。
-        reflection_library = support.text("gfx/reflection.glsl")  # 通用库里的反射主流程。
+        reflection_library = support.text("omni-gfx/reflection.glsl")  # 通用库里的反射主流程。
         self.assertIn("ogxScreenSpaceTrace", reflection_library)  # 屏幕空间追踪的循环已迁到生成库。
-        self.assertIn("gfx_specular_reflections", screenspace)  # 反射主流程由通用库提供，效果文件只填参数。
+        self.assertIn("SpecularReflections", screenspace)  # 反射主流程由通用库提供，效果文件只填参数。
         self.assertIn("CalculateSpecularReflections", screenspace)  # 镜面反射独立成函数。
         self.assertIn("OMNI_RAYTRACE_QUALITY", screenspace)  # 质量参与采样数。
 
@@ -799,26 +798,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("OMNI_SELECTION_BOX_COLOR_R", selection)  # 颜色参与着色。
 
     # --- 引入与流程设置的边界 ---
-    def test_gfx_library_has_no_host_symbols(self):
-        """通用库只接收参数：不出现加载器输入、选项宏、版本声明或宿主文件引用。"""
-        hosts = (
-            "worldTime", "worldDay", "frameCounter", "frameTimeCounter",
-            "sunAngle", "sunPosition", "shadowLightPosition", "cameraPosition",
-            "gbufferModelView", "gbufferProjection", "screenSize", "pixelSize",
-            "taaJitter", "viewWidth", "viewHeight", "aspectRatio", "rainStrength",
-            "eyeBrightness", "isEyeInWater", "nightVision", "blindness",
-            "darknessFactor", "darknessLightFactor",
-        )  # 这些名字只在宿主层出现，通用库必须通过参数接收；不收录同名的自定义参数。
-        for path in sorted((build.SHADERS / "gfx").glob("*.glsl")):  # 逐个检查可独立发布的通用库。
+    def test_effects_have_no_gfx_forwarding_calls(self):
+        """效果直接引用生成库，旧的 gfx_ 转发函数和 /gfx/ 路径不能重新出现。"""
+        for path in sorted((build.SHADERS / "effects").rglob("*.glsl")):  # 逐个检查效果自己的文件。
             code = build._code_only(path.read_text(encoding="utf-8"))  # 去掉注释，只检查真正参与编译的代码。
             with self.subTest(file=path.name):
-                self.assertNotIn("#version", code)  # 版本由宿主决定。
-                self.assertNotIn("uniform", code)  # 通用库自己声明输入就会绑定到宿主。
-                self.assertNotIn('"/common/', code)  # 不依赖项目共用层。
-                self.assertNotIn('"/effects/', code)  # 不依赖具体效果。
-                self.assertNotIn("OMNI_", code)  # 不读取项目选项宏。
-                for token in hosts:  # 宿主输入只能由调用方传入。
-                    self.assertNotRegex(code, rf"\b{token}\b")
+                self.assertNotIn('"/gfx/', code)  # 旧转发层已经删除。
+                self.assertNotRegex(code, r"\bgfx_[a-z]")  # 旧转发函数名不能重新出现。
 
     def test_include_lines_are_bare_references(self):
         """任何一行出现 `#include` 都必须是干净的引用行：加载器在去注释之前扫描引用，注释里的示例会被当成自我包含。"""

@@ -24,7 +24,7 @@
 
 // --- 效果实现：宿主输入、参数换算与阶段入口 ---
 // Eclipse 实时天空的密度与路径函数在生成库，需要显式引入。
-#include "/gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere.glsl"
 // 极光噪声在 Eclipse 天空模块，和实时天空共用同一份生成库。
 #include "/omni-gfx/eclipse_sky.glsl"
 /*
@@ -36,7 +36,7 @@
 可复制示例：
     `vec3 rayleigh = (sun_scattering * RayleighPhaseFunction(sun_nu)) * omniSkyRayleighTint();` // 逐通道缩放瑞利散射。
     `vec3 mie = sun_single_mie_scattering * MiePhaseFunction(g, sun_nu) * omniSkyMieTint();`    // 逐通道缩放米氏散射。
-    `return (rayleigh + mie) * GFX_ATMO_LMS * OMNI_SKY_BRIGHTNESS;`                             // 缩放整体天空亮度。
+    `return (rayleigh + mie) * OGX_ATMO_LMS * OMNI_SKY_BRIGHTNESS;`                             // 缩放整体天空亮度。
 设计原因与取舍：
     Omni 的天空是预计算大气贴图，系数已经烘进那张数据里，运行时无法按新系数重算整条光路；
     所以这里把 Eclipse 的绝对系数改成“相对当前大气的倍率”：放大瑞利让天空更亮更蓝，放大米氏让太阳附近的白晕更强。

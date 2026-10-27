@@ -107,7 +107,7 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 // 暗角曲线放在通用库，这里只传入画面纵横比与选项。
-#include "/gfx/post.glsl"
+#include "/omni-gfx/post.glsl"
 #include "/effects/clarity/antialiasing.glsl"
 #include "/common/noise.glsl"
 
@@ -120,6 +120,6 @@
 // --- 暗角 ---
 // 按到画面中心的距离把四角压暗；`falloff` 是强度，`roundness` 在椭圆与圆形之间插值。
 float Vignette(vec2 coord, const float falloff, const float roundness){
-	return gfx_vignette(coord, falloff, roundness, aspectRatio); // 画面纵横比由效果层传入。
+	return ogxVignette(coord, falloff, roundness, aspectRatio); // 画面纵横比由效果层传入。
 }
 #endif // OMNI_EFFECT_LENS_LENS_INCLUDED

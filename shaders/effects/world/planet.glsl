@@ -47,7 +47,7 @@ float omniPlanetCurvatureDrop(vec2 horizontal){
 	#if OMNI_PLANET_CURVATURE // 开启时才取玩家的强度。
 		amount = OMNI_CURVATURE_AMOUNT; // 取玩家设置的曲率强度。
 	#endif
-	return gfx_planet_curvature_drop(horizontal, amount); // 公式在通用库。
+	return ogxPlanetCurvatureDrop(horizontal, amount); // 公式在通用库。
 }
 // 视空间下沉版本：按调用方给定的一对互逆矩阵把视空间位置转到相机相对世界坐标，下沉纵向后再转回。
 // 为什么把矩阵当作参数：不同阶段的视空间属于不同相机——普通绘制挂在 `gbufferModelView`，阴影挂在 `shadowModelView`；

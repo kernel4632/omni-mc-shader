@@ -39,8 +39,8 @@
 // 亮度、邻域最值与放大核来自共用文件。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/gfx/upscale.glsl"
-#include "/gfx/sampling.glsl"
+#include "/omni-gfx/upscale.glsl"
+#include "/omni-gfx/sampling.glsl"
 
 // 参考签名兼容层：RGSS 旋转网格超采样在片元里自己取导数，宿主层补上贴图与像素大小。
 vec4 sampleRGSS(sampler2D tex, vec2 uv, vec2 pixelSize){
@@ -54,16 +54,16 @@ void FsrEasuSet(inout vec2 dir, inout float len, float w, float lA, float lB, fl
 
 // 把合成一号画面按边缘方向重采样放大到目标分辨率，返回放大后的颜色。
 vec3 FsrEasu(vec2 fragCoord, vec2 inputScreenSize, vec2 outputScreenSize) {
-	return gfx_fsr_easu(colortex1, fragCoord, inputScreenSize, outputScreenSize); // 输入画面固定是一号，公式在通用库。
+	return ogxFsrEasu(colortex1, fragCoord, inputScreenSize, outputScreenSize); // 输入画面固定是一号，公式在通用库。
 }
 // 对比度自适应锐化：按十字邻域的对比度决定锐化强度，平坦区不会放大噪点。
 vec3 FidelityFX_CAS(vec3 sampleE, ivec2 texelCoord) {
-	return gfx_cas(colortex1, sampleE, texelCoord, OMNI_CAS_SHARPNESS, bool(OMNI_CAS_DENOISE)); // 画面与两个选项在这里传入。
+	return ogxCas(colortex1, sampleE, texelCoord, OMNI_CAS_SHARPNESS, bool(OMNI_CAS_DENOISE)); // 画面与两个选项在这里传入。
 }
 #if MC_VERSION >= 11801 // 放大功能只在一点一八点一以后可用，因为需要较低的内部渲染比例。
 // 放大后的锐化：读取八号放大输出画面，再叠一次对比度自适应锐化。
 vec3 FidelityFX_FSR1(ivec2 texelCoord) {
-	return gfx_fsr1(colortex8, texelCoord, OMNI_FSR_SHARPNESS, bool(OMNI_FSR_DENOISE)); // 画面与两个选项在这里传入。
+	return ogxFsr1(colortex8, texelCoord, OMNI_FSR_SHARPNESS, bool(OMNI_FSR_DENOISE)); // 画面与两个选项在这里传入。
 }
 #endif // 版本判断结束。
 #endif // 阶段放大接口结束。

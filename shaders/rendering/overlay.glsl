@@ -402,7 +402,7 @@ void main(){
 
 	if (albedo.a < 0.122) discard; // 光束边缘丢弃，阈值照原程序。
 
-	mat3 tbn = gfx_tangent_basis(dp1, dp2, duv1, duv2); // 由已经算好的屏幕导数构造切线基。
+	mat3 tbn = omniTangentBasis(dp1, dp2, duv1, duv2); // 由已经算好的屏幕导数构造切线基。
 
 
 // 法线：原程序把法线强制朝外。

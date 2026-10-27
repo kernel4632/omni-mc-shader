@@ -14,7 +14,7 @@
 设计原因与取舍：眩光与光斑共用同一批光点和色散取样，合在一个文件；两者各自带开关，关闭时整段不编译。
 */
 // 眩光与光斑的形状计算放在通用库，这里只传屏幕位置、太阳位置与畸变强度。
-#include "/gfx/post.glsl"
+#include "/omni-gfx/post.glsl"
 // --- 镜头眩光与光斑 ---
 // 只在开启眩光或光斑时编译这一段。
 #if OMNI_LENS_GLARE || OMNI_LENS_FLARE
@@ -44,19 +44,19 @@
 		#if OMNI_LENS_FLARE // 光斑：一组鬼影、两个光环和若干散点。
 			float size = 0.5 * fovFactor; // 光斑整体大小。
 			vec3 fl = vec3(0.0); // 光斑累加。
-			fl += gfx_glare_orb(coord, sunPos, 0.0, size * 0.01, DISTORTION_BARREL) * 0.1; // 圆形鬼影。
-			fl += gfx_glare_ring(coord, sunPos,  1.0, 0.02, 1.4) * 0.01; // 远端光环。
-			fl += gfx_glare_ring(coord, sunPos, -1.0, 0.02, 1.4) * 0.01; // 近端光环。
-			fl += gfx_glare_flare(coord, sunPos, -2.00, 0.05, size * 0.05, DISTORTION_BARREL) * 0.5; // 一抹大鬼影。
-			fl += gfx_glare_flare(coord, sunPos, -0.90, 0.02, size * 0.03, DISTORTION_BARREL) * 0.3; // 散点。
-			fl += gfx_glare_flare(coord, sunPos, -0.70, 0.01, size * 0.06, DISTORTION_BARREL) * 0.5; // 散点。
-			fl += gfx_glare_flare(coord, sunPos, -0.55, 0.02, size * 0.02, DISTORTION_BARREL) * 0.2; // 散点。
-			fl += gfx_glare_flare(coord, sunPos, -0.35, 0.02, size * 0.04, DISTORTION_BARREL) * 0.7; // 散点。
-			fl += gfx_glare_flare(coord, sunPos, -0.25, 0.01, size * 0.15, DISTORTION_BARREL) * vec3(0.3, 0.4, 0.38); // 偏青的大鬼影。
-			fl += gfx_glare_flare(coord, sunPos, -0.25, 0.02, size * 0.08, DISTORTION_BARREL) * 0.2; // 散点。
-			fl += gfx_glare_flare(coord, sunPos,  0.05, 0.01, size * 0.03, DISTORTION_BARREL) * 0.1; // 散点。
-			fl += gfx_glare_flare(coord, sunPos,  0.30, 0.02, size * 0.20, DISTORTION_BARREL) * vec3(0.2, 0.18, 0.14); // 偏暖的鬼影。
-			fl += gfx_glare_flare(coord, sunPos,  1.20, 0.03, size * 0.10, DISTORTION_BARREL) * 0.2; // 散点。
+			fl += ogxGlareOrb(coord, sunPos, 0.0, size * 0.01, DISTORTION_BARREL) * 0.1; // 圆形鬼影。
+			fl += ogxGlareRing(coord, sunPos,  1.0, 0.02, 1.4) * 0.01; // 远端光环。
+			fl += ogxGlareRing(coord, sunPos, -1.0, 0.02, 1.4) * 0.01; // 近端光环。
+			fl += ogxGlareFlare(coord, sunPos, -2.00, 0.05, size * 0.05, DISTORTION_BARREL) * 0.5; // 一抹大鬼影。
+			fl += ogxGlareFlare(coord, sunPos, -0.90, 0.02, size * 0.03, DISTORTION_BARREL) * 0.3; // 散点。
+			fl += ogxGlareFlare(coord, sunPos, -0.70, 0.01, size * 0.06, DISTORTION_BARREL) * 0.5; // 散点。
+			fl += ogxGlareFlare(coord, sunPos, -0.55, 0.02, size * 0.02, DISTORTION_BARREL) * 0.2; // 散点。
+			fl += ogxGlareFlare(coord, sunPos, -0.35, 0.02, size * 0.04, DISTORTION_BARREL) * 0.7; // 散点。
+			fl += ogxGlareFlare(coord, sunPos, -0.25, 0.01, size * 0.15, DISTORTION_BARREL) * vec3(0.3, 0.4, 0.38); // 偏青的大鬼影。
+			fl += ogxGlareFlare(coord, sunPos, -0.25, 0.02, size * 0.08, DISTORTION_BARREL) * 0.2; // 散点。
+			fl += ogxGlareFlare(coord, sunPos,  0.05, 0.01, size * 0.03, DISTORTION_BARREL) * 0.1; // 散点。
+			fl += ogxGlareFlare(coord, sunPos,  0.30, 0.02, size * 0.20, DISTORTION_BARREL) * vec3(0.2, 0.18, 0.14); // 偏暖的鬼影。
+			fl += ogxGlareFlare(coord, sunPos,  1.20, 0.03, size * 0.10, DISTORTION_BARREL) * 0.2; // 散点。
 			lf += fl * (OMNI_FLARE_BRIGHTNESS * 0.3); // 按光斑亮度累加。
 		#endif
 		lf *= colorSunlight * (sunVisibility * saturate(exp2(1.0 - OMNI_VFOG_DENSITY * 20.0)) / MAIN_OUTPUT_FACTOR); // 按阳光颜色、可见度与雾浓淡衰减。
@@ -65,10 +65,10 @@
 #endif // 眩光与光斑结束。
 
 // --- 参考签名兼容层：参考的镜头函数直接读全局畸变强度 ---
-vec2 GetDistOffset(vec2 uv, vec2 pxoffset){ return gfx_glare_dist_offset(uv, pxoffset, 1.0); }
+vec2 GetDistOffset(vec2 uv, vec2 pxoffset){ return ogxGlareDistOffset(uv, pxoffset, 1.0); }
 vec3 flare(vec2 uv, vec2 pos, float dist, float size, float chromaOffset){
-	return gfx_glare_flare(uv, pos, dist, chromaOffset, size, 1.0);
+	return ogxGlareFlare(uv, pos, dist, chromaOffset, size, 1.0);
 }
-vec3 orb(vec2 uv, vec2 pos, float dist, float size){ return gfx_glare_orb(uv, pos, dist, size, 1.0); }
+vec3 orb(vec2 uv, vec2 pos, float dist, float size){ return ogxGlareOrb(uv, pos, dist, size, 1.0); }
 
 #endif // OMNI_LENS_GLARE_INCLUDED

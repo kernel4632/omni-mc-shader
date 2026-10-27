@@ -65,7 +65,7 @@
 #if defined OMNI_FRAGMENT
 
 	// 后期共享声明，全量声明一次；本程序只用 `screenSize` 与共用数学。
-	#include "/effects/clarity/post_shared.glsl"
+	#include "/rendering/post_shared.glsl"
 	// 边缘方向重采样放大。
 	#include "/effects/clarity/upscale.glsl"
 

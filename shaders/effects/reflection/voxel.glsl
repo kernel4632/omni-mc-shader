@@ -49,7 +49,7 @@
 // 体积坐标、体素编号映射、颜色线性化都来自光传播体积的效果主体，本文件复用同一套约定，避免两套坐标不一致。
 #include "/effects/lighting/lpv.glsl"
 // 三维逐格步进、半透明染色、镜面弹射与体素着色在通用库。
-#include "/gfx/voxel.glsl"
+#include "/omni-gfx/voxel.glsl"
 
 // --- 玩家选项：体素反射开关、追踪距离与强度 ---
 
@@ -79,7 +79,7 @@ uniform usampler3D omniLpvVoxelTex; // 体素编号图按整数采样器读，�
 // 返回值的 `rgb` 是反射颜色，`a` 是归一化总命中距离；`a` 为负表示没有命中，交给调用方走天空回退。
 vec4 omniVoxelReflection(vec3 originWorld, vec3 rayDirWorld, vec3 surfaceNormal, out vec3 hitWorldPos){
 	vec3 voxelOffset = fract(cameraPosition) + omniLpvHalf; // 相机相对位置到体积坐标的平移。
-	return gfx_voxel_reflection(originWorld, rayDirWorld, surfaceNormal, voxelOffset, int(omniLpvSide),
+	return ogxVoxelReflection(originWorld, rayDirWorld, surfaceNormal, voxelOffset, int(omniLpvSide),
 		omniLpvVoxelTex, omniVoxelColorTex, colorTorchlight, colorSkylight, colorShadowlight, worldSunVector,
 		float(OMNI_VOXEL_REFLECTION_DISTANCE), OMNI_VOXEL_REFLECTION_STRENGTH, hitWorldPos); // 逐格步进与着色在通用库。
 }

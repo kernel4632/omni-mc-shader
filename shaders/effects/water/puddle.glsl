@@ -38,7 +38,7 @@
   Eclipse 默认就会做这几步、该锐度选项默认 0.9，都会改画面，这里改用中性默认，说明见 `OmniPuddleSurface`。
 */
 // 水洼覆盖与湿面粗糙度的纯公式放在通用库，这里只传玩家选项。
-#include "/gfx/water.glsl"
+#include "/omni-gfx/water.glsl"
 // 湿润度与相机位置由绑定层整理，水洼公式只接收普通数值。
 #include "/bind/camera.glsl"
 #include "/bind/weather.glsl"
@@ -48,7 +48,7 @@
 // 为什么先减噪声：噪声代表地势起伏，湿润高于噪声处才是真正低洼，减掉噪声就露出水洼边界。
 // 为什么用五次方加指数：让阈值附近的过渡更陡、远离阈值处更平，水洼边缘自然又不整片糊死。
 float OmniPuddleCoverage(float halfWet, float noise){
-	return gfx_puddle_coverage(halfWet, noise, OMNI_PUDDLE_SIZE); // 覆盖公式在通用库，尺寸选项在这里传入。
+	return ogxPuddleCoverage(halfWet, noise, OMNI_PUDDLE_SIZE); // 覆盖公式在通用库，尺寸选项在这里传入。
 }
 
 // 湿面反射锐度：把干表面粗糙度往「湿表面粗糙度」混合，湿得越深反射越清晰。
@@ -56,7 +56,7 @@ float OmniPuddleCoverage(float halfWet, float noise){
 // 数学与 Eclipse 一致：`mix(roughness, wetRoughness, wetnessStages * 锐度)`，此处不做额外夹取，保持等价。
 // 调用点：`effects/ground/material.glsl` 的 `MaterialFromTex`（湿润度取那里的 `wet`）与本文件的 `OmniPuddleSurface`（传水洼权重）。
 float OmniPuddleRoughness(float roughness, float wetRoughness, float wetnessStages){
-	return gfx_puddle_roughness(roughness, wetRoughness, wetnessStages, OMNI_PUDDLE_REFLECTION_SHARPNESS); // 混合公式在通用库，锐度选项在这里传入。
+	return ogxPuddleRoughness(roughness, wetRoughness, wetnessStages, OMNI_PUDDLE_REFLECTION_SHARPNESS); // 混合公式在通用库，锐度选项在这里传入。
 }
 
 // 水洼表面：把 Eclipse `applyPuddles` 的水洼三步——法线压平、粗糙度改写与反照率压暗——接到已解出的表面上，

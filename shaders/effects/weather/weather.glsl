@@ -55,7 +55,7 @@ const float drynessHalflife = 50.0; // [10.0 20.0 30.0 50.0 75.0 100.0 150.0 200
   雨遮罩写进零号画面的透明通道，读取端靠它判断雨落在画面哪一层，而不是靠世界位置猜。
 */
 // 雨雪随风偏移放在通用库，这里只传入相机、时间与选项。
-#include "/gfx/weather.glsl"
+#include "/omni-gfx/weather.glsl"
 // 宿主输入统一由绑定层整理：时间、相机位置与露天标记不再散落在效果里。
 #include "/bind/time.glsl"
 #include "/bind/camera.glsl"
@@ -91,7 +91,7 @@ void Rain(inout vec3 color, float rainMask, vec3 shadowlightColorInput, vec3 sky
 vec2 RainWindOffset(vec3 worldPos){
 	OmniCamera camera = bind_camera(); // 相机位置从绑定结构取一次。
 	OmniTime time = bind_time(); // 动画时间从绑定结构取一次。
-	return gfx_rain_wind_offset(worldPos, camera.position, time.seconds, vec2(OMNI_RAIN_WIND_X, OMNI_RAIN_WIND_Z), OMNI_RAIN_DISTURBANCE, bind_weather().eyeBrightnessOne); // 全局量与选项交给库。
+	return ogxRainWindOffset(worldPos, camera.position, time.seconds, vec2(OMNI_RAIN_WIND_X, OMNI_RAIN_WIND_Z), OMNI_RAIN_DISTURBANCE, bind_weather().eyeBrightnessOne); // 全局量与选项交给库。
 }
 
 // --- 雨遮罩：读天气贴图的透明通道，空白纹素直接丢弃 ---

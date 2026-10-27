@@ -16,13 +16,13 @@
     本文件只传反射图、深度图、法线图与像素大小，半径与是否抖动仍由调用方决定。
 */
 // 反射小波滤波在通用库。
-#include "/gfx/reflection.glsl"
+#include "/omni-gfx/reflection.glsl"
 // --- composite3 / composite4：反射小波滤波 ---
 #if defined OMNI_COMPOSITE3_PASS || defined OMNI_COMPOSITE4_PASS
 // 反射滤波：用九点小波核按法线与深度相似度加权，抹掉屏幕反射的噪点同时保住反射边界。
 // 输入是反射数据、表面位置、视线方向、法线、粗糙度、滤波半径与抖动噪声；就地改写反射数据。
 void AtrousWaveletFilter(inout vec4 reflectionData, vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, float radius, vec2 noise){
-	gfx_reflection_atrous_filter(reflectionData, viewPos, viewDir, normal, roughness, radius, noise, texCoord,
+	ogxReflectionAtrousFilter(reflectionData, viewPos, viewDir, normal, roughness, radius, noise, texCoord,
 		colortex3, depthtex0, colortex4, pixelSize, gbufferProjectionInverse); // 一次调用完成九点加权滤波。
 }
 #endif // composite3 与 composite4 段结束。

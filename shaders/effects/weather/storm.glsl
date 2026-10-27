@@ -60,7 +60,7 @@
 // 共用数学：提供 `clamp`、`exp2`、`floor`、`fract`、`mix`、`texture` 等小工具，重复引入由守卫去重。
 #include "/common/math.glsl"
 // 暴风噪声与颜色、每日天气哈希的纯计算放在通用库。
-#include "/gfx/weather.glsl"
+#include "/omni-gfx/weather.glsl"
 // 每日天气：提供当天的云量与雾密度，逐日轮换；本文件是天气文件夹里已经接进体积雾程序的入口，
 // 所以在这里引入它，让每日匀雾能借暴风雾这条通道进入画面，同时让整个模块随雾程序一起编译。
 #include "/effects/weather/dailyweather.glsl"
@@ -105,7 +105,7 @@ float OmniDailyWeatherFog(){
 // 照 Eclipse `lib/overworld_fog.glsl:3-13` 的 `densityAtPosFog` 一比一搬运。
 // 为什么先除以十八再把横向缩一半：这是 Eclipse 的噪声格子尺度，直接照搬保证雾团大小一致。
 float OmniStormNoise(vec3 position){
-	return gfx_storm_noise(position, noisetex, 512.0); // 噪声公式在通用库，贴图边长照原程序。
+	return ogxStormNoise(position, noisetex, 512.0); // 噪声公式在通用库，贴图边长照原程序。
 }
 
 // --- 暴风浓雾：照 Eclipse `lib/overworld_fog.glsl:42-47` 搬运 ---
@@ -126,7 +126,7 @@ float OmniStormFog(vec3 worldPos, float snowStorm){
 // 返回归一化后的雾色乘子，调用方按总强度在单位色与它之间混合。
 // 为什么按总强度归一：沙暴与雪暴互斥，任一单独出现时颜色不被另一个的零值拉暗。
 vec3 OmniStormColor(float snowStorm, float sandStorm){
-	return gfx_storm_color(snowStorm, sandStorm); // 加权与归一化在通用库。
+	return ogxStormColor(snowStorm, sandStorm); // 加权与归一化在通用库。
 }
 #endif // 暴风函数开关结束。
 #endif // OMNI_EFFECT_WEATHER_STORM_INCLUDED

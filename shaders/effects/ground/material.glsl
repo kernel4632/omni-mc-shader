@@ -108,7 +108,7 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 // 方块光曲线、材质法线与遮蔽算法放在通用库；这里只传入选项值。
-#include "/gfx/surface.glsl"
+#include "/omni-gfx/surface.glsl"
 // G 缓冲读取、材质编号、掩码与手部判断在绑定层，本文件只保留材质选项与 PBR 解码。
 #include "/bind/gbuffer.glsl"
 // --- 几何结构：射线、平面与求交结果，供屏幕空间反射等使用 ---
@@ -180,15 +180,15 @@ void ApplyMaterial(inout Material material, in MaterialMask mask, inout bool isS
 // 材质遮蔽：资源包把遮蔽存在法线贴图的蓝通道，取出来乘到底色上；未开该选项时恒为一。
 // 为什么单独拆出来：视差路径已经自己解出法线，只差遮蔽要另外取一次贴图，拆开才能单独复用。
 float omniMaterialAO(vec3 normalTexRGB){
-	return gfx_material_ao(normalTexRGB, bool(OMNI_MATERIAL_AO)); // 选项决定是否启用遮蔽。
+	return ogxMaterialAo(normalTexRGB, bool(OMNI_MATERIAL_AO)); // 选项决定是否启用遮蔽。
 }
 // 法线倍率：围绕朝外方向缩放起伏，`OMNI_NORMAL_MAP_MULT` 越大起伏越强；为一等于原样。
 // 传入的已经是切线空间单位法线，所以视差路径解出的法线也能直接套用，不必重采贴图。
 vec3 omniMaterialNormalScale(vec3 tangentNormal){
-	return gfx_material_normal_scale(tangentNormal, OMNI_NORMAL_MAP_MULT); // 倍率由选项传入。
+	return ogxMaterialNormalScale(tangentNormal, OMNI_NORMAL_MAP_MULT); // 倍率由选项传入。
 }
 vec4 omniMaterialNormal(vec3 normalTexRGB){
-	return gfx_material_normal(normalTexRGB, bool(OMNI_MATERIAL_AO), OMNI_NORMAL_MAP_MULT); // 解码、缩放与遮蔽一次完成。
+	return ogxMaterialNormal(normalTexRGB, bool(OMNI_MATERIAL_AO), OMNI_NORMAL_MAP_MULT); // 解码、缩放与遮蔽一次完成。
 }
 // 视差由使用它的几何阶段显式引入，本文件只提供材质解码与选项，不反向依赖渲染层。
 #endif // OMNI_EFFECT_GROUND_MATERIAL_INCLUDED

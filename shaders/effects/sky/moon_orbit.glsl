@@ -23,10 +23,10 @@
 #define EARTH_ROTATION_TILT 14.0 // 月亮轨道随季节摆动的最大赤纬偏移，单位度。
 uniform float omniMoonTimeSmooth; // 平滑后的累计世界时间，由加载器按 `pipeline.properties` 每帧算好。世界天数 `worldDay` 由 `common/uniforms.glsl` 统一声明。
 // 月亮轨道公式放在通用库，这里只传时间、纬度与倾角。
-#include "/gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere.glsl"
 // 把时间换算成月亮的世界方向：纬度决定升起高度，倾角决定赤纬，时间决定时角。
 vec3 MoonDirection(float time, float latitude, float pathRotation){
-	return gfx_moon_direction(time, latitude, pathRotation, float(MONTH_LENGTH)); // 转发到通用库，月份长度按本文件常数。
+	return ogxMoonDirection(time, latitude, pathRotation, float(MONTH_LENGTH)); // 转发到通用库，月份长度按本文件常数。
 }
 // 由世界时间闭式算出月亮方向：开启自定义轨道时月亮独立运行，关闭时月亮仍与太阳相对。
 // 这是顶点阶段的一项纯计算，不读取任何中间画面，因此各程序算出的方向完全一致。

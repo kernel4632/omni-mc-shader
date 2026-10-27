@@ -14,11 +14,11 @@
 可复制示例：
     `vec4 gi = GI_TemporalFilter();`
     `vec3 filtered = GI_SpatialFilter(dist, normal, viewDir);`
-设计原因与取舍：主循环在 `gfx/gi.glsl`，这里只填 `gfx_gi_view` 结构、解释选项并各调用一次；
+设计原因与取舍：主循环在 `gfx/gi.glsl`，这里只填 `OgxGiView` 结构、解释选项并各调用一次；
     程序宏仍留在这里，保证不需要全局光的程序不产生采样代码。
 */
 // 通用库提供反弹、历史重投影、时间滤波与空间滤波。
-#include "/gfx/gi.glsl"
+#include "/omni-gfx/gi.glsl"
 // 远景深度贴图选择：没有远景模组时用近景深度占位，通用库按开关决定是否读取。
 #ifdef DISTANT_HORIZONS
 	#define OMNI_GI_DH_DEPTH dhDepthTex0 // 远景深度贴图。
@@ -27,8 +27,8 @@
 #endif
 #if OMNI_GI_RSM // 只有打开全局光才需要下面的函数。
 // 把本帧相机、投影、阴影相机与屏幕尺寸打包成通用库结构；没有远景时用近景矩阵占位。
-gfx_gi_view GiView(){
-	gfx_gi_view view; // 本帧参数。
+OgxGiView GiView(){
+	OgxGiView view; // 本帧参数。
 	view.projection_inverse = gbufferProjectionInverse; // 近景逆投影。
 	view.previous_projection = gbufferPreviousProjection; // 上一帧投影。
 	view.model_view_inverse = gbufferModelViewInverse; // 视空间转世界。
@@ -68,7 +68,7 @@ vec3 RSM(vec3 viewPos, vec3 normal){
 	#else // 末地或关闭修正时不做遮罩。
 		const bool leakFix = false; // 所有可见表面都补光。
 	#endif
-	return gfx_gi_rsm(viewPos, normal, GiView(), shadowtex0, shadowtex1, shadowcolor0, shadowcolor1,
+	return ogxGiRsm(viewPos, normal, GiView(), shadowtex0, shadowtex1, shadowcolor0, shadowcolor1,
 		OMNI_GI_RADIUS, int(OMNI_GI_QUALITY), OMNI_GI_FALLOFF, float(shadowMapResolution), OMNI_SHADOW_MAP_BIAS,
 		BlueNoiseTemporal(), useSolidShadow, leakFix, isEyeInWater == 1); // 一次调用完成反弹。
 }
@@ -105,7 +105,7 @@ vec4 GI_TemporalFilter(){
 	#else // 玩家正常参与。
 		const bool disablePlayer = false; // 不排除玩家。
 	#endif
-	return gfx_gi_temporal_filter(texCoord, texelCoord, GiView(), colortex2, colortex2, colortex5, depthtex1, OMNI_GI_DH_DEPTH,
+	return ogxGiTemporalFilter(texCoord, texelCoord, GiView(), colortex2, colortex2, colortex5, depthtex1, OMNI_GI_DH_DEPTH,
 		shadowtex0, shadowtex1, shadowcolor0, shadowcolor1, OMNI_GI_RENDER_RESOLUTION, hasDh, OMNI_DH_AO != 0, newVersion,
 		leakFix, isEyeInWater == 1, useSolidShadow, disableHand, disablePlayer, MC_HAND_DEPTH, float(MATID_ENTITIES_PLAYER),
 		OMNI_GI_RADIUS, OMNI_GI_FALLOFF, int(OMNI_GI_QUALITY), float(shadowMapResolution), OMNI_SHADOW_MAP_BIAS, BlueNoiseTemporal()); // 一次调用完成时间滤波。
@@ -114,7 +114,7 @@ vec4 GI_TemporalFilter(){
 // 空间滤波：主世界在延迟二号、末地在延迟四号，读半分辨率历史并做七乘七邻域平均。
 #if (defined OMNI_DEFERRED2_PASS && !defined OMNI_END) || (defined OMNI_END && defined OMNI_DEFERRED4_PASS)
 vec3 GI_SpatialFilter(float dist, vec3 normal, vec3 viewDir){
-	return gfx_gi_spatial_filter(texCoord, dist, normal, viewDir, GiView(), colortex2, OMNI_GI_RENDER_RESOLUTION); // 一次调用完成空间滤波。
+	return ogxGiSpatialFilter(texCoord, dist, normal, viewDir, GiView(), colortex2, OMNI_GI_RENDER_RESOLUTION); // 一次调用完成空间滤波。
 }
 #endif // 空间滤波结束。
 #endif // 全局光开关结束。

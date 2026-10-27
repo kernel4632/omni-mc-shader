@@ -99,9 +99,9 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 // 强光压缩算法放在通用库里，本文件只保留选项、曝光统计与调用。
-#include "/gfx/color.glsl"
+#include "/omni-gfx/color.glsl"
 // 自动曝光的分块统计也在通用后期库，本文件只填参数。
-#include "/gfx/post.glsl"
+#include "/omni-gfx/post.glsl"
 
 // --- 曝光统计：按分块对一号画面求平均亮度，得到目标曝光 ---
 // 把画面切成固定大小的小块，每个块只读一个亮度，按到中心的距离和亮度给块计权，再加权平均。
@@ -109,7 +109,7 @@
 // 为什么用对数平均：亮度跨度很大，直接平均会被几个高光块带偏。
 float GetExposureTiles(){
 	float avg = Luminance(CurveToLinear(textureLod(colortex1, vec2(0.65, 0.65), floor(log2(min(viewWidth, viewHeight)))).rgb)) * (MAIN_OUTPUT_FACTOR / 128.0); // 用一个粗糙降采样估计整体亮度，供计权用。
-	gfx_exposure_params params; // 分块统计需要的全部输入。
+	OgxExposureParams params; // 分块统计需要的全部输入。
 	params.screen_size = screenSize; // 画面尺寸。
 	params.pixel_size = pixelSize; // 单像素大小。
 	params.lod = 6; // 用第六级多级纹理做分块采样。
@@ -138,7 +138,7 @@ float GetExposureTiles(){
 	#else
 		params.overworld = false; // 非主世界不套主世界曲线。
 	#endif
-	float exposure = gfx_exposure_tile_average(colortex1, params); // 分块循环在通用库里。
+	float exposure = ogxExposureTileAverage(colortex1, params); // 分块循环在通用库里。
 	exposure *= EXPOSURE_OUTPUT_FACTOR; // 换到曝光单位。
 	return LinearToCurve(exposure); // 按管线编码后写进顶行像素。
 }
@@ -175,13 +175,13 @@ float GetExposureValue(){
 // --- 黑边：按电影比例在画面上下画黑边 ---
 // `newRatio` 是目标宽高比，零表示不加黑边。返回零或一表示该像素是否落在画面内。
 float BlackBar(float newRatio){
-	return gfx_black_bar(texCoord, aspectRatio, newRatio); // 黑边形状在通用库。
+	return ogxBlackBar(texCoord, aspectRatio, newRatio); // 黑边形状在通用库。
 }
 
 // --- 浦肯野效应：暗处向偏蓝的暗视觉偏移 ---
 // 亮度低于阈值时，颜色向偏蓝的亮度混合，阈值和强度由选项控制。
 void PurkinjeEffect(inout vec3 color){
-	gfx_purkinje(color, OMNI_PURKINJE_EFFECT_THRESHOLD, OMNI_PURKINJE_EFFECT_STRENGTH); // 混合公式在通用库。
+	color = ogxPurkinje(color, OMNI_PURKINJE_EFFECT_THRESHOLD, OMNI_PURKINJE_EFFECT_STRENGTH); // 混合公式在通用库。
 }
 
 // --- 白平衡：按色温给线性颜色染色 ---
@@ -191,14 +191,14 @@ void PurkinjeEffect(inout vec3 color){
 // 为什么放在色调映射之前：白平衡是相机白点校正，要在曝光后的线性颜色上做；
 //   压缩曲线之后再改会破坏已经压好的高光，也与真实相机的处理顺序不符。
 vec3 WhiteBalance(vec3 color){
-	if (OMNI_WHITE_BALANCE != 6500.0) color = gfx_white_balance(color, Blackbody(OMNI_WHITE_BALANCE)); // 非中性时才按黑体色温染色，低值偏暖、高值偏冷。
+	if (OMNI_WHITE_BALANCE != 6500.0) color = ogxWhiteBalance(color, Blackbody(OMNI_WHITE_BALANCE)); // 非中性时才按黑体色温染色，低值偏暖、高值偏冷。
 	return color; // 返回染色后的线性颜色。
 }
 
 // --- 高级调色：白光裁剪、亮度伽马与饱和度，从十四号主体里单独拆出 ---
 // 先回线性空间，再压白点、按亮度伽马调整明暗对比、按饱和度调整鲜艳度，最后回显示空间。
 vec3 AdvancedColor(vec3 color){
-	return gfx_advanced_color(color, OMNI_LUMA_GAMMA, OMNI_WHITE_CLIP, OMNI_SATURATION, OMNI_GAMMA); // 调色步骤在通用库，选项在这里传入。
+	return ogxAdvancedColor(color, OMNI_LUMA_GAMMA, OMNI_WHITE_CLIP, OMNI_SATURATION, OMNI_GAMMA); // 调色步骤在通用库，选项在这里传入。
 }
 
 // 参考签名兼容层：HSV 转 RGB 与 Eclipse 黑体色。

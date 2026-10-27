@@ -15,7 +15,7 @@
 #ifndef OMNI_MATH_INCLUDED // 只引入一次，避免宏和函数重复定义。
 #define OMNI_MATH_INCLUDED // 置上标记。
 // 纯数学函数放在通用库；这里只保留引擎常数与转发。
-#include "/gfx/math.glsl"
+#include "/omni-gfx/math.glsl"
 
 // 本文件的 `BicubicBlurTexture` 直接读 `noisetex`，所以自己先引入加载器输入声明。
 // 为什么放在文件内部而不是要求调用方先引入：引用顺序写错时只会报“未声明的标识符”，
@@ -55,126 +55,126 @@
 
 // --- 区间重映射 ---
 // 把落在 `e0` 到 `e1` 的值映射到零到一并夹紧。
-float remapSaturate(float x, float e0, float e1){ return gfx_remapSaturate(x, e0, e1); }
+float remapSaturate(float x, float e0, float e1){ return ogxRemapSaturate(x, e0, e1); }
 // Eclipse 的 `linear_step` 与 remapSaturate 同式，只是名字不同。
 float linear_step(float x, float edge0, float edge1){ return remapSaturate(x, edge0, edge1); }
 
 // --- 角度近似 ---
 // 两参数反正切：返回从横轴到向量的角度，横分量为零时单独处理避免除零。
-float atan2(vec2 v){ return gfx_atan2(v); }
+float atan2(vec2 v){ return ogxAtan2(v); }
 
 // 快速反余弦近似：一次多项式乘近似平方根，精度够光照用。
-float facos(float x){ return gfx_facos(x); }
+float facos(float x){ return ogxFastAcos(x); }
 
 // --- 颜色曲线：伽马与管线四次方根编码 ---
 // 线性转伽马空间，指数二点二。
-vec3 LinearToGamma(vec3 c){ return gfx_LinearToGamma(c); }
+vec3 LinearToGamma(vec3 c){ return ogxLinearToGamma(c); }
 
 // 伽马空间转线性，贴图颜色进入光照前用。
-vec3 GammaToLinear(vec3 c){ return gfx_GammaToLinear(c); }
+vec3 GammaToLinear(vec3 c){ return ogxGammaToLinear(c); }
 
 // 管线编码：取四次方根，让十六位定点画面在暗部有足够精度。
-float LinearToCurve(float c){ return gfx_LinearToCurve(c); }
+float LinearToCurve(float c){ return ogxLinearToCurve(c); }
 
 // 管线解码：四次方，用两次平方代替幂函数更快。
-float CurveToLinear(float c){ return gfx_CurveToLinear(c); }
+float CurveToLinear(float c){ return ogxCurveToLinear(c); }
 
 // 三维版本的管线编码。
-vec3 LinearToCurve(vec3 c){ return gfx_LinearToCurve(c); }
+vec3 LinearToCurve(vec3 c){ return ogxLinearToCurve3(c); }
 
 // 三维版本的管线解码。
-vec3 CurveToLinear(vec3 c){ return gfx_CurveToLinear(c); }
+vec3 CurveToLinear(vec3 c){ return ogxCurveToLinear3(c); }
 
 // 夜视色偏：暗处颜色向偏蓝的亮度混一半，模拟人眼暗视觉。
-void DoNightEye(inout vec3 c){ gfx_DoNightEye(c); }
+void DoNightEye(inout vec3 c){ ogxDoNightEye(c); }
 
 // --- 打包：把两个数塞进一个通道 ---
 // 两个零到一的数各取八位，拼进一个十六位通道。
-float Pack2x8(vec2 x){ return gfx_Pack2x8(x); }
+float Pack2x8(vec2 x){ return ogxPack2x8(x); }
 
 // 从十六位通道拆回两个八位数。
-vec2 Unpack2x8(float x){ return gfx_Unpack2x8(x); }
+vec2 Unpack2x8(float x){ return ogxUnpack2x8(x); }
 
 // 两个零到一的数各取十六位，按位拼进一个三十二位浮点通道。
-float Pack2x16(vec2 x){ return gfx_Pack2x16(x); }
+float Pack2x16(vec2 x){ return ogxPack2x16(x); }
 
 // 从三十二位浮点通道按位拆回两个数。
-vec2 Unpack2x16(float x){ return gfx_Unpack2x16(x); }
+vec2 Unpack2x16(float x){ return ogxUnpack2x16(x); }
 
 // --- 法线编码 ---
 // 解码法线贴图：三通道和接近一点五才认为是有效法线，否则按朝外法线处理。
-vec3 DecodeNormalTex(vec3 texNormal){ return gfx_DecodeNormalTex(texNormal); }
+vec3 DecodeNormalTex(vec3 texNormal){ return ogxDecodeNormalTex(texNormal); }
 
 // 八面体编码的折叠：把下半球翻到外圈。
-vec2 OctWrap(vec2 v){ return gfx_OctWrap(v); }
+vec2 OctWrap(vec2 v){ return ogxOctWrap(v); }
 
 // 单位法线压成两个零到一的数，存进画面的两个通道。
-vec2 EncodeNormal(vec3 n){ return gfx_EncodeNormal(n); }
+vec2 EncodeNormal(vec3 n){ return ogxEncodeNormal(n); }
 
 // 从两个通道解回单位法线，与上面互逆。
-vec3 DecodeNormal(vec2 en){ return gfx_DecodeNormal(en); }
+vec3 DecodeNormal(vec2 en){ return ogxDecodeNormal(en); }
 
 // --- 光照模型 ---
 // 法线分布：微表面朝向半程向量的比例，粗糙度越大高光越散。
-float D_Walter(float NdotH, float roughness){ return gfx_D_Walter(NdotH, roughness); }
+float D_Walter(float NdotH, float roughness){ return ogxDistributionGGX(NdotH, roughness); }
 
 // 菲涅尔近似：掠射角反射更强，五次方曲线。
-float F_Schlick(float VdotH, float f0, float f90){ return gfx_F_Schlick(VdotH, f0, f90); }
+float F_Schlick(float VdotH, float f0, float f90){ return ogxFresnelSchlick(VdotH, f0, f90); }
 
 // 可见性项：微表面互相遮挡的比例，已经乘了入射余弦。
-float V_Schlick(float NdotL, float NdotV, float roughness){ return gfx_V_Schlick(NdotL, NdotV, roughness); }
+float V_Schlick(float NdotL, float NdotV, float roughness){ return ogxVisibilitySchlick(NdotL, NdotV, roughness); }
 
 // 漫反射：迪士尼模型，粗糙表面在掠射角更亮。
-float Fd_Burley(vec3 n, vec3 v, vec3 l, float roughness){ return gfx_Fd_Burley(n, v, l, roughness); }
+float Fd_Burley(vec3 n, vec3 v, vec3 l, float roughness){ return ogxDiffuseBurley(n, v, l, roughness); }
 
 // 高光：菲涅尔、可见性、分布三项相乘。
-float SpecularGGX(vec3 n, vec3 v, vec3 l, float roughness, float f0){ return gfx_SpecularGGX(n, v, l, roughness, f0); }
+float SpecularGGX(vec3 n, vec3 v, vec3 l, float roughness, float f0){ return ogxSpecularGGX(n, v, l, roughness, f0); }
 
 // --- 黑体颜色：按色温给出光源颜色，火把色温选项用 ---
 // 普朗克轨迹的分段多项式拟合，先求色度坐标再转线性显示颜色。
-vec3 Blackbody(float temperature){ return gfx_Blackbody(temperature); }
+vec3 Blackbody(float temperature){ return ogxBlackbody(temperature); }
 
 // --- 射线求交 ---
 // 射线与过原点的平面求交；几乎平行时返回极远处的点。
-vec3 RayPlaneIntersection(vec3 ori, vec3 dir, vec3 normal){ return gfx_RayPlaneIntersection(ori, dir, normal); }
+vec3 RayPlaneIntersection(vec3 ori, vec3 dir, vec3 normal){ return ogxRayPlaneIntersection(ori, dir, normal); }
 
 // 射线与球心在原点的球求交，返回进出两个距离；不相交时返回近大远小的无效值。
-vec2 RaySphereIntersection(vec3 ori, vec3 dir, float radius){ return gfx_RaySphereIntersection(ori, dir, radius); }
+vec2 RaySphereIntersection(vec3 ori, vec3 dir, float radius){ return ogxRaySphereIntersection(ori, dir, radius); }
 
 // --- 散射相位函数 ---
 // 瑞利相位：小粒子散射，前后对称。
-float RayleighPhaseFunction(float nu){ return gfx_RayleighPhaseFunction(nu); }
+float RayleighPhaseFunction(float nu){ return ogxRayleighPhase(nu); }
 
 // 米氏相位：大粒子散射，`g` 越大越偏向前方。
-float MiePhaseFunction(float g, float nu){ return gfx_MiePhaseFunction(g, nu); }
+float MiePhaseFunction(float g, float nu){ return ogxMiePhase(g, nu); }
 
 // --- 抖动噪声 ---
 // 交错梯度噪声：按像素位置给出均匀分布的伪随机数。
-float InterleavedGradientNoise(vec2 c){ return gfx_InterleavedGradientNoise(c); }
+float InterleavedGradientNoise(vec2 c){ return ogxInterleavedGradientNoise(c); }
 
 // 二乘二拜尔矩阵：下面更大的矩阵由它递归组合。
-float bayer2(vec2 a){ return gfx_bayer2(a); }
+float bayer2(vec2 a){ return ogxBayer2(a); }
 
-float bayer4(vec2 a){ return gfx_bayer4(a); }
-float bayer8(vec2 a){ return gfx_bayer8(a); }
-float bayer64(vec2 a){ return gfx_bayer64(a); }
+float bayer4(vec2 a){ return ogxBayer4(a); }
+float bayer8(vec2 a){ return ogxBayer8(a); }
+float bayer64(vec2 a){ return ogxBayer64(a); }
 
 // --- 三次采样：原程序在两种时间抗锯齿里各写一份且逐字相同，按移植合同合并到这里一份 ---
 // 五次采样近似卡特穆尔-罗姆三次插值，放大历史画面时比双线性更锐利。
 // 为什么只采五次：四角的权重很小，省掉后画面差别看不出，采样数从九次降到五次。
-vec3 BicubicTexture(sampler2D texSampler, vec2 coord, vec2 texSize){ return gfx_BicubicTexture(texSampler, coord, texSize); }
+vec3 BicubicTexture(sampler2D texSampler, vec2 coord, vec2 texSize){ return ogxBicubicTexture(texSampler, coord, texSize); }
 
 // --- 噪声贴图三次模糊：原程序地形顶点与阴影顶点各写一份且逐字相同，合并到这里一份 ---
 // 调用前提：`common/uniforms.glsl` 已引入，函数固定读取六十四像素的 `noisetex`，`texSampler` 参数只为保持原签名。
 // 泛光版与云影版参数和返回类型不同，分别留在 `effects/color/bloom.glsl` 与 `effects/cloud/shadow.glsl`，见移植合同偏离记录。
-vec4 BicubicBlurTexture(sampler2D texSampler, vec2 coord){ return gfx_BicubicBlurTexture(texSampler, coord); }
+vec4 BicubicBlurTexture(sampler2D texSampler, vec2 coord){ return ogxBicubicBlurTexture(texSampler, coord); }
 
 // --- Omni 额外函数：原程序没有，保留文件仍在使用 ---
 // 安全归一化：长度为零时普通归一化会得到无穷，光传播体积计算阶段用它算天体方向。
-vec3 omniNormalize(vec3 vector){ return gfx_omniNormalize(vector); }
+vec3 omniNormalize(vec3 vector){ return ogxNormalize(vector); }
 // 颜色转色相、饱和度、明度：体积光染色与矿石/纹饰自发光都要拆出这三个量，来源 Eclipse `lib/hsv.glsl`。
 // 为什么放共用文件：两处以上效果（体积光、自发光矿石/纹饰）都要用，复制一份会与别处不一致。
-vec3 omniRgbToHsv(vec3 c){ return gfx_omniRgbToHsv(c); }
+vec3 omniRgbToHsv(vec3 c){ return ogxRgbToHsv(c); }
 // Eclipse `frisvad`：由法线生成一组正交切线，退化方向单独处理。
 void frisvad(vec3 n, out vec3 f, out vec3 r){
 	if (n.z < -0.9){
@@ -186,6 +186,12 @@ void frisvad(vec3 n, out vec3 f, out vec3 r){
 		f = vec3(1.0 - n.x * n.x * a, b, -n.x);
 		r = vec3(b, 1.0 - n.y * n.y * a, -n.y);
 	}
+}
+
+// 切线基：生成库返回三个向量，这里按列装回矩阵，保留旧调用点的 mat3 结果。
+mat3 omniTangentBasis(vec3 dp1, vec3 dp2, vec2 duv1, vec2 duv2){
+	OgxTangentBasis basis = ogxTangentBasis(dp1, dp2, duv1, duv2); // 生成库算出的三个方向。
+	return mat3(basis.tangent, basis.bitangent, basis.normal); // 切线、副切线、法线按列排列。
 }
 
 #endif // 文件守卫结束。

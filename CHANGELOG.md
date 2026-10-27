@@ -1,4 +1,12 @@
 # 更新记录
+## 0.16.0-dev.7
+
+结构重构第二批：删除 `shaders/gfx/` 纯转发层，生成 GLSL 只保留一份。
+- 转发层：248 个直通函数改为直接调用生成的 `ogx` 名字；五级泛光链排布搬进 `effects/color/bloom.glsl`，反射结构体与合成主流程搬进 `effects/reflection/screenspace.glsl`，切线基放回 `common/math.glsl`，视差调用改成直接传三个基向量。效果文件直接 `#include "/omni-gfx/..."`，不再经过第二层转发。
+- 单一产物：删除 `omni-gfx/generated/glsl/` 镜像，`python omni-gfx/build.py generate` 只写 `shaders/omni-gfx/`；清单、统计与测试同步改为单一位置。
+- 数量：选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；`effects/` 99 个文件 6490 行，`rendering/` 43 个文件 2992 行，`bind/` 6 个文件 385 行。
+- 验证：`python build.py audit` 通过 447 个代码文件；`python build.py verify` 通过 160 个测试、9 组编译探针与打包；`python build.py compile` 通过 280 组唯一程序、0 错误；`python omni-gfx/build.py strict-parity` 为 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0；`python omni-gfx/build.py profiles` 两份 profile 编译通过。未启动 Minecraft，游戏内画面、菜单、性能与其他显卡仍未验证。
+
 ## 0.16.0-dev.6
 
 结构重构第一批：把每个效果从 `effects/` 选项层、`rendering/<效果>/` 阶段片段和 `bind/` 接线三处收回到 `effects/<页>/` 一处，`rendering/` 只留程序主体与阶段胶水。

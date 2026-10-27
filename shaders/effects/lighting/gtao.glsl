@@ -17,7 +17,7 @@
 设计原因与取舍：遮蔽与全局光互相独立、开关也各自独立，拆成两个文件后可分别阅读和关闭。
 */
 // 多弹射补偿放在通用库，这里只传入遮蔽与底色。
-#include "/gfx/gi.glsl"
+#include "/omni-gfx/gi.glsl"
 // 地平线遮蔽：沿视线做多切片搜索最大地平线角，积分出半球被挡住的比重。
 // 调用前提：`texCoord`、`gbufferProjection`、`depthtex1` 已声明；采样循环在通用库。
 float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
@@ -26,7 +26,7 @@ float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
 	#else // 否则用空间噪声。
 		vec2 noise = BlueNoise(); // 固定空间噪声。
 	#endif
-	gfx_gtao_params params; // 画质、半径与远景能力。
+	OgxGtaoParams params; // 画质、半径与远景能力。
 	params.steps = OMNI_GTAO_QUALITY; // 环绕视线的切片数。
 	params.slice_steps = OMNI_GTAO_SLICE_QUALITY; // 每个切片的搜索步数。
 	params.falloff_start = OMNI_GTAO_FALLOFF_START; // 衰减起点。
@@ -47,18 +47,18 @@ float GroundTruthBasedAmbientOcclusion(vec3 viewPos, vec3 viewDir, vec3 normal){
 		#else
 			params.dh_ao = false; // 天空样本不产生遮挡。
 		#endif
-		return gfx_ground_truth_ao(viewPos, viewDir, normal, texCoord, aspectRatio, depthtex1, dhDepthTex0,
+		return ogxGroundTruthAo(viewPos, viewDir, normal, texCoord, aspectRatio, depthtex1, dhDepthTex0,
 			gbufferProjection, gbufferProjectionInverse, dhProjectionInverse, params, noise); // 一次调用完成全部切片。
 	#else // 没有远景时用近景深度占位。
 		params.has_dh = false; // 没有远景深度。
 		params.dh_ao = false; // 不启用远景遮蔽。
-		return gfx_ground_truth_ao(viewPos, viewDir, normal, texCoord, aspectRatio, depthtex1, depthtex1,
+		return ogxGroundTruthAo(viewPos, viewDir, normal, texCoord, aspectRatio, depthtex1, depthtex1,
 			gbufferProjection, gbufferProjectionInverse, gbufferProjectionInverse, params, noise); // 一次调用完成全部切片。
 	#endif
 }
 // 遮蔽多弹射：按表面底色给遮蔽补一层间接光，深色表面补得少，避免暗部压死。
 vec3 GTAOMultiBounce(float ao, vec3 albedo){
-	return gfx_ao_multi_bounce(ao, albedo); // 转发到通用库。
+	return ogxAoMultiBounce(ao, albedo); // 转发到通用库。
 }
 
 #endif // OMNI_GTAO_INCLUDED

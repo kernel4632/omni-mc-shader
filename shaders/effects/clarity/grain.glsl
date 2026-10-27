@@ -32,14 +32,14 @@
 // 加载器输入由绑定层整理，时间以普通秒数交给效果。
 #include "/bind/time.glsl"
 // 颗粒公式放在通用库。
-#include "/gfx/post.glsl"
+#include "/omni-gfx/post.glsl"
 
 // --- 胶片颗粒：把屏幕坐标与时间合成一个种子，再折成一个正负各半的细噪点 ---
 // 为什么用取模反复折叠：原实现只用取模和乘法把坐标与时间搅成一个伪随机数，不做噪声贴图采样，代价很低。
 // 为什么乘零点零一再减零点零零五：让结果落在正负零点零零五之间，围绕零上下波动，只加噪点而不整体提亮或压暗画面。
 vec3 OmniFilmGrain(vec3 color, vec2 coord){
 	#if OMNI_FILM_GRAIN // 关闭时整段不编译，直接原样返回。
-		color = gfx_film_grain(color, coord, bind_time().seconds, OMNI_FILM_GRAIN_STRENGTH); // 颗粒公式在通用库，时间与强度在这里传入。
+		color = ogxFilmGrain(color, coord, bind_time().seconds, OMNI_FILM_GRAIN_STRENGTH); // 颗粒公式在通用库，时间与强度在这里传入。
 	#endif
 	return color; // 返回叠加颗粒后的颜色，关闭时就是原颜色。
 }

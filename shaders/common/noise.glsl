@@ -18,7 +18,7 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 // 采样算法放在通用库，本文件只把加载器纹理、像素坐标和帧号传进去。
-#include "/gfx/sampling.glsl"
+#include "/omni-gfx/sampling.glsl"
 // 三角噪声与雾噪声在生成库，宿主兼容层直接引用。
 #include "/omni-gfx/noise.glsl"
 
@@ -46,17 +46,17 @@ float rand(float co){ return ogxWhiteNoise(vec2(co, co * 2.0)); }
 
 // 不随时间变化的二维蓝噪声，按像素位置平铺。
 vec2 BlueNoise(){
-	return gfx_blue_noise(noisetex, ivec2(OMNI_PIXEL)); // 传纹理和坐标，库负责取模平铺。
+	return ogxBlueNoise(noisetex, ivec2(OMNI_PIXEL)); // 传纹理和坐标，库负责取模平铺。
 }
 
 // 每帧平移的二维蓝噪声，六十四帧一循环。
 vec2 BlueNoiseTemporal(){
-	return gfx_blue_noise_temporal(noisetex, ivec2(OMNI_PIXEL), frameCounter); // 帧号交给库做时间偏移。
+	return ogxBlueNoiseTemporal(noisetex, ivec2(OMNI_PIXEL), frameCounter); // 帧号交给库做时间偏移。
 }
 
 // 每帧平移的拜尔抖动，一百二十八帧一循环。
 float BayerTemporal(){
-	return gfx_bayer_temporal(ivec2(OMNI_PIXEL), frameCounter); // 拜尔矩阵与帧偏移都在库里。
+	return ogxBayerTemporal(ivec2(OMNI_PIXEL), frameCounter); // 拜尔矩阵与帧偏移都在库里。
 }
 // 参考签名兼容层：参考的采样函数不带参数，直接取当前像素与帧号。
 vec2 BlueNoiseTemproal(){ return BlueNoiseTemporal(); }

@@ -217,7 +217,7 @@ void omniTerrainFragment(){
 	vec2 duv2 = dFdy(texCoord); // 纹理坐标纵向屏幕变化。
 	
 	#ifndef OMNI_TERRAIN_VS_TBN // 顶点没提供切线基时现场构造。
-		mat3 tbn = gfx_tangent_basis(dFdx(viewPos), dFdy(viewPos), duv1, duv2); // 由屏幕导数构造切线基。
+		mat3 tbn = omniTangentBasis(dFdx(viewPos), dFdy(viewPos), duv1, duv2); // 由屏幕导数构造切线基。
 	#endif
 
 	#if OMNI_DIRECTIONAL_BLOCKLIGHT // 指向性方块光要用方块光的屏幕梯度。

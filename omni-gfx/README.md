@@ -11,7 +11,7 @@ Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Mine
 | 路径 | 用途 |
 | --- | --- |
 | `src/` | Slang 源文件，唯一手写算法来源 |
-| `generated/glsl/` | 自动生成的 GLSL，与 `shaders/omni-gfx/` 内容相同 |
+| `shaders/omni-gfx/` | 自动生成的 GLSL，唯一产物位置 |
 | `generated/spirv/` | 本机生成的 SPIR-V 与清单，二进制不提交 |
 | `examples/world/` | 不启动 Minecraft 的程序化测试世界 |
 | `tests/` | GPU 等值测试、Slang 编译探针、离线回归 |
@@ -25,7 +25,7 @@ python omni-gfx/build.py generate
 python omni-gfx/build.py check
 ```
 
-`generate` 写入两处：`omni-gfx/generated/glsl/` 和 `shaders/omni-gfx/`。Iris 只读取后者：
+`generate` 只写入 `shaders/omni-gfx/`，Iris 直接读取这一份：
 
 ```glsl
 // 通用库大气模块：天空散射与空气透视由 Slang 源生成。

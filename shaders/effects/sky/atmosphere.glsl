@@ -47,7 +47,7 @@
 #include "/bind/world.glsl"
 #include "/common/math.glsl"
 // 极光与彩虹的纯公式放在通用库。
-#include "/gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere.glsl"
 // 太阳色与氛围同属天空光照的补充：由本文件引入后，凡引入氛围的天空与合成程序都直接拿到 `omniSunTint()`，
 // 太阳圆盘与直射光的接线点因此不必再各自引入；`suncolor.glsl` 自身带守卫，重复引入无副作用。
 #include "/effects/sky/suncolor.glsl"
@@ -58,7 +58,7 @@ uniform vec4 lightningBoltPosition; // 闪电的相机相对世界位置与强�
 vec3 omniAurora(vec3 color, vec3 direction) {
 #if OMNI_AURORA // 打开极光才生成采样。
 	vec3 sunDirection = bind_world().sunDirection; // 太阳方向由绑定层转到世界空间。
-	color = gfx_aurora(color, direction, sunDirection, bind_time().seconds, bind_weather().wetness, OMNI_AURORA_TINT, OMNI_AURORA_STRENGTH); // 帘幕公式在通用库。
+	color = ogxAurora(color, direction, sunDirection, bind_time().seconds, bind_weather().wetness, OMNI_AURORA_TINT, OMNI_AURORA_STRENGTH); // 帘幕公式在通用库。
 #endif
 	return color; // 关闭时不改动颜色。
 }
@@ -66,7 +66,7 @@ vec3 omniAurora(vec3 color, vec3 direction) {
 vec3 omniRainbow(vec3 color, vec3 direction) {
 #if OMNI_RAINBOW // 打开彩虹才生成采样。
 	vec3 sunDirection = bind_world().sunDirection; // 世界空间的太阳方向。
-	color = gfx_rainbow(color, direction, sunDirection, bind_weather().wetness, OMNI_RAINBOW_STRENGTH); // 窄带彩虹公式在通用库。
+	color = ogxRainbow(color, direction, sunDirection, bind_weather().wetness, OMNI_RAINBOW_STRENGTH); // 窄带彩虹公式在通用库。
 #endif
 	return color; // 关闭时不改动颜色。
 }

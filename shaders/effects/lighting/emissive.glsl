@@ -43,18 +43,18 @@
 // 颜色转 HSV 的 `omniRgbToHsv` 在共用数学里，先引入。
 #include "/common/math.glsl"
 // 矿石与纹饰的发光公式放在通用库，这里只传底色。
-#include "/gfx/surface.glsl"
+#include "/omni-gfx/surface.glsl"
 
 // 矿石发光：鲜艳（饱和度够高）又明亮（明度高）的像素才发光，来源 Eclipse `getEmission`。
 // 为什么同时看饱和度和明度：矿石底料是灰色石头，只有矿物颗粒又艳又亮，用这两条把颗粒和石底分开。
 // 为什么明度取三点五次幂：把灰石底压到几乎不发光，只留最亮的颗粒尖，照 Eclipse 系数。
 float omniOreEmission(vec3 albedo){
-	return gfx_ore_emission(albedo); // 转发到通用库。
+	return ogxOreEmission(albedo); // 转发到通用库。
 }
 
 // 纹饰发光：只看明度，越亮的纹路越亮，来源 Eclipse `getTrimEmission`。
 // 为什么开方：暗一些的纹路也保留一部分发光，整块纹饰不会只有最亮处亮。
 float omniTrimEmission(vec3 albedo){
-	return gfx_trim_emission(albedo); // 转发到通用库。
+	return ogxTrimEmission(albedo); // 转发到通用库。
 }
 #endif // OMNI_EFFECT_LIGHTING_EMISSIVE_INCLUDED

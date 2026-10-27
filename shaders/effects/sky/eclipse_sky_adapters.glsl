@@ -1,18 +1,32 @@
 /*
-效果文件 `effects/sky/eclipse_sky_adapters.glsl`：玩家选项、宿主参数换算、阶段组合与说明集中在这里，菜单由 options.py 扫描本文件生成。
-调用位置：`rendering/` 下的绘制主体按需引用本文件；同目录的其它效果文件补充分阶段实现。
-可复制示例：`#include "/effects/sky/eclipse_sky_adapters.glsl"`，随后调用下方保留原名的效果入口。
-设计原因与取舍：选项、参数换算与阶段组合同属一个效果，放在一处才找得到、改得动；算式在生成的 `omni-gfx` 库，本文件不复制。
+Eclipse 天空兼容效果：把参考的经纬换算、贴图坐标与图集偏移接到本项目的天空纹理。
+调用位置：由 `effects/sky/sky.glsl` 在天空盒文件之后引入；渲染主体不直接引用本文件。
+可复制示例：`vec4 clouds = skyCloudsFromTex(dir, skyTexture);`
+设计原因与取舍：这些函数只服务 Eclipse 天空，放在所属效果里；通用插值与纹理取样在生成的 `omni-gfx` 库，本文件只补参考签名与图集布局。
 */
 #ifndef OMNI_EFFECT_SKY_ECLIPSE_ADAPTERS_INCLUDED
 #define OMNI_EFFECT_SKY_ECLIPSE_ADAPTERS_INCLUDED
 /*
 Eclipse 天空纹理兼容层：参考的贴图坐标函数直接读 `texelSize` 与固定图集偏移。
-调用位置：由 `rendering/sky/sky.glsl` 在天空盒文件之后引入。
+调用位置：由 `effects/sky/sky.glsl` 在天空盒文件之后引入。
 可复制示例：`vec4 clouds = skyCloudsFromTex(dir, skyTexture);`
 设计原因与取舍：参考把图集布局写死在函数里；Omni 用 `pixelSize` 作为同一张图的纹素大小。
     本文件只补参考签名，不改图集坐标公式；阴影与体积图各自走自己的入口。
 */
+
+// Eclipse 的经纬坐标换算：参考里是两个独立工具函数，天空映射与严格对照共用这一份公式。
+// 为什么留在效果文件：它们只服务 Eclipse 天空，不进入其它效果；常数照参考写死，避免表达式化简改变严格对照的常数集合。
+vec3 cartToSphere(vec2 coord){
+	coord.y = 1.0 - coord.y; // 翻转纵轴，贴图零在顶部。
+	coord *= vec2(6.28318530718, 3.14159265359); // 经度一整圈，纬度半圈。
+	vec2 lon = vec2(sin(coord.x), cos(coord.x)) * sin(coord.y); // 经度方向。
+	return vec3(lon.x, cos(coord.y), lon.y); // 单位球面方向。
+}
+// 反向换算：球面方向换回零到一的经纬贴图坐标。
+vec2 sphereToCart(vec3 dir){
+	float lonlat = atan(-dir.x, -dir.z); // 经度角。
+	return vec2(lonlat * 0.159154943092 + 0.5, 0.5 * dir.y + 0.5); // 映射到零到一。
+}
 
 // 天空图集里的云层：经纬贴图坐标夹紧后加图集偏移。
 vec4 skyCloudsFromTex(vec3 pos, sampler2D sampler){

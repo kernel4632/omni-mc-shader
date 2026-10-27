@@ -45,7 +45,7 @@
 #if defined OMNI_FRAGMENT
 
 	// 后期共享声明，全项目只声明一次。
-	#include "/effects/clarity/post_shared.glsl"
+	#include "/rendering/post_shared.glsl"
 	// 提供材质编号 `MATID_*`，抗锯齿的速度重投影引用它。
 	#include "/effects/ground/material.glsl"
 	// 时间重投影与相机速度；内部再引入坐标换算。

@@ -15,11 +15,11 @@
 设计原因与取舍：邻域统计、历史裁剪与时间混合在 `gfx/antialias.glsl`，这里只保留相机速度与
     选项换算；相机速度要区分远景、手与材质编号，属于宿主参数转换，仍留在效果层。
 */
-#include "/gfx/antialias.glsl"
+#include "/omni-gfx/antialias.glsl"
 
 // 颜色空间转换的兼容入口：其他文件可能按旧名字调用。
-vec3 RGB_To_YCoCg(vec3 color) { return gfx_rgb_to_ycocg(color); }
-vec3 YCoCg_To_RGB(vec3 color) { return gfx_ycocg_to_rgb(color); }
+vec3 RGB_To_YCoCg(vec3 color) { return ogxRgbToYCoCg(color); }
+vec3 YCoCg_To_RGB(vec3 color) { return ogxYCoCgToRgb(color); }
 
 // --- 深度取样与相机速度：宿主矩阵、深度图和材质编号在这里换成屏幕位移 ---
 // 近景深度直接读零号深度图；有远景与没有远景都使用同一张，所以只写一次。
@@ -146,7 +146,7 @@ vec4 TemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin){
 		const bool microBlur = false; // 不做微模糊。
 	#endif
 	float reference = 0.0; // 普通维度不需要参考深度。
-	return gfx_taa_reproject(coord, velocity, currDepthMin, colortex1, colortex7, screenSize, taaTexelCoord, gbufferProjectionInverse, far,
+	return ogxTaaReproject(coord, velocity, currDepthMin, colortex1, colortex7, screenSize, taaTexelCoord, gbufferProjectionInverse, far,
 		taaJitter, OMNI_TAA_BLENDWEIGHT, OMNI_TAA_AGGRESSION, OMNI_TAA_DEPTH_COMPARE_THRESHOLD, bicubicCurrent, bicubicPrevious,
 		clipToCenter, depthCompare, microBlur, false, reference); // 一次调用完成重投影。
 }
@@ -178,7 +178,7 @@ vec4 TemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin, out flo
 	#else
 		const bool microBlur = false; // 不做微模糊。
 	#endif
-	return gfx_taa_reproject(coord, velocity, currDepthMin, colortex1, colortex7, screenSize, taaTexelCoord, gbufferProjectionInverse, far,
+	return ogxTaaReproject(coord, velocity, currDepthMin, colortex1, colortex7, screenSize, taaTexelCoord, gbufferProjectionInverse, far,
 		taaJitter, OMNI_TAA_BLENDWEIGHT, OMNI_TAA_AGGRESSION, OMNI_TAA_DEPTH_COMPARE_THRESHOLD, bicubicCurrent, bicubicPrevious,
 		clipToCenter, depthCompare, microBlur, true, referenceDepth); // 一次调用完成下界重投影。
 }

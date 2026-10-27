@@ -18,20 +18,20 @@
     星点散列、稳定星场与星盒的公式已经迁到 `shaders/gfx/atmosphere.glsl`，本文件只保留选项、编译分支与亮度口径。
 */
 // 星场纯计算放在通用库，这里只传亮度、密度与星色。
-#include "/gfx/atmosphere.glsl"
+#include "/omni-gfx/atmosphere.glsl"
 
 // 星场总入口：按是否开启彩色星点选白色稳定星场或彩色星盒，再缩放成本项目亮度口径。
 // 返回最终星点颜色；太阳方向只用于把星场对齐天球。
 vec3 CalculateStars(vec3 worldDir, vec3 sunVector){
-	worldDir = gfx_align_to_sun_axis(worldDir, sunVector); // 按罗德里格公式把星场对齐到太阳方向。
+	worldDir = ogxAlignToSunAxis(worldDir, sunVector); // 按罗德里格公式把星场对齐到太阳方向。
 
 	#if OMNI_STARS_COLORED
 		const float starScale = 0.05 / 75.0; // 彩色路径在 Eclipse 里带七十五倍系数，除回去，使两条路径最亮星一致。
 		vec3 starColor; // 星场回填的星色。
-		return starScale * gfx_stars_colored(worldDir, OMNI_STARS_BRIGHTNESS, OMNI_STARS_AMOUNT, starColor) * starColor; // 亮度乘星色。
+		return starScale * ogxStarsColored(worldDir, OMNI_STARS_BRIGHTNESS, OMNI_STARS_AMOUNT, starColor) * starColor; // 亮度乘星色。
 	#else
 		const float starScale = 0.05; // 与旧 `CalculateStars` 最亮星零点零五对齐，保持夜间曝光不变。
-		return vec3(starScale * gfx_stars_stable(worldDir, OMNI_STARS_BRIGHTNESS, OMNI_STARS_AMOUNT)); // 白色路径没有星温，转成三分量。
+		return vec3(starScale * ogxStarsStable(worldDir, OMNI_STARS_BRIGHTNESS, OMNI_STARS_AMOUNT)); // 白色路径没有星温，转成三分量。
 	#endif
 }
 // 参考签名兼容层：Eclipse 的 `stars` 返回亮度并回填星色，亮度口径取本项目的选项。

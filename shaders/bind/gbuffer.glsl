@@ -14,9 +14,9 @@ G 缓冲绑定：把 Minecraft 的材质编号、G 缓冲画面与深度读成�
 
 // 读画面与解码法线都要用共用数学，绑定层自己保证引入顺序。
 #include "/common/math.glsl"
-#include "/gfx/surface.glsl"
+#include "/omni-gfx/surface.glsl"
 // 湿面粗糙度与吸水暗化用通用库的水面公式。
-#include "/gfx/water.glsl"
+#include "/omni-gfx/water.glsl"
 
 // 内部常数：方块与实体材质编号，按 iterationT `Settings.glsl` 原值，几何与合成阶段共用一份。
 #define MATID_SKY 0.0 // 天空里没有几何的像素。
@@ -104,8 +104,8 @@ GbufferData bind_gbuffer(ivec2 texel, sampler2D albedo_tex, sampler2D normal_lig
 	data.depthW = texelFetch(depth_opaque_tex, texel, 0).x; // 不透明层深度。
 	data.lightmapL = gbuffer3.ba; // 三号画面的后两个通道是半透明光照图。
 	data.lightmapW = gbuffer4.ba; // 四号画面的后两个通道是不透明光照图。
-	data.lightmapL = vec2(data.lightmapL.r, gfx_curve_block_light_sky(data.lightmapL.g)); // 天光分量按曲线重整。
-	data.lightmapW = vec2(data.lightmapW.r, gfx_curve_block_light_sky(data.lightmapW.g)); // 不透明层同样处理。
+	data.lightmapL = vec2(data.lightmapL.r, ogxCurveBlockLightSky(data.lightmapL.g)); // 天光分量按曲线重整。
+	data.lightmapW = vec2(data.lightmapW.r, ogxCurveBlockLightSky(data.lightmapW.g)); // 不透明层同样处理。
 	data.materialIDL = gbuffer5.b; // 五号画面的蓝色通道是不透明材质编号。
 	data.materialIDW = gbuffer6.b; // 六号画面的蓝色通道是半透明材质编号。
 	data.waterMask = gbuffer6.a; // 六号画面的透明通道是水遮罩。

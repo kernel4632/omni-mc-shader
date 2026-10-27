@@ -20,7 +20,7 @@ CATEGORIES = (
     ("构建工具", (LIB / "tools", LIB / "build.py"), "生成器、编译器封装与统计工具"),
     ("测试", (LIB / "tests",), "等值测试、编译探针与回归测试"),
     ("测试世界", (LIB / "examples",), "不启动 Minecraft 的程序化场景"),
-    ("生成 GLSL", (LIB / "generated" / "glsl", ROOT / "shaders" / "omni-gfx"), "由 Slang 源自动生成，不手工修改"),
+    ("生成 GLSL", (ROOT / "shaders" / "omni-gfx",), "由 Slang 源自动生成，不手工修改"),
     ("第三方", (LIB / "vendor",), "外部代码，当前没有引入"),
 )
 

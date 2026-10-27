@@ -76,9 +76,9 @@
 // 共用纯计算：夹取、法线工具。
 #include "/common/math.glsl"
 // 颜色转换与饱和度矩阵放在通用库。
-#include "/gfx/color.glsl"
+#include "/omni-gfx/color.glsl"
 // 手持光的三次方衰减在表面模块，供雾照明复用。
-#include "/gfx/surface.glsl"
+#include "/omni-gfx/surface.glsl"
 // 体积光的取样、编码、坐标映射与边缘淡出都在通用库，本文件只保留纹理与体素接线。
 #include "/omni-gfx/lpv.glsl"
 
@@ -94,10 +94,10 @@ const uint omniLpvBlockTableSize = 8192u;
 // --- 颜色编码：HSV 与线性化，照 Eclipse `lib/hsv.glsl` 与 `util.glsl` ---
 // `omniRgbToHsv` 已移到 `common/math.glsl`（自发光矿石/纹饰也要用），本文件在上面已引入它。
 vec3 omniHsvToRgb(vec3 c){ // 色相、饱和度、明度转回颜色。
-	return gfx_hsv_to_rgb(c); // 转换公式在通用库。
+	return ogxHsvToRgb(c); // 转换公式在通用库。
 }
 vec3 omniSrgbToLinear(vec3 s){ // sRGB 到线性，照 Eclipse 的近似多项式，供方块光表复原颜色。
-	return gfx_srgb_to_linear(s); // 多项式在通用库。
+	return ogxSrgbToLinear(s); // 多项式在通用库。
 }
 
 // --- 坐标映射：相机相对位置到体积坐标与体素下标 ---
@@ -246,7 +246,7 @@ layout(rg32ui) uniform uimage1D omniLpvBlocks; // 方块光表，`setup` 阶段�
 
 // --- 饱和度矩阵：让光色按玩家设置变鲜艳或变灰，照 Eclipse `setup.csh:39` ---
 mat4 omniLpvSaturationMatrix(float saturation){
-	return gfx_saturation_matrix(saturation); // 矩阵在通用库。
+	return ogxSaturationMatrix(saturation); // 矩阵在通用库。
 }
 
 // --- 蜡烛颜色：照 Eclipse `dimensions/setup.csh:12-33` 的 `LightColor_Candles_*` ---
