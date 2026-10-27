@@ -1,8 +1,8 @@
 /*
-反射的菜单选项：只声明玩家可调的选项与默认值，菜单由 options.py 扫描本文件生成。
-调用位置：由 `bind/reflection/reflection.glsl` 引入；渲染程序通过绑定文件间接取得这些宏。
-可复制示例：引用 `effects/reflection/reflection.glsl` 只取选项；需要算法时引用绑定文件。
-设计原因与取舍：效果层只保留选项，选项名、默认值与配置格式不变；算法与宿主接线已迁到绑定层和通用库。
+效果文件 `effects/reflection/reflection.glsl`：玩家选项、宿主参数换算、阶段组合与说明集中在这里，菜单由 options.py 扫描本文件生成。
+调用位置：`rendering/` 下的绘制主体按需引用本文件；同目录的其它效果文件补充分阶段实现。
+可复制示例：`#include "/effects/reflection/reflection.glsl"`，随后调用下方保留原名的效果入口。
+设计原因与取舍：选项、参数换算与阶段组合同属一个效果，放在一处才找得到、改得动；算式在生成的 `omni-gfx` 库，本文件不复制。
 */
 #ifndef OMNI_EFFECT_REFLECTION_REFLECTION_INCLUDED
 #define OMNI_EFFECT_REFLECTION_REFLECTION_INCLUDED
@@ -15,4 +15,43 @@
 #define OMNI_RAYTRACE_ZDIFF_THRESHOLD 0.2 //[0.05 0.1 0.15 0.2 0.3 0.4 0.5]
 // @option {"label":{"zh_cn":"远景反射","en_us":"Distant reflections"},"description":{"zh_cn":"让屏幕空间反射也能命中远景地形；关闭后反射只打到近景几何，远景处反射天空。默认开启，与原来一致。来源 Eclipse 的 DH_SCREENSPACE_REFLECTIONS。","en_us":"Lets screen-space reflections hit distant terrain; when off, rays only hit near geometry and reflect the sky over distant chunks. On by default. Ports Eclipse's DH_SCREENSPACE_REFLECTIONS."}}
 #define OMNI_DH_SSR 1 // [0 1]
-#endif // 选项层结束
+
+// --- 效果实现：宿主输入、参数换算与阶段入口 ---
+/*
+屏幕空间反射：照 iterationT `Lib/IndividualFounctions/Reflections/SSR.glsl`、
+`Reflections/ReflectionFilter.glsl` 与 `composite2.fsh`、`composite5.fsh` 的反射段一比一移植。
+职责分成四块：
+  一、玩家选项：光线步进质量、细化步数与深度差阈值，照 iterationT `Settings.glsl` 带取值范围的菜单项，全项目只在这里定义一次；
+  二、屏幕空间追踪：`ScreenSpaceTracer` 沿反射方向在屏幕里找被反射到的几何，`sampleGGXVNDF` 给粗糙面抽样方向；
+  三、反射合成：`CalculateSpecularReflections` 有重载两份，一份写三号画面（`composite2`），一份就地合并进场景色（`composite5`）；
+  四、反射滤波：`AtrousWaveletFilter` 对三号画面做小波滤波，供 `composite3`、`composite4` 两次半径调用。
+调用位置：
+  `rendering/composite.glsl` 的 `composite2` 程序算反射并写三号画面；
+  `rendering/composite.glsl` 的 `composite3`、`composite4` 程序对三号画面做小波滤波；
+  `rendering/composite.glsl` 的 `composite5` 程序把三号画面的反射合并进场景色。
+可复制示例：
+  `compositeOutput3 = CalculateSpecularReflections(viewPos, worldPos, viewDir, normal, gbufferdepth, albedo, material, skylight, isHand, isSmooth, highlightStrength);`
+  `CalculateSpecularReflections(color, viewDir, normal, albedo, waterAbsorption, material);`
+  `AtrousWaveletFilter(reflectionData, viewPos, viewDir, normal, roughness, 40.0, vec2(0.0));`
+调用前提（按 iterationT 原程序的引用顺序，由绘制主体先声明这些全局量）：
+  `texelCoord`、`texCoord`、`gbufferModelViewInverse`、`gbufferProjection`、
+  `worldSunVector`、`worldMoonVector`、`shadowVector`、`colorSunlight`、`colorMoonlight`、`colorShadowlight`、
+  `timeNoon`、`wetness`、`eyeNoPrecipitationSmooth`、`isEyeInWater`、`far`、`colortex1`…`colortex5`、`depthtex0`、`depthtex1` 由合成主程序声明；
+  本文件按阶段引入所需效果文件：`composite2` 引入雾与天空云反射，`composite5` 只引入材质，`composite3`/`composite4` 只引入坐标。
+关键设计原因与取舍：
+  原程序把 `ProjectSky` 写在 SSR 与天空两处，按合同只在 `effects/sky/sky.glsl` 保留一份，本文件直接调用；
+  两份 `CalculateSpecularReflections` 参数不同、用途不同，原程序靠所在程序区分，这里按程序宏 `OMNI_COMPOSITE2_PASS`、`OMNI_COMPOSITE5_PASS` 分开，避免把只属于反射通道的采样编译进滤波通道；
+  接近全反射的像素（`colortex1` 的 a 通道大于零点五）直接取当前场景色，避免反射处出现黑洞。
+    本文件按算法拆到同目录：屏幕空间反射与着色在 `screenspace.glsl`，反射小波滤波在 `denoise.glsl`；引入顺序与拆分前逐字一致。
+*/
+
+// --- 玩家选项：光线步进质量、细化步数与深度差阈值，照 iterationT `Lib/Settings.glsl` 带取值范围的菜单项 ---
+// 数学提供光照模型与颜色曲线，坐标换算提供屏幕与视空间互转，两份都供三个通道共用。
+#include "/common/math.glsl"
+#include "/common/coordinates.glsl"
+
+// 屏幕空间反射追踪与着色：只在 composite2 / composite5 程序里编译。
+#include "/effects/reflection/screenspace.glsl"
+// 反射小波滤波：只在 composite3 / composite4 程序里编译。
+#include "/effects/reflection/denoise.glsl"
+#endif // OMNI_EFFECT_REFLECTION_REFLECTION_INCLUDED

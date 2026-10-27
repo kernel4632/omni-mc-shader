@@ -19,7 +19,7 @@
 // 加载器输入：相机位置、帧时间、眼睛介质等由统一声明提供。
 #include "/common/uniforms.glsl"
 // 选项、常量、图像与跨帧状态访问都来自效果文件，计算与采样共用同一份定义。
-#include "/rendering/water/wavesim.glsl"
+#include "/effects/water/wavesim.glsl"
 
 #ifdef OMNI_COMPUTE // 只有计算阶段编译下面的入口。
 #ifdef OMNI_WAVE_SIM_ON // 选项关闭或缺能力时，三个程序的 main 都是空的。

@@ -1,4 +1,12 @@
 # 更新记录
+## 0.16.0-dev.6
+
+结构重构第一批：把每个效果从 `effects/` 选项层、`rendering/<效果>/` 阶段片段和 `bind/` 接线三处收回到 `effects/<页>/` 一处，`rendering/` 只留程序主体与阶段胶水。
+- 移动与合并：98 个按效果命名的阶段片段从 `rendering/<页>/` 移到 `effects/<页>/`，其中 44 个选项文件与同名实现合并；`bind/ground/material.glsl` 的材质解码并入 `effects/ground/material.glsl`；`rendering/parallax.glsl` 移到 `effects/ground/parallax.glsl`。只移动、合并与改引用，没有删除效果、选项、默认值、配置格式或测试。
+- 结构口径：`rendering/` 从 140 个文件降到 41 个 `.glsl` 文件（2941 行），`effects/` 为 101 个文件（6250 行），`bind/` 为 6 个输入适配文件（385 行）。选项仍为 519 个，入口 269 个，唯一程序 280 组，测试 160 个。
+- 文档与测试：更新 `docs/rendering.md`、`docs/structure-plan.md`、`docs/structure-audit.md`、`docs/parity.md`、`docs/omni-gfx-plan.md` 与 `shaders/bind/README.md`；测试扫描范围改为 `effects/`，路径断言同步新位置。
+- 验证：`python build.py audit` 通过 469 个代码文件；`python build.py verify` 通过 160 个测试、9 组编译探针与打包；`python build.py compile` 通过 280 组唯一程序、0 错误；`python omni-gfx/build.py strict-parity` 为 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0；`python omni-gfx/build.py profiles` 两份 profile 编译通过。未启动 Minecraft，游戏内画面、菜单、性能与其他显卡仍未验证。
+
 ## 0.16.0-dev.5
 
 严格函数对照第六轮：exact 从 473 增到 474，reference_broken 从 6 降到 5，approximate、missing 保持 0，mc_glue 保持 26。本轮解决 `GetVolumetricClouds` 的采样差异，并到上游核对五条损坏参考；上游同样没有可恢复源码，因此保留 reference_broken，不伪造 exact。

@@ -10,26 +10,26 @@
 #define OMNI_POST_FRAGMENT_DEPS_INCLUDED
 
 // 后期共享声明，全项目只声明一次。
-#include "/rendering/clarity/post_shared.glsl"
+#include "/effects/clarity/post_shared.glsl"
 // 材质编号（并提供视差与材质选项）。
-#include "/bind/ground/material.glsl"
+#include "/effects/ground/material.glsl"
 // 提供 `OMNI_TAA` 与时间抗锯齿选项，并带入坐标换算。
-#include "/rendering/clarity/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 提供雨可见度等选项，泛光的合并读它。
-#include "/rendering/weather/weather.glsl"
+#include "/effects/weather/weather.glsl"
 // 提供水下雾开关与浓度选项，泛光的合并读它。
-#include "/rendering/water/water.glsl"
+#include "/effects/water/water.glsl"
 // 提供体积雾选项，并带入水面、阴影、天空、云与光照依赖。
-#include "/rendering/fog/fog.glsl"
+#include "/effects/fog/fog.glsl"
 // 坐标与深度换算。
 #include "/common/coordinates.glsl"
 // 时间噪声，景深与动态模糊的抖动读它。
 #include "/common/noise.glsl"
 // 曝光统计、曝光值与强光压缩曲线。
-#include "/rendering/color/color.glsl"
+#include "/effects/color/color.glsl"
 // 景深、动态模糊、暗角与镜头光斑。
-#include "/rendering/lens/lens.glsl"
+#include "/effects/lens/lens.glsl"
 // 泛光降采样、轴向模糊与合并泛光。
-#include "/rendering/color/bloom.glsl"
+#include "/effects/color/bloom.glsl"
 
 #endif // 文件守卫结束。

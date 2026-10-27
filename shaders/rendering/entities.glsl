@@ -44,37 +44,37 @@ vec3 colorSkylight; // 天光颜色。
 	in vec3 viewPos; // 实体表面的视空间位置，视差与切线基都要用它。
 #endif
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
-#include "/rendering/clarity/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与实体材质选项。
-#include "/bind/ground/material.glsl"
+#include "/effects/ground/material.glsl"
 // 视差算法只服务几何片元阶段，由真正调用的阶段显式引入。
-#include "/rendering/parallax.glsl"
+#include "/effects/ground/parallax.glsl"
 // 自发光纹饰：提供纹饰自发光选项与 `omniTrimEmission`，实体片元按盔甲纹饰编号补一份自发光。
-#include "/rendering/lighting/emissive.glsl"
+#include "/effects/lighting/emissive.glsl"
 // 生物与玩家：提供 `EntityStatusColor` 与 `HandFovProjection`。
-#include "/rendering/entity/entity.glsl"
+#include "/effects/entity/entity.glsl"
 // Omni 额外功能：积雪覆盖（来源 Eclipse），默认关闭；与地形共用同一份雪覆盖算法。
-#include "/rendering/weather/snow.glsl"
+#include "/effects/weather/snow.glsl"
 // 行星曲率：顶点阶段按相机相对水平距离把远处顶点下沉，选项与算法都在该文件。
-#include "/rendering/world/planet.glsl"
+#include "/effects/world/planet.glsl"
 // 自发光模式选项归属方块光文件，只在有高光贴图时按需引入。
 #if defined OMNI_FRAGMENT && defined MC_SPECULAR_MAP
 	// 方块光文件读取火把光色，按它的调用前提给一个空全局。
 	vec3 colorTorchlight;
 	// 方块光与手持光：这里只借它的 `OMNI_TEXTURE_EMISSIVENESS_MODE` 选项。
-	#include "/rendering/lighting/blocklight.glsl"
+	#include "/effects/lighting/blocklight.glsl"
 #endif
 // 水面与水雾：片元算湿润与雨点要用 `GetModulatedRainSpecular`、`GetRainNormal`，只在片元引入。
 #ifdef OMNI_FRAGMENT
 	// 波浪、涟漪、湿润调制与水体光学。
-	#include "/rendering/water/water.glsl"
+	#include "/effects/water/water.glsl"
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 // 末地需要末地版阴影相机矩阵，只有片元用到，也只有末地用它。
 #if defined OMNI_END && defined OMNI_FRAGMENT
 	// 阴影：提供末地的 `shadowModelViewInverseEnd`。
-	#include "/rendering/shadow/shadow.glsl"
+	#include "/effects/shadow/shadow.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：四类实体程序的共用顶点着色器。

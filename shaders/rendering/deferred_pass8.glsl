@@ -51,12 +51,12 @@
 	layout(location = 0) out vec4 deferredOutput1; // 一号：贴好云的天空颜色。
 	// 光色、方向与阴影纹理由延迟程序共用声明提供。
 	#include "/rendering/deferred_shared.glsl"
-	#include "/rendering/sky/sky.glsl"
-	#include "/rendering/cloud/cloud.glsl"
+	#include "/effects/sky/sky.glsl"
+	#include "/effects/cloud/cloud.glsl"
 	// 云高度、风与可见判据由两个低分辨率云阶段共用。
-	#include "/rendering/sky/cloud_stage.glsl"
-	#include "/rendering/lighting/sunlight.glsl"
-	#include "/rendering/sky/atmosphere.glsl"
+	#include "/effects/sky/cloud_stage.glsl"
+	#include "/effects/lighting/sunlight.glsl"
+	#include "/effects/sky/atmosphere.glsl"
 	void main(){
 		vec4 base = texelFetch(colortex1, texelCoord, 0); // 延迟三号画好的天空。
 		deferredOutput1 = base; // 默认原样保留，几何像素不动。

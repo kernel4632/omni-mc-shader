@@ -7,8 +7,8 @@
 
 ## 一、目标
 
-- 效果层（`effects/`）只保留菜单选项、选项到参数的换算和一次效果入口调用；`bind/` 只做 Minecraft 输入到普通数值或结构体的适配；阶段专属代码放 `rendering/` 的共享片段；通用算法放 `shaders/gfx/`。
-- 通用图形算法放 `shaders/gfx/`，不读取任何 Minecraft、Iris 或全局 uniform，可单独发布。
+- 每个效果在 `effects/<页>/<效果>.glsl` 或同名文件夹里集中保存菜单选项、宿主参数换算、阶段组合和说明；`bind/` 只做 Minecraft 输入到普通数值或结构体的适配；`rendering/` 只保留程序主体、阶段顺序和真正的阶段胶水。
+- 通用图形算法放 `omni-gfx/src`，生成 `shaders/omni-gfx/` 供光影直接引用，不读取任何 Minecraft、Iris 或全局 uniform，可单独发布。
 - 效果数量不减少，默认画面与现在一致；不能为了减行数删效果或改观感。
 - 选项可以精简，但必须归入所属页面，不设“高级”总入口。
 
@@ -16,29 +16,15 @@
 
 ```
 shaders/
-├─ gfx/                        通用库，可独立发布
-│  ├─ color.glsl              颜色、伽马、ACES、AgX、无压缩
-│  ├─ math.glsl               曲线、重映射、编码
-│  ├─ sampling.glsl           蓝噪声、抖动、采样
-│  ├─ surface.glsl            材质与双向反射分布
-│  ├─ atmosphere.glsl         大气散射与天空辐照
-│  ├─ cloud.glsl              云的形状、密度与光照
-│  ├─ water.glsl              波形、折射、焦散
-│  ├─ fog.glsl                高度雾与体积散射
-│  ├─ shadow.glsl             阴影采样与半影
-│  ├─ gi.glsl                 环境遮蔽与全局光
-│  ├─ reflection.glsl         屏幕空间与体素反射
-│  ├─ post.glsl               泛光、景深、运动模糊、眩光
-│  └─ antialias.glsl          时间抗锯齿、边缘平滑、放大
-│
+├─ omni-gfx/                   由 omni-gfx/src 生成的 GLSL 330，唯一算式来源
 ├─ bind/                       Minecraft 输入 → 普通数值或结构体
-├─ effects/                    每个效果一个文件，只保留选项、参数换算与一次调用
-├─ rendering/                  按阶段分组的绘制主体，以及 `rendering/<效果>/` 下的共享阶段片段
+├─ effects/                    每个效果一个文件或同名文件夹：选项、参数换算、阶段组合与说明
+├─ rendering/                  程序主体、阶段顺序与真正的阶段胶水
 ├─ common/                     加载器输入、坐标与管线编码
 └─ world0/ world1/ world-1/    生成的薄入口
 ```
 
-`bind/` 只允许出现“把加载器输入解成普通数据”的代码：不写光照、雾、云、颜色分级等效果算法，不读写中间画面。读中间画面的代码放 `rendering/<效果>/`，公式优先抽到 `gfx/`。`rendering/` 扁平文件是程序主体，子目录文件是跨程序复用的阶段片段，两者都不复制算法。
+`bind/` 只允许出现“把加载器输入解成普通数据”的代码：不写光照、雾、云、颜色分级等效果算法，不读写中间画面。效果算法与选项放在 `effects/<页>/` 的所属效果文件里，纯公式在 `omni-gfx/src`。`rendering/` 扁平文件是程序主体，只保留阶段胶水，不复制效果算法。
 
 ## 三、通用库规则
 
@@ -176,3 +162,4 @@ shaders/
 - 当前固定口径（0.1.87）：`bind/` 460 行（7 个文件）、`rendering/` 8446 行（137 个文件）、`gfx/` 4066 行（22 个文件）、`effects/` 628 行（46 个文件），四层合计 13600 行；生成入口 `world0/` 608、`world1/` 530、`world-1/` 482。复现命令：
   `python -c "import build;S={'.glsl','.vsh','.fsh','.csh','.gsh'};print({d:sum(1 for p in (build.SHADERS/d).rglob('*') if p.suffix in S for l in build._code_only(p.read_text(encoding='utf-8')).splitlines() if l.strip()) for d in ('common','bind','rendering','gfx','effects','world0','world1','world-1')})"`
 - 验证边界：`audit`、`verify`、全量 `compile` 与 GitHub Actions 通过；按用户要求未启动 Minecraft，游戏内画面、菜单逐页与性能仍未验证。另用 8 个代表入口比较重构前后的展开代码，去注释、引用与声明后语句集合完全一致。
+- 已完成（0.16.0-dev.6）：按效果唯一归属重排。98 个按效果命名的阶段片段从 `rendering/<页>/` 移回 `effects/<页>/`，44 个选项文件与同名实现合并；`bind/ground/material.glsl` 的材质解码并入 `effects/ground/material.glsl`；`rendering/` 只留 42 个程序主体与阶段胶水。选项仍为 519 个、入口 269 个、唯一程序 280 组、测试 160 个；只移动与合并，没有删除效果、选项、默认值或测试。新口径：`bind/` 385 行（6 个文件）、`rendering/` 2941 行（41 个文件）、`effects/` 6250 行（101 个文件）。

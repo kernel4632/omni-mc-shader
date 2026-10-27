@@ -38,33 +38,33 @@ uniform int renderStage; // 当前原版绘制阶段，用来区分实体方块�
 	flat in float textureResolution; // 方块纹理分辨率，由几何阶段平面插值传下，视差要用。
 #endif
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
-#include "/rendering/clarity/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与材质相关选项。
-#include "/bind/ground/material.glsl"
+#include "/effects/ground/material.glsl"
 // 视差算法只在地形片元阶段用到，由本主体显式引入。
-#include "/rendering/parallax.glsl"
+#include "/effects/ground/parallax.glsl"
 // 自发光矿石：提供矿石自发光选项与 `omniOreEmission`，片元按矿石标记补一份自发光。
-#include "/rendering/lighting/emissive.glsl"
+#include "/effects/lighting/emissive.glsl"
 // 区块淡入：`omniChunkFade*` 一组纯计算，顶点取进度、几何转发、片元按进度抖动丢弃。
-#include "/rendering/clarity/chunkfade.glsl"
+#include "/effects/clarity/chunkfade.glsl"
 // 时间噪声：片元抖动丢弃要读蓝噪声，顶点与几何阶段只编译不调用。
 #include "/common/noise.glsl"
 // 植物摆动：提供 `WavingPlants`，顶点阶段的地形与阴影共用同一份摆法。
-#include "/rendering/ground/vegetation.glsl"
+#include "/effects/ground/vegetation.glsl"
 // 程序化草：提供草丛的摆动、方块编号查询与草叶外形；默认关闭，只在主世界编译。
-#include "/rendering/ground/grass.glsl"
+#include "/effects/ground/grass.glsl"
 // Omni 额外功能：植被季节色，默认关闭。
-#include "/rendering/weather/season.glsl"
+#include "/effects/weather/season.glsl"
 // Omni 额外功能：积雪覆盖（来源 Eclipse），默认关闭；与季节同属天气相关的地表效果。
-#include "/rendering/weather/snow.glsl"
+#include "/effects/weather/snow.glsl"
 // 行星曲率：顶点阶段按相机相对水平距离把远处顶点下沉，选项与算法都在该文件。
-#include "/rendering/world/planet.glsl"
+#include "/effects/world/planet.glsl"
 // 自发光模式选项归属方块光文件，只在有高光贴图时按需引入。
 #if defined OMNI_FRAGMENT && defined MC_SPECULAR_MAP
 	// 方块光文件读取火把光色，按它的调用前提给一个空全局。
 	vec3 colorTorchlight;
 	// 方块光与手持光：这里只借它的 `OMNI_TEXTURE_EMISSIVENESS_MODE` 选项。
-	#include "/rendering/lighting/blocklight.glsl"
+	#include "/effects/lighting/blocklight.glsl"
 #endif
 // 水面与水雾：片元算湿润与雨点要用 `GetModulatedRainSpecular`、`GetRainNormal`，只在片元引入。
 #ifdef OMNI_FRAGMENT
@@ -72,14 +72,14 @@ uniform int renderStage; // 当前原版绘制阶段，用来区分实体方块�
 	vec3 colorShadowlight; // 阳光颜色。
 	vec3 colorSkylight; // 天光颜色。
 	// 波浪、涟漪、湿润调制与水体光学。
-	#include "/rendering/water/water.glsl"
+	#include "/effects/water/water.glsl"
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 // 末地需要末地版阴影相机矩阵，只有片元用到，也只有末地用它。
 #if defined OMNI_END && defined OMNI_FRAGMENT
 	// 阴影：提供末地的 `shadowModelViewInverseEnd`。
-	#include "/rendering/shadow/shadow.glsl"
+	#include "/effects/shadow/shadow.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：地形顶点着色器。
@@ -285,7 +285,7 @@ flat out float blockID; // 方块编号，片元写九号画面用。
 #endif
 
 // 草丛几何算法体在效果文件里，本文件只按开关调用。
-#include "/rendering/ground/grass_geometry.glsl"
+#include "/effects/ground/grass_geometry.glsl"
 
 // 几何主函数：先估分辨率，再逐顶点转发。
 void main(){
@@ -353,7 +353,7 @@ uniform int biome; // 当前像素所在的生物群系编号，写九号画面�
 #endif
 
 // 地形表面采样与写出在效果文件里，本文件只按阶段调用。
-#include "/rendering/ground/terrain_surface.glsl"
+#include "/effects/ground/terrain_surface.glsl"
 
 
 // 片元主函数：算法体在 `effects/ground/terrain_surface.glsl`，这里只调用。

@@ -52,21 +52,21 @@
 	#include "/common/uniforms.glsl"
 	#include "/common/math.glsl"
 	// 提供材质编号，被引入的环境光速度重投影引用它。
-	#include "/bind/ground/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算要用。
-	#include "/rendering/clarity/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 	// 光色、方向与阴影纹理由延迟程序共用声明提供。
 	#include "/rendering/deferred_shared.glsl"
 	// 预计算大气、日月圆盘、星空与天空盒投影。
-	#include "/rendering/sky/sky.glsl"
+	#include "/effects/sky/sky.glsl"
 	// 体积云、平面云与云影贴图。
-	#include "/rendering/cloud/cloud.glsl"
+	#include "/effects/cloud/cloud.glsl"
 	// 提供洞穴模式与无光亮度选项，并带入光色计算依赖。
-	#include "/rendering/lighting/sunlight.glsl"
+	#include "/effects/lighting/sunlight.glsl"
 	// Omni 额外功能：极光与彩虹，默认关闭。
-	#include "/rendering/sky/atmosphere.glsl"
+	#include "/effects/sky/atmosphere.glsl"
 	// 天空、云、日月星与天空盒的算法在效果文件里，这里只调用并写一号与二号。
-	#include "/rendering/sky/skyrender.glsl"
+	#include "/effects/sky/skyrender.glsl"
 	void main(){
 		RenderDeferredSky(); // 画天空像素、天空盒图与右上角云影贴图。
 	}

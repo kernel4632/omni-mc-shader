@@ -23,13 +23,13 @@
 // 共用纯计算。
 #include "/common/math.glsl"
 // 时间抗锯齿选项：顶点抖动要用。
-#include "/rendering/clarity/antialiasing.glsl"
+#include "/effects/clarity/antialiasing.glsl"
 // 天空选项归属文件，只在片元引入；它的星点函数读取世界太阳方向，先给一个空全局满足调用前提。
 #ifdef OMNI_FRAGMENT
 	// `effects/sky/sky.glsl` 的星点函数读取世界太阳方向，几何阶段不用，这里给一个空全局。
 	vec3 worldSunVector;
 	// 天空：提供日月贴图与天空盒贴图、星点类型的选项。
-	#include "/rendering/sky/sky.glsl"
+	#include "/effects/sky/sky.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：天空基础与天空贴图分开写。

@@ -37,9 +37,9 @@
 	uniform sampler2D gaux2; // 第二张涟漪动画贴图，雨点落水用。
 	uniform sampler2D gaux3; // 第三张涟漪动画贴图，雨点落水用。
 	// 表面数据与材质掩码：读回颜色、法线、深度与材质编号。
-	#include "/bind/ground/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，后面的坐标换算与噪声按它选择采样方式。
-	#include "/rendering/clarity/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 	// 屏幕与视空间互转，各程序都用来还原表面位置。
 	#include "/common/coordinates.glsl"
 	// Eclipse 相机函数的同名兼容层，只转发全局矩阵。

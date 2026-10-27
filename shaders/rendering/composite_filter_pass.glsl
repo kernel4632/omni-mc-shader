@@ -17,9 +17,9 @@
 	/* DRAWBUFFERS:3 */
 	layout(location = 0) out vec4 compositeOutput3; // 三号：滤波后的反射数据。
 	// 反射小波滤波的通用入口。
-	#include "/rendering/reflection/reflection.glsl"
+	#include "/effects/reflection/reflection.glsl"
 	// 按三号或四号宏选择半径与抖动。
-	#include "/rendering/reflection/composite_filter.glsl"
+	#include "/effects/reflection/composite_filter.glsl"
 	void main(){ CompositeReflectionFilter(); } // 做一次小波滤波并写回三号。
 #endif
 #endif

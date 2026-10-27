@@ -43,7 +43,7 @@ uv pip sync requirements-dev.lock
 
 | 要做什么 | 打开哪里 |
 | --- | --- |
-| 改阴影、水面、云等效果 | 选项在 `shaders/effects/`，阶段片段在 `shaders/rendering/` 的同名文件，纯公式在 `shaders/gfx/` |
+| 改阴影、水面、云等效果 | 选项、参数换算与阶段入口都在 `shaders/effects/<页>/`，纯公式在 `omni-gfx/src/` |
 | 改通用库算法 | `omni-gfx/src/` 的 Slang 源；生成物在 `shaders/omni-gfx/`，不手改 |
 | 改不启动 Minecraft 的测试世界 | `omni-gfx/examples/world/` |
 | 生成 GLSL、SPIR-V 或跑等值测试 | `python omni-gfx/build.py` |

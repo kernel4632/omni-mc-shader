@@ -49,34 +49,34 @@ layout(location = 0) out vec4 compositeOutput1; // 一号画面：场景曲线�
 #if defined OMNI_NETHER // 下界：没有太阳，光照来自 `NetherLighting` 与雾色（来自 `world-1/composite.fsh`）。
 uniform sampler2D shadowtex1; // 阴影实心图，下界当普通深度贴图。
 // 雾文件带入水面、阴影、天空、云与光照，并提供 `OMNI_NETHER_FOG_DENSITY`。
-#include "/rendering/fog/fog.glsl"
+#include "/effects/fog/fog.glsl"
 // 下界配色与光照 `NetherLighting`、`NetherFogColor`。
-#include "/rendering/world/nether.glsl"
+#include "/effects/world/nether.glsl"
 // Omni 额外功能：真实闪电事件照亮表面，默认开启但缺少事件输入时无影响。
-#include "/rendering/sky/atmosphere.glsl"
+#include "/effects/sky/atmosphere.glsl"
 #elif defined OMNI_END // 末地：没有太阳贴图，天空像素画吸积盘与行星（来自 `world1/composite.fsh`）。
 #define OMNI_SHADOW_COMPARE 1 // 末地也用可变半影阴影，打开阴影效果里的对应段。
 uniform sampler2DShadow shadowtex1; // 阴影实心图，可变半影阴影按深度比较读取。
 // 光照文件提供 `OMNI_SUNLIGHT_INTENSITY`、方块光、遮蔽与星空类型选项。
-#include "/rendering/lighting/sunlight.glsl"
+#include "/effects/lighting/sunlight.glsl"
 // 水面文件提供波法线 `GetWavesNormal`，末地折射函数引用它。
-#include "/rendering/water/water.glsl"
+#include "/effects/water/water.glsl"
 // 末地天空 `BlackHole_AccretionDisc_Stars`、`PlanetEnd2` 与 `timeFactor`、`planetShadow`。
-#include "/rendering/world/end.glsl"
+#include "/effects/world/end.glsl"
 #else // 主世界：唯一使用可变半影阴影的合成阶段（来自 `composite.fsh`）。
 #define OMNI_SHADOW_COMPARE 1 // 让 `effects/shadow/shadow.glsl` 编译可变半影阴影函数。
 uniform sampler2DShadow shadowtex1; // 阴影实心图，可变半影阴影按深度比较读取。
 // 天光照明 `SkyLighting`，并带入天空、云、环境光、方块光与阴影。
-#include "/rendering/lighting/sunlight.glsl"
+#include "/effects/lighting/sunlight.glsl"
 // 水下雾与焦散选项，本程序据它们决定水色。
-#include "/rendering/water/water.glsl"
+#include "/effects/water/water.glsl"
 // Omni 额外功能：真实闪电事件照亮表面。
-#include "/rendering/sky/atmosphere.glsl"
+#include "/effects/sky/atmosphere.glsl"
 // Omni 额外功能：光传播体积的采样映射、选项与片元取样函数。
-#include "/rendering/lighting/lpv.glsl"
+#include "/effects/lighting/lpv.glsl"
 #endif
 // 不透明表面光照算法在效果文件里。
-#include "/rendering/lighting/composite_surface.glsl"
+#include "/effects/lighting/composite_surface.glsl"
 void main(){ CompositeSurfaceLighting(); } // 算不透明表面光照并写回一号画面。
 #endif
 

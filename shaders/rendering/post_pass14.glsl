@@ -57,11 +57,11 @@
 		/* DRAWBUFFERS:1 */
 		layout(location = 0) out vec4 compositeOutput1; // 一号色调映射后的场景颜色。
 		// 合并泛光、曝光与调色的算法体。
-		#include "/rendering/color/post_tonemap.glsl"
+		#include "/effects/color/post_tonemap.glsl"
 		// 胶片颗粒算法体；默认关闭时调用原样返回，画面不变。
-		#include "/rendering/clarity/grain.glsl"
+		#include "/effects/clarity/grain.glsl"
 		// 色调映射之后的色彩分级与亮度曲线，两个开关默认关闭时不改画面。
-		#include "/rendering/color/colorgrade.glsl"
+		#include "/effects/color/colorgrade.glsl"
 		void main(){
 			TonemapColor(); // 合并泛光、曝光与调色并写回一号。
 			compositeOutput1 = vec4(OmniColorGrade(compositeOutput1.rgb), compositeOutput1.a); // 在色调映射后的显示域颜色上做色彩分级，透明度沿用原值。

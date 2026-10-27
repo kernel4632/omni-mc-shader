@@ -178,7 +178,7 @@ MC 光影编译 + 同场景对比
 - `shaders/gfx/` 是旧 GLSL 原型，约 4k 行，迁移完成前保留。
 - 2026-10-24 完成阶段 0–2：根目录 `omni-gfx/` 骨架、Slang 源、GLSL 330 生成、SPIR-V 探针、`math` / `color` / `sampling` 迁移、程序化测试世界（天空、地形、水面、云、可移动相机、截图与帧时）。
 - 2026-10-24 完成阶段 3 的第一批效果迁移：`noise`、`atmosphere`、`cloud`、`water`、`fog` 五个 Slang 模块；测试世界改用生成的 GLSL，加入单次散射大气、24 步程序化体积云、方向波水面、软高度图阴影、云影、空气透视与低空雾。
-- 生成库已接入 `shaders/rendering/color/post_tonemap.glsl`（`composite14` 的色调映射）与 `shaders/rendering/fog/landscattering.glsl`（合成程序的瑞利与米氏相函数）；离线全量编译 280 组程序通过。
+- 生成库已接入 `shaders/effects/color/post_tonemap.glsl`（`composite14` 的色调映射）与 `shaders/effects/fog/landscattering.glsl`（合成程序的瑞利与米氏相函数）；离线全量编译 280 组程序通过。
 - GPU 等值测试 26/26 通过，最大绝对差 0；阶段三测试世界在 1280×720 下 120 帧平均 73.76 毫秒，截图在 `.dev/omni-gfx/world-phase3.png`，详见 `omni-gfx/docs/verification.md`。
 - 2026-10-24 完成阶段 3 的画面与性能收尾：体积云改为半分辨率（640×360）、十二步、蓝噪声抖动、时间累积与双边升采样；地形改用覆盖全岛的方向光阴影贴图；水面补上屏幕空间地形反射、深水体色与远距离雾；后期加入两级对数亮度自动曝光。测试世界在 1280×720 下从 73.76 毫秒降到平均 28.96 毫秒（中位 29.09，约 34.5 帧每秒），截图在 `.dev/omni-gfx/world-final.png`，详见 `omni-gfx/docs/verification.md`。
 - 2026-10-24 完成阶段 3 收尾与整包接入：新增 `shadow`、`gi`、`reflection`、`post`、`antialias` 五个 Slang 模块，扩展到 13 个模块；阴影补上三级级联与 PCSS，全局光补上地平线遮蔽、反弹与两级滤波，反射补上九点降噪，抗锯齿补上时间重投影，后期补上泛光核、景深与分块测光。Minecraft 侧的九个适配层改为引用生成库，调用点、519 个选项、九页菜单与默认画面不变；280 组程序离线编译通过。

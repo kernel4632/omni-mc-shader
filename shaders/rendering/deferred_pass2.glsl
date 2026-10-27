@@ -53,11 +53,11 @@
 		// 延迟程序的共用输入与光色量集中在共享文件里。
 		#include "/rendering/deferred_shared.glsl"
 		// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
-		#include "/bind/ground/material.glsl"
+		#include "/effects/ground/material.glsl"
 		// 先定义 `OMNI_TAA`，坐标换算要用。
-		#include "/rendering/clarity/antialiasing.glsl"
+		#include "/effects/clarity/antialiasing.glsl"
 		// 提供阳光泄漏修正选项，并带入环境光与阴影文件（末地版阴影相机由 `OMNI_END` 选择）。
-		#include "/rendering/lighting/sunlight.glsl"
+		#include "/effects/lighting/sunlight.glsl"
 		void main(){
 			deferredOutput2 = GI_TemporalFilter(); // 与历史帧按法线和深度双向插值。
 		}
@@ -67,11 +67,11 @@
 	// 延迟程序的共用输入与光色量集中在共享文件里。
 	#include "/rendering/deferred_shared.glsl"
 	// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
-	#include "/bind/ground/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算与遮蔽抖动要用。
-	#include "/rendering/clarity/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 	// 提供阳光泄漏修正选项，并带入环境光与阴影文件。
-	#include "/rendering/lighting/sunlight.glsl"
+	#include "/effects/lighting/sunlight.glsl"
 		// 全局光空间滤波的算法在 `effects/lighting/ambient.glsl`（上面经 `effects/lighting/sunlight.glsl` 引入），这里只取深度并写一号。
 	void main(){
 		deferredOutput1 = RenderGISpatialFilter(texelFetch(depthtex1, texelCoord, 0).x); // 用不含半透明的深度做遮蔽与空间滤波。

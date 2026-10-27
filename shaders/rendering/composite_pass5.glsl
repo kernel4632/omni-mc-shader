@@ -63,28 +63,28 @@ uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴�
 // 维度决定雾与折射由谁提供：主世界用体积雾与地表散射，下界用 `NetherFog`，末地用 `EndFog`。
 #if defined OMNI_NETHER // 下界。
 	// 雾文件带入水面、天空、云、光照，并提供 `VanillaFog` 与雾选项。
-	#include "/rendering/fog/fog.glsl"
+	#include "/effects/fog/fog.glsl"
 	// 下界配色、雾与折射 `NetherFogColor`、`NetherFog`、`RefractSampleOnceNether`。
-	#include "/rendering/world/nether.glsl"
+	#include "/effects/world/nether.glsl"
 #elif defined OMNI_END // 末地。
 	// 雾文件带入水面与 `VanillaFog`，并提供星空类型与阳光强度选项。
-	#include "/rendering/fog/fog.glsl"
+	#include "/effects/fog/fog.glsl"
 	// 末地天空、雾与折射 `EndFog`、`RefractSampleOnceEnd`。
-	#include "/rendering/world/end.glsl"
+	#include "/effects/world/end.glsl"
 #else // 主世界。
 	// 带入天空、云、环境光与方块光依赖。
-	#include "/rendering/lighting/sunlight.glsl"
+	#include "/effects/lighting/sunlight.glsl"
 	// 体积雾、水下体积雾、地面大气散射、原版雾，并带入水面与阴影。
-	#include "/rendering/fog/fog.glsl"
+	#include "/effects/fog/fog.glsl"
 #endif
 // 反射合并 `CalculateSpecularReflections`。
-#include "/rendering/reflection/reflection.glsl"
+#include "/effects/reflection/reflection.glsl"
 // 浦肯野效应 `PurkinjeEffect`。
-#include "/rendering/color/color.glsl"
+#include "/effects/color/color.glsl"
 // 景深弥散 `CoCSpread` 与镜头光斑 `LensFlare`，并提供镜头选项。
-#include "/rendering/lens/lens.glsl"
+#include "/effects/lens/lens.glsl"
 // 选择框 `SelectionBox`。
-#include "/rendering/ground/selection.glsl"
+#include "/effects/ground/selection.glsl"
 #if defined OMNI_NETHER || defined OMNI_END // 下界与末地只写一号画面。
 // 下界与末地的合成五号原程序只写一号画面，不画镜头光斑，所以这里不声明三号输出。
 #else
@@ -93,7 +93,7 @@ uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴�
 #endif
 #endif
 // 折射、合并反射、雾、雨、选择框与镜头光斑算法在效果文件里。
-#include "/rendering/world/composite_scene.glsl"
+#include "/effects/world/composite_scene.glsl"
 void main(){ CompositeSceneColor(); } // 合成整幅场景色并写回一号与三号画面。
 #endif
 

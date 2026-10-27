@@ -37,7 +37,7 @@
 #ifdef OMNI_VERTEX
 
 		// 焦散法线只需要一个被拉长的整屏四边形，与延迟零号共用同一份顶点。
-		#include "/rendering/water/caustics_vertex.glsl"
+		#include "/effects/water/caustics_vertex.glsl"
 
 #endif
 
@@ -51,13 +51,13 @@
 		// 延迟程序的共用输入与光色量集中在共享文件里。
 		#include "/rendering/deferred_shared.glsl"
 		// 提供材质编号，水面文件与坐标换算引用它。
-		#include "/bind/ground/material.glsl"
+		#include "/effects/ground/material.glsl"
 		// 先定义 `OMNI_TAA`，坐标换算要用。
-		#include "/rendering/clarity/antialiasing.glsl"
+		#include "/effects/clarity/antialiasing.glsl"
 		// 雾文件带入水面、阴影、天空、云与光照依赖，也提供 `GetWavesNormal`。
-		#include "/rendering/fog/fog.glsl"
+		#include "/effects/fog/fog.glsl"
 		// 焦散法线的算法在效果文件里，这里只调用并写七号。
-		#include "/rendering/water/caustics.glsl"
+		#include "/effects/water/caustics.glsl"
 		void main(){
 			RenderCaustics(); // 算波法线并写七号；末地没有丢弃判断，总是写七号。
 		}
@@ -67,11 +67,11 @@
 	// 延迟程序的共用输入与光色量集中在共享文件里。
 	#include "/rendering/deferred_shared.glsl"
 	// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
-	#include "/bind/ground/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算要用。
-	#include "/rendering/clarity/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 	// 提供阳光泄漏修正选项，并带入环境光与阴影文件。
-	#include "/rendering/lighting/sunlight.glsl"
+	#include "/effects/lighting/sunlight.glsl"
 	void main(){
 		deferredOutput2 = GI_TemporalFilter(); // 与历史帧按法线和深度双向插值。
 	}

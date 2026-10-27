@@ -1,8 +1,8 @@
 /*
-镜头的菜单选项：只声明玩家可调的选项与默认值，菜单由 options.py 扫描本文件生成。
-调用位置：由 `bind/lens/lens.glsl` 引入；渲染程序通过绑定文件间接取得这些宏。
-可复制示例：引用 `effects/lens/lens.glsl` 只取选项；需要算法时引用绑定文件。
-设计原因与取舍：效果层只保留选项，选项名、默认值与配置格式不变；算法与宿主接线已迁到绑定层和通用库。
+效果文件 `effects/lens/lens.glsl`：玩家选项、宿主参数换算、阶段组合与说明集中在这里，菜单由 options.py 扫描本文件生成。
+调用位置：`rendering/` 下的绘制主体按需引用本文件；同目录的其它效果文件补充分阶段实现。
+可复制示例：`#include "/effects/lens/lens.glsl"`，随后调用下方保留原名的效果入口。
+设计原因与取舍：选项、参数换算与阶段组合同属一个效果，放在一处才找得到、改得动；算式在生成的 `omni-gfx` 库，本文件不复制。
 */
 #ifndef OMNI_EFFECT_LENS_LENS_INCLUDED
 #define OMNI_EFFECT_LENS_LENS_INCLUDED
@@ -65,4 +65,61 @@
 #define OMNI_VIGNETTE_ROUNDNESS 0.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 // @option {"label": {"zh_cn": "潜行暗角", "en_us": "Sneaking Vignette"}, "description": {"zh_cn": "潜行时画面下边缘出现额外暗角。", "en_us": "Adds a bottom-edge vignette while sneaking."}}
 #define OMNI_SNEAKING_VIGNETTE 0 // [0 1]
-#endif // 选项层结束
+
+// --- 效果实现：宿主输入、参数换算与阶段入口 ---
+/*
+镜头成像：景深、弥散范围统计、镜头眩光与光斑、相机动态模糊、暗角，合成成一套相机成像效果。
+来源：景深照 iterationT `Lib/IndividualFounctions/DOF.glsl` 一比一移植；
+  景深的散景变形与色散照 Eclipse `lib/settings.glsl:720-721` 的 `DOF_ANAMORPHIC_RATIO`、`DOF_DISPERSION_MULT`
+  与 `dimensions/composite11.fsh:251-258` 的采样方式移植，两项默认值一表示不变形、不色散，默认画面不变；
+  景深的焦距与光圈照 Eclipse `lib/settings.glsl:725-727` 的 `focal`、`fstop` 与 `aperture = focal/fstop`
+  换算相对模糊倍数，默认五十毫米、f/2.8 正好等于一，不改动原来由 `OMNI_DOF_BLUR` 决定的模糊量；
+  眩光与光斑照 iterationT `Lib/IndividualFounctions/LensGlareFlare.glsl` 一比一移植；
+  相机速度与动态模糊照 iterationT `Lib/IndividualFounctions/MotionBlur.glsl` 的模糊部分一比一移植；
+  暗角照 iterationT `Lib/Programs/Final.glsl` 的 `Vignette` 一比一移植。
+  曝光统计（平均亮度与 `AE_*`）不属于本文件，按合同放在 `effects/color/color.glsl`。
+调用位置：
+  合成五号片元在景深开启时调用 `CoCSpread` 取弥散范围，并调用 `LensFlare` 写镜头光斑到三号画面；
+  合成六号片元调用 `DepthOfField` 做景深；
+  合成八号片元调用 `MotionBlur` 做相机动态模糊；
+  合成十四号片元调用 `Vignette` 画暗角。
+本文件的相机速度函数叫 `MotionBlurCameraVelocity`：它只按相机位移算屏幕位移，不回填深度。
+  同名用途在 `effects/clarity/antialiasing.glsl` 是 `TaaCameraVelocity`、在 `effects/lighting/ambient.glsl` 是
+  `GiCameraVelocity`，三份实现不同，按 iterationT 原程序各留一份，名字体现用途以区分。
+可复制示例：
+  `compositeOutput1 = DepthOfField();`
+  `float spread = CoCSpread();`
+  `color += CurveToLinear(texelFetch(colortex3, texelCoord, 0).rgb) * eyeBrightnessSmoothCurved;`
+  `color *= Vignette(texCoord, OMNI_VIGNETTE_FALLOFF, OMNI_VIGNETTE_ROUNDNESS);`
+调用前提（iterationT 原样保留）：
+  调用方必须先声明 `texCoord`、`texelCoord` 全局量，并让材质编号 `MATID_*` 可见；
+  `LensFlare` 还要用到从合成顶点程序插值进来的 `sunCoord`、`colorSunlight`、`sunVisibility`；
+  `CoCSpread`、`DepthOfField`、`MotionBlur` 里的随机数按 `OMNI_TAA` 决定是否随时间变化，
+  所以本文件先引入定义该选项的 `effects/clarity/antialiasing.glsl`；`LensFlare` 用到 `OMNI_VFOG_DENSITY`，
+  由 `effects/fog/fog.glsl` 提供。
+设计原因与取舍：
+  这些效果共用同一套屏幕元数据与坐标约定，放在一个文件里，读取同一份深度和颜色；
+  每个效果各自成函数，关闭时用预处理器在编译期直接去掉对应循环，不为关闭的功能付出逐像素开销。
+    本文件按算法拆到同目录：景深在 `dof.glsl`，眩光与光斑在 `glare.glsl`，相机动态模糊在 `motion_blur.glsl`；暗角只有几行仍留在本文件；引入顺序与拆分前逐字一致。
+*/
+
+// 加载器输入、共享数学、时间噪声先引入；坐标换算依赖本文件先定义的 `OMNI_TAA`，所以放在选项之后。
+#include "/common/uniforms.glsl"
+#include "/common/math.glsl"
+// 暗角曲线放在通用库，这里只传入画面纵横比与选项。
+#include "/gfx/post.glsl"
+#include "/effects/clarity/antialiasing.glsl"
+#include "/common/noise.glsl"
+
+// 景深：弥散圆、散焦范围与散焦合成。
+#include "/effects/lens/dof.glsl"
+// 镜头眩光与光斑。
+#include "/effects/lens/glare.glsl"
+// 相机动态模糊。
+#include "/effects/lens/motion_blur.glsl"
+// --- 暗角 ---
+// 按到画面中心的距离把四角压暗；`falloff` 是强度，`roundness` 在椭圆与圆形之间插值。
+float Vignette(vec2 coord, const float falloff, const float roundness){
+	return gfx_vignette(coord, falloff, roundness, aspectRatio); // 画面纵横比由效果层传入。
+}
+#endif // OMNI_EFFECT_LENS_LENS_INCLUDED

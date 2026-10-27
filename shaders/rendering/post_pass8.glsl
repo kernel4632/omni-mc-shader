@@ -58,11 +58,11 @@
 		layout(location = 0) out vec4 compositeOutput1; // 一号模糊后的场景颜色。
 		layout(location = 1) out vec4 compositeOutput2; // 二号顶行统计像素与保留内容。
 		// 动态模糊与镜头光斑叠加的算法体。
-		#include "/rendering/lens/post_motionblur.glsl"
+		#include "/effects/lens/post_motionblur.glsl"
 		// 标题标志叠加与标题计数累加。
-		#include "/rendering/lens/title.glsl"
+		#include "/effects/lens/title.glsl"
 		// 顶行统计像素的算法体。
-		#include "/rendering/color/post_stats.glsl"
+		#include "/effects/color/post_stats.glsl"
 		void main(){
 			vec3 color = MotionBlurSceneColor(); // 模糊后的线性场景颜色。
 			float bloomGuide = 0.0; // 泛光引导，默认零。

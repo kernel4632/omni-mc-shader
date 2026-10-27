@@ -45,11 +45,11 @@
 #if defined OMNI_FRAGMENT
 
 	// 后期共享声明，全项目只声明一次。
-	#include "/rendering/clarity/post_shared.glsl"
+	#include "/effects/clarity/post_shared.glsl"
 	// 提供材质编号 `MATID_*`，抗锯齿的速度重投影引用它。
-	#include "/bind/ground/material.glsl"
+	#include "/effects/ground/material.glsl"
 	// 时间重投影与相机速度；内部再引入坐标换算。
-	#include "/rendering/clarity/antialiasing.glsl"
+	#include "/effects/clarity/antialiasing.glsl"
 
 	/* DRAWBUFFERS:7 */
 	layout(location = 0) out vec4 compositeOutput7; // 七号时间抗锯齿历史画面。
