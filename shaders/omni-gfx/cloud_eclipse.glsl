@@ -19,7 +19,7 @@ Omni 通用图形库 Eclipse 体积云模块：五层云形状、云影、朝光
 #ifndef OGX_CLOUD_ECLIPSE_INCLUDED
 #define OGX_CLOUD_ECLIPSE_INCLUDED
 
-// 数学提供球面求交，云模块提供密度取样与相函数。
+// 数学提供球面求交，云模块提供密度取样与相函数，天空提供云的环境色查表。
 #include "/omni-gfx/math.glsl"
 #include "/omni-gfx/cloud.glsl"
 // 一层云的几何与覆盖：参考实现的宏逐项搬进字段，调用方按层号填写。
@@ -551,6 +551,7 @@ vec4 ogxEclipseRaymarchCloud(OgxEclipseCloudSettings s, int layerIndex, int samp
                     }
                     if (layerIndex != 2 && s.cumulonimbus > 0) // 积雨云投到其他积云。
                     {
+                        float angle = clamp(degrees(acos(dot(vec3(0.0, 1.0, 0.0), mainLightVec))), 45.0, 90.0) - 45.0; // 参考保留的角度项，当前不参与距离。
                         shadowStartPos = rayPosition + mainLightVec * 9000.0; // 大步投到积雨云。
                         sunShadowMask += ogxEclipseGetCumulonimbusShape(s, 0, shadowStartPos, 600.0, 4600.0 + shadowStartPos.y, 1.0, cameraPos, noiseTexture).x * 3.0; // 积雨云遮挡。
                     }
@@ -580,6 +581,7 @@ vec4 ogxEclipseRaymarchCloud(OgxEclipseCloudSettings s, int layerIndex, int samp
                             lighting = mix(lighting, lightningStrength, lightningIntensity); // 混向闪电。
                         }
                     }
+                    lighting += s.auroraLighting * min(max(rayHeightInCloud, 0.0) / max(tallness, 1.0), 1.0) * skylightOcclusion * skylightOcclusion; // 参考的极光按云内高度与天光遮挡叠加。
                     newPos.xz /= max(newPos.y, 0.0) * 0.0025 + 1.0; // 空气透视距离压缩。
                     float distancefog = exp2(s.distanceFogScale * length(newPos.xz)); // 距离雾。
                     vec3 atmosphereHaze = sampledSkyCol - sampledSkyCol * distancefog; // 雾色。
@@ -603,7 +605,7 @@ vec4 ogxEclipseGetVolumetricClouds(OgxEclipseCloudSettings s, vec3 viewPos, vec2
     vec3 moonVector, vec3 directLightCol, vec3 directLightCol2, vec3 indirectLightCol,
     inout float cloudPlaneDistance, inout vec2 cloudDistance, vec3 cameraPos, vec3 sampledSkyCol,
     float farPlane, float dhFarPlane, mat4 modelViewInverse, int samples, bool deferred, bool skyGround,
-    float skyBrightness, bool terrainShadowOnClouds, vec3 shadowCameraPos, sampler2D noiseTexture,
+    float skyBrightness, bool terrainShadowOnClouds, sampler2D noiseTexture,
     sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution, float shadowDistort)
 {
     vec3 color = vec3(0.0); // 累积颜色。
@@ -628,7 +630,7 @@ vec4 ogxEclipseGetVolumetricClouds(OgxEclipseCloudSettings s, vec3 viewPos, vec2
     vec3 rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / min(cloudDist, vec3(0.05 * lViewPosM))) / float(samples)); // 一层走完的步长。
     vec3 rayPosition = ogxEclipseGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点压到云层平面。
     sampledSkyCol *= skyBrightness; // 天空亮度。
-    vec3 playerPos = ogxMatrixMulPoint(modelViewInverse, viewPos); // 相机相对世界位置。
+    vec3 playerPos = (modelViewInverse * vec4(viewPos, 1.0)).xyz; // 相机相对世界位置。
     float maxLength = min(length(playerPos), farPlane) / max(length(playerPos), 1e-4); // 限制到远平面。
     playerPos *= maxLength; // 截断。
     float startDistance = length(playerPos); // 到像素的距离。
@@ -1376,14 +1378,38 @@ vec4 ogxEclipseCloudTransmittanceSimple(vec2 dither, vec3 lightDir, vec2 offset,
 
 // 严格参考签名的单层云步进入口：参考参数在前，云设置、相机与阴影资源追加在后。
 // 主体仍由 `ogxEclipseRaymarchCloud` 执行，入口只负责把显式参数重新排好。
+// 五层云的高度、厚度与距离按参考默认配置传入，避免把宿主菜单常数藏进结构体。
 vec4 ogxEclipseRaymarchCloudExact(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,
     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,
     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,
     vec4 phaseLevels2, OgxEclipseCloudSettings settings, vec3 cameraPos, bool terrainShadowOnClouds,
     bool deferred, sampler2D noiseTexture, sampler2D shadowTexture, mat4 shadowView,
-    mat4 shadowProjection, float shadowResolution, float shadowDistort)
+    mat4 shadowProjection, float shadowResolution, float shadowDistort, vec4 layer0Size,
+    vec4 layer1Size, vec4 layer2Size, vec3 layer3Size, vec3 layer4Size, vec3 auroraRgb,
+    float auroraBrightness, float auroraAmount, vec3 customLightningRgb)
 {
+    settings.layers[0].height = layer0Size.x; // 小积云高度。
+    settings.layers[0].tallness = layer0Size.y; // 小积云厚度。
+    settings.layers[0].scale = layer0Size.z; // 小积云水平尺度。
+    settings.layers[0].distance = layer0Size.w; // 小积云可见距离。
+    settings.layers[1].height = layer1Size.x; // 大积云高度。
+    settings.layers[1].tallness = layer1Size.y; // 大积云厚度。
+    settings.layers[1].scale = layer1Size.z; // 大积云水平尺度。
+    settings.layers[1].distance = layer1Size.w; // 大积云可见距离。
+    settings.layers[2].height = layer2Size.x; // 高层云高度。
+    settings.layers[2].distance = layer2Size.y; // 高层云可见距离。
+    settings.layers[2].scale = layer2Size.z; // 高层云水平尺度。
+    settings.layers[3].height = layer3Size.x; // 卷云高度。
+    settings.layers[3].distance = layer3Size.y; // 卷云可见距离。
+    settings.layers[3].scale = layer3Size.z; // 卷云水平尺度。
+    settings.layers[4].height = layer4Size.x; // 额外云层高度。
+    settings.layers[4].distance = layer4Size.y; // 额外云层可见距离。
+    settings.layers[4].scale = layer4Size.z; // 额外云层水平尺度。
+    settings.auroraLighting = 0.015 * auroraBrightness * (sin(auroraRgb + 0.63) * 0.5 + 0.5) * auroraAmount
+        * smoothstep(0.0, -0.1, sunVector.y) * smoothstep(0.1, 0.0, moonVector.y); // 参考的极光光照。
+    settings.cumulonimbusLightningColor = vec3(customLightningRgb.x, 1.05 * customLightningRgb.y,
+        1.22 * customLightningRgb.z); // 参考的积雨云闪电颜色。
     return ogxEclipseRaymarchCloud(settings, layerIndex, samples, rayPosition, rayDirection, dither, minHeight,
         maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance,
         sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2,
@@ -1391,19 +1417,21 @@ vec4 ogxEclipseRaymarchCloudExact(int layerIndex, int samples, vec3 rayPosition,
         shadowResolution, shadowDistort); // 转调同一份层步进。
 }
 
-// 严格参考签名的体积云总入口：五个参考参数在前，相机、天空与阴影资源追加在后。
+// 严格参考签名的体积云总入口：参考参数在前，相机、天空与阴影资源追加在后。
+// 参考正文依赖五层云宏与天空盒贴图，当前采样数与显式入口不一致，台账保留 reference_broken；
+// 这里只转发到通用入口，避免留下未经验证的近似实现。
 vec4 ogxEclipseGetVolumetricCloudsExact(vec3 viewPos, vec2 dither, vec3 sunVector, vec3 moonVector,
     vec3 directLightCol, vec3 directLightCol2, vec3 indirectLightCol, inout float cloudPlaneDistance,
     inout vec2 cloudDistance, OgxEclipseCloudSettings settings, vec3 cameraPos, vec3 sampledSkyCol,
     float farPlane, float dhFarPlane, mat4 modelViewInverse, int samples, bool deferred, bool skyGround,
-    float skyBrightness, bool terrainShadowOnClouds, vec3 shadowCameraPos, sampler2D noiseTexture,
+    float skyBrightness, bool terrainShadowOnClouds, sampler2D noiseTexture,
     sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution,
     float shadowDistort)
 {
     return ogxEclipseGetVolumetricClouds(settings, viewPos, dither, sunVector, moonVector, directLightCol,
         directLightCol2, indirectLightCol, cloudPlaneDistance, cloudDistance, cameraPos, sampledSkyCol,
         farPlane, dhFarPlane, modelViewInverse, samples, deferred, skyGround, skyBrightness,
-        terrainShadowOnClouds, shadowCameraPos, noiseTexture, shadowTexture, shadowView, shadowProjection,
+        terrainShadowOnClouds, noiseTexture, shadowTexture, shadowView, shadowProjection,
         shadowResolution, shadowDistort); // 转调五层总入口。
 }
 

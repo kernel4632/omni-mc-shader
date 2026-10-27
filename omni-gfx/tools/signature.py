@@ -1186,12 +1186,15 @@ def compare(ref: dict, impl: dict, ref_constants: dict, lib_constants: dict,
             allow_extra_constants: bool = False,
             resources: dict[str, str] | None = None,
             bindings: dict[str, float] | None = None,
-            resource_calls: dict[str, dict] | None = None) -> dict:
+            resource_calls: dict[str, dict] | None = None,
+            tree_cache: dict | None = None) -> dict:
     """比较两份签名与算式，返回可直接写进报告的差异列表与证据字段。
 
     `ref_index` 与 `impl_index` 给出时沿调用图收集常数与采样；否则只比较函数体本身。
     `allow_extra_constants` 用于宿主转发层：参考常数必须全部出现，实现多出的常量
     可能来自显式化的宿主参数，不算缺失，但会记录在证据里供人工复核。
+    `tree_cache` 由调用方跨条目复用；只给没有参考宏覆盖的条目共用，避免同一路径
+    在不同预处理分支下命中错误缓存。
 
     `resources` 给出参考签名之后允许追加的宿主资源参数，键是参数名，值是
     texture/matrix/struct/value。参考参数必须逐项出现在实现参数表的最前面；
@@ -1247,9 +1250,9 @@ def compare(ref: dict, impl: dict, ref_constants: dict, lib_constants: dict,
                     impl_numbers_extra.append(float(value))
     if ref_index is not None and impl_index is not None:
         ref_numbers_raw, ref_samples, ref_unknown = collect_tree(
-            ref, ref_index, ref_constants, resource_calls=resource_calls)
+            ref, ref_index, ref_constants, cache=tree_cache, resource_calls=resource_calls)
         impl_numbers_raw, impl_samples, impl_unknown = collect_tree(
-            impl, impl_index, lib_constants,
+            impl, impl_index, lib_constants, cache=tree_cache,
             bindings={name: ([float(item) for item in value] if isinstance(value, (list, tuple))
                              else [1.0 if value is True else 0.0 if value is False else float(value)])
                       for name, value in (bindings or {}).items()})

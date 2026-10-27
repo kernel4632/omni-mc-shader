@@ -366,7 +366,7 @@ vec3 ogxEndVortexLighting(vec3 startPos, vec3 lightPos, float density, vec3 ligh
     float shadow = 0.0; // 沿光方向累积的遮挡。
     for (int j = 0; j < 3; j++) // 三步采样雾的遮挡。
     {
-        vec3 shadowSamplePos = startPos - lightPos * (0.05 + float(j) * 0.25); // 从当前点向光柱中心退回采样。
+        vec3 shadowSamplePos = startPos - lightPos * (0.05 + float(j) * (0.25 + 0.0 * 0.15)); // 从当前点向光柱中心退回采样，零点一五照参考保留但不参与。
         shadow += ogxEndVortexShape(shadowSamplePos, time, noiseTexture, noiseResolution); // 累加遮挡。
     }
     vec3 lighting = lightColor * phase * exp(-7.0 * shadow); // 直接来自光柱的亮光，被遮挡压暗。
@@ -408,6 +408,59 @@ vec4 ogxEndVortexFog(vec3 cameraPos, vec3 worldDir, float viewDist, float dither
         color += (hazeLighting - hazeLighting * exp(-hazeDensity * dd * dL)) * absorbance; // 雾霭不改变透过率，只按当前透过率叠上。
     }
     return vec4(color * outputScale, absorbance); // 散射色换算到管线单位，剩余透射率一并交回。
+}
+
+// 末地体积涡旋雾：按 Eclipse `end_fog.glsl` 的 GetVolumetricFog 逐行移植。
+// 参考参数在前，相机、随机缓冲、噪声与风暴资源追加在后；默认分支不读宿主全局量。
+vec4 ogxEclipseGetVolumetricFogEndExact(vec3 viewPosition, float dither, float dither2,
+    mat4 modelViewInverse, vec3 cameraWorldPos, vec3 ambientColor, vec3 vortexColor, vec3 lightningColor,
+    vec3 orbColor, float orbMult, bool theOrb, float vortexBoundRange, vec3 manualLightPos,
+    sampler2D randomTexture, sampler2D noiseTexture, float noiseResolution, float endStormDensity,
+    float endHazeDensity, int sampleCount, float expFactor, float maxDistNear, float maxDistFar,
+    float time)
+{
+    vec3 wpos = ogxMatrixMulPoint(modelViewInverse, viewPosition) + ogxMatrixTranslation(modelViewInverse); // 参考用视图逆矩阵把视线终点转到世界位置。
+    vec3 dVWorld = wpos - ogxMatrixTranslation(modelViewInverse); // 相机相对的射线位移。
+    float verticalFactor = abs(normalize(dVWorld).y); // 视线越竖直，雾越短。
+    verticalFactor = pow(verticalFactor, 2.0); // 参考对竖直分量平方。
+    float rayLength = length(dVWorld); // 射线总长。
+    float maxDist = mix(maxDistNear, maxDistFar, verticalFactor); // 按视线角度在两组距离之间取值。
+    float maxLength = min(rayLength, maxDist) / rayLength; // 距离上限的比例。
+    dVWorld *= maxLength; // 截断到最大距离。
+    float dL = length(dVWorld); // 实际步进长度。
+    vec3 color = vec3(0.0); // 累积颜色。
+    float absorbance = 1.0; // 累积透过率。
+    float skyPhase = (0.5 + pow(clamp(normalize(wpos).y * 0.5 + 0.5, 0.0, 1.0), 4.0) * 5.0) * 0.1; // 抬头方向的雾霭权重。
+    float lightningflash = texelFetch(randomTexture, ivec2(1, 1), 0).x / 150.0; // 参考从第四张缓冲固定像素取闪电强度。
+    for (int i = 0; i < sampleCount; i++) // 逐步前进。
+    {
+        float d = (pow(expFactor, (float(i) + dither) / float(sampleCount)) / expFactor - 1.0 / expFactor) / (1.0 - 1.0 / expFactor); // 这一步在视线上的比例。
+        float dd = pow(expFactor, (float(i) + dither2) / float(sampleCount)) * log(expFactor) / float(sampleCount) / (expFactor - 1.0); // 这一步的宽度。
+        vec3 progressP = ogxMatrixTranslation(modelViewInverse) + d * dVWorld; // 相机相对位置。
+        vec3 progressW = progressP + cameraWorldPos; // 绝对世界位置。
+        float vortexBounds = clamp(vortexBoundRange - length(progressW), 0.0, 1.0); // 涡旋核心范围。
+        vec3 vortexPos = progressW - vec3(0.0, 200.0, 0.0); // 中心光柱。
+        vec3 lightningPos = progressW - cameraWorldPos - manualLightPos; // 闪电光。
+        lightningPos += fract(cameraWorldPos / 200.0) * 200.0 - 200.0 * 0.5; // 吸到两百格网格。
+        vec3 randomOffset = (texelFetch(randomTexture, ivec2(2, 1), 0).xyz / 150.0) * 2.0 - 1.0; // 参考从第四张缓冲取随机偏移。
+        lightningPos -= randomOffset * 2.5; // 随机偏移。
+        vec3 lightPosition = theOrb ? lightningPos : mix(lightningPos, vortexPos, vortexBounds); // 参考的光源位置。
+        vec3 lightColors = (theOrb ? orbColor * orbMult : mix(lightningColor * lightningflash, vortexColor, vortexBounds)) * 0.25; // 参考的光源颜色。
+        float volumeDensity = ogxEndVortexShape(progressW, time, noiseTexture, noiseResolution); // 这一步的雾密度。
+        float clearArea = 1.0 - min(max(1.0 - length(progressP) / 100.0, 0.0), 1.0); // 相机一百格内留空。
+        float stormDensity = min(volumeDensity, clearArea * clearArea * endStormDensity); // 风暴部分按贴脸留空与密度封顶。
+        float volumeCoeff = exp(-stormDensity * dd * dL); // 这一步之后的透过率。
+        vec3 lightsources = ogxEndVortexLighting(progressW, lightPosition, volumeDensity, lightColors,
+            time, noiseTexture, noiseResolution); // 雾内光柱发光。
+        vec3 indirect = ambientColor * 0.2 * (exp((volumeDensity * volumeDensity) * -50.0) * 0.9 + 0.1) * 0.1; // 雾内环境光。
+        vec3 stormLighting = indirect + lightsources; // 这一步的总发光。
+        color += (stormLighting - stormLighting * volumeCoeff) * absorbance; // 累积散射。
+        absorbance *= volumeCoeff; // 累积透过率。
+        float hazeDensity = 0.001 * endHazeDensity; // 参考的雾霭密度。
+        vec3 hazeLighting = vec3(0.37, 0.32, 0.75) * skyPhase * 0.5; // 冷紫雾霭。
+        color += (hazeLighting - hazeLighting * exp(-hazeDensity * dd * dL)) * absorbance; // 雾霭不改变透过率。
+    }
+    return vec4(color, absorbance); // 交回雾色与透过率。
 }
 
 // 末地解析雾的密度：视线先转到行星相位坐标系，再按等效高度做积分，最后乘风暴与雾霭两层密度。

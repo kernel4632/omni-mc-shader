@@ -211,6 +211,7 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
     missing = review.get("missing", {})
     errors: list[str] = []
     records = []
+    shared_cache: dict = {}  # 无参考宏覆盖的条目共用调用图缓存；参考与实现的同名函数不会互相覆盖键。
 
     for row in raw_rows:
         name = row["name"]
@@ -284,10 +285,11 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
                     candidates.append(item)
             result = None
             best_ref = ref
+            cache = shared_cache if not overrides_key else {}  # 参考宏覆盖的条目单独建缓存，避免分支串味。
             for candidate in candidates or [ref]:
                 current = signature.compare(candidate, impl, source_constants[candidate["pack"]], impl_constants,
                                             impl_structs, source_index[candidate["pack"]], impl_index, allow_extra,
-                                            resources, bindings, entry.get("resourceCalls"))
+                                            resources, bindings, entry.get("resourceCalls"), cache)
                 if result is None or len(current["issues"]) < len(result["issues"]):
                     result = current
                     best_ref = candidate

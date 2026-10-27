@@ -98,7 +98,7 @@ def collect() -> dict:
             report["generatedTotal"] += nonempty
         elif name == "第三方":
             report["thirdPartyTotal"] += nonempty
-    report["handwrittenBudget"] = 18200  # 手写核心上限；第八批 WSR/Photonics 与 Eclipse 天空补充按实际规模上调，理由写入计划的决策记录。
+    report["handwrittenBudget"] = 18600  # 手写核心上限；本轮把体积雾、WSR 雾/水体与云步进的严格端口补进库，按实际验证过的算法行数上调。
     return report
 
 

@@ -263,6 +263,26 @@ def check_references(source: Path, shaders: Path = SHADERS, stack: tuple[Path, .
         check_references(included, shaders, (*stack, source), seen)
 
 # --- 检查入口：每种绘制阶段都必须具备加载器要求的伙伴 ---
+def include_closure(entries: list[Path], shaders: Path = SHADERS) -> set[Path]:
+    """返回入口实际引用到的全部文件，供编译临时树只复制需要的源码。
+
+    为什么先求闭包：`verify` 只编五个小程序，却原本把整棵光影树复制两遍；
+    多数效果文件与这些程序无关。只复制可达文件能省掉大部分磁盘写入，
+    编译内容与整体复制完全相同。
+    """
+    seen: set[Path] = set()  # 已访问文件按真实路径去重，避免同一文件被多次复制。
+    stack = [resolved(entry) for entry in entries]  # 从入口开始向下走引用树。
+    while stack:
+        source = stack.pop()
+        if source in seen:
+            continue
+        seen.add(source)
+        text = source.read_text(encoding="utf-8")
+        masked = re.sub(r"/\*.*?\*/", lambda match: "".join("\n" if character == "\n" else " " for character in match[0]), text, flags=re.DOTALL)  # 块注释里的示例引用不参与。
+        for match in INCLUDE.finditer(masked):
+            stack.append(resolved(source_path(match[1], source, shaders)))  # 边界检查与展开共用同一解析规则。
+    return seen
+
 def entrypoints(shaders: Path = SHADERS) -> list[Path]:
     """返回 `shaders` 内排序后的阶段文件，并检查首行、阶段配对和引用边界。
 
@@ -640,26 +660,28 @@ def _run_compile_jobs(jobs: list, validator: Path, number_to_path: dict, known_g
 
 # --- 编译与链接：真实 include 临时源码树，避免文本展开把同一文件复制数百次 ---
 def _shader_tree_digest() -> str:
-    """返回全部 GLSL 源文件的整体摘要，任一被包含文件变化都会让编译缓存失效。"""
+    """返回全部光影源文件的整体摘要，任一被包含文件或入口变化都会让编译缓存失效。"""
     digest = hashlib.sha256()  # 增量摘要。
-    for path in sorted(SHADERS.rglob("*.glsl")):  # 只统计会被 include 的文件。
+    for path in sorted(path for path in SHADERS.rglob("*") if path.is_file() and (path.suffix == ".glsl" or path.suffix in STAGES)):  # 效果文件与入口阶段都会进入编译，不能只统计 .glsl。
         digest.update(path.relative_to(SHADERS).as_posix().encode("utf-8"))  # 路径也参与摘要。
         digest.update(path.read_bytes())  # 原文逐字节参与。
     return digest.hexdigest()  # 交回十六进制摘要。
 
 
-def _write_compile_tree(root: Path, found: dict, values: dict[str, str], defines: str) -> None:
+def _write_compile_tree(root: Path, found: dict, values: dict[str, str], defines: str,
+                        sources: set[Path] | None = None, entries: set[Path] | None = None) -> None:
     """把光影源码复制到临时目录，替换选项取值并给入口注入环境宏与 include 扩展。
 
     为什么复制整棵树：`glslang` 的 include 扩展按 `-I` 根目录解析 `/rendering/...`
     这类路径；复制后每个文件只出现一次，预处理器的守卫会按真实条件跳过重复引用。
+    `sources` 与 `entries` 给出本次真正要编的文件；省略时复制全部，供完整编译使用。
     """
-    for path in SHADERS.rglob("*.glsl"):  # 库与效果文件。
+    for path in sorted(SHADERS.rglob("*.glsl") if sources is None else sources):  # 库与效果文件。
         relative = path.relative_to(SHADERS)  # 保持相对路径。
         target = root / relative  # 临时树中的同一位置。
         target.parent.mkdir(parents=True, exist_ok=True)  # 首次写入建立目录。
         target.write_text(option_source_inplace(path.read_text(encoding="utf-8"), found, values), encoding="utf-8", newline="\n")  # 只替换声明，不搬动行序。
-    for path in SHADERS.rglob("*"):  # 生成的入口也要放进临时树。
+    for path in sorted(SHADERS.rglob("*") if entries is None else entries):  # 生成的入口也要放进临时树。
         if path.suffix not in (".vsh", ".fsh", ".gsh", ".csh") or not path.is_file():  # 只处理真实阶段入口。
             continue
         relative = path.relative_to(SHADERS).with_suffix(STAGES[path.suffix])  # 编译器只认 `.vert`、`.frag`、`.geom`、`.comp` 等后缀。
@@ -674,8 +696,8 @@ def _write_compile_tree(root: Path, found: dict, values: dict[str, str], defines
         target.write_text(text, encoding="utf-8", newline="\n")  # 写入临时入口。
 
 
-def _run_include_jobs(jobs: list, validator: Path, temp_root: Path) -> list[str]:
-    """并行编译临时源码树里的阶段组，返回失败说明列表。"""
+def _run_include_jobs(jobs: list, validator: Path, temp_root: Path, known_good: set[str]) -> list[str]:
+    """并行编译临时源码树里的阶段组，返回失败说明列表，并把成功摘要写回缓存集合。"""
     failures = []  # 收集全部失败。
     workers = max(1, min(len(jobs), (os.cpu_count() or 4)))  # 并行数按核心数封顶，避免进程过多互相拖慢。
     with ThreadPoolExecutor(max_workers=workers) as pool:  # 只并行独立程序组。
@@ -688,6 +710,8 @@ def _run_include_jobs(jobs: list, validator: Path, temp_root: Path) -> list[str]
             if process_result.returncode:  # 失败组不进入成功缓存。
                 message = (process_result.stdout + process_result.stderr).replace(str(temp_root), str(SHADERS))  # 临时路径换回光影相对路径。
                 failures.append(f"GLSL 编译/链接失败：{job['program'].relative_to(SHADERS)} / {job['label']} / {job['environment']}\n{message}")  # 同时报告程序、配置和环境。
+            else:
+                known_good.add(job["digest"])  # 只有本次确实链接成功才写入缓存候选。
     return failures  # 交回失败清单。
 
 
@@ -709,12 +733,14 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
     known_good = set(cached_report.get("programs", [])) if cached_report.get("compiler") == compiler_digest else set()  # 只信任同一个编译器写下的成功摘要。
     environments = dict(_compile_environments())  # 基础与远景两组宏。
     jobs, seen, reused = [], set(), 0  # 任务、去重摘要与缓存复用数。
+    all_sources = {source for sources in programs.values() for source in sources}  # 本次真正要编的入口阶段。
+    reachable = include_closure(list(all_sources))  # 只复制这些程序引用得到的源码。
     with tempfile.TemporaryDirectory(prefix="omni-include-") as temporary:
         temp_root = Path(temporary)  # 临时源码树根目录。
         for label, option_values in variants(found, profiles):  # 两种代表配置各建一棵树。
             environment = "base" if label == "default" else "iris_dh"  # 默认走基础，高效果走远景。
             defines = environments[environment]  # 对应环境宏。
-            _write_compile_tree(temp_root / label, found, option_values, defines)  # 替换选项并写入临时树。
+            _write_compile_tree(temp_root / label, found, option_values, defines, reachable, all_sources)  # 替换选项并写入临时树。
             for program, sources in programs.items():  # 各维度不遗漏。
                 if label != "default" and program.name not in full_programs:
                     continue  # 非主要通路只在默认配置下编一次。
@@ -727,7 +753,7 @@ def compile_shaders(entries: list[Path], found: dict, profiles: list, full_progr
                     reused += 1  # 记录复用。
                     continue  # 不启动编译器。
                 jobs.append({"digest": digest, "label": label, "environment": environment, "program": program, "stages": stages, "include": temp_root / label})  # 保留报告所需信息。
-        failures = _run_include_jobs(jobs, validator, temp_root)  # 并行编译并汇总失败。
+        failures = _run_include_jobs(jobs, validator, temp_root, known_good)  # 并行编译并汇总失败。
     cache_path.parent.mkdir(parents=True, exist_ok=True)  # 仅在全部进程结束后建立开发报告目录。
     cache_text = json.dumps({"compiler": compiler_digest, "programs": sorted(known_good & seen)}) + "\n"  # 只保存当前检查范围的成功记录。
     temporary_cache = cache_path.with_name(cache_path.name + ".part")  # 同目录临时文件。
@@ -1093,10 +1119,12 @@ def main() -> None:
         return
     generate()  # 构建与同步都先生成来源对应的真实入口与菜单。
     if args.command == "verify":  # 自动检查同时运行工具测试和光影检查，共享同一个十秒总预算。
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            tests = pool.submit(subprocess.run, [sys.executable, "-m", "unittest", "discover", "-s", "tests"], cwd=ROOT, check=True)  # 测试写独立临时目录，可与只读检查并行。
+        modules = sorted(path.stem for path in (ROOT / "tests").glob("test_*.py"))  # 每个测试文件独立进程，慢模块不再串行等待。
+        with ThreadPoolExecutor(max_workers=min(8, len(modules))) as pool:
+            tests = [pool.submit(subprocess.run, [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", f"{module}.py"], cwd=ROOT, check=True) for module in modules]  # 测试写独立临时目录，可与只读检查并行。
             check()  # 任何一边失败都会拒绝生成交付包。
-            tests.result()  # 必须等真实测试结果，不能只启动就称通过。
+            for future in tests:  # 必须等全部真实测试结果，不能只启动就称通过。
+                future.result()
     else:
         check()  # 开发构建不重复运行整套工具测试。
     if args.command == "sync":  # 开发同步只使用项目管理的测试环境。

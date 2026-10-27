@@ -13,6 +13,7 @@ from __future__ import annotations
 import ast  # 用语法树识别真正的 Python 文档字符串，避免普通字符串冒充说明。
 import io  # 把源码交给标准词法扫描器，保持 Python 的注释边界规则。
 import json  # 机器菜单说明必须按真实结构读取，不能靠文字前缀绕过审计。
+import os  # 遍历时直接跳过环境、参考与第三方目录，不先枚举数万文件再过滤。
 import re  # 识别中文、文件示例、机器字段和未实现标记。
 import tokenize  # 让字符串中的井号不会被误判为注释。
 from functools import lru_cache  # 大量重复英文词只判断一次，避免审计随注释量线性变慢。
@@ -116,13 +117,14 @@ def chinese_explanation(line: str) -> bool:
     return len(CHINESE.findall(text)) >= 4  # 至少四个中文字符才算完整说明，不接受单字凑比例。
 
 
-def comments(source: Path) -> tuple[set[int], list[tuple[int, str]]]:
+def comments(source: Path, text: str | None = None) -> tuple[set[int], list[tuple[int, str]]]:
     """解析一个源码文件里的真实注释，并返回有效行号和原始片段。
 
     Python 使用语法树和词法扫描；其他格式使用对应的字符串边界规则。这样做是因为
     字符串里的井号、示例文本和菜单值不是维护者给接手者的说明，不能虚增中文覆盖率。
+    `text` 可由检查循环传入已读内容，避免同一文件在比例统计与注释解析时读取两次。
     """
-    text = source.read_text(encoding="utf-8")  # 审计实际源文件，不读取构建报告或缓存副本。
+    text = source.read_text(encoding="utf-8") if text is None else text  # 审计实际源文件，不读取构建报告或缓存副本。
     fragments = []  # 保存原始片段和行号，后续才能指出维护者要改的具体位置。
     if source.suffix == ".py":  # Python 需要标准语法边界，避免把普通字符串算成注释。
         tree = ast.parse(text)  # 源码无法解析时直接失败，不能用审计绕过语法错误。
@@ -160,25 +162,32 @@ def check(root: Path) -> list[dict]:
     的语言，而不是要求它们重复携带源代码注释。
     """
     reports, errors = [], []  # 汇总所有文件的结果，让维护者一次看到全部需要修正的位置。
-    for file_path in sorted(root.rglob("*")):
-        relative_path = file_path.relative_to(root).as_posix()  # 报告使用项目相对路径，避免泄露本机目录。
-        if not file_path.is_file() or file_path.suffix not in SUFFIXES or EXCLUDED.intersection(file_path.relative_to(root).parts) or relative_path in MACHINE_FILES: continue  # 第三方、机器数据和生成菜单有自己的来源，不在这里重复审计。
-        nonempty_lines = {number for number, line in enumerate(file_path.read_text(encoding="utf-8").splitlines(), 1) if line.strip()}  # 空行没有业务内容，不应稀释说明比例。
-        commented_lines, fragments = comments(file_path)
-        ratio = len(commented_lines & nonempty_lines) / max(len(nonempty_lines), 1)  # 行尾说明既是代码行也是说明行，分子分母都保留。
-        reports.append({"file": relative_path, "nonempty": len(nonempty_lines), "chineseCommentLines": len(commented_lines & nonempty_lines), "ratio": ratio})
-        if ratio < 0.5 and not relative_path.startswith(GENERATED): errors.append(f"{relative_path}：中文有效注释 {ratio:.1%}，至少需要 50%")  # 一半是项目约定的最低接手说明密度。
-        for line_number, fragment in fragments:
-            if fragment.lstrip().startswith(("// @option ", "// @effect ")):
-                try: chinese_explanation(fragment)
-                except (ValueError, TypeError) as error: errors.append(f"{relative_path}:{line_number}：机器说明无效：{error}")  # 机器字段错误必须指向原始文件和行。
-                continue  # 只有结构合法的机器字段可以使用机器字段规则，不放宽普通英语说明。
-            if re.search(r"\b(?:TODO|FIXME)\b|待实现|尚未实现|未接入的占位", fragment): errors.append(f"{relative_path}:{line_number}：存在未实现标记")  # 未实现标记说明交付边界仍有空缺。
-            for line_offset, text in enumerate(fragment.splitlines()):
-                if MACHINE.match(text): continue  # 注释里成行的机器语句不按自然语言检查。
-                try:
-                    chinese_explanation(text)
-                except ValueError as error: errors.append(f"{relative_path}:{line_number + line_offset}：{error}")  # 中英混合和纯英文说明使用同一严格规则。
+    # 为什么先剪枝：项目根目录下的 `.git`、`.venv`、`references` 与 `dist` 有数万个文件；
+    # 先递归扫描全部文件再逐个取相对路径，会在十秒预算里白扫这些不参与审计的目录。
+    for current, directories, names in os.walk(root):
+        directories[:] = sorted(name for name in directories if name not in EXCLUDED)  # 排除目录不再向下遍历。
+        for name in sorted(names):
+            file_path = Path(current) / name
+            relative_path = file_path.relative_to(root).as_posix()  # 报告使用项目相对路径，避免泄露本机目录。
+            if file_path.suffix not in SUFFIXES or relative_path in MACHINE_FILES: continue  # 第三方、机器数据和生成菜单有自己的来源，不在这里重复审计。
+            text = file_path.read_text(encoding="utf-8")  # 每个文件只读一次，比例统计和注释解析共用。
+            nonempty_lines = {number for number, line in enumerate(text.splitlines(), 1) if line.strip()}  # 空行没有业务内容，不应稀释说明比例。
+            commented_lines, fragments = comments(file_path, text)
+            ratio = len(commented_lines & nonempty_lines) / max(len(nonempty_lines), 1)  # 行尾说明既是代码行也是说明行，分子分母都保留。
+            reports.append({"file": relative_path, "nonempty": len(nonempty_lines), "chineseCommentLines": len(commented_lines & nonempty_lines), "ratio": ratio})
+            if ratio < 0.5 and not relative_path.startswith(GENERATED): errors.append(f"{relative_path}：中文有效注释 {ratio:.1%}，至少需要 50%")  # 一半是项目约定的最低接手说明密度。
+            for line_number, fragment in fragments:
+                if fragment.lstrip().startswith(("// @option ", "// @effect ")):
+                    try: chinese_explanation(fragment)
+                    except (ValueError, TypeError) as error: errors.append(f"{relative_path}:{line_number}：机器说明无效：{error}")  # 机器字段错误必须指向原始文件和行。
+                    continue  # 只有结构合法的机器字段可以使用机器字段规则，不放宽普通英语说明。
+                if re.search(r"\b(?:TODO|FIXME)\b|待实现|尚未实现|未接入的占位", fragment): errors.append(f"{relative_path}:{line_number}：存在未实现标记")  # 未实现标记说明交付边界仍有空缺。
+                for line_offset, text_line in enumerate(fragment.splitlines()):
+                    if MACHINE.match(text_line): continue  # 注释里成行的机器语句不按自然语言检查。
+                    try:
+                        chinese_explanation(text_line)
+                    except ValueError as error:
+                        errors.append(f"{relative_path}:{line_number + line_offset}：{error}")  # 中英混合和纯英文说明使用同一严格规则。
     if errors: raise ValueError("源码审计失败\n" + "\n".join(errors))
     return reports
 

@@ -1,4 +1,12 @@
 # 更新记录
+## 0.16.0-dev.4
+
+严格函数对照第五轮：exact 从 468 增到 473，reference_broken 从 11 降到 6，approximate、missing 保持 0，mc_glue 保持 26。本轮把五个依赖宿主宏的体积雾与云函数改成参考默认分支的逐行端口，参考常数、循环次数与采样顺序逐项对齐。
+- 新增 exact：`VolumetricFog` 按 iterationT `VFOG_NOISE_TYPE=0` 的高度雾路径实现，补齐时序蓝噪声取像素、六步阴影采样与四级散射；`GetVolumetricFog` 按 Eclipse 末地涡旋雾实现，补齐光源位置/颜色、雾形状与三层遮挡；`raymarchWSRfog` 与 `WSRwaterVolumetrics` 按 Eclipse 的阴影压缩、云影、焦散、闪电与大气透视实现；`raymarchCloud` 补齐五层云设置、极光、积雨云遮挡与闪电颜色。五个入口都接收显式纹理、矩阵与数值资源，不读宿主全局量。
+- 未升级：`GetVolumetricClouds` 仍为 reference_broken。参考五层调用图在 `CLOUDSHADOWSONLY`、`CloudLayer0..3`、`CUMULONIMBUS`、`CLOUD_SAMPLES` 与天空盒贴图配置下展开为 7621 次采样，显式入口为 6796 次，采样顺序不一致，不能写成 exact。其余五条（`GetVoxelData`、`GetTexCoord`、`sortIntersectionCutout`、`trace_wsr`、`photonicsReflection`）继续保留 reference_broken：`voxel_common.glsl` 的 `voxelData` SSBO 声明在 5–7、12–14 行被注释，`photonics/photonics.glsl` 为 0 字节，仓库内没有可恢复定义。
+- 验证提速：`audit.py` 改为遍历时跳过 `.git`、`.venv`、`references`、`dist` 等目录并只读每个文件一次；`build.py` 编译临时树只复制本次入口的可达源码，缓存摘要纳入阶段入口，成功链接真正写回缓存。`verify` 的十秒预算没有提高，检查耗时从超时降到约 3.4 秒，测试约 7.5 秒。
+- 记录：`docs/omni-gfx-plan.md` 的手写核心上限按本轮实际端口从 18200 上调到 18600，并写明 `GetVolumetricClouds` 未通过的原因。
+- 验证：`python omni-gfx/build.py strict-parity`、`profiles`、`python build.py audit`、`verify`、`compile` 结果见本次提交；未启动 Minecraft，游戏内画面、性能与其他显卡仍未验证。
 ## 0.16.0-dev.3
 
 严格函数对照第四轮：exact 从 459 增到 468，approximate 与 missing 保持 0，mc_glue 从 46 降到 26，新增 `reference_broken` 11 条。参考参数保持在前，纹理、矩阵、结构体与数值资源追加在后；参考常数与采样次数逐项核对。
