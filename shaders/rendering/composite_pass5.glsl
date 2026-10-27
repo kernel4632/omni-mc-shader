@@ -63,19 +63,19 @@ uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴�
 // 维度决定雾与折射由谁提供：主世界用体积雾与地表散射，下界用 `NetherFog`，末地用 `EndFog`。
 #if defined OMNI_NETHER // 下界。
 	// 雾文件带入水面、天空、云、光照，并提供 `VanillaFog` 与雾选项。
-	#include "/effects/fog/fog.glsl"
+	#include "/effects/shared/fog.glsl"
 	// 下界配色、雾与折射 `NetherFogColor`、`NetherFog`、`RefractSampleOnceNether`。
 	#include "/effects/world/nether.glsl"
 #elif defined OMNI_END // 末地。
 	// 雾文件带入水面与 `VanillaFog`，并提供星空类型与阳光强度选项。
-	#include "/effects/fog/fog.glsl"
+	#include "/effects/shared/fog.glsl"
 	// 末地天空、雾与折射 `EndFog`、`RefractSampleOnceEnd`。
 	#include "/effects/world/end.glsl"
 #else // 主世界。
 	// 带入天空、云、环境光与方块光依赖。
 	#include "/effects/lighting/sunlight.glsl"
 	// 体积雾、水下体积雾、地面大气散射、原版雾，并带入水面与阴影。
-	#include "/effects/fog/fog.glsl"
+	#include "/effects/shared/fog.glsl"
 #endif
 // 反射合并 `CalculateSpecularReflections`。
 #include "/effects/reflection/reflection.glsl"

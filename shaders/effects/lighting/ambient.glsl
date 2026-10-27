@@ -81,10 +81,10 @@
 // 相对坐标、数学、噪声与共享效果按下述顺序引入；本文件末尾的算法只在这里定义一次。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/clarity/antialiasing.glsl"
+#include "/effects/shared/antialias.glsl"
 #include "/common/coordinates.glsl"
 #include "/common/noise.glsl"
-#include "/effects/shadow/shadow.glsl"
+#include "/effects/shared/shadow.glsl"
 // 反射阴影图全局光：反弹、时间滤波与空间滤波。
 #include "/effects/lighting/gi.glsl"
 // 地平线遮蔽与多弹射补偿。

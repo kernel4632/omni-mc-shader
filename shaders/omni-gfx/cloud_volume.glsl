@@ -60,6 +60,7 @@ float ogxCumulusCurve(float x)
 }
 
 // NUBIS 的顶部曲线：以 1 为顶点、在 0 与 2 处落到零的抛物线，用来把云顶收圆。
+// 积云顶部的垂直密度曲线：底部厚、顶部逐渐变薄。
 float ogxCumulusCurveTop(float x)
 {
     x = x - 1.0; // 把顶点移到一。
@@ -247,6 +248,7 @@ float ogxCumulusShadowTex(vec2 coord, OgxCumulusMedia media, vec3 worldLight, fl
 }
 
 // iterationT 的标量曲线：与参考 curve 同一个式子，用于云层竖直分布。
+// iterationT 的软曲线：把输入压到零到一之间，避免高光过曝。
 float ogxItxCurve(float x) { return 1.0 - x / (1.0 + x); }
 
 // iterationT 云密度：基础三维噪声合成大尺度形状，覆盖率裁剪后再叠细节噪声。

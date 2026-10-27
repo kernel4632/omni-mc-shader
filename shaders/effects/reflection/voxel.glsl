@@ -47,7 +47,7 @@
 */
 
 // 体积坐标、体素编号映射、颜色线性化都来自光传播体积的效果主体，本文件复用同一套约定，避免两套坐标不一致。
-#include "/effects/lighting/lpv.glsl"
+#include "/effects/shared/lpv.glsl"
 // 三维逐格步进、半透明染色、镜面弹射与体素着色在通用库。
 #include "/omni-gfx/voxel.glsl"
 

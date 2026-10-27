@@ -52,7 +52,7 @@
 	#include "/common/uniforms.glsl"
 	#include "/common/math.glsl"
 	// 提供材质编号，被引入的环境光速度重投影引用它。
-	#include "/effects/ground/material.glsl"
+	#include "/effects/shared/surface.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算要用。
 	#include "/effects/clarity/antialiasing.glsl"
 	// 光色、方向与阴影纹理由延迟程序共用声明提供。

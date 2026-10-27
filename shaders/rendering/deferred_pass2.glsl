@@ -53,7 +53,7 @@
 		// 延迟程序的共用输入与光色量集中在共享文件里。
 		#include "/rendering/deferred_shared.glsl"
 		// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
-		#include "/effects/ground/material.glsl"
+		#include "/effects/shared/surface.glsl"
 		// 先定义 `OMNI_TAA`，坐标换算要用。
 		#include "/effects/clarity/antialiasing.glsl"
 		// 提供阳光泄漏修正选项，并带入环境光与阴影文件（末地版阴影相机由 `OMNI_END` 选择）。
@@ -67,7 +67,7 @@
 	// 延迟程序的共用输入与光色量集中在共享文件里。
 	#include "/rendering/deferred_shared.glsl"
 	// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
-	#include "/effects/ground/material.glsl"
+	#include "/effects/shared/surface.glsl"
 	// 先定义 `OMNI_TAA`，坐标换算与遮蔽抖动要用。
 	#include "/effects/clarity/antialiasing.glsl"
 	// 提供阳光泄漏修正选项，并带入环境光与阴影文件。

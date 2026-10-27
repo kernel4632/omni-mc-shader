@@ -70,3 +70,7 @@
 
 - `audit`、`verify`、全量 `compile` 与 `strict-parity` 通过；按用户要求未启动 Minecraft。
 - 游戏内画面、菜单逐页、性能与其他显卡仍未验证。
+
+## 五、共享主体
+- effects/shared/ 保存被多个页面共用的材质、大气、云、天气、水、雾、阴影、光传播体积与抗锯齿主体；页面只能引用本页或共享层，共享层不能反向引用页面。
+- uild.py 的 check_effect_boundaries 在 erify 与 	ests/test_gfx.py 中检查这条方向；当前跨页 include 0，shared 反向引用 0。

@@ -119,6 +119,7 @@ void ogxItxSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, 
         hit, shiftedCurrPos, stepAxis, gtexture, voxelDataTexture, voxelSize, cameraWorldPos);
 }
 
+// 镂空求交排序的实际定义：按距离与面朝向保留最近命中，供反射与阴影使用。
 void ogxEclipseSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, vec3 stepDir,
     vec2 gtexSize, vec2 texCoordOffset, vec3 voxelPos, inout bool hit,
     inout vec3 shiftedCurrPos, inout vec3 stepAxis, sampler2D gtexture,
@@ -294,6 +295,7 @@ float ogxEclipseComputeVoxelShadowMap(inout vec3 directLightColor, vec3 playerPo
 }
 
 // Photonics 阴影：和体素阴影相同的几何路径，但用 Photonics 采样曲线与固定样本数。
+// 光子学阴影图：把可见光源与遮挡写进阴影图，并返回直射光强度。
 float ogxEclipseComputePhotonicsShadowMap(inout vec3 directLightColor, vec3 playerPos, float maxDistFade,
     float noise, vec3 geoNormals, sampler2D opaqueShadowMap, sampler2D translucentShadowMap, sampler2D shadowcolor0,
     mat4 shadowView, mat4 shadowProjection, float shadowDistance, float shadowMapResolution,
@@ -307,6 +309,7 @@ float ogxEclipseComputePhotonicsShadowMap(inout vec3 directLightColor, vec3 play
 }
 
 // WSR 体素追踪：在三维方块编号图里逐格前进，记录半透明命中与最终不透明命中。
+// WSR 体素追踪：沿视线在体素编号图里找命中，供反射与雾共用。
 void ogxEclipseTraceWsr(inout OgxEclipseRayJob job, usampler3D voxelIds, sampler3D voxelColors,
     inout OgxEclipseTranslucentHit translucentHits[10], inout uint translucentHitsCount,
     out int blockId, out float skylightmap, int side, float worldOffset)
@@ -407,6 +410,7 @@ vec3 ogxEclipseDoIndirectLighting(vec3 lightColor, vec3 minimumLightColor, float
 }
 
 // Photonics 反射着色：间接光、方块光、阴影、云影与自发光一起决定命中面颜色。
+// 光子学反射着色：把体素命中、手光与阴影合成为反射颜色。
 void ogxEclipsePhotonicsReflectionShading(inout vec4 color, vec3 normal, vec3 worldPos, float noise,
     vec3 directLightColor, vec3 ambientLightColor, int blockID, float skylightmap, vec3 torchColor,
     vec3 lpvSample, vec3 handLight, vec3 lpvPos, float lpvSize, float fadeLength, float torchAmount,

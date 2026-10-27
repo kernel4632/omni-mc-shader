@@ -51,7 +51,7 @@ class ComputeTests(unittest.TestCase):
         scene = support.expand(build.SHADERS/"world0/shadowcomp.csh")  # 从传播计算入口展开。
         self.assertIn("omniLpvMixNeighbours",scene)  # 邻居混合接入传播阶段。
         self.assertIn("omniLpvReadAt",scene)  # 上一帧体积值读取接入传播阶段。
-        effect = support.code("effects/lighting/lpv.glsl")  # 效果主体。
+        effect = support.code("effects/shared/lpv.glsl")  # 效果主体。
         self.assertIn("uvec2 omniLpvBlockData",effect)  # 方块光表独立成函数。
         self.assertIn("vec3 omniLpvApply",effect)  # 片元混光独立成函数。
 
@@ -76,5 +76,5 @@ class ComputeTests(unittest.TestCase):
         for key in ("image.omniWaveSim","image.omniWaveSim2","image.omniWaveState"):  # 两张模拟场加一张跨帧状态图像。
             self.assertIn(key,settings)  # 三张图像在流程设置登记。
         self.assertIn("omniWaveSimStep",support.text("rendering/watersim.glsl"))  # 推进公式在计算主体里。
-        self.assertIn("omniWaveSimNormal",support.code("effects/water/wavesim.glsl"))  # 片元采样独立成函数。
+        self.assertIn("omniWaveSimNormal",support.code("effects/shared/water/wavesim.glsl"))  # 片元采样独立成函数。
         self.assertIn("omniWaveSimNormal",support.text("rendering/translucent.glsl"))  # 模拟法线接入水面片元。

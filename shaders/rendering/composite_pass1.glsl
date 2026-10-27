@@ -51,9 +51,9 @@ layout(location = 0) out vec4 compositeOutput1; // 一号画面：颜色与全�
 // 先提供 `OMNI_RAIN_SHADOW` 与天空盒投影，供天气与水面引用。
 #include "/effects/cloud/cloud.glsl"
 // `WaterFog` 水下与水后雾。
-#include "/effects/water/water.glsl"
+#include "/effects/shared/water.glsl"
 // 水下与水后雾算法在效果文件里。
-#include "/effects/water/composite_waterfog.glsl"
+#include "/effects/shared/water/composite_waterfog.glsl"
 void main(){ CompositeWaterFog(); } // 叠水下与水后雾并写回一号画面。
 #endif
 

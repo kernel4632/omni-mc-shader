@@ -6,6 +6,10 @@
 */
 #ifndef OMNI_COMPOSITE_SURFACE_END_INCLUDED
 #define OMNI_COMPOSITE_SURFACE_END_INCLUDED
+// 末地表面光照与其它维度共用阳光强度选项。
+// 材质与水洼选项由共享表面主体统一定义。
+#include "/effects/shared/surface.glsl"
+#include "/effects/shared/light.glsl"
 /*
 末地不透明表面光照：用固定色温太阳光、全局光与可变半影阴影照亮末地表面，天空像素画吸积盘与行星，
 是 iterationT `world1/composite.fsh` 该段算法的一比一移植。

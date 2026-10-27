@@ -57,6 +57,7 @@ vec3 ogxItxEndStars(vec3 worldDir, vec3 worldSunVector, float time, int starType
 }
 
 // iterationT 行星 BRDF：用 Chandrasekhar H 函数与 Lambert 曲线近似行星表面。
+// iterationT 的次表面近似：按法线与光方向补透光，供末地植物使用。
 vec3 ogxItxPpss(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir, float s)
 {
     float NdotL = dot(normal, lightDir); // 光线与法线。

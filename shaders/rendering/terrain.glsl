@@ -40,7 +40,7 @@ uniform int renderStage; // 当前原版绘制阶段，用来区分实体方块�
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与材质相关选项。
-#include "/effects/ground/material.glsl"
+#include "/effects/shared/surface.glsl"
 // 视差算法只在地形片元阶段用到，由本主体显式引入。
 #include "/effects/ground/parallax.glsl"
 // 自发光矿石：提供矿石自发光选项与 `omniOreEmission`，片元按矿石标记补一份自发光。
@@ -72,14 +72,14 @@ uniform int renderStage; // 当前原版绘制阶段，用来区分实体方块�
 	vec3 colorShadowlight; // 阳光颜色。
 	vec3 colorSkylight; // 天光颜色。
 	// 波浪、涟漪、湿润调制与水体光学。
-	#include "/effects/water/water.glsl"
+	#include "/effects/shared/water.glsl"
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 // 末地需要末地版阴影相机矩阵，只有片元用到，也只有末地用它。
 #if defined OMNI_END && defined OMNI_FRAGMENT
 	// 阴影：提供末地的 `shadowModelViewInverseEnd`。
-	#include "/effects/shadow/shadow.glsl"
+	#include "/effects/shared/shadow.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：地形顶点着色器。

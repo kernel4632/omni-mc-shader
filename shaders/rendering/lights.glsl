@@ -48,7 +48,9 @@ ivec2 texelCoord; // 整数像素坐标，材质读回段引用它（合成程�
 vec2 texCoord; // 零到一屏幕坐标，环境遮蔽与时间抗锯齿引用它。
 
 // 火把色温、冷色月光等选项分别属于块光与光照效果文件，引入它们即一并带入天空、云与环境光依赖。
-#include "/effects/ground/material.glsl"
+#include "/effects/shared/surface.glsl"
+// 天体方向、天空盒投影与日月相位由天空页提供，合成顶点要算月光与世界方向。
+#include "/effects/sky/sky.glsl"
 #include "/effects/lighting/sunlight.glsl"
 
 // 太阳可见度只在镜头光晕或眩光开启时才有意义，与 iterationT 一致按这两个选项分派。

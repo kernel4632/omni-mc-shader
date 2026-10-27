@@ -62,12 +62,14 @@ float2 ogxEclipseHash2(float2 p)
 }
 
 // 归一化哈希向量：把格坐标变成一个单位方向，供 Perlin 梯度使用。
+// 把二维哈希值归一到零到一，避免负值让噪声出现暗带。
 float2 ogxEclipseNormalizeHash(float2 p)
 {
     return normalize(ogxEclipseHash2(p) - 0.5); // 中心化后单位化。
 }
 
 // Perlin 梯度：返回解析梯度，供旋度噪声直接使用。
+// 由哈希选二维梯度方向，供 Perlin 噪声生成云形状。
 float2 ogxEclipsePerlinGradient(float2 coord)
 {
     float2 i = floor(coord); // 整数格。
@@ -132,6 +134,7 @@ float ogxItxGetCloudShadow(float3 playerPos, float3 sunVector, OgxEclipseCloudSe
         cameraPos, noiseTexture);
 }
 
+// 云形状的实际定义：把层号、覆盖率与上下界交给噪声采样，返回该层的密度。
 float ogxEclipseGetCloudShape(OgxEclipseCloudSettings s, int layerIndex, int lod, float3 position,
     float minHeight, float maxHeight, Sampler2D noiseTexture)
 {
@@ -350,6 +353,7 @@ float3 ogxEclipseGetRayOrigin(float3 rayStartPos, float3 cameraPos, float dither
 }
 
 // 云的相函数：按 `mode` 选择 Henyey-Greenstein、Cornette-Shanks 或 HG-Draine。
+// 按云相位模式组合前向与背向散射，决定云边缘的透光方向。
 float ogxEclipsePhaseCloud(float x, float g, int mode)
 {
     if (mode == 1) // Cornette-Shanks。
@@ -402,6 +406,7 @@ float ogxEclipseGetCloudScattering(OgxEclipseCloudSettings s, int layerIndex, fl
 }
 
 // 云的光照：直射按 Beer 定律衰减，前后散射按粉末效应插值，间接光按形状抬升。
+// 云的单次散射颜色：直射、天光、阴影与相位共同决定云的明暗。
 float3 ogxEclipseGetCloudLighting(int layerIndex, float shape, float shapeFaded, float sunShadowMask, float3 directLightCol,
     float3 directLightCol2, float indirectShadowMask, float3 indirectLightCol, float3 rayPosition, float backScatterPhase,
     float4 phaseLevels, float backScatterPhase2, float4 phaseLevels2)

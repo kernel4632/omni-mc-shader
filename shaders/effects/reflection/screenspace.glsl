@@ -22,10 +22,10 @@
 #ifdef OMNI_COMPOSITE2_PASS
 // 蓝噪声给追踪与体积反射抖动，材质提供解码材质，天空云提供假天空反射与云影开关，雾提供反射里的体积雾与地表散射。
 #include "/common/noise.glsl"
-#include "/effects/ground/material.glsl"
-#include "/effects/sky/sky.glsl"
-#include "/effects/cloud/cloud.glsl"
-#include "/effects/fog/fog.glsl"
+#include "/effects/shared/surface.glsl"
+#include "/effects/shared/skyview.glsl"
+#include "/effects/shared/cloud.glsl"
+#include "/effects/shared/fog.glsl"
 
 // 远景深度图选择：没有远景模组时用近景深度占位，通用库按开关决定是否读取。
 #ifdef DISTANT_HORIZONS
@@ -436,7 +436,7 @@ vec4 CalculateSpecularReflections(vec3 viewPos, vec3 worldPos, vec3 viewDir, vec
 // --- composite5：把三号画面的反射合并进场景色 ---
 #ifdef OMNI_COMPOSITE5_PASS
 // 材质提供 `Material` 结构，反射合并要读它的金属度与反射强度。
-#include "/effects/ground/material.glsl"
+#include "/effects/shared/surface.glsl"
 // 反射合并使用通用库的菲涅耳与水吸收。
 #include "/omni-gfx/reflection.glsl"
 

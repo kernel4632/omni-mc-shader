@@ -18,6 +18,8 @@
   本文件只选天空版或反射版的步数、起点与噪声幂次，并决定是否叠星空；星空仍属末地天空业务，留在效果层。
 */
 // 吸积盘积分在通用库。
+// 星空类型与天空贴图选项由共享天空贴图主体定义。
+#include "/effects/shared/skyview.glsl"
 #include "/omni-gfx/accretion.glsl"
 // 吸积盘的云噪声随时间流动，时间从绑定层取。
 #include "/bind/time.glsl"

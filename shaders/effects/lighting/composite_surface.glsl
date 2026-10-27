@@ -22,6 +22,10 @@
 
 #if defined OMNI_NETHER // 下界：没有太阳，光照来自 `NetherLighting` 与雾色，不接收全局光与阴影。
 // 下界不透明表面光照在独立文件里。
+// 阳光、天光与方块光亮度由共享光照文件统一定义。
+// 材质与水洼选项由共享表面主体统一定义。
+#include "/effects/shared/surface.glsl"
+#include "/effects/shared/light.glsl"
 #include "/effects/lighting/composite_surface_nether.glsl"
 #elif defined OMNI_END // 末地：没有太阳贴图，光色用固定黑体色，天空像素画吸积盘与行星。
 // 末地不透明表面光照在独立文件里。

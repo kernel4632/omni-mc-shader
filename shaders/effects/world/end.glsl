@@ -80,6 +80,10 @@
 // --- 时间因子：整颗末地天空按它旋转 ---
 // 手动相位时取固定角度，否则按累计时间除以公转周期循环。零点二八二是原程序的起始相位。
 // 累计秒数由绑定层提供，下面只做周期换算。
+// 光照强度属于共享选项，本效果按同一档位读取。
+// 星空类型与天空贴图选项由共享天空贴图主体定义。
+#include "/effects/shared/skyview.glsl"
+#include "/effects/shared/light.glsl"
 #include "/bind/time.glsl"
 #ifdef OMNI_END_MANUAL_PLANET_CYCLE
 	const float timeFactor = fract(OMNI_END_MANUAL_PLANET_ANGLE / 360.0 + 0.282) * TAU; // 手动相位换算成弧度。

@@ -17,6 +17,8 @@
     手电筒模式与火把模式的分支、指针平滑、阴影品质都照 iterationT 原样。
 */
 // 屏幕空间阴影的步进循环在通用库，光斑形状与光束指向也在通用库。
+// 光照强度属于共享选项，本效果按同一档位读取。
+#include "/effects/shared/light.glsl"
 #include "/omni-gfx/shadow.glsl"
 #include "/omni-gfx/surface.glsl"
 // --- 手电筒光斑形状：按光线与指向的夹角给出一束光的强度分布 ---

@@ -180,6 +180,7 @@ float4 ogxItxBilateralUpscaleSsao(Sampler2D source, Sampler2D sourceDepth, float
 }
 
 // SSGI 合成：多根余弦半球射线，命中时读历史场景色，未命中时保留天空贡献。
+// 把屏幕空间追踪结果混进间接光，按最小光色与遮挡权重取舍。
 float3 ogxEclipseApplySsrt(float3 unchangedIndirect, float3 blockLightColor, float3 minimumLightColor,
     float3 viewPos, float3 normal, float3 noise, float lightmap, bool isGrass, bool isLod,
     int2 pixelCoord, int frameCounter, int rayCount, int raySteps, float giStrength,

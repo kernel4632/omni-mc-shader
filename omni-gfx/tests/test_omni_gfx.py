@@ -147,7 +147,7 @@ class OmniGfxTests(unittest.TestCase):
 
     def test_minecraft_program_uses_generated_atmosphere(self):
         """合成程序的大气散射必须调用生成库，避免两套公式各自漂移。"""
-        text = (ROOT / "shaders" / "effects" / "fog" / "landscattering.glsl").read_text(encoding="utf-8")  # 真实消费者。
+        text = (ROOT / "shaders" / "effects" / "shared" / "fog" / "landscattering.glsl").read_text(encoding="utf-8")  # 真实消费者。
         self.assertIn('#include "/omni-gfx/atmosphere.glsl"', text)  # 生成库必须在引用边界内。
         self.assertIn("ogxAtmoSimpleScattering(", text)  # 四段散射已迁到生成库的查表模块。
         library = (ROOT / "omni-gfx" / "src" / "atmosphere_model.slang").read_text(encoding="utf-8")  # 库里的唯一算式。
@@ -156,7 +156,7 @@ class OmniGfxTests(unittest.TestCase):
 
     def test_minecraft_lpv_uses_generated_module(self):
         """光传播体积的取样、编码与合成必须来自生成库，避免两套算式各自漂移。"""
-        text = (ROOT / "shaders" / "effects" / "lighting" / "lpv.glsl").read_text(encoding="utf-8")  # 真实消费者。
+        text = (ROOT / "shaders" / "effects" / "shared" / "lpv.glsl").read_text(encoding="utf-8")  # 真实消费者。
         self.assertIn('#include "/omni-gfx/lpv.glsl"', text)  # 生成库必须在引用边界内。
         self.assertIn("ogxLpvDecodeSample(", text)  # 片元取样解码来自生成库。
         self.assertIn("ogxLpvEncode(", text)  # 传播写入编码来自生成库。

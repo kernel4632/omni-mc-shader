@@ -79,6 +79,7 @@ vec3 ogxAces(vec3 color, bool abney)
 }
 
 // 参考包的 `ACES` 默认开启 Abney 效应校正；单参数重载让旧调用点保持原签名。
+// ACES 单参入口：保留旧调用方式，内部按默认白点走完整映射。
 vec3 ogxAces(vec3 color) { return ogxAces(color, true); }
 
 // AgX 对比度曲线：用六次多项式近似原查找表，省掉一张纹理。
@@ -295,6 +296,7 @@ float ogxLuminanceRec601(vec3 color) { return dot(color, vec3(0.299, 0.587, 0.11
 vec3 ogxEclipseCurve(vec3 x) { return 1.0 - x / (1.0 + x); }
 
 // Eclipse 全范围 Reinhard：白点 10、提亮 0.5，保留完整有理式。
+// Reinhard 完整版：按最大通道压缩，保留色相。
 vec3 ogxTonemapReinhardFull(vec3 color)
 {
     float whitepoint = 10.0; // 参考实现固定白点。
@@ -303,6 +305,7 @@ vec3 ogxTonemapReinhardFull(vec3 color)
 }
 
 // Eclipse 可编辑 Reinhard：先把颜色抬 1.2 次方，再用更低的提亮 0.333。
+// Reinhard 编辑版：用固定曝光近似，适合快速预览。
 vec3 ogxTonemapReinhardEdit(vec3 color)
 {
     color = pow(color, vec3(1.2)); // 抬暗部，保持高光不动。
@@ -312,6 +315,7 @@ vec3 ogxTonemapReinhardEdit(vec3 color)
 }
 
 // Reinhard-Jodie：同时算亮度压缩与逐通道压缩，再按逐通道结果混回去。
+// Reinhard-Jodie：按亮度与通道分别压缩，减少高光偏色。
 vec3 ogxTonemapReinhardJodie(vec3 color)
 {
     color *= 1.5; // 参考实现的曝光抬升。
@@ -321,6 +325,7 @@ vec3 ogxTonemapReinhardJodie(vec3 color)
 }
 
 // Eclipse 的 AgX look：保留参考的偏移、斜率与幂变量，默认零偏移、单位斜率与幂，只把饱和度推到 1.25。
+// AgX 的 look 曲线：在色调映射后做一次对比与饱和调整。
 vec3 ogxAgxLook(vec3 value)
 {
     const vec3 lw = vec3(0.2126, 0.7152, 0.0722); // 参考实现固定 Rec.709 亮度。
@@ -334,6 +339,7 @@ vec3 ogxAgxLook(vec3 value)
 }
 
 // Eclipse 的 AgX 完整版：插入矩阵、动态范围 -12.47393 到 4.026069，再用 AGX look。
+// AgX 主映射：把线性场景色压进显示范围并保留高光层次。
 vec3 ogxToneMapAgx(vec3 color)
 {
     vec3 in0 = vec3(0.856627153315983, 0.137318972929847, 0.11189821299995); // 插入矩阵第一列。
@@ -372,6 +378,7 @@ vec3 ogxToneMapAgxMinimal(vec3 color)
 }
 
 // Eclipse 的 AgX Merlin 版：矩阵同上，端点整体上移一档，动态范围更窄。
+// AgX 的另一种拟合：用简化多项式逼近同一曲线，减少常数运算。
 vec3 ogxToneMapAgxMerlin(vec3 color)
 {
     vec3 in0 = vec3(0.842479062253094, 0.0423282422610123, 0.0423756549057051); // 精简插入矩阵第一列。
@@ -391,6 +398,7 @@ vec3 ogxToneMapAgxMerlin(vec3 color)
 }
 
 // Eclipse 的 Uchimura 指数肩部版：肩部用 exp，参考实现保留反向 smoothstep 参数顺序。
+// Uchimura 指数版：按分段指数压缩高光，适合夜景。
 vec3 ogxTonemapUchimuraExp(vec3 x, float P, float a, float m, float l, float c, float b)
 {
     float l0 = ((P - m) * l) / a; // 线性段折算长度。
@@ -408,6 +416,7 @@ vec3 ogxTonemapUchimuraExp(vec3 x, float P, float a, float m, float l, float c, 
 }
 
 // Eclipse 的 Uchimura 修改版：肩部改成 smoothstep 曲线，其余参数与指数版相同。
+// Uchimura 改进版：用可调切线参数控制肩部过渡。
 vec3 ogxTonemapUchimuraModified(vec3 x, float P, float a, float m, float l, float c, float b)
 {
     float l0 = ((P - m) * l) / a; // 线性段折算长度。
@@ -488,6 +497,7 @@ OgxAgxMat3 ogxAgxInverse(OgxAgxMat3 m)
 }
 
 // 色度坐标到 XYZ：Y 归一为一，X 与 Z 由 xy 反推。
+// AgX 反变换：从显示色回推线性值，供历史帧比较与调试。
 vec3 ogxAgxUnproject(vec2 xy)
 {
     if (xy.y == 0.0) return vec3(0.0); // 参考实现对零分母直接返回零。

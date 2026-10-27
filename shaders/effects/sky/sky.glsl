@@ -7,36 +7,12 @@
 #ifndef OMNI_EFFECT_SKY_SKY_INCLUDED
 #define OMNI_EFFECT_SKY_SKY_INCLUDED
 // @effect {"label":{"zh_cn":"天空","en_us":"Sky"}}
-// @option {"label":{"zh_cn":"地平线","en_us":"Sky Horizon"},"description":{"zh_cn":"打开后地平线方向也算被行星表面挡住的大气，日出时地平线一带更真实。","en_us":"Also shades the horizon band below the eye as ground-lit atmosphere."}}
-//#define OMNI_ATMO_HORIZON
 // @option {"label":{"zh_cn":"反射天空盒地平线","en_us":"Skybox Horizon"},"description":{"zh_cn":"反射用的天空盒是否同样处理地平线方向。","en_us":"Whether the reflection skybox shades the horizon the same way."}}
 #define OMNI_ATMO_REFLECTION_HORIZON
-// @option {"label":{"zh_cn":"月亮纹理平滑","en_us":"Moon Texture Smoothing"},"description":{"zh_cn":"用双线性过滤读月亮贴图，低分辨率资源包会显得更糊。","en_us":"Reads the moon texture with bilinear filtering; low-resolution packs look softer."}}
-#define OMNI_BILINEAR_MOON_TEXTURE 0 // [0 1]
-// @option {"label":{"zh_cn":"盒纹理平滑","en_us":"Skybox Texture Smoothing"},"description":{"zh_cn":"用双线性过滤读天空盒贴图，低分辨率资源包会显得更糊。","en_us":"Reads the skybox texture with bilinear filtering; low-resolution packs look softer."}}
-#define OMNI_BILINEAR_SKYBOX_TEXTURE 0 // [0 1]
-// @option {"label":{"zh_cn":"月亮纹理","en_us":"Moon Texture"},"description":{"zh_cn":"用资源包的月亮贴图代替内置圆盘。","en_us":"Uses the resource pack moon texture instead of the built-in disc."}}
-#define OMNI_MOON_TEXTURE
-// @option {"label":{"zh_cn":"夜间亮度比值","en_us":"Night Brightness"},"description":{"zh_cn":"夜间环境光相对白天环境光的比值，越大夜里越亮。","en_us":"Night ambient light relative to day; larger makes nights brighter."},"slider":true}
-#define OMNI_NIGHT_BRIGHTNESS 0.0003 // [0.0 0.0001 0.00015 0.0002 0.0003 0.0005 0.0007 0.001 0.0015 0.002 0.003 0.005 0.007 0.01 1.0]
-// @option {"label":{"zh_cn":"盒纹理","en_us":"Skybox Texture"},"description":{"zh_cn":"用资源包的天空盒贴图叠在天空上。","en_us":"Overlays the resource pack skybox texture on the sky."}}
-#define OMNI_SKYBOX_TEXTURE 0 // [0 1]
 // @option {"label":{"zh_cn":"资源包天空","en_us":"Resource Pack Sky"},"description":{"zh_cn":"用资源包画好的整片天空（自定义天空层、日月与星空）当天空底色，替换光影的程序化大气；只作用在主视图的天空，水面反射的天空盒仍用程序化大气。默认关闭，关闭时画面与从前一致。","en_us":"Uses the resource pack's painted sky (custom sky layers, sun, moon and stars) as the sky base instead of the procedural atmosphere; only the main view is affected, reflections keep the procedural skybox. Off by default."}}
 #define OMNI_RESOURCEPACK_SKY 0 // [0 1]
 // @option {"label":{"zh_cn":"资源包天空亮度","en_us":"Resource Pack Sky Brightness"},"description":{"zh_cn":"资源包天空底色的亮度倍率，用来和光影本身的大气亮度对齐；只在开启资源包天空时生效，具体数值要在游戏里对照调整。","en_us":"Brightness multiplier for the resource pack sky base, to match the shader's own atmosphere; only used with Resource Pack Sky. The exact value needs in-game tuning."},"slider":true}
 #define OMNI_RESOURCEPACK_SKY_BRIGHTNESS 1.0 // [0.0 0.05 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0]
-// @option {"label":{"zh_cn":"反射天空盒分辨率","en_us":"Skybox Resolution"},"description":{"zh_cn":"反射里天空贴图的边长，越高越清晰也越费性能。","en_us":"Side length of the reflected sky image; higher is sharper and costlier."},"values":{"32.0":{"zh_cn":"极低","en_us":"Lowest"},"64.0":{"zh_cn":"低","en_us":"Low"},"128.0":{"zh_cn":"中","en_us":"Medium"},"256.0":{"zh_cn":"高","en_us":"High"},"512.0":{"zh_cn":"极高","en_us":"Very high"}}}
-#define OMNI_SKY_IMAGE_RESOLUTION 64.0 // [32.0 48.0 64.0 96.0 128.0 192.0 256.0 384.0 512.0]
-// @option {"label":{"zh_cn":"纹理亮度","en_us":"Texture Brightness"},"description":{"zh_cn":"原版星星、月亮贴图和天空盒的亮度倍率。","en_us":"Brightness multiplier for vanilla stars, the moon texture and the skybox."},"slider":true}
-#define OMNI_SKY_TEXTURE_BRIGHTNESS 1.0 // [0.0 0.05 0.1 0.15 0.2 0.3 0.5 0.7 1.0 1.5 2.0 3.0 5.0 7.0 10.0 15.0 20.0 30.0 50.0 70.0 100.0]
-// @option {"label":{"zh_cn":"星星类型","en_us":"Star Type"},"description":{"zh_cn":"关为没有星星，点状为按方向生成的星点，原版为资源包星空贴图。","en_us":"Off has no stars, Dots draws procedural points, Vanilla uses the pack sky texture."},"values":{"0":{"zh_cn":"关","en_us":"Off"},"1":{"zh_cn":"点状","en_us":"Dots"},"2":{"zh_cn":"原版","en_us":"Vanilla"}}}
-#define OMNI_STAR_TYPE 1 // [0 1 2]
-// @option {"label":{"zh_cn":"星星数量","en_us":"Stars Amount"},"description":{"zh_cn":"点状星空的星点疏密倍率，默认一倍与现在一致；只在星星类型为点状时生效。","en_us":"Density multiplier for the Dots star field; default 1 matches the current look; only used with the Dots star type."},"slider":true}
-#define OMNI_STARS_AMOUNT 1.0 // [0.5 0.75 1.0 1.25 1.5 1.75 2.0]
-// @option {"label":{"zh_cn":"星星亮度","en_us":"Stars Brightness"},"description":{"zh_cn":"点状星空的星点整体亮度倍率，默认一倍与现在一致；只在星星类型为点状时生效。","en_us":"Overall brightness multiplier for the Dots star field; default 1 matches the current look; only used with the Dots star type."},"slider":true}
-#define OMNI_STARS_BRIGHTNESS 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 3.0 4.0 5.0]
-// @option {"label":{"zh_cn":"彩色星点","en_us":"Colored Stars"},"description":{"zh_cn":"改用带星温的彩色星场（Eclipse 的 `starbox`）；关闭时是 Eclipse 默认的白色星点，只在星星类型为点状时生效。","en_us":"Uses the star-temperature colored field (Eclipse `starbox`); off keeps Eclipse's default white stars; only used with the Dots star type."}}
-#define OMNI_STARS_COLORED 0 // [0 1]
 // @option {"label":{"zh_cn":"日月倾角","en_us":"Sun Path Rotation"},"description":{"zh_cn":"日月运动轨迹相对原版轨迹的倾角，Iris 直接读取该原生常量。","en_us":"Tilt of the sun and moon path versus vanilla; Iris reads this native constant."}}
 const float sunPathRotation = -30.0; // [-90.0 -89.0 -88.0 -87.0 -86.0 -85.0 -84.0 -83.0 -82.0 -81.0 -80.0 -79.0 -78.0 -77.0 -76.0 -75.0 -74.0 -73.0 -72.0 -71.0 -70.0 -69.0 -68.0 -67.0 -66.0 -65.0 -64.0 -63.0 -62.0 -61.0 -60.0 -59.0 -58.0 -57.0 -56.0 -55.0 -54.0 -53.0 -52.0 -51.0 -50.0 -49.0 -48.0 -47.0 -46.0 -45.0 -44.0 -43.0 -42.0 -41.0 -40.0 -39.0 -38.0 -37.0 -36.0 -35.0 -34.0 -33.0 -32.0 -31.0 -30.0 -29.0 -28.0 -27.0 -26.0 -25.0 -24.0 -23.0 -22.0 -21.0 -20.0 -19.0 -18.0 -17.0 -16.0 -15.0 -14.0 -13.0 -12.0 -11.0 -10.0 -9.0 -8.0 -7.0 -6.0 -5.0 -4.0 -3.0 -2.0 -1.0 0.0 1.0 2.0 3.0 4.0 5.0 6.0 7.0 8.0 9.0 10.0 11.0 12.0 13.0 14.0 15.0 16.0 17.0 18.0 19.0 20.0 21.0 22.0 23.0 24.0 25.0 26.0 27.0 28.0 29.0 30.0 31.0 32.0 33.0 34.0 35.0 36.0 37.0 38.0 39.0 40.0 41.0 42.0 43.0 44.0 45.0 46.0 47.0 48.0 49.0 50.0 51.0 52.0 53.0 54.0 55.0 56.0 57.0 58.0 59.0 60.0 61.0 62.0 63.0 64.0 65.0 66.0 67.0 68.0 69.0 70.0 71.0 72.0 73.0 74.0 75.0 76.0 77.0 78.0 79.0 80.0 81.0 82.0 83.0 84.0 85.0 86.0 87.0 88.0 89.0 90.0]
 // --- 月亮轨道与月食：来源 Eclipse `lib/settings.glsl:400-456`、`dimensions/begin.csh:73-95`、`lib/ROBOBO_sky.glsl:130-133` ---
@@ -101,54 +77,21 @@ const float sunPathRotation = -30.0; // [-90.0 -89.0 -88.0 -87.0 -86.0 -85.0 -84
     资源包天空与其它天文量不同：它不靠查表，而是让原版与资源包把天空几何画进零号画面再读回来，
     所以本文件只放选项；天空几何的分流在 `rendering/celestial.glsl`，底色读取与合成在 `effects/sky/skyrender.glsl`。
 */
-// --- 内部常数：原 `Settings.glsl` 里不进菜单的取值，名字保持原名 ---
-#define ATMO_MIN_ALTITUDE 500.0 // 相机大气高度下限，低于它按这个高度算，避免贴地时大气几何退化。
-#define ATMO_SKYBOX_MIN_ALTITUDE 500.0 - wetness * 300.0 // 反射天空盒的相机高度下限，雨天云更厚所以再压低一点。
-// 预计算大气三维贴图的排布尺寸，读表时要按这些尺寸算坐标。
-#define TRANSMITTANCE_TEXTURE_WIDTH 256.0 // 透过率子图宽度，单位像素。
-#define TRANSMITTANCE_TEXTURE_HEIGHT 64.0 // 透过率子图高度。
-#define SCATTERING_TEXTURE_R_SIZE 32.0 // 散射子图的半径方向尺寸，拼进深度方向。
-#define SCATTERING_TEXTURE_MU_SIZE 128.0 // 散射子图的高度角方向尺寸。
-#define SCATTERING_TEXTURE_MU_S_SIZE 32.0 // 散射子图的太阳高度角方向尺寸。
-#define SCATTERING_TEXTURE_NU_SIZE 16.0 // 散射子图的视线与太阳夹角方向尺寸。
-#define COMBINED_TEXTURE_WIDTH 512.0 // 拼合后大图宽度。
-#define COMBINED_TEXTURE_HEIGHT 128.0 // 拼合后大图高度。
-#define COMBINED_TEXTURE_DEPTH 33.0 // 拼合后大图深度。
-#define IRRADIANCE_TEXTURE_WIDTH 64.0 // 辐照度子图宽度。
-#define IRRADIANCE_TEXTURE_HEIGHT 16.0 // 辐照度子图高度。
-// 大气物理常数，长度单位公里，亮度单位辐射亮度；与 iterationT 完全一致。
-#define atmosphereModel_solar_irradiance 		vec3(1.68194, 1.85149, 1.91198) // 太阳辐照度，决定大气散射的基准亮度。
-#define atmosphereModel_sun_angular_radius 		0.005 // 太阳视半径，日落时用它对太阳方向做渐隐。
-#define atmosphereModel_bottom_radius 			6360.0 // 行星底半径，越过它就算被地面挡住。
-#define atmosphereModel_top_radius 				6420.0 // 大气层顶半径，视线到这里离开大气。
-#define atmosphereModel_rayleigh_scattering 	vec3(0.008396, 0.014590, 0.033100) // 瑞利散射系数，蓝光最强，天空因此偏蓝。
-#define atmosphereModel_mie_scattering 			vec3(0.003996) // 米氏散射系数，气溶胶造成太阳附近的白晕。
-#define atmosphereModel_mie_extinction 			vec3(0.004440) // 米氏消光系数，比散射略大，差额被吸收。
-#define atmosphereModel_mie_phase_function_g 	0.8 // 米氏相位的前向集中程度。
-#define atmosphereModel_absorption_extinction 	vec3(0.0020031, 0.0016555, 0.0000847) // 臭氧吸收系数。
-#define atmosphereModel_ground_albedo 			vec3(0.1) // 地面反照率，地平线方向算一次地面反弹。
-#define atmosphereModel_mu_s_min 				-0.5 // 太阳高度角的查表下限。
-#define atmosphereModel_densityProfile_rayleigh 			-0.1803369 // 瑞利密度剖面的指数系数。
-#define atmosphereModel_densityProfile_mie 					-1.2022459 // 米氏密度剖面的指数系数。
-#define atmosphereModel_densityProfile_absorption_width 	25.0 // 臭氧三角剖面的转折高度。
-#define atmosphereModel_densityProfile_absorption 			vec4(0.09617967, -0.9617967, -0.09617967, 3.847187) // 臭氧剖面分段线性系数。
+// 大气常数、贴图尺寸、太阳色与散射倍率都在共享大气文件里，本文件只保留天空自己的选项与算法。
 // 共用数学与加载器输入，显式引入而不依赖调用顺序。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-// 太阳色与辐照：提供 `omniSunTint()`，给太阳直射与太阳圆盘做相对染色；默认取值下返回全一、不改画面。
-#include "/effects/sky/suncolor.glsl"
-// 天空散射系数：提供 `omniSkyRayleighTint()` 与 `omniSkyMieTint()`，给瑞利与米氏散射做逐通道倍率；默认全一、不改画面。
+// 大气常数、查表接口、太阳色与散射倍率由共享大气文件统一提供。
+#include "/effects/shared/atmosphere.glsl"
+// Eclipse 实时天空密度、路径与极光兼容函数留在天空页，因为它们只服务天空自己的对照入口。
 #include "/effects/sky/skyscatter.glsl"
-// 预计算大气：球面几何、密度剖面、贴图查表、透过率、辐照度与天空辐射。
-#include "/effects/sky/atmosphere_model.glsl"
 // 日月圆盘：把日月光点画成天空上的圆盘。
 #include "/effects/sky/sun_moon.glsl"
 // 月亮轨道、月食与月相：自定义轨道、月相与真实月亮。
 #include "/effects/sky/moon_orbit.glsl"
 // 星空：Eclipse 星场，供主世界与末地共用。
-#include "/effects/sky/stars.glsl"
-// 天空盒投影：世界方向与天空盒图坐标的互逆换算。
-#include "/effects/sky/skybox.glsl"
+// 天空盒投影、反射月亮圆盘与天空贴图选项由共享天空贴图主体提供。
+#include "/effects/shared/skyview.glsl"
 // Eclipse 天空图集与三次采样的同名兼容层。
 #include "/effects/sky/eclipse_sky_adapters.glsl"
 #endif // OMNI_EFFECT_SKY_SKY_INCLUDED

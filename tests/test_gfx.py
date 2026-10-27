@@ -21,6 +21,7 @@ class GfxBoundaryTests(unittest.TestCase):
     def test_generated_library_only_includes_itself(self):
         """生成库只能引入自身目录内的文件，旧的 gfx 转发层不能重新出现。"""
         self.assertFalse((build.SHADERS / "gfx").exists())  # 目录存在说明又出现了第二层转发。
+        build.check_effect_boundaries()  # 效果页面只能引用本页或 effects/shared，跨页引用直接失败。
         effects = list((build.SHADERS / "effects").rglob("*.glsl"))
         self.assertTrue(any('#include "/omni-gfx/' in path.read_text(encoding="utf-8") for path in effects))  # 至少要有一个真实消费者。
         for path in (build.SHADERS / "omni-gfx").glob("*.glsl"):

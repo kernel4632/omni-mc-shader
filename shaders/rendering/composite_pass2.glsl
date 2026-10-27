@@ -57,13 +57,13 @@ uniform sampler2D shadowtex1; // 阴影实心图，本程序当普通深度贴�
 // 维度决定反射里的天空回退与雾由谁提供，效果文件按分支引入后再引入反射文件。
 #if defined OMNI_NETHER // 下界。
 	// 雾文件提供 `OMNI_NETHER_FOG_DENSITY`，下界文件提供 `NetherFog` 与 `NetherFogColor`。
-	#include "/effects/fog/fog.glsl"
+	#include "/effects/shared/fog.glsl"
 	#include "/effects/world/nether.glsl"
 #elif defined OMNI_END // 末地。
 	// 光照文件提供选项与星空类型，末地文件提供 `EndFog` 与 `ComputeFakeSkyReflectionEnd`。
 	#include "/effects/lighting/sunlight.glsl"
 	// 水面文件提供波法线 `GetWavesNormal`，末地折射函数引用它。
-	#include "/effects/water/water.glsl"
+	#include "/effects/shared/water.glsl"
 	#include "/effects/world/end.glsl"
 #else // 主世界。
 	// 带入天空、云、环境光、方块光与雾依赖。

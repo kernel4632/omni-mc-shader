@@ -44,7 +44,7 @@
 // 噪声用到共用数学与亮度，树叶判定取材质文件的编号，距离剔除读加载器的远景距离。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/ground/material.glsl"
+#include "/bind/gbuffer.glsl"
 // 远景阴影淡入要用共用蓝噪声；本文件在两个绘制主体里都只于片元阶段引入，蓝噪声的像素坐标在这里可用。
 #include "/common/noise.glsl"
 // 远景地形剔除：太近的远景区块与正常区块重叠，直接丢弃，避免两层地形互相闪烁。

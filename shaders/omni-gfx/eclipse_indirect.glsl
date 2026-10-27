@@ -185,6 +185,7 @@ vec4 ogxItxBilateralUpscaleSsao(sampler2D source, sampler2D sourceDepth, vec2 co
 }
 
 // SSGI 合成：多根余弦半球射线，命中时读历史场景色，未命中时保留天空贡献。
+// 把屏幕空间追踪结果混进间接光，按最小光色与遮挡权重取舍。
 vec3 ogxEclipseApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
     vec3 viewPos, vec3 normal, vec3 noise, float lightmap, bool isGrass, bool isLod,
     ivec2 pixelCoord, int frameCounter, int rayCount, int raySteps, float giStrength,

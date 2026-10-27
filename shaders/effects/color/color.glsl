@@ -59,8 +59,6 @@
 #define OMNI_PURKINJE_EFFECT_STRENGTH 0.7 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]
 // @option {"label": {"zh_cn": "关闭夜视校正", "en_us": "Disable Night Vision"}, "page": "about", "description": {"zh_cn": "调试开关：忽略夜视对曝光曲线的抬升，用来比较真实亮度。","en_us": "Debug switch: ignores the night-vision lift of the exposure curve to compare real brightness."}}
 #define OMNI_DISABLE_NIGHTVISION 0 // [0 1]
-// @option {"label": {"zh_cn": "关闭失明与黑暗校正", "en_us": "Disable Blindness & Darkness"}, "page": "about", "description": {"zh_cn": "调试开关：忽略失明与黑暗对曝光、泛光和原版雾的影响。","en_us": "Debug switch: ignores blindness and darkness on exposure, bloom and vanilla fog."}}
-#define OMNI_DISABLE_BLINDNESS_DARKNESS 0 // [0 1]
 
 // --- 效果实现：宿主输入、参数换算与阶段入口 ---
 /*
@@ -96,12 +94,16 @@
 #define AE_CLAMP // 给分块亮度设一个极小下限，避免全黑画面把曝光推到无穷。
 
 // 颜色曲线与亮度来自共用数学；曝光统计还要读一号与二号画面。
+// 光照强度属于共享选项，本效果按同一档位读取。
+#include "/effects/shared/light.glsl"
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 // 强光压缩算法放在通用库里，本文件只保留选项、曝光统计与调用。
 #include "/omni-gfx/color.glsl"
 // 自动曝光的分块统计也在通用后期库，本文件只填参数。
 #include "/omni-gfx/post.glsl"
+// 全屏调试开关属于共享画面状态，调色、泛光与原版雾都从这里取同一份定义。
+#include "/effects/shared/screen.glsl"
 
 // --- 曝光统计：按分块对一号画面求平均亮度，得到目标曝光 ---
 // 把画面切成固定大小的小块，每个块只读一个亮度，按到中心的距离和亮度给块计权，再加权平均。

@@ -16,6 +16,7 @@ Omni 通用图形库 Eclipse 补充模块：环境光遮蔽、阴影压缩、雾
 #include "math.slang"
 
 // GTAO 的弧段积分：两个水平角之间覆盖的余弦积分。
+// 在单位圆上积分一段弧的贡献，供天空环境光近似。
 float ogxEclipseIntegrateArc(float2 h, float n, float cosN)
 {
     float2 tmp = cosN + 2.0 * h * sin(n) - cos(2.0 * h - n); // 参考实现的积分核。
@@ -55,6 +56,7 @@ float ogxEclipseMaxHorizonAngle(float3 viewSliceDir, float3 viewerDir, float3 sc
 }
 
 // GTAO 环境光遮蔽：沿多个切片各取两个最大水平角，再积分成遮蔽。
+// Eclipse 地平线遮蔽：沿多个方向搜索最近遮挡，返回零到一的可见度。
 float ogxEclipseAmbientOcclusion(float3 screenPos, float3 viewPos, float3 viewNormal, float2 dither, int slices,
     float radius, int horizonSteps, float falloffStart, float3 viewPixelSize, float2 viewRes, float renderScale,
     float handDepth, float halfPi, Sampler2D depthTexture, float4x4 projection, float4x4 projectionInverse)

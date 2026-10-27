@@ -61,13 +61,21 @@ float3 ogxEclipseDrawRealMoon(float3 playerPos, float3 worldSunVec, float3 color
 }
 
 // 三次卷积权重：Catmull-Rom 核的四个分段，供双三次采样复用。
+// 三次卷积权重零号：离采样点最近的一侧。
 float ogxEclipseBicubicW0(float a) { return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0); }
+// 三次卷积权重一号：与零号配对，组成左半核。
 float ogxEclipseBicubicW1(float a) { return (1.0 / 6.0) * (a * a * (3.0 * a - 6.0) + 4.0); }
+// 三次卷积权重二号：右半核的第一项。
 float ogxEclipseBicubicW2(float a) { return (1.0 / 6.0) * (a * (a * (-3.0 * a + 3.0) + 3.0) + 1.0); }
+// 三次卷积权重三号：离采样点最远的一侧。
 float ogxEclipseBicubicW3(float a) { return (1.0 / 6.0) * (a * a * a); }
+// 左半核归一化：把零号与一号权重合在一起。
 float ogxEclipseBicubicG0(float a) { return ogxEclipseBicubicW0(a) + ogxEclipseBicubicW1(a); }
+// 右半核归一化：把二号与三号权重合在一起。
 float ogxEclipseBicubicG1(float a) { return ogxEclipseBicubicW2(a) + ogxEclipseBicubicW3(a); }
+// 左半核的偏移量：让采样点落在正确的纹素中心。
 float ogxEclipseBicubicH0(float a) { return -1.0 + ogxEclipseBicubicW1(a) / (ogxEclipseBicubicW0(a) + ogxEclipseBicubicW1(a)); }
+// 右半核的偏移量：与左半核一起完成三次插值。
 float ogxEclipseBicubicH1(float a) { return 1.0 + ogxEclipseBicubicW3(a) / (ogxEclipseBicubicW2(a) + ogxEclipseBicubicW3(a)); }
 
 // Eclipse 双三次纹理采样：四个角各取一次双线性，再按卷积权重合成。

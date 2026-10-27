@@ -50,13 +50,13 @@
 // 时间抗锯齿选项：远景顶点抖动要用。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*` 与物理光照选项。
-#include "/effects/ground/material.glsl"
+#include "/effects/shared/surface.glsl"
 // 行星曲率：远景顶点要与近景地形做同一次下沉，否则交界处会错位，选项与算法都在该文件。
 #include "/effects/world/planet.glsl"
 // 远景噪声与剔除、水面波法线都只在片元引入。
 #ifdef OMNI_FRAGMENT
 	// 天气选项与雨函数：远景地形的湿润要读 `OMNI_SURFACE_WETNESS`。
-	#include "/effects/weather/weather.glsl"
+	#include "/effects/shared/weather.glsl"
 	// 天气的 `Rain` 读取阳光与天光颜色，按它的调用前提给两个空全局。
 	vec3 colorShadowlight; // 阳光颜色，本程序不调用 `Rain`。
 	vec3 colorSkylight; // 天光颜色，本程序不调用 `Rain`。
@@ -66,7 +66,7 @@
 	uniform sampler2D gaux2; // 雨点第二张动画贴图。
 	uniform sampler2D gaux3; // 雨点第三张动画贴图。
 	// 波浪、涟漪与水波法线。
-	#include "/effects/water/water.glsl"
+	#include "/effects/shared/water.glsl"
 	// 远景噪声与剔除。
 	#include "/effects/world/world.glsl"
 	// 远景附加能力：过绘防护与噪声远距衰减。

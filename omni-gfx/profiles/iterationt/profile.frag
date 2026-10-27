@@ -48,6 +48,7 @@ const float OGX_GOLDEN_ANGLE = 2.39996322973;
 float ogxSaturate(float x) { return clamp(x, 0.0, 1.0); }
 vec2 ogxSaturate(vec2 x) { return clamp(x, vec2(0.0), vec2(1.0)); }
 vec3 ogxSaturate(vec3 x) { return clamp(x, vec3(0.0), vec3(1.0)); }
+// 四分量重载：逐分量夹到零到一，颜色与打包数据共用。
 vec4 ogxSaturate(vec4 x) { return clamp(x, vec4(0.0), vec4(1.0)); }
 
 // 人眼亮度权重，和显示管线一致；绿权重最高，蓝最低。
@@ -121,6 +122,7 @@ float ogxMinVec3(vec3 value) { return min(value.x, min(value.y, value.z)); }
 float ogxMinVec2(vec2 value) { return min(value.x, value.y); }
 float ogxMaxVec2(vec2 value) { return max(value.x, value.y); }
 float ogxMinVec4(vec4 value) { return min(min(value.x, value.y), min(value.z, value.w)); }
+// 四分量最大值：曝光统计与亮度比较需要单个代表值。
 float ogxMaxVec4(vec4 value) { return max(max(value.x, value.y), max(value.z, value.w)); }
 
 // 三分量里最大的一个，和上一函数配对使用。
@@ -763,6 +765,7 @@ float ogxFastAcosEclipse(float x)
 }
 
 // Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派。
+// Elek 的瑞利相函数写法：与 iterationT 常数一致，供天空对照。
 float ogxRayleighPhaseElek(float cosTheta)
 {
     const float oneOverPi = 1.0 / acos(-1.0); // 参考实现用 acos(-1) 求 pi。
@@ -839,6 +842,7 @@ mat3 ogxGetRotMat(vec3 x, vec3 y)
 }
 
 // Eclipse 的 Halton 二进序列：按位反转，返回一个零到一的低差异数。
+// 二维 Halton 序列：低差异采样点，供阴影与反射抖动。
 float ogxHaltonSeq2(int index)
 {
     float r = 0.0;
@@ -854,6 +858,7 @@ float ogxHaltonSeq2(int index)
 }
 
 #endif
+
 /*
 生成文件：颜色模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中的同名模块，改动后运行构建脚本的生成命令。
@@ -935,6 +940,7 @@ vec3 ogxAces(vec3 color, bool abney)
 }
 
 // 参考包的 `ACES` 默认开启 Abney 效应校正；单参数重载让旧调用点保持原签名。
+// ACES 单参入口：保留旧调用方式，内部按默认白点走完整映射。
 vec3 ogxAces(vec3 color) { return ogxAces(color, true); }
 
 // AgX 对比度曲线：用六次多项式近似原查找表，省掉一张纹理。
@@ -1151,6 +1157,7 @@ float ogxLuminanceRec601(vec3 color) { return dot(color, vec3(0.299, 0.587, 0.11
 vec3 ogxEclipseCurve(vec3 x) { return 1.0 - x / (1.0 + x); }
 
 // Eclipse 全范围 Reinhard：白点 10、提亮 0.5，保留完整有理式。
+// Reinhard 完整版：按最大通道压缩，保留色相。
 vec3 ogxTonemapReinhardFull(vec3 color)
 {
     float whitepoint = 10.0; // 参考实现固定白点。
@@ -1159,6 +1166,7 @@ vec3 ogxTonemapReinhardFull(vec3 color)
 }
 
 // Eclipse 可编辑 Reinhard：先把颜色抬 1.2 次方，再用更低的提亮 0.333。
+// Reinhard 编辑版：用固定曝光近似，适合快速预览。
 vec3 ogxTonemapReinhardEdit(vec3 color)
 {
     color = pow(color, vec3(1.2)); // 抬暗部，保持高光不动。
@@ -1168,6 +1176,7 @@ vec3 ogxTonemapReinhardEdit(vec3 color)
 }
 
 // Reinhard-Jodie：同时算亮度压缩与逐通道压缩，再按逐通道结果混回去。
+// Reinhard-Jodie：按亮度与通道分别压缩，减少高光偏色。
 vec3 ogxTonemapReinhardJodie(vec3 color)
 {
     color *= 1.5; // 参考实现的曝光抬升。
@@ -1177,6 +1186,7 @@ vec3 ogxTonemapReinhardJodie(vec3 color)
 }
 
 // Eclipse 的 AgX look：保留参考的偏移、斜率与幂变量，默认零偏移、单位斜率与幂，只把饱和度推到 1.25。
+// AgX 的 look 曲线：在色调映射后做一次对比与饱和调整。
 vec3 ogxAgxLook(vec3 value)
 {
     const vec3 lw = vec3(0.2126, 0.7152, 0.0722); // 参考实现固定 Rec.709 亮度。
@@ -1190,6 +1200,7 @@ vec3 ogxAgxLook(vec3 value)
 }
 
 // Eclipse 的 AgX 完整版：插入矩阵、动态范围 -12.47393 到 4.026069，再用 AGX look。
+// AgX 主映射：把线性场景色压进显示范围并保留高光层次。
 vec3 ogxToneMapAgx(vec3 color)
 {
     vec3 in0 = vec3(0.856627153315983, 0.137318972929847, 0.11189821299995); // 插入矩阵第一列。
@@ -1228,6 +1239,7 @@ vec3 ogxToneMapAgxMinimal(vec3 color)
 }
 
 // Eclipse 的 AgX Merlin 版：矩阵同上，端点整体上移一档，动态范围更窄。
+// AgX 的另一种拟合：用简化多项式逼近同一曲线，减少常数运算。
 vec3 ogxToneMapAgxMerlin(vec3 color)
 {
     vec3 in0 = vec3(0.842479062253094, 0.0423282422610123, 0.0423756549057051); // 精简插入矩阵第一列。
@@ -1247,6 +1259,7 @@ vec3 ogxToneMapAgxMerlin(vec3 color)
 }
 
 // Eclipse 的 Uchimura 指数肩部版：肩部用 exp，参考实现保留反向 smoothstep 参数顺序。
+// Uchimura 指数版：按分段指数压缩高光，适合夜景。
 vec3 ogxTonemapUchimuraExp(vec3 x, float P, float a, float m, float l, float c, float b)
 {
     float l0 = ((P - m) * l) / a; // 线性段折算长度。
@@ -1264,6 +1277,7 @@ vec3 ogxTonemapUchimuraExp(vec3 x, float P, float a, float m, float l, float c, 
 }
 
 // Eclipse 的 Uchimura 修改版：肩部改成 smoothstep 曲线，其余参数与指数版相同。
+// Uchimura 改进版：用可调切线参数控制肩部过渡。
 vec3 ogxTonemapUchimuraModified(vec3 x, float P, float a, float m, float l, float c, float b)
 {
     float l0 = ((P - m) * l) / a; // 线性段折算长度。
@@ -1344,6 +1358,7 @@ OgxAgxMat3 ogxAgxInverse(OgxAgxMat3 m)
 }
 
 // 色度坐标到 XYZ：Y 归一为一，X 与 Z 由 xy 反推。
+// AgX 反变换：从显示色回推线性值，供历史帧比较与调试。
 vec3 ogxAgxUnproject(vec2 xy)
 {
     if (xy.y == 0.0) return vec3(0.0); // 参考实现对零分母直接返回零。
@@ -1512,6 +1527,7 @@ mat3 ogxAgxConfigurable1Mat3()
 }
 
 #endif
+
 /*
 生成文件：采样模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中的同名模块，改动后运行构建脚本的生成命令。
@@ -1672,6 +1688,7 @@ float ogxHalton2(int index)
     return result;
 }
 
+// 三维 Halton 序列：体素与体积采样用低差异点减少噪点。
 float ogxHalton3(int index)
 {
     float result = 0.0;
@@ -2566,12 +2583,14 @@ float ogxPlanetRingNoise(float position, sampler2D noiseTexture)
 }
 
 // Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派做能量守恒。
+// Eclipse 天空的瑞利相函数：按视线与太阳夹角给出蓝光更强的散射比例。
 float ogxEclipseSkyRayleighPhase(float cosTheta)
 {
     return cosTheta * (0.1 * OGX_INV_PI) + 0.28 * OGX_INV_PI; // 参考实现把两个常数都乘 1/pi。
 }
 
 // Eclipse 的米氏相函数：用 g 的平方与 1.5 次幂，和 Henyey-Greenstein 不是同一公式。
+// Eclipse 天空的米氏相函数：用 g 控制太阳附近的前向散射强度。
 float ogxEclipseSkyMiePhase(float cosTheta, float g)
 {
     float gg = g * g; // 先算 g 的平方。
@@ -3445,6 +3464,7 @@ vec4 ogxCloudShadowBlur(sampler2D shadowTex, ivec2 texel, ivec2 axis, ivec2 bord
 }
 
 // Eclipse 的云相函数：和 Henyey-Greenstein 不是同一公式，分母固定除以 3.14。
+// Eclipse 云相位兼容层：把参考的双瓣散射写成同一个入口，供云光照复用。
 float ogxCloudPhaseEclipse(float x, float g)
 {
     float gg = g * g; // g 的平方。
@@ -3528,6 +3548,7 @@ float ogxCumulusCurve(float x)
 }
 
 // NUBIS 的顶部曲线：以 1 为顶点、在 0 与 2 处落到零的抛物线，用来把云顶收圆。
+// 积云顶部的垂直密度曲线：底部厚、顶部逐渐变薄。
 float ogxCumulusCurveTop(float x)
 {
     x = x - 1.0; // 把顶点移到一。
@@ -3715,6 +3736,7 @@ float ogxCumulusShadowTex(vec2 coord, OgxCumulusMedia media, vec3 worldLight, fl
 }
 
 // iterationT 的标量曲线：与参考 curve 同一个式子，用于云层竖直分布。
+// iterationT 的软曲线：把输入压到零到一之间，避免高光过曝。
 float ogxItxCurve(float x) { return 1.0 - x / (1.0 + x); }
 
 // iterationT 云密度：基础三维噪声合成大尺度形状，覆盖率裁剪后再叠细节噪声。
@@ -8992,6 +9014,7 @@ vec3 ogxItxFsr1(ivec2 texelCoord, sampler2D upscaledTex, float sharpness, bool d
     return ogxFsr1(upscaledTex, texelCoord, sharpness, denoise);
 }
 
+// FSR1 放大入口的实际定义：先取中心样本，再交给十字对比度锐化。
 vec3 ogxFsr1(sampler2D upscaledTex, ivec2 texelCoord, float sharpness, bool denoise)
 {
     vec3 sampleE = texelFetch(upscaledTex, texelCoord + ivec2(0, 0), 0).rgb; // 中心样本。
@@ -10284,6 +10307,7 @@ float ogxGetExposureTiles(sampler2D exposureTexture, int viewWidth, int viewHeig
 }
 
 // 曝光值：手动模式直接由 EV 算出，自动模式从曝光统计像素读取并按曲线、夜视与黑暗调整。
+// 自动曝光取值：从统计纹理中读分块亮度，按测光模式合成曝光值。
 float ogxGetExposureValue(sampler2D exposureTexture, ivec2 screenExtent, bool manualExposure, float evValue,
     float mainOutputFactor, float exposureOutputFactor, float aeCurve, float nightVision, bool aeClamp,
     bool dimensionNether, float aeOffset, float darknessFactor, bool disableBlindness)
@@ -11196,13 +11220,21 @@ vec3 ogxEclipseDrawRealMoon(vec3 playerPos, vec3 worldSunVec, vec3 color, inout 
 }
 
 // 三次卷积权重：Catmull-Rom 核的四个分段，供双三次采样复用。
+// 三次卷积权重零号：离采样点最近的一侧。
 float ogxEclipseBicubicW0(float a) { return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0); }
+// 三次卷积权重一号：与零号配对，组成左半核。
 float ogxEclipseBicubicW1(float a) { return (1.0 / 6.0) * (a * a * (3.0 * a - 6.0) + 4.0); }
+// 三次卷积权重二号：右半核的第一项。
 float ogxEclipseBicubicW2(float a) { return (1.0 / 6.0) * (a * (a * (-3.0 * a + 3.0) + 3.0) + 1.0); }
+// 三次卷积权重三号：离采样点最远的一侧。
 float ogxEclipseBicubicW3(float a) { return (1.0 / 6.0) * (a * a * a); }
+// 左半核归一化：把零号与一号权重合在一起。
 float ogxEclipseBicubicG0(float a) { return ogxEclipseBicubicW0(a) + ogxEclipseBicubicW1(a); }
+// 右半核归一化：把二号与三号权重合在一起。
 float ogxEclipseBicubicG1(float a) { return ogxEclipseBicubicW2(a) + ogxEclipseBicubicW3(a); }
+// 左半核的偏移量：让采样点落在正确的纹素中心。
 float ogxEclipseBicubicH0(float a) { return -1.0 + ogxEclipseBicubicW1(a) / (ogxEclipseBicubicW0(a) + ogxEclipseBicubicW1(a)); }
+// 右半核的偏移量：与左半核一起完成三次插值。
 float ogxEclipseBicubicH1(float a) { return 1.0 + ogxEclipseBicubicW3(a) / (ogxEclipseBicubicW2(a) + ogxEclipseBicubicW3(a)); }
 
 // Eclipse 双三次纹理采样：四个角各取一次双线性，再按卷积权重合成。
@@ -11563,12 +11595,14 @@ vec2 ogxEclipseHash2(vec2 p)
 }
 
 // 归一化哈希向量：把格坐标变成一个单位方向，供 Perlin 梯度使用。
+// 把二维哈希值归一到零到一，避免负值让噪声出现暗带。
 vec2 ogxEclipseNormalizeHash(vec2 p)
 {
     return normalize(ogxEclipseHash2(p) - 0.5); // 中心化后单位化。
 }
 
 // Perlin 梯度：返回解析梯度，供旋度噪声直接使用。
+// 由哈希选二维梯度方向，供 Perlin 噪声生成云形状。
 vec2 ogxEclipsePerlinGradient(vec2 coord)
 {
     vec2 i = floor(coord); // 整数格。
@@ -11633,6 +11667,7 @@ float ogxItxGetCloudShadow(vec3 playerPos, vec3 sunVector, OgxEclipseCloudSettin
         cameraPos, noiseTexture);
 }
 
+// 云形状的实际定义：把层号、覆盖率与上下界交给噪声采样，返回该层的密度。
 float ogxEclipseGetCloudShape(OgxEclipseCloudSettings s, int layerIndex, int lod, vec3 position,
     float minHeight, float maxHeight, sampler2D noiseTexture)
 {
@@ -11851,6 +11886,7 @@ vec3 ogxEclipseGetRayOrigin(vec3 rayStartPos, vec3 cameraPos, float dither, floa
 }
 
 // 云的相函数：按 `mode` 选择 Henyey-Greenstein、Cornette-Shanks 或 HG-Draine。
+// 按云相位模式组合前向与背向散射，决定云边缘的透光方向。
 float ogxEclipsePhaseCloud(float x, float g, int mode)
 {
     if (mode == 1) // Cornette-Shanks。
@@ -11903,6 +11939,7 @@ float ogxEclipseGetCloudScattering(OgxEclipseCloudSettings s, int layerIndex, ve
 }
 
 // 云的光照：直射按 Beer 定律衰减，前后散射按粉末效应插值，间接光按形状抬升。
+// 云的单次散射颜色：直射、天光、阴影与相位共同决定云的明暗。
 vec3 ogxEclipseGetCloudLighting(int layerIndex, float shape, float shapeFaded, float sunShadowMask, vec3 directLightCol,
     vec3 directLightCol2, float indirectShadowMask, vec3 indirectLightCol, vec3 rayPosition, float backScatterPhase,
     vec4 phaseLevels, float backScatterPhase2, vec4 phaseLevels2)
@@ -12992,6 +13029,7 @@ Omni 通用图形库 Eclipse 补充模块：环境光遮蔽、阴影压缩、雾
 
 
 // GTAO 的弧段积分：两个水平角之间覆盖的余弦积分。
+// 在单位圆上积分一段弧的贡献，供天空环境光近似。
 float ogxEclipseIntegrateArc(vec2 h, float n, float cosN)
 {
     vec2 tmp = cosN + 2.0 * h * sin(n) - cos(2.0 * h - n); // 参考实现的积分核。
@@ -13031,6 +13069,7 @@ float ogxEclipseMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPo
 }
 
 // GTAO 环境光遮蔽：沿多个切片各取两个最大水平角，再积分成遮蔽。
+// Eclipse 地平线遮蔽：沿多个方向搜索最近遮挡，返回零到一的可见度。
 float ogxEclipseAmbientOcclusion(vec3 screenPos, vec3 viewPos, vec3 viewNormal, vec2 dither, int slices,
     float radius, int horizonSteps, float falloffStart, vec3 viewPixelSize, vec2 viewRes, float renderScale,
     float handDepth, float halfPi, sampler2D depthTexture, mat4 projection, mat4 projectionInverse)
@@ -13415,6 +13454,7 @@ vec3 ogxItxEndStars(vec3 worldDir, vec3 worldSunVector, float time, int starType
 }
 
 // iterationT 行星 BRDF：用 Chandrasekhar H 函数与 Lambert 曲线近似行星表面。
+// iterationT 的次表面近似：按法线与光方向补透光，供末地植物使用。
 vec3 ogxItxPpss(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir, float s)
 {
     float NdotL = dot(normal, lightDir); // 光线与法线。
@@ -13801,6 +13841,7 @@ vec4 ogxItxBilateralUpscaleSsao(sampler2D source, sampler2D sourceDepth, vec2 co
 }
 
 // SSGI 合成：多根余弦半球射线，命中时读历史场景色，未命中时保留天空贡献。
+// 把屏幕空间追踪结果混进间接光，按最小光色与遮挡权重取舍。
 vec3 ogxEclipseApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
     vec3 viewPos, vec3 normal, vec3 noise, float lightmap, bool isGrass, bool isLod,
     ivec2 pixelCoord, int frameCounter, int rayCount, int raySteps, float giStrength,
@@ -14013,6 +14054,7 @@ void ogxItxSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, 
         hit, shiftedCurrPos, stepAxis, gtexture, voxelDataTexture, voxelSize, cameraWorldPos);
 }
 
+// 镂空求交排序的实际定义：按距离与面朝向保留最近命中，供反射与阴影使用。
 void ogxEclipseSortIntersectionCutout(OgxEclipseRayHit hit1, OgxEclipseRayHit hit2, vec3 stepDir,
     vec2 gtexSize, vec2 texCoordOffset, vec3 voxelPos, inout bool hit,
     inout vec3 shiftedCurrPos, inout vec3 stepAxis, sampler2D gtexture,
@@ -14188,6 +14230,7 @@ float ogxEclipseComputeVoxelShadowMap(inout vec3 directLightColor, vec3 playerPo
 }
 
 // Photonics 阴影：和体素阴影相同的几何路径，但用 Photonics 采样曲线与固定样本数。
+// 光子学阴影图：把可见光源与遮挡写进阴影图，并返回直射光强度。
 float ogxEclipseComputePhotonicsShadowMap(inout vec3 directLightColor, vec3 playerPos, float maxDistFade,
     float noise, vec3 geoNormals, sampler2D opaqueShadowMap, sampler2D translucentShadowMap, sampler2D shadowcolor0,
     mat4 shadowView, mat4 shadowProjection, float shadowDistance, float shadowMapResolution,
@@ -14201,6 +14244,7 @@ float ogxEclipseComputePhotonicsShadowMap(inout vec3 directLightColor, vec3 play
 }
 
 // WSR 体素追踪：在三维方块编号图里逐格前进，记录半透明命中与最终不透明命中。
+// WSR 体素追踪：沿视线在体素编号图里找命中，供反射与雾共用。
 void ogxEclipseTraceWsr(inout OgxEclipseRayJob job, usampler3D voxelIds, sampler3D voxelColors,
     inout OgxEclipseTranslucentHit translucentHits[10], inout uint translucentHitsCount,
     out int blockId, out float skylightmap, int side, float worldOffset)
@@ -14301,6 +14345,7 @@ vec3 ogxEclipseDoIndirectLighting(vec3 lightColor, vec3 minimumLightColor, float
 }
 
 // Photonics 反射着色：间接光、方块光、阴影、云影与自发光一起决定命中面颜色。
+// 光子学反射着色：把体素命中、手光与阴影合成为反射颜色。
 void ogxEclipsePhotonicsReflectionShading(inout vec4 color, vec3 normal, vec3 worldPos, float noise,
     vec3 directLightColor, vec3 ambientLightColor, int blockID, float skylightmap, vec3 torchColor,
     vec3 lpvSample, vec3 handLight, vec3 lpvPos, float lpvSize, float fadeLength, float torchAmount,

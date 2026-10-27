@@ -302,6 +302,32 @@ def entrypoints(shaders: Path = SHADERS) -> list[Path]:
         check_references(source, shaders, seen=seen)  # 入口配对检查只走引用树，不拼接文本。
     return entries  # 下游链接真实入口。
 
+# --- 效果层边界：页面之间只能经过 effects/shared，不能直接互相引用 ---
+def check_effect_boundaries(shaders: Path = SHADERS) -> None:
+    """检查 `effects/` 的引用方向：页面只能引用本页或 `shared/`，`shared/` 只能引用 `shared/`。
+
+    为什么单独检查：效果文件可以互相引用时，页面归属会慢慢失效，改一个页面会牵动另一页；
+    共享主体是唯一允许的跨页通道，而且它必须自己保持自洽，不能反过来引用页面实现。
+    被引用路径的第一段文件夹决定页面，`common/`、`bind/` 与 `omni-gfx/` 不属于效果页面。
+    """
+    effects = shaders / "effects"  # 效果层根目录。
+    problems = []  # 一次列出全部越界引用，修一处不用重跑一次。
+    for source in sorted(effects.rglob("*.glsl")):
+        page = source.relative_to(effects).parts[0]  # 第一段文件夹就是页面；`shared` 是共享层。
+        for number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+            match = INCLUDE.fullmatch(line)  # 只认独立的引用行，行尾说明由入口检查单独报。
+            if not match:
+                continue
+            target = re.match(r"/effects/([^/]+)/", match[1])  # 只检查效果层内部引用。
+            if not target:
+                continue
+            included = target.group(1)
+            allowed = {"shared"} if page == "shared" else {page, "shared"}
+            if included not in allowed:
+                problems.append(f"{source.relative_to(SHADERS)}:{number}：{page}/ 不能直接引用 {included}/")
+    if problems:
+        raise ValueError("效果页面存在跨页引用\n" + "\n".join(problems))  # 共享主体是唯一允许的跨页通道。
+
 # --- 选项接线：全树检查一次，和编译探针范围无关 ---
 GLSL_COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.DOTALL)  # 块注释与行注释一次匹配，交错时不会互相误吃。
 PROPERTIES_COMMENT = re.compile(r"(?m)^(?![ \t]*#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include)\b)[ \t]*#.*$")  # 加载器设置的注释行；`#if` 等条件指令是真实接线，保留。
@@ -843,6 +869,7 @@ def check() -> None:
     if generated_entries != set(program_files()):  # 旧程序可能被加载器忽略，必须明确清理并审查。
         raise ValueError("存在流程表之外的旧入口，请重新生成并审查")
     audited = audit.check(ROOT)  # 自有源码先通过中文说明与未实现标记审计。
+    check_effect_boundaries()  # 效果页面之间只能经过 effects/shared。
     check_loader_properties()  # 编号属性文件必须能被加载器的预处理器读取。
     check_compute_workgroups()  # 计算工作组必须能被加载器的整数解析器读取。
     dependencies()  # 发行包中的第三方文件与许可也必须满足白名单。

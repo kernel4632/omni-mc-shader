@@ -47,7 +47,7 @@
 	// 后期共享声明，全项目只声明一次。
 	#include "/rendering/post_shared.glsl"
 	// 提供材质编号 `MATID_*`，抗锯齿的速度重投影引用它。
-	#include "/effects/ground/material.glsl"
+	#include "/effects/shared/surface.glsl"
 	// 时间重投影与相机速度；内部再引入坐标换算。
 	#include "/effects/clarity/antialiasing.glsl"
 

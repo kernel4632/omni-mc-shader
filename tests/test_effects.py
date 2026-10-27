@@ -223,9 +223,9 @@ class EffectTests(unittest.TestCase):
         self.assertIn("screen.QUICK = <profile> OMNI_VOLUMETRIC_CLOUDS", menu)  # 快速设置先放预设，再放常用选项。
         self.assertIn("screen.SKY = ", menu)  # 天空分类存在。
         self.assertIn("screen.SKY_SKY_ATMOSPHERE = ", menu)  # 天空下的子页面自带选项列表。
-        self.assertIn("screen.WATERGROUND_WATER_WATER = OMNI_WAVE_SCALE", menu)  # 水面基础选项落在水与地面页。
-        self.assertIn("screen.WATERGROUND_WATER_WAVESIM = OMNI_WAVE_SIMULATION", menu)  # 波浪模拟独立成一个水面子页面。
-        self.assertIn("screen.CLOUDFOG_CLOUD_CLOUD = OMNI_PLANAR_CLOUDS", menu)  # 云与雾页保留云的子页面。
+        self.assertIn("screen.WATERGROUND_SHARED_WATER = OMNI_WAVE_SCALE", menu)  # 水面基础选项落在水与地面页，由共享水面主体定义。
+        self.assertIn("screen.WATERGROUND_SHARED_WATER_WAVESIM = OMNI_WAVE_SIMULATION", menu)  # 波浪模拟仍是水面下的独立子页面。
+        self.assertIn("screen.CLOUDFOG_SHARED_CLOUD = OMNI_PLANAR_CLOUDS", menu)  # 云与雾页保留云的子页面，选项来自共享云主体。
         about = next(line for line in menu.splitlines() if line.startswith("screen.ABOUT = "))  # 关于页平铺。
         self.assertIn("OMNI_TITLE", about)  # 标题开关归入关于页。
         self.assertIn("OMNI_DEBUG_VIEW", about)  # 调试入口也在这一页。
@@ -322,7 +322,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_VARIABLE_PENUMBRA_SHADOWS", "OMNI_VPS_QUALITY", "OMNI_VPS_SPREAD", "OMNI_SHADOW_MAP_BIAS", "OMNI_SHADOW_BASIC_BLUR"):
             self.assertIn(name, found)  # 每个阴影参数由阴影源码定义。
-        shadow = support.code("effects/shadow/shadow.glsl")  # 阴影主体。
+        shadow = support.code("effects/shared/shadow.glsl")  # 阴影主体。
         self.assertIn("VariablePenumbraShadow", shadow)  # 半影阴影独立成函数。
         self.assertIn("OMNI_VARIABLE_PENUMBRA_SHADOWS", shadow)  # 开关作为参数交给通用库。
         self.assertIn("ogxVariablePenumbraShadow", support.text("omni-gfx/shadow.glsl"))  # 通用库按参数决定是否估计遮挡物距离。
@@ -333,9 +333,9 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_SCREEN_SPACE_SHADOWS", "OMNI_DISABLE_PLAYER_SCREEN_SPACE_SHADOWS", "OMNI_COLORED_SHADOWS"):
             self.assertIn(name, found)  # 三个阴影开关由阴影源码定义。
-        shadow = support.code("effects/shadow/shadow.glsl")  # 阴影主体（阴影图坐标与可变半影）。
+        shadow = support.code("effects/shared/shadow.glsl")  # 阴影主体（阴影图坐标与可变半影）。
         self.assertIn("screen_shadow.glsl", shadow)  # 入口按引入顺序展开屏幕空间阴影文件。
-        self.assertIn("ScreenSpaceShadow", support.code("effects/shadow/screen_shadow.glsl"))  # 屏幕空间阴影独立成函数。
+        self.assertIn("ScreenSpaceShadow", support.code("effects/shared/shadow/screen_shadow.glsl"))  # 屏幕空间阴影独立成函数。
         self.assertIn("OMNI_COLORED_SHADOWS", shadow)  # 彩色阴影参与着色。
 
     def test_sky_moon_texture_and_stars(self):
@@ -344,9 +344,11 @@ class EffectTests(unittest.TestCase):
         for name in ("OMNI_MOON_TEXTURE", "OMNI_SKYBOX_TEXTURE", "OMNI_STAR_TYPE", "OMNI_STARS_AMOUNT", "OMNI_NIGHT_BRIGHTNESS"):
             self.assertIn(name, found)  # 每个天空参数由天空源码定义。
         sky = support.code("effects/sky/sky.glsl")  # 天空入口，选项与内部常数在这里。
+        skyview = support.code("effects/shared/skyview.glsl")  # 天空贴图与星空类型的共享选项。
         self.assertIn("RenderMoonDisc", support.code("effects/sky/sun_moon.glsl"))  # 月盘独立成函数。
-        self.assertIn("CalculateStars", support.code("effects/sky/stars.glsl"))  # 星空独立成函数。
-        self.assertIn("OMNI_STAR_TYPE", sky)  # 星空类型参与计算。
+        self.assertIn("CalculateStars", support.code("effects/shared/skyview.glsl"))  # 星空与天空贴图同属共享主体。
+        self.assertIn("OMNI_STAR_TYPE", skyview)  # 星空类型由共享天空贴图主体定义并参与计算。
+        self.assertIn("ProjectSky", skyview)  # 天空盒投影只保留一份，反射与水面共用。
         celestial = support.text("rendering/celestial.glsl")  # 天体贴图程序。
         self.assertRegex(celestial, r"#\s*(ifdef|if)\s+OMNI_MOON_TEXTURE\b")  # 月亮贴图决定是否叠加。
         self.assertRegex(celestial, r"#\s*(ifndef|if\s+!)\s*OMNI_SKYBOX_TEXTURE\b")  # 关闭天空盒时回退。
@@ -368,7 +370,7 @@ class EffectTests(unittest.TestCase):
         cloud = support.code("effects/cloud/volumetric.glsl")  # 体积云主体。
         self.assertIn("omniLightningVolume", cloud)  # 体积云接到闪电照明。
         self.assertIn("marchingPos - cameraPosition", cloud)  # 云采样点换成相机相对坐标后再比闪电距离。
-        fog = support.code("effects/fog/volumetric.glsl")  # 体积雾主体。
+        fog = support.code("effects/shared/fog/volumetric.glsl")  # 体积雾主体。
         self.assertIn("omniLightningVolume", fog)  # 体积雾接到闪电照明。
         self.assertIn("lightningFogLight", fog)  # 闪电点亮的空气按每步吸收量累加。
 
@@ -397,7 +399,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_CLOUD_SHADOW", "OMNI_CLOUD_SHADOW_RANGE", "OMNI_CLOUD_SHADOWTEX_SIZE", "OMNI_CLOUD_SHADOW_FADE"):
             self.assertIn(name, found)  # 每个云影参数由云源码定义。
-        cloud = support.code("effects/cloud/shadow.glsl")  # 云影主体。
+        cloud = support.code("effects/shared/cloud.glsl")  # 云影主体。
         self.assertIn("CloudShadowFromTex", cloud)  # 云影采样独立成函数。
         self.assertIn("OMNI_CLOUD_SHADOW_RANGE", cloud)  # 范围参与贴图坐标。
         self.assertIn("OMNI_CLOUD_SHADOWTEX_SIZE", cloud)  # 贴图尺寸参与分辨率。
@@ -431,7 +433,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn(found["OMNI_VFOG"].values, (("false", "true"), ("0", "1")))  # 体积雾可开关。
         for name in ("OMNI_VFOG_QUALITY", "OMNI_VFOG_NOISE_TYPE", "OMNI_VFOG_DENSITY", "OMNI_VFOG_HEIGHT", "OMNI_VFOG_FALLOFF"):
             self.assertIn(name, found)  # 每个体积雾参数由雾源码定义。
-        fog = support.code("effects/fog/volumetric.glsl")  # 体积雾主体。
+        fog = support.code("effects/shared/fog/volumetric.glsl")  # 体积雾主体。
         self.assertIn("VolumetricFog", fog)  # 体积雾独立成函数。
         self.assertIn("const float steps = OMNI_VFOG_QUALITY", fog)  # 步数来自选项。
         self.assertIn("OMNI_VFOG_FALLOFF", fog)  # 衰减参与高度密度。
@@ -441,7 +443,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         self.assertIn(found["OMNI_UNDERWATER_VFOG"].values, (("false", "true"), ("0", "1")))  # 水下体积雾可开关。
         self.assertIn("OMNI_UNDERWATER_VFOG_DENSITY", found)  # 浓度可调。
-        fog = support.code("effects/fog/underwater_fog.glsl")  # 水下体积雾主体。
+        fog = support.code("effects/shared/fog/underwater_fog.glsl")  # 水下体积雾主体。
         self.assertIn("UnderwaterVolumetricFog", fog)  # 水下体积雾独立成函数。
         self.assertIn("OMNI_UNDERWATER_VFOG_DENSITY", fog)  # 浓度参与散射。
         self.assertRegex(support.code("effects/reflection/screenspace.glsl"), r"#\s*(ifdef|if)\s+OMNI_UNDERWATER_VFOG\b")  # 反射路径按选项叠加水下光柱。
@@ -451,7 +453,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_LANDSCATTERING", "OMNI_LANDSCATTERING_STRENGTH", "OMNI_LANDSCATTERING_DISTANCE", "OMNI_INDOOR_FOG"):
             self.assertIn(name, found)  # 每个雾参数由雾源码定义。
-        fog = support.code("effects/fog/landscattering.glsl")  # 地面大气散射主体。
+        fog = support.code("effects/shared/fog/landscattering.glsl")  # 地面大气散射主体。
         self.assertIn("LandAtmosphericScattering", fog)  # 地表散射独立成函数。
         self.assertIn("OMNI_LANDSCATTERING_DISTANCE", fog)  # 距离参与散射。
 
@@ -460,7 +462,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_WAVE_SCALE", "OMNI_WAVE_HEIGHT", "OMNI_WATER_PARALLAX"):
             self.assertIn(name, found)  # 每个水波参数由水源码定义。
-        waves = support.code("effects/water/waves.glsl")  # 波浪主体（按算法从入口拆出）。
+        waves = support.code("effects/shared/water/waves.glsl")  # 波浪主体（按算法从入口拆出）。
         self.assertIn("GetWaves", waves)  # 波浪高度独立成函数。
         self.assertIn("GetWavesNormal", waves)  # 波浪法线独立成函数。
         self.assertIn("GetWaterParallaxCoord", waves)  # 视差坐标独立成函数。
@@ -471,9 +473,9 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_UNDERWATER_FOG", "OMNI_WATER_FOG_DENSITY", "OMNI_CAUSTICS", "OMNI_PUDDLE_MODE"):
             self.assertIn(name, found)  # 每个水参数由水源码定义。
-        self.assertIn("WaterFog", support.code("effects/water/waterfog.glsl"))  # 水下水雾独立成函数。
-        self.assertIn("TransparentAbsorption", support.code("effects/water/refraction.glsl"))  # 彩色玻璃吸收独立成函数。
-        self.assertIn("CalculateWaterCaustics", support.code("effects/shadow/water_caustics.glsl"))  # 焦散来自阴影文件夹里的焦散算法。
+        self.assertIn("WaterFog", support.code("effects/shared/water/waterfog.glsl"))  # 水下水雾独立成函数。
+        self.assertIn("TransparentAbsorption", support.code("effects/shared/water/refraction.glsl"))  # 彩色玻璃吸收独立成函数。
+        self.assertIn("CalculateWaterCaustics", support.code("effects/shared/shadow/water_caustics.glsl"))  # 焦散来自阴影文件夹里的焦散算法。
 
     def test_rain_ripple_options(self):
         """雨点涟漪的强度与对比可调，两者都作用在同一个雨点法线上，默认都为一、画面不变。"""
@@ -481,7 +483,7 @@ class EffectTests(unittest.TestCase):
         for name in ("OMNI_RAIN_RIPPLE_STRENGTH", "OMNI_RAIN_RIPPLE_CONTRAST"):
             self.assertIn(name, found)  # 两个选项由水源码定义。
             self.assertEqual(found[name].default, "1.0")  # 默认为一，乘一与取一次幂都是原样。
-        rain = support.code("effects/water/rain.glsl")  # 雨点涟漪主体（按算法从入口拆出）。
+        rain = support.code("effects/shared/water/rain.glsl")  # 雨点涟漪主体（按算法从入口拆出）。
         self.assertIn("OMNI_RAIN_RIPPLE_STRENGTH", rain)  # 强度乘在雨点法线上。
         self.assertIn("OMNI_RAIN_RIPPLE_CONTRAST", rain)  # 对比指数作用在雨点法线上。
 
@@ -512,10 +514,10 @@ class EffectTests(unittest.TestCase):
         self.assertIn(found["OMNI_ENABLE_PBR"].values, (("false", "true"), ("0", "1")))  # 物理光照可开关。
         for name in ("OMNI_PARALLAX_MODE", "OMNI_PARALLAX_QUALITY", "OMNI_PARALLAX_SHADOW", "OMNI_SSS_STRENGTH"):
             self.assertIn(name, found)  # 每个材质参数由材质源码定义。
-        material = support.code("effects/ground/material.glsl")  # 材质主体。
-        self.assertIn("ParallaxOcclusionMapping", material)  # 视差独立成函数。
+        material = support.code("effects/shared/surface.glsl")  # 材质主体。
+        self.assertIn("ParallaxOcclusionMapping", support.code("effects/ground/parallax.glsl"))  # 视差独立成函数并留在最靠近地表的实现里。
         self.assertIn("OMNI_ENABLE_PBR", material)  # 物理光照开关参与材质。
-        self.assertIn("OMNI_PARALLAX_MODE", material)  # 视差模式参与分派。
+        self.assertIn("OMNI_PARALLAX_MODE", material)  # 视差模式选项由共享材质主体定义。
 
     def test_torchlight_colour_temperature(self):
         """火把光亮度与色温可调，黑体色温函数把色温换成颜色。"""
@@ -651,7 +653,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         for name in ("OMNI_RAIN_VISIBILITY", "OMNI_RAIN_DISTURBANCE", "OMNI_RAIN_WIND_X", "OMNI_RAIN_WIND_Z"):
             self.assertIn(name, found)  # 每个天气参数由天气源码定义。
-        weather = support.code("effects/weather/weather.glsl")  # 天气主体。
+        weather = support.code("effects/shared/weather.glsl")  # 天气主体。
         self.assertIn("Rain(", weather)  # 雨着色独立成函数。
         self.assertIn("RainWindOffset", weather)  # 风向独立成函数。
         self.assertIn("OMNI_RAIN_VISIBILITY", weather)  # 可见度参与着色。
@@ -661,7 +663,7 @@ class EffectTests(unittest.TestCase):
         found, _, _ = support.configuration()  # 真实选项。
         self.assertIn(found["OMNI_RAIN_SPLASH_EFFECT"].values, (("false", "true"), ("0", "1")))  # 溅射可开关。
         self.assertIn("OMNI_SURFACE_WETNESS", found)  # 手动湿润可调。
-        weather = support.code("effects/weather/weather.glsl")  # 天气主体。
+        weather = support.code("effects/shared/weather.glsl")  # 天气主体。
         self.assertIn("OMNI_SURFACE_WETNESS", weather)  # 手动湿润参与计算。
         self.assertIn("OMNI_RAIN_SPLASH_EFFECT", weather)  # 溅射开关参与分支。
 
@@ -750,13 +752,13 @@ class EffectTests(unittest.TestCase):
         self.assertIn("omniLpvBlockData", scene)  # 方块光表接入 setup 阶段。
         shadowcomp = support.expand(build.SHADERS / "world0/shadowcomp.csh")  # 从传播计算入口展开。
         self.assertIn("omniLpvMixNeighbours", shadowcomp)  # 邻居混合接入传播阶段。
-        effect = support.code("effects/lighting/lpv.glsl")  # 效果主体。
+        effect = support.code("effects/shared/lpv.glsl")  # 效果主体。
         self.assertIn("omniLpvApply", effect)  # 片元混光独立成函数。
         self.assertIn("omniVoxelBlockId", effect)  # 体素编号映射独立成函数。
 
     def test_lpv_block_entity_and_item_lights(self):
         """体积光的实体光源同一开关也覆盖发光方块实体与掉落物，编号与属性文件一一对应。"""
-        effect = support.code("effects/lighting/lpv.glsl")  # 效果主体。
+        effect = support.code("effects/shared/lpv.glsl")  # 效果主体。
         self.assertIn("omniLpvBlockEntityVoxelId", effect)  # 方块实体编号映射独立成函数。
         self.assertIn("omniLpvDroppedItemVoxelId", effect)  # 掉落物编号映射独立成函数。
         shadow = support.text("rendering/shadow.glsl")  # 阴影顶点写体素。
@@ -778,7 +780,7 @@ class EffectTests(unittest.TestCase):
         self.assertIn("image.omniLpv1", settings)  # 自定义图像仍由绘制设置提供。
         fields = settings["image.omniLpv1"].split()  # 字段顺序与取值必须符合加载器要求。
         self.assertEqual(len(fields), 9, fields)  # 采样器名加八个设置项。
-        for path in ("rendering/lpv.glsl", "effects/lighting/lpv.glsl", "rendering/shadow.glsl"):
+        for path in ("rendering/lpv.glsl", "effects/shared/lpv.glsl", "rendering/shadow.glsl"):
             self.assertIn("IRIS_FEATURE_CUSTOM_IMAGES", support.code(path))  # 每处图像读写都按能力开关回退。
 
     def test_lpv_image_writes_have_visibility_barriers(self):

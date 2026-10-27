@@ -16,6 +16,8 @@
 #ifndef OMNI_EFFECT_GROUND_PARALLAX_INCLUDED // 只引入一次，避免函数重复定义。
 #define OMNI_EFFECT_GROUND_PARALLAX_INCLUDED // 置上标记。
 // 视差用到共用数学（解码法线）与通用视差算法，显式引入而不依赖调用顺序。
+// 材质与水洼选项由共享表面主体统一定义。
+#include "/effects/shared/surface.glsl"
 #include "/common/math.glsl"
 #include "/omni-gfx/parallax.glsl"
 // 视差阴影在开时间抗锯齿时用蓝噪声抖动起点。

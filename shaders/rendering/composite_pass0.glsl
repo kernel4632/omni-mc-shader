@@ -49,7 +49,9 @@ layout(location = 0) out vec4 compositeOutput1; // 一号画面：场景曲线�
 #if defined OMNI_NETHER // 下界：没有太阳，光照来自 `NetherLighting` 与雾色（来自 `world-1/composite.fsh`）。
 uniform sampler2D shadowtex1; // 阴影实心图，下界当普通深度贴图。
 // 雾文件带入水面、阴影、天空、云与光照，并提供 `OMNI_NETHER_FOG_DENSITY`。
-#include "/effects/fog/fog.glsl"
+#include "/effects/shared/fog.glsl"
+// 下界没有太阳，方块光与手持光仍要由光照效果显式引入。
+#include "/effects/lighting/sunlight.glsl"
 // 下界配色与光照 `NetherLighting`、`NetherFogColor`。
 #include "/effects/world/nether.glsl"
 // Omni 额外功能：真实闪电事件照亮表面，默认开启但缺少事件输入时无影响。
@@ -60,7 +62,7 @@ uniform sampler2DShadow shadowtex1; // 阴影实心图，可变半影阴影按�
 // 光照文件提供 `OMNI_SUNLIGHT_INTENSITY`、方块光、遮蔽与星空类型选项。
 #include "/effects/lighting/sunlight.glsl"
 // 水面文件提供波法线 `GetWavesNormal`，末地折射函数引用它。
-#include "/effects/water/water.glsl"
+#include "/effects/shared/water.glsl"
 // 末地天空 `BlackHole_AccretionDisc_Stars`、`PlanetEnd2` 与 `timeFactor`、`planetShadow`。
 #include "/effects/world/end.glsl"
 #else // 主世界：唯一使用可变半影阴影的合成阶段（来自 `composite.fsh`）。
@@ -69,11 +71,11 @@ uniform sampler2DShadow shadowtex1; // 阴影实心图，可变半影阴影按�
 // 天光照明 `SkyLighting`，并带入天空、云、环境光、方块光与阴影。
 #include "/effects/lighting/sunlight.glsl"
 // 水下雾与焦散选项，本程序据它们决定水色。
-#include "/effects/water/water.glsl"
+#include "/effects/shared/water.glsl"
 // Omni 额外功能：真实闪电事件照亮表面。
 #include "/effects/sky/atmosphere.glsl"
 // Omni 额外功能：光传播体积的采样映射、选项与片元取样函数。
-#include "/effects/lighting/lpv.glsl"
+#include "/effects/shared/lpv.glsl"
 #endif
 // 不透明表面光照算法在效果文件里。
 #include "/effects/lighting/composite_surface.glsl"

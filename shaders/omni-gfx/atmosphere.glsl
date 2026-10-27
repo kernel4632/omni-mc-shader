@@ -645,12 +645,14 @@ float ogxPlanetRingNoise(float position, sampler2D noiseTexture)
 }
 
 // Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派做能量守恒。
+// Eclipse 天空的瑞利相函数：按视线与太阳夹角给出蓝光更强的散射比例。
 float ogxEclipseSkyRayleighPhase(float cosTheta)
 {
     return cosTheta * (0.1 * OGX_INV_PI) + 0.28 * OGX_INV_PI; // 参考实现把两个常数都乘 1/pi。
 }
 
 // Eclipse 的米氏相函数：用 g 的平方与 1.5 次幂，和 Henyey-Greenstein 不是同一公式。
+// Eclipse 天空的米氏相函数：用 g 控制太阳附近的前向散射强度。
 float ogxEclipseSkyMiePhase(float cosTheta, float g)
 {
     float gg = g * g; // 先算 g 的平方。

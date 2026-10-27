@@ -43,7 +43,7 @@
 	// 共用数学：亮度、颜色曲线与交错梯度噪声。
 	#include "/common/math.glsl"
 	// 提供材质编号 `MATID_*`，手与玩家的排除判断用它。
-	#include "/effects/ground/material.glsl"
+	#include "/effects/shared/surface.glsl"
 	// 边缘抗锯齿 `Fxaa`；内部再引入坐标换算。
 	#include "/effects/clarity/antialiasing.glsl"
 	// 黑边 `BlackBar`。

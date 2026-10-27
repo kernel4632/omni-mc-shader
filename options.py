@@ -87,22 +87,42 @@ MAIN_PAGES: list[tuple[str, dict[str, str]]] = [
 # 效果文件夹到主页面的归属：文件夹仍决定子页面标题，页面只决定顶层入口。
 # 这样顶层保持九页，效果文件不必为了分页而搬家，已有子页面名称也不变。
 GROUP_PAGES: dict[str, str] = {
-    "sky": "sky",
-    "cloud": "cloudfog",
-    "fog": "cloudfog",
-    "water": "waterground",
-    "ground": "waterground",
-    "lighting": "lightshadow",
-    "shadow": "lightshadow",
-    "reflection": "lightshadow",
-    "color": "camera",
-    "lens": "camera",
+    "sky": "sky",  # 天空效果归入天空页。
+    "cloud": "cloudfog",  # 云与雾共用同一顶层页。
+    "fog": "cloudfog",  # 雾与云相邻，方便一起调。
+    "water": "waterground",  # 水面与地面同页。
+    "ground": "waterground",  # 地表材质与草同页。
+    "lighting": "lightshadow",  # 光照与阴影同页。
+    "shadow": "lightshadow",  # 阴影属于光照页。
+    "reflection": "lightshadow",  # 反射归入光照页。
+    "color": "camera",  # 调色属于画面页。
+    "lens": "camera",  # 镜头属于画面页。
     "clarity": "camera",
     "entity": "camera",
     "weather": "weather",
     "world": "world",
     "dev": "about",
-}  # 十五种效果文件夹归入九个主页面，不设“高级”总入口。
+    # 共享主体不单独占一个顶层页；每个主体的选项仍归入它服务的页面。
+    # 完整组名优先于文件夹名，`effects/shared/` 下的不同主体才能落到不同页面。
+    "shared/antialias": "camera",
+    "shared/light": "lightshadow",
+    "shared/screen": "camera",
+    "shared/lpv": "lightshadow",
+    "shared/atmosphere": "sky",
+    "shared/suncolor": "sky",
+    "shared/skyscatter": "sky",
+    "shared/lightning": "sky",
+    "shared/skyview": "sky",
+    "shared/cloud": "cloudfog",
+    "shared/weather": "weather",
+    "shared/dailyweather": "weather",
+    "shared/storm": "weather",
+    "shared/surface": "waterground",
+    "shared/shadow": "lightshadow",
+    "shared/water": "waterground",
+    "shared/fog": "cloudfog",
+    "shared/fog_volume": "cloudfog",
+}  # 十五种效果文件夹归入九个主页面，共享主体按服务的页面登记，不设“高级”总入口。
 
 # 快速设置页的快捷入口：只重复展示常用选项，不改变选项归属、默认值或配置文件。
 # 同一选项仍保留在所属效果的子页面里，删除或改名这里不会删除任何选项。
@@ -353,9 +373,11 @@ def page_of(option: Option) -> str:
     """
     if option.page:
         return option.page  # 单个选项可覆盖所在效果的默认页面。
-    folder = option.group.split("/")[0]  # 效果分组是“文件夹/文件”，文件夹就是效果名。
-    if folder in GROUP_PAGES:
-        return GROUP_PAGES[folder]  # 文件夹归入九页之一，不再要求文件夹名等于页面名。
+    parts = option.group.split("/")  # 效果分组是“文件夹/文件”，共享主体还可能多一层子目录。
+    for length in range(len(parts), 0, -1):
+        key = "/".join(parts[:length])  # 最长前缀优先，`shared/water/wavesim` 先查完整组名，再退回 `shared/water`。
+        if key in GROUP_PAGES:
+            return GROUP_PAGES[key]  # 共享主体按登记页归属，页面表仍是唯一的入口来源。
     raise ValueError(f"{option.source}：效果 {option.group} 没有登记主页面")
 
 

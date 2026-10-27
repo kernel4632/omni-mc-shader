@@ -122,41 +122,7 @@ in vec3 color; // 顶点色。
 in vec2 texCoord; // 纹理坐标。
 flat in float isMoon; // 是否是月亮。
 
-// 双线性取贴图：在图块内按四角纹素插值，比双线性更可控。
-vec4 BilinearTexture(sampler2D texSampler, vec2 coord, vec2 texSize){
-	coord = coord * texSize - 0.5; // 换成以纹素中心为原点的坐标。
-
-	vec2 p = floor(coord); // 整数纹素。
-	vec2 f = coord - p; // 小数偏移。
-
-	ivec2 texelX = ivec2(p); // 左下角纹素。
-	ivec2 texelW = texelX + 1; // 右上角纹素。
-
-	return mix(mix(texelFetch(texSampler, texelX                   , 0), texelFetch(texSampler, ivec2(texelW.x, texelX.y), 0), f.x), // 先横向插值。
-			   mix(texelFetch(texSampler, ivec2(texelX.x, texelW.y), 0), texelFetch(texSampler, texelW                   , 0), f.x), // 再横向插值。
-			   f.y); // 最后纵向插值。
-}
-
-// 天空盒版双线性：每个图块边界内插值，避免跨图块取到相邻面。
-vec4 BilinearTextureSkybox(sampler2D texSampler, vec2 coord, vec2 texSize){
-	ivec2 grid = ivec2(floor(coord * vec2(3.0, 2.0))); // 天空盒是三乘二的图块排布。
-	int gridSize = int(floor(texSize.y * 0.5)); // 每个图块的边长。
-	grid *= gridSize; // 换成像素坐标。
-	ivec4 border = ivec4(grid, grid + gridSize - 1); // 该图块的四条边界。
-
-	coord = coord * texSize - 0.5; // 换成以纹素中心为原点的坐标。
-
-	vec2 p = floor(coord); // 整数纹素。
-	vec2 f = coord - p; // 小数偏移。
-
-	ivec2 texelX = clamp(ivec2(p), border.xy, border.zw); // 左下角夹在图块内。
-	ivec2 texelW = clamp(texelX + 1, border.xy, border.zw); // 右上角同样夹住。
-
-	return mix(mix(texelFetch(texSampler, texelX                   , 0), texelFetch(texSampler, ivec2(texelW.x, texelX.y), 0), f.x), // 横向插值。
-			   mix(texelFetch(texSampler, ivec2(texelX.x, texelW.y), 0), texelFetch(texSampler, texelW                   , 0), f.x), // 横向插值。
-			   f.y); // 纵向插值。
-}
-
+// 天空贴图的双线性取样在共享天空贴图文件里，绘制主体只按开关选一次。
 // 片元主函数：月亮与天空盒各有开关，关闭时丢弃；资源包天空打开时全部原样叠加。
 void main(){
 	vec4 albedo = vec4(0.0); // 待填充的颜色。
@@ -171,7 +137,7 @@ void main(){
 		#endif
 
 		#if OMNI_BILINEAR_MOON_TEXTURE // 月亮贴图按开关选双线性或普通采样。
-			albedo = BilinearTexture(tex, texCoord, vec2(textureSize(tex, 0))); // 双线性采样。
+			albedo = BilinearSkyTexture(tex, texCoord, vec2(textureSize(tex, 0))); // 双线性采样。
 		#else
 			albedo = textureLod(tex, texCoord, 0.0); // 普通采样。
 		#endif	
@@ -183,7 +149,7 @@ void main(){
 		#endif
 
 		#if OMNI_BILINEAR_SKYBOX_TEXTURE // 天空盒按开关选双线性或普通采样。
-			albedo = BilinearTextureSkybox(tex, texCoord, vec2(textureSize(tex, 0))); // 天空盒双线性采样。
+			albedo = BilinearSkyboxTexture(tex, texCoord, vec2(textureSize(tex, 0))); // 天空盒双线性采样。
 		#else
 			albedo = textureLod(tex, texCoord, 0.0); // 普通采样。
 		#endif

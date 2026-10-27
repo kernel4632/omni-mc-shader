@@ -160,6 +160,7 @@ vec3 ogxItxFsr1(ivec2 texelCoord, sampler2D upscaledTex, float sharpness, bool d
     return ogxFsr1(upscaledTex, texelCoord, sharpness, denoise);
 }
 
+// FSR1 放大入口的实际定义：先取中心样本，再交给十字对比度锐化。
 vec3 ogxFsr1(sampler2D upscaledTex, ivec2 texelCoord, float sharpness, bool denoise)
 {
     vec3 sampleE = texelFetch(upscaledTex, texelCoord + ivec2(0, 0), 0).rgb; // 中心样本。

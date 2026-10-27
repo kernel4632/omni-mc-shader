@@ -45,7 +45,7 @@ def expand(path, shaders=None) -> str:
 def text(path: str) -> str:
     """读取项目光影目录下 `path` 的原文，同一文件只读一次。
 
-    `path` 是相对 `shaders/` 的正斜杠路径，例如 `"effects/water/water.glsl"`；
+    `path` 是相对 `shaders/` 的正斜杠路径，例如 `"effects/shared/water.glsl"`；
     只提供稳定文本给关键字断言，不参与展开。
     """
     if path not in _texts:

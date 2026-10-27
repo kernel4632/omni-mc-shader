@@ -52,11 +52,13 @@
 #include "/common/uniforms.glsl"
 // 降雨强度由绑定层提供，泛光强度按雨势提升。
 #include "/bind/weather.glsl"
+// 失明与黑暗同时影响曝光与泛光，开关从共享画面状态读取。
+#include "/effects/shared/screen.glsl"
 #include "/common/math.glsl"
-#include "/effects/clarity/antialiasing.glsl"
+#include "/effects/shared/antialias.glsl"
 #include "/common/coordinates.glsl"
 // 合并泛光要读水雾密度 `OMNI_WATER_FOG_DENSITY`（定义在 `effects/water/water.glsl`），这里引入它的归属文件。
-#include "/effects/water/water.glsl"
+#include "/effects/shared/water.glsl"
 // 合并泛光用失明与黑暗的调试开关 `OMNI_DISABLE_BLINDNESS_DARKNESS`，它的归属文件是颜色效果，这里引入才拿到定义。
 #include "/effects/color/color.glsl"
 

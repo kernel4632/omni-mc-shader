@@ -1,4 +1,13 @@
 # 更新记录
+## 0.16.0-dev.8
+
+结构重构第三批：建立 `effects/shared/` 共享主体，效果页面之间不再互相引用，跨页面与共享反向引用均为 0。
+- 共享主体：材质与水洼合入 `shared/surface.glsl`；大气常数、查表、太阳色与散射倍率拆到 `shared/atmosphere.glsl`、`suncolor.glsl`、`skyscatter.glsl`；天空盒投影、星场与贴图选项合入 `shared/skyview.glsl`；闪电、云与云影、天气、每日天气、暴雪、阴影、水面、雾、光传播体积、时域抗锯齿、光照强度与画面调试各自成共享文件。选项随主体只定义一次，页面通过 `@option.page` 与 `GROUP_PAGES` 的完整组名继续落在原来的顶层页。
+- 引用方向：`effects/<页>/` 只引用本页或 `effects/shared/`，`shared/` 只引用 `shared/`、`common/`、`bind/` 与 `omni-gfx/`。`build.py` 新增 `check_effect_boundaries`，在 `verify` 与 `tests/test_gfx.py` 中硬检查，跨页引用直接失败。
+- 绘制主体收口：`rendering/` 的天空贴图双线性、反射月盘与末地传送门十六层叠色移到效果层，渲染主体只剩两次三顶点转发循环与直接的画面、深度、贴图读取；代码里的纹理采样从 55 次降到 45 次（另有 3 处注释示例不计），没有留下采样核或效果循环。
+- Slang 审计：`audit.py` 新增 `omni-gfx/src/**/*.slang` 检查，要求注释语言为中文、每个顶层函数与结构体有紧邻说明、只引用库内 Slang 文件且不声明 `#version`；38 个模块全部通过，夹带算法人名与参数名的注释用独立术语表放行，不扩大 GLSL 审计范围。
+- 数量：选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；跨页 include 0，shared 反向引用 0。
+- 验证：`python build.py audit` 通过 489 个代码文件；`python build.py verify` 通过 160 个测试、审计、九组编译探针与打包；`python build.py compile` 通过 280 组唯一程序 0 错误；`python omni-gfx/build.py strict-parity` 为 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0；`python omni-gfx/build.py profiles` 两份 profile 编译通过。未启动 Minecraft，游戏内画面、菜单、性能与其他显卡仍未验证。
 ## 0.16.0-dev.7
 
 结构重构第二批：删除 `shaders/gfx/` 纯转发层，生成 GLSL 只保留一份。

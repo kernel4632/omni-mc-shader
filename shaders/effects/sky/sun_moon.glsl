@@ -20,6 +20,8 @@
 */
 // 日月圆盘的纯形状计算放在通用库，这里只传方向与尺寸档位。
 #include "/omni-gfx/atmosphere.glsl"
+// 太阳圆盘要乘太阳色与辐照倍率，选项在共享太阳色文件里。
+#include "/effects/shared/suncolor.glsl"
 
 // 太阳圆盘：视线越接近太阳方向越亮，边缘由平滑曲线收口。
 vec3 RenderSunDisc(vec3 worldDir, vec3 sunDir){
@@ -39,10 +41,7 @@ float RenderMoonDisc(vec3 worldDir, vec3 moonDir){
 		return ogxMoonDiscDefault(worldDir, moonDir); // 默认的小而硬的圆盘。
 	#endif
 }
-// 反射里的月亮圆盘：反射天空盒分辨率低，用更大的角半径换取可见。
-float RenderMoonDiscReflection(vec3 worldDir, vec3 moonDir){
-	return ogxMoonDiscReflection(worldDir, moonDir); // 转发到通用库。
-}
+// 反射里的月亮圆盘在共享天空贴图文件里，天空页只画主视图的日月。
 // --- Eclipse 日月绘制兼容层：参考直接返回带颜色的光斑并压暗星点 ---
 vec3 drawMoon(vec3 worldSunVec, vec3 playerPos, vec3 color, inout vec3 occludeStars){
 	float shape = min(max(dot(worldSunVec, playerPos)-0.9994, 0.0) / (1.0-0.9994), 1.0);

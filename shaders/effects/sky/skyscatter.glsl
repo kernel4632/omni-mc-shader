@@ -6,21 +6,9 @@
 */
 #ifndef OMNI_EFFECT_SKY_SKYSCATTER_INCLUDED
 #define OMNI_EFFECT_SKY_SKYSCATTER_INCLUDED
-// @effect {"label":{"zh_cn":"天空散射","en_us":"Sky Scattering"}}
-// @option {"label":{"zh_cn":"天空亮度","en_us":"Sky Brightness"},"description":{"zh_cn":"整个天空辐射的亮度倍率，默认一倍与现在一致；Eclipse 的天空亮度选项。","en_us":"Brightness multiplier for the whole sky radiance; default 1 matches the current look; Eclipse's Sky Brightness."},"slider":true}
-#define OMNI_SKY_BRIGHTNESS 1.0 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.75 0.8 0.85 0.9 0.95 1.0 1.5 2.0 3.0 4.0 5.0 6.0 10.0]
-// @option {"label":{"zh_cn":"天空蓝色红","en_us":"Rayleigh R"},"description":{"zh_cn":"瑞利散射红通道相对当前大气的倍率，越大天空越偏红；默认一倍与现在一致。","en_us":"Red-channel multiplier for Rayleigh scattering relative to the current atmosphere; default 1 matches the current look."},"slider":true}
-#define OMNI_SKY_RAYLEIGH_R 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 2.5 3.0 4.0 5.0]
-// @option {"label":{"zh_cn":"天空蓝色绿","en_us":"Rayleigh G"},"description":{"zh_cn":"瑞利散射绿通道相对当前大气的倍率，越大天空越偏绿；默认一倍与现在一致。","en_us":"Green-channel multiplier for Rayleigh scattering relative to the current atmosphere; default 1 matches the current look."},"slider":true}
-#define OMNI_SKY_RAYLEIGH_G 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 2.5 3.0 4.0 5.0]
-// @option {"label":{"zh_cn":"天空蓝色蓝","en_us":"Rayleigh B"},"description":{"zh_cn":"瑞利散射蓝通道相对当前大气的倍率，越大天空越蓝；默认一倍与现在一致。","en_us":"Blue-channel multiplier for Rayleigh scattering relative to the current atmosphere; default 1 matches the current look."},"slider":true}
-#define OMNI_SKY_RAYLEIGH_B 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 2.5 3.0 4.0 5.0]
-// @option {"label":{"zh_cn":"太阳白光红","en_us":"Mie R"},"description":{"zh_cn":"米氏散射红通道相对当前大气的倍率，越大太阳红晕越强；默认一倍与现在一致。","en_us":"Red-channel multiplier for Mie scattering relative to the current atmosphere; default 1 matches the current look."},"slider":true}
-#define OMNI_SKY_MIE_R 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 2.5 3.0 4.0 5.0]
-// @option {"label":{"zh_cn":"太阳白光绿","en_us":"Mie G"},"description":{"zh_cn":"米氏散射绿通道相对当前大气的倍率，越大太阳绿晕越强；默认一倍与现在一致。","en_us":"Green-channel multiplier for Mie scattering relative to the current atmosphere; default 1 matches the current look."},"slider":true}
-#define OMNI_SKY_MIE_G 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 2.5 3.0 4.0 5.0]
-// @option {"label":{"zh_cn":"太阳白光蓝","en_us":"Mie B"},"description":{"zh_cn":"米氏散射蓝通道相对当前大气的倍率，越大太阳蓝晕越强；默认一倍与现在一致。","en_us":"Blue-channel multiplier for Mie scattering relative to the current atmosphere; default 1 matches the current look."},"slider":true}
-#define OMNI_SKY_MIE_B 1.0 // [0.0 0.25 0.5 0.75 1.0 1.25 1.5 1.75 2.0 2.5 3.0 4.0 5.0]
+// @effect {"label":{"zh_cn":"天空散射兼容层","en_us":"Sky scattering adapters"}}
+// 天空散射倍率与整体亮度属于共享大气输入，兼容层直接引用那份唯一选项。
+#include "/effects/shared/skyscatter.glsl"
 
 // --- 效果实现：宿主输入、参数换算与阶段入口 ---
 // Eclipse 实时天空的密度与路径函数在生成库，需要显式引入。
@@ -43,15 +31,7 @@
     这属于近似——严格的消光与多次散射不会随倍率改变，与 Eclipse 的实时积分不同；默认倍率全为一，画面与原来逐位一致。
     表面接到的天空环境光（`GetSunAndSkyIrradiance`）不在此列：Eclipse 的系数只进实时积分的天空色，不进平均天空光。
 */
-// 瑞利散射倍率：把三个通道选项拼成一个向量，默认全一，乘到瑞利项上不改画面。
-// 单独成函数的原因：倍率是“改系数”这件事唯一落到代码里的地方，将来若要顺带调整消光，只需改这里。
-vec3 omniSkyRayleighTint(){
-	return vec3(OMNI_SKY_RAYLEIGH_R, OMNI_SKY_RAYLEIGH_G, OMNI_SKY_RAYLEIGH_B); // 逐通道取选项值。
-}
-// 米氏散射倍率：同上，默认全一，乘到米氏项上不改画面。
-vec3 omniSkyMieTint(){
-	return vec3(OMNI_SKY_MIE_R, OMNI_SKY_MIE_G, OMNI_SKY_MIE_B); // 逐通道取选项值。
-}
+// 瑞利散射倍率与米氏散射倍率已经移到共享天空散射文件，凡是引入本兼容层的调用方都会一并拿到。
 // --- Eclipse 实时天空密度与路径兼容层：参考直接读固定行星常数 ---
 // 行星半径、两层标高与大气层顶都取 Eclipse `ROBOBO_sky.glsl` 的默认值。
 const float OMNI_ECLIPSE_PLANET_RADIUS = 6731e3;

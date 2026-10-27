@@ -46,7 +46,7 @@ vec3 colorSkylight; // 天光颜色。
 // 时间抗锯齿选项：坐标换算要用它决定是否撤销抖动，必须先于坐标换算引入。
 #include "/effects/clarity/antialiasing.glsl"
 // 材质与视差：提供 `MATID_*`、`ParallaxOcclusionMapping` 与实体材质选项。
-#include "/effects/ground/material.glsl"
+#include "/effects/shared/surface.glsl"
 // 视差算法只服务几何片元阶段，由真正调用的阶段显式引入。
 #include "/effects/ground/parallax.glsl"
 // 自发光纹饰：提供纹饰自发光选项与 `omniTrimEmission`，实体片元按盔甲纹饰编号补一份自发光。
@@ -67,14 +67,14 @@ vec3 colorSkylight; // 天光颜色。
 // 水面与水雾：片元算湿润与雨点要用 `GetModulatedRainSpecular`、`GetRainNormal`，只在片元引入。
 #ifdef OMNI_FRAGMENT
 	// 波浪、涟漪、湿润调制与水体光学。
-	#include "/effects/water/water.glsl"
+	#include "/effects/shared/water.glsl"
 #endif
 // 坐标换算：屏幕、视空间与深度互转，放在 `OMNI_TAA` 定义之后。
 #include "/common/coordinates.glsl"
 // 末地需要末地版阴影相机矩阵，只有片元用到，也只有末地用它。
 #if defined OMNI_END && defined OMNI_FRAGMENT
 	// 阴影：提供末地的 `shadowModelViewInverseEnd`。
-	#include "/effects/shadow/shadow.glsl"
+	#include "/effects/shared/shadow.glsl"
 #endif
 
 #ifdef OMNI_VERTEX // 顶点阶段：四类实体程序的共用顶点着色器。
@@ -186,50 +186,8 @@ in vec2 blockLight; // 方块光。
 	in mat3 tbn; // 顶点切线基。
 #endif
 
-#ifdef OMNI_BLOCK_PASS // 方块实体的传送门数据与颜色表。
+#ifdef OMNI_BLOCK_PASS // 方块实体的传送门投影坐标。
 	in vec4 portalCoord; // 传送门投影坐标。
-
-	const vec3[] COLORS = vec3[]( // 十六层传送门贴图的颜色权重，照原程序。
-	vec3(0.022087, 0.098399, 0.110818),
-	vec3(0.011892, 0.095924, 0.089485),
-	vec3(0.027636, 0.101689, 0.100326),
-	vec3(0.046564, 0.109883, 0.114838),
-	vec3(0.064901, 0.117696, 0.097189),
-	vec3(0.063761, 0.086895, 0.123646),
-	vec3(0.084817, 0.111994, 0.166380),
-	vec3(0.097489, 0.154120, 0.091064),
-	vec3(0.106152, 0.131144, 0.195191),
-	vec3(0.097721, 0.110188, 0.187229),
-	vec3(0.133516, 0.138278, 0.148582),
-	vec3(0.070006, 0.243332, 0.235792),
-	vec3(0.196766, 0.142899, 0.214696),
-	vec3(0.047281, 0.315338, 0.321970),
-	vec3(0.204675, 0.390010, 0.302066),
-	vec3(0.080955, 0.314821, 0.661491));
-
-	const mat4 SCALE_TRANSLATE = mat4(0.5, 0.0, 0.0, 0.25, // 传送门贴图的缩放平移矩阵。
-									  0.0, 0.5, 0.0, 0.25,
-									  0.0, 0.0, 1.0, 0.0,
-									  0.0, 0.0, 0.0, 1.0);
-
-	// 绕竖轴旋转的二维矩阵。
-	mat2 mat2_rotate_z(float radian){
-		return mat2(cos(radian), -sin(radian), sin(radian), cos(radian)); // 标准旋转矩阵。
-	}
-
-	// 生成第若干层传送门贴图的变换矩阵。
-	mat4 end_portal_layer(float layer){
-		mat4 translate = mat4(1.0, 0.0, 0.0, 17.0 / layer, // 逐层偏移。
-							  0.0, 1.0, 0.0, (2.0 + layer / 1.5) * (frameTimeCounter * 0.0005), // 纵向随时间缓慢流动。
-							  0.0, 0.0, 1.0, 0.0,
-							  0.0, 0.0, 0.0, 1.0);
-
-		mat2 rotate = mat2_rotate_z(radians((layer * layer * 4321.0 + layer * 9.0) * 2.0)); // 每层不同角度。
-
-		mat2 scale = mat2((4.5 - layer / 4.0) * 2.0); // 每层不同缩放。
-
-		return mat4(scale * rotate) * translate * SCALE_TRANSLATE; // 合成完整变换。
-	}
 #endif
 
 
@@ -573,11 +531,7 @@ void main(){
 
 	#ifdef OMNI_BLOCK_PASS
 		if (materialIDs == MATID_END_PORTAL){ // 末地传送门方块实体。
-			vec3 portalColor = textureProj(tex, portalCoord).rgb * COLORS[0]; // 第一层。
-			for (int i = 0; i < 16; i++){
-				portalColor += textureProj(tex, portalCoord * end_portal_layer(float(i + 1))).rgb * COLORS[i]; // 叠上其余各层。
-			}
-			albedo.rgb = portalColor; // 用叠加结果当底色。
+			albedo.rgb = EndPortalColor(tex, portalCoord); // 十六层贴图叠成底色，算法在实体效果里。
 			specularTex.rgb = vec3(1.0, 0.0, 254.0 / 255.0); // 固定高光与一个小自发光。
 		}
 	#endif

@@ -12,15 +12,15 @@
 // 后期共享声明，全项目只声明一次。
 #include "/rendering/post_shared.glsl"
 // 材质编号（并提供视差与材质选项）。
-#include "/effects/ground/material.glsl"
+#include "/effects/shared/surface.glsl"
 // 提供 `OMNI_TAA` 与时间抗锯齿选项，并带入坐标换算。
 #include "/effects/clarity/antialiasing.glsl"
 // 提供雨可见度等选项，泛光的合并读它。
-#include "/effects/weather/weather.glsl"
+#include "/effects/shared/weather.glsl"
 // 提供水下雾开关与浓度选项，泛光的合并读它。
-#include "/effects/water/water.glsl"
+#include "/effects/shared/water.glsl"
 // 提供体积雾选项，并带入水面、阴影、天空、云与光照依赖。
-#include "/effects/fog/fog.glsl"
+#include "/effects/shared/fog.glsl"
 // 坐标与深度换算。
 #include "/common/coordinates.glsl"
 // 时间噪声，景深与动态模糊的抖动读它。

@@ -38,7 +38,7 @@
 // 选择框曝光与颜色打包都用共用数学，材质编号取自材质文件。
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
-#include "/effects/ground/material.glsl"
+#include "/effects/shared/surface.glsl"
 // 选择框颜色：把三个颜色分量组成一条固定颜色，线条与基础几何共用一份。
 vec3 SelectionBoxColor(){
 	return vec3(OMNI_SELECTION_BOX_COLOR_R, OMNI_SELECTION_BOX_COLOR_G, OMNI_SELECTION_BOX_COLOR_B); // 三个分量来自选项。

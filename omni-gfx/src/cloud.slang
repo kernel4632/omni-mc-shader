@@ -417,6 +417,7 @@ float4 ogxCloudShadowBlur(Sampler2D shadowTex, int2 texel, int2 axis, int2 borde
 }
 
 // Eclipse 的云相函数：和 Henyey-Greenstein 不是同一公式，分母固定除以 3.14。
+// Eclipse 云相位兼容层：把参考的双瓣散射写成同一个入口，供云光照复用。
 float ogxCloudPhaseEclipse(float x, float g)
 {
     float gg = g * g; // g 的平方。

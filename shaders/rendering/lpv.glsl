@@ -16,7 +16,7 @@
 #ifndef OMNI_LPV_LIB // 防止重复引用造成重复声明。
 #define OMNI_LPV_LIB // 标记本文件已经引入。
 // 效果选项、光表、坐标映射与体素读写来自效果主体。
-#include "/effects/lighting/lpv.glsl"
+#include "/effects/shared/lpv.glsl"
 
 // ========================= 阶段一 setup：填方块光表 =========================
 #ifdef OMNI_LPV_SETUP // 只有本阶段编译下面的入口。

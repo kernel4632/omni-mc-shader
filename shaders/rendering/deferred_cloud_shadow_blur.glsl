@@ -23,7 +23,7 @@
 		// 云影模糊只作用在画面右上角的方贴图上，顶点把整屏四边形缩到那块方贴图的范围。
 		vec3 worldShadowVector; // 云影效果文件里合成专用函数引用它；顶点阶段不调用那些函数。
 		vec3 worldSunVector; // 云带入的天空效果文件里星空函数引用它；本阶段不调用，仅让文件可编译。
-		#include "/effects/cloud/cloud.glsl"
+		#include "/effects/shared/cloud.glsl"
 		void main(){
 			vec2 shadowTexSize = pixelSize * floor(min(screenSize.y * 0.45, OMNI_CLOUD_SHADOWTEX_SIZE)); // 方贴图占屏幕的比例。
 			vec2 shadowTexCoord = gl_Vertex.xy; // 加载器顶点在零到一的方块上。
@@ -43,7 +43,7 @@
 		#include "/common/uniforms.glsl"
 		#include "/common/math.glsl"
 		// 提供材质编号，环境光与时间抗锯齿的速度重投影引用它。
-		#include "/effects/ground/material.glsl"
+		#include "/effects/shared/surface.glsl"
 		// 先定义 `OMNI_TAA`，坐标换算与遮蔽抖动要用。
 		#include "/effects/clarity/antialiasing.glsl"
 		ivec2 texelCoord = ivec2(gl_FragCoord.xy); // 整数像素坐标。
@@ -81,7 +81,7 @@
 	vec3 worldShadowVector; // 云影效果文件里合成专用函数引用它；本程序不调用那些函数。
 	vec3 worldSunVector; // 云带入的天空效果文件里星空函数引用它；本程序不调用，仅让文件可编译。
 	// 提供 `CloudShadowAxialBlur`。
-	#include "/effects/cloud/cloud.glsl"
+	#include "/effects/shared/cloud.glsl"
 	void main(){
 			deferredOutput2 = CloudShadowAxialBlur(texelCoord, CLOUD_SHADOW_BLUR_AXIS); // 按调用方给的方向做高斯模糊。
 	}

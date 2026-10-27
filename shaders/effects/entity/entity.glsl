@@ -55,4 +55,48 @@ mat4 HandFovProjection(mat4 projection, float aspectRatio){
 	#endif
 	return projection; // 交回改写后的投影矩阵。
 }
+// 末地传送门的十六层贴图：每层用不同缩放、旋转与时间偏移叠同一条投影坐标，颜色权重照原程序。
+// 为什么放在实体效果里：这是方块实体的贴图合成算法，绘制主体的片元只负责在 `OMNI_BLOCK_PASS` 里调用一次。
+// 调用前提：`frameTimeCounter` 由加载器输入声明；`tex` 是方块实体贴图采样器。
+mat2 mat2_rotate_z(float radian){
+	return mat2(cos(radian), -sin(radian), sin(radian), cos(radian)); // 标准二维旋转矩阵。
+}
+// 生成第若干层传送门贴图的变换矩阵。
+mat4 end_portal_layer(float layer){
+	const mat4 scaleTranslate = mat4(0.5, 0.0, 0.0, 0.25, // 传送门贴图的缩放平移矩阵。
+									 0.0, 0.5, 0.0, 0.25,
+									 0.0, 0.0, 1.0, 0.0,
+									 0.0, 0.0, 0.0, 1.0);
+	mat4 translate = mat4(1.0, 0.0, 0.0, 17.0 / layer, // 逐层偏移。
+						  0.0, 1.0, 0.0, (2.0 + layer / 1.5) * (frameTimeCounter * 0.0005), // 纵向随时间缓慢流动。
+						  0.0, 0.0, 1.0, 0.0,
+						  0.0, 0.0, 0.0, 1.0);
+	mat2 rotate = mat2_rotate_z(radians((layer * layer * 4321.0 + layer * 9.0) * 2.0)); // 每层不同角度。
+	mat2 scale = mat2((4.5 - layer / 4.0) * 2.0); // 每层不同缩放。
+	return mat4(scale * rotate) * translate * scaleTranslate; // 合成完整变换。
+}
+vec3 EndPortalColor(sampler2D texSampler, vec4 portalCoord){
+	const vec3 COLORS[16] = vec3[]( // 十六层传送门贴图的颜色权重，照原程序。
+		vec3(0.022087, 0.098399, 0.110818),
+		vec3(0.011892, 0.095924, 0.089485),
+		vec3(0.027636, 0.101689, 0.100326),
+		vec3(0.046564, 0.109883, 0.114838),
+		vec3(0.064901, 0.117696, 0.097189),
+		vec3(0.063761, 0.086895, 0.123646),
+		vec3(0.084817, 0.111994, 0.166380),
+		vec3(0.097489, 0.154120, 0.091064),
+		vec3(0.106152, 0.131144, 0.195191),
+		vec3(0.097721, 0.110188, 0.187229),
+		vec3(0.133516, 0.138278, 0.148582),
+		vec3(0.070006, 0.243332, 0.235792),
+		vec3(0.196766, 0.142899, 0.214696),
+		vec3(0.047281, 0.315338, 0.321970),
+		vec3(0.204675, 0.390010, 0.302066),
+		vec3(0.080955, 0.314821, 0.661491));
+	vec3 color = textureProj(texSampler, portalCoord).rgb * COLORS[0]; // 第一层。
+	for (int i = 0; i < 16; i++){ // 逐层叠加。
+		color += textureProj(texSampler, portalCoord * end_portal_layer(float(i + 1))).rgb * COLORS[i]; // 叠上其余各层。
+	}
+	return color; // 交回叠加后的底色。
+}
 #endif // OMNI_EFFECT_ENTITY_ENTITY_INCLUDED

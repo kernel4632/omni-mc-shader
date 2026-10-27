@@ -18,6 +18,8 @@
     程序宏仍留在这里，保证不需要全局光的程序不产生采样代码。
 */
 // 通用库提供反弹、历史重投影、时间滤波与空间滤波。
+// 阳光泄漏修正属于共享光照选项。
+#include "/effects/shared/light.glsl"
 #include "/omni-gfx/gi.glsl"
 // 远景深度贴图选择：没有远景模组时用近景深度占位，通用库按开关决定是否读取。
 #ifdef DISTANT_HORIZONS

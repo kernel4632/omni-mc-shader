@@ -48,6 +48,7 @@
 // --- 玩家选项：光线步进质量、细化步数与深度差阈值，照 iterationT `Lib/Settings.glsl` 带取值范围的菜单项 ---
 // 数学提供光照模型与颜色曲线，坐标换算提供屏幕与视空间互转，两份都供三个通道共用。
 #include "/common/math.glsl"
+#include "/effects/shared/antialias.glsl"
 #include "/common/coordinates.glsl"
 
 // 屏幕空间反射追踪与着色：只在 composite2 / composite5 程序里编译。

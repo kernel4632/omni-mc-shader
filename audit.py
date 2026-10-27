@@ -25,11 +25,22 @@ MACHINE = re.compile(r"\s*(?:#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef
 EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__", "omni-gfx"}  # 环境、参考和第三方内容不是本项目的维护边界；omni-gfx 由自己的检查命令审计。
 GENERATED = ("omni-gfx/generated/", "shaders/omni-gfx/", "generated/glsl/")  # 自动生成的库文件只检查说明语言，不要求达到手写文件的比例；最后一项用于库内单独审计。
 MACHINE_FILES = {"shaders/shaders.properties", "shaders/block.properties", "shaders/entity.properties", "shaders/item.properties"}  # 生成菜单和从 iterationT 原样移植的方块、实体、物品编号表是逐行可对照的机器数据，加中文说明会破坏对照；它们是数据不是业务代码。
-SUFFIXES = {".py", ".glsl", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除。
-TERMS = set("GLSL glsl Slang slang slangc omni gfx ogx PNG zlib CRC GLFW PyOpenGL SPIR-V SPIRV SPIR Vulkan GitHub Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup prepare SSBO AgX ACES Filmic Uncharted Narkowicz PCSS Omni iterationT Eclipse shadowcomp floodfill HSV TAU PI RGSS FSR FBM LOD BRDF ppss Disc exact approximate mc_glue missing".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
+SUFFIXES = {".py", ".glsl", ".slang", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除；Slang 源由专门的范围检查。
+TERMS = set("GLSL glsl Slang slang slangc omni gfx ogx PNG zlib CRC GLFW PyOpenGL SPIR-V SPIRV SPIR Vulkan GitHub Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup prepare SSBO AgX ACES Filmic Uncharted Narkowicz PCSS Omni iterationT Eclipse shadowcomp floodfill HSV TAU PI RGSS FSR FBM LOD BRDF ppss Disc exact approximate mc_glue missing shared".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
 # GLSL 的关键字、类型与内建函数是技术词，放进术语表，代码示例里的类型名和调用名不会被误报成英语说明。
 TERMS |= set("uniform in out void float int bool ivec2 ivec3 ivec4 mat2 mat3 mat4 if else for while return discard flat attribute varying layout location struct sampler2DShadow min max abs clamp mix floor ceil fract pow exp log sqrt dot cross length normalize reflect refract texture textureLod texelFetch smoothstep step saturate far near".split())  # 只补技术词，不放行整句英文。
 EXTRA = {"VERSION", "CHANGELOG", "ROOT", "STAGES", "INCLUDE", "UTF", "BOM"}  # 自己源码里反复出现、又不必进术语表的大写标识符。
+# Slang 库源里的算法人名、参数名与图形学名词只服务库源注释；单独放行，不扩大 GLSL 审计的术语范围。
+SLANG_TERMS = frozenset(word.lower() for word in """
+Abney Albedo Bayer Beer CUMULONIMBUS Catmull Chandrasekhar Cornette Draine EV Elek Frisvad GI GTAO
+Gerstner GetHandLight GetVolumetricClouds GetVolumetricFog Greenstein HG Halton Henyey Hillaire Jodie LUT
+Lambert MATID Merlin NUBIS Nubis Perlin Photonics RSM Rec Reinhard Rom SSGI SSS SetCloudPos Shanks Uchimura
+WSR Worley XYZ albedo atlas background bits buffer cameraWorldPos centerDepthSmooth clip cloud color colortex
+compression curve depth dir flashlight focus frame gi held hit hits indirect jitter job lightmap look media
+mie modelViewInverse noise normal ogxEclipseApplyGameplayEffects ogxEclipseSsrtHandlightShadows ozone pixel
+prevCameraPos prevModelView previousCameraWorldPos previousModelView projection rayleigh rotation sharp sky
+stars sun switch tile transmittance up velocity xy yzw
+""".split())
 EXTRA_LOWER = {word.lower() for word in EXTRA}  # 大小写不同的同一标识符按同一个小写形式比较。
 TERMS_LOWER = {term.lower() for term in TERMS}  # 拆词时按小写比较，驼峰与全大写都能对上术语。
 
@@ -46,13 +57,14 @@ def _strip_code(text: str) -> str:
 
 
 @lru_cache(maxsize=8192)  # 术语判断是纯函数，重复词直接复用结果。
-def _unknown_word(word: str) -> bool:
+def _unknown_word(word: str, extra: frozenset[str] = frozenset()) -> bool:
     """判断一个英文词是否是必须报出的未知自然语言。
 
     放行已知术语、全大写接口宏（如 `OMNI_TAA`）和拆开后英文词段不超过两个的标识符；
     含三个以上未知英文词段的写法（如 `some_english_snake_words`）说明它其实是一句英文，报出。
+    `extra` 是调用方补充的术语集合；Slang 的移植注释里有算法人名和参数名，只在库源审计里放行。
     """
-    if word.lower() in TERMS_LOWER or word.lower() in EXTRA_LOWER or len(word) <= 1:
+    if word.lower() in TERMS_LOWER or word.lower() in EXTRA_LOWER or word.lower() in extra or len(word) <= 1:
         return False  # 已知术语、单字母与常见大写标识符不算英语句子。
     if "_" not in word and not re.search(r"\d|[a-z][A-Z]", word):
         return True  # 纯大小写单词不是术语就是裸英语。
@@ -60,11 +72,11 @@ def _unknown_word(word: str) -> bool:
         return False  # 全大写加下划线是接口宏，例如 `MC_HAND_DEPTH`。
     parts = [part for part in re.split(r"_|\d+", word) if part]  # 先按下划线、数字切开。
     parts = [piece for part in parts for piece in re.split(r"(?<=[a-z])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", part) if piece]  # 再把驼峰拆成词段。
-    prose = [part for part in parts if len(part) >= 3 and part.isalpha() and part.lower() not in TERMS_LOWER]  # 未知词段才算英语。
+    prose = [part for part in parts if len(part) >= 3 and part.isalpha() and part.lower() not in TERMS_LOWER and part.lower() not in extra]  # 未知词段才算英语。
     return len(prose) >= 3  # 三个以上未知词段合起来就是一句英文。
 
 
-def _backtick_prose(span: str) -> str:
+def _backtick_prose(span: str, extra: frozenset[str] = frozenset()) -> str:
     """找出反引号里被当作标识符藏起来的英语自然语言，触发时返回该词，否则返回空串。
 
     不含空格的内容是单个标识符或路径，按代码跳过；含空格但出现赋值、调用或分号等代码
@@ -75,7 +87,7 @@ def _backtick_prose(span: str) -> str:
         return ""  # 单个标识符或带代码符号的内容按代码跳过。
     run = 0  # 连续未知英文词的计数。
     for word in re.findall(r"[A-Za-z_][A-Za-z_0-9]*", _strip_code(span)):  # 先去代码外形再逐词判断。
-        prose = bool(re.fullmatch(r"[a-z]{2,}", word)) and word not in TERMS_LOWER  # 纯小写的未知词才像英语。
+        prose = bool(re.fullmatch(r"[a-z]{2,}", word)) and word not in TERMS_LOWER and word not in extra  # 纯小写的未知词才像英语。
         if prose:
             run += 1  # 累加连续英文词。
         elif len(word) > 1:
@@ -85,7 +97,7 @@ def _backtick_prose(span: str) -> str:
     return ""  # 没有发现藏起来的英文句子。
 
 
-def chinese_explanation(line: str) -> bool:
+def chinese_explanation(line: str, extra: frozenset[str] = frozenset()) -> bool:
     """判断一行是否是有效中文说明，并区分机器字段与代码示例。
 
     `True` 表示这一行可以计入中文说明比例；`False` 表示它是合法的机器字段、
@@ -107,12 +119,12 @@ def chinese_explanation(line: str) -> bool:
         return True  # 菜单其他字段交给选项扫描器，避免重复定义机器规则。
     if re.fullmatch(r"(?:#?define\s+)?[A-Z][A-Z0-9_]*(?:\s+[-\d.]+)?", text) or re.fullmatch(r"(?:RENDERTARGETS|DRAWBUFFERS):\s*[\d, ]+", text): return False  # 原生宏和附件指令是机器配置，不是业务说明。
     for span in re.findall(r"`([^`]*)`", text):  # 反引号里的内容按标识符或代码看待，但整句英文仍要报出。
-        prose = _backtick_prose(span)  # 找出藏在反引号里的英语自然语言。
+        prose = _backtick_prose(span, extra)  # 找出藏在反引号里的英语自然语言。
         if prose: raise ValueError("自然语言说明必须中文：" + prose)  # 反引号不能把英文句子整体藏起来。
     text = re.sub(r"`[^`]*`", "", text)  # 检查过反引号后统一按代码引用移除。
     text = _strip_code(text)  # 去掉路径、命令与函数调用示例。
     words = re.findall(r"[A-Za-z_][A-Za-z_0-9]*", text)  # 即使混有中文，也逐个检查英文词，避免漏掉一句英文。
-    unknown = [word for word in words if _unknown_word(word)]  # 只放行已知术语与接口名，下划线和驼峰不再整体豁免。
+    unknown = [word for word in words if _unknown_word(word, extra)]  # 只放行已知术语与接口名，下划线和驼峰不再整体豁免。
     if unknown: raise ValueError("自然语言说明必须中文：" + ", ".join(unknown))  # 拒绝裸英语，保证接手者不必猜说明含义。
     return len(CHINESE.findall(text)) >= 4  # 至少四个中文字符才算完整说明，不接受单字凑比例。
 
@@ -154,6 +166,67 @@ def comments(source: Path, text: str | None = None) -> tuple[set[int], list[tupl
     return valid_lines, fragments
 
 
+def check_slang(root: Path) -> list[dict]:
+    """检查 `omni-gfx/src` 下的 Slang 源：中文说明、未实现标记与库内引用边界。
+
+    为什么不并进普通目录遍历：`omni-gfx` 里还有生成产物、参考下载和测试世界，那些有自己的检查；
+    只审计手写 Slang 源，才能让“库源码也要中文说明、只引用库内文件”成为可执行的合同。
+    说明密度按“每个顶层函数与结构体都有紧邻的中文解释”检查，不按物理行比例：
+    移植代码保留上游密集的局部变量，凑比例只会逼出复述语法的填充；对外接口才是接手者真正要读的部分。
+    注释语言、未实现标记、引用边界和版本声明仍按与 GLSL 相同的规则检查。
+    """
+    reports, errors = [], []  # 与 GLSL 审计共用报告结构，失败时一次列出全部位置。
+    sources = sorted((root / "omni-gfx" / "src").rglob("*.slang"))  # 只审计手写库源。
+    for source in sources:
+        relative_path = source.relative_to(root).as_posix()  # 报告使用项目相对路径。
+        text = source.read_text(encoding="utf-8")  # 每个文件只读一次。
+        nonempty_lines = {number for number, line in enumerate(text.splitlines(), 1) if line.strip()}  # 空行不稀释比例。
+        _, fragments = comments(source, text)  # 复用同一套注释识别与语言规则；有效行稍后按 Slang 术语表重算。
+        documented = set()  # 用 Slang 术语表再判一次，带算法人名的中文说明才算有效。
+        for start_line, fragment in fragments:
+            for offset, line in enumerate(fragment.splitlines()):
+                if MACHINE.match(line):
+                    continue  # 机器语句不是自然语言。
+                try:
+                    if chinese_explanation(line, SLANG_TERMS):
+                        documented.add(start_line + offset)  # 只记录真正合格的中文说明行。
+                except ValueError:
+                    pass  # 语言错误在下面的循环里统一报告。
+        ratio = len(documented & nonempty_lines) / max(len(nonempty_lines), 1)  # 报告仍给出说明密度供参考。
+        reports.append({"file": relative_path, "nonempty": len(nonempty_lines),
+                        "chineseCommentLines": len(documented & nonempty_lines), "ratio": ratio})
+        # 库源的维护合同是“每个对外函数和结构体都能看懂”，不按物理行比例；
+        # 移植算法保留了上游的密集局部变量，强行凑一半行数注释只会产生复述语法的填充。
+        for number, line in enumerate(text.splitlines(), 1):
+            if not re.match(r"^(?:\[[^\]]*\]\s*)?(?:static\s+)?(?:float[234]?|void|bool|int|uint|half|struct)\b[^;=]*[({]", line):
+                continue  # 只检查顶层函数与结构体，不要求每个局部变量都有说明。
+            if any(candidate in documented for candidate in range(max(1, number - 3), number + 1)):
+                continue  # 前三条以内或本行有合格中文说明即算已解释。
+            errors.append(f"{relative_path}:{number}：顶层定义缺少紧邻的中文说明")  # 对外接口必须有说明。
+        for line_number, fragment in fragments:
+            if re.search(r"\b(?:TODO|FIXME)\b|待实现|尚未实现|未接入的占位", fragment):
+                errors.append(f"{relative_path}:{line_number}：存在未实现标记")  # 不把缺口留在库里。
+            for line_offset, text_line in enumerate(fragment.splitlines()):
+                if MACHINE.match(text_line):
+                    continue  # 注释里的机器语句不是自然语言。
+                try:
+                    chinese_explanation(text_line, SLANG_TERMS)
+                except ValueError as error:
+                    errors.append(f"{relative_path}:{line_number + line_offset}：{error}")  # 拒绝英语说明。
+        masked = re.sub(r"/\*.*?\*/", lambda match: " " * len(match[0]), text, flags=re.DOTALL)  # 块注释里的示例不算引用。
+        masked = re.sub(r"//[^\n]*", "", masked)  # 行尾说明同样不算引用。
+        if re.search(r"(?m)^\s*#version\b", masked):
+            errors.append(f"{relative_path}：库源不能声明 #version")  # 版本由光影入口决定。
+        for reference in re.findall(r'#include\s+"([^"]+)"', masked):
+            if reference.startswith("/") or not reference.endswith(".slang"):
+                errors.append(f"{relative_path}：库源只能引用同目录 Slang 文件：{reference}")  # 不回头引用光影实现。
+            elif not (source.parent / reference).is_file():
+                errors.append(f"{relative_path}：引用的 Slang 文件不存在：{reference}")  # 引用必须落到真实文件。
+    if errors:
+        raise ValueError("Slang 审计失败\n" + "\n".join(errors))  # 与 GLSL 审计分开报告，便于定位库源。
+    return reports
+
+
 def check(root: Path) -> list[dict]:
     """检查审计范围，拒绝说明不足和未实现标记，并返回每个文件的比例。
 
@@ -188,6 +261,8 @@ def check(root: Path) -> list[dict]:
                         chinese_explanation(text_line)
                     except ValueError as error:
                         errors.append(f"{relative_path}:{line_number + line_offset}：{error}")  # 中英混合和纯英文说明使用同一严格规则。
+    slang_reports = check_slang(root)  # 手写 Slang 源单独审计，目录遍历不进入生成产物与测试世界。
+    reports.extend(slang_reports)  # 报告数量包含库源，终端能看出覆盖范围。
     if errors: raise ValueError("源码审计失败\n" + "\n".join(errors))
     return reports
 

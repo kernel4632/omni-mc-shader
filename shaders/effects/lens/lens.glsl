@@ -108,7 +108,7 @@
 #include "/common/math.glsl"
 // 暗角曲线放在通用库，这里只传入画面纵横比与选项。
 #include "/omni-gfx/post.glsl"
-#include "/effects/clarity/antialiasing.glsl"
+#include "/effects/shared/antialias.glsl"
 #include "/common/noise.glsl"
 
 // 景深：弥散圆、散焦范围与散焦合成。

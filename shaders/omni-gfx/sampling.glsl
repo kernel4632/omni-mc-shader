@@ -158,6 +158,7 @@ float ogxHalton2(int index)
     return result;
 }
 
+// 三维 Halton 序列：体素与体积采样用低差异点减少噪点。
 float ogxHalton3(int index)
 {
     float result = 0.0;

@@ -33,6 +33,7 @@ static const float OGX_GOLDEN_ANGLE = 2.39996322973;
 float ogxSaturate(float x) { return clamp(x, 0.0, 1.0); }
 float2 ogxSaturate(float2 x) { return clamp(x, float2(0.0), float2(1.0)); }
 float3 ogxSaturate(float3 x) { return clamp(x, float3(0.0), float3(1.0)); }
+// 四分量重载：逐分量夹到零到一，颜色与打包数据共用。
 float4 ogxSaturate(float4 x) { return clamp(x, float4(0.0), float4(1.0)); }
 
 // 人眼亮度权重，和显示管线一致；绿权重最高，蓝最低。
@@ -106,6 +107,7 @@ float ogxMinVec3(float3 value) { return min(value.x, min(value.y, value.z)); }
 float ogxMinVec2(float2 value) { return min(value.x, value.y); }
 float ogxMaxVec2(float2 value) { return max(value.x, value.y); }
 float ogxMinVec4(float4 value) { return min(min(value.x, value.y), min(value.z, value.w)); }
+// 四分量最大值：曝光统计与亮度比较需要单个代表值。
 float ogxMaxVec4(float4 value) { return max(max(value.x, value.y), max(value.z, value.w)); }
 
 // 三分量里最大的一个，和上一函数配对使用。
@@ -748,6 +750,7 @@ float ogxFastAcosEclipse(float x)
 }
 
 // Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派。
+// Elek 的瑞利相函数写法：与 iterationT 常数一致，供天空对照。
 float ogxRayleighPhaseElek(float cosTheta)
 {
     const float oneOverPi = 1.0 / acos(-1.0); // 参考实现用 acos(-1) 求 pi。
@@ -824,6 +827,7 @@ float3x3 ogxGetRotMat(float3 x, float3 y)
 }
 
 // Eclipse 的 Halton 二进序列：按位反转，返回一个零到一的低差异数。
+// 二维 Halton 序列：低差异采样点，供阴影与反射抖动。
 float ogxHaltonSeq2(int index)
 {
     float r = 0.0;

@@ -56,7 +56,7 @@
 	// 后期共享声明，全项目只声明一次。
 	#include "/rendering/post_shared.glsl"
 	// 提供材质编号，被抗锯齿文件引用。
-	#include "/effects/ground/material.glsl"
+	#include "/effects/shared/surface.glsl"
 	// 提供 `OMNI_TAA`，锐化的开启条件读它。
 	#include "/effects/clarity/antialiasing.glsl"
 	// 对比度自适应锐化与放大。

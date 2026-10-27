@@ -24,6 +24,8 @@
   星空不再单独维护一份，与主世界共用同一份 Eclipse 星场，星点形态在两个维度保持一致，也避免复制代码。
 */
 // 行星表面与环带的纯公式放在通用库。
+// 星空类型与天空贴图选项由共享天空贴图主体定义。
+#include "/effects/shared/skyview.glsl"
 #include "/omni-gfx/atmosphere.glsl"
 #include "/omni-gfx/planet.glsl"
 

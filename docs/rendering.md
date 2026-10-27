@@ -103,7 +103,7 @@ Iris 的执行顺序是：阴影 → 不透明几何 → deferred 0–8 → 半�
 | 9 | `world/nether.glsl` 的 `NetherVolumetricFog` | 下界体积雾沿视线步进 | 已迁库：`ogxNetherVolumetricFog`（`fog_volume.slang`） |
 | 10 | `celestial.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
 | 11 | `terrain.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
-| 12 | `entities.glsl` 的 `main` | 末地传送门叠十六层 | 留阶段层 |
+| 12 | `entities.glsl` 的 `EndPortalColor` | 末地传送门叠十六层 | 已迁效果层：`effects/entity/entity.glsl` |
 
 阶段胶水的具体依据，逐项说明为什么不能参数化：
 
@@ -111,6 +111,6 @@ Iris 的执行顺序是：阴影 → 不透明几何 → deferred 0–8 → 半�
 - 第 8 项是材质采样阶段。循环体里 `fract(tilesCoord)` 回绕、`atlasTiles` 换算、`MC_NORMAL_MAP` 与 `MC_SPECULAR_MAP` 决定读哪几张图，都是资源包与光影图集的约定。把这些搬进库，等于把图集布局写进通用代码。
 - 第 9 项现在只有取射线、雾色与选项的接线；羽流、雾霭、顶烟三段步进与三个密度选项都已作为参数传进库，固定颜色属于算法常数而不是宿主决定。
 - 第 10、11 项只有 `gl_in[i]` 到 `gl_Position` 的转发和 `EmitVertex()`，没有可抽取的计算。
-- 第 12 项是末地传送门方块：十六层靠 `end_portal_layer()` 生成的层矩阵与 `COLORS` 十六项常量表叠出颜色，是 Minecraft 独有的渲染约定。循环依赖那张常量表和投影坐标，迁进库只会多一层转发。
+- 第 12 项是末地传送门方块：十六层靠 `end_portal_layer()` 生成的层矩阵与 `COLORS` 十六项常量表叠出颜色，是 Minecraft 独有的渲染约定。它已随方块实体效果移到 `effects/entity/entity.glsl` 的 `EndPortalColor`，阶段主体只传贴图与投影坐标；渲染层因此不再保留效果循环。
 
 迁进库的五处循环满足同一条标准：循环体只有算术，需要的输入都能当参数传，常数属于算法而不是宿主选项。水面那两处原本是同一段循环抄了两遍，迁走后共享一个函数与一份常数，以后改波形不会再改漏一处；下界三段雾把密度选项与噪声纹理换成参数后，同一段步进也能给别的引擎使用。

@@ -200,6 +200,7 @@ float ogxGetExposureTiles(sampler2D exposureTexture, int viewWidth, int viewHeig
 }
 
 // 曝光值：手动模式直接由 EV 算出，自动模式从曝光统计像素读取并按曲线、夜视与黑暗调整。
+// 自动曝光取值：从统计纹理中读分块亮度，按测光模式合成曝光值。
 float ogxGetExposureValue(sampler2D exposureTexture, ivec2 screenExtent, bool manualExposure, float evValue,
     float mainOutputFactor, float exposureOutputFactor, float aeCurve, float nightVision, bool aeClamp,
     bool dimensionNether, float aeOffset, float darknessFactor, bool disableBlindness)

@@ -7,8 +7,8 @@
 #ifndef OMNI_EFFECT_LIGHTING_BLOCKLIGHT_INCLUDED
 #define OMNI_EFFECT_LIGHTING_BLOCKLIGHT_INCLUDED
 // @effect {"label":{"zh_cn":"方块光与手持光","en_us":"Block & held light"}}
-// @option {"label":{"zh_cn":"方块光强度","en_us":"Block light brightness"},"description":{"zh_cn":"光源方块自身发光与照亮周围的强度，同时影响资源包自发光的强度。","en_us":"Brightness of light sources and the area they light; also scales resource-pack emissiveness."},"slider":true}
-#define OMNI_TORCHLIGHT_BRIGHTNESS 1.0 // [0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0 1.1 1.2 1.3 1.4 1.5 1.6 1.7 1.8 1.9 2.0]
+// 方块光强度与阳光、天光共用同一组光照档位，选项定义在共享光照文件里。
+#include "/effects/shared/light.glsl"
 // @option {"label":{"zh_cn":"方块光色温","en_us":"Block light temperature"},"description":{"zh_cn":"光源方块发光与照亮周围的色温，单位开尔文；只改颜色不改强度。","en_us":"Colour temperature of block light in kelvin; changes colour only, not brightness."},"slider":true}
 #define OMNI_TORCHLIGHT_COLOR_TEMPERATURE 3000 // [2000 2500 3000 3500 4000 4500 5000 5500 6000 6500 7000 7500 8000 8500 9000 9500 10000 12000 15000]
 // @option {"label":{"zh_cn":"指向性方块光","en_us":"Directional block light"},"description":{"zh_cn":"在法线贴图上显示光照方向；需要支持法线贴图的资源包，可能出现光照衔接错误。","en_us":"Shows the light direction on normal maps; needs a normal-map pack and may show seams."}}
@@ -87,9 +87,10 @@
 
 // 共用数学提供曲线与光照模型，坐标换算提供深度还原，蓝噪声提供屏幕阴影抖动，材质文件提供掩码结构。
 #include "/common/math.glsl"
+#include "/effects/shared/antialias.glsl"
 #include "/common/coordinates.glsl"
 #include "/common/noise.glsl"
-#include "/effects/ground/material.glsl"
+#include "/bind/gbuffer.glsl"
 
 // --- 原版方块光：按方块光等级与遮蔽算出火把照亮周围的光 ---
 // 输入是方块光等级、遮蔽项与不透明材质掩码；输出该像素收到的方块光颜色。

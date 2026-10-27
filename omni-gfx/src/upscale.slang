@@ -155,6 +155,7 @@ float3 ogxItxFsr1(int2 texelCoord, Sampler2D upscaledTex, float sharpness, bool 
     return ogxFsr1(upscaledTex, texelCoord, sharpness, denoise);
 }
 
+// FSR1 放大入口的实际定义：先取中心样本，再交给十字对比度锐化。
 float3 ogxFsr1(Sampler2D upscaledTex, int2 texelCoord, float sharpness, bool denoise)
 {
     float3 sampleE = upscaledTex.Load(int3(texelCoord + int2(0, 0), 0)).rgb; // 中心样本。

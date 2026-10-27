@@ -27,6 +27,10 @@
     反射天空盒不受影响，仍用程序化大气。这是项目额外功能，默认关闭；底色亮度用 `OMNI_RESOURCEPACK_SKY_BRIGHTNESS` 调节。
 */
 // 相机、时间与天气输入由绑定层整理成普通结构体，本文件只负责合成。
+// 阳光、天光、底光与火把亮度由共享光照文件统一定义。
+// 星空类型与天空贴图选项由共享天空贴图主体定义。
+#include "/effects/shared/skyview.glsl"
+#include "/effects/shared/light.glsl"
 #include "/bind/camera.glsl"
 #include "/bind/time.glsl"
 #include "/bind/weather.glsl"

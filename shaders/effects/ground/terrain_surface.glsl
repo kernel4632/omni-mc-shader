@@ -6,6 +6,8 @@
 */
 #ifndef OMNI_TERRAIN_SURFACE_INCLUDED
 #define OMNI_TERRAIN_SURFACE_INCLUDED
+// 材质与水洼选项由共享表面主体统一定义，地形只消费这份唯一配置。
+#include "/effects/shared/surface.glsl"
 /*
 地形表面采样与写出：片元阶段按开关走视差、各向异性过滤或屏幕导数采样，得到底色、高光与法线，并写出画面。
 来源：iterationT `Lib/Programs/Gbuffers/Terrain_FS.glsl` 一比一移植。
