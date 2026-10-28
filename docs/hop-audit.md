@@ -22,6 +22,6 @@
 
 - [x] 16. 第五轮删除零调用包装后，严格台账仍指向宿主旧名字，strict 一度降到 exact 459、approximate 15。处理结果：15 条目标改到通用库真实实现（`frisvad` 与 `rand` 补可调用入口），并修复 G-buffer 重复采样、GTAO 弧积分常数、镜头 `atan2` 与各向异性静态分支；strict 恢复 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
 
-## ?????
+## 第五轮结果
 
-???????strict ?? 474/0/5/26/0?? 16 ????????????
+结构整改完成，strict 恢复 474/0/5/26/0；第 16 项关闭。等待第六轮审计。
