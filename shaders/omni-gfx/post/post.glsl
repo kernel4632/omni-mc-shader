@@ -676,4 +676,8 @@ vec3 ogxBloomDownsample(sampler2D source, vec2 coord, vec2 texel)
     return ogxLinearToCurve3(blur * 0.25); // 权重和为四，乘四分之一保持亮度。
 }
 
+// 自动曝光、泛光合并与夜视曲线属于后期效果，编译进同一份产物。
+#include "/omni-gfx/post/exposure.glsl"
+// 受伤、入水与着火等画面状态属于后期效果，编译进同一份产物。
+#include "/omni-gfx/post/scene.glsl"
 #endif

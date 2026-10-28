@@ -1,4 +1,17 @@
 # 更新记录
+## 0.16.0-dev.16
+
+按 HOP 第四轮审计整改。
+
+- 末地吸积盘改为调用 `accretion`；`world/end`、`fog/fog/end`、`post/scene` 按职责拆成同名子文件夹。
+- 8 个只靠探针/profile 的模块接入真实编译链；`catalog` 沿引用链核对消费者。
+- 删除 939 行索引式注释，补业务步骤说明；文件头状态、示例、调用位置统一为事实。
+- 收口末地旋转、夜视、光环半径、雨纹等重复实现；清理命名、死变量与过期文档。
+- `audit.py` 增加生成 GLSL 50% 检查与示例/调用位置校验；`signature.py` 记录解析跳过原因；`slang.py` 改为同盘原子替换。
+
+验证：`generate`、`spirv` 48/48、`check`、`strict-parity`、`profiles`、`audit`、`verify`、`compile` 280 组程序、GPU 等值 26/26 全部通过。游戏内画面未验证。
+
+
 ## 0.16.0-dev.15
 
 按 HOP 第三轮审计整改。

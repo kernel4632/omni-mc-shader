@@ -113,18 +113,21 @@ class OmniGfxTests(unittest.TestCase):
         self.assertEqual(tuple(profile.MODULES), catalog.MODULES)  # profile 生成器同样只能读清单。
 
     def test_probe_only_modules_are_honest(self):
-        """仅探针模块必须没有顶层消费者，文件头也要写明状态。"""
+        """间接模块必须能沿引用链到达画面，文件头也要写明真实状态。"""
         used = catalog.consumers()  # 真实引用扫描，不按目录名猜测。
-        for name, reason in catalog.PROBE_ONLY.items():
+        reached = catalog.reachable()  # 沿模块引用求真实编译范围。
+        for name, consumer in catalog.PROBE_ONLY.items():
             with self.subTest(module=name):
-                self.assertFalse(used[name], f"{name} 已有消费者，应从 PROBE_ONLY 移除")
+                self.assertFalse(used[name], f"{name} 已有直接消费者，应从 PROBE_ONLY 移除")
+                self.assertIn(name, reached, f"{name} 没有真实画面消费者，只靠探针或 profile")
                 header = (LIB / "src" / f"{name}.slang").read_text(encoding="utf-8").split("*/", 1)[0]
-                self.assertIn("仅编译探针", header)  # 文件头不能继续写成已经被画面引用。
+                self.assertIn(f"由 `{consumer}` 引入", header)  # 文件头必须写出带它进入编译的效果模块。
         for name in catalog.MODULES:
             if name in catalog.PROBE_ONLY:
                 continue
             with self.subTest(module=name):
                 self.assertTrue(used[name], f"{name} 没有顶层消费者，应登记到 PROBE_ONLY")
+                self.assertIn(name, reached, f"{name} 没有被任何真实画面文件引入")
 
     def test_docs_stats_are_current(self):
         """README 与验证记录的当前统计必须和源码、对照报告一致。"""

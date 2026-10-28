@@ -8,13 +8,13 @@
 Omni 通用图形库体积雾模块：密度、阳光方向吸收、沿视线步进、闪电、暴风、群系与云影。
 调用位置：任何需要体积雾的程序；Minecraft 光影由 `/omni-gfx/fog/volume.glsl` 引入，
     `shaders/effects/shared/fog/volumetric.glsl` 只把选项、天气、群系与阴影贴图换成参数。
-可复制示例：先填好一层雾的参数，再调用一次 `ogxVolumetricFog` 完成整段步进。
+可复制示例：`vec4 fog = ogxVolumetricFog(media, worldPos, cameraOffset, cameraWorld, 1.0, 16, 8.0, 160.0, noiseTex, shadowTex);` 先填好一层雾的参数，再调用一次完成整段步进。
 设计原因与取舍：
     纹理、阴影矩阵、相机、光色与选项全部由调用方传入，库不读取宿主状态。
     雾照明与水下手持光属于可选的宿主能力，用两个钩子宏留给效果层注入；不定义时是完全的空操作。
     钩子宏名是库的公开接口，效果层在包含本文件前定义；要改名必须同时改宿主，当前保留稳定名字。
     步进顺序与常数照 iterationT 原程序保留，保证默认画面不变。
-    算法按内容分成云影、暴风、闪电、单步、主体、水下、严格入口与下界烟八段，子文件放在同名文件夹内；
+    算法按内容分成云影、水下、严格入口与下界烟四段，子文件放在同名文件夹内；
     主文件保留结构体、钩子和主体步进，打开文件就能看到完整步进顺序。
 */
 #ifndef OGX_FOG_VOLUME_INCLUDED
@@ -144,7 +144,6 @@ float ogxFogCloudShadow(vec3 worldPos, OgxFogMedia media, sampler2D cloudShadowT
 }
 
 // 暴风浓雾密度，具体实现在子文件。
-// --- storm ---
 
 // 暴风浓雾：噪声雾团与低空层相加，雪暴才随高度变淡。
 // 为什么纵向压扁再乘一百：暴风的云团在水平方向拉得很长，压扁后噪声才会形成横向雪带。
@@ -381,7 +380,6 @@ vec3 ogxUnderwaterFog(vec3 startPos, vec3 endPos, vec3 worldDir, float globalClo
 }
 
 // 严格参考签名入口，具体实现在子文件。
-// --- exact ---
 
 // WSR 水下体积：按 Eclipse 参考逐行移植水吸收、焦散、方向光与闪电照明。
 // 参考参数在前，相机、阴影、噪声与选项资源追加在后；默认分支不读宿主全局量。
@@ -454,7 +452,7 @@ vec4 ogxUnderwaterVolumeReference(vec3 origin, vec3 endPos, vec2 dither, vec3 am
 // 严格参考签名的雾与水下光柱入口，具体实现在子文件。
 // 子文件：fog/volume/exact.slang。
 /* 体积雾的严格入口：按 iterationT 默认路径逐行移植的雾与水下光柱；由 `fog/volume.slang` 内联引入。
-用法：调用下方 `ogxVolumetricFogExact`，参数顺序见函数签名。
+可复制示例：`vec4 fog = ogxVolumetricFogExact(media, worldPos, cameraOffset, cameraWorld, 1.0, 16, 8.0, 160.0, noiseTex, shadowTex, shadowView, shadowProj, 2048.0, 1.0);`
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
@@ -589,12 +587,11 @@ vec3 ogxUnderwaterFogExact(vec3 startPos, vec3 endPos, vec3 worldDir,
 }
 
 // 下界三段体积雾，具体实现在子文件。
-// --- nether ---
 
 // 下界羽流、雾霭与顶部烟，具体实现在子文件。
 // 子文件：fog/volume/nether.slang。
 /* 下界的体积雾：羽流、雾霭与顶部烟在同一条视线上分开累加；由 `fog/volume.slang` 内联引入。
-可复制示例：`float density = ogxEndFogDensity(worldDir, distance, VdotL, 0.0, 0.0, 0.0, 1.0, 1.0);`
+可复制示例：`vec4 fog = ogxNetherVolumetricFog(rayDir, cameraOffset, cameraWorld, noiseTex, 1.0, 1.0, hazeColor, 1.0, 16, 8.0, 160.0, farPlane);`
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */

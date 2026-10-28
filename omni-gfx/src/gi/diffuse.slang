@@ -9,7 +9,7 @@ Omni 通用图形库方块光模块：光照图曲线、LPV 体积混合与体�
     分支、常数和采样顺序保持参考实现。
     手持光、手电与手光阴影统一放在 `heldlight.slang`，本文件只负责方块光合成，
     避免同一个手光主体分成两个模块。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。漫反射光照目前只被库内 Photonics 模块间接引用，没有顶层画面入口。
+当前状态：由 `gi/gi` 引入并编译；宿主 `doBlockLightLighting` 调用 `ogxBlockLightLightingVoxelExact`。
 */
 #ifndef OGX_GI_DIFFUSE_INCLUDED
 #define OGX_GI_DIFFUSE_INCLUDED

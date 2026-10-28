@@ -115,7 +115,7 @@ float OmniPuddleCoverage(float halfWet, float noise){
 // 数学与 Eclipse 一致：`mix(roughness, wetRoughness, wetnessStages * 锐度)`，此处不做额外夹取，保持等价。
 // 调用点：`effects/shared/surface.glsl` 的 `MaterialFromTex`（湿润度取那里的 `wet`）与本文件的 `OmniPuddleSurface`（传水洼权重）。
 float OmniPuddleRoughness(float roughness, float wetRoughness, float wetnessStages){
-	return ogxPuddleRoughness(roughness, wetRoughness, wetnessStages, OMNI_PUDDLE_REFLECTION_SHARPNESS); // 混合公式在通用库，锐度选项在这里传入。
+	return mix(roughness, wetRoughness, wetnessStages * OMNI_PUDDLE_REFLECTION_SHARPNESS); // 湿润阶段乘锐度作为混合比例。
 }
 
 // 水洼表面：把 Eclipse `applyPuddles` 的水洼三步——法线压平、粗糙度改写与反照率压暗——接到已解出的表面上，

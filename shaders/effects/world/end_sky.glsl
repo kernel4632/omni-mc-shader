@@ -28,6 +28,8 @@
 #include "/effects/shared/skyview.glsl"
 #include "/omni-gfx/atmosphere/atmosphere.glsl"
 #include "/omni-gfx/planet.glsl"
+// 末地星空与云影在末地模块，星空函数由本文件的兼容入口调用。
+#include "/omni-gfx/world/end.glsl"
 
 // --- 星空：与主世界共用同一份 Eclipse 星场，来源 Eclipse `lib/stars.glsl`（经 `effects/sky/sky.glsl`） ---
 // 为什么共用：用户要求末地星空也换成 Eclipse 的实现，而主世界已把星场核换成 Eclipse；
@@ -57,28 +59,7 @@ void PlanetEnd2(inout vec3 color, in vec3 eye, in vec3 rayDir, in vec3 lightDir)
 
 // 参考签名兼容层：默认太阳方向由宿主全局量提供，主世界的两参数版本保持不变。
 vec3 CalculateStars(vec3 worldDir){
-	float angleY = frameTimeCounter * 0.001;
-	mat3 eyeRotationY = mat3(cos(angleY), 0.0, sin(angleY), 0.0, 1.0, 0.0, -sin(angleY), 0.0, cos(angleY));
-	worldDir = eyeRotationY * worldDir;
-	const float scale = 384.0;
-	const float coverage = 0.007;
-	const float maxLuminance = 0.04;
-	const float minTemperature = 4000.0;
-	const float maxTemperature = 8000.0;
-	float cosine = dot(worldSunVector, vec3(0.0, 0.0, 1.0));
-	vec3 axis = cross(worldSunVector, vec3(0.0, 0.0, 1.0));
-	float cosecantSquared = 1.0 / dot(axis, axis);
-	worldDir = cosine * worldDir + cross(axis, worldDir) + (cosecantSquared - cosecantSquared * cosine) * dot(axis, worldDir) * axis;
-	vec3 p = worldDir * scale;
-	ivec3 i = ivec3(floor(p));
-	vec3 f = p - i;
-	float r = dot(f - 0.5, f - 0.5);
-	vec3 i3 = fract(i * vec3(443.897, 441.423, 437.195));
-	i3 += dot(i3, i3.yzx + 19.19);
-	vec2 hash = fract((i3.xx + i3.yz) * i3.zy);
-	hash.y = 2.0 * hash.y - 4.0 * hash.y * hash.y + 3.0 * hash.y * hash.y * hash.y;
-	float c = remapSaturate(hash.x, 1.0 - coverage, 1.0);
-	return (maxLuminance * remapSaturate(r, 0.25, 0.0) * c * c) * Blackbody(mix(minTemperature, maxTemperature, hash.y));
+	return ogxEndStars(worldDir, worldSunVector, frameTimeCounter, 1, 1.0, 1.0); // 末地星空只在通用库维护一份。
 }
 
 #endif // OMNI_END_SKY_INCLUDED 结束。

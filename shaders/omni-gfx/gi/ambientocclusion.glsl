@@ -13,7 +13,7 @@ Omni 通用图形库全局光环境光遮蔽模块：Eclipse GTAO 的弧段积�
     沿切片搜索最近遮挡，切片数与步数由调用方给出；深度图、矩阵与手部深度显式传入，公式与参考实现逐项相同。
     本模块只服务独立画面的低成本遮蔽，步数与切片数由画质档位控制；全局光内部使用的
     多次切片参考实现放在 `gi/gi/ao.slang`，两者按调用场景分工，不互相包含，避免把重算法带进轻量阶段。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。独立环境光遮蔽目前只有探针覆盖，顶层画面走 gi/gi 的多切片实现。
+当前状态：由 `gi/gi` 引入并编译；顶层画面仍走 `gi/gi` 的多切片实现。
 */
 #ifndef OGX_GI_AMBIENTOCCLUSION_INCLUDED
 #define OGX_GI_AMBIENTOCCLUSION_INCLUDED

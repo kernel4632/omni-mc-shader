@@ -69,7 +69,6 @@ float3 ogxUnderwaterFog(float3 startPos, float3 endPos, float3 worldDir, float g
 }
 
 // 严格参考签名入口，具体实现在子文件。
-// --- exact ---
 
 // WSR 水下体积：按 Eclipse 参考逐行移植水吸收、焦散、方向光与闪电照明。
 // 参考参数在前，相机、阴影、噪声与选项资源追加在后；默认分支不读宿主全局量。

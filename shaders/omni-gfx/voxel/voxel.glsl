@@ -8,7 +8,7 @@
 Omni 通用图形库体素追踪模块：在规则三维网格里沿射线逐格前进，撞到实心方格时用存下的颜色与光照着色。
 调用位置：任何有三维方块编号图与颜色图的程序；Minecraft 光影由 `/omni-gfx/voxel/voxel.glsl` 引入，
     `shaders/effects/reflection/voxel.glsl` 只保留选项换算与坐标平移。
-可复制示例：ogxVoxelReflection 返回反射颜色与归一化命中距离，并带回命中点。
+可复制示例：`vec4 hit = ogxVoxelReflection(origin, rayDir, normal, worldOffset, side, voxelIds, voxelColors, torch, sky, shadow, sun, 64.0, 1.0, hitWorld);`
 设计原因与取舍：
     网格偏移、边长、两张三维纹理、光色、太阳方向、追踪距离与强度全部由调用方传入，库不读取任何引擎状态。
     水、冰、玻璃按半透明处理，只给后面的画面染色后继续走；铁块按镜面弹射，最多弹四次，
@@ -260,9 +260,9 @@ vec4 ogxVoxelReflection(vec3 originWorld, vec3 rayDirWorld, vec3 surfaceNormal, 
 */
 
 // 体素写入是否在体积内：三个轴都必须在零到边长减一之间，越界写会被丢弃。
-bool ogxVoxelWriteInBounds(ivec3 voxelPos, int size)
-{
-    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0
+bool ogxVoxelWriteInBounds(ivec3 voxelPos, int size) // 当前步骤的计数或下标。
+{ // 按参考顺序推进。
+    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0 // 交回这一段的计算结果。
         && voxelPos.x < size && voxelPos.y < size && voxelPos.z < size; // 逐轴判断，避免夹紧后写错格。
 }
 
@@ -272,6 +272,9 @@ ivec3 ogxGetVoxelIndex(vec3 playerPos, vec3 cameraOffset, int side)
     return ivec3(floor(playerPos + cameraOffset)) + ivec3(side / 2); // 参考实现按体积半边长平移。
 }
 
+// 为什么先判断越界：体素图只覆盖玩家周围一段，阴影阶段仍会碰到边界外的方块；
+// 越界写会让相邻区域的数据串位，反射里出现不属于那里的颜色。
+// 编号与光照用整数通道，颜色用八位；反射只需要近似颜色，八位足够且省显存。
 void ogxSetVoxelBlock(ivec3 voxelPos, uint blockId, int voxelSize,
     inout ivec3 writePos, inout uint writeId)
 {
@@ -295,6 +298,8 @@ uint ogxPopulateShadowVoxelIndex(vec3 playerPos, vec3 cameraOffset, ivec3 midBlo
     return voxelId; // 交回最终编号。
 }
 
+// 阴影体素填充：只写相机附近一段，远处交给屏幕空间与天空回退。
+// 每格只存一份颜色与光照，不存六个面；反射是低频效果，单份足够。
 void ogxPopulateShadowVoxel(vec3 playerPos, vec3 eyeOffset, vec3 cameraFraction, vec3 midBlock,
     bool terrainStage, bool entityStage, bool blockEntityStage, float blockEntityId,
     float entityId, float currentRenderedItemId, float mcEntityX, int voxelSize,
@@ -338,25 +343,5 @@ void ogxPopulateShadowVoxel(vec3 playerPos, vec3 eyeOffset, vec3 cameraFraction,
     }
     if (voxelId > 0u) ogxSetVoxelBlock(voxelPos, voxelId, voxelSize, writePos, writeId); // 最终写入。
 }
-
-/*
-实现说明：体素写入的格号与边界。
-一、格号：玩家相对位置加相机小数偏移，再平移到体积中心。
-二、越界：三个轴都必须落在零到边长减一之间，越界写入直接丢弃。
-三、阴影阶段：按地形、实体与方块实体三个阶段决定是否写入，再按方块编号与实体编号生成最终编号。
-四、手持物品与船：按参考的编号偏移写入，避免和草与其它实体互相覆盖。
-五、输出：格号与编号通过输出参数交回，宿主负责真正写进图像或缓冲。
-六、边界：函数不读取阶段全局量，所有阶段标记由调用方传入。
-*/
-
-/*
-函数索引：
-一、`ogxVoxelWriteInBounds`：三个轴都在零到边长减一之间。
-二、`ogxGetVoxelIndex`：玩家相对位置加相机偏移，再平移到体积中心。
-三、`ogxSetVoxelBlock`：越界丢弃，合法时交回格号与编号。
-四、`ogxPopulateShadowVoxelIndex`：按绘制阶段与实体编号算写入值。
-五、`ogxPopulateShadowVoxel`：参考签名的完整写入入口。
-六、边界：函数不读取阶段全局量，所有阶段标记由调用方传入。
-*/
 
 #endif

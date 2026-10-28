@@ -20,6 +20,9 @@
     与 `effects/lighting/composite_surface_end.glsl`，本文件只留主世界实现与维度分派。
 */
 
+// 方块光与间接光的曲线在全局光模块，本文件只把宿主选项接过去。
+#include "/omni-gfx/gi/gi.glsl"
+
 #if defined OMNI_NETHER // 下界：没有太阳，光照来自 `NetherLighting` 与雾色，不接收全局光与阴影。
 // 下界不透明表面光照在独立文件里。
 // 阳光、天光与方块光亮度由共享光照文件统一定义。
@@ -255,21 +258,12 @@ void CompositeSurfaceLighting(){
 }
 #endif // 维度分支结束。
 // --- Eclipse 方块光与间接光兼容层：参考直接读光照色与全局强度 ---
+// 算式在 `gi/diffuse` 与 `gi/indirect`；本函数只填火把亮度与最低光比例，默认画面不变。
 vec3 doBlockLightLighting(vec3 lightColor, float lightmap, vec3 handLight, vec3 lpvSample){
-	lightmap = clamp(lightmap, 0.0, 1.0);
-	float brightspot = min(max(lightmap - 0.7, 0.0) * 3.3333, 1.0);
-	brightspot *= brightspot * brightspot;
-	float lightCurve = 1.0 - sqrt(1.0 - lightmap);
-	lightCurve *= lightCurve;
-	float lightmapCurve = mix(lightCurve, 2.5, brightspot);
-	return lightmapCurve * lightColor * OMNI_TORCHLIGHT_BRIGHTNESS;
+	return ogxBlockLightLightingVoxelExact(lightColor, lightmap, lpvSample, handLight, OMNI_TORCHLIGHT_BRIGHTNESS); // 参考签名入口不混入 LPV 与手持光。
 }
 vec3 doIndirectLighting(vec3 lightColor, vec3 minimumLightColor, float lightmap){
-	float lightmapCurve = (pow(lightmap, 15.0) * 2.0 + lightmap * lightmap) / 3.0;
-	vec3 indirect = lightColor * lightmapCurve;
-	indirect += mix(minimumLightColor * (0.5 * 0.004 + nightVision * 0.02),
-		minimumLightColor * (0.8 * 0.004 + nightVision * 0.02), 1.0 - lightmap);
-	return indirect;
+	return ogxIndirectLighting(lightColor, minimumLightColor, lightmap, 1.0, 0.5, 0.8, nightVision); // 环境亮度一、最低光比例零点五与零点八，照参考。
 }
 
 #endif // OMNI_COMPOSITE_SURFACE_INCLUDED

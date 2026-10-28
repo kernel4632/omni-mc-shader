@@ -16,7 +16,7 @@ Omni 通用图形库噪声模块：整数哈希、二维与三维值噪声、分
 #include "math.slang"
 
 // 三维整数哈希：把格点坐标与种子混成一个零到一的伪随机数。
-float ogxHash13(float3 p)
+float ogxHash13(float3 p) // 当前步骤的中间量。
 {
     p = fract(p * 0.1031); // 先压到小数范围，减少大坐标的精度损失。
     p += dot(p, p.yzx + 33.33); // 三个分量互相混合。
@@ -216,26 +216,35 @@ float ogxFogNoise(float3 position, Sampler2D noiseTexture)
     return lerp(n.x, n.y, f.z); // 按高度做一次插值。
 }
 
-/*
-实现说明：噪声与哈希。
-一、哈希：标量、二维、三分量与整数版本各一份，输入相同就得到相同随机值。
-二、值噪声：八个格点取哈希后按平滑曲线插值，二维与三维各一份。
-三、分形：多层值噪声按振幅减半叠加，层数由调用方决定。
-四、蓝噪声与云噪声：按调用方传入的纹理句柄取样，不假设纹理槽位。
-五、三角形噪声：均匀随机数折成三角分布，抖动与颗粒共用。
-六、边界：哈希不保存状态，同一坐标在不同帧得到同一值；需要动画时由调用方加时间偏移。
-*/
-/*
-函数索引：
-一、`ogxHash13`、`ogxHash12`、`ogxHash11`、`ogxHash31`、`ogxHash22`：不同维度的哈希。
-二、`ogxHashUint3` 与 `ogxIntegerHash3`：整数混合器。
-三、`ogxPerlinGradient2` 与 `ogxCurl2D`：梯度与旋度。
-四、`ogxWhiteNoise` 与 `ogxWhiteNoiseTemporal`：白噪声与逐帧白噪声。
-五、`ogxTriangleNoise`：三角分布噪声。
-六、`ogxValueNoise2` 与 `ogxValueNoise3`：二维与三维值噪声。
-七、`ogxFbm2` 与 `ogxFbm3`：分形叠加。
-八、`ogxWarp3`：三维扭曲。
-九、`ogxFogNoise`：雾噪声，读取调用方传入的纹理。
-十、边界：哈希不保存状态，同一坐标在不同帧得到同一值。
-*/
+// 可按贴图边长缩放的三维查表：吸积盘与体积云用不同分辨率的同一张噪声图。
+// 为什么与 `ogxFogNoise` 并存：雾固定用六十四像素的图，吸积盘则由调用方传 512，合并会改画面。
+float ogxTexture3dNoise(float3 position, Sampler2D noiseTexture, float noiseResolution)
+{
+    float3 p = floor(position); // 整数格决定用贴图哪一块。
+    float3 b = fract(position); // 格内偏移用于插值。
+    b = b * b * (3.0 - 2.0 * b); // 三次平滑，格与格之间不出现硬边。
+    float2 uv = 17.0 * p.z + p.xy + b.xy; // 把三层格子压到二维坐标，十七是原程序打散层数的常数。
+    float2 rg = noiseTexture.SampleLevel((uv + 0.5) / noiseResolution, 0.0).zx; // 取两张通道，零号层级与原来的即时采样一致。
+    return lerp(rg.x, rg.y, b.z); // 按格内高度在两层之间插值。
+}
+
+// 云状分形噪声：四层不同频率的三维噪声叠加，供吸积盘等体积细节使用。
+// `shift` 是每层之间的时间位移，让细节缓慢流动而不是整块平移。
+float ogxCloudFbm(float3 position, float3 shift, Sampler2D noiseTexture, float noiseResolution)
+{
+    const int octaves = 4; // 四层就够，再多在远景里看不出来。
+    const float octAlpha = 0.87; // 每层权重只衰减一成多，细节保留得多。
+    const float octScale = 2.5; // 每层频率放大二点五倍，避免相邻层太像。
+    const float octShift = (octAlpha / octScale) / float(octaves); // 层间偏移，把结果抬回零附近。
+    float accum = 0.0; // 累积噪声。
+    float alpha = 0.5; // 第一层权重。
+    for (int i = 0; i < octaves; i++) // 逐层叠加。
+    {
+        accum += alpha * ogxTexture3dNoise(position, noiseTexture, noiseResolution); // 加这一层。
+        position = (position + shift) * octScale; // 抬高频率并错开时间。
+        alpha *= octAlpha; // 权重衰减。
+    }
+    return accum + octShift; // 返回归一化后的噪声。
+}
+
 #endif

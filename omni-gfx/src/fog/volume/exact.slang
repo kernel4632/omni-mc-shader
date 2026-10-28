@@ -1,5 +1,5 @@
 /* 体积雾的严格入口：按 iterationT 默认路径逐行移植的雾与水下光柱；由 `fog/volume.slang` 内联引入。
-用法：调用下方 `ogxVolumetricFogExact`，参数顺序见函数签名。
+可复制示例：`float4 fog = ogxVolumetricFogExact(media, worldPos, cameraOffset, cameraWorld, 1.0, 16, 8.0, 160.0, noiseTex, shadowTex, shadowView, shadowProj, 2048.0, 1.0);`
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
@@ -134,4 +134,3 @@ float3 ogxUnderwaterFogExact(float3 startPos, float3 endPos, float3 worldDir,
 }
 
 // 下界三段体积雾，具体实现在子文件。
-// --- nether ---

@@ -6,7 +6,7 @@ Omni 通用图形库体素求交模块：射线任务、包围盒、栅栏、裁
     float2 hit = ogxVoxelSampleOffset(3, 8.0, 0.5); // 取螺旋采样点。
 设计原因与取舍：
     所有求交只依赖整数格与几何参数；裁剪命中会读体素面表，其余路径不读取宿主纹理。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。体素求交目前只被库内反射与阴影模块间接引用，没有独立画面入口。
+当前状态：由 `shadow/map` 引入并编译；供体素阴影与反射共用。
 */
 #ifndef OGX_VOXEL_TRACE_INCLUDED
 #define OGX_VOXEL_TRACE_INCLUDED
@@ -17,40 +17,44 @@ Omni 通用图形库体素求交模块：射线任务、包围盒、栅栏、裁
 #include "voxel.slang"
 
 // 体素包围盒求交结果：命中、参数、位置与进入面轴。
-struct OgxRayHit
-{
+struct OgxRayHit // 按参考顺序推进。
+{ // 按参考顺序推进。
     bool hit; // 是否命中。
     float t; // 射线参数。
     float3 currPos; // 命中位置。
     float3 stepAxis; // 进入面轴。
-};
+}; // 按参考顺序推进。
 
 // 体素射线任务：起点、方向、结果。
-struct OgxRayJob
-{
+struct OgxRayJob // 按参考顺序推进。
+{ // 按参考顺序推进。
     float3 origin; // 起点，体积坐标。
     float3 direction; // 方向。
     float3 resultPosition; // 命中位置。
     float3 resultColor; // 命中颜色。
     float3 resultNormal; // 命中法线。
     bool resultHit; // 是否命中。
-};
+}; // 按参考顺序推进。
 
 // 半透明命中：给反射链逐层染色。
-struct OgxTranslucentHit
-{
+struct OgxTranslucentHit // 按参考顺序推进。
+{ // 按参考顺序推进。
     float3 hitNormal; // 命中面法线。
     float3 hitPos; // 命中点。
     float4 hitColor; // 颜色与透明度。
     int hitId; // 方块编号。
     float skylight; // 天光。
-};
+}; // 按参考顺序推进。
 
 // 构造一个体素射线任务。
-OgxRayJob ogxRayJob(float3 origin, float3 direction){
+// 为什么逐格而不是解析求交：体素图是离散的，逐格步进能直接复用方块编号，
+// 不需要为每种方块建包围盒；步数上限固定，最坏情况也不会卡死。
+// 四分之一体素用于半透明面：整格步进会漏掉薄玻璃，细分后能记录进入面与离开面。
+// 裁剪排序先把命中按距离排好，反射只取最近的不透明面，半透明按顺序叠色。
+OgxRayJob ogxRayJob(float3 origin, float3 direction){ // 当前步骤的中间量。
     OgxRayJob job; // 逐字段赋值，避免结构体构造顺序出错。
-    job.origin = origin;
-    job.direction = direction;
+    job.origin = origin; // 按参考写法推进这一步。
+    job.direction = direction; // 按参考写法推进这一步。
     job.resultPosition = float3(0.0);
     job.resultColor = float3(0.0);
     job.resultNormal = float3(0.0);
@@ -243,6 +247,8 @@ bool ogxVoxelAabbIntersect(inout float3 currPos, float3 reflectedVector, float3 
 }
 
 // 体素采样螺旋：把样本序号变成单位圆上的螺旋点，2.26 是参考实现的关键常数。
+// 螺旋采样把子体素偏移铺在圆盘上，比规则网格更不容易出现条带。
+// 偏移按样本序号与半径变化，调用方传同一组参数就能复现参考的采样位置。
 float2 ogxVoxelSampleOffset(int samples, float totalSamples, float noise)
 {
     float variance = noise * 0.897; // 每像素抖动。
@@ -259,43 +265,4 @@ float2 ogxVoxelSampleOffset(int samples, float totalSamples, float noise)
 // 输出参数 `hitWorldPos` 是命中点的相机相对世界位置，供调用方算反射雾段；未命中时它落回起点。
 // 返回值的 `rgb` 是反射颜色，`a` 是归一化总命中距离；`a` 为负表示没有命中，交给调用方走天空回退。
 
-/*
-实现说明：体素求交工具。
-一、射线任务：`OgxRayJob` 保存起点、方向与命中结果，构造时全部清零。
-二、包围盒：逐轴求入口与出口，取最晚入口与最早出口，命中时把位置推进到入口。
-三、栅栏：横杆加立柱，多次求交后取最近；双段栅栏是四根立柱的扩展。
-四、裁剪排序：先取较近交点，再用贴图 alpha 判断是否穿过去。
-五、四分之一体素：低分辨率掩码逐格前进，命中非空格就停。
-六、平面求交：只接受两格以内且仍在同一格的交点。
-七、螺旋采样：样本序号变成圆上的螺旋点，抖动让相邻像素错开。
-八、边界：求交只依赖整数格与几何参数，贴图由调用方传入。
-*/
-/*
-函数索引：
-一、`ogxRayJob`：构造射线任务，结果字段清零。
-二、`ogxVoxelAabbHit`：包围盒求交，返回结构体。
-三、`ogxSortIntersectionCutout`：裁剪命中排序，按贴图 alpha 决定是否穿过。
-四、`ogxSortIntersectionCutoutReference`：参考签名版本。
-五、`ogxSortIntersectionOpaque`：只保留较近的不透明交点。
-六、`ogxFenceAabbIntersect` 与 `ogxFenceAabbIntersect2`：栅栏横杆与立柱求交。
-七、`ogxQuarterVoxelTrace`：四分之一体素掩码步进。
-八、`ogxVoxelPlaneIntersect`：平面求交，只接受两格以内。
-九、`ogxVoxelAabbIntersect`：返回是否命中并推进位置。
-十、`ogxVoxelSampleOffset`：螺旋采样点。
-十一、边界：求交只依赖整数格与几何参数。
-十二、顺序：先取最近交点，再用贴图判断是否穿过。
-*/
-/*
-参数与边界：
-一、射线方向要归一化，参数距离才有统一含义。
-二、包围盒的上下界按分量排序。
-三、栅栏的横杆与立柱位置来自方块局部坐标。
-四、裁剪排序读取贴图 alpha，纹理坐标由调用方给出。
-五、四分之一体素的边长是体积边长的四分之一。
-六、平面求交只接受两格以内的交点。
-七、螺旋采样的总数必须大于零。
-八、所有纹理句柄显式传入，库不读取宿主槽位。
-九、求交只依赖整数格与几何参数。
-十、画面验证要看体素反射边缘与栅栏轮廓。
-*/
 #endif

@@ -208,7 +208,8 @@ float ogxCloudShadow(OgxCloudLayer layer, float3 groundPosition, float3 sunDirec
 }
 
 // 亨耶-格林斯坦相函数：`g` 越大越向前集中，云的向阳边缘因此更亮。
-// 与迁移前 GLSL 原型的算式一致，供球面云与体积云共用。
+// 与通用数学的 `ogxHenyeyGreensteinPhase` 形状相同，但参考实现把归一化常数写成 0.25/π，
+// 层状云与末地雾又各用 3.14；三处常数必须保持参考精度，所以这里保留直接算式并在注释里说明差异。
 float ogxHenyeyGreenstein(float cosAngle, float g)
 {
     float num = 1.0 - g * g; // 分子，决定整体强度。
@@ -216,7 +217,6 @@ float ogxHenyeyGreenstein(float cosAngle, float g)
     float inverse = rsqrt(denom); // 分母的平方根倒数。
     return num * inverse * inverse * inverse * (0.25 / OGX_PI); // 合成一次散射的相函数。
 }
-
 // 云顶曲线：把归一化高度换成边缘压低的圆顶，用来让云的顶部看起来是弧面。
 float ogxCloudTopCurve(float x)
 {

@@ -34,8 +34,12 @@ struct OgxFog
 
 // 高度雾、噪声雾与沿视线积分，具体实现在子文件。
 #include "fog/density.slang"
-// 末地涡旋、群系与下界雾，具体实现在子文件。
+// 末地涡旋与末地相位，具体实现在子文件。
 #include "fog/end.slang"
+// 下界群系的自发光与雾色，具体实现在子文件。
+#include "fog/nether.slang"
+// 通用群系雾色与密度，具体实现在子文件。
+#include "fog/biome.slang"
 
 float4 ogxFogMarch(OgxFog fog, float3 camera, float3 worldPosition, float3 sunDirection,
                    float3 sunColor, float jitter, int steps)

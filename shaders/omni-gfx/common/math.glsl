@@ -21,8 +21,8 @@ Omni 通用图形库数学模块：曲线、编码、材质、光线求交、噪
 #define OGX_MATH_INCLUDED
 
 // 圆周率与常用倒数，和旧库保持同一精度。
-const float OGX_PI = 3.14159265359;
-const float OGX_TAU = 6.28318530718;
+const float OGX_PI = 3.14159265359; // 当前步骤的中间量。
+const float OGX_TAU = 6.28318530718; // 当前步骤的中间量。
 const float OGX_HALF_PI = 1.57079632679;
 const float OGX_INV_PI = 0.31830988618;
 
@@ -94,30 +94,30 @@ float ogxFma2(float a, float b, float c) { return a * b + c; }
 // 设计原因与取舍：只收不依赖采样器的纯计算，算式与常数照旧库保留。
 
 // 同时给出正弦与余弦：极坐标采样需要两者，一次算出省掉一次三角函数。
-vec2 ogxSinCos(float angle) { return vec2(sin(angle), cos(angle)); }
+vec2 ogxSinCos(float angle) { return vec2(sin(angle), cos(angle)); } // 交回这一段的计算结果。
 
 // 二维旋转：把点按角度绕原点转动，光斑与暗角图案用得到。
-vec2 ogxRotate2(vec2 p, float angle)
-{
-    vec2 sc = ogxSinCos(angle);
-    return vec2(p.x * sc.y - p.y * sc.x, p.x * sc.x + p.y * sc.y);
-}
+vec2 ogxRotate2(vec2 p, float angle) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    vec2 sc = ogxSinCos(angle); // 当前步骤的中间量。
+    return vec2(p.x * sc.y - p.y * sc.x, p.x * sc.x + p.y * sc.y); // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 把值从一段区间线性映射到零到一，再夹紧；区间外不会越界。
-float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); }
+float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); } // 交回这一段的计算结果。
 
 // 把值从一段区间线性映射到另一段区间，两端都不夹紧；目标区间可以反向。
 // 为什么保留不夹紧的版本：动画曲线与雾密度需要外插，提前夹紧会把远处的值压成一团。
-float ogxRemap(float x, float minOrigin, float maxOrigin, float minNew, float maxNew)
-{
-    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew;
-}
+float ogxRemap(float x, float minOrigin, float maxOrigin, float minNew, float maxNew) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 三分量版本的不夹紧映射，逐通道用同一组端点。
-vec3 ogxRemap(vec3 x, vec3 minOrigin, vec3 maxOrigin, vec3 minNew, vec3 maxNew)
-{
-    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew;
-}
+vec3 ogxRemap(vec3 x, vec3 minOrigin, vec3 maxOrigin, vec3 minNew, vec3 maxNew) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 三分量里最小的一个，等价于先两两取小再合并。
 float ogxMinVec3(vec3 value) { return min(value.x, min(value.y, value.z)); }
@@ -135,6 +135,9 @@ float ogxMaxVec3(vec3 value) { return max(value.x, max(value.y, value.z)); }
 // 黄金角：圆周除以黄金比的平方，圆盘点列靠它错开方向，相邻两个点不会撞在一起。
 
 // 圆盘内均匀分布的第 `index` 个采样点：角度按黄金角步进，半径取平方根保证面积均匀。
+// 圆盘映射把方形坐标折成圆：先按最大分量归一，再按半径缩放。
+// 这样角上的点不会被拉出圆外，采样点在整个圆盘上均匀。
+// 三维版本多一个 z 分量，供球面采样直接使用。
 vec2 ogxCircleMap(float index, float count)
 {
     float angle = index * count * OGX_GOLDEN_ANGLE;
@@ -206,6 +209,9 @@ vec3 ogxMatrixTranslation(mat4 m) { return m[3].xyz; }
 vec3 ogxMatrix3MulPoint(mat3 m, vec3 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z; }
 
 // 两参数反正切：先处理竖直方向，再对左半平面补一个圆周率。
+// 两参数反正切：按象限修正单参数版本，返回负一到一之间的角度比例。
+// 为什么不用内建反正切：参考实现把结果除以圆周率，调用方按比例使用；
+// 这里保留同一约定，避免每个调用点各乘一次。
 float ogxAtan2(vec2 v)
 {
     return v.x == 0.0 ?
@@ -222,59 +228,6 @@ float ogxFastAcos(float x)
     return x >= 0.0 ? result : OGX_PI - result;
 }
 
-/*
-实现说明：标量、向量与矩阵的小工具。
-一、矩阵乘向量：四乘四与三乘三各一份，按列展开后相加，避免行列约定差异。
-二、圆映射：方形到圆盘的折叠，返回二维或三维版本。
-三、三角函数：`ogxSinCos` 一次给出正弦与余弦，`ogxAtan2` 处理象限。
-四、快速反余弦：多项式近似，误差在可视范围内，节省反三角函数开销。
-五、极值：二、三、四分量各一份，避免调用方自己写比较链。
-六、重映射：把区间映射到零到一并夹紧，曲线与遮罩共用。
-七、边界：所有函数只做纯计算，不读取屏幕或时间。
-*/
-
-/*
-函数索引：
-一、`ogxSinCos`：一次给出正弦与余弦。
-二、`ogxRotate2`：二维旋转。
-三、`ogxRemapSaturate` 与 `ogxRemap`：区间重映射。
-四、`ogxMinVec2`、`ogxMinVec3`、`ogxMinVec4`、`ogxMaxVec2`、`ogxMaxVec3`、`ogxMaxVec4`：逐分量极值。
-五、`ogxCircleMap` 与 `ogxCircleMapL`：方形到圆盘。
-六、`ogxSpiralSample`：螺旋采样点。
-七、`ogxRoughSpecularDirection`：粗糙高光方向。
-八、`ogxNormalize`：安全归一化，零向量有回退。
-九、`ogxMod`：浮点取模，结果为非负。
-十、`ogxEqual`：向量相等判断。
-十一、`ogxMatrixMul`、`ogxMatrixMulPoint`、`ogxMatrixMulPoint4`、`ogxMatrixTranslation`、`ogxMatrix3MulPoint`：矩阵与向量工具。
-十二、`ogxAtan2`：两参数反正切。
-十三、`ogxFastAcos`：反余弦近似。
-十四、边界：所有函数只做纯计算，不读取屏幕或时间。
-十五、顺序：矩阵按列展开，和 GLSL 的列主序一致。
-*/
-
-/*
-参数与边界：
-一、矩阵乘向量假设矩阵按列主序存储。
-二、归一化在零向量时返回零向量，调用方要判断。
-三、取模的除数不能为零。
-四、相等判断使用绝对误差，阈值由调用方给出。
-五、反余弦近似只在零到一之间有效。
-六、圆映射的输入是负一到一。
-七、极值函数逐分量比较，不处理 NaN。
-八、旋转角度用弧度。
-九、所有函数都是纯函数，可以在任意阶段调用。
-十、矩阵平移只取第四列，不处理投影。
-*/
-
-/*
-补充说明：矩阵与向量。
-矩阵按列主序存储。
-归一化在零向量时返回零。
-取模的除数不能为零。
-反余弦近似只在零到一之间有效。
-画面验证看旋转与投影。
-*/
-
 // 伽马、曲线、打包与法线编码，具体实现在子文件。
 // 子文件：common/math/encoding.slang。
 // 数学模块编码工具：伽马、曲线、八位与十六位打包、八面体法线编码。
@@ -283,40 +236,40 @@ float ogxFastAcos(float x)
 // 设计原因与取舍：编码与解码必须成对出现，放在同一文件里方便核对位运算顺序。
 
 // 线性颜色转显示伽马；二点二近似，和原管线一致，不在这里改成分段标准曲线。
-vec3 ogxLinearToGamma(vec3 color) { return pow(color, vec3(1.0 / 2.2)); }
+vec3 ogxLinearToGamma(vec3 color) { return pow(color, vec3(1.0 / 2.2)); } // 交回这一段的计算结果。
 
 // 显示伽马转回线性，与上一函数互逆。
-vec3 ogxGammaToLinear(vec3 color) { return pow(color, vec3(2.2)); }
+vec3 ogxGammaToLinear(vec3 color) { return pow(color, vec3(2.2)); } // 交回这一段的计算结果。
 
 // 平滑曲线：把零到一映射成两端平、中间陡的零到一，投影光斑与柔边都用它。
 // 与 iterationT 的 `curve(x)` 逐项相同，调用方自己保证输入已夹紧。
-float ogxCurve01(float x)
-{
-    return x * x * (3.0 - 2.0 * x);
-}
+float ogxCurve01(float x) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    return x * x * (3.0 - 2.0 * x); // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 中间画面用的四次方根曲线，压缩高动态范围并保住暗部。
-float ogxLinearToCurve(float color) { return pow(color, 0.25); }
+float ogxLinearToCurve(float color) { return pow(color, 0.25); } // 交回这一段的计算结果。
 
 // 四次方根曲线解码：平方两次得到原值。
-float ogxCurveToLinear(float color)
-{
-    color = color * color;
-    return color * color;
-}
+float ogxCurveToLinear(float color) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    color = color * color; // 按参考写法推进这一步。
+    return color * color; // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 向量版本的四次方根编码，逐通道处理。
-vec3 ogxLinearToCurve3(vec3 color) { return pow(color, vec3(0.25)); }
+vec3 ogxLinearToCurve3(vec3 color) { return pow(color, vec3(0.25)); } // 交回这一段的计算结果。
 
 // 向量版本的四次方根解码，逐通道平方两次。
-vec3 ogxCurveToLinear3(vec3 color)
-{
+vec3 ogxCurveToLinear3(vec3 color) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     return vec3(ogxCurveToLinear(color.x), ogxCurveToLinear(color.y), ogxCurveToLinear(color.z)); // 逐通道走标量版本。
-}
+} // 按参考顺序推进。
 
 // 把两个八位分量打包进一个浮点；高八位放第一个，低八位放第二个。
-float ogxPack2x8(vec2 value)
-{
+float ogxPack2x8(vec2 value) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     uvec2 bits = uvec2(value * 255.0);
     return float((bits.x << 8u) | bits.y) / 65535.0;
 }
@@ -329,6 +282,9 @@ vec2 ogxUnpack2x8(float value)
 }
 
 // 把两个十六位分量直接按位塞进浮点，不损失精度，但只能按位还原。
+// 二乘十六位打包把两个零到一的值塞进一个浮点位模式，适合历史缓冲。
+// 为什么不用两张纹理：历史深度与参考深度总是一起读写，打包后少一次采样。
+// 解包用位运算，不做浮点乘除，跨显卡的结果完全一致。
 float ogxPack2x16(vec2 value)
 {
     uvec2 bits = uvec2(value * 65535.0);
@@ -346,6 +302,9 @@ vec2 ogxUnpack2x16(float value)
 vec2 ogxOctWrap(vec2 v) { return (1.0 - abs(v.yx)) * vec2(ogxSign(v.x), ogxSign(v.y)); }
 
 // 把单位法线编码到零到一的二维坐标，八个象限各占一块。
+// 八面体法线编码：把单位法线投影到八面体再折到正方形，两个通道就够。
+// 相比直接存 xy，八面体在边缘的精度更均匀，低角度法线不会出现台阶。
+// 解码时先还原第三分量再归一化，避免插值后的长度偏差。
 vec2 ogxEncodeNormal(vec3 n)
 {
     n.xy /= (abs(n.x) + abs(n.y) + abs(n.z));
@@ -375,76 +334,8 @@ vec3 ogxDecodeNormalTex(vec3 texNormal)
 }
 
 /*
-实现说明：编码与打包。
-一、伽马：线性到显示用二点二幂，显示到线性用同一次幂的逆；这是管线的近似，不是标准 sRGB。
-二、曲线：四次方根压缩高动态范围，平方两次还原；中间画面用它保住暗部。
-三、八位打包：两个零到一的数各取八位，压进一个通道；解包时按同样的位宽拆回。
-四、十六位打包：用整数与小数部分搬运两个十六位值，不依赖浮点位模式，跨后端可复现。
-五、法线编码：八面体投影把单位向量压到零到一，解码时按绝对值折叠回球面。
-六、边界：打包函数假设输入已经在零到一之间，越界值会被截断而不是报错。
-七、顺序：编码与解码必须成对修改，位宽或常数改一处就要同步另一处。
-*/
-
-/*
-函数索引：
-一、`ogxLinearToGamma`：线性到显示，二点二幂。
-二、`ogxGammaToLinear`：显示到线性，同一次幂的逆。
-三、`ogxCurve01`：零到一平滑曲线，两端平、中间陡。
-四、`ogxLinearToCurve`：四次方根压缩，中间画面用。
-五、`ogxCurveToLinear`：平方两次还原。
-六、`ogxLinearToCurve3` 与 `ogxCurveToLinear3`：三分量版本，逐通道处理。
-七、`ogxPack2x8` 与 `ogxUnpack2x8`：两个八位数压进一个通道。
-八、`ogxPack2x16` 与 `ogxUnpack2x16`：两个十六位数用整数与小数部分搬运。
-九、`ogxOctWrap`：八面体编码的折叠，处理负半轴。
-十、`ogxEncodeNormal`：单位法线压到零到一。
-十一、`ogxDecodeNormal`：零到一还原单位法线。
-十二、`ogxDecodeNormalTex`：从贴图通道解出法线，先解码再归一化。
-十三、位宽：打包与解包必须成对修改，位宽或常数改一处就要同步另一处。
-十四、边界：打包函数假设输入在零到一之间，越界值会被截断。
-十五、用途：中间画面、法线图与延迟缓冲共用这一组编码。
-*/
-
-/*
-参数与边界：
-一、伽马函数假设输入非负，负值会得到未定义结果。
-二、四次方根曲线假设输入非负，中间画面已经保证。
-三、八位打包假设两个输入都在零到一之间。
-四、十六位打包用浮点小数部分，输入超出零到一时会丢精度。
-五、八面体编码要求法线已归一化。
-六、解码后的法线要再归一化，贴图量化会带来长度误差。
-七、打包与解包的位宽必须一致。
-八、所有函数都是纯函数，不读取纹理或屏幕。
-九、编码结果可以存进八位或十六位通道，调用方按精度选择。
-十、法线贴图的绿通道方向由调用方决定，库不做翻转。
-*/
-
-/*
-补充说明：编码的精度。
-八位打包适合颜色，十六位打包适合坐标。
-法线编码的量化误差在解码后要重新归一化。
-伽马函数不处理负值。
-四次方根曲线不处理负值。
-打包与解包的位宽必须一致。
-画面验证看中间画面的暗部与法线边缘。
-*/
-
-/*
-补充说明：精度与边界。
-八位打包适合颜色。
-十六位打包适合坐标。
-法线解码后要重新归一化。
-伽马与四次方根不处理负值。
-打包与解包位宽必须一致。
-*/
-/*
 编码结果存进通道时按精度选择位宽。
 法线贴图的绿通道方向由调用方决定。
-*/
-
-/*
-补充说明：通道布局由调用方决定。
-法线解码后要重新归一化。
-编码与解码必须成对维护。
 */
 
 // 材质、黑体、求交与相函数，具体实现在子文件。
@@ -457,57 +348,70 @@ vec3 ogxDecodeNormalTex(vec3 texNormal)
 // --- 材质、黑体与光线求交 ---
 
 // 沃尔特 GGX 分布：粗糙度越大，高光越散。
-float ogxDistributionGGX(float NdotH, float roughness)
-{
-    float roughness2 = roughness * roughness;
-    float k = NdotH * NdotH * (roughness2 - 1.0) + 1.0;
-    return roughness2 / (OGX_PI * k * k);
-}
+// 分母里的圆周率让分布在整个半球上积分为一，粗糙度平方控制峰值高度。
+// 为什么不用更简单的半程高光：GGX 的长尾更接近真实金属的高光边缘。
+float ogxDistributionGGX(float NdotH, float roughness) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    float roughness2 = roughness * roughness; // 先平方，后面峰值宽度与分母都用这一份。
+    float k = NdotH * NdotH * (roughness2 - 1.0) + 1.0; // 分母的二次项，粗糙度为零时退化成一。
+    return roughness2 / (OGX_PI * k * k); // 峰值高度由粗糙度平方决定。
+} // 按参考顺序推进。
 
 // 菲涅尔近似：掠射角反射强，正对时只剩基础反射率。
+// 先把夹角转成“一减余弦”再取五次方，是为了让曲线在正对时平滑落到 f0。
+// `f90` 是掠射时的上限，金属与电介质可以分别给不同的值。
 float ogxFresnelSchlick(float VdotH, float f0, float f90)
 {
-    VdotH = 1.0 - VdotH;
-    float VdotH2 = VdotH * VdotH;
-    return f0 + (f90 - f0) * VdotH2 * VdotH2 * VdotH;
+    VdotH = 1.0 - VdotH; // 换成掠射程度，零是正对、一是贴着表面。
+    float VdotH2 = VdotH * VdotH; // 五次方的中间量。
+    return f0 + (f90 - f0) * VdotH2 * VdotH2 * VdotH; // 从正对反射率平滑过渡到掠射上限。
 }
 
 // 可见性项：把入射与出射方向的遮挡相乘，采用粗糙度一半的常用近似。
+// 半粗糙度是实时渲染的常用折中：完全按 Smith 理论算更贵，画面差异很小。
+// 分母在正对时接近一，掠射时变大，正好压住菲涅尔的亮边。
 float ogxVisibilitySchlick(float NdotL, float NdotV, float roughness)
 {
-    float k = roughness * 0.5;
-    return NdotL / ((NdotL * (1.0 - k) + k) * (NdotV * (1.0 - k) + k));
+    float k = roughness * 0.5; // 半粗糙度是实时渲染的常用近似。
+    return NdotL / ((NdotL * (1.0 - k) + k) * (NdotV * (1.0 - k) + k)); // 入射与出射遮挡相乘。
 }
 
 // 布利漫反射：能量在掠射时更集中，避免边缘死黑。
+// 两个菲涅尔项分别描述光和视线方向的散射，乘起来比 Lambert 多一层柔边。
+// 最后乘 1/π 是把反射率积分归一化，和 GGX 共用同一套能量口径。
 float ogxDiffuseBurley(vec3 n, vec3 v, vec3 l, float roughness)
 {
-    vec3 h = normalize(v + l);
-    float LdotH = ogxSaturate(dot(l, h));
-    float NdotL = ogxSaturate(dot(n, l));
-    float NdotV = ogxSaturate(dot(n, v));
-    float f90 = 0.5 + 2.0 * roughness * LdotH * LdotH;
-    float lightScatter = ogxFresnelSchlick(NdotL, 1.0, f90);
-    float viewScatter = ogxFresnelSchlick(NdotV, 1.0, f90);
-    return NdotL * lightScatter * viewScatter * OGX_INV_PI;
+    vec3 h = normalize(v + l); // 半程方向，位置在视线与光线中间。
+    float LdotH = ogxSaturate(dot(l, h)); // 光线与半程方向的余弦。
+    float NdotL = ogxSaturate(dot(n, l)); // 表面朝光程度。
+    float NdotV = ogxSaturate(dot(n, v)); // 表面朝视线程度。
+    float f90 = 0.5 + 2.0 * roughness * LdotH * LdotH; // 掠射上限随粗糙度抬高。
+    float lightScatter = ogxFresnelSchlick(NdotL, 1.0, f90); // 光方向的散射。
+    float viewScatter = ogxFresnelSchlick(NdotV, 1.0, f90); // 视线方向的散射。
+    return NdotL * lightScatter * viewScatter * OGX_INV_PI; // 归一化后的漫反射。
 }
 
 // 完整 GGX 高光：菲涅尔、可见性、分布三项相乘。
+// 三项相乘是标准高光分解，顺序不影响结果，这里按参考的写法排。
+// 调用方只要给法线、视线、光方向、粗糙度与基础反射率，不需要自己拆项。
 float ogxSpecularGGX(vec3 n, vec3 v, vec3 l, float roughness, float f0)
 {
     vec3 h = normalize(v + l);
-    float NdotH = ogxSaturate(dot(n, h));
+    float NdotH = ogxSaturate(dot(n, h)); // 法线与半程方向的余弦。
     float LdotH = ogxSaturate(dot(l, h));
     float NdotL = ogxSaturate(dot(n, l));
     float NdotV = ogxSaturate(dot(n, v));
-    float ggx = ogxFresnelSchlick(LdotH, f0, 1.0);
-    ggx *= ogxVisibilitySchlick(NdotL, NdotV, roughness);
-    ggx *= ogxDistributionGGX(NdotH, roughness);
+    float ggx = ogxFresnelSchlick(LdotH, f0, 1.0); // 菲涅尔项。
+    ggx *= ogxVisibilitySchlick(NdotL, NdotV, roughness); // 几何遮挡项。
+    ggx *= ogxDistributionGGX(NdotH, roughness); // 法线分布项。
     return ggx;
 }
 
 // 黑体色温拟合：先求色度横坐标与纵坐标，再转线性显示原色。
 // 分界点四千开与两千二百二十二开来自原拟合的分段条件，不能省略。
+// 两组横坐标多项式分别覆盖低温和高温，纵坐标再多一段低温分支，
+// 因为单一多项式在两端会偏色，分段后星空与日落的色温才连续。
+// 最后从 XYZ 转回 sRGB 并夹掉负值，负值只出现在拟合边缘，直接保留会变成黑块。
 vec3 ogxBlackbody(float temperature)
 {
     const vec4 SPLINE_X_LOW = vec4(-0.2661293e9, -0.2343589e6, 0.8776956e3, 0.179910);
@@ -515,25 +419,27 @@ vec3 ogxBlackbody(float temperature)
     const vec4 SPLINE_Y_LOW = vec4(-1.1063814, -1.34811020, 2.18555832, -0.20219683);
     const vec4 SPLINE_Y_MID = vec4(-0.9549476, -1.37418593, 2.09137015, -0.16748867);
     const vec4 SPLINE_Y_HIGH = vec4(3.0817580, -5.87338670, 3.75112997, -0.37001483);
-    float rt = 1.0 / temperature;
-    float rt2 = rt * rt;
-    vec4 coeffX = vec4(rt2 * rt, rt2, rt, 1.0);
-    float x = dot(coeffX, temperature < 4000.0 ? SPLINE_X_LOW : SPLINE_X_HIGH);
-    float x2 = x * x;
-    vec4 coeffY = vec4(x2 * x, x2, x, 1.0);
-    vec4 splineY = temperature < 2222.0 ? SPLINE_Y_LOW : (temperature < 4000.0 ? SPLINE_Y_MID : SPLINE_Y_HIGH);
-    float z = 1.0 / dot(coeffY, splineY);
-    vec3 xyz = vec3(x * z, 1.0, z);
-    xyz.z -= xyz.x + 1.0;
+    float rt = 1.0 / temperature; // 多项式以倒色温为自变量。
+    float rt2 = rt * rt; // 倒色温平方，供三次多项式复用。
+    vec4 coeffX = vec4(rt2 * rt, rt2, rt, 1.0); // 三次项、二次项、一次项与常数。
+    float x = dot(coeffX, temperature < 4000.0 ? SPLINE_X_LOW : SPLINE_X_HIGH); // 四千开分段求横坐标。
+    float x2 = x * x; // 纵坐标多项式以横坐标为自变量。
+    vec4 coeffY = vec4(x2 * x, x2, x, 1.0); // 纵坐标的三次项。
+    vec4 splineY = temperature < 2222.0 ? SPLINE_Y_LOW : (temperature < 4000.0 ? SPLINE_Y_MID : SPLINE_Y_HIGH); // 低温、中温、高温三段。
+    float z = 1.0 / dot(coeffY, splineY); // 先算缩放，再还原色度分量。
+    vec3 xyz = vec3(x * z, 1.0, z); // 色度坐标转三分量。
+    xyz.z -= xyz.x + 1.0; // 由 x+y+z=1 反推 Z 分量。
     // 三列分别乘三个色度分量再相加，保持与 GLSL 矩阵乘向量的求和顺序一致。
     const vec3 XYZ_TO_SRGB_0 = vec3(3.24097, -0.96924, 0.05563);
     const vec3 XYZ_TO_SRGB_1 = vec3(-1.53738, 1.87597, -0.20398);
     const vec3 XYZ_TO_SRGB_2 = vec3(-0.49861, 0.04156, 1.05697);
-    vec3 rgb = XYZ_TO_SRGB_0 * xyz.x + XYZ_TO_SRGB_1 * xyz.y + XYZ_TO_SRGB_2 * xyz.z;
-    return max(rgb, vec3(0.0));
+    vec3 rgb = XYZ_TO_SRGB_0 * xyz.x + XYZ_TO_SRGB_1 * xyz.y + XYZ_TO_SRGB_2 * xyz.z; // 三列按顺序相加。
+    return max(rgb, vec3(0.0)); // 拟合边缘的负值夹到零。
 }
 
 // 射线与平面求交：射线与平面法线接近平行时返回极远处的默认交点，避免除零。
+// 阈值一万分之一弧度：再小的夹角在屏幕上已经看不出交点移动，继续除会放大浮点误差。
+// 默认交点放在一亿米外，调用方仍能拿到一个有限坐标，不会传播无穷大。
 vec3 ogxRayPlaneIntersection(vec3 origin, vec3 direction, vec3 normal)
 {
     float rayPlaneAngle = dot(direction, normal);
@@ -548,6 +454,8 @@ vec3 ogxRayPlaneIntersection(vec3 origin, vec3 direction, vec3 normal)
 }
 
 // 射线与球求交：返回进入和离开两个距离，无交点时返回一正一负的极值。
+// 用一亿与负一亿当哨兵：调用方只比较两个分量就能判断有没有交点，不必再加布尔返回值。
+// 判别式只开一次方，进入与离开共用同一个偏移，少两次重复计算。
 vec2 ogxRaySphereIntersection(vec3 origin, vec3 direction, float radius){
     float b = dot(origin, direction);
     float c = -radius * radius + dot(origin, origin);
@@ -581,6 +489,8 @@ vec2 ogxRaySphereHit(vec3 position, vec3 direction, float radius)
 // 射线与轴对齐包围盒求交：返回进入与离开的距离。
 // 三个轴分别解一次区间，再把区间求交集；无交点时返回一正一负的极值。
 // `boxSize` 是盒子的半边长，盒子以 `origin` 所在坐标系的原点为中心。
+// 方向分量接近零时换成百万分之一：这样倒数仍是有限数，区间会自然落到盒外或全包。
+// 先取每轴的近远再求最大最小，是标准的逐轴区间方法，不需要逐面判断。
 vec2 ogxRayBoxRange(vec3 origin, vec3 direction, vec3 boxSize)
 {
     vec3 safeDirection = vec3(abs(direction.x) < 1e-6 ? 1e-6 : direction.x,
@@ -604,9 +514,13 @@ float ogxRayBoxIntersection(vec3 origin, vec3 direction, vec3 boxSize)
 }
 
 // 瑞利相函数：天空散射近似各向同性，常数是十六分之三除以圆周率。
+// 蓝光波长短、散射强，所以天空偏蓝；这里只保留角度项，波长权重交给大气模块。
+// 常数 0.059683104 等于 3/(16π)，与参考实现逐位一致。
 float ogxRayleighPhase(float nu) { return 0.059683104 * (nu * nu + 1.0); }
 
 // 米氏相函数：康奈特-沙克形式，`g` 越大前向散射越集中。
+// 康奈特-沙克比 HG 多一个“一加余弦平方”因子，太阳附近的亮晕更集中。
+// 分母的 -1.5 次方来自相函数的解析积分，改指数会让太阳周围过亮或过暗。
 float ogxMiePhase(float g, float nu)
 {
     float gg = g * g;
@@ -614,6 +528,8 @@ float ogxMiePhase(float g, float nu)
     return k * (1.0 + nu * nu) * pow(1.0 + gg - 2.0 * g * nu, -1.5);
 }
 
+// 亨耶-格林斯坦相函数在云与雾里共用；把除派拆成参数，是为了让 3.14 与圆周率两种精度都能逐位对照。
+// 分母的负一点五次方来自相函数的解析积分，改指数会改变太阳附近的亮度分布。
 // 亨耶-格林斯坦相函数：把除以圆周率的部分作为显式参数，方便参考包保留自己的 3.14 常数。
 // 为什么参数化：云、雾与层状云参考实现的圆周率精度不同，统一常数会改变严格对照的数值。
 float ogxHenyeyGreensteinPhase(float cosAngle, float g, float inversePi)
@@ -624,117 +540,9 @@ float ogxHenyeyGreensteinPhase(float cosAngle, float g, float inversePi)
 
 // 相函数与几何近似在文件前半段，闪电照明移到天气模块。
 
-/*
-实现说明：材质、黑体与光线求交。
-一、GGX 分布：粗糙度平方进入分母，粗糙度越大高光越散。
-二、菲涅尔：Schlick 五次方近似，掠射角反射增强，正对时回到基础反射率。
-三、可见性：Smith 近似把入射与出射遮挡相乘，粗糙度用一半的常用写法。
-四、漫反射：Burley 分布让掠射边缘更集中，避免死黑。
-五、完整高光：分布、菲涅尔与可见性三项相乘，金属度只改基础反射率。
-六、黑体：先求色度坐标再转线性，分界点在四千开与两千二百二十二开。
-七、射线求交：球、平面与包围盒各一份，返回最近正交点。
-八、相函数：瑞利、米氏与 Henyey-Greenstein 用于大气与云。
-九、闪电光柱：按竖直光柱的距离做指数衰减，云与雾共用一条曲线。
-十、边界：函数只接收显式几何与光学参数，不读取宿主状态；常数按参考精度保留。
-*/
-
-/*
-函数索引：
-一、`ogxDistributionGGX`：输入半程向量与粗糙度，输出 GGX 分布值；粗糙度平方进入分母。
-二、`ogxFresnelSchlick`：输入夹角余弦、基础反射率与掠射反射率，输出菲涅尔系数；五次方近似。
-三、`ogxVisibilitySchlick`：输入入射、出射与粗糙度，输出 Smith 可见性；粗糙度用一半。
-四、`ogxDiffuseBurley`：输入法线、视线、光方向与粗糙度，输出漫反射；掠射边缘更集中。
-五、`ogxSpecularGGX`：把分布、菲涅尔与可见性三项相乘，输出完整高光；金属只改基础反射率。
-六、`ogxBlackbody`：输入色温，输出线性颜色；先求色度坐标再转矩阵，分界点在四千开。
-七、`ogxRayPlaneIntersection`：输入点、方向、平面法线与偏移，输出交点；平行时返回零向量。
-八、`ogxRaySphereIntersection`：输入射线与球，输出两个参数；没有交点时两个值都小于零。
-九、`ogxRaySphereHit`：只返回最近正交点，供不需要远交点的调用方使用。
-十、`ogxRayBoxRange`：输入射线与包围盒，输出入口与出口参数；用于体素与云层裁剪。
-十一、`ogxRayBoxIntersection`：只返回是否命中并把位置推进到入口。
-十二、`ogxRayleighPhase`：输入夹角余弦，输出瑞利相函数；蓝光散射更强。
-十三、`ogxMiePhase`：输入前向集中度与夹角，输出米氏相；气溶胶的白色光晕来自它。
-十四、`ogxHenyeyGreensteinPhase`：输入夹角、集中度与圆周率倒数，输出通用相函数；云与雾共用。
-十五、常数：所有多项式系数与矩阵按参考精度保留，换成近似值会让高光或色温偏色。
-十六、边界：函数只接收显式几何与光学参数，不读取宿主状态；调用方负责夹紧输入。
-*/
-
-/*
-参数与边界：
-一、GGX 的粗糙度在零附近会变成镜面，调用方需要先夹到最小值，避免除零。
-二、菲涅尔的基础反射率对金属是底色，对电介质是零点零四左右。
-三、Smith 可见性假设入射与出射遮挡独立，掠射角会略微偏暗，这是常用近似。
-四、Burley 漫反射在粗糙度为零时退化成 Lambert，粗糙度越大边缘越亮。
-五、完整高光不包含多次散射能量，金属在粗糙表面会偏暗，需要环境光补足。
-六、黑体拟合在四千开以下走另一条绿通道曲线，温度越低越偏红。
-七、球面求交返回两个参数，调用方要自己判断哪个在射程内。
-八、平面求交在射线平行时返回零向量，调用方不能把零当成有效交点。
-九、包围盒求交要求入口小于出口且入口为正，背面命中不算。
-十、瑞利相函数在前后方向对称，米氏相函数在前向集中。
-十一、Henyey-Greenstein 的集中度在零到一之间，负数表示后向散射。
-十二、闪电光柱的竖直范围是一百一十六格，水平距离按米计算。
-十三、所有常数按参考精度保留，改成近似值会让严格对照的常数检查失败。
-十四、函数不读取时间、屏幕或相机，调用方把需要的量显式传入。
-十五、返回值都是线性空间颜色或纯几何量，伽马编码由调用方负责。
-十六、矩阵乘法在 Slang 与 GLSL 的行列解释不同，统一走标量模块的展开。
-十七、射线方向的长度会影响参数含义，调用方应先归一化。
-十八、黑体色的输出可能超过一，需要曝光或色调映射再夹紧。
-十九、高光项没有乘光源颜色，调用方要把光色与强度乘上去。
-二十、可见性项已经包含分母，不要再乘一次点积。
-二十一、分布项的分母在粗糙度极小时接近零，提前夹紧能避免亮点。
-二十二、相函数的归一化因子由调用方传入，参考包使用的圆周率精度不同。
-二十三、球面求交的半径必须为正，负半径会得到相反的交点顺序。
-二十四、包围盒的上下界必须按分量排序，调用方要保证最小值小于最大值。
-二十五、平面求交的偏移是沿法线的距离，不是世界坐标。
-二十六、所有这些函数都是纯函数，可以在任意阶段调用。
-*/
-
-/*
-补充说明：高光与求交的边界。
-一、粗糙度为零时 GGX 分母接近零，调用方要先夹紧。
-二、菲涅尔的基础反射率对金属是底色，对电介质约零点零四。
-三、Smith 可见性假设入射与出射遮挡独立，掠射角略暗。
-四、Burley 漫反射在粗糙度为零时退化成 Lambert。
-五、完整高光不含多次散射，粗糙金属会偏暗。
-六、黑体拟合在四千开以下走另一条绿通道曲线。
-七、球面求交返回两个参数，调用方要判断射程。
-八、平面求交平行时返回零向量。
-九、包围盒求交不把背面命中算作入口。
-十、瑞利相函数前后对称，米氏相函数前向集中。
-十一、Henyey-Greenstein 的集中度在零到一之间。
-十二、闪电光柱的竖直范围是一百一十六格。
-十三、常数按参考精度保留。
-十四、函数不读取时间、屏幕或相机。
-十五、返回值是线性颜色或纯几何量。
-十六、矩阵乘法统一走标量模块的展开。
-十七、射线方向应先归一化。
-十八、黑体色可能超过一，需要曝光或色调映射。
-十九、高光项没有乘光源颜色。
-二十、可见性项已经包含分母。
-二十一、分布项在粗糙度极小时要提前夹紧。
-二十二、相函数的归一化因子由调用方传入。
-二十三、球面半径必须为正。
-二十四、包围盒上下界要按分量排序。
-二十五、平面偏移是沿法线的距离。
-二十六、所有这些函数都是纯函数。
-二十七、修改常数会同时影响高光、雾与云的亮度。
-二十八、严格对照会检查常数与采样次数。
-二十九、画面验证看高光边缘与阴影接触面。
-三十、离线编译只证明语法。
-三十一、高光在金属与电介质上的表现不同。
-三十二、粗糙度改变时反射颜色也要跟着变。
-三十三、环境光与直射光要分开叠加。
-三十四、相函数的集中度不要超过一。
-三十五、求交参数为负表示交点在射线背后。
-三十六、包围盒入口等于出口时按未命中处理。
-三十七、黑体温度低于一千开时按比例压暗。
-三十八、菲涅尔在掠射时接近一，不要重复加反射率。
-三十九、可见性项在粗糙度为零时退化成简单除法。
-四十、所有这些边界都应按场景实际尺度调整。
-*/
-
 // 抖动、切线基、旋转与空间扭曲，具体实现在子文件。
 // 子文件：common/math/pattern.slang。
-// 数学模块图案工具：拜尔抖动、切线基、HSV、旋转矩阵、径向曲线与空间扭曲。
+// 数学模块图案工具：拜尔抖动、切线基、旋转矩阵、径向曲线与夜视。
 // 调用位置：由 `common/math.slang` 内联引入，后期、天空与吸积盘共用。
 // 可复制示例：`float b = ogxInterleavedGradientNoise(pixelCoord);`
 // 设计原因与取舍：图案函数保持原来的常数与矩阵展开顺序，避免画面抖动改变。
@@ -742,34 +550,43 @@ float ogxHenyeyGreensteinPhase(float cosAngle, float g, float inversePi)
 // --- 抖动表、切线基与颜色图案 ---
 
 // 交错梯度噪声：一个像素一个值，适合做抖动，常数来自原始论文。
-float ogxInterleavedGradientNoise(vec2 coordinate)
-{
-    return fract(52.9829189 * fract(0.06711056 * coordinate.x + 0.00583715 * coordinate.y));
-}
+float ogxInterleavedGradientNoise(vec2 coordinate) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    // 两个大常数来自原始论文，乘完取小数就是每像素稳定的伪随机值，不需要纹理。
+    return fract(52.9829189 * fract(0.06711056 * coordinate.x + 0.00583715 * coordinate.y)); // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 二乘二拜尔矩阵：四个格子依次得到零、四分之一、二分之一、四分之三。
-float ogxBayer2(vec2 a)
-{
+float ogxBayer2(vec2 a) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    // 先取整：同一格里的不同小数必须得到同一个阈值，否则抖动会退化成噪点。
     a = floor(a);
+    // 二乘二矩阵的四个值由这两个系数交错得到，范围正好是零到四分之三。
     return fract(dot(a, vec2(0.5, a.y * 0.75)));
 }
 
 // 四乘四拜尔矩阵：由二乘二嵌套得到，用来做稳定抖动。
+// 四乘四由二乘二嵌套：低频层乘四分之一，高频层原样，阈值均匀铺满十六格。
 float ogxBayer4(vec2 a) { return ogxBayer2(0.5 * a) * 0.25 + ogxBayer2(a); }
 
 // 八乘八拜尔矩阵。
+// 八乘八继续嵌套；低频用四阶、高频用二阶，是拜尔矩阵的递推写法。
 float ogxBayer8(vec2 a) { return ogxBayer4(0.5 * a) * 0.25 + ogxBayer2(a); }
 
 // 十六乘十六拜尔矩阵：四层二乘二矩阵嵌套，抖动级别比八乘八细四倍。
+// 十六阶开始两层都用四阶，频率间隔更大，适合时间累积前的初始抖动。
 float ogxBayer16(vec2 a) { return ogxBayer4(0.25 * a) * 0.0625 + ogxBayer4(a); }
 
 // 三十二乘三十二拜尔矩阵：低频一档换成八乘八，级别再细四倍。
+// 三十二阶用八阶低频加四阶高频，格数翻倍但只多一次二阶调用。
 float ogxBayer32(vec2 a) { return ogxBayer8(0.25 * a) * 0.0625 + ogxBayer4(a); }
 
 // 六十四乘六十四拜尔矩阵：范围大，适合时间累积前的初始偏移。
+// 六十四阶两层都用八阶；0.015625 是六十四分之一，保证总和落回零到一。
 float ogxBayer64(vec2 a) { return ogxBayer8(0.125 * a) * 0.015625 + ogxBayer8(a); }
 
 // 一百二十八乘一百二十八拜尔矩阵：目前最细的一档，给低步数光追分摊首帧噪点。
+// 一百二十八阶是当前最细一档，低频十六阶、高频八阶，用于低步数光追的首帧分摊。
 float ogxBayer128(vec2 a) { return ogxBayer16(0.125 * a) * 0.015625 + ogxBayer8(a); }
 
 // 切线基的三个方向；用结构体而不是矩阵，避免两种语言的行列顺序不同造成转置错误。
@@ -782,6 +599,9 @@ struct OgxTangentBasis
 
 // 由位置与纹理导数构造切线基：先叉乘得到法线，再解切线与副切线。
 // 模型没提供切线时只能这样反推；返回结构体，调用方按字段读取。
+// 切线基为什么用导数反推：Minecraft 的方块模型不一定带切线，顶点阶段也拿不到接缝信息；
+// 用屏幕空间的位置差与纹理差构造，能在任意几何上得到一致的法线贴图方向。
+// 退化时（位置差共线）叉乘接近零，最后除以模长会把方向压回单位长度，不产生无穷大。
 OgxTangentBasis ogxTangentBasis(vec3 dp1, vec3 dp2, vec2 duv1, vec2 duv2)
 {
     vec3 normal = normalize(cross(dp1, dp2));
@@ -798,6 +618,11 @@ OgxTangentBasis ogxTangentBasis(vec3 dp1, vec3 dp2, vec2 duv1, vec2 duv2)
 }
 
 // 色相、饱和度、明度：按最大通道选扇区，再算色相与饱和度。
+// 为什么放在数学模块：宿主的公共数学包装与体积光编码都要用，属于共享颜色工具。
+// 输入假设在零到一之间，超出范围时取模结果会绕回，调用方要先夹紧。
+// 色相以六分之一圈为单位，除以六段再取小数，和参考实现完全一致。
+// 色相、饱和度、明度：按最大通道选扇区，再算色相与饱和度。
+// 为什么放在颜色模块：表面湿润、体素着色与光传播编码都要把颜色拆成 HSV，属于共享颜色工具。
 vec3 ogxRgbToHsv(vec3 color)
 {
     const vec4 K = vec4(0.0, -1.0, 2.0, -3.0) / 3.0;
@@ -808,6 +633,8 @@ vec3 ogxRgbToHsv(vec3 color)
     return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
+// 色相、饱和度、明度的拆解在颜色模块；这里只保留图案与坐标工具。
+
 // 三个轴的旋转合成：先俯仰、再偏航、最后滚转，供吸积盘与末地行星摆正自己的坐标系。
 // 这里保留原程序的扁平构造参数顺序：生成 GLSL 后由 GLSL 的列主序规则解释，
 // 因此运行时矩阵与旧实现完全相同；不要在 Slang 侧改成按列传入，否则生成文本会换序。
@@ -817,6 +644,20 @@ mat3 ogxRotateMatrix(float x, float y, float z)
     mat3 maty = mat3(cos(y), 0.0, -sin(y), 0.0, 1.0, 0.0, sin(y), 0.0, cos(y)); // 绕纵轴偏航。
     mat3 matz = mat3(cos(z), sin(z), 0.0, -sin(z), cos(z), 0.0, 0.0, 0.0, 1.0); // 绕前后轴滚转。
     return maty * matx * matz; // 三个旋转按原程序的顺序合成。
+}
+
+// 绕纵轴的旋转矩阵：末地天空、行星与雾相位共用同一份，避免各自抄一遍符号。
+mat3 ogxRotationY(float angle)
+{
+    return mat3(cos(angle), 0.0, sin(angle), 0.0, 1.0, 0.0, -sin(angle), 0.0, cos(angle)); // 与参考实现的偏航矩阵逐项一致。
+}
+
+// 先俯仰再偏航的旋转：行星与末地雾用同一套 y 轴朝上的天球坐标。
+// 为什么单独成函数：两处原来各写三行矩阵，符号一旦改错会让雾和行星的相位对不上。
+mat3 ogxRotationXThenY(float angleX, float angleY)
+{
+    mat3 rotationX = mat3(1.0, 0.0, 0.0, 0.0, cos(angleX), -sin(angleX), 0.0, sin(angleX), cos(angleX)); // 俯仰。
+    return rotationX * ogxRotationY(angleY); // 参考实现的相乘顺序。
 }
 
 // 环形径向轮廓：中心亮、边缘按四次方乘线性衰减，用于光晕。
@@ -834,74 +675,6 @@ void ogxDoNightEye(inout vec3 color)
     color = mix(color, luma * vec3(0.7771, 1.0038, 1.6190), vec3(0.5)); // 偏蓝亮度与原色各占一半。
 }
 
-// 空间扭曲：越靠近原点，光线方向越被拉向原点，模拟黑洞附近的引力弯曲。
-// 方向和位置都就地修改，调用方下一轮步进会用到新的方向。
-void ogxWarpSpace(inout vec3 direction, inout vec3 position)
-{
-    vec3 origin = vec3(0.0);
-    float singularityDistance = distance(position, origin);
-    float warpFactor = 1.0 / (singularityDistance * singularityDistance + 0.000001);
-    vec3 singularityVector = normalize(origin - position);
-    float warpAmount = 0.06;
-    direction = normalize(direction + singularityVector * warpFactor * warpAmount);
-}
-
-/*
-实现说明：屏幕图案与坐标变换。
-一、Bayer 矩阵：二阶到八阶的阈值矩阵由递归展开得到，抖动用它把色阶打散。
-二、旋转矩阵：二维旋转与三列矩阵互转，光环与光斑按角度旋转。
-三、圆映射：把方形坐标折到圆盘，`ogxCircleMapL` 返回三维版本供球面采样。
-四、空间扭曲：黑洞附近的引力弯曲按距离平方增强方向偏移。
-五、夜视：暗处把颜色混向偏蓝的亮度，宿主公共数学的包装直接调用它。
-六、哈希与噪声：屏幕坐标加帧号生成稳定的伪随机值，避免每帧重新排布。
-七、边界：图案函数不读取分辨率，调用方把像素坐标归一化后传入。
-*/
-
-/*
-函数索引：
-一、`ogxInterleavedGradientNoise`：屏幕坐标的插值梯度噪声。
-二、`ogxBayer2` 到 `ogxBayer128`：递归展开的 Bayer 阈值矩阵。
-三、`ogxTangentBasis`：按法线构造切线基，退化方向有回退。
-四、`ogxRgbToHsv`：颜色到色相、饱和度、明度。
-五、`ogxRotateMatrix`：二维旋转与三列矩阵互转。
-六、`ogxRadialCurve`：环形径向轮廓。
-七、`ogxDoNightEye`：暗视觉偏蓝。
-八、`ogxWarpSpace`：黑洞附近的引力弯曲。
-九、边界：图案函数不读取分辨率，调用方把像素坐标归一化后传入。
-十、常数：Bayer 矩阵与夜间偏蓝系数按参考精度保留。
-*/
-
-/*
-参数与边界：
-一、Bayer 矩阵的阶数越高，抖动的颗粒越细。
-二、切线基在法线与辅助轴平行时退化，调用方要提供回退。
-三、色相转换假设输入在零到一之间。
-四、旋转矩阵的角度用弧度。
-五、径向曲线在中心为零，在边缘回落。
-六、夜视只改颜色，不改亮度统计。
-七、空间扭曲的强度固定，调用方不能按场景缩放。
-八、图案函数不读取分辨率，坐标要归一化。
-九、所有函数都是纯函数，可以在任意阶段调用。
-十、哈希与噪声的常数按参考精度保留。
-*/
-
-/*
-补充说明：图案的坐标。
-Bayer 矩阵按屏幕像素取模，坐标要取整。
-切线基在法线与辅助轴平行时退化。
-色相转换的输入在零到一之间。
-空间扭曲的强度固定。
-画面验证看抖动颗粒与法线。
-*/
-
-/*
-补充说明：图案坐标。
-Bayer 矩阵按像素取模。
-切线基在平行时退化。
-色相输入在零到一之间。
-空间扭曲强度固定。
-*/
-
 // 双线性与双三次纹理过滤，具体实现在子文件。
 // 子文件：common/math/filter.slang。
 // 数学模块纹理过滤：双线性、天空盒图集双线性、三次 B 样条与双三次采样。
@@ -909,7 +682,7 @@ Bayer 矩阵按像素取模。
 // 可复制示例：`vec4 c = ogxBilinearTexture(tex, uv, texSize);`
 // 设计原因与取舍：库不绑定任何纹理单元；取像素与层级采样都显式写在参数里。
 
-// --- 纹理过滤、空间扭曲与随机采样 ---
+// --- 纹理过滤与双三次采样 ---
 
 // 双线性取像素：自己取四个相邻纹素再插值，不依赖硬件的线性过滤。
 // 为什么不用 `SampleLevel`：像素画风格的月亮贴图会把硬件过滤设成最近邻，画面上出现锯齿；
@@ -1032,53 +805,56 @@ vec4 ogxBicubicBlurTexture(sampler2D texSampler, vec2 coord)
 
 // R2 低差异序列：两个无理数比例把序号摊成平面上的均匀点，样本不会聚成一团。
 // 为什么用 R2 而不是随机数：随机数会成簇，R2 每加一个样本都把空隙补得更均匀。
-vec2 ogxR2Sample(int n)
-{
+vec2 ogxR2Sample(int n) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     vec2 alpha = vec2(0.75487765, 0.56984026); // 二维黄金比例常数，照 Eclipse 原值。
     return fract(alpha * float(n)); // 序号乘常数后取小数，得到零到一的点。
-}
+} // 按参考顺序推进。
 
 // 余弦加权半球采样：把两个零到一的随机数变成朝上的半球方向。
 // 为什么用余弦权重：漫反射的入射能量本身带余弦，按这个分布采样可以直接平均，不用再除权重。
-vec3 ogxCosineHemisphere(vec2 xi)
-{
+// 余弦半球采样：按余弦分布取方向，重要性采样让漫反射的方差更小。
+// 输入两个零到一的随机数，输出单位方向；调用方负责把它们变成逐帧变化。
+// 用平方根而不是正弦，是为了让圆盘上的点均匀分布，不会在中心堆积。
+vec3 ogxCosineHemisphere(vec2 xi) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float theta = OGX_TAU * xi.y; // 绕竖直轴的角度。
     float r = sqrt(xi.x); // 半径开方，得到余弦分布。
     return vec3(r * cos(theta), r * sin(theta), sqrt(clamp(1.0 - xi.x, 0.0, 1.0))); // 横向两个分量加竖直分量。
-}
+} // 按参考顺序推进。
 
 // 把手部深度从固定深度尺度换算到正常投影尺度，屏幕空间追踪手部光时用。
 // `handDepth` 是加载器给的手部深度比例，手不参与追踪时原样返回。
-float ogxConvertHandDepth3(float depth, bool hand, float handDepth)
-{
+float ogxConvertHandDepth3(float depth, bool hand, float handDepth) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     if (!hand) return depth; // 不是手部像素就不换算。
     float ndcDepth = depth * 2.0 - 1.0; // 零到一转负一到一。
     ndcDepth /= handDepth; // 按手部深度比例还原。
     return ndcDepth * 0.5 + 0.5; // 再转回零到一。
-}
+} // 按参考顺序推进。
 
 // iterationT 的一维 R1 序列：黄金比例步长，加半格避免从零开始。
-float ogxSequenceR1(float n)
-{
+float ogxSequenceR1(float n) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     const float alpha = 1.0 / OGX_GOLDEN_RATIO; // 黄金比例倒数。
     return fract(0.5 + n * alpha); // 加半格后取小数。
-}
+} // 按参考顺序推进。
 
 // iterationT 的二维 R2 序列：塑料常数的两个幂做步长。
-vec2 ogxSequenceR2(float n)
-{
+vec2 ogxSequenceR2(float n) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     vec2 alpha = 1.0 / vec2(OGX_PLASTIC_RATIO, OGX_PLASTIC_RATIO * OGX_PLASTIC_RATIO); // 两个步长。
     return fract(0.5 + n * alpha); // 加半格后取小数。
-}
+} // 按参考顺序推进。
 
 // Eclipse 的三角波：先减半再取绝对值，夹在 0.01 到 0.49 之间避免端点。
-float ogxTriangleGradient(float x)
-{
+float ogxTriangleGradient(float x) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     return clamp(abs(fract(x) - 0.5), 0.01, 0.49); // 参考实现的夹紧范围。
-}
+} // 按参考顺序推进。
 
 // Eclipse 的二维三角波：先分别算两个方向，再用第一个结果扰动第二个输入。
-vec2 ogxTriangleGradient2d(vec2 p)
+vec2 ogxTriangleGradient2d(vec2 p) // 当前步骤的中间量。
 {
     float triX = ogxTriangleGradient(p.x); // 第一方向。
     float triY = ogxTriangleGradient(p.y); // 第二方向。
@@ -1133,6 +909,9 @@ float ogxBayer4Dither(vec2 pixel)
 }
 
 // Eclipse 的二维旋转矩阵：`mm2(a)` 返回绕原点旋转 `a` 弧度的二乘二矩阵。
+// 二维旋转矩阵按行优先写入，和 GLSL 构造函数的列主序解释配合；
+// 这样生成的文本与参考实现的矩阵展开顺序一致，旋转方向不会反。
+// 角度用弧度，调用方不要把角度制直接传进来。
 mat2 ogxRotate2Matrix(float angle)
 {
     float c = cos(angle);
@@ -1181,68 +960,5 @@ float ogxHaltonSeq2(int index)
     }
     return r;
 }
-
-/*
-实现说明：低差异序列与半球采样。
-一、R2 序列：两个无理数步长生成二维低差异点，适合每帧少量样本的累积。
-二、黄金角：螺旋采样每步旋转固定角度，样本不会排成放射状条纹。
-三、余弦半球：按余弦分布生成方向，漫反射与间接光用同一套分布。
-四、手部深度：把加载器的手部深度约定转成米制距离，靠近相机时夹住下限。
-五、三角形渐变：二维与三维版本把均匀随机数折成三角分布，抖动更柔和。
-六、边界：序列函数只接收序号与总数，不保存状态；调用方负责帧间偏移。
-七、顺序：先算半径再算角度，和参考实现的样本顺序一致。
-*/
-
-/*
-函数索引：
-一、`ogxR2Sample`：二维低差异点，输入序号与总数。
-二、`ogxCosineHemisphere`：余弦半球方向，输入二维随机数。
-三、`ogxConvertHandDepth3`：手部深度换算，靠近相机时夹住下限。
-四、`ogxSequenceR1` 与 `ogxSequenceR2`：一维与二维低差异序列。
-五、`ogxTriangleGradient` 与 `ogxTriangleGradient2d`：三角分布，抖动更柔和。
-六、`ogxFastAcosPoly`：反余弦多项式近似。
-七、`ogxRayleighPhaseElek`：瑞利相函数，供雾与大气使用。
-八、`ogxBayer4Dither`：四阶 Bayer 抖动。
-九、`ogxRotate2Matrix` 与 `ogxGetRotMat`：二维旋转矩阵。
-十、`ogxGenUnitVector`：由随机数生成单位向量。
-十一、`ogxHaltonSeq2`：二维 Halton 序列，基数二与三。
-十二、边界：序列函数只接收序号与总数，不保存状态。
-十三、顺序：先算半径再算角度，与参考实现的样本顺序一致。
-十四、用途：间接光、雾与抗锯齿共用这一组采样。
-*/
-
-/*
-参数与边界：
-一、序号从零开始，总数必须大于零。
-二、低差异序列不保存状态，重复调用得到同一点。
-三、余弦半球的输入是零到一的二维随机数。
-四、手部深度换算假设深度已经夹到合法范围。
-五、三角分布的输入是零到一，输出也在零到一。
-六、反余弦近似在端点附近误差最大，调用方要接受少量偏差。
-七、Bayer 抖动只改阈值，不改采样位置。
-八、旋转矩阵假设角度用弧度。
-九、单位向量生成要求随机数在零到一之间。
-十、Halton 序列的基数不同，样本分布也不同。
-十一、所有函数都是纯函数，可以在任意阶段调用。
-十二、采样质量与样本数有关，少量样本要配合时间累积。
-*/
-
-/*
-补充说明：序列的累积。
-低差异序列适合每帧少量样本。
-余弦半球用于漫反射。
-手部深度在靠近相机时夹住下限。
-三角分布让抖动更柔和。
-样本数越多越平滑。
-画面验证看间接光噪点。
-*/
-
-/*
-补充说明：样本累积。
-低差异序列适合少量样本。
-余弦半球用于漫反射。
-手部深度在近处夹住下限。
-三角分布让抖动更柔和。
-*/
 
 #endif

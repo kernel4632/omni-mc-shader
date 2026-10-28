@@ -11,7 +11,7 @@ Omni 通用图形库天气雨纹模块：三层动画雨纹、降水分布与湿
     vec2 n = ogxGetRainNormal(pos, strength, wet, rainTex1, rainTex2, rainTex3, noiseTex, time, 2.0); // 取雨滴法线。
 设计原因与取舍：
     雨纹按每秒六十帧离散滚动，三层强度由大尺度降水分布决定；湿润度在函数内更新，采样顺序与参考实现一致。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。雨纹目前只被库内水面模块间接引用，没有独立画面入口。
+当前状态：由 `shaders/effects/shared/water/rain.glsl` 引入并编译；宿主 `GetRainAnimationTex` 调用 `ogxRainAnimationTex`。
 */
 #ifndef OGX_WEATHER_RAIN_INCLUDED
 #define OGX_WEATHER_RAIN_INCLUDED

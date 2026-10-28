@@ -86,32 +86,23 @@ DISPLAY = {
     "world/portal": "末地传送门",
 }
 
-# 没有顶层画面入口的模块：只有编译探针、profile 或库内其它生成模块间接引用。
-# 文件头必须写明这个状态；接入真实入口后再从表里删除。
+# 没有顶层画面入口、但由表内效果模块直接或间接引入并编译的子算法。
+# 值必须是清单内的模块名：检查会沿着 `#include` 链确认它真的被那个模块带进来，
+# 不接受“只靠探针或 profile 存活”的模块，也不接受写不出链路的假消费者。
 PROBE_ONLY = {
-    "common/sampling/anisotropic": "各向异性过滤目前只有编译探针覆盖，还没有顶层采样入口。",
-    "gbuffer": "延迟缓冲解码目前只有探针覆盖，宿主仍直接读取附件布局。",
-    "cloud/layers": "层状体积云目前只有探针与 profile 覆盖，顶层云入口仍走体积云与平面云。",
-    "shadow/map": "阴影贴图写入目前只被库内其它生成模块间接引用，没有顶层画面入口。",
-    "voxel/trace": "体素求交目前只被库内反射与阴影模块间接引用，没有独立画面入口。",
-    "gi/diffuse": "漫反射光照目前只被库内 Photonics 模块间接引用，没有顶层画面入口。",
-    "gi/indirect": "间接光目前只被库内反射模块间接引用，没有顶层画面入口。",
-    "gi/ambientocclusion": "独立环境光遮蔽目前只有探针覆盖，顶层画面走 gi/gi 的多切片实现。",
-    "reflection/wsr": "WSR 反射目前只被库内高光模块间接引用，没有顶层画面入口。",
-    "reflection/photonics": "Photonics 反射目前只被库内高光模块间接引用，没有顶层画面入口。",
-    "reflection/specular": "高光合成目前只被库内反射模块间接引用，没有顶层画面入口。",
-    "post/exposure": "曝光与泛光目前只被库内后期模块间接引用，没有顶层画面入口。",
-    "post/scene": "画面效果入口目前只有探针覆盖，顶层画面仍由各效果文件分别处理。",
-    "lens/lens": "镜头光斑目前只有探针覆盖，还没有顶层画面入口。",
-    "antialias/taa": "时间取样目前只被库内抗锯齿模块间接引用，没有顶层画面入口。",
-    "antialias/fxaa": "FXAA 目前只有探针覆盖，顶层抗锯齿走 antialias/antialias。",
-    "weather/rain": "雨纹目前只被库内水面模块间接引用，没有独立画面入口。",
-    "weather/lightning": "闪电目前只被库内反射模块间接引用，没有独立画面入口。",
-    "world/end": "末地效果目前只有探针与 profile 覆盖，顶层末地入口尚未接入。",
-    "world/portal": "末地传送门矩阵目前只有探针覆盖，顶层入口尚未接入。",
+    "gi/diffuse": "gi/gi",
+    "gi/indirect": "gi/gi",
+    "reflection/wsr": "reflection/specular",
+    "shadow/map": "fog/volume",
+    "voxel/trace": "shadow/map",
+    "gi/ambientocclusion": "gi/gi",
+    "post/scene": "post/post",
+    "weather/lightning": "cloud/volume",
 }
 
 INCLUDE = re.compile(r'#include\s+"/omni-gfx/([\w./-]+)\.glsl"')
+INCLUDE_SLANG = re.compile(r'^\s*#include\s+"([\w./-]+)\.slang"', re.MULTILINE)
+SRC = LIB / "src"
 
 
 def consumers() -> dict[str, set[str]]:
@@ -136,16 +127,104 @@ def consumers() -> dict[str, set[str]]:
     return used
 
 
-def check_consumers() -> None:
-    """核对模块表与真实引用：仅探针模块不能有顶层消费者，其余必须有。
+def _module_files(name: str, stack: tuple[str, ...] = ()) -> list[Path]:
+    """返回一个模块的主文件与全部子文件，供依赖分析使用。"""
+    path = SRC / f"{name}.slang"  # 主文件一定存在；子文件由递归检查确认。
+    files = [path]
+    for reference in INCLUDE_SLANG.findall(path.read_text(encoding="utf-8")):
+        target = _resolve_module(name, reference)  # 先按当前文件目录规范化。
+        if target in MODULES or target in stack:
+            continue  # 模块引用由主图处理，循环交给生成器报错。
+        part = SRC / f"{target}.slang"
+        if part.is_file():
+            files.extend(_module_files_path(target, part, (*stack, name)))
+    return files
 
-    只读检查，不修改文件；测试和生成前的自检都调用这里，避免文件头与事实脱节。
+
+def _module_files_path(target: str, path: Path, stack: tuple[str, ...]) -> list[Path]:
+    """递归收集子文件；子文件之间只允许同目录引用，路径按子文件自己的位置解析。"""
+    files = [path]
+    for reference in INCLUDE_SLANG.findall(path.read_text(encoding="utf-8")):
+        child = _resolve_module(target, reference)
+        if child in MODULES or child in stack:
+            continue  # 子文件不承担模块级引用，遇到时由图去处理。
+        child_path = SRC / f"{child}.slang"
+        if child_path.is_file():
+            files.extend(_module_files_path(child, child_path, (*stack, target)))
+    return files
+
+
+def _resolve_module(name: str, reference: str) -> str:
+    """把 Slang 的相对引用按所在目录规范化成 `src` 下的模块名。"""
+    import posixpath  # 只在这里用到，保持模块导入轻量。
+    return posixpath.normpath(posixpath.join(posixpath.dirname(name), reference))
+
+
+def dependencies() -> dict[str, set[str]]:
+    """返回每个模块直接引用的其它模块，子文件里的引用也计入。"""
+    graph = {name: set() for name in MODULES}
+    for name in MODULES:
+        for path in _module_files(name):
+            local = path.relative_to(SRC).with_suffix("").as_posix()
+            for reference in INCLUDE_SLANG.findall(path.read_text(encoding="utf-8")):
+                target = _resolve_module(local, reference)
+                if target in MODULES and target != name:
+                    graph[name].add(target)
+    return graph
+
+
+def reachable() -> set[str]:
+    """从真实画面文件出发，沿模块引用求可达集合。
+
+    真实画面文件指 `shaders/`（排除生成目录）与测试世界；只要一个模块能被这些文件
+    直接或间接引入，它就会进入真实编译，不再只是探针里的孤立代码。
+    """
+    graph = dependencies()
+    seeds = {name for name, files in consumers().items() if files}
+    reached = set(seeds)
+    changed = True
+    while changed:
+        changed = False
+        for name in list(reached):
+            for dependency in graph[name]:
+                if dependency not in reached:
+                    reached.add(dependency)
+                    changed = True
+    return reached
+
+
+def check_consumers() -> None:
+    """核对模块表与真实引用：每个模块都要能追溯到画面文件。
+
+    没有直接引用的模块必须登记在 `PROBE_ONLY` 里，并写明带它进入编译的效果模块；
+    这里会沿 `#include` 链确认消费者真的依赖它，避免再出现“只靠探针或 profile”的模块。
     """
     if len(MODULES) != len(set(MODULES)):
         raise ValueError("模块表存在重复项")
     used = consumers()
+    graph = dependencies()
+    reached = reachable()
     for name in MODULES:
-        if name in PROBE_ONLY and used[name]:
-            raise ValueError(f"模块 {name} 已声明仅探针，但被这些文件引用：" + "、".join(sorted(used[name])))
-        if name not in PROBE_ONLY and not used[name]:
-            raise ValueError(f"模块 {name} 没有顶层消费者，请接入或登记到 PROBE_ONLY")
+        if name not in reached:
+            raise ValueError(f"模块 {name} 没有真实画面消费者，请接入或删除")
+        if name in PROBE_ONLY:
+            if used[name]:
+                raise ValueError(f"模块 {name} 已有直接消费者，应从 PROBE_ONLY 移除")
+            consumer = PROBE_ONLY[name]
+            if consumer not in MODULES:
+                raise ValueError(f"模块 {name} 登记的消费者 {consumer} 不在模块表里")
+            # 消费者必须能沿引用链走到这个模块，否则登记就是假的。
+            pending = [consumer]
+            seen = set()
+            while pending:
+                current = pending.pop()
+                if current == name:
+                    break
+                if current in seen:
+                    continue
+                seen.add(current)
+                pending.extend(graph[current])
+            else:
+                raise ValueError(f"模块 {name} 登记的消费者 {consumer} 没有引用它")
+        elif not used[name]:
+            raise ValueError(f"模块 {name} 没有直接消费者，请接入或登记到 PROBE_ONLY")

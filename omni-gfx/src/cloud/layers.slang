@@ -7,7 +7,7 @@ Omni 通用图形库层状体积云模块：五层云形状、云影、朝光散
     把太阳、月亮、闪电与噪声图显式传入，函数体仍按原来的层号分支和采样顺序执行。
     条件功能（积雨云、闪电、极光）用布尔开关保留；关闭时与参考实现的默认路径一致。
     `texture` 的隐式层级在这里统一写成显式零级，避免不同显卡对导数层级的实现差异。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。层状体积云目前只有探针与 profile 覆盖，顶层云入口仍走体积云与平面云。
+当前状态：由 `shaders/effects/shared/cloud.glsl` 引入并编译；顶层云入口仍走体积云与平面云。
 */
 #ifndef OGX_CLOUD_LAYERS_INCLUDED
 #define OGX_CLOUD_LAYERS_INCLUDED
@@ -77,6 +77,15 @@ float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, fl
 // 层状云严格入口提供参考默认常数。
 #include "layers/exact.slang"
 
+// 单层步进准备：层厚、水平步长与采样数决定一步的长度，起点压到该层云底与云顶之间。
+// 五层原来各写两行同样的式子，抽成 ???? 后改步长公式只改一处，层与层之间不会漂移。
+void ogxLayersLayerRay(float3 viewDir, float thickness, float3 cloudDist, int samples, float2 dither,
+    float3 cameraPos, float minHeight, out float3 rayDirection, out float3 rayPosition)
+{
+    rayDirection = viewDir * (thickness / length(viewDir / cloudDist) / float(samples)); // 一层走完的步长。
+    rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, minHeight + thickness); // 起点压到云层平面。
+}
+
 // 五层体积云总入口：按参考实现的顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合。
 // 为什么保留为单一入口：五层顺序、相机高度混合与距离合成共享同一份状态，拆开会让二十多个参数
 // 在子函数之间来回传递，反而更难核对参考顺序；其余超过一百行的函数已按算法拆分。
@@ -107,8 +116,10 @@ float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, fl
         clamp(smoothstep(maxHeight + 300.0, maxHeight - 60.0, cameraPos.y), 0.0, 1.0)); // 相机在层内时水平步长更小。
     float3 cloudDist = float3(1.0); // 水平与竖直步长。
     cloudDist.xz = lerp(float2(255.0), float2(5.5), cloudMix); // 层内 5.5，层外 255。
-    float3 rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / min(cloudDist, float3(0.05 * lViewPosM))) / float(samples)); // 一层走完的步长。
-    float3 rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点压到云层平面。
+    float3 rayDirection; // 当前层的步长方向。
+    float3 rayPosition; // 当前层的步进起点。
+    ogxLayersLayerRay(normPlayerPos.xyz, cloudheight, min(cloudDist, float3(0.05 * lViewPosM)), samples, dither,
+        cameraPos, minHeight, rayDirection, rayPosition); // 小积云：层内步长更小。
     float3 sampledSkyCol = ogxSkyGradientLookup(normalize(rayPosition - cameraPos), skyTexture, texelSize) / 1200.0; // 参考在第一步后查天空盒。
     if (skyGround) // 参考 SKY_GROUND 分支：地面视角把天空色混向间接光。
     {
@@ -161,8 +172,8 @@ float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, fl
         cloudMix = clamp(smoothstep(minHeight - 400.0, minHeight + 45.0, cameraPos.y), 0.0,
             clamp(smoothstep(maxHeight + 300.0, maxHeight - 60.0, cameraPos.y), 0.0, 1.0)); // 重算混合。
         cloudDist.xz = lerp(float2(255.0), float2(5.0), cloudMix); // 大积云水平步长。
-        rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist) / float(samples)); // 重算步长。
-        rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 重算起点。
+        ogxLayersLayerRay(normPlayerPos.xyz, cloudheight, cloudDist, samples, dither, cameraPos, minHeight,
+            rayDirection, rayPosition); // 大积云：按当前层厚重算。
         largeCumulusClouds = ogxCloudLayerMarch(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer1Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
@@ -179,8 +190,8 @@ float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, fl
         maxHeight = cloudheight + minHeight; // 积雨云顶。
         int cumulonimbusSamples = 2 * samples; // 两倍样本。
         cloudDist.xz = float2(8.0); // 固定水平步长。
-        rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist) / float(cumulonimbusSamples)); // 重算步长。
-        rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 重算起点。
+        ogxLayersLayerRay(normPlayerPos.xyz, cloudheight, cloudDist, cumulonimbusSamples, dither, cameraPos,
+            minHeight, rayDirection, rayPosition); // 积雨云：样本翻倍，步长相应缩短。
         cumulonimbusClouds = ogxCloudLayerMarch(s, 2, cumulonimbusSamples, rayPosition, rayDirection, dither.x, minHeight,
             maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol,
             cloudLayer4Distance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds,
@@ -197,8 +208,8 @@ float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, fl
         maxHeight = cloudheight + minHeight; // 高层云顶。
         cloudDist.xz = lerp(float2(255.0), float2(5.0), clamp(cameraPos.y - minHeight, 0.0,
             clamp((maxHeight - 15.0) - cameraPos.y, 0.0, 1.0))); // 层内水平步长。
-        rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist)); // 单步走到层顶。
-        rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点。
+        ogxLayersLayerRay(normPlayerPos.xyz, cloudheight, cloudDist, 1, dither, cameraPos, minHeight,
+            rayDirection, rayPosition); // 高层云：单步走到层顶。
         altoStratusClouds = ogxCloudLayerMarch(s, 3, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer2Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
@@ -214,8 +225,8 @@ float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, fl
         maxHeight = cloudheight + minHeight; // 卷云顶。
         cloudDist.xz = lerp(float2(255.0), float2(5.0), clamp(cameraPos.y - minHeight, 0.0,
             clamp((maxHeight - 15.0) - cameraPos.y, 0.0, 1.0))); // 层内水平步长。
-        rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist)); // 单步走到层顶。
-        rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点。
+        ogxLayersLayerRay(normPlayerPos.xyz, cloudheight, cloudDist, 1, dither, cameraPos, minHeight,
+            rayDirection, rayPosition); // 卷云：单步走到层顶。
         cirrusClouds = ogxCloudLayerMarch(s, 4, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer3Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,

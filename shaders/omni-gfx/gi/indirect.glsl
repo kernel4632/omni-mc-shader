@@ -14,7 +14,7 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
     参考实现直接读 `gl_FragCoord`、`frameCounter`、`gbufferModelView` 与缓冲编号。库把像素坐标、帧号、
     矩阵、纹理、射线数与开关全部改成显式参数；公式、循环顺序与分支条件保持参考实现。
     纹理只作为参数传入，库不绑定缓冲；调用方可以换分辨率、换历史缓冲，也可以独立测试。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。间接光目前只被库内反射模块间接引用，没有顶层画面入口。
+当前状态：由 `gi/gi` 引入并编译；宿主 `doIndirectLighting` 调用 `ogxIndirectLighting`，反射命中面也共用。
 */
 #ifndef OGX_GI_INDIRECT_INCLUDED
 #define OGX_GI_INDIRECT_INCLUDED
@@ -26,7 +26,7 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
 // 反射提供屏幕空间追踪与历史重投影。
 #include "/omni-gfx/reflection/reflection.glsl"
 // 余弦半球采样：把二维均匀随机数变成半球上的余弦分布方向。
-vec3 ogxCosineHemisphereDirection(vec2 xi)
+vec3 ogxCosineHemisphereDirection(vec2 xi) // 当前步骤的中间量。
 {
     float theta = 2.0 * OGX_PI * xi.y; // 方位角。
     float r = sqrt(xi.x); // 半径。
@@ -53,7 +53,7 @@ float ogxLinearToScreenDepth(float linearDepth, float nearPlane, float farPlane)
 
 
 // 取得纹理的像素尺寸：库需要显式尺寸，避免依赖宿主 `texelSize`。
-vec2 texelFetchSize(sampler2D tex)
+vec2 ogxTexelFetchSize(sampler2D tex)
 {
     return vec2(textureSize(tex, 0)); // GLSL 内建，返回整数尺寸。
 }
@@ -81,8 +81,8 @@ vec3 ogxGiRayTrace(vec3 dir, vec3 position, float dither, float quality,
     for (int i = 0; i <= int(quality); i++) // 固定步数。
     {
         float sampleDepth; // 读深度；分支写成块，严格对照才能按四分之一分辨率开关裁掉另一条。
-        if (quarterRes) { sampleDepth = sqrt(texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture) / 4.0), 0).a / 65000.0); }
-        else { sampleDepth = ogxLinearizeDepth(texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture)), 0).r, nearPlane, farPlane); }
+        if (quarterRes) { sampleDepth = sqrt(texelFetch(depthTexture, ivec2(spos.xy / ogxTexelFetchSize(depthTexture) / 4.0), 0).a / 65000.0); }
+        else { sampleDepth = ogxLinearizeDepth(texelFetch(depthTexture, ivec2(spos.xy / ogxTexelFetchSize(depthTexture)), 0).r, nearPlane, farPlane); }
         float sp = ogxLinearToScreenDepth(sampleDepth, nearPlane, farPlane); // 反解屏幕深度。
         if ((sp < max(minZ, maxZ) && sp > min(minZ, maxZ))) return vec3(spos.xy / renderScale, sp); // 命中。
         minZ = maxZ - biasAmount / ogxLinearizeDepth(spos.z, nearPlane, farPlane); // 推进下界。
@@ -126,8 +126,8 @@ vec3 ogxGiRayMarch(vec3 dir, vec3 position, float noise, float stepSizes, bool h
         spos.xy = clamp(spos.xy, screenEdges, 1.0 - screenEdges); // 夹到屏幕内。
         if (spos.x < 0.0 || spos.y < 0.0 || spos.z < 0.0 || spos.x > 1.0 || spos.y > 1.0 || spos.z > 1.0) return vec3(1.1); // 离开屏幕。
         float sp; // 读深度；分支写成块，严格对照才能按四分之一分辨率开关裁掉另一条。
-        if (quarterRes) { sp = ogxLinearToScreenDepth(sqrt(texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture) / 4.0), 0).a / 65000.0), nearPlane, farPlane); }
-        else { sp = texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture)), 0).r; }
+        if (quarterRes) { sp = ogxLinearToScreenDepth(sqrt(texelFetch(depthTexture, ivec2(spos.xy / ogxTexelFetchSize(depthTexture) / 4.0), 0).a / 65000.0), nearPlane, farPlane); }
+        else { sp = texelFetch(depthTexture, ivec2(spos.xy / ogxTexelFetchSize(depthTexture)), 0).r; }
         float currZ = ogxLinearizeDepth(spos.z, nearPlane, farPlane); // 当前米制深度。
         float nextZ = ogxLinearizeDepth(sp, nearPlane, farPlane); // 采样米制深度。
         if (nextZ < currZ && (sp <= max(minZ, maxZ) && sp >= min(minZ, maxZ))) return vec3(spos.xy / renderScale, sp); // 命中。
@@ -146,7 +146,7 @@ vec4 ogxBilateralUpscaleSsao(sampler2D source, sampler2D sourceDepth, ivec2 pixe
     ivec2 scaling = ivec2(1); // 参考实现的缩放。
     ivec2 posDepth = pixel * scaling; // 深度采样位置。
     ivec2 posColor = pixel; // 颜色采样位置。
-    ivec2 pos = ivec2(vec2(pixel) * texelFetchSize(source) + vec2(1.0)); // 参考实现的偏移。
+    ivec2 pos = ivec2(vec2(pixel) * ogxTexelFetchSize(source) + vec2(1.0)); // 参考实现的偏移。
     ivec2 offsets[4] = ivec2[4](ivec2(-2, -2), ivec2(-2, 0), ivec2(0, 0), ivec2(0, -2)); // 四个邻域。
     vec4 result = vec4(0.0); // 颜色累加。
     float sum = 0.0; // 权重累加。

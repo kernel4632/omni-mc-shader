@@ -7,7 +7,7 @@ Omni 通用图形库 G-buffer 解码模块：把多张中间画面还原成表�
     这样算法本身不依赖 Minecraft，调用方仍可按自己的缓冲布局填写。
     `GetGbufferData` 的每一行读取顺序与参考实现一致；材质编号只通过 `OgxMaterialIdTable`
     传入，避免把资源包的编号约定写死进通用库。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。延迟缓冲解码目前只有探针覆盖，宿主仍直接读取附件布局。
+当前状态：由 `shaders/bind/gbuffer.glsl` 引入并编译，作为材质编号与掩码解码的参考实现。
 */
 #ifndef OGX_GBUFFER_INCLUDED
 #define OGX_GBUFFER_INCLUDED

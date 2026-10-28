@@ -178,7 +178,7 @@
 #endif
 
 // --- 参考签名兼容层：末地三维噪声与云 FBM 分形噪声，分辨率取参考的 64 ---
-float Calculate3DNoise(vec3 position){ return ogxEnd3dNoise(position, noisetex, 64.0); }
+float Calculate3DNoise(vec3 position){ return ogxTexture3dNoise(position, noisetex, 64.0); }
 float CalculateCloudFBM(vec3 position, vec3 shift){ return ogxCloudFbm(position, shift, noisetex, 64.0); }
 float CalculateCloudFBM_LQ(vec3 position, vec3 shift){
 	const int octaves = 3;

@@ -49,4 +49,3 @@ float ogxFogCloudShadow(float3 worldPos, OgxFogMedia media, Sampler2D cloudShado
 }
 
 // 暴风浓雾密度，具体实现在子文件。
-// --- storm ---

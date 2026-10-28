@@ -2,7 +2,7 @@
 Omni 通用图形库体素追踪模块：在规则三维网格里沿射线逐格前进，撞到实心方格时用存下的颜色与光照着色。
 调用位置：任何有三维方块编号图与颜色图的程序；Minecraft 光影由 `/omni-gfx/voxel/voxel.glsl` 引入，
     `shaders/effects/reflection/voxel.glsl` 只保留选项换算与坐标平移。
-可复制示例：ogxVoxelReflection 返回反射颜色与归一化命中距离，并带回命中点。
+可复制示例：`vec4 hit = ogxVoxelReflection(origin, rayDir, normal, worldOffset, side, voxelIds, voxelColors, torch, sky, shadow, sun, 64.0, 1.0, hitWorld);`
 设计原因与取舍：
     网格偏移、边长、两张三维纹理、光色、太阳方向、追踪距离与强度全部由调用方传入，库不读取任何引擎状态。
     水、冰、玻璃按半透明处理，只给后面的画面染色后继续走；铁块按镜面弹射，最多弹四次，

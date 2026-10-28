@@ -2,12 +2,12 @@
 Omni 通用图形库Photonics 反射模块：命中面着色、方块光、云影与半透明反射合成。
 调用位置：Eclipse Photonics 风格的体素反射；由 `/omni-gfx/reflection/photonics.glsl` 引入。
 可复制示例：
-    vec4 color = ogxPhotonicsReflection(job, hits, count, dir, normal, noise, mask, tint, ids, colors, direct, ambient, indirect, 1.0, 0.0, 0.0, 0.0, 0.0, torch, lpv, hand, lpvPos, 64.0, 1.0, 2.0, true, 128.0, 1.0, 1.0, sun, opaque, translucent, tintTex, view, proj, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, 1.0, 1.0, true);
+    vec4 color = ogxPhotonicsReflection(job, hits, count, dir, normal, noise, mask, tint, ids, colors, direct, ambient, indirect, 1.0, 0.0, 0.0, 0.0, 0.0, torch, lpv, hand, lpvPos, 64.0, 1.0, 2.0, true, 128.0, 1.0, 1.0, sun, opaque, translucent, tintTex, view, proj, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, 1.0, 1.0, true); // 当前步骤的计数或下标。
 设计原因与取舍：
     半透明命中逐层染色，不透明命中再合成；阴影、方块光与自发光全部走显式参数，采样顺序与参考实现相同。
     `Photonics` 是 Eclipse 参考包的子系统名，菜单与严格台账沿用该名字，不是作者名；
     改名会让玩家选项和逐函数对照同时失去来源，因此保留。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。Photonics 反射目前只被库内高光模块间接引用，没有顶层画面入口。
+当前状态：由 `shaders/effects/reflection/screenspace.glsl` 引入并编译；Photonics 后端后续接到顶层入口。
 */
 #ifndef OGX_REFLECTION_PHOTONICS_INCLUDED
 #define OGX_REFLECTION_PHOTONICS_INCLUDED
@@ -25,41 +25,45 @@ Omni 通用图形库Photonics 反射模块：命中面着色、方块光、云�
 
 // Photonics 反射着色：间接光、方块光、阴影、云影与自发光一起决定命中面颜色。
 // 光子学反射着色：把体素命中、手光与阴影合成为反射颜色。
-void ogxPhotonicsReflectionShading(inout float4 color, float3 normal, float3 worldPos, float noise,
-    float3 directLightColor, float3 ambientLightColor, int blockID, float skylightmap, float3 torchColor,
-    float3 lpvSample, float3 handLight, float3 lpvPos, float lpvSize, float fadeLength, float torchAmount,
-    bool vanillaMask, float shadowDistance, float ambientBrightness, float minLightAmount,
-    float minLightAmountInside, float nightVision, float eyeBrightness, float cloudShadow, float3 sunVector,
-    Sampler2D opaqueShadowMap, Sampler2D translucentShadowMap, Sampler2D shadowcolor0,
-    float4x4 shadowView, float4x4 shadowProjection, float shadowMapResolution,
-    float distortA, float distortB, float distortK, float d0k, int shadowSampleCount,
-    bool basicFilter, bool coloredShadows, bool endShader, float emissiveBrightness, float emissiveCurve)
-{
+// Photonics 命中面着色：先算间接光，再按方块光与阴影叠直射，最后加自发光。
+// 顺序照参考：间接光不乘阴影，因为环境光在洞穴里仍然存在；
+// 直射光才乘屏幕阴影，阴影边缘用距离淡出，避免反射里出现硬切。
+// 半透明命中在追踪阶段已经按层染色，这里只处理不透明面。
+void ogxPhotonicsReflectionShading(inout float4 color, float3 normal, float3 worldPos, float noise, // 当前步骤的中间量。
+    float3 directLightColor, float3 ambientLightColor, int blockID, float skylightmap, float3 torchColor, // 当前步骤的中间量。
+    float3 lpvSample, float3 handLight, float3 lpvPos, float lpvSize, float fadeLength, float torchAmount, // 当前步骤的中间量。
+    bool vanillaMask, float shadowDistance, float ambientBrightness, float minLightAmount, // 当前步骤的中间量。
+    float minLightAmountInside, float nightVision, float eyeBrightness, float cloudShadow, float3 sunVector, // 当前步骤的中间量。
+    Sampler2D opaqueShadowMap, Sampler2D translucentShadowMap, Sampler2D shadowcolor0, // 按参考顺序推进。
+    float4x4 shadowView, float4x4 shadowProjection, float shadowMapResolution, // 当前步骤的中间量。
+    float distortA, float distortB, float distortK, float d0k, int shadowSampleCount, // 当前步骤的中间量。
+    bool basicFilter, bool coloredShadows, bool endShader, float emissiveBrightness, float emissiveCurve) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float skyDir = normal.y * 0.5 + 0.5; // 法线朝上程度。
     float2 lightmap = float2(0.0, skylightmap); // 光照图。
     if (abs(blockID - 197) <= 1 || blockID == 242) lightmap.x = 1.0; // 岩浆块与海晶灯。
     float skylight = lerp(0.08 + 0.92 * (1.0 - lightmap.y), 1.0, skyDir); // 天空光。
-    float3 indirectLighting = ogxIndirectLighting(ambientLightColor * skylight, float3(1.0),
+    float3 indirectLighting = ogxIndirectLighting(ambientLightColor * skylight, float3(1.0), // 当前步骤的中间量。
         lightmap.y, ambientBrightness, minLightAmount, minLightAmountInside, nightVision); // 间接光。
     float3 playerPosition = worldPos; // 相机相对位置。
-    indirectLighting += ogxBlockLightLightingVoxel(torchColor, lightmap.x, lpvSample, handLight,
+    indirectLighting += ogxBlockLightLightingVoxel(torchColor, lightmap.x, lpvSample, handLight, // 按参考写法推进这一步。
         lpvPos, lpvSize, fadeLength, torchAmount, vanillaMask); // 方块光。
     float shadowMapFalloff = smoothstep(0.0, 1.0, min(max(1.0 - length(playerPosition) / (shadowDistance + 16.0), 0.0) * 5.0, 1.0)); // 阴影距离淡出。
     float sh = 1.0; // 阳光阴影。
-    if (!endShader) sh = ogxPhotonicsShadowMap(directLightColor, playerPosition, shadowMapFalloff,
-        noise, normal, opaqueShadowMap, translucentShadowMap, shadowcolor0, shadowView, shadowProjection,
-        shadowDistance, shadowMapResolution, distortA, distortB, distortK, d0k, shadowSampleCount,
+    if (!endShader) sh = ogxPhotonicsShadowMap(directLightColor, playerPosition, shadowMapFalloff, // 按参考条件选择这一支。
+        noise, normal, opaqueShadowMap, translucentShadowMap, shadowcolor0, shadowView, shadowProjection, // 按参考顺序推进。
+        shadowDistance, shadowMapResolution, distortA, distortB, distortK, d0k, shadowSampleCount, // 按参考顺序推进。
         basicFilter, coloredShadows, false); // 主世界阴影。
     float lightLeakFix = clamp(pow(eyeBrightness / 240.0 + lightmap.y, 2.0), 0.0, 1.0); // 漏光修正。
-    sh *= lightLeakFix;
+    sh *= lightLeakFix; // 按参考写法推进这一步。
     sh *= cloudShadow; // 云影。
     float NdotL = endShader ? 1.0 : clamp((-15.0 + dot(normal, sunVector) * 255.0) / 240.0, 0.0, 1.0); // 参考实现的直射项。
     float3 albedo = color.rgb; // 命中面底色。
     color.rgb *= indirectLighting + directLightColor * sh * NdotL; // 合成光照。
     float emissive = 0.0; // 自发光。
     if (blockID >= 100 && blockID < 282) // 普通光源方块。
-    {
-        emissive = 0.5;
+    { // 按参考顺序推进。
+        emissive = 0.5; // 按参考写法推进这一步。
         if (blockID == 266 || (blockID >= 276 && blockID <= 281)) emissive = 0.2; // 幽匿方块。
         else if (blockID == 195) emissive = 2.3; // 发光地衣。
         else if (blockID == 185) emissive = 1.5; // 哭泣的黑曜石。
@@ -127,6 +131,9 @@ void ogxPhotonicsReflectionShadingExact(inout float4 color, float3 normal, float
 }
 
 // Photonics 反射：先追踪体素，再给半透明与不透明命中着色，最后按雾吸收。
+// 追踪入口：先沿射线找不透明命中，再把半透明层按从近到远叠色。
+// 半透明层只改颜色不改方向，所以一条射线能穿过玻璃继续找后面的面。
+// 未命中时返回背景遮罩，调用方据此走天空或体素回退。
 float4 ogxPhotonicsReflection(OgxRayJob job, OgxTranslucentHit translucentHits[10],
     uint translucentHitsCount, float3 reflectedVector, float3 flatNormal, float2 noise,
     inout float backgroundReflectMask, inout float3 backgroundTint,
@@ -182,59 +189,4 @@ float4 ogxPhotonicsReflection(OgxRayJob job, OgxTranslucentHit translucentHits[1
     return color; // 交回反射颜色。
 }
 
-/*
-实现说明：Photonics 体素反射。
-一、命中着色：按命中面法线、方块光、天光与直射光合成颜色，自发光按曲线混入。
-二、阴影：`ogxPhotonicsShadowMap` 把屏幕空间阴影投到命中点，边缘按距离淡出。
-三、半透明：命中链逐层染色，近处半透明方块先乘颜色，再继续追踪后面的不透明面。
-四、手光与体积光：手持光与光传播体积的样本按强度叠加，暗处不会完全黑。
-五、严格入口：`ogxPhotonicsReflectionShadingExact` 保留参考签名，资源参数追加在尾部。
-六、边界：体素图、阴影图、颜色表与相机矩阵全部显式传入，库不读取宿主槽位。
-七、顺序：先算直接光再算间接光，最后混半透明染色；顺序与参考实现一致。
-*/
-/*
-函数索引：
-一、`ogxPhotonicsReflectionShading`：命中面着色，输入法线、位置、方块光、天光与直射光。
-二、`ogxPhotonicsReflectionShadingExact`：参考签名版本，资源参数追加在尾部。
-三、`ogxPhotonicsReflection`：追踪入口，接收射线任务、半透明命中链与体素图。
-四、阴影：`ogxPhotonicsShadowMap` 把屏幕空间阴影投到命中点，边缘按距离淡出。
-五、半透明：命中链逐层染色，近处半透明方块先乘颜色，再继续追踪后面的不透明面。
-六、手光与体积光：手持光与光传播体积样本按强度叠加，暗处不会完全黑。
-七、边界：体素图、阴影图、颜色表与相机矩阵全部显式传入。
-八、顺序：先算直接光再算间接光，最后混半透明染色；顺序与参考实现一致。
-九、常数：自发光曲线、阴影偏移与亮度缩放都按参考精度保留。
-十、验证：严格对照检查采样次数与常数，画面需要在测试世界里看反射颜色。
-十一、用途：Eclipse 风格的体素反射补屏幕空间看不到的地方。
-十二、取舍：追踪主体在当前参考里被注释，库保留清空颜色与背景遮罩的行为。
-*/
-/*
-参数与边界：
-一、体素图的边长由调用方给出，坐标要在体积内。
-二、颜色表与编号图分开，编号为零表示空气。
-三、半透明命中链最多十条，超过后停止记录。
-四、阴影图的边缘按距离淡出，远处不再投影。
-五、自发光按饱和度与亮度估计，不是真实光源。
-六、手光与体积光按强度叠加，强度为零时没有贡献。
-七、严格入口的资源参数追加在尾部，参考参数在前。
-八、所有纹理与矩阵显式传入，库不读取宿主槽位。
-九、顺序：先直接光再间接光，最后混半透明染色。
-十、画面验证要看反射颜色与半透明边缘。
-*/
-/*
-补充说明：反射的边界。
-一、体素坐标要在体积内。
-二、编号为零表示空气。
-三、半透明链最多十条。
-四、阴影边缘按距离淡出。
-五、自发光不是真实光源。
-六、手光与体积光按强度叠加。
-七、严格入口的资源参数追加在尾部。
-八、所有纹理与矩阵显式传入。
-九、画面验证看反射颜色与半透明边缘。
-十、追踪主体在当前参考里被注释。
-十一、库保留清空颜色与背景遮罩。
-十二、修改亮度曲线会改变反射整体明暗。
-十三、阴影偏移太小会出现自阴影。
-十四、离线编译不验证反射画面。
-*/
 #endif

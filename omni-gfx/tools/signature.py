@@ -31,6 +31,10 @@ import math  # 计算常量表达式和比较浮点容差。
 import re  # 解析签名、常数与采样调用。
 from pathlib import Path  # 统一使用路径对象。
 
+# 参考文件里有预处理器把大括号裁掉的写法，解析器会跳过这类函数；跳过不等于通过，
+# 原因记录在这里，由严格对照入口统一报告，避免静默丢函数。
+PARSE_ERRORS: list[str] = []
+
 # 基础类型别名：GLSL 与 Slang 对同一种数据用不同拼写。
 TYPE_ALIASES = {
     "vec2": "float2", "vec3": "float3", "vec4": "float4",
@@ -366,6 +370,7 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
         if index >= len(text):
             if strict:
                 raise ValueError(f"{path}:{match.start()} 函数参数表括号不配对：{name}")
+            PARSE_ERRORS.append(f"{path}:{match.start()} 参数表括号不配对：{name}")
             continue
         rest = text[index + 1:]
         brace = rest.find("{")
@@ -384,6 +389,7 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
         if cursor >= len(text):
             if strict:
                 raise ValueError(f"{path}:{match.start()} 函数体大括号不配对：{name}")
+            PARSE_ERRORS.append(f"{path}:{match.start()} 函数体大括号不配对：{name}")
             continue
         found.append({
             "name": name,

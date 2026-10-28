@@ -3,6 +3,8 @@
 调用位置：`omni-gfx/build.py spirv` 逐模块编译；探针只验证，不进入光影包。
 设计原因与取舍：输入用像素坐标构造，避免常量折叠掩盖类型问题；采样器版本的函数只做类型检查。
 */
+// 兼容层补 Slang 没有的 GLSL 内建，探针才能覆盖被内联的间接光算法。
+#include "../slang_compat.slang"
 #include "../../../src/gi/gi.slang"
 
 Sampler2D gProbeTexture; // 探针用的占位纹理，只为让采样器参数通过类型检查。

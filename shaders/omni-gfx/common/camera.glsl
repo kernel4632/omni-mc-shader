@@ -8,7 +8,7 @@
 Omni 通用图形库相机变换模块：屏幕、视空间、世界空间、阴影空间与远景投影的显式换算。
 调用位置：任何需要把深度图还原成位置、把世界点投到阴影图的程序；Minecraft 光影由 `/omni-gfx/common/camera.glsl` 引入。
 可复制示例：
-    vec3 viewPos = ogxViewPosFromScreenPos(coord, depth, jitter, 0.5, projectionInverse, true);
+    vec3 viewPos = ogxViewPosFromScreenPos(coord, depth, jitter, 0.5, projectionInverse, true); // 当前步骤的中间量。
     vec3 shadowPos = ogxShadowScreenPosDistorted(worldPos, shadowView, shadowProjection, 0.9);
     vec3 clip = ogxProjectAndDivide(projection, viewPos);
 设计原因与取舍：

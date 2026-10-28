@@ -5,53 +5,56 @@
 
 // R2 低差异序列：两个无理数比例把序号摊成平面上的均匀点，样本不会聚成一团。
 // 为什么用 R2 而不是随机数：随机数会成簇，R2 每加一个样本都把空隙补得更均匀。
-float2 ogxR2Sample(int n)
-{
+float2 ogxR2Sample(int n) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float2 alpha = float2(0.75487765, 0.56984026); // 二维黄金比例常数，照 Eclipse 原值。
     return fract(alpha * float(n)); // 序号乘常数后取小数，得到零到一的点。
-}
+} // 按参考顺序推进。
 
 // 余弦加权半球采样：把两个零到一的随机数变成朝上的半球方向。
 // 为什么用余弦权重：漫反射的入射能量本身带余弦，按这个分布采样可以直接平均，不用再除权重。
-float3 ogxCosineHemisphere(float2 xi)
-{
+// 余弦半球采样：按余弦分布取方向，重要性采样让漫反射的方差更小。
+// 输入两个零到一的随机数，输出单位方向；调用方负责把它们变成逐帧变化。
+// 用平方根而不是正弦，是为了让圆盘上的点均匀分布，不会在中心堆积。
+float3 ogxCosineHemisphere(float2 xi) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float theta = OGX_TAU * xi.y; // 绕竖直轴的角度。
     float r = sqrt(xi.x); // 半径开方，得到余弦分布。
     return float3(r * cos(theta), r * sin(theta), sqrt(clamp(1.0 - xi.x, 0.0, 1.0))); // 横向两个分量加竖直分量。
-}
+} // 按参考顺序推进。
 
 // 把手部深度从固定深度尺度换算到正常投影尺度，屏幕空间追踪手部光时用。
 // `handDepth` 是加载器给的手部深度比例，手不参与追踪时原样返回。
-float ogxConvertHandDepth3(float depth, bool hand, float handDepth)
-{
+float ogxConvertHandDepth3(float depth, bool hand, float handDepth) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     if (!hand) return depth; // 不是手部像素就不换算。
     float ndcDepth = depth * 2.0 - 1.0; // 零到一转负一到一。
     ndcDepth /= handDepth; // 按手部深度比例还原。
     return ndcDepth * 0.5 + 0.5; // 再转回零到一。
-}
+} // 按参考顺序推进。
 
 // iterationT 的一维 R1 序列：黄金比例步长，加半格避免从零开始。
-float ogxSequenceR1(float n)
-{
+float ogxSequenceR1(float n) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     const float alpha = 1.0 / OGX_GOLDEN_RATIO; // 黄金比例倒数。
     return fract(0.5 + n * alpha); // 加半格后取小数。
-}
+} // 按参考顺序推进。
 
 // iterationT 的二维 R2 序列：塑料常数的两个幂做步长。
-float2 ogxSequenceR2(float n)
-{
+float2 ogxSequenceR2(float n) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float2 alpha = 1.0 / float2(OGX_PLASTIC_RATIO, OGX_PLASTIC_RATIO * OGX_PLASTIC_RATIO); // 两个步长。
     return fract(0.5 + n * alpha); // 加半格后取小数。
-}
+} // 按参考顺序推进。
 
 // Eclipse 的三角波：先减半再取绝对值，夹在 0.01 到 0.49 之间避免端点。
-float ogxTriangleGradient(float x)
-{
+float ogxTriangleGradient(float x) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     return clamp(abs(fract(x) - 0.5), 0.01, 0.49); // 参考实现的夹紧范围。
-}
+} // 按参考顺序推进。
 
 // Eclipse 的二维三角波：先分别算两个方向，再用第一个结果扰动第二个输入。
-float2 ogxTriangleGradient2d(float2 p)
+float2 ogxTriangleGradient2d(float2 p) // 当前步骤的中间量。
 {
     float triX = ogxTriangleGradient(p.x); // 第一方向。
     float triY = ogxTriangleGradient(p.y); // 第二方向。
@@ -106,6 +109,9 @@ float ogxBayer4Dither(float2 pixel)
 }
 
 // Eclipse 的二维旋转矩阵：`mm2(a)` 返回绕原点旋转 `a` 弧度的二乘二矩阵。
+// 二维旋转矩阵按行优先写入，和 GLSL 构造函数的列主序解释配合；
+// 这样生成的文本与参考实现的矩阵展开顺序一致，旋转方向不会反。
+// 角度用弧度，调用方不要把角度制直接传进来。
 float2x2 ogxRotate2Matrix(float angle)
 {
     float c = cos(angle);
@@ -154,66 +160,3 @@ float ogxHaltonSeq2(int index)
     }
     return r;
 }
-
-/*
-实现说明：低差异序列与半球采样。
-一、R2 序列：两个无理数步长生成二维低差异点，适合每帧少量样本的累积。
-二、黄金角：螺旋采样每步旋转固定角度，样本不会排成放射状条纹。
-三、余弦半球：按余弦分布生成方向，漫反射与间接光用同一套分布。
-四、手部深度：把加载器的手部深度约定转成米制距离，靠近相机时夹住下限。
-五、三角形渐变：二维与三维版本把均匀随机数折成三角分布，抖动更柔和。
-六、边界：序列函数只接收序号与总数，不保存状态；调用方负责帧间偏移。
-七、顺序：先算半径再算角度，和参考实现的样本顺序一致。
-*/
-
-/*
-函数索引：
-一、`ogxR2Sample`：二维低差异点，输入序号与总数。
-二、`ogxCosineHemisphere`：余弦半球方向，输入二维随机数。
-三、`ogxConvertHandDepth3`：手部深度换算，靠近相机时夹住下限。
-四、`ogxSequenceR1` 与 `ogxSequenceR2`：一维与二维低差异序列。
-五、`ogxTriangleGradient` 与 `ogxTriangleGradient2d`：三角分布，抖动更柔和。
-六、`ogxFastAcosPoly`：反余弦多项式近似。
-七、`ogxRayleighPhaseElek`：瑞利相函数，供雾与大气使用。
-八、`ogxBayer4Dither`：四阶 Bayer 抖动。
-九、`ogxRotate2Matrix` 与 `ogxGetRotMat`：二维旋转矩阵。
-十、`ogxGenUnitVector`：由随机数生成单位向量。
-十一、`ogxHaltonSeq2`：二维 Halton 序列，基数二与三。
-十二、边界：序列函数只接收序号与总数，不保存状态。
-十三、顺序：先算半径再算角度，与参考实现的样本顺序一致。
-十四、用途：间接光、雾与抗锯齿共用这一组采样。
-*/
-
-/*
-参数与边界：
-一、序号从零开始，总数必须大于零。
-二、低差异序列不保存状态，重复调用得到同一点。
-三、余弦半球的输入是零到一的二维随机数。
-四、手部深度换算假设深度已经夹到合法范围。
-五、三角分布的输入是零到一，输出也在零到一。
-六、反余弦近似在端点附近误差最大，调用方要接受少量偏差。
-七、Bayer 抖动只改阈值，不改采样位置。
-八、旋转矩阵假设角度用弧度。
-九、单位向量生成要求随机数在零到一之间。
-十、Halton 序列的基数不同，样本分布也不同。
-十一、所有函数都是纯函数，可以在任意阶段调用。
-十二、采样质量与样本数有关，少量样本要配合时间累积。
-*/
-
-/*
-补充说明：序列的累积。
-低差异序列适合每帧少量样本。
-余弦半球用于漫反射。
-手部深度在靠近相机时夹住下限。
-三角分布让抖动更柔和。
-样本数越多越平滑。
-画面验证看间接光噪点。
-*/
-
-/*
-补充说明：样本累积。
-低差异序列适合少量样本。
-余弦半球用于漫反射。
-手部深度在近处夹住下限。
-三角分布让抖动更柔和。
-*/

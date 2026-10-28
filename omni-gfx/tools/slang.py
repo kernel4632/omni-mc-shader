@@ -130,9 +130,22 @@ def download() -> Path:
             _extract_zip(archive, unpacked)
         else:
             _extract_tar(archive, unpacked)
+        staging = DEV_TOOLS / "slang-staging"  # 先放到同盘暂存目录，改名才是原子操作。
+        backup = DEV_TOOLS / "slang-previous"  # 旧版本先保留，改名失败时可以恢复。
+        for folder in (staging, backup):
+            if folder.exists():
+                shutil.rmtree(folder)
+        shutil.move(str(unpacked), str(staging))  # 完整解压后才进入暂存位置。
         if SLANG_DIR.exists():
-            shutil.rmtree(SLANG_DIR)  # 替换旧版本，避免多份编译器混用。
-        shutil.move(str(unpacked), str(SLANG_DIR))  # 完整解压后才进入正式位置。
+            SLANG_DIR.rename(backup)  # 旧版本改名保留，不在替换中途删除。
+        try:
+            staging.rename(SLANG_DIR)  # 同盘改名，替换瞬间完成。
+        except Exception:
+            if backup.exists() and not SLANG_DIR.exists():
+                backup.rename(SLANG_DIR)  # 替换失败时把旧版本放回原位。
+            raise
+        if backup.exists():
+            shutil.rmtree(backup)  # 新版本就位后才清理旧目录。
     return find()  # 返回新编译器路径。
 
 

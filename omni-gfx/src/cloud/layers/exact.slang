@@ -1,5 +1,5 @@
 /* 层状体积云的严格入口：按参考签名重排参数并填写参考默认常数；由 `cloud/layers.slang` 内联引入。
-用法：调用下方 `ogxLayersGetVolumetricCloudsExact`，参数顺序见函数签名。
+可复制示例：`float4 c = ogxLayersGetVolumetricCloudsExact(viewPos, dither, sunVector, moonVector, sunColor, moonColor, indirectColor, cloudPlane, cloudDist, settings, cameraPos, farPlane, dhFarPlane, modelViewInverse, 32, false, false, 1.0, true, layer0, layer1, layer2, layer3, layer4, auroraRgb, 1.0, 1.0, lightningRgb, noiseTex, shadowTex, shadowView, shadowProj, 2048.0, 1.0, skyTex, texel);`
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */

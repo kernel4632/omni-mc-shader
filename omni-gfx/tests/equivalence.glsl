@@ -14,6 +14,8 @@
 #include "/omni-gfx/common/math.glsl"
 #include "/omni-gfx/common/color.glsl"
 #include "/omni-gfx/common/sampling.glsl"
+// 黑洞扭曲的公式随吸积盘模块移动，等值测试跟着新位置走。
+#include "/omni-gfx/accretion.glsl"
 
 uniform int uCase;  // 当前比较的用例编号，由 Python 逐个绘制。
 uniform sampler2D uNoise;  // 两边共用的六十四像素噪声纹理。
@@ -48,7 +50,7 @@ vec3 ogxWarpResult(vec2 uv, vec3 color)
 {
     vec3 direction = normalize(vec3(uv, 0.8));  // 与旧库相同的初始方向。
     vec3 position = vec3(1.0, 0.5, 0.25);  // 与旧库相同的初始位置。
-    ogxWarpSpace(direction, position);  // 调用新库的扭曲。
+    ogxAccretionWarpSpace(direction, position);  // 调用新库的扭曲。
     return direction * 0.5 + position * 0.1 + color * 0.0;  // 与旧库相同的组合方式。
 }
 

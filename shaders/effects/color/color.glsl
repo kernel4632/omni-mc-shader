@@ -100,8 +100,10 @@
 #include "/common/math.glsl"
 // 强光压缩算法放在通用库里，本文件只保留选项、曝光统计与调用。
 #include "/omni-gfx/common/color.glsl"
-// 自动曝光的分块统计也在通用后期库，本文件只填参数。
+// 自动曝光的分块统计与曝光曲线在通用后期库，本文件只填参数。
 #include "/omni-gfx/post/post.glsl"
+// 曝光统计与曝光值的完整公式在曝光子模块，本文件只做选项换算。
+#include "/omni-gfx/post/exposure.glsl"
 // 全屏调试开关属于共享画面状态，调色、泛光与原版雾都从这里取同一份定义。
 #include "/effects/shared/screen.glsl"
 
@@ -110,67 +112,45 @@
 // 为什么分块而不是逐像素：逐像素太贵；分块加计权既便宜又能得到接近整屏的平均亮度。
 // 为什么用对数平均：亮度跨度很大，直接平均会被几个高光块带偏。
 float GetExposureTiles(){
-	float avg = Luminance(CurveToLinear(textureLod(colortex1, vec2(0.65, 0.65), floor(log2(min(viewWidth, viewHeight)))).rgb)) * (MAIN_OUTPUT_FACTOR / 128.0); // 用一个粗糙降采样估计整体亮度，供计权用。
-	OgxExposureParams params; // 分块统计需要的全部输入。
-	params.screen_size = screenSize; // 画面尺寸。
-	params.pixel_size = pixelSize; // 单像素大小。
-	params.lod = 6; // 用第六级多级纹理做分块采样。
-	params.luma_scale = MAIN_OUTPUT_FACTOR / 128.0; // 管线亮度换算。
-	params.average = avg; // 粗估整体亮度。
-	params.mode = OMNI_AE_MODE; // 测光方式。
-	params.luminance_mode = OMNI_LUMINANCE_WEIGHT_MODE; // 亮度计权方式。
-	params.luminance_strength = OMNI_LUMINANCE_WEIGHT_STRENGTH; // 计权强度。
-	#ifdef OMNI_END // 末地标记。
-		params.end_dimension = true; // 末地不看中心。
-	#else
-		params.end_dimension = false; // 其他维度按中心计权。
+	#ifdef OMNI_END // 末地默认测光不看中心。
+		const int dimension = 2;
+	#elif defined OMNI_NETHER // 下界用固定计权指数。
+		const int dimension = 1;
+	#else // 主世界按中心与亮度计权。
+		const int dimension = 0;
 	#endif
-	#ifdef OMNI_NETHER // 下界标记。
-		params.nether = true; // 下界用固定计权指数。
+	#ifdef OMNI_CAVE_MODE // 洞穴模式按与平均亮度的比值加权。
+		const bool caveMode = true;
 	#else
-		params.nether = false; // 其他维度按整体亮度调整。
+		const bool caveMode = false;
 	#endif
-	#ifdef OMNI_CAVE_MODE // 洞穴模式标记。
-		params.cave_mode = true; // 洞穴按偏离整体亮度计权。
-	#else
-		params.cave_mode = false; // 普通模式不启用洞穴计权。
-	#endif
-	#ifdef OMNI_OVERWORLD // 主世界标记。
-		params.overworld = true; // 主世界指数范围与末地不同。
-	#else
-		params.overworld = false; // 非主世界不套主世界曲线。
-	#endif
-	float exposure = ogxExposureTileAverage(colortex1, params); // 分块循环在通用库里。
-	exposure *= EXPOSURE_OUTPUT_FACTOR; // 换到曝光单位。
-	return LinearToCurve(exposure); // 按管线编码后写进顶行像素。
+	return ogxGetExposureTiles(colortex1, int(viewWidth), int(viewHeight), screenSize, pixelSize,
+		MAIN_OUTPUT_FACTOR, EXPOSURE_OUTPUT_FACTOR, OMNI_AE_MODE, dimension, true, caveMode,
+		OMNI_LUMINANCE_WEIGHT_MODE, OMNI_LUMINANCE_WEIGHT_STRENGTH); // 分块循环与计权在通用库，返回值已编码。
 }
 
 // --- 曝光值：把顶行像素里的统计换算成这一帧要乘的曝光 ---
 // 手动模式直接由曝光值换算；自动模式再按曲线和偏移调整，并乘回管线单位；
 // 最后统一叠三项 Eclipse 曝光增益（乘数、变暗、增亮），默认均为一时结果与原来相同。
 float GetExposureValue(){
-	float exposure; // 先算出基础曝光，再统一叠增益。
-	#if OMNI_MANUAL_EXPOSURE // 手动曝光。
-		exposure = 1.5e5 * MAIN_OUTPUT_FACTOR * exp2(-OMNI_EV_VALUE); // 由曝光值直接换算。
-	#else // 自动曝光。
-		float ae = CurveToLinear(texelFetch(colortex2, ivec2(0, screenSize.y - 1.0), 0).a) * (5120.0 / EXPOSURE_OUTPUT_FACTOR); // 读顶行自动曝光统计。
-		float aeCurve = OMNI_AE_CURVE; // 曲线指数初值。
-		#if !OMNI_DISABLE_NIGHTVISION // 夜视时把曲线指数抬到接近一。
-			aeCurve = mix(aeCurve, 0.95, nightVision); // 按夜视强度混合。
-		#endif
-		#ifdef AE_CLAMP // 开启曝光钳位时按亮度压曲线。
-			aeCurve *= remapSaturate(ae, 2.0, 1.0) * 0.6 + 0.4; // 越暗越接近固定值，避免过曝。
-		#endif
-		#ifdef OMNI_NETHER // 下界整体压一点曲线。
-			aeCurve *= 0.83; // 下界修正系数。
-		#endif
-		ae = pow(ae, -aeCurve); // 按曲线把亮度换成曝光。
-		ae *= exp2(OMNI_AE_OFFSET); // 叠加曝光偏移。
-		#if !OMNI_DISABLE_BLINDNESS_DARKNESS // 黑暗效果时压低曝光。
-			ae *= 1.0 - min(darknessLightFactor * 2.0, 0.9); // 按黑暗脉动亮度压低。
-		#endif
-		exposure = 8.5 * MAIN_OUTPUT_FACTOR * ae; // 乘回管线单位得到基础曝光。
+	#ifdef OMNI_NETHER // 下界整体压低曲线。
+		const bool dimensionNether = true;
+	#else
+		const bool dimensionNether = false;
 	#endif
+	#if OMNI_DISABLE_NIGHTVISION // 只关夜视对曲线的抬升。
+		const bool disableNightVision = true;
+	#else
+		const bool disableNightVision = false;
+	#endif
+	#if OMNI_DISABLE_BLINDNESS_DARKNESS // 只关黑暗对曝光的压低。
+		const bool disableBlindness = true;
+	#else
+		const bool disableBlindness = false;
+	#endif
+	float exposure = ogxGetExposureValue(colortex2, ivec2(screenSize), OMNI_MANUAL_EXPOSURE != 0, OMNI_EV_VALUE,
+		MAIN_OUTPUT_FACTOR, EXPOSURE_OUTPUT_FACTOR, OMNI_AE_CURVE, nightVision, true, dimensionNether,
+		OMNI_AE_OFFSET, darknessLightFactor, disableNightVision, disableBlindness); // 曲线、夜视与黑暗在通用库。
 	return exposure * OMNI_EXPOSURE_MULTIPLIER * OMNI_EXPOSURE_DARKENING * OMNI_EXPOSURE_BRIGHTENING; // 叠三项增益，默认一为原样。
 }
 

@@ -45,10 +45,8 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     acc += basis.tangent + basis.bitangent + basis.normal;  // 读取三个字段。
     float3 hsv = ogxRgbToHsv(n);  // 颜色转色相。
     acc += ogxRadialCurve(t) * n + ogxCircleMapL(t, 8.0) * n;  // 径向轮廓与圆映射。
-    float3 warpedDirection = l;  // 空间扭曲就地修改方向与位置。
-    float3 warpedPosition = float3(1.0, 2.0, 3.0);  // 远离原点，避免除零。
-    ogxWarpSpace(warpedDirection, warpedPosition);  // 调用扭曲。
-    acc += warpedDirection + hsv;  // 汇总剩余结果。
+    acc += ogxMatrix3MulPoint(ogxRotationXThenY(t, t * 0.5), n);  // 俯仰加偏航的旋转。
+    acc += hsv;  // 汇总剩余结果。
 
     return float4(acc, 1.0);  // 有输出即可，数值本身不参与测试。
 }

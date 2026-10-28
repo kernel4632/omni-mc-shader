@@ -18,6 +18,8 @@
 // 材质与水洼选项由共享表面主体统一定义。
 #include "/effects/shared/surface.glsl"
 #include "/omni-gfx/water.glsl"
+// 雨纹动画的对比度重整属于天气效果，本文件只把它接到水面纹理。
+#include "/omni-gfx/weather/rain.glsl"
 // 降雨、雪天与干燥群系标记由绑定层整理，涟漪只接收普通数值。
 #include "/bind/weather.glsl"
 // 雨点动画的当前帧由累计秒数换算。
@@ -33,7 +35,7 @@ float GetModulatedRainSpecular(vec3 pos){
 
 // 读一张雨点动画贴图并转成带符号的法线，指数控制边缘锐度。
 vec2 GetRainAnimationTex(sampler2D texSampler, vec2 coord, float rp){
-	return ogxRainAnimationNormal(texSampler, coord, rp); // 转发到通用库。
+	return ogxRainAnimationTex(texSampler, coord, rp); // 通用天气模块的雨纹重整。
 }
 
 // 雨点法线：按动画相位在贴图上采样，三层按降雨强弱叠加。

@@ -146,37 +146,7 @@ float ogxFogDensityNoise(vec3 fogPos, vec3 wind, float heightA, float heightB, f
     return density * density * 3.0; // 再平方并放大，得到清楚的边界。
 }
 
-// 三维噪声：把世界坐标折成三维格子，再用一张二维噪声图的上下两层按高度插值。
-// 为什么能这样降维：噪声图本身是二维的，用格子的纵坐标错开贴图里的一行，
-// 再把两个通道当成上下两层，就能在不增加纹理的情况下得到三维手感。
-float ogxEnd3dNoise(vec3 position, sampler2D noiseTexture, float noiseResolution)
-{
-    vec3 p = floor(position); // 整数格决定用贴图哪一块。
-    vec3 b = fract(position); // 格内偏移用于插值。
-    b = b * b * (3.0 - 2.0 * b); // 三次平滑，格与格之间不出现硬边。
-    vec2 uv = 17.0 * p.z + p.xy + b.xy; // 把三层格子压到二维坐标，十七是原程序打散层数的常数。
-    vec2 rg = textureLod(noiseTexture, (uv + 0.5) / noiseResolution, 0.0).zx; // 取两张通道，零号层级与原来的即时采样一致。
-    return mix(rg.x, rg.y, b.z); // 按格内高度在两层之间插值。
-}
-
-// 云状分形噪声：四层不同频率的三维噪声叠加，供吸积盘等体积细节使用。
-// `shift` 是每层之间的时间位移，让细节缓慢流动而不是整块平移。
-float ogxCloudFbm(vec3 position, vec3 shift, sampler2D noiseTexture, float noiseResolution)
-{
-    const int octaves = 4; // 四层就够，再多在远景里看不出来。
-    const float octAlpha = 0.87; // 每层权重只衰减一成多，细节保留得多。
-    const float octScale = 2.5; // 每层频率放大二点五倍，避免相邻层太像。
-    const float octShift = (octAlpha / octScale) / float(octaves); // 层间偏移，把结果抬回零附近。
-    float accum = 0.0; // 累积噪声。
-    float alpha = 0.5; // 第一层权重。
-    for (int i = 0; i < octaves; i++) // 逐层叠加。
-    {
-        accum += alpha * ogxEnd3dNoise(position, noiseTexture, noiseResolution); // 加这一层。
-        position = (position + shift) * octScale; // 抬高频率并错开时间。
-        alpha *= octAlpha; // 权重衰减。
-    }
-    return accum + octShift; // 返回归一化后的噪声。
-}
+// 三维噪声与云状分形在通用噪声模块：吸积盘、雾与体积云共用同一份查表公式。
 
 // 下界雾的单格密度：世界坐标折成三维格子，再查二维噪声图。
 float ogxNetherFogDensityAt(vec3 pos, sampler2D noiseTexture)
@@ -207,10 +177,10 @@ float ogxNetherFogCloudVolume(vec3 pos, float time, sampler2D noiseTexture)
     return max((roofToFloor - plumes * (1.0 - erosion)) * 2.0, clamp((floorFalloff - floorPlumes * 0.5) * erosion, 0.0, 1.0)); // 两种形状取大者。
 }
 
-// 末地涡旋、群系与下界雾，具体实现在子文件。
+// 末地涡旋与末地相位，具体实现在子文件。
 // 子文件：fog/fog/end.slang。
 /*
-雾子文件：末地漩涡雾、群系雾色与密度、原版雾、选择框和末地阴影形状。
+雾子文件：末地漩涡雾、下界群系雾色、通用群系雾与末地阴影形状。
 调用位置：由 `fog/fog.slang` 内联，末地天空与雾效果直接调用这里的入口。
 可复制示例：`float phase = ogxEndVortexLightPhase(lightPos);`
 设计原因与取舍：群系权重与光源位置显式传入，不读取宿主群系表；漩涡形状与参考采样顺序一致。
@@ -417,10 +387,8 @@ vec4 ogxEndVolumetricFogExact(vec3 viewPosition, float dither, float dither2,
 // `VdotL` 是视线与光方向余弦，`angleX`、`angleY` 是行星相位角，`planetShadow` 是行星遮挡权重。
 float ogxEndFogDensity(vec3 worldDir, float dist, float VdotL, float angleX, float angleY, float planetShadow, float stormScale, float hazeScale)
 {
-    mat3 eyeRoataionMatrixX = mat3(1.0, 0.0, 0.0, 0.0, cos(angleX), -sin(angleX), 0.0, sin(angleX), cos(angleX)); // 俯仰旋转。
-    mat3 eyeRoataionMatrixY = mat3(cos(angleY), 0.0, sin(angleY), 0.0, 1.0, 0.0, -sin(angleY), 0.0, cos(angleY)); // 偏航旋转。
-    mat3 eyeRoataionMatrix = eyeRoataionMatrixX * eyeRoataionMatrixY; // 合成旋转。
-    vec3 dir = ogxMatrix3MulPoint(eyeRoataionMatrix, worldDir); // 视线转到相位坐标系。
+    mat3 eyeRotationMatrix = ogxRotationXThenY(angleX, angleY); // 与行星共用的俯仰加偏航。
+    vec3 dir = ogxMatrix3MulPoint(eyeRotationMatrix, worldDir); // 视线转到相位坐标系。
     dist = min(dist, 512.0); // 距离封顶，远处不再变浓。
     float h = abs(dir.z) * dist * 0.03; // 沿视线方向的等效高度。
     float fogDepth = (1.0 - exp(-h)) / h * dist; // 密度沿距离的积分闭式解。
@@ -430,6 +398,42 @@ float ogxEndFogDensity(vec3 worldDir, float dist, float VdotL, float angleX, flo
     density *= planetShadow * 0.93 + 0.07; // 行星阴影压低密度。
     return density; // 交回未换算单位的密度。
 }
+
+// Eclipse 末地雾的相函数：与云相函数同形，但常数用 3.14 而不是 pi，保留参考精度。
+float ogxEndFogPhaseAnisotropic(float x, float g)
+{
+    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考实现直接写 3.14，保留同一精度。
+}
+
+// 雾相位：Eclipse 的指数相位，光线越正对越亮。
+float ogxEndLightFalloff(float lightPoint)
+{
+    float linear = clamp(-lightPoint * 0.5 + 0.5, 0.001, 1.0); // 线性项。
+    float linear2 = 1.0 - clamp(lightPoint, 0.0, 1.0); // 参考保留这一项，当前返回值没有用到它。
+    float exponential = exp2(pow(linear, 0.3) * -15.0) * 1.5; // 指数项。
+    exponential += sqrt(exp2(sqrt(linear) * -12.5)); // 开方项。
+    return exponential; // 交回相位。
+}
+
+// 末地雾阴影：沿光源方向取三个密度样本，再按指数衰减成阴影。
+float ogxEndFogShadowShape(vec3 worldPos, vec3 lightPos, sampler3D fogShape, float endStormDensity)
+{
+    float shadow = 0.0; // 密度累加。
+    for (int i = 0; i < 3; i++) // 三个样本。
+    {
+        vec3 samplePos = worldPos - lightPos * (0.01 + pow(float(i), 0.75) * 0.25); // 参考实现的偏移。
+        shadow += textureLod(fogShape, samplePos, 0.0).r * endStormDensity; // 取雾密度。
+    }
+    return clamp(exp2(shadow * -10.0), 0.0, 1.0); // 参考实现的衰减。
+}
+
+// 下界群系的自发光与雾色，具体实现在子文件。
+// 子文件：fog/fog/nether.slang。
+// 下界子文件：五个群系的自发光与雾色，按平滑权重相加。
+// 调用位置：由 `fog/fog.slang` 内联；下界雾与下界光照调用这里的两个入口。
+// 设计原因与取舍：下界没有太阳，亮度全靠写死的群系基色；颜色与密度分开成两个函数，
+// 调用方可以只取雾色或只取光照，不必背一整组参数。
+// 可复制示例：`vec3 light = ogxNetherBiomeLighting(0.0, 0.0, 0.0, 0.0, 1.0, 1.0);`
 
 // 下界群系自发光：五个群系各给一种基色与强度，按平滑权重相加后再乘整体亮度。
 // 为什么每个群系单独一项：下界没有太阳，画面亮度全靠这组写死的基色撑着，群系之间差别很大。
@@ -456,6 +460,15 @@ vec4 ogxNetherBiomeFogColor(float netherWastes, float soulSandValley, float crim
     fog += vec4(0.400, 0.400, 0.400, 0.014) * basaltDeltas; // 玄武岩三角洲灰色、最浓。
     return fog * vec4(brightness, brightness, brightness, density); // 颜色乘亮度、密度乘雾浓度。
 }
+
+
+// 通用群系雾色与密度，具体实现在子文件。
+// 子文件：fog/fog/biome.slang。
+// 群系子文件：Eclipse 的群系雾色与密度混合。
+// 调用位置：由 `fog/fog.slang` 内联；通用群系雾与天气雾调用这里的三个入口。
+// 设计原因与取舍：四个群系权重与两套密度分开传入，颜色与密度各自混合，
+// 这样天气系统可以在不改变颜色的情况下只调密度。
+// 可复制示例：`vec3 c = ogxBiomeFogColor(vec4(1.0, 0.0, 0.0, 0.0), swamp, jungle, dark, pale, coverage);`
 
 // Eclipse 群系雾色：四个群系各给一组红绿蓝基色，按权重相加；返回本群系颜色与覆盖程度。
 // 为什么颜色分量分开写：与参考文件一行对一行，之后核对某个群系的颜色不会看错列。
@@ -500,33 +513,6 @@ void ogxBiomeFogDensityReference(inout vec4 uniformDensity, inout vec4 cloudyDen
     cloudyDensity = mix(cloudyDensity, vec4(density.y), inBiome * maxDistance); // 团雾密度混合。
 }
 
-// Eclipse 末地雾的相函数：与云相函数同形，但常数用 3.14 而不是 pi，保留参考精度。
-float ogxEndFogPhaseAnisotropic(float x, float g)
-{
-    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考实现直接写 3.14，保留同一精度。
-}
-
-// 雾相位：Eclipse 的指数相位，光线越正对越亮。
-float ogxEndLightFalloff(float lightPoint)
-{
-    float linear = clamp(-lightPoint * 0.5 + 0.5, 0.001, 1.0); // 线性项。
-    float linear2 = 1.0 - clamp(lightPoint, 0.0, 1.0); // 参考保留这一项，当前返回值没有用到它。
-    float exponential = exp2(pow(linear, 0.3) * -15.0) * 1.5; // 指数项。
-    exponential += sqrt(exp2(sqrt(linear) * -12.5)); // 开方项。
-    return exponential; // 交回相位。
-}
-
-// 末地雾阴影：沿光源方向取三个密度样本，再按指数衰减成阴影。
-float ogxEndFogShadowShape(vec3 worldPos, vec3 lightPos, sampler3D fogShape, float endStormDensity)
-{
-    float shadow = 0.0; // 密度累加。
-    for (int i = 0; i < 3; i++) // 三个样本。
-    {
-        vec3 samplePos = worldPos - lightPos * (0.01 + pow(float(i), 0.75) * 0.25); // 参考实现的偏移。
-        shadow += textureLod(fogShape, samplePos, 0.0).r * endStormDensity; // 取雾密度。
-    }
-    return clamp(exp2(shadow * -10.0), 0.0, 1.0); // 参考实现的衰减。
-}
 
 vec4 ogxFogMarch(OgxFog fog, vec3 camera, vec3 worldPosition, vec3 sunDirection,
                    vec3 sunColor, float jitter, int steps)

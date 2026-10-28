@@ -8,11 +8,11 @@
 Omni 通用图形库镜头模块：对焦距离、桶形光斑、彩色鬼影、环形眩光与太阳眩光。
 调用位置：需要复现 iterationT 镜头光斑与景深对焦的后期程序；由 `/omni-gfx/lens/lens.glsl` 引入。
 可复制示例：
-    float focus = ogxGetFocus(colortex2, screenExtent, 0, 8.0, projectionInverse); // 取对焦距离。
+    float focus = ogxGetFocus(exposureTexture, screenExtent, 0, 8.0, projectionInverse); // 取对焦距离。
     vec3 color = ogxLensFlare(texCoord, sunCoord, aspect, projectionYY, true, true, 1.0, 1.0, sunColor, 1.0, 0.0, 1.0); // 叠镜头光斑。
 设计原因与取舍：
     对焦与光斑都只依赖屏幕坐标、投影与太阳位置；纹理、开关和强度显式传入，常数与参考实现逐项相同。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。镜头光斑目前只有探针覆盖，还没有顶层画面入口。
+当前状态：由 `shaders/effects/lens/lens.glsl` 引入并编译；镜头效果后续接到顶层入口。
 */
 #ifndef OGX_LENS_LENS_INCLUDED
 #define OGX_LENS_LENS_INCLUDED

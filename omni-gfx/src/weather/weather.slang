@@ -23,24 +23,31 @@ Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、
 
 // 雨雪随风摆动：固定风向叠一个缓慢旋转的扰动，再按高度放大。
 // 为什么扰动跟着世界位置走：不同位置的雨丝才不会像一整块布同步摆动。
-float2 ogxRainWindOffset(float3 worldPos, float3 cameraPos, float time, float2 wind, float disturbance, float outdoor)
-{
+// 为什么按高度放大：雨丝从云底落到地面，越高的部分受风时间越长，偏移自然更大；
+// 贴着地面的雨滴几乎竖直，屋檐与树下不会出现横向穿模的雨。
+// 扰动用世界位置做相位，避免整片雨幕同步摆动；露天系数为零时整段归零，室内不受影响。
+float2 ogxRainWindOffset(float3 worldPos, float3 cameraPos, float time, float2 wind, float disturbance, float outdoor) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    // 相位随世界位置变化：相邻雨丝不会同步摆动，整片雨幕才不像一块布。
     float angle = dot(worldPos + cameraPos, float3(3.0, 0.5, 3.0)) + time * 0.2; // 位置与时间决定的摆动相位。
+    // 单位圆上的方向：正弦与余弦一起给出旋转，不需要再归一化。
     float2 rotation = float2(sin(angle), cos(angle)); // 摆动方向。
+    // 高度越高偏移越大，贴近地面的雨丝仍然近似竖直，屋檐下不会出现横向雨。
     float2 offset = (wind + rotation * disturbance) * worldPos.y; // 固定风向加摆动，按高度放大。
+    // 露天系数为零时整段偏移归零，室内雨雪保持竖直，不需要另写分支。
     return outdoor * offset; // 只有露天时倾斜。
-}
+} // 按参考顺序推进。
 
 // 植被程度：顶点色里绿色比红、蓝多出越多，越像群系染过的植被。
 // 乘四是为了让普通草色接近一，避免季节色只有一点点。
-float ogxFoliage(float3 vertexColor)
-{
+float ogxFoliage(float3 vertexColor) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     return clamp((vertexColor.g - max(vertexColor.r, vertexColor.b)) * 4.0, 0.0, 1.0); // 用绿色优势判断是否植被。
-}
+} // 按参考顺序推进。
 
 // 季节上色：植被按一年相位混入秋色，再按色调参数整体偏暖或偏冷。
 // `phase` 是零到一的一年进度，`tint` 是负到正的冷暖偏置，`enabled` 关闭时原样返回。
-float3 ogxSeason(float3 albedo, float3 vertexColor, float phase, float tint, bool enabled)
+float3 ogxSeason(float3 albedo, float3 vertexColor, float phase, float tint, bool enabled) // 当前步骤的中间量。
 {
     if (!enabled) return albedo; // 关闭时不做任何改动。
     float foliage = ogxFoliage(vertexColor); // 这一面有多像植被。
@@ -66,6 +73,8 @@ float ogxStormNoise(float3 position, Sampler2D noiseTexture, float noiseResoluti
 
 // 暴风颜色：按雪暴与沙暴的强度在冷白与沙黄之间加权，再归一化成雾色乘子。
 // 加一个小量避免两份强度都为零时除零；零强度由调用方跳过，不会走到这里。
+// 每日天气用日期做哈希：同一天所有玩家得到同一结果，跨天自然变化。
+// 哈希只接受一个标量，输出零到一，调用方再按档位分段。
 float3 ogxStormColor(float snowStorm, float sandStorm)
 {
     float total = max(snowStorm + sandStorm, 1e-4); // 两份强度之和。
@@ -73,7 +82,6 @@ float3 ogxStormColor(float snowStorm, float sandStorm)
     float3 snowCol = float3(0.6, 0.8, 1.0); // 雪暴的冷白，照 Eclipse 的雪系数。
     return (sandStorm * sandCol + snowStorm * snowCol) / total; // 按强度加权后归一。
 }
-
 
 // 四季调色板：树叶与非树叶各一套颜色，因为树叶的季节变化通常更明显。
 struct OgxSeasonPalette
@@ -196,36 +204,5 @@ void ogxYearCycleColorSeason(inout float3 finalColor, float3 glcolor, bool isLea
     if (isTintIndex) finalColor = springToSummer;
 }
 
-/*
-实现说明：天气形状。
-一、云量：按每日天气与群系权重混合，输出零到一的覆盖率。
-二、风：水平风向与风速由调用方传入，噪声坐标随时间平移。
-三、雷暴：闪电强度与云量分别输出，云与雾按自己的阈值使用。
-四、噪声：二维值噪声叠成云团，低频决定大块，高频决定边缘。
-五、边界：位置、时间、风向与露天系数全部显式传入，库不读取天气全局量。
-六、单位：世界坐标用方块，时间用秒；调用方负责把自己的时间缩放传入。
-*/
-/*
-函数索引：
-一、`ogxRainWindOffset`：雨天的风偏移。
-二、`ogxFoliage`：植被季节色。
-三、`ogxSeason`：季节权重。
-四、`ogxStormNoise`：雷暴噪声。
-五、`ogxStormColor`：雷暴染色。
-六、`ogxYearCycleColor` 与 `ogxYearCycleColorSeason`：年周期颜色。
-七、`ogxFogDensities`：按天气输出雾密度。
-八、边界：位置、时间、风向与露天系数全部显式传入。
-九、单位：世界坐标用方块，时间用秒。
-*/
-/*
-参数与边界：
-一、时间用秒，世界坐标用方块。
-二、风向是水平单位向量。
-三、露天系数在零到一之间，零表示完全遮蔽。
-四、季节权重按年周期插值。
-五、雷暴强度与降雨强度分开。
-六、雾密度按天气与群系混合。
-七、所有函数只接收显式参数，不读取天气全局量。
-八、画面验证要看雨、雪与雷暴三种天气。
-*/
+
 #endif

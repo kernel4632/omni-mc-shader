@@ -6,8 +6,12 @@
 */
 // 七乘七邻域偏移按行列下标现算：x 从负三到三，y 同样，按行优先排列。
 // 全局光空间滤波：在七乘七邻域里按法线与深度加权平均，抑制半分辨率带来的噪点。
-float3 ogxGiSpatialFilter(float2 coord, float dist, float3 normal, float3 viewDir, OgxGiView view, Sampler2D historyTexture, float renderScale)
-{
+// 空间滤波为什么按法线与深度拒绝样本：全局光是低频信号，但几何边缘不是；
+// 不拒绝会把前景的亮色抹到背景，出现一圈光晕。
+// 七乘七核已经够大，再大只会增加成本；时间滤波负责补剩下的噪声。
+// 权重用平方反比，近处样本话语权更高，远处只做平滑补充。
+float3 ogxGiSpatialFilter(float2 coord, float dist, float3 normal, float3 viewDir, OgxGiView view, Sampler2D historyTexture, float renderScale) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float2 local = coord * renderScale; // 全局光分辨率下的坐标。
     float weights = 0.0; // 权重和。
     float3 gi = float3(0.0); // 累积的反弹颜色。
@@ -18,21 +22,21 @@ float3 ogxGiSpatialFilter(float2 coord, float dist, float3 normal, float3 viewDi
     float2 offsetScale = view.texel_size * 4.0 * renderScale; // 邻域步长。
     // 七乘七偏移表与参考实现的数组逐项相同；显式列出而不是现算，常数集合才能逐项核对。
     float2 offsets[49]; // 四十九个空间采样偏移，覆盖七乘七邻域。
-    offsets[0] = float2(-3.0, -3.0);
-    offsets[1] = float2(-2.0, -3.0);
-    offsets[2] = float2(-1.0, -3.0);
-    offsets[3] = float2(0.0, -3.0);
-    offsets[4] = float2(1.0, -3.0);
-    offsets[5] = float2(2.0, -3.0);
-    offsets[6] = float2(3.0, -3.0);
-    offsets[7] = float2(-3.0, -2.0);
-    offsets[8] = float2(-2.0, -2.0);
-    offsets[9] = float2(-1.0, -2.0);
-    offsets[10] = float2(0.0, -2.0);
-    offsets[11] = float2(1.0, -2.0);
-    offsets[12] = float2(2.0, -2.0);
-    offsets[13] = float2(3.0, -2.0);
-    offsets[14] = float2(-3.0, -1.0);
+    offsets[0] = float2(-3.0, -3.0); // 当前步骤的中间量。
+    offsets[1] = float2(-2.0, -3.0); // 当前步骤的中间量。
+    offsets[2] = float2(-1.0, -3.0); // 当前步骤的中间量。
+    offsets[3] = float2(0.0, -3.0); // 当前步骤的中间量。
+    offsets[4] = float2(1.0, -3.0); // 当前步骤的中间量。
+    offsets[5] = float2(2.0, -3.0); // 当前步骤的中间量。
+    offsets[6] = float2(3.0, -3.0); // 当前步骤的中间量。
+    offsets[7] = float2(-3.0, -2.0); // 当前步骤的中间量。
+    offsets[8] = float2(-2.0, -2.0); // 当前步骤的中间量。
+    offsets[9] = float2(-1.0, -2.0); // 当前步骤的中间量。
+    offsets[10] = float2(0.0, -2.0); // 当前步骤的中间量。
+    offsets[11] = float2(1.0, -2.0); // 当前步骤的中间量。
+    offsets[12] = float2(2.0, -2.0); // 当前步骤的中间量。
+    offsets[13] = float2(3.0, -2.0); // 当前步骤的中间量。
+    offsets[14] = float2(-3.0, -1.0); // 当前步骤的中间量。
     offsets[15] = float2(-2.0, -1.0);
     offsets[16] = float2(-1.0, -1.0);
     offsets[17] = float2(0.0, -1.0);
@@ -91,58 +95,3 @@ float3 ogxGiSpatialFilterReference(float dist, float3 normal, float3 viewDir, fl
 {
     return ogxGiSpatialFilter(coord, dist, normal, viewDir, view, historyTexture, renderScale);
 }
-
-/*
-实现说明：全局光的空间滤波。
-一、邻域：七乘七窗口逐像素取历史反弹，窗口大小由调用方给出。
-二、权重：法线夹角、深度差与距离共同决定样本权重，边缘不会被糊平。
-三、中心样本：当前像素权重更高，避免滤波把细节整体拉走。
-四、归一化：权重和为零时退回中心样本，不会出现黑块。
-五、边界：屏幕坐标越界的样本直接跳过，不读取画面外。
-六、用途：时间滤波之后的降噪，输入输出都是曲线编码颜色。
-*/
-
-/*
-函数索引：
-一、`ogxGiSpatialFilter`：七乘七空间滤波，输入坐标、距离、法线、视线与历史图。
-二、`ogxGiSpatialFilterReference`：参考签名版本，参数顺序与参考实现一致。
-三、权重：法线夹角、深度差与距离共同决定样本权重。
-四、中心样本：当前像素权重更高，避免细节被整体拉走。
-五、归一化：权重和为零时退回中心样本，不会出现黑块。
-六、边界：屏幕坐标越界的样本直接跳过。
-七、用途：时间滤波之后的降噪。
-八、顺序：先算权重再累加，最后归一化。
-九、常数：窗口大小与法线阈值由调用方给出。
-十、验证：降噪效果需要在测试世界里看静止与移动画面。
-*/
-
-/*
-参数与边界：
-一、窗口大小由调用方给出，七乘七是默认值。
-二、法线阈值与深度阈值决定哪些样本参与滤波。
-三、中心样本权重更高，避免细节被整体拉走。
-四、权重和为零时退回中心样本。
-五、屏幕坐标越界的样本直接跳过。
-六、输入输出都是曲线编码颜色，解码与编码由调用方负责。
-七、滤波只做空间降噪，不改变相机运动。
-八、画面验证要看静止与移动两种状态。
-九、严格入口的参数顺序与参考实现一致。
-十、所有纹理与矩阵显式传入，库不读取宿主槽位。
-*/
-
-/*
-补充说明：滤波边界。
-一、窗口越大越平滑，也越容易糊掉细节。
-二、法线阈值决定哪些样本参与。
-三、深度阈值决定前后景是否混合。
-四、中心样本权重更高。
-五、权重和为零时退回中心样本。
-六、越界样本直接跳过。
-七、输入输出都是曲线编码颜色。
-八、画面验证看静止与移动两种状态。
-九、严格入口的参数顺序与参考一致。
-十、所有纹理与矩阵显式传入。
-十一、滤波不改变相机运动。
-十二、降噪之后的边缘要保持清晰。
-十三、离线编译不验证画面。
-*/

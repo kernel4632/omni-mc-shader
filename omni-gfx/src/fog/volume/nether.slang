@@ -1,5 +1,5 @@
 /* 下界的体积雾：羽流、雾霭与顶部烟在同一条视线上分开累加；由 `fog/volume.slang` 内联引入。
-可复制示例：`float density = ogxEndFogDensity(worldDir, distance, VdotL, 0.0, 0.0, 0.0, 1.0, 1.0);`
+可复制示例：`float4 fog = ogxNetherVolumetricFog(rayDir, cameraOffset, cameraWorld, noiseTex, 1.0, 1.0, hazeColor, 1.0, 16, 8.0, 160.0, farPlane);`
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */

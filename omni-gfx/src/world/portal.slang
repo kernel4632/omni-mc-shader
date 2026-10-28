@@ -5,7 +5,7 @@ Omni 通用图形库末地传送门模块：每层旋转、缩放与平移的传
     float4x4 clip = ogxEndPortalLayer(3.0, frameTime); // 取该层的矩阵。
 设计原因与取舍：
     十六层各自不同旋转与平移，矩阵按参考实现的乘法顺序展开，调用方直接乘贴图坐标。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。末地传送门矩阵目前只有探针覆盖，顶层入口尚未接入。
+当前状态：由 `shaders/effects/world/end.glsl` 引入并编译；末地传送门效果后续调用。
 */
 #ifndef OGX_WORLD_PORTAL_INCLUDED
 #define OGX_WORLD_PORTAL_INCLUDED
@@ -14,7 +14,10 @@ Omni 通用图形库末地传送门模块：每层旋转、缩放与平移的传
 #include "../common/math.slang"
 
 // 末地传送门层：每层一个旋转、缩放与平移，叠出会流动的传送门纹理。
-float4x4 ogxEndPortalLayer(float layer, float timeSeconds)
+// 为什么先缩放再旋转：缩放要作用在贴图坐标上，旋转与平移描述层的运动；
+// 顺序反过来会让每层的缩放中心跟着旋转，层与层之间出现错位。
+// 平移量取层号的比例，层数越多流动越慢，和参考实现的视觉速度一致。
+float4x4 ogxEndPortalLayer(float layer, float timeSeconds) // 当前步骤的中间量。
 {
     float4x4 translate = float4x4(1.0, 0.0, 0.0, 17.0 / layer,
                                   0.0, 1.0, 0.0, (2.0 + layer / 1.5) * (timeSeconds * 0.0005),
@@ -45,17 +48,4 @@ float4x4 ogxEndPortalLayer(float layer, float timeSeconds)
     return result; // 参考实现的乘法顺序。
 }
 
-/*
-实现说明：末地传送门矩阵。
-一、矩阵：按传送门方块的位置与朝向构造局部坐标系，供传送门表面着色使用。
-二、边界：只做矩阵与坐标换算，不读取维度或方块状态。
-三、用法：调用方传入相机相对位置与传送门中心，得到局部坐标后再采样纹理。
-*/
-/*
-函数索引：
-一、`ogxEndPortalLayer`：末地传送门的局部坐标与层号。
-二、输入：相机相对位置、传送门中心与朝向。
-三、输出：局部坐标供传送门表面采样纹理。
-四、边界：只做矩阵与坐标换算，不读取维度或方块状态。
-*/
 #endif

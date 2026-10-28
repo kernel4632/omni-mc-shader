@@ -49,10 +49,10 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `atmosphere/sky.slang` | Eclipse 日月圆盘、球面映射、双三次采样、天空盒查表、大气积分与极光 | `common/math`、`atmosphere` |
 | `cloud/cloud.slang` | 单层球面云的球壳求交、程序化密度、朝阳光照、沿视线步进与云影 | `common/math`、`common/noise` |
 | `cloud/volume.slang` | 体积云形状、光照、步进、闪电与云影贴图 | `cloud`、`common/color`、`common/math` |
-| `cloud/layers.slang` | 层状五层云形状、云影、朝光散射与主步进循环；实现在 `cloud/layers/` 的八个同名子文件 | `cloud`、`atmosphere/sky`、`common/math` |
+| `cloud/layers.slang` | 层状五层云形状、云影、朝光散射与主步进循环；实现在 `cloud/layers/` 的七个子文件 | `cloud`、`atmosphere/sky`、`common/math` |
 | `cloud/planar.slang` | 平面云扭曲、密度、光照密度、固定高度取样与空气透视 | `cloud`、`common/math`、`atmosphere/model` |
-| `fog/fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分、雾相位与末地雾阴影；实现在 `fog/fog/` 的两个子文件 | `common/math`、`common/noise` |
-| `fog/volume.slang` | 体积雾密度、光照吸收、步进、暴风、水下光柱与下界烟；主文件保留结构体与主体步进，算法分在 `fog/volume/` 的七个子文件 | `fog`、`weather`、`shadow`、`water`、`common/color`、`common/sampling` |
+| `fog/fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分、末地涡旋、下界群系与通用群系雾；实现在 `fog/fog/` 的四个子文件 | `common/math`、`common/noise` |
+| `fog/volume.slang` | 体积雾密度、光照吸收、步进、水下光柱与下界烟；主文件保留结构体与主体步进，算法分在 `fog/volume/` 的四个子文件 | `fog`、`weather`、`shadow`、`water`、`common/color`、`common/sampling` |
 | `shadow/shadow.slang` | 屏幕空间阴影、级联选择、PCSS 与可变半影；投影与边缘压缩收口到 `common/camera` | `common/math`、`common/camera` |
 | `shadow/map.slang` | 阴影写入端的投影偏差、Eclipse 边缘压缩、硬阴影、轨道旋转与体素阴影图；读取端的相机投影与压缩还原仍在 `shadow/shadow.slang` | `common/math`、`voxel/trace` |
 | `voxel/voxel.slang` | 三维逐格步进、半透明染色、植物穿透、铁块镜面弹射 | `common/math`、`common/color` |
@@ -62,7 +62,7 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `gi/indirect.slang` | 余弦半球采样、切线基、屏幕空间 GI、双边上采样与 SSGI 合成 | `common/camera`、`common/math`、`reflection` |
 | `gi/ambientocclusion.slang` | 独立画面用的 Eclipse GTAO 低成本入口；全局光内部的高质量多切片遮蔽在 `gi/gi/ao.slang`，两者按用途分工 | `common/camera`、`common/math` |
 | `reflection/reflection.slang` | 可见法线采样、屏幕空间追踪、菲涅耳合并、九点小波降噪 | `common/math` |
-| `reflection/wsr.slang` | WSR 体素追踪、屏幕空间反射、LPV 雾、空气雾与水下体积 | `common/math`、`voxel/trace`、`shadow/map`、`fog`、`water`、`weather/lightning`、`lpv`、`heldlight`、`gi/indirect` |
+| `reflection/wsr.slang` | WSR 体素追踪、屏幕空间反射与历史重投影；LPV 雾、空气雾与水下体积已移到 `fog/volume` | `common/math`、`voxel/trace`、`gi/indirect` |
 | `reflection/photonics.slang` | Photonics 命中面着色、方块光、云影与半透明反射合成 | `common/math`、`voxel`、`shadow/map`、`gi/diffuse`、`gi/indirect` |
 | `reflection/specular.slang` | GGX、可见法线采样、粗糙菲涅耳、反射可见度与高光合成 | `common/math`、`heldlight`、`atmosphere/sky`、`reflection/wsr` |
 | `post/post.slang` | 泛光核、三次升采样、亮度曲线、暗角、颗粒、景深、动态模糊、分块测光、远景噪点；实现在 `post/post/` 的三个子文件 | `common/math`、`common/noise`、`common/sampling`、`shadow` |

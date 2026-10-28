@@ -150,6 +150,8 @@ def _expand_parts(name: str, text: str, stack: tuple[str, ...]) -> str:
         if not path.is_file():
             raise ValueError(f"未知模块或子文件引用：{name} -> {match[1]}")
         body = path.read_text(encoding="utf-8")
+        if not body.endswith("\n"):
+            body += "\n"  # 子文件末尾没有换行时补一个，避免与后续指令或注释粘在同一行。
         return f"// 子文件：{target}.slang。\n" + _expand_parts(target, body, (*stack, name))
     return INCLUDE.sub(replace, text)
 

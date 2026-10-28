@@ -23,11 +23,22 @@ Omni 通用图形库吸积盘模块：沿视线在黑洞附近步进，累加盘
 #include "/omni-gfx/common/math.glsl"
 // 雾提供高度密度、相位与粉末效应。
 #include "/omni-gfx/fog/fog.glsl"
+// 黑洞附近的引力弯曲：方向按到奇点的距离平方被拉向原点。
+// 为什么放在吸积盘模块：只有这里的步进会用到，放进通用数学会让所有模块都带一条没人用的公式。
+void ogxAccretionWarpSpace(inout vec3 direction, inout vec3 position)
+{
+    vec3 origin = vec3(0.0); // 黑洞在原点。
+    float singularityDistance = distance(position, origin); // 当前步到奇点的距离。
+    float warpFactor = 1.0 / (singularityDistance * singularityDistance + 0.000001); // 距离越近弯曲越强，加小数避免除零。
+    vec3 singularityVector = normalize(origin - position); // 指向奇点的方向。
+    direction = normalize(direction + singularityVector * warpFactor * 0.06); // 把方向往奇点拉，供下一步使用。
+}
+
 // 吸积盘积分：`steps` 是步数，`startOffset` 是起始位置离黑洞的距离，
 // `densityPower` 是噪声幂次（天空版四、反射版五），`detailAlongLongitude` 决定细节是否沿方位角分布，
-// `doppler` 打开后按方位角调制亮度。返回 rgb 盘颜色与 a 透过率。
+// `doppler` 打开后按方位角调制亮度，`noiseResolution` 是噪声贴图边长。返回 rgb 盘颜色与 a 透过率。
 vec4 ogxAccretionDisc(vec3 rayDir, vec3 lightDir, float noise, sampler2D noiseTexture, float seconds,
-    int steps, float startOffset, int densityPower, bool detailAlongLongitude, bool doppler)
+    int steps, float startOffset, int densityPower, bool detailAlongLongitude, bool doppler, float noiseResolution)
 {
     const float stepLength = 0.2; // 每步长度。
     const float discRadius = 2.25; // 吸积盘半径。
@@ -43,7 +54,7 @@ vec4 ogxAccretionDisc(vec3 rayDir, vec3 lightDir, float noise, sampler2D noiseTe
     for (int i = 0; i < steps; i++) // 逐步前进。
     {
         if (transmittance < 0.0001) break; // 已被遮满就停止。
-        ogxWarpSpace(rayDir, rayPos); // 靠近黑洞时光线被拉弯。
+        ogxAccretionWarpSpace(rayDir, rayPos); // 靠近黑洞时光线被拉弯。
         rayPos += rayDir * stepLength; // 前进一步。
         vec3 discPos = ogxMatrix3MulPoint(rotation, rayPos); // 转到吸积盘坐标系。
         float r = length(discPos); // 到盘中心的半径。
@@ -77,7 +88,7 @@ vec4 ogxAccretionDisc(vec3 rayDir, vec3 lightDir, float noise, sampler2D noiseTe
                 discCoord = vec3(r, 0.0, h * 0.1) * 3.5;
                 shift = seconds * vec3(0.03, 0.05, 0.0);
             }
-            float fbm = ogxCloudFbm(discCoord, shift, noiseTexture, 64.0); // 高质量云噪声。
+            float fbm = ogxCloudFbm(discCoord, shift, noiseTexture, noiseResolution); // 调用方指定噪声贴图精度。
             if (densityPower == 4) // 天空版：噪声四次方。
             {
                 fbm = fbm * fbm;

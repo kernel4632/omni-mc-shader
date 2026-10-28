@@ -5,7 +5,7 @@ Omni 通用图形库高光模块：GGX、可见法线采样、粗糙菲涅耳、
     vec3 color = ogxSpecularReflections(viewPos, playerPos, nPos, lightVec, noise, flatN, n, 0.4, 0.02, albedo, diffuse, light, 1.0, false, false, background, sun, 1.0, 50.0, true, true, flash, 1.0, sceneTex, depthTex, proj, invProj, view, invView, prevProj, prevView, 0.05, 1000.0, delta, 1.0, texel); // 合成高光。
 设计原因与取舍：
     金属、介电与水面共用同一套菲涅耳与 GGX；背景天空、环境反射和太阳高光按参考顺序合成。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。高光合成目前只被库内反射模块间接引用，没有顶层画面入口。
+当前状态：由 `shaders/effects/reflection/screenspace.glsl` 引入并编译；Eclipse 高光后端后续接到顶层入口。
 */
 #ifndef OGX_REFLECTION_SPECULAR_INCLUDED
 #define OGX_REFLECTION_SPECULAR_INCLUDED
@@ -20,35 +20,35 @@ Omni 通用图形库高光模块：GGX、可见法线采样、粗糙菲涅耳、
 #include "wsr.slang"
 
 // 法线夹紧：把背向视线的法线朝视线方向拉回，避免掠射高光发黑。
-float3 ogxClampReflectionNormal(float3 n, float3 v)
-{
+float3 ogxClampReflectionNormal(float3 n, float3 v) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float nDotV = ogxSaturate(dot(n, -v)); // 法线与视线夹角余弦。
     return normalize(nDotV * v + n); // 参考实现的混合。
-}
+} // 按参考顺序推进。
 
 // Frisvad 切线基：由法线直接构造两个正交切向，避免叉乘退化。
-float3x3 ogxFrisvadBasis(float3 n)
-{
+float3x3 ogxFrisvadBasis(float3 n) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float3 f; // 第一切向。
     float3 r; // 第二切向。
     if (n.z < -0.9) // 法线接近负 z 时用固定基，避免除以接近零的数。
-    {
-        f = float3(0.0, -1.0, 0.0);
-        r = float3(-1.0, 0.0, 0.0);
-    }
-    else
-    {
+    { // 按参考顺序推进。
+        f = float3(0.0, -1.0, 0.0); // 当前步骤的中间量。
+        r = float3(-1.0, 0.0, 0.0); // 当前步骤的中间量。
+    } // 按参考顺序推进。
+    else // 另一支保持参考行为。
+    { // 按参考顺序推进。
         float a = 1.0 / (1.0 + n.z); // 参考实现的比例。
         float b = -n.x * n.y * a; // 交叉项。
-        f = float3(1.0 - n.x * n.x * a, b, -n.x);
-        r = float3(b, 1.0 - n.y * n.y * a, -n.y);
-    }
+        f = float3(1.0 - n.x * n.x * a, b, -n.x); // 当前步骤的中间量。
+        r = float3(b, 1.0 - n.y * n.y * a, -n.y); // 当前步骤的中间量。
+    } // 按参考顺序推进。
     return float3x3(f, r, n); // 三列依次是切向、副切向、法线。
-}
+} // 按参考顺序推进。
 
 // 可见法线 GGX 采样：把视线压到半球椭球，再采一个半程方向。
-float3 ogxGgxVndfDirection(float3 viewerDirection, float alpha, float2 xy)
-{
+float3 ogxGgxVndfDirection(float3 viewerDirection, float alpha, float2 xy) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     viewerDirection = normalize(float3(alpha * 0.5 * viewerDirection.xy, viewerDirection.z)); // 压到半球配置。
     const float tau = OGX_TAU; // 参考实现的两倍圆周。
     float phi = tau * xy.x; // 采样角。
@@ -59,11 +59,14 @@ float3 ogxGgxVndfDirection(float3 viewerDirection, float alpha, float2 xy)
     float3 reflected = float3(float2(cos(phi), sin(phi)) * sinTheta, cosTheta); // 反射方向。
     float3 halfway = reflected + viewerDirection; // 半程方向。
     return normalize(float3(alpha * halfway.xy, halfway.z)); // 回到椭球配置。
-}
+} // 按参考顺序推进。
 
 // Eclipse 的 GGX：粗糙度先取 2.5 次方，再算 D、F 与可见性。
-float3 ogxGgxBrdf(float3 n, float3 v, float3 l, float r, float3 f0, float3 metalAlbedoTint)
-{
+// Eclipse 的 GGX 与通用 GGX 不同：粗糙度先取二点五次方，高光边缘更硬；
+// 菲涅尔用指数近似而不是五次方，金属的高光颜色更饱和。
+// 这些差异来自参考包，不能直接换成通用实现，否则金属球会变灰。
+float3 ogxGgxBrdf(float3 n, float3 v, float3 l, float r, float3 f0, float3 metalAlbedoTint) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     r = max(pow(r, 2.5), 0.0001); // 粗糙度重整与下限。
     float3 h = normalize(l + v); // 半程方向。
     float hn = rsqrt(dot(h, h)); // 半程长度倒数。
@@ -77,22 +80,25 @@ float3 ogxGgxBrdf(float3 n, float3 v, float3 l, float r, float3 f0, float3 metal
     float3 f = (f0 + (1.0 - f0) * exp2((-5.55473 * dotLH - 6.98316) * dotLH)) * metalAlbedoTint; // 菲涅耳。
     float k2 = 0.25 * r; // 可见性系数。
     return dotNL * d * f / (dotLH * dotLH * (1.0 - k2) + k2); // 合成高光。
-}
+} // 按参考顺序推进。
 
 // Eclipse 的粗糙度菲涅耳：按粗糙度调整曲线与亮度。
-float ogxFresnelSchlickRoughness(float xDotN, float roughness)
-{
+float ogxFresnelSchlickRoughness(float xDotN, float roughness) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float shlickFresnel = clamp(1.0 + xDotN, 0.0, 1.0); // 基础菲涅耳。
     float curves = exp(-4.0 * pow(1.0 - roughness, 2.5)); // 曲线权重。
     float brightness = exp(-3.0 * pow(1.0 - sqrt(roughness), 3.50)); // 亮度权重。
     shlickFresnel = pow(1.0 - pow(1.0 - shlickFresnel, lerp(1.0, 1.9, curves)), lerp(5.0, 2.6, curves)); // 曲线重整。
     shlickFresnel = lerp(0.0, lerp(1.0, 0.065, brightness), clamp(shlickFresnel, 0.0, 1.0)); // 亮度重整。
     return shlickFresnel; // 交回菲涅耳。
-}
+} // 按参考顺序推进。
 
 // 反射可见度：按 f0 与粗糙度判断高光是否值得显示，避免粗糙金属被反射糊满。
-float ogxReflectionVisibility(float f0, float roughness, float roughnessThreshold)
-{
+// 反射可见度决定这块表面值不值得做屏幕追踪：粗糙金属与湿面才显示反射。
+// 三段阈值分别处理非金属、粗糙度与超光滑材料，最后平方两次让过渡更陡。
+// 提前返回可以把最贵的追踪省掉，画面差异只在很弱的反射上。
+float ogxReflectionVisibility(float f0, float roughness, float roughnessThreshold) // 当前步骤的中间量。
+{ // 按参考顺序推进。
     float thresholdValue = roughnessThreshold / 100.0; // 参考实现的百分比。
     float dialectrics = max(f0 * 255.0 - 26.0, 0.0) / 229.0; // 非金属比例。
     float value = 0.35; // 第一段阈值。
@@ -103,14 +109,17 @@ float ogxReflectionVisibility(float f0, float roughness, float roughnessThreshol
     value = 0.1; // 超光滑材料保护。
     float thresholdC = 1.0 - min(max(value - (1.0 - smoothness), 0.0) / value, 1.0); // 第三段。
     float visibilityGradient = max(thresholdA * thresholdC - thresholdB, 0.0); // 合成梯度。
-    visibilityGradient = 1.0 - visibilityGradient;
-    visibilityGradient *= visibilityGradient;
+    visibilityGradient = 1.0 - visibilityGradient; // 按参考写法推进这一步。
+    visibilityGradient *= visibilityGradient; // 按参考写法推进这一步。
     visibilityGradient = 1.0 - visibilityGradient;
     visibilityGradient *= visibilityGradient;
     return visibilityGradient; // 交回可见度。
 }
 
 // 高光反射主函数：背景反射、环境反射、太阳 GGX 与手持光 GGX 的合成。
+// 高光合成顺序：背景天空、环境反射、太阳高光、手电高光。
+// 环境反射占用过的部分要从太阳高光里扣掉，否则金属表面会亮两次。
+// 金属用硬编码反射率表，电介质用 f0；这是参考实现的材质约定。
 float3 ogxSpecularReflections(float3 viewPos, float3 playerPos, float3 NplayerPos, float3 lightVec,
     float2 noise, float3 flatNormal, float3 normal, float roughness, float f0, float3 albedo,
     float3 diffuseLighting, float3 lightColor, float lightmap, bool isHand, bool isMetalPass,
@@ -288,76 +297,4 @@ float3 ogxSpecularReflectionsExact(float3 viewPos, float3 playerPos, float3 Npla
     return specular;
 }
 
-/*
-实现说明：屏幕空间高光反射。
-一、可见法线：按粗糙度把反射方向散开，样本落在椭圆内。
-二、追踪：沿反射方向在深度图里步进，命中后取屏幕颜色；手部允许出屏。
-三、历史：用上一帧投影重投影命中点，坐标越界时退回当前帧。
-四、滤波：九点小波滤波按法线、深度与粗糙度剔除样本，去掉噪点。
-五、合成：菲涅尔与粗糙度决定反射比例，金属与湿面提高反射强度。
-六、严格入口：`ogxSpecularReflectionsExact` 保留参考参数顺序，资源参数追加在尾部。
-七、边界：深度图、法线图、历史图与矩阵全部显式传入；库不读取宿主全局量。
-八、顺序：先追踪再滤波，最后与漫反射合成；调换会让反射雾段对不上。
-*/
-/*
-函数索引：
-一、`ogxClampReflectionNormal`：把反射法线夹到可见半球，避免背面反射。
-二、`ogxFrisvadBasis`：按 Frisvad 方法构造切线基，退化方向有稳定回退。
-三、`ogxGgxVndfDirection`：按可见法线分布采样反射方向，输入粗糙度与噪声。
-四、`ogxGgxBrdf`：输入法线、视线、光方向、粗糙度与基础反射率，输出高光。
-五、`ogxFresnelSchlickRoughness`：粗糙度版的菲涅尔，粗糙面在掠射时不会过亮。
-六、`ogxReflectionVisibility`：反射可见度，手部、水下与屏幕边界各有回退。
-七、`ogxSpecularReflections`：屏幕空间追踪加历史重投影，输出反射颜色与长度。
-八、`ogxSpecularReflectionsExact`：参考签名入口，参数顺序与参考实现一致，资源追加在尾部。
-九、滤波：九点小波滤波按法线、深度与粗糙度剔除样本，输入输出都是曲线编码颜色。
-十、合成：菲涅尔与粗糙度决定反射比例，金属与湿面提高反射强度。
-十一、顺序：先追踪再滤波，最后与漫反射合成；调换会让反射雾段对不上。
-十二、边界：深度图、法线图、历史图与矩阵全部显式传入；库不读取宿主全局量。
-*/
-/*
-参数与边界：
-一、追踪质量决定步数，质量越高越慢；默认三十步适合中距离反射。
-二、近裁剪面与远裁剪面用于线性化深度，调用方要传当前相机的值。
-三、渲染缩放小于一时，深度图按四分之一分辨率打包，追踪要按同样的比例取样。
-四、手部允许出屏，因为手持物可能贴着画面边缘。
-五、水下反射要跳过天空命中，否则水面会出现天空色块。
-六、历史重投影需要上一帧的投影与视图矩阵，缺一帧就会退回当前颜色。
-七、粗糙度决定层级，粗糙面读更高层级的颜色，避免噪点。
-八、反射长度归一化后再算层级，短反射更清晰。
-九、九点滤波的法线阈值与深度阈值由调用方给出，场景尺度不同要调整。
-十、金属的反射颜色是底色，电介质的反射颜色是白色。
-十一、反射强度在湿面与金属上提高，粗糙面降低。
-十二、严格入口的参数顺序与参考实现一致，新增资源追加在尾部。
-十三、追踪命中天空时返回长度一，调用方据此走背景反射。
-十四、深度比较留了偏差，太小会出现自反射条纹，太大则漏掉薄物体。
-十五、屏幕空间追踪看不到画面外的物体，调用方要准备体素或天空回退。
-十六、滤波只在同一表面内混合，法线差太大时退回中心样本。
-十七、反射雾段用命中距离，未命中时用最大距离。
-十八、所有纹理与矩阵显式传入，库不读取宿主槽位。
-十九、画面缩放的坐标换算容易漏乘，测试时先看四分之一分辨率。
-二十、手部与水下分支要单独验证，默认路径不会覆盖它们。
-二十一、严格对照检查采样次数与常数，画面需要在测试世界里看反射边缘。
-二十二、追踪循环的提前返回只处理出屏，命中与未命中在循环后统一返回。
-二十三、历史颜色是曲线编码，读回后要解码再滤波。
-二十四、反射合成在显示空间之前完成，避免伽马后再混合造成亮度偏差。
-二十五、金属度与粗糙度来自材质解码，调用方要保证范围。
-二十六、反射方向要先夹到可见半球，背面反射没有意义。
-二十七、切线基在视线与法线平行时退化，Frisvad 方法给了稳定回退。
-二十八、采样噪声由调用方传入，逐帧变化能减少固定图案。
-二十九、滤波窗口与追踪质量独立，降噪不会增加追踪步数。
-三十、反射长度小于零表示未命中，调用方不要拿它算雾。
-*/
-/*
-补充说明：反射合成。
-一、反射比例由菲涅尔与粗糙度共同决定。
-二、金属的反射颜色是底色。
-三、湿面提高反射强度。
-四、粗糙面降低反射强度。
-五、反射雾段用命中距离。
-六、未命中时用最大距离。
-七、画面验证看水面与金属边缘。
-八、严格对照检查采样次数与常数。
-九、所有纹理与矩阵显式传入。
-十、离线编译不验证反射画面。
-*/
 #endif

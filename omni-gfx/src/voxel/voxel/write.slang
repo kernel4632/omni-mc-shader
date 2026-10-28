@@ -9,9 +9,9 @@
 */
 
 // 体素写入是否在体积内：三个轴都必须在零到边长减一之间，越界写会被丢弃。
-bool ogxVoxelWriteInBounds(int3 voxelPos, int size)
-{
-    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0
+bool ogxVoxelWriteInBounds(int3 voxelPos, int size) // 当前步骤的计数或下标。
+{ // 按参考顺序推进。
+    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0 // 交回这一段的计算结果。
         && voxelPos.x < size && voxelPos.y < size && voxelPos.z < size; // 逐轴判断，避免夹紧后写错格。
 }
 
@@ -21,6 +21,9 @@ int3 ogxGetVoxelIndex(float3 playerPos, float3 cameraOffset, int side)
     return int3(floor(playerPos + cameraOffset)) + int3(side / 2); // 参考实现按体积半边长平移。
 }
 
+// 为什么先判断越界：体素图只覆盖玩家周围一段，阴影阶段仍会碰到边界外的方块；
+// 越界写会让相邻区域的数据串位，反射里出现不属于那里的颜色。
+// 编号与光照用整数通道，颜色用八位；反射只需要近似颜色，八位足够且省显存。
 void ogxSetVoxelBlock(int3 voxelPos, uint blockId, int voxelSize,
     inout int3 writePos, inout uint writeId)
 {
@@ -44,6 +47,8 @@ uint ogxPopulateShadowVoxelIndex(float3 playerPos, float3 cameraOffset, int3 mid
     return voxelId; // 交回最终编号。
 }
 
+// 阴影体素填充：只写相机附近一段，远处交给屏幕空间与天空回退。
+// 每格只存一份颜色与光照，不存六个面；反射是低频效果，单份足够。
 void ogxPopulateShadowVoxel(float3 playerPos, float3 eyeOffset, float3 cameraFraction, float3 midBlock,
     bool terrainStage, bool entityStage, bool blockEntityStage, float blockEntityId,
     float entityId, float currentRenderedItemId, float mcEntityX, int voxelSize,
@@ -87,23 +92,3 @@ void ogxPopulateShadowVoxel(float3 playerPos, float3 eyeOffset, float3 cameraFra
     }
     if (voxelId > 0u) ogxSetVoxelBlock(voxelPos, voxelId, voxelSize, writePos, writeId); // 最终写入。
 }
-
-/*
-实现说明：体素写入的格号与边界。
-一、格号：玩家相对位置加相机小数偏移，再平移到体积中心。
-二、越界：三个轴都必须落在零到边长减一之间，越界写入直接丢弃。
-三、阴影阶段：按地形、实体与方块实体三个阶段决定是否写入，再按方块编号与实体编号生成最终编号。
-四、手持物品与船：按参考的编号偏移写入，避免和草与其它实体互相覆盖。
-五、输出：格号与编号通过输出参数交回，宿主负责真正写进图像或缓冲。
-六、边界：函数不读取阶段全局量，所有阶段标记由调用方传入。
-*/
-
-/*
-函数索引：
-一、`ogxVoxelWriteInBounds`：三个轴都在零到边长减一之间。
-二、`ogxGetVoxelIndex`：玩家相对位置加相机偏移，再平移到体积中心。
-三、`ogxSetVoxelBlock`：越界丢弃，合法时交回格号与编号。
-四、`ogxPopulateShadowVoxelIndex`：按绘制阶段与实体编号算写入值。
-五、`ogxPopulateShadowVoxel`：参考签名的完整写入入口。
-六、边界：函数不读取阶段全局量，所有阶段标记由调用方传入。
-*/

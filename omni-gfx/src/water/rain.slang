@@ -64,16 +64,6 @@ float3 ogxWaterFog(float3 color, float3 viewDir, float opaqueDist, float waterDi
     return lerp(fogColor, color, visibility); // 用可见度在水雾色与场景色之间混合。
 }
 
-// 雨点动画法线：读一张雨点动画贴图并转成带符号的法线，指数控制边缘锐度。
-// 只取红绿两通道：这张贴图存的是法线的横纵分量，蓝色在写入端舍弃。
-float2 ogxRainAnimationNormal(Sampler2D rainTexture, float2 coord, float exponent)
-{
-    float2 n = rainTexture.SampleLevel(coord, 0.0).rg; // 读红绿两通道。
-    n = n * float2(2.0, -2.0) + float2(-1.0, 1.0); // 零到一转成负一到一，并翻转纵轴。
-    n = pow(abs(n), float2(exponent)) * sign(n); // 按指数压形状，符号保留。
-    return n; // 返回法线横纵分量。
-}
-
 // 波法线方块读取：把世界位置按折射方向投到七号画面左下角的波法线方块，解出世界空间法线。
 // 为什么先按折射方向移动坐标：光线进入水面会弯折，直接用世界横纵坐标会读到错误的波法线。
 float3 ogxWavesNormalFromTex(float3 position, float3 lightDir, Sampler2D normalTexture, float2 pixelSize,

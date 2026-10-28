@@ -5,38 +5,45 @@
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
 */
 /*
-Omni 通用图形库 iterationT 末地补充模块：末地星空、行星 BRDF、黑洞吸积盘与云影查表。
-调用位置：需要复现 iterationT `EndSky.glsl` 与 `NUBIS.glsl` 的末地程序；Minecraft 光影由
-    `/omni-gfx/world/end.glsl` 引入，当前由严格 profile 与独立测试消费。
+Omni 通用图形库末地模块：末地星空、行星 BRDF、黑洞吸积盘包装与云影查表。
+调用位置：`shaders/effects/world/end_sky.glsl` 的 `CalculateStars` 调用 `ogxEndStars`；
+    其余入口供严格 profile 与需要复现 iterationT 末地的程序使用。
 可复制示例：
-    vec3 stars = ogxEndStars(worldDir, sunVector, frameTime, 1, 1.0, 1.0);
+    vec3 stars = ogxEndStars(worldDir, sunVector, frameTime, 1, 1.0, 1.0); // 当前步骤的中间量。
     vec3 disc = ogxBlackHoleStars(color, rayDir, lightDir, 0.5, frameTime, true, true, sunVector, 1, noiseTex, 512.0);
     float shadow = ogxCloudShadowTex(coord, altitude, wind, cameraXZ, sunVector, baseTex, 0.5, offset, 0.4, 0.7, 0.0, 512.0);
 设计原因与取舍：
     参考实现直接读 `frameTimeCounter`、`worldSunVector`、`STAR_TYPE` 与云噪声选项。库把时间、光方向、
     纹理和开关全部改成显式参数，公式、常数、循环次数和采样顺序保持不变。
-    噪点纹理只作为参数传入，库不假设它绑定在哪个缓冲；这样末地星空能独立测试，也能在光影里换槽位。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。末地效果目前只有探针与 profile 覆盖，顶层末地入口尚未接入。
+    四个职责按内容拆在同名文件夹：星空、行星着色、吸积盘参数、云影查表；主文件只排引用顺序，
+    所以一处算式只读一个文件，也不会因为拆分改变编译顺序。
 */
 #ifndef OGX_WORLD_END_INCLUDED
 #define OGX_WORLD_END_INCLUDED
 
-// 数学提供旋转、黑体色与夹紧；雾提供三维噪声与分形云；云提供顶部曲线；行星提供曲面曲线。
+// 数学提供旋转、黑体色、曲线与夹紧，四个子文件共用。
 #include "/omni-gfx/common/math.glsl"
-// 雾提供高度密度、相位与粉末效应。
+// 雾提供分形云噪声，吸积盘纹理细节要用。
 #include "/omni-gfx/fog/fog.glsl"
-// 云提供球面求交、密度与单层步进。
+// 云提供球面求交、密度与顶部曲线，云影查表要用。
 #include "/omni-gfx/cloud/cloud.glsl"
-// 行星提供末地天空与行星环。
+// 行星提供末地天空与行星环，行星着色要用钱德拉塞卡近似。
 #include "/omni-gfx/planet.glsl"
-// iterationT 末地星空：按天球格子取哈希星点，星色用黑体温度。
-// `starType` 为零时由调用方决定是否叠加；本函数只负责算出星点。
+// 吸积盘积分只保留一份，末地的天空版与反射版只差参数。
+#include "/omni-gfx/accretion.glsl"
+// 末地星空：天球格子哈希与黑体星色。
+// 子文件：world/end/stars.slang。
+// 末地星空子文件：按天球格子取哈希星点，星色用黑体温度。
+// 调用位置：由 `world/end.slang` 内联；末地天空与吸积盘叠加都调用 `ogxEndStars`。
+// 设计原因与取舍：星场只依赖方向、时间与太阳方向，旋转与色温都来自通用数学，可单独测试。
+// 可复制示例：`vec3 stars = ogxEndStars(worldDir, sunVector, frameTime, 1, 1.0, 1.0);`
+
+// iterationT 末地星空：先绕纵轴缓慢自转，再把天球对齐太阳轴，最后在格子里取星点。
+// `starType`、`brightness`、`amount` 是参考签名的三个开关；当前星场只用到前两个，保留参数以便严格对照。
 vec3 ogxEndStars(vec3 worldDir, vec3 worldSunVector, float time, int starType, float brightness, float amount)
 {
     float angleY = time * 0.001; // 星空缓慢自转。
-    mat3 eyeRotationY = mat3(cos(angleY), 0.0, sin(angleY),
-                                     0.0, 1.0, 0.0,
-                                     -sin(angleY), 0.0, cos(angleY)); // 绕纵轴旋转。
+    mat3 eyeRotationY = ogxRotationY(angleY); // 绕纵轴旋转。
     worldDir = ogxMatrix3MulPoint(eyeRotationY, worldDir); // 转到星空坐标。
     const float scale = 384.0; // 星点密度。
     const float coverage = 0.007; // 星点覆盖率。
@@ -60,8 +67,14 @@ vec3 ogxEndStars(vec3 worldDir, vec3 worldSunVector, float time, int starType, f
     return maxLuminance * ogxRemapSaturate(r, 0.25, 0.0) * c * c * ogxBlackbody(mix(minTemperature, maxTemperature, hash.y)); // 星点亮度乘色温。
 }
 
+// 末地行星：钱德拉塞卡近似与 Lambert 曲线。
+// 子文件：world/end/planet.slang。
+// 末地行星子文件：用钱德拉塞卡近似与 Lambert 曲线给行星表面着色。
+// 调用位置：由 `world/end.slang` 内联；需要复现 iterationT 行星 BRDF 的程序调用 `ogxPlanetShading`。
+// 设计原因与取舍：只接收反照率、法线与方向；行星本体的求交与光环在 `planet` 模块，这里只保留着色。
+// 可复制示例：`vec3 c = ogxPlanetShading(albedo, normal, eyeDir, lightDir, 0.0);`
+
 // iterationT 行星 BRDF：用 Chandrasekhar H 函数与 Lambert 曲线近似行星表面。
-// iterationT 的次表面近似：按法线与光方向补透光，供末地植物使用。
 vec3 ogxPlanetShading(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir, float s)
 {
     float NdotL = dot(normal, lightDir); // 光线与法线。
@@ -71,151 +84,42 @@ vec3 ogxPlanetShading(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir, floa
     return ogxSaturate(color); // 夹到合法范围。
 }
 
-// 黑洞吸积盘主函数：沿射线步进，累计盘面自发光与遮挡。
+// 吸积盘包装：天空版与反射版只填参数。
+// 子文件：world/end/accretion.slang。
+// 末地吸积盘子文件：只保留天空版与反射版的参数，积分本身调用 `accretion` 模块。
+// 调用位置：由 `world/end.slang` 内联；需要“吸积盘加星空”或“反射版吸积盘”的程序调用下面两个入口。
+// 设计原因与取舍：两个版本原来各抄一份五十行积分，盘面算式改一次要改两处；现在只剩步数、起点与噪声幂次不同。
+// 可复制示例：`vec3 c = ogxBlackHoleStars(color, rayDir, lightDir, 0.5, time, true, true, sunVector, 1, noiseTex, 512.0);`
+
+// 黑洞吸积盘主函数：调用通用积分，再按参考顺序叠星空并让盘面遮挡背景。
 // `detailAlongLongitude`、`doppler` 与 `starType` 对应参考实现的三个菜单开关。
 vec3 ogxBlackHoleStars(vec3 color, vec3 rayDir, vec3 lightDir, float noise, float time,
     bool detailAlongLongitude, bool doppler, vec3 worldSunVector, int starType,
     sampler2D noiseTexture, float noiseResolution)
 {
-    const float steps = 50.0; // 固定步数。
-    const float rSteps = 1.0 / steps; // 步数倒数。
-    const float stepLength = 0.2; // 每步长度。
-    const float discRadius = 2.25; // 盘半径。
-    const float discWidth = 3.5; // 盘宽度。
-    const float discInner = discRadius - discWidth * 0.5; // 内缘。
-    const float discOuter = discRadius + discWidth * 0.5; // 外缘。
-    vec3 eye = -lightDir * 8.0; // 相机位置。
-    vec3 rayPos = eye + rayDir * 3.0; // 起点。
-    mat3 rotation = ogxRotateMatrix(0.1, 0.0, -0.35); // 固定盘面旋转。
-    vec3 result = vec3(0.0); // 盘面颜色。
-    float transmittance = 1.0; // 透过率。
-    rayPos += rayDir * stepLength * noise; // 抖动起点。
-    for (int i = 0; i < int(steps); i++) // 固定步数。
-    {
-        if (transmittance < 0.0001) break; // 全遮挡就停。
-        ogxWarpSpace(rayDir, rayPos); // 空间扭曲。
-        rayPos += rayDir * stepLength; // 前进一步。
-        vec3 discPos = ogxMatrix3MulPoint(rotation, rayPos); // 盘面坐标。
-        float r = length(discPos); // 半径。
-        float p = ogxAtan2(vec2(-discPos.z, -discPos.x)); // 方位角。
-        float h = discPos.y; // 高度。
-        float radialGradient = 1.0 - ogxSaturate((r - discInner) / discWidth * 0.5); // 径向渐变。
-        float dist = abs(h); // 到盘面的距离。
-        float discThickness = 0.1 * radialGradient; // 盘厚度。
-        float fr = abs(r - discInner) + 0.4; // 内缘距离。
-        fr = fr * fr; // 平方。
-        float fade = fr * fr * 0.04; // 远处淡出。
-        float bloomFactor = 1.0 / (h * h * 40.0 + fade + 0.00002); // 盘面辉光。
-        bloomFactor *= ogxSaturate(2.0 - abs(dist) / discThickness); // 厚度内可见。
-        bloomFactor = bloomFactor * bloomFactor; // 平方增强。
-        float dr = ogxEndSkyPCurve(radialGradient); // 径向曲线。
-        float density = dr; // 密度。
-        density *= ogxSaturate(1.0 - abs(dist) / discThickness); // 厚度衰减。
-        density = ogxSaturate(density * 0.7); // 参考实现的强度。
-        density = ogxSaturate(density + bloomFactor * 0.1); // 辉光贡献。
-        if (density > 0.0001) // 只有足够密才发光。
-        {
-            vec3 discCoord = detailAlongLongitude
-                ? vec3(r, p * (1.0 - radialGradient * 0.5), h * 0.1) * 3.5
-                : vec3(r, 0.0, h * 0.1) * 3.5; // 经度细节开关。
-            vec3 shift = detailAlongLongitude ? time * vec3(0.1, 0.07, 0.0) : time * vec3(0.03, 0.05, 0.0); // 流动方向。
-            float fbm = ogxCloudFbm(discCoord, shift, noiseTexture, noiseResolution); // 参考实现的分形云。
-            fbm = fbm * fbm; // 平方。
-            fbm = fbm * fbm; // 四次方。
-            density *= fbm * dr; // 细节乘回密度。
-            float gr = 1.0 - radialGradient; // 外缘渐变。
-            gr = gr * gr; // 平方。
-            float glowStrength = 1.0 / (gr * gr * 400.0 + 0.002); // 外缘辉光强度。
-            vec3 glow = ogxBlackbody(2700.0 + glowStrength * 50.0) * glowStrength; // 黑体色乘强度。
-            if (doppler) glow *= sin(p - 1.07) * 0.75 + 1.0; // 多普勒效应。
-            float stepTransmittance = exp2(-density * 7.0); // 本段透过率。
-            float integral = 1.0 - stepTransmittance; // 本段吸收。
-            transmittance *= stepTransmittance; // 累积透过率。
-            result += integral * transmittance * glow; // 累积发光。
-        }
-        vec2 t = vec2(1.0, 0.01); // 圆环参数。
-        float torusDist = length(length(discPos + vec3(0.0, -0.05, 0.0)) - t); // 到圆环的距离。
-        float bloomDisc = 1.0 / (pow(torusDist, 3.5) + 0.001); // 圆环辉光。
-        vec3 col = ogxBlackbody(12000.0); // 高温蓝白。
-        bloomDisc *= step(0.5, r); // 内圈不发光。
-        result += col * bloomDisc * 0.1 * transmittance; // 叠加圆环。
-    }
-    result *= rSteps; // 步长归一化。
+    vec4 disc = ogxAccretionDisc(rayDir, lightDir, noise, noiseTexture, time, 50, 3.0, 4,
+        detailAlongLongitude, doppler, noiseResolution); // 天空版：五十步、起点三、噪声四次方。
     if (starType > 0) color += ogxEndStars(rayDir, worldSunVector, time, starType, 1.0, 1.0); // 参考实现的星空叠加。
-    color *= transmittance; // 盘面遮挡背景。
-    return color + result; // 最终颜色。
+    color *= disc.a; // 盘面遮挡背景。
+    return color + disc.rgb; // 最终颜色。
 }
 
-// 黑洞吸积盘反射版：步数更少，细节权重与主函数不同。
+// 黑洞吸积盘反射版：步数更少、起点更远、噪声五次方，细节权重与主函数不同。
 vec3 ogxBlackHoleReflection(vec3 color, vec3 rayDir, vec3 lightDir, float noise, float time,
     bool detailAlongLongitude, bool doppler, sampler2D noiseTexture, float noiseResolution)
 {
-    const float steps = 30.0; // 反射只走三十步。
-    const float rSteps = 1.0 / steps; // 步数倒数。
-    const float stepLength = 0.2; // 每步长度。
-    const float discRadius = 2.25; // 盘半径。
-    const float discWidth = 3.5; // 盘宽度。
-    const float discInner = discRadius - discWidth * 0.5; // 内缘。
-    vec3 eye = -lightDir * 8.0; // 相机位置。
-    vec3 rayPos = eye + rayDir * 4.0; // 起点更远。
-    mat3 rotation = ogxRotateMatrix(0.1, 0.0, -0.35); // 固定盘面旋转。
-    vec3 result = vec3(0.0); // 盘面颜色。
-    float transmittance = 1.0; // 透过率。
-    rayPos += rayDir * stepLength * noise; // 抖动起点。
-    for (int i = 0; i < int(steps); i++) // 固定步数。
-    {
-        if (transmittance < 0.0001) break; // 全遮挡就停。
-        ogxWarpSpace(rayDir, rayPos); // 空间扭曲。
-        rayPos += rayDir * stepLength; // 前进一步。
-        vec3 discPos = ogxMatrix3MulPoint(rotation, rayPos); // 盘面坐标。
-        float r = length(discPos); // 半径。
-        float p = ogxAtan2(vec2(-discPos.z, -discPos.x)); // 方位角。
-        float h = discPos.y; // 高度。
-        float radialGradient = 1.0 - ogxSaturate((r - discInner) / discWidth * 0.5); // 径向渐变。
-        float dist = abs(h); // 到盘面距离。
-        float discThickness = 0.1 * radialGradient; // 盘厚度。
-        float fr = abs(r - discInner) + 0.4; // 内缘距离。
-        fr = fr * fr; // 平方。
-        float fade = fr * fr * 0.04; // 远处淡出。
-        float bloomFactor = 1.0 / (h * h * 40.0 + fade + 0.00002); // 盘面辉光。
-        bloomFactor *= ogxSaturate(2.0 - abs(dist) / discThickness); // 厚度内可见。
-        bloomFactor = bloomFactor * bloomFactor; // 平方增强。
-        float dr = ogxEndSkyPCurve(radialGradient); // 径向曲线。
-        float density = dr; // 密度。
-        density *= ogxSaturate(1.0 - abs(dist) / discThickness); // 厚度衰减。
-        density = ogxSaturate(density * 0.7); // 参考实现的强度。
-        density = ogxSaturate(density + bloomFactor * 0.1); // 辉光贡献。
-        if (density > 0.0001) // 只有足够密才发光。
-        {
-            vec3 discCoord = detailAlongLongitude
-                ? vec3(r, p * (1.0 - radialGradient * 0.5), h * 0.1) * 3.5
-                : vec3(r, 0.0, h * 0.1) * 3.5; // 经度细节开关。
-            vec3 shift = detailAlongLongitude ? time * vec3(0.1, 0.07, 0.0) : time * vec3(0.03, 0.05, 0.0); // 流动方向。
-            float fbm = ogxCloudFbm(discCoord, shift, noiseTexture, noiseResolution); // 参考实现的分形云。
-            float fbm2 = fbm * fbm; // 平方。
-            density *= fbm2 * fbm2 * fbm; // 五次方权重。
-            density *= dr; // 乘径向曲线。
-            float gr = 1.0 - radialGradient; // 外缘渐变。
-            gr = gr * gr; // 平方。
-            float glowStrength = 1.0 / (gr * gr * 400.0 + 0.002); // 外缘辉光强度。
-            vec3 glow = ogxBlackbody(2700.0 + glowStrength * 50.0) * glowStrength; // 黑体色乘强度。
-            if (doppler) glow *= sin(p - 1.07) * 0.75 + 1.0; // 多普勒效应。
-            float stepTransmittance = exp2(-density * 7.0); // 本段透过率。
-            float integral = 1.0 - stepTransmittance; // 本段吸收。
-            transmittance *= stepTransmittance; // 累积透过率。
-            result += integral * transmittance * glow; // 累积发光。
-        }
-        vec2 t = vec2(1.0, 0.01); // 圆环参数。
-        float torusDist = length(length(discPos + vec3(0.0, -0.05, 0.0)) - t); // 到圆环的距离。
-        float bloomDisc = 1.0 / (pow(torusDist, 3.5) + 0.001); // 圆环辉光。
-        vec3 col = ogxBlackbody(12000.0); // 高温蓝白。
-        bloomDisc *= step(0.5, r); // 内圈不发光。
-        result += col * bloomDisc * 0.1 * transmittance; // 叠加圆环。
-    }
-    result *= rSteps; // 步长归一化。
-    color *= transmittance; // 盘面遮挡背景。
-    return color + result; // 最终颜色。
+    vec4 disc = ogxAccretionDisc(rayDir, lightDir, noise, noiseTexture, time, 30, 4.0, 5,
+        detailAlongLongitude, doppler, noiseResolution); // 反射版：三十步、起点四、噪声五次方。
+    color *= disc.a; // 盘面遮挡背景。
+    return color + disc.rgb; // 最终颜色。
 }
+
+// 末地云影：按太阳方向取两次云密度。
+// 子文件：world/end/cloud_shadow.slang。
+// 末地云影子文件：按太阳方向在云层高度取两次密度，再换成地面阴影。
+// 调用位置：由 `world/end.slang` 内联；需要复现 iterationT 云影查表的程序调用 `ogxCloudShadowTex`。
+// 设计原因与取舍：只算基础形状、不算细节层，和参考实现的 `sampleDetail=false` 一致；噪声贴图与画质由调用方给出。
+// 可复制示例：`float s = ogxCloudShadowTex(coord, altitude, wind, cameraXZ, sunVector, baseTex, 0.5, offset, 0.4, 0.7, 0.0, 512.0);`
 
 // 云影密度函数的提前声明：云影查表会先调用它，定义放在文件末尾。
 vec3 ogxCloudShadowDensity(vec4 cloudPos, sampler3D baseNoise, float baseScale, vec3 coverageOffset,

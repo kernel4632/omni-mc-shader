@@ -152,6 +152,8 @@
 #include "/bind/weather.glsl"
 // 云影的投影、三次模糊、全局统计与高斯模糊在通用库。
 #include "/omni-gfx/cloud/cloud.glsl"
+// 层状体积云的形状、阴影与步进属于云效果，编译进同一份产物。
+#include "/omni-gfx/cloud/layers.glsl"
 
 // 云影贴图取值：把世界坐标投到云影贴图，采样后按天气在晴天与雨天两档之间混合。
 float CloudShadowFromTex(vec3 worldPos, vec3 shadowLightVector){

@@ -1,12 +1,12 @@
 /* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers.slang` 内联引入。
-用法：调用下方 `ogxLayersGetVolumetricCloudsSimple`，参数顺序见函数签名。
+可复制示例：`float4 t = ogxLayersGetVolumetricCloudsSimple(settings, dither, lightDir, offset, startPos, cameraPos, noiseTex);`
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
 
 // 云影步进：只算透过率，不算光照，供阴影程序低成本使用。
-float ogxCloudLayerMarchSimple(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition,
-    float3 rayDirection, float dither, float minHeight, float maxHeight, float3 startPos, float3 cameraPos,
+float ogxCloudLayerMarchSimple(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition, // 当前步骤的中间量。
+    float3 rayDirection, float dither, float minHeight, float maxHeight, float3 startPos, float3 cameraPos, // 当前步骤的中间量。
     Sampler2D noiseTexture)
 {
     float totalAbsorbance = 1.0; // 初始完全透明。

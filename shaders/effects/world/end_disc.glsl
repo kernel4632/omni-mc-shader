@@ -32,7 +32,7 @@ void BlackHole_AccretionDisc_Stars(inout vec3 color, in vec3 rayDir, in vec3 lig
 		float noise = InterleavedGradientNoise(gl_FragCoord.xy); // 交错梯度噪声。
 	#endif
 	vec4 disc = ogxAccretionDisc(rayDir, lightDir, noise, noisetex, bind_time().seconds, 50, 3.0, 4,
-		OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE != 0, OMNI_ACCRETIONDISC_DOPPLER_EFFECT != 0); // 天空版五十步、起点三米、噪声四次方。
+		OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE != 0, OMNI_ACCRETIONDISC_DOPPLER_EFFECT != 0, 64.0); // 天空版五十步、起点三米、噪声四次方与六十四像素噪声图。
 
 	#if OMNI_STAR_TYPE > 0 // 打开星空才画星星。
 		color += CalculateStars(rayDir); // 参考的末地星空用 iterationT 星场，不是主世界稳定星场。
@@ -46,7 +46,7 @@ void BlackHole_AccretionDisc_Stars(inout vec3 color, in vec3 rayDir, in vec3 lig
 void BlackHole_AccretionDisc_Reflection(inout vec3 color, in vec3 rayDir, in vec3 lightDir){
 	float noise = BlueNoiseTemporal().x; // 每帧变化的噪声；反射版始终用时间噪声。
 	vec4 disc = ogxAccretionDisc(rayDir, lightDir, noise, noisetex, bind_time().seconds, 30, 4.0, 5,
-		OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE != 0, OMNI_ACCRETIONDISC_DOPPLER_EFFECT != 0); // 反射版三十步、起点四米、噪声五次方。
+		OMNI_ACCRETIONDISC_DETAIL_ALONG_LONGITUDE != 0, OMNI_ACCRETIONDISC_DOPPLER_EFFECT != 0, 64.0); // 反射版三十步、起点四米、噪声五次方与六十四像素噪声图。
 
 	color *= disc.a; // 前面天光被吃掉。
 	color += disc.rgb; // 叠吸积盘颜色。

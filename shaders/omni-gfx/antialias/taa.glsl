@@ -8,13 +8,13 @@
 Omni 通用图形库时间抗锯齿取样模块：三乘三最近深度、远景深度与相机速度。
 调用位置：需要时间抗锯齿输入的程序，算法与常数来自 iterationT 的 TAA；Minecraft 光影由 `/omni-gfx/antialias/taa.glsl` 引入。
 可复制示例：
-    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, texel);
-    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, ivec2(0));
+    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, texel); // 当前步骤的中间量。
+    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, ivec2(0)); // 当前步骤的中间量。
 设计原因与取舍：
     参考实现用全局深度图与矩阵。库把纹理、像素坐标、材质编号与全部矩阵显式传入，
     这样三乘三取样与远近景切换可以单独测试，也不会把坐标约定藏在引擎里。
     采样顺序与参考实现一致：先按材质决定深度来源，再决定近景或远景重投影。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。时间取样目前只被库内抗锯齿模块间接引用，没有顶层画面入口。
+当前状态：由 `shaders/effects/clarity/taa.glsl` 引入并编译；宿主 `TaaCameraVelocity` 的远景分支调用 `ogxTaaCameraVelocity`。
 */
 #ifndef OGX_ANTIALIAS_TAA_INCLUDED
 #define OGX_ANTIALIAS_TAA_INCLUDED
@@ -59,6 +59,9 @@ float ogxTaaDistantDepthClosest3x3(sampler2D dhDepthTexture, ivec2 coord)
     return min(depth0, min(depth1, min(depth2, min(depth3, min(depth4, min(depth5, min(depth6, min(depth7, depth8)))))))); // 九点最小值。
 }
 
+// 相机速度为什么单独一个入口：深度选择、远景换算与手部补偿是同一件事的三个分支，
+// 合在重投影里会让历史裁剪函数也背上矩阵参数。这里只算位移，裁剪与混合由调用方决定。
+// 输出深度用 `out` 带回，是因为最近深度与速度必须来自同一个像素，分开再采样会错位。
 // 相机速度：按材质与深度选择近景或远景重投影，返回当前像素相对上一帧的屏幕位移。
 // `stainedGlassId`、`iceId`、`endPortalId` 是宿主材质编号，算法只做比较，不假设编号大小。
 vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, sampler2D dhDepthTexture0,
@@ -67,6 +70,7 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
     mat4 modelViewInverse, mat4 previousModelView, mat4 previousProjection, vec3 cameraWorldPos,
     vec3 previousCameraPosition, float handDepth, out float depth)
 {
+    // 玻璃和冰的最近深度会穿到透明层后面，所以改用完整深度图；其他材质才按质量选项取最近深度。
     if (materialIDs == stainedGlassId || materialIDs == iceId) // 透明材质用完整深度，避免最近深度穿到后面。
     {
         depth = texelFetch(depthTexture1, texelCoord, 0).x; // 精确读取完整深度。
@@ -79,11 +83,13 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
     {
         depth = ogxSampleDepthFetch(depthTexture0, texelCoord); // 中心深度。
     }
+    // 默认零位移：末地传送门不参与重投影，材质不符时直接返回零，调用方不必再判断。
     vec3 velocity = vec3(0.0); // 默认没有位移。
     if (materialIDs != endPortalId) // 末地传送门不做重投影。
     {
         vec3 screenPos = vec3(texCoord, depth); // 当前屏幕坐标。
         vec3 projection = vec3(0.0); // 上一帧屏幕坐标。
+        // 深度为一说明近景没有几何，重投影必须改用远景深度，否则天空会被当成无限远而拖影。
         if (screenPos.z == 1.0) // 天空像素改用远景深度。
         {
             if (closestDepth) screenPos.z = ogxTaaDistantDepthClosest3x3(dhDepthTexture0, texelCoord); // 远景最近深度。
@@ -91,6 +97,7 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
             projection = screenPos * 2.0 - 1.0; // 转负一到一。
             projection = ogxProjectAndDivide(dhProjectionInverse, projection); // 远景逆投影到视空间。
             projection = ogxMatrixMulPoint(modelViewInverse, projection) + ogxMatrixTranslation(modelViewInverse); // 转世界。
+            // 只有远景真的打到几何时才补相机位移；纯天空没有世界坐标，补了会让云层随相机滑动。
             if (screenPos.z < 1.0) projection += cameraWorldPos - previousCameraPosition; // 有远景几何时加相机位移。
             projection = ogxMatrixMulPoint(previousModelView, projection) + ogxMatrixTranslation(previousModelView); // 转上一帧视空间。
             vec3 previousScreen = vec3(previousProjection[0][0], previousProjection[1][1], previousProjection[2][2]) * projection + ogxMatrixTranslation(previousProjection); // 上一帧投影。
@@ -117,27 +124,10 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
             vec3 previousScreen = vec3(previousProjection[0][0], previousProjection[1][1], previousProjection[2][2]) * projection + ogxMatrixTranslation(previousProjection); // 上一帧投影。
             projection = previousScreen / -projection.z * 0.5 + 0.5; // 用投影前的深度做透视除法。
         }
+        // 屏幕位移是当前坐标减上一帧坐标，正号表示这一帧向右下移动，历史采样要反着取。
         velocity = screenPos - projection; // 当前减上一帧得到屏幕位移。
     }
     return velocity; // 交回速度。
 }
 
-/*
-实现说明：时间抗锯齿的数据流。
-一、深度取样：当前帧与上一帧各取三乘三邻域，先用最近深度挡住背景像素，避免前景边缘把背景颜色拖进来。
-二、方差裁剪：邻域颜色求均值与方差，把历史颜色夹在均值加减若干倍方差内；这一步去掉鬼影，但保留真实的高光变化。
-三、重投影：用相机速度与深度把当前像素映射到上一帧坐标，坐标越界或深度跳变时退回当前帧颜色。
-四、双三次采样：历史颜色用四次双线性样本合成，减少旋转相机时的模糊。
-五、输出：本帧颜色按历史权重混合，权重随运动量增大而降低，快速移动时更相信当前帧。
-这些步骤都是纯函数，深度图、历史图、矩阵与像素坐标由调用方显式传入。
-*/
-/*
-函数索引：
-一、`ogxTaaCurrentDepthClosest3x3`：当前帧三乘三最近深度。
-二、`ogxTaaDistantDepthFetch`：远景深度单点取样。
-三、`ogxTaaDistantDepthClosest3x3`：远景三乘三最近深度。
-四、`ogxTaaCameraVelocity`：用两帧深度与相机矩阵算像素速度。
-五、边界：深度图、矩阵与像素坐标由调用方传入。
-六、顺序：先取最近深度再算速度，避免背景像素拖前景。
-*/
 #endif

@@ -12,7 +12,7 @@ Omni 通用图形库各向异性过滤模块：按屏幕导数构造椭圆核，
 设计原因与取舍：
     导数只在片元阶段可用，因此本文件不并入基础采样模块；基础模块会被顶点与阴影程序引用。
     椭圆核、长轴步进与法线/材质加权保持参考实现，纹理和 atlas 尺寸全部显式传入。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。各向异性过滤目前只有编译探针覆盖，还没有顶层采样入口。
+当前状态：由 `shaders/effects/ground/terrain_surface.glsl` 引入并编译；顶层各向异性过滤仍走宿主实现。
 */
 #ifndef OGX_SAMPLING_ANISOTROPIC_INCLUDED
 #define OGX_SAMPLING_ANISOTROPIC_INCLUDED

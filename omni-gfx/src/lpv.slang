@@ -20,11 +20,11 @@ Omni 通用图形库光传播体积模块：三维彩色间接光的取样、编
 #include "heldlight.slang"
 
 // 方块光的亮度系数：存下的颜色取值零到十五，除以十五得到零到一。
-static const float OGX_LPV_BLOCK_BRIGHTNESS = 0.066666;
+static const float OGX_LPV_BLOCK_BRIGHTNESS = 0.066666; // 当前步骤的中间量。
 
 // 体积光的亮度曲线：平方放大，让弱光抬起来、强光更快饱和。
 // 与解码端的曲线必须一致，改一处就要同步另一处，否则光强会整体漂移。
-float ogxLpvCurve(float value) { return value * value; }
+float ogxLpvCurve(float value) { return value * value; } // 交回这一段的计算结果。
 
 // 把归一化坐标换成三维纹理坐标：体积边长由调用方给出。
 float3 ogxLpvUvw(float3 lpvPos, float side) { return lpvPos / side; }

@@ -11,6 +11,9 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
 {
     float t = position.x * 0.001 + 0.25; // 随像素变化的输入。
     float3 dir = normalize(float3(t, position.y * 0.001, 0.8)); // 视线方向。
-    float4 disc = ogxAccretionDisc(dir, normalize(float3(0.3, 0.2, -0.9)), t, probeTex2D, t * 10.0, 8, 3.0, 4, false, true); // 吸积盘积分。
+    float3 warpedDir = dir; // 空间扭曲的测试方向。
+    float3 warpedPos = float3(1.0, 2.0, 3.0); // 远离奇点，避免除零。
+    ogxAccretionWarpSpace(warpedDir, warpedPos); // 引力弯曲。
+    float4 disc = ogxAccretionDisc(warpedDir, normalize(float3(0.3, 0.2, -0.9)), t, probeTex2D, t * 10.0, 8, 3.0, 4, false, true, 64.0); // 吸积盘积分。
     return disc; // 返回盘颜色与透过率即可。
 }

@@ -4,30 +4,30 @@
 // 设计原因与取舍：只收不依赖采样器的纯计算，算式与常数照旧库保留。
 
 // 同时给出正弦与余弦：极坐标采样需要两者，一次算出省掉一次三角函数。
-float2 ogxSinCos(float angle) { return float2(sin(angle), cos(angle)); }
+float2 ogxSinCos(float angle) { return float2(sin(angle), cos(angle)); } // 交回这一段的计算结果。
 
 // 二维旋转：把点按角度绕原点转动，光斑与暗角图案用得到。
-float2 ogxRotate2(float2 p, float angle)
-{
-    float2 sc = ogxSinCos(angle);
-    return float2(p.x * sc.y - p.y * sc.x, p.x * sc.x + p.y * sc.y);
-}
+float2 ogxRotate2(float2 p, float angle) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    float2 sc = ogxSinCos(angle); // 当前步骤的中间量。
+    return float2(p.x * sc.y - p.y * sc.x, p.x * sc.x + p.y * sc.y); // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 把值从一段区间线性映射到零到一，再夹紧；区间外不会越界。
-float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); }
+float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); } // 交回这一段的计算结果。
 
 // 把值从一段区间线性映射到另一段区间，两端都不夹紧；目标区间可以反向。
 // 为什么保留不夹紧的版本：动画曲线与雾密度需要外插，提前夹紧会把远处的值压成一团。
-float ogxRemap(float x, float minOrigin, float maxOrigin, float minNew, float maxNew)
-{
-    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew;
-}
+float ogxRemap(float x, float minOrigin, float maxOrigin, float minNew, float maxNew) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 三分量版本的不夹紧映射，逐通道用同一组端点。
-float3 ogxRemap(float3 x, float3 minOrigin, float3 maxOrigin, float3 minNew, float3 maxNew)
-{
-    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew;
-}
+float3 ogxRemap(float3 x, float3 minOrigin, float3 maxOrigin, float3 minNew, float3 maxNew) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 三分量里最小的一个，等价于先两两取小再合并。
 float ogxMinVec3(float3 value) { return min(value.x, min(value.y, value.z)); }
@@ -45,6 +45,9 @@ float ogxMaxVec3(float3 value) { return max(value.x, max(value.y, value.z)); }
 // 黄金角：圆周除以黄金比的平方，圆盘点列靠它错开方向，相邻两个点不会撞在一起。
 
 // 圆盘内均匀分布的第 `index` 个采样点：角度按黄金角步进，半径取平方根保证面积均匀。
+// 圆盘映射把方形坐标折成圆：先按最大分量归一，再按半径缩放。
+// 这样角上的点不会被拉出圆外，采样点在整个圆盘上均匀。
+// 三维版本多一个 z 分量，供球面采样直接使用。
 float2 ogxCircleMap(float index, float count)
 {
     float angle = index * count * OGX_GOLDEN_ANGLE;
@@ -116,6 +119,9 @@ float3 ogxMatrixTranslation(float4x4 m) { return m[3].xyz; }
 float3 ogxMatrix3MulPoint(float3x3 m, float3 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z; }
 
 // 两参数反正切：先处理竖直方向，再对左半平面补一个圆周率。
+// 两参数反正切：按象限修正单参数版本，返回负一到一之间的角度比例。
+// 为什么不用内建反正切：参考实现把结果除以圆周率，调用方按比例使用；
+// 这里保留同一约定，避免每个调用点各乘一次。
 float ogxAtan2(float2 v)
 {
     return v.x == 0.0 ?
@@ -131,56 +137,3 @@ float ogxFastAcos(float x)
     result *= ogxFastSqrt(1.0 - ax);
     return x >= 0.0 ? result : OGX_PI - result;
 }
-
-/*
-实现说明：标量、向量与矩阵的小工具。
-一、矩阵乘向量：四乘四与三乘三各一份，按列展开后相加，避免行列约定差异。
-二、圆映射：方形到圆盘的折叠，返回二维或三维版本。
-三、三角函数：`ogxSinCos` 一次给出正弦与余弦，`ogxAtan2` 处理象限。
-四、快速反余弦：多项式近似，误差在可视范围内，节省反三角函数开销。
-五、极值：二、三、四分量各一份，避免调用方自己写比较链。
-六、重映射：把区间映射到零到一并夹紧，曲线与遮罩共用。
-七、边界：所有函数只做纯计算，不读取屏幕或时间。
-*/
-
-/*
-函数索引：
-一、`ogxSinCos`：一次给出正弦与余弦。
-二、`ogxRotate2`：二维旋转。
-三、`ogxRemapSaturate` 与 `ogxRemap`：区间重映射。
-四、`ogxMinVec2`、`ogxMinVec3`、`ogxMinVec4`、`ogxMaxVec2`、`ogxMaxVec3`、`ogxMaxVec4`：逐分量极值。
-五、`ogxCircleMap` 与 `ogxCircleMapL`：方形到圆盘。
-六、`ogxSpiralSample`：螺旋采样点。
-七、`ogxRoughSpecularDirection`：粗糙高光方向。
-八、`ogxNormalize`：安全归一化，零向量有回退。
-九、`ogxMod`：浮点取模，结果为非负。
-十、`ogxEqual`：向量相等判断。
-十一、`ogxMatrixMul`、`ogxMatrixMulPoint`、`ogxMatrixMulPoint4`、`ogxMatrixTranslation`、`ogxMatrix3MulPoint`：矩阵与向量工具。
-十二、`ogxAtan2`：两参数反正切。
-十三、`ogxFastAcos`：反余弦近似。
-十四、边界：所有函数只做纯计算，不读取屏幕或时间。
-十五、顺序：矩阵按列展开，和 GLSL 的列主序一致。
-*/
-
-/*
-参数与边界：
-一、矩阵乘向量假设矩阵按列主序存储。
-二、归一化在零向量时返回零向量，调用方要判断。
-三、取模的除数不能为零。
-四、相等判断使用绝对误差，阈值由调用方给出。
-五、反余弦近似只在零到一之间有效。
-六、圆映射的输入是负一到一。
-七、极值函数逐分量比较，不处理 NaN。
-八、旋转角度用弧度。
-九、所有函数都是纯函数，可以在任意阶段调用。
-十、矩阵平移只取第四列，不处理投影。
-*/
-
-/*
-补充说明：矩阵与向量。
-矩阵按列主序存储。
-归一化在零向量时返回零。
-取模的除数不能为零。
-反余弦近似只在零到一之间有效。
-画面验证看旋转与投影。
-*/

@@ -105,37 +105,7 @@ float ogxFogDensityNoise(float3 fogPos, float3 wind, float heightA, float height
     return density * density * 3.0; // 再平方并放大，得到清楚的边界。
 }
 
-// 三维噪声：把世界坐标折成三维格子，再用一张二维噪声图的上下两层按高度插值。
-// 为什么能这样降维：噪声图本身是二维的，用格子的纵坐标错开贴图里的一行，
-// 再把两个通道当成上下两层，就能在不增加纹理的情况下得到三维手感。
-float ogxEnd3dNoise(float3 position, Sampler2D noiseTexture, float noiseResolution)
-{
-    float3 p = floor(position); // 整数格决定用贴图哪一块。
-    float3 b = fract(position); // 格内偏移用于插值。
-    b = b * b * (3.0 - 2.0 * b); // 三次平滑，格与格之间不出现硬边。
-    float2 uv = 17.0 * p.z + p.xy + b.xy; // 把三层格子压到二维坐标，十七是原程序打散层数的常数。
-    float2 rg = noiseTexture.SampleLevel((uv + 0.5) / noiseResolution, 0.0).zx; // 取两张通道，零号层级与原来的即时采样一致。
-    return lerp(rg.x, rg.y, b.z); // 按格内高度在两层之间插值。
-}
-
-// 云状分形噪声：四层不同频率的三维噪声叠加，供吸积盘等体积细节使用。
-// `shift` 是每层之间的时间位移，让细节缓慢流动而不是整块平移。
-float ogxCloudFbm(float3 position, float3 shift, Sampler2D noiseTexture, float noiseResolution)
-{
-    const int octaves = 4; // 四层就够，再多在远景里看不出来。
-    const float octAlpha = 0.87; // 每层权重只衰减一成多，细节保留得多。
-    const float octScale = 2.5; // 每层频率放大二点五倍，避免相邻层太像。
-    const float octShift = (octAlpha / octScale) / float(octaves); // 层间偏移，把结果抬回零附近。
-    float accum = 0.0; // 累积噪声。
-    float alpha = 0.5; // 第一层权重。
-    for (int i = 0; i < octaves; i++) // 逐层叠加。
-    {
-        accum += alpha * ogxEnd3dNoise(position, noiseTexture, noiseResolution); // 加这一层。
-        position = (position + shift) * octScale; // 抬高频率并错开时间。
-        alpha *= octAlpha; // 权重衰减。
-    }
-    return accum + octShift; // 返回归一化后的噪声。
-}
+// 三维噪声与云状分形在通用噪声模块：吸积盘、雾与体积云共用同一份查表公式。
 
 // 下界雾的单格密度：世界坐标折成三维格子，再查二维噪声图。
 float ogxNetherFogDensityAt(float3 pos, Sampler2D noiseTexture)

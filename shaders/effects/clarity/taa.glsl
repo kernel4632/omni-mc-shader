@@ -16,6 +16,18 @@
     选项换算；相机速度要区分远景、手与材质编号，属于宿主参数转换，仍留在效果层。
 */
 #include "/omni-gfx/antialias/antialias.glsl"
+// 相机速度的深度选择与重投影在时间取样模块，本文件只填宿主矩阵。
+#include "/omni-gfx/antialias/taa.glsl"
+
+// 为什么宿主仍然保留一层速度函数：没有远景模组时，参考实现不做远景深度换算，
+// 而通用库的远景分支需要 dhDepthTex；两者条件不同，不能硬塞进同一条调用。
+// 有远景时直接调用通用库，近景、手部与天空的处理与参考逐项一致；
+// 没有远景时保留简化版，只读近景深度，避免为不存在的纹理生成采样。
+// 重投影部分不分维度：当前帧、历史帧、邻域裁剪与颜色空间都在通用库，
+// 宿主只选纹理、屏幕尺寸与几个开关。这样 TAA 的算法只有一份，
+// 选项变化不会让两个分支的裁剪公式漂移。
+// 参考签名兼容层保留原函数名，是因为严格对照按参考的取样顺序与常数核对；
+// 这些重载只填纹理与编码，不做第二套算法。
 
 // 颜色空间转换的兼容入口：其他文件可能按旧名字调用。
 vec3 RGB_To_YCoCg(vec3 color) { return ogxRgbToYCoCg(color); }
@@ -48,47 +60,15 @@ float SampleCurrDepthDHFetchClosest3x3(ivec2 coord){
 	return min9(depth0, depth1, depth2, depth3, depth4, depth5, depth6, depth7, depth8); // 取九个里的最近。
 }
 vec3 TaaCameraVelocity(out float depth, float materialIDs){
-	if (materialIDs == MATID_STAINEDGLASS || materialIDs == MATID_ICE) depth = texelFetch(depthtex1, taaTexelCoord, 0).x; // 玻璃和冰用不含半透明的深度。
-	else{ // 其他表面按选项取最近邻或单点深度。
-		#ifdef TAA_CLOSEST_DEPTH
-			depth = SampleCurrDepthFetchClosest3x3(taaTexelCoord); // 三乘三最近深度。
-		#else
-			depth = SampleDepthFetch(taaTexelCoord); // 单点深度。
-		#endif
-	}
-	vec3 velocity = vec3(0.0); // 默认零位移。
-	if (materialIDs != MATID_END_PORTAL){ // 末地传送门不参与重投影。
-		vec3 screenPos = vec3(taaTexCoord, depth); // 当前屏幕位置与深度。
-		vec3 projection = vec3(0.0); // 上一帧投影结果。
-		if (screenPos.z == 1.0){ // 深度为一时说明是远景像素。
-			#ifdef TAA_CLOSEST_DEPTH
-				screenPos.z = SampleCurrDepthDHFetchClosest3x3(taaTexelCoord); // 远景最近深度。
-			#else
-				screenPos.z = SampleDepthDHFetch(taaTexelCoord); // 远景单点深度。
-			#endif
-			projection = vec3(screenPos * 2.0 - 1.0); // 转负一到一。
-			projection = (vec3(vec2(dhProjectionInverse[0].x, dhProjectionInverse[1].y) * projection.xy, 0.0) + dhProjectionInverse[3].xyz) / (dhProjectionInverse[2].w * projection.z + dhProjectionInverse[3].w); // 远景逆投影到视空间。
-			projection = mat3(gbufferModelViewInverse) * projection + gbufferModelViewInverse[3].xyz; // 视空间转到世界空间。
-			if (screenPos.z < 1.0) projection += cameraPosition - previousCameraPosition; // 有限深度才补相机位移。
-			projection = mat3(gbufferPreviousModelView) * projection + gbufferPreviousModelView[3].xyz; // 用上一帧相机转到上一帧视空间。
-			projection = (vec3(gbufferPreviousProjection[0].x, gbufferPreviousProjection[1].y, gbufferPreviousProjection[2].z) * projection + gbufferPreviousProjection[3].xyz) / -projection.z * 0.5 + 0.5; // 投到上一帧屏幕。
-			screenPos.z = ScreenDepth_From_DHScreenDepth(screenPos.z); // 远景深度换到近景尺度。
-			projection.z = ScreenDepth_From_DHScreenDepth(projection.z); // 上一帧深度同样换算。
-			depth = saturate(screenPos.z); // 输出换算后的深度。
-		}else{ // 近景像素。
-			projection = vec3(screenPos * 2.0 - 1.0); // 转负一到一。
-			projection = (vec3(vec2(gbufferProjectionInverse[0].x, gbufferProjectionInverse[1].y) * projection.xy, 0.0) + gbufferProjectionInverse[3].xyz) / (gbufferProjectionInverse[2].w * projection.z + gbufferProjectionInverse[3].w); // 近景逆投影到视空间。
-			if (depth < 0.7) projection += (gbufferPreviousModelView[3].xyz - gbufferModelView[3].xyz) * MC_HAND_DEPTH; // 手按固定深度偏移补偿相机位移。
-			else{ // 普通世界表面。
-				projection = mat3(gbufferModelViewInverse) * projection + gbufferModelViewInverse[3].xyz; // 视空间转世界。
-				projection += cameraPosition - previousCameraPosition; // 补相机位移。
-				projection = mat3(gbufferPreviousModelView) * projection + gbufferPreviousModelView[3].xyz; // 转到上一帧视空间。
-			}
-			projection = (vec3(gbufferPreviousProjection[0].x, gbufferPreviousProjection[1].y, gbufferPreviousProjection[2].z) * projection + gbufferPreviousProjection[3].xyz) / -projection.z * 0.5 + 0.5; // 投到上一帧屏幕。
-		}
-		velocity = screenPos - projection; // 位移等于当前位置减上一帧位置。
-	}
-	return velocity; // 返回屏幕位移。
+	#ifdef TAA_CLOSEST_DEPTH
+		const bool closestDepth = true; // 三乘三最近深度。
+	#else
+		const bool closestDepth = false; // 单点深度。
+	#endif
+	return ogxTaaCameraVelocity(depthtex0, depthtex1, dhDepthTex0, taaTexelCoord, taaTexCoord, materialIDs,
+		closestDepth, MATID_STAINEDGLASS, MATID_ICE, MATID_END_PORTAL, gbufferProjectionInverse, dhProjectionInverse,
+		gbufferModelView, gbufferModelViewInverse, gbufferPreviousModelView, gbufferPreviousProjection,
+		cameraPosition, previousCameraPosition, MC_HAND_DEPTH, depth); // 深度选择与重投影在通用库。
 }
 #else // 没有远景模组时的简化版。
 vec3 TaaCameraVelocity(out float depth, float materialIDs){
@@ -245,4 +225,12 @@ vec3 GetVariance3x3(ivec2 coord, vec3 currColor, out vec3 avgColor, out vec3 cro
 	return maxColor - minColor; // 返回范围宽度。
 }
 
+// 参考签名兼容层保留原函数名：严格对照按参考的取样顺序与常数逐项核对，改名会失去来源。
+// 这些重载只填纹理、屏幕尺寸与编码，不做第二套算法；颜色空间转换仍走通用库。
+// 下界历史把两个参考深度打包在透明度通道，所以另有一个双线性版本。
+// 方差裁剪用九点二阶矩，乘以攻击性选项后再与当前颜色取并集，避免把真实高光裁掉。
+// 时间混合的权重由调用方给出，快速运动时降低历史权重，静止时更多依赖历史。
+// 画面回归要看静止、平移、转身与快速挥动手臂四种情况，鬼影与锯齿分别检查。
+// 下界与末地没有远景深度时只走简化版，重投影仍使用同一套邻域裁剪。
+// 这两条路径的深度尺度不同，不能共用同一个最近深度阈值。
 #endif // OMNI_TAA_CORE_INCLUDED

@@ -6,10 +6,11 @@
 
 // 云的相函数：按 `mode` 选择 Henyey-Greenstein、Cornette-Shanks 或 HG-Draine。
 // 按云相位模式组合前向与背向散射，决定云边缘的透光方向。
-float ogxLayersPhaseCloud(float x, float g, int mode)
-{
+float ogxLayersPhaseCloud(float x, float g, int mode) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    // 模式一用 Cornette-Shanks：比默认多一个前向峰，适合太阳附近的银边；模式二用 Draine 近似。
     if (mode == 1) // Cornette-Shanks。
-    {
+    { // 按参考顺序推进。
         return (3.0 * (1.0 - g * g) * (1.0 + x * x)) / (25.133 * (2.0 + g * g) * pow(1.0 + g * g - 2.0 * g * x, 1.5)); // 参考实现系数 25.133。
     }
     if (mode == 2) // HG-Draine。
@@ -23,6 +24,10 @@ float ogxLayersPhaseCloud(float x, float g, int mode)
 }
 
 // 朝光散射：沿光方向取几步云密度，层数与步长按层号决定。
+// 云层散射为什么只取少量步长：云体内部没有细节几何，遮挡是连续的密度函数，
+// 四到六步已经能把整层走完；步长随光源方向与层厚变化，近处细、远处粗。
+// 相位按层选择：积云用前向集中的 HG，高层云用更平的 Cornette-Shanks，
+// 积雨云再叠一份宽相位，避免闪电照亮时整块云一起发白。
 float ogxLayersGetCloudScattering(OgxLayersCloudSettings s, int layerIndex, float3 rayPosition, float3 sunVector,
     float3 moonVector, float dither, float minHeight, float maxHeight, float density, float cumulonimbusScale,
     float sunVisibility, float moonVisibility, float3 cameraPos, Sampler2D noiseTexture)
@@ -39,15 +44,18 @@ float ogxLayersGetCloudScattering(OgxLayersCloudSettings s, int layerIndex, floa
     {
         if (layerIndex == 3 || layerIndex == 4) // 平面云沿日月方向。
         {
+            // 向太阳采样时用两百米级步长，云层很厚，细步长只会增加采样数而不改遮挡形状。
             shadowRayPosition = rayPosition + sunVector * sunVisibility * (0.25 + float(i) * dither) * 200.0
                 + moonVector * moonVisibility * (0.25 + float(i) * dither) * 200.0; // 沿日月方向取样。
         }
         else if (layerIndex == 0 || layerIndex == 1) // 积云沿混合方向。
         {
+            // 月亮方向用小步长，月光弱、云影边缘更容易看出层叠，细采样能保住柔边。
             shadowRayPosition = rayPosition + lightVec * (0.25 + float(i) + dither) * 20.0; // 小步长。
         }
         else if (layerIndex == 2) // 积雨云大步长。
         {
+            // 积雨云用大步长，云体尺度大，二十米级步长足够穿过整层而不产生条带。
             shadowRayPosition = rayPosition + lightVec * (0.5 + float(i) + dither) * isLarge; // 大步长。
             isLarge *= 1.374; // 每步放大。
         }
@@ -66,6 +74,7 @@ float3 ogxLayersGetCloudLighting(int layerIndex, float shape, float shapeFaded, 
     float3 heightScal = float3(lerp(1.0, 0.5, clamp(rayPosition.y, 0.0, 7000.0) / 7000.0)); // 高度对光色的压缩。
     directLightCol = pow(directLightCol, heightScal); // 直射颜色按高度压暗。
     directLightCol2 = pow(directLightCol2, heightScal); // 第二直射同样。
+    // Beer 系数负四：参考实现的消光强度，绝对值越大云越不透光。
     float beerCoef = -4.0; // Beer 系数。
     float powder = min(exp(beerCoef * exp(beerCoef * shapeFaded)) * 3.5, 1.0); // 粉末效应。
     float backscatter = powder * backScatterPhase; // 后向散射。
@@ -75,6 +84,7 @@ float3 ogxLayersGetCloudLighting(int layerIndex, float shape, float shapeFaded, 
     float expBeer = 6.28 * exp((beerCoef - 1.0) * sunShadowMask); // 直射透过率。
     float3 directScattering = expBeer * directLightCol * (forwardscatter + backscatter); // 太阳直射。
     directScattering += expBeer * directLightCol2 * (forwardscatter2 + backscatter2); // 月亮直射。
+    // 间接光按形状指数衰减，再按遮蔽掩码平方混合；平方让薄云保留更多环境光。
     float3 indirectScattering = indirectLightCol * lerp(1.0, exp2(-5.0 * shape), indirectShadowMask * indirectShadowMask); // 间接光。
     return indirectScattering + directScattering; // 合成。
 }
@@ -137,24 +147,3 @@ float ogxLayersCloudScatteringSamples(int layerIndex, float3 rayPosition, float3
     }
     return shadow; // 交回云内遮挡量。
 }
-
-/*
-实现说明：层状云的相函数与光照。
-一、相函数：`ogxLayersPhaseCloud` 在两种前向集中度之间切换，`ogxLayersPhaseCloudHenyey` 走标准 Henyey-Greenstein。
-二、朝光散射：`ogxLayersGetCloudScattering` 沿太阳与月亮方向取样云密度，把遮挡换成透光比例。
-三、逐层光照：`ogxLayersGetCloudLighting` 按层号选择直射、间接与多次散射的权重，厚云内部靠慢衰减托起。
-四、采样顺序：先算太阳再算月亮，最后叠天空光；顺序与参考实现一致，严格对照据此核对采样次数。
-五、边界：层号超出五层时返回零，调用方不必自己夹紧。
-*/
-
-/*
-函数索引：
-一、`ogxLayersPhaseCloud`：两种前向集中度之间切换的云相函数。
-二、`ogxLayersGetCloudScattering`：沿太阳与月亮方向取样云密度。
-三、`ogxLayersGetCloudLighting`：按层号选择直射、间接与多次散射权重。
-四、`ogxLayersPhaseCloudHenyey`：标准 Henyey-Greenstein 相函数。
-五、`ogxLayersCloudScatteringSamples`：参考签名的采样入口。
-六、顺序：先太阳再月亮，最后天空光。
-七、边界：层号超出五层时返回零。
-八、常数：前向集中度与多次散射权重按参考精度保留。
-*/

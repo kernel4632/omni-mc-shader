@@ -8,7 +8,7 @@
 Omni 通用图形库视差模块：在地表材质的高度图上沿视线找可见交点，并算视差自阴影与法线。
 调用位置：任何使用方块图集高度图做视差的几何片元程序；Minecraft 光影由
     `shaders/effects/ground/parallax.glsl` 引入，选项换算留在效果层。
-可复制示例：调用 ogxParallaxSmooth 传入坐标、切线基与画质参数，返回最终采样像素。
+可复制示例：`vec2 p = ogxParallaxSmooth(texCoord, tangent, bitangent, viewDir, depth, height, 8, 0.2, 0.02);`
 设计原因与取舍：
     方块图集、高度图、切线基、视线位置、分辨率与全部画质参数由调用方传入，库不读取任何引擎状态。
     平滑模式用双线性高度采样加二分细化，锐利模式逐像素穿越图块；两种外观差别明显，所以保留两套函数。

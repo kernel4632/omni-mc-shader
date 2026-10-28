@@ -23,7 +23,7 @@ Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表
 
 // 手电筒模型的手持光：两个光源分别位于左右手，按光斑、距离衰减与漫反射累加。
 // `aimDir` 是光束指向，`heldLightShadow` 为真时每个光斑再乘屏幕空间阴影。
-float3 ogxHeldLightingSpot(float3 viewPos, float3 viewDir, float3 normal, float roughness, float3 ao, bool isHand,
+float3 ogxHeldLightingSpot(float3 viewPos, float3 viewDir, float3 normal, float roughness, float3 ao, bool isHand, // 当前步骤的中间量。
     float heldBlockLightValue, float heldBlockLightValue2, float3 aimDir, float3 lightColor, float brightness,
     float posRX, float posRY, float posLX, float posLY, float fov, float falloff, bool overworld, bool heldLightShadow,
     Sampler2D depthTexture, Sampler2D dhDepthTexture, float4x4 projection, float4x4 projectionInverse,

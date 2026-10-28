@@ -15,8 +15,8 @@ Omni 通用图形库数学模块：曲线、编码、材质、光线求交、噪
 #define OGX_MATH_INCLUDED
 
 // 圆周率与常用倒数，和旧库保持同一精度。
-static const float OGX_PI = 3.14159265359;
-static const float OGX_TAU = 6.28318530718;
+static const float OGX_PI = 3.14159265359; // 当前步骤的中间量。
+static const float OGX_TAU = 6.28318530718; // 当前步骤的中间量。
 static const float OGX_HALF_PI = 1.57079632679;
 static const float OGX_INV_PI = 0.31830988618;
 

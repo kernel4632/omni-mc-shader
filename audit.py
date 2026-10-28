@@ -27,7 +27,7 @@ MACHINE = re.compile(r"\s*(?:#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef
 EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__"}  # 环境、参考和第三方内容不是本项目的维护边界。
 # 这些目录有自己的检查或不是手写说明对象：Slang 源由 check_slang 按接口说明审查，
 # 生成产物与 profile 由生成器保证，探针是编译夹具，不重复要求行覆盖率。
-EXCLUDED_PATHS = ("omni-gfx/src/", "omni-gfx/generated/", "omni-gfx/profiles/", "omni-gfx/tests/probes/", "omni-gfx/vendor/", "shaders/omni-gfx/")  # 生成 GLSL 的说明来源于 Slang，由库检查负责，不在光影审计里重复。
+EXCLUDED_PATHS = ("omni-gfx/src/", "omni-gfx/generated/", "omni-gfx/profiles/", "omni-gfx/tests/probes/", "omni-gfx/vendor/", "shaders/omni-gfx/")  # 生成 GLSL 由下方的比例检查单独核对，语言错误已在源文件阶段拦下。  # 生成 GLSL 的说明来源于 Slang，由库检查负责，不在光影审计里重复。
 # 开发工具与测试世界不进入光影 ZIP，按 docs/omni-gfx-plan.md 的边界只检查说明语言与接口，
 # 不按玩家可见代码的 50% 行覆盖率要求；测试世界的 GLSL 仍然按 50% 检查，因为它会被真实编译。
 DEVELOPMENT = ("omni-gfx/tools/", "omni-gfx/examples/")
@@ -216,6 +216,16 @@ def check_slang(root: Path) -> list[dict]:
             for markers, label in ((("调用位置",), "调用位置"), (("示例", "用法"), "可复制示例"), (("设计原因", "设计取舍", "设计边界", "为什么"), "设计原因与取舍")):
                 if not any(marker in header for marker in markers):
                     errors.append(f"{relative_path}：文件头缺少{label}")  # 只写一句“这个文件做什么”不足以判断改动边界。
+            # 示例与调用位置不能只写关键词：示例要真的能复制，调用位置要指向文件或明确的引入者。
+            header_rows = header.splitlines()
+            example_text = []
+            for index, line in enumerate(header_rows):
+                if "示例" in line or "用法" in line:
+                    example_text.extend(header_rows[index:index + 4])  # 示例常分多行写，向下多看几行。
+            if not any("(" in line for line in example_text):
+                errors.append(f"{relative_path}：文件头的示例必须给出可复制的调用")
+            if not re.search(r"`[^`]*\.(?:slang|glsl|fsh|vsh)`|effects/|shaders/|omni-gfx/|由所属主文件|由 `", header):
+                errors.append(f"{relative_path}：文件头的调用位置必须指向具体文件或引入者")
         for number, line in enumerate(lines):
             if re.match(r'^\s*#include\s+"', line):
                 previous = lines[number - 1].strip() if number else ""
@@ -276,6 +286,24 @@ def check_slang(root: Path) -> list[dict]:
     return reports
 
 
+def check_generated_ratio(root: Path) -> None:
+    """检查生成 GLSL 的中文说明比例，不再只靠源文件。
+
+    生成文件的内容由 Slang 源决定，语言错误已在源文件阶段报出；这里只补上
+    一半非空行有中文说明的比例要求，避免生成阶段把注释丢掉后没人发现。
+    """
+    problems = []
+    for path in sorted((root / "shaders" / "omni-gfx").rglob("*.glsl")):
+        text = path.read_text(encoding="utf-8")
+        nonempty = {number for number, line in enumerate(text.splitlines(), 1) if line.strip()}
+        documented, _ = comments(path, text)
+        ratio = len(documented & nonempty) / max(len(nonempty), 1)
+        if ratio < 0.5:
+            problems.append(f"{path.relative_to(root).as_posix()}：中文有效注释 {ratio:.1%}，至少需要 50%")
+    if problems:
+        raise ValueError("生成 GLSL 说明不足\n" + "\n".join(problems))
+
+
 def check(root: Path) -> list[dict]:
     """检查审计范围，拒绝说明不足和未实现标记，并返回每个文件的比例。
 
@@ -313,6 +341,7 @@ def check(root: Path) -> list[dict]:
                         chinese_explanation(text_line)
                     except ValueError as error:
                         errors.append(f"{relative_path}:{line_number + line_offset}：{error}")  # 中英混合和纯英文说明使用同一严格规则。
+    check_generated_ratio(root)  # 生成 GLSL 单独核对说明比例，语言错误已在源文件阶段处理。
     slang_reports = check_slang(root)  # 手写 Slang 源单独审计，目录遍历不进入生成产物与测试世界。
     reports.extend(slang_reports)  # 报告数量包含库源，终端能看出覆盖范围。
     if errors: raise ValueError("源码审计失败\n" + "\n".join(errors))

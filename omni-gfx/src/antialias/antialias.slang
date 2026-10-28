@@ -19,7 +19,7 @@ Omni 通用图形库抗锯齿模块：YCoCg 颜色空间、历史邻域裁剪、
 #include "../common/camera.slang"
 
 // 把线性颜色转到亮度与色差空间，亮度单独处理。
-float3 ogxRgbToYCoCg(float3 color)
+float3 ogxRgbToYCoCg(float3 color) // 当前步骤的中间量。
 {
     return float3(color.r * 0.25 + color.g * 0.5 + color.b * 0.25,
                   color.r * 0.5 - color.b * 0.5,
@@ -316,5 +316,8 @@ float4 ogxTaaTemporalBlend(float2 coord, float3 velocity, float currDepthMin,
     return float4(currColor, currDepthMin); // 带回代表深度。
 }
 
+
+// 时间取样的深度与相机速度属于抗锯齿效果，编译进同一份产物。
+#include "../antialias/taa.slang"
 
 #endif

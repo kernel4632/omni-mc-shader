@@ -50,4 +50,9 @@ float3 ogxBloomDownsample(Sampler2D source, float2 coord, float2 texel)
     return ogxLinearToCurve3(blur * 0.25); // 权重和为四，乘四分之一保持亮度。
 }
 
+// 自动曝光、泛光合并与夜视曲线属于后期效果，编译进同一份产物。
+#include "../post/exposure.slang"
+// 受伤、入水与着火等画面状态属于后期效果，编译进同一份产物。
+#include "../post/scene.slang"
+
 #endif

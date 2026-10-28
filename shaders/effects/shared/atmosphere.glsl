@@ -6,7 +6,7 @@
     `vec3 sunIrradiance = GetSunAndSkyIrradiance(camera, worldSunVector, -worldSunVector, moonIrradiance, sunSkyIrradiance, moonSkyIrradiance);`
 设计原因与取舍：大气是所有室外效果共用的光源，贴图尺寸与散射常数只能有一份；
     太阳色倍率与散射倍率也一起放在共享层，云、雾、反射看到的天空才会和主天空一致。
-    查表公式在 `omni-gfx/atmosphere_model.glsl`，本文件只把加载器输入、选项与尺寸填进通用结构体。
+    查表公式在 `omni-gfx/atmosphere/model.glsl`，本文件只把加载器输入、选项与尺寸填进通用结构体。
     一点一六点五以后大气数据挂八号画面，更早版本挂二号深度，所以统一用 `OMNI_ATMO_LUT` 选一次采样器。
 */
 #ifndef OMNI_SHARED_ATMOSPHERE_INCLUDED

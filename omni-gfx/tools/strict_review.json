@@ -126,7 +126,7 @@
       "target": "common/math/pattern.ogxRotateMatrix"
     },
     "WarpSpace": {
-      "target": "common/math/pattern.ogxWarpSpace"
+      "target": "accretion.ogxAccretionWarpSpace"
     },
     "pcurve": {
       "target": "planet.ogxEndSkyPCurve"
@@ -165,7 +165,7 @@
       "target": "reflection/reflection.ogxSampleGgxVndf"
     },
     "GetRainAnimationTex": {
-      "target": "water/rain.ogxRainAnimationNormal"
+      "target": "weather/rain.ogxRainAnimationTex"
     },
     "GetRainNormal": {
       "target": "GetRainNormal"
@@ -1168,7 +1168,7 @@
       }
     },
     "applyGameplayEffects": {
-      "target": "post/scene.ogxGameplayEffects",
+      "target": "post/scene/gameplay.ogxGameplayEffects",
       "resources": {
         "currentHealth": "value",
         "maxHealth": "value",
@@ -2058,7 +2058,7 @@
       "target": "voxel/voxel.ogxGetVoxelEmission"
     },
     "applySceneControllerParameters": {
-      "target": "post/scene.ogxSceneControllerDefaults"
+      "target": "post/scene/controller.ogxSceneControllerDefaults"
     },
     "traceQuarterVoxel": {
       "target": "voxel/trace.ogxQuarterVoxelTrace",

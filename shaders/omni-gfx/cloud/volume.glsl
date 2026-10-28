@@ -11,8 +11,8 @@ Omni 通用图形库体积云模块：Nubis / Hillaire 风格的积云形状、�
 可复制示例：
     OgxCumulusMedia media; // 调用方先填好云底、云顶、风与光照强度。
     vec3 hit; // 平均命中位置，供大气淡出使用。
-    vec4 cloud = ogxCumulusMarch(viewDir, media, jitter, hit, baseTex, detailTex, curlTex,
-                                   40.0, 1.0, sunDir, 1.0, 0.0, 3.0, 1.2);
+    vec4 cloud = ogxCumulusMarch(viewDir, media, jitter, hit, baseTex, detailTex, curlTex, // 当前步骤的中间量。
+                                   40.0, 1.0, sunDir, 1.0, 0.0, 3.0, 1.2); // 按参考顺序推进。
     // cloud.rgb 是预乘散射颜色，cloud.a 是透射率；调用方按 1 - cloud.a 合成覆盖率。
 设计原因与取舍：
     形状来自三维 Perlin-Worley 基础噪声与高频 Worley 侵蚀。基础噪声先决定云块位置，
@@ -62,6 +62,12 @@ struct OgxCumulusMedia
 // 曲率修正让远处的云跟着地球弧度下沉，否则云层会像一块硬板挂在天边。
 // 为什么保留 `cloud_scale`：Minecraft 侧用公里，测试世界用米；调用方乘一次就能统一，
 // 库内不再猜单位，也不会把覆盖率的低频坐标压成常数。
+// 体积云的坐标与采样分成三步：先把世界位置投到云层平面，再取两次密度，最后沿太阳方向估光照。
+// 为什么先投影：云层是一层薄壳，直接按三维距离取密度会把空气也当成云；
+// 投影后每个样本都落在云层附近，远处也不会因为步长变大而漏掉整团云。
+// 密度与细节分开：基础形状决定哪里有云，侵蚀噪声只削边缘，二者频率差一个数量级。
+// 光照只用少量朝向太阳的样本，云体内部没有细节几何，多采几步只会增加成本。
+// 下面三个入口分别负责：设置云层平面、取一个样本的密度、把闪电叠到云上。
 vec4 ogxCumulusSetPos(vec3 marchingPos, OgxCumulusMedia media)
 {
     vec4 cloudPos = vec4(marchingPos, 0.0); // 前三通道是位置，第四通道是层内高度。

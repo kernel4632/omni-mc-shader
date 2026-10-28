@@ -24,6 +24,9 @@
   不放进被多个程序共用的 `effects/ground/material.glsl`。
 */
 
+// 各向异性过滤的椭圆核与采样步进在通用库，本文件按宿主选项调用。
+#include "/omni-gfx/common/sampling/anisotropic.glsl"
+
 // 各向异性过滤：沿屏幕上的纹理压缩方向多采几步，换回更清晰的远处方块。
 vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, inout vec4 specularTex, out float materialAO){
 	materialAO = 1.0; // 材质遮蔽系数默认一：没有法线贴图或没开遮蔽时都不压暗底色。

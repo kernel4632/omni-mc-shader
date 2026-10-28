@@ -22,7 +22,7 @@ Omni 通用图形库表面模块：方块光曲线、材质法线、遮蔽换算
 #ifndef OGX_SURFACE_INCLUDED
 #define OGX_SURFACE_INCLUDED
 
-// 数学模块提供法线解码、夹紧、湿面粗糙度与色相转换。
+// 数学模块提供法线解码、夹紧与曲线。
 #include "/omni-gfx/common/math.glsl"
 // 天光曲线：先抬高低等级，再压暗高等级，等级越高越接近饱和。
 float ogxCurveBlockLightSky(float blockLight)
@@ -120,12 +120,8 @@ struct OgxPbrMaterial
 };
 
 // 水洼粗糙度：湿润阶段按锐度在干湿之间插值；只有材质解码使用这一条。
-// 为什么放在表面模块：水洼粗糙度是资源包材质的湿润处理，不属于通用编码。
-float ogxPuddleRoughness(float roughness, float wetRoughness, float wetnessStages, float sharpness)
-{
-    return mix(roughness, wetRoughness, wetnessStages * sharpness); // 湿润阶段乘锐度作为混合比例。
-}
-
+// 为什么直接写在材质解码里：它只是一次线性插值，没有第二个调用者；做成公共函数会让表面模块
+// 多背一个只服务水洼的入口，也和 `water` 模块的水洼覆盖公式分家。
 // 从 labPBR 表面贴图解出材质：蓝色通道兼作孔隙率与散射，红绿通道是平滑度与金属度。
 // 参数全部显式传入，库不读取资源包格式选项；`baseTex` 会被吸水压暗，所以是输入输出参数。
 // 为什么先算孔隙率：它同时决定吸水暗化与湿润后的平滑度，两处必须用同一个值。
@@ -143,7 +139,7 @@ OgxPbrMaterial ogxPbrMaterialFromTex(inout vec3 baseTex, vec4 specTex, float wet
     float rawSmoothness = mix(specTex.r, 1.0, ogxSaturate(wet * (1.7 - porosity * 0.7))); // 湿润把表面拉向光滑。
     material.roughness = 1.0 - rawSmoothness; // 平滑度取反得到粗糙度。
     material.roughness *= material.roughness; // 平方让光滑面更集中。
-    material.roughness = ogxPuddleRoughness(material.roughness, 0.5, wet, puddleSharpness); // 湿面锐度按选项混合。
+    material.roughness = mix(1.0 - rawSmoothness, 0.5, wet * puddleSharpness); // 水洼湿润阶段按锐度在干湿之间插值。
     float rawMetalness = specTex.g; // 绿通道是金属度。
     if (pbrFormat == 0) rawMetalness = ogxSaturate(rawMetalness + step(0.9, rawMetalness)); // labPBR 预设金属位拉满。
     material.metalness = roughnessClamp ? ogxSaturate(rawMetalness * 1.1 - 0.1) : rawMetalness; // 限制模式先放大再平移。

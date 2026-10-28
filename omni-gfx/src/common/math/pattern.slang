@@ -1,4 +1,4 @@
-// 数学模块图案工具：拜尔抖动、切线基、HSV、旋转矩阵、径向曲线与空间扭曲。
+// 数学模块图案工具：拜尔抖动、切线基、旋转矩阵、径向曲线与夜视。
 // 调用位置：由 `common/math.slang` 内联引入，后期、天空与吸积盘共用。
 // 可复制示例：`float b = ogxInterleavedGradientNoise(pixelCoord);`
 // 设计原因与取舍：图案函数保持原来的常数与矩阵展开顺序，避免画面抖动改变。
@@ -6,34 +6,43 @@
 // --- 抖动表、切线基与颜色图案 ---
 
 // 交错梯度噪声：一个像素一个值，适合做抖动，常数来自原始论文。
-float ogxInterleavedGradientNoise(float2 coordinate)
-{
-    return fract(52.9829189 * fract(0.06711056 * coordinate.x + 0.00583715 * coordinate.y));
-}
+float ogxInterleavedGradientNoise(float2 coordinate) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    // 两个大常数来自原始论文，乘完取小数就是每像素稳定的伪随机值，不需要纹理。
+    return fract(52.9829189 * fract(0.06711056 * coordinate.x + 0.00583715 * coordinate.y)); // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 二乘二拜尔矩阵：四个格子依次得到零、四分之一、二分之一、四分之三。
-float ogxBayer2(float2 a)
-{
+float ogxBayer2(float2 a) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    // 先取整：同一格里的不同小数必须得到同一个阈值，否则抖动会退化成噪点。
     a = floor(a);
+    // 二乘二矩阵的四个值由这两个系数交错得到，范围正好是零到四分之三。
     return fract(dot(a, float2(0.5, a.y * 0.75)));
 }
 
 // 四乘四拜尔矩阵：由二乘二嵌套得到，用来做稳定抖动。
+// 四乘四由二乘二嵌套：低频层乘四分之一，高频层原样，阈值均匀铺满十六格。
 float ogxBayer4(float2 a) { return ogxBayer2(0.5 * a) * 0.25 + ogxBayer2(a); }
 
 // 八乘八拜尔矩阵。
+// 八乘八继续嵌套；低频用四阶、高频用二阶，是拜尔矩阵的递推写法。
 float ogxBayer8(float2 a) { return ogxBayer4(0.5 * a) * 0.25 + ogxBayer2(a); }
 
 // 十六乘十六拜尔矩阵：四层二乘二矩阵嵌套，抖动级别比八乘八细四倍。
+// 十六阶开始两层都用四阶，频率间隔更大，适合时间累积前的初始抖动。
 float ogxBayer16(float2 a) { return ogxBayer4(0.25 * a) * 0.0625 + ogxBayer4(a); }
 
 // 三十二乘三十二拜尔矩阵：低频一档换成八乘八，级别再细四倍。
+// 三十二阶用八阶低频加四阶高频，格数翻倍但只多一次二阶调用。
 float ogxBayer32(float2 a) { return ogxBayer8(0.25 * a) * 0.0625 + ogxBayer4(a); }
 
 // 六十四乘六十四拜尔矩阵：范围大，适合时间累积前的初始偏移。
+// 六十四阶两层都用八阶；0.015625 是六十四分之一，保证总和落回零到一。
 float ogxBayer64(float2 a) { return ogxBayer8(0.125 * a) * 0.015625 + ogxBayer8(a); }
 
 // 一百二十八乘一百二十八拜尔矩阵：目前最细的一档，给低步数光追分摊首帧噪点。
+// 一百二十八阶是当前最细一档，低频十六阶、高频八阶，用于低步数光追的首帧分摊。
 float ogxBayer128(float2 a) { return ogxBayer16(0.125 * a) * 0.015625 + ogxBayer8(a); }
 
 // 切线基的三个方向；用结构体而不是矩阵，避免两种语言的行列顺序不同造成转置错误。
@@ -46,6 +55,9 @@ struct OgxTangentBasis
 
 // 由位置与纹理导数构造切线基：先叉乘得到法线，再解切线与副切线。
 // 模型没提供切线时只能这样反推；返回结构体，调用方按字段读取。
+// 切线基为什么用导数反推：Minecraft 的方块模型不一定带切线，顶点阶段也拿不到接缝信息；
+// 用屏幕空间的位置差与纹理差构造，能在任意几何上得到一致的法线贴图方向。
+// 退化时（位置差共线）叉乘接近零，最后除以模长会把方向压回单位长度，不产生无穷大。
 OgxTangentBasis ogxTangentBasis(float3 dp1, float3 dp2, float2 duv1, float2 duv2)
 {
     float3 normal = normalize(cross(dp1, dp2));
@@ -62,6 +74,11 @@ OgxTangentBasis ogxTangentBasis(float3 dp1, float3 dp2, float2 duv1, float2 duv2
 }
 
 // 色相、饱和度、明度：按最大通道选扇区，再算色相与饱和度。
+// 为什么放在数学模块：宿主的公共数学包装与体积光编码都要用，属于共享颜色工具。
+// 输入假设在零到一之间，超出范围时取模结果会绕回，调用方要先夹紧。
+// 色相以六分之一圈为单位，除以六段再取小数，和参考实现完全一致。
+// 色相、饱和度、明度：按最大通道选扇区，再算色相与饱和度。
+// 为什么放在颜色模块：表面湿润、体素着色与光传播编码都要把颜色拆成 HSV，属于共享颜色工具。
 float3 ogxRgbToHsv(float3 color)
 {
     static const float4 K = float4(0.0, -1.0, 2.0, -3.0) / 3.0;
@@ -72,6 +89,8 @@ float3 ogxRgbToHsv(float3 color)
     return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
+// 色相、饱和度、明度的拆解在颜色模块；这里只保留图案与坐标工具。
+
 // 三个轴的旋转合成：先俯仰、再偏航、最后滚转，供吸积盘与末地行星摆正自己的坐标系。
 // 这里保留原程序的扁平构造参数顺序：生成 GLSL 后由 GLSL 的列主序规则解释，
 // 因此运行时矩阵与旧实现完全相同；不要在 Slang 侧改成按列传入，否则生成文本会换序。
@@ -81,6 +100,20 @@ float3x3 ogxRotateMatrix(float x, float y, float z)
     float3x3 maty = float3x3(cos(y), 0.0, -sin(y), 0.0, 1.0, 0.0, sin(y), 0.0, cos(y)); // 绕纵轴偏航。
     float3x3 matz = float3x3(cos(z), sin(z), 0.0, -sin(z), cos(z), 0.0, 0.0, 0.0, 1.0); // 绕前后轴滚转。
     return maty * matx * matz; // 三个旋转按原程序的顺序合成。
+}
+
+// 绕纵轴的旋转矩阵：末地天空、行星与雾相位共用同一份，避免各自抄一遍符号。
+float3x3 ogxRotationY(float angle)
+{
+    return float3x3(cos(angle), 0.0, sin(angle), 0.0, 1.0, 0.0, -sin(angle), 0.0, cos(angle)); // 与参考实现的偏航矩阵逐项一致。
+}
+
+// 先俯仰再偏航的旋转：行星与末地雾用同一套 y 轴朝上的天球坐标。
+// 为什么单独成函数：两处原来各写三行矩阵，符号一旦改错会让雾和行星的相位对不上。
+float3x3 ogxRotationXThenY(float angleX, float angleY)
+{
+    float3x3 rotationX = float3x3(1.0, 0.0, 0.0, 0.0, cos(angleX), -sin(angleX), 0.0, sin(angleX), cos(angleX)); // 俯仰。
+    return rotationX * ogxRotationY(angleY); // 参考实现的相乘顺序。
 }
 
 // 环形径向轮廓：中心亮、边缘按四次方乘线性衰减，用于光晕。
@@ -97,71 +130,3 @@ void ogxDoNightEye(inout float3 color)
     float luma = ogxLuminance(color); // 原色亮度。
     color = lerp(color, luma * float3(0.7771, 1.0038, 1.6190), float3(0.5)); // 偏蓝亮度与原色各占一半。
 }
-
-// 空间扭曲：越靠近原点，光线方向越被拉向原点，模拟黑洞附近的引力弯曲。
-// 方向和位置都就地修改，调用方下一轮步进会用到新的方向。
-void ogxWarpSpace(inout float3 direction, inout float3 position)
-{
-    float3 origin = float3(0.0);
-    float singularityDistance = distance(position, origin);
-    float warpFactor = 1.0 / (singularityDistance * singularityDistance + 0.000001);
-    float3 singularityVector = normalize(origin - position);
-    float warpAmount = 0.06;
-    direction = normalize(direction + singularityVector * warpFactor * warpAmount);
-}
-
-/*
-实现说明：屏幕图案与坐标变换。
-一、Bayer 矩阵：二阶到八阶的阈值矩阵由递归展开得到，抖动用它把色阶打散。
-二、旋转矩阵：二维旋转与三列矩阵互转，光环与光斑按角度旋转。
-三、圆映射：把方形坐标折到圆盘，`ogxCircleMapL` 返回三维版本供球面采样。
-四、空间扭曲：黑洞附近的引力弯曲按距离平方增强方向偏移。
-五、夜视：暗处把颜色混向偏蓝的亮度，宿主公共数学的包装直接调用它。
-六、哈希与噪声：屏幕坐标加帧号生成稳定的伪随机值，避免每帧重新排布。
-七、边界：图案函数不读取分辨率，调用方把像素坐标归一化后传入。
-*/
-
-/*
-函数索引：
-一、`ogxInterleavedGradientNoise`：屏幕坐标的插值梯度噪声。
-二、`ogxBayer2` 到 `ogxBayer128`：递归展开的 Bayer 阈值矩阵。
-三、`ogxTangentBasis`：按法线构造切线基，退化方向有回退。
-四、`ogxRgbToHsv`：颜色到色相、饱和度、明度。
-五、`ogxRotateMatrix`：二维旋转与三列矩阵互转。
-六、`ogxRadialCurve`：环形径向轮廓。
-七、`ogxDoNightEye`：暗视觉偏蓝。
-八、`ogxWarpSpace`：黑洞附近的引力弯曲。
-九、边界：图案函数不读取分辨率，调用方把像素坐标归一化后传入。
-十、常数：Bayer 矩阵与夜间偏蓝系数按参考精度保留。
-*/
-
-/*
-参数与边界：
-一、Bayer 矩阵的阶数越高，抖动的颗粒越细。
-二、切线基在法线与辅助轴平行时退化，调用方要提供回退。
-三、色相转换假设输入在零到一之间。
-四、旋转矩阵的角度用弧度。
-五、径向曲线在中心为零，在边缘回落。
-六、夜视只改颜色，不改亮度统计。
-七、空间扭曲的强度固定，调用方不能按场景缩放。
-八、图案函数不读取分辨率，坐标要归一化。
-九、所有函数都是纯函数，可以在任意阶段调用。
-十、哈希与噪声的常数按参考精度保留。
-*/
-
-/*
-补充说明：图案的坐标。
-Bayer 矩阵按屏幕像素取模，坐标要取整。
-切线基在法线与辅助轴平行时退化。
-色相转换的输入在零到一之间。
-空间扭曲的强度固定。
-画面验证看抖动颗粒与法线。
-*/
-
-/*
-补充说明：图案坐标。
-Bayer 矩阵按像素取模。
-切线基在平行时退化。
-色相输入在零到一之间。
-空间扭曲强度固定。
-*/

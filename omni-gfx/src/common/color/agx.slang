@@ -4,29 +4,33 @@
 // 设计原因与取舍：普通版与可配置版共用矩阵工具，避免三套色域转换各写一份。
 
 // AgX 对比度曲线：用六次多项式近似原查找表，省掉一张纹理。
-float3 ogxAgxContrast(float3 x)
-{
-    return (((((15.5 * x - 40.14) * x + 31.96) * x - 6.868) * x + 0.4298) * x + 0.1191) * x - 0.00232;
-}
+float3 ogxAgxContrast(float3 x) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    return (((((15.5 * x - 40.14) * x + 31.96) * x - 6.868) * x + 0.4298) * x + 0.1191) * x - 0.00232; // 交回这一段的计算结果。
+} // 按参考顺序推进。
 
 // 转 AgX 宽色域工作空间的三列。
-static const float3 OGX_AGX_0 = float3(0.842479062253094, 0.0784335999999992, 0.0792237451477643);
-static const float3 OGX_AGX_1 = float3(0.0423282422610123, 0.878468636469772, 0.0791661274605434);
-static const float3 OGX_AGX_2 = float3(0.0423756549057051, 0.0784336, 0.879142973793104);
+static const float3 OGX_AGX_0 = float3(0.842479062253094, 0.0784335999999992, 0.0792237451477643); // 当前步骤的中间量。
+static const float3 OGX_AGX_1 = float3(0.0423282422610123, 0.878468636469772, 0.0791661274605434); // 当前步骤的中间量。
+static const float3 OGX_AGX_2 = float3(0.0423756549057051, 0.0784336, 0.879142973793104); // 当前步骤的中间量。
 
 // 从 AgX 宽色域转回显示原色的三列。
-static const float3 OGX_AGX_BACK_0 = float3(1.19687900512017, -0.0980208811401368, -0.0990297440797205);
-static const float3 OGX_AGX_BACK_1 = float3(-0.0528968517574562, 1.15190312990417, -0.0989611768448433);
-static const float3 OGX_AGX_BACK_2 = float3(-0.0529716355144438, -0.0980434501171241, 1.15107367264116);
+static const float3 OGX_AGX_BACK_0 = float3(1.19687900512017, -0.0980208811401368, -0.0990297440797205); // 当前步骤的中间量。
+static const float3 OGX_AGX_BACK_1 = float3(-0.0528968517574562, 1.15190312990417, -0.0989611768448433); // 当前步骤的中间量。
+static const float3 OGX_AGX_BACK_2 = float3(-0.0529716355144438, -0.0980434501171241, 1.15107367264116); // 当前步骤的中间量。
 
 // AgX 强光压缩：先按中间灰取对数并夹进承认范围，再用 S 曲线成形，尽量保住高光色相。
 // `ev` 是承认的动态范围，`abney` 与 ACES 版本含义相同。
 // AgX 宽色域压缩：参考的默认曝光是 13、半动态范围 6.5；显式传入两个常数，避免派生值丢失。
-float3 ogxAgx(float3 color, float ev, float hev, bool abney)
-{
-    color *= 2.3;
-    if (abney)
-    {
+// AgX 的核心是先把曝光压到对数域，再用一条 S 曲线压缩，最后回宽色域。
+// 中间灰定在零点一八：这是摄影里的标准中灰，场景亮度除以它以后，
+// 亮部与暗部在曲线上对称展开，不会因为场景整体偏亮而丢掉高光。
+// 对比曲线用五次多项式而不是分段样条，是为了在 GPU 上少分支、结果连续。
+float3 ogxAgx(float3 color, float ev, float hev, bool abney) // 当前步骤的中间量。
+{ // 按参考顺序推进。
+    color *= 2.3; // 按参考写法推进这一步。
+    if (abney) // 按参考条件选择这一支。
+    { // 按参考顺序推进。
         color = ogxApplyRows(OGX_ABNEY_0, OGX_ABNEY_1, OGX_ABNEY_2, color);
     }
     color = ogxApplyRows(OGX_AGX_0, OGX_AGX_1, OGX_AGX_2, color);
@@ -172,6 +176,9 @@ float3 ogxAgxUnproject(float2 xy)
 }
 
 // 由三原色与白点色度构造 RGB 到 XYZ 的矩阵；列顺序与参考实现一致。
+// 原色坐标转矩阵：先把色度坐标还原成 XYZ，再用白点求三原色的缩放。
+// 为什么不用现成常数：可配置 AgX 允许换原色，矩阵必须跟着白点与三原色重算。
+// 行列式为零时逆矩阵没有意义，调用方要保证三原色不共线。
 OgxAgxMat3 ogxAgxPrimariesToMatrix(float2 xyRed, float2 xyGreen, float2 xyBlue, float2 xyWhite)
 {
     float3 xyzRed = ogxAgxUnproject(xyRed); // 红原色 XYZ。
@@ -259,6 +266,9 @@ float3x3 ogxAgxCustomGamutMatrix3();
 
 // iterationT 的可配置 AgX：把 RGB 转到调整后的工作空间，再走完整曲线。
 // 组合矩阵由 `ogxAgxCustomGamutMatrix3` 提供，和单独调用矩阵版本共用同一套原色常数。
+// 可配置 AgX：把趾部、肩部、白点与原色都做成参数，供不同参考风格共用。
+// 默认参数取 iterationT 的配置；曲线在两端各留一段线性，避免纯黑与纯白结块。
+// 压缩矩阵先算一次再复用，不逐像素重建，配置换原色时才需要重算。
 float3 ogxAgxConfigurable(float3 rgb)
 {
     float3x3 adjustedFromSrgb = ogxAgxCustomGamutMatrix3(); // sRGB 到调整后空间的组合矩阵。
@@ -312,54 +322,3 @@ float3x3 ogxAgxCustomGamutMatrix3()
 {
     return ogxAgxMat3ToMat3(ogxAgxCustomGamutMatrix());
 }
-
-/*
-实现说明：AgX 色调映射与可配置色域。
-一、工作空间：先把显示原色转到 AgX 的宽色域，矩阵由三原色与白点算出。
-二、对数压缩：把线性亮度转到以二为底的对数，端点由最小与最大曝光决定。
-三、曲线：趾部、肩部与支点组成分段双曲曲线，参数改变对比与过渡。
-四、look：对比、饱和与色相偏移在压缩后的空间里做，避免直接改线性颜色造成色偏。
-五、色域：`ogxAgxPrimariesToMatrix` 与 `ogxAgxComputeCompressionMatrix` 用三原色构造矩阵，支持自定义色域。
-六、紧凑版：`ogxToneMapAgxCompact` 用更窄的动态范围换更少的常数运算。
-七、输出：逐通道曲线后再转回显示原色并夹紧。
-八、取舍：矩阵乘法显式展开成三列，避免 Slang 与 GLSL 的行列顺序差异。
-*/
-
-/*
-函数索引：
-一、`ogxAgxContrast`：对比曲线，输入零到一。
-二、`ogxAgx`：完整 AgX，输入线性颜色与曝光参数。
-三、`ogxAgxLook`：对比、饱和与色相偏移。
-四、`ogxToneMapAgx` 与 `ogxToneMapAgxMinimal`：完整与精简两条路径。
-五、`ogxToneMapAgxCompact`：更窄动态范围的紧凑版。
-六、矩阵工具：`ogxAgxMulVec`、`ogxAgxVecMul`、`ogxAgxMulMat` 与 `ogxAgxInverse`。
-七、色度：`ogxAgxUnproject` 把色度坐标还原成 XYZ。
-八、原色矩阵：`ogxAgxPrimariesToMatrix` 由三原色与白点构造 RGB 到 XYZ。
-九、压缩矩阵：`ogxAgxComputeCompressionMatrix` 先滑动主色再缩放。
-十、曲线：`ogxAgxEquationScale` 与 `ogxAgxEquationFullCurve` 组成分段双曲曲线。
-十一、自定义色域：`ogxAgxCustomGamutMatrix` 与 `ogxAgxCustomGamutMatrix3` 返回组合矩阵。
-十二、边界：矩阵乘法显式展开成三列，避免两个后端的行列顺序差异。
-*/
-
-/*
-参数与边界：
-一、最小与最大曝光决定对数端点，调用方要保证最小小于最大。
-二、支点、斜率、趾部与肩部幂都按参考精度保留。
-三、三原色与白点用色度坐标，不是 XYZ。
-四、矩阵求逆在行列式为零时没有保护，调用方要保证色域有效。
-五、自定义色域矩阵返回三列结构体，再转成 GLSL 的 mat3。
-六、完整版与精简版的端点不同，不能混用。
-七、紧凑版的动态范围更窄，适合低对比场景。
-八、输出夹到零到一，调用方负责伽马编码。
-九、矩阵乘法显式展开，避免两个后端的行列顺序差异。
-十、所有函数只接收显式颜色与参数，不读取引擎状态。
-*/
-
-/*
-补充说明：AgX 的端点。
-最小与最大曝光决定对数端点。
-端点改变会同时改变对比与色相。
-自定义色域的矩阵在行列式为零时没有保护。
-输出夹到零到一。
-画面验证看高光与肤色。
-*/

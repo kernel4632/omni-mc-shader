@@ -11,7 +11,7 @@ Omni 通用图形库后期曝光模块：自动曝光分块统计、曝光值与
     float ev = ogxGetExposureValue(exposureTex, screenExtent, false, 0.0, 1.0, 1.0, 1.0, 0.0, true, false, 0.0, 0.0, true); // 取自动曝光值。
 设计原因与取舍：
     分块统计、测光权重与泛光量都按参考实现的分支保留；纹理、屏幕尺寸、维度与天气全部改成显式参数。
-当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。曝光与泛光目前只被库内后期模块间接引用，没有顶层画面入口。
+当前状态：由 `shaders/effects/color/color.glsl` 引入并编译；宿主曝光统计与曝光值调用 `ogxGetExposureTiles` 与 `ogxGetExposureValue`。
 */
 #ifndef OGX_POST_EXPOSURE_INCLUDED
 #define OGX_POST_EXPOSURE_INCLUDED
@@ -81,16 +81,17 @@ float ogxGetExposureTiles(sampler2D exposureTexture, int viewWidth, int viewHeig
 
 // 曝光值：手动模式直接由 EV 算出，自动模式从曝光统计像素读取并按曲线、夜视与黑暗调整。
 // 自动曝光取值：从统计纹理中读分块亮度，按测光模式合成曝光值。
+// `disableNightVision` 与 `disableBlindness` 分开，因为宿主的两个调试开关互不影响。
 float ogxGetExposureValue(sampler2D exposureTexture, ivec2 screenExtent, bool manualExposure, float evValue,
     float mainOutputFactor, float exposureOutputFactor, float aeCurve, float nightVision, bool aeClamp,
-    bool dimensionNether, float aeOffset, float darknessFactor, bool disableBlindness)
+    bool dimensionNether, float aeOffset, float darknessFactor, bool disableNightVision, bool disableBlindness)
 {
     if (manualExposure) // 手动曝光。
     {
         return 1.5e5 * mainOutputFactor * exp2(-evValue); // 参考实现的固定比例。
     }
     float ae = ogxCurveToLinear(texelFetch(exposureTexture, ivec2(0, screenExtent.y - 1), 0).a) * (5120.0 / exposureOutputFactor); // 统计像素还原。
-    if (!disableBlindness) aeCurve = mix(aeCurve, 0.95, nightVision); // 夜视把曲线推平。
+    if (!disableNightVision) aeCurve = mix(aeCurve, 0.95, nightVision); // 夜视把曲线推平。
     if (aeClamp) aeCurve *= ogxRemapSaturate(ae, 2.0, 1.0) * 0.6 + 0.4; // 极暗时限制曲线。
     if (dimensionNether) aeCurve *= 0.83; // 下界整体压低。
     ae = pow(ae, -aeCurve); // 曲线调整。

@@ -24,7 +24,7 @@ Omni 通用图形库抗锯齿模块：YCoCg 颜色空间、历史邻域裁剪、
 // 相机模块提供深度换算与阴影投影的唯一实现。
 #include "/omni-gfx/common/camera.glsl"
 // 把线性颜色转到亮度与色差空间，亮度单独处理。
-vec3 ogxRgbToYCoCg(vec3 color)
+vec3 ogxRgbToYCoCg(vec3 color) // 当前步骤的中间量。
 {
     return vec3(color.r * 0.25 + color.g * 0.5 + color.b * 0.25,
                   color.r * 0.5 - color.b * 0.5,
@@ -322,4 +322,6 @@ vec4 ogxTaaTemporalBlend(vec2 coord, vec3 velocity, float currDepthMin,
 }
 
 
+// 时间取样的深度与相机速度属于抗锯齿效果，编译进同一份产物。
+#include "/omni-gfx/antialias/taa.glsl"
 #endif

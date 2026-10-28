@@ -15,6 +15,8 @@ G 缓冲绑定：把 Minecraft 的材质编号、G 缓冲画面与深度读成�
 // 读画面与解码法线都要用共用数学，绑定层自己保证引入顺序。
 #include "/common/math.glsl"
 #include "/omni-gfx/surface.glsl"
+// 延迟缓冲的材质编号表与掩码解码在通用库，绑定层只保留 Minecraft 侧的编号。
+#include "/omni-gfx/gbuffer.glsl"
 // 湿面粗糙度与吸水暗化用通用库的水面公式。
 #include "/omni-gfx/water.glsl"
 

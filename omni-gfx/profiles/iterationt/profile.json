@@ -2,8 +2,8 @@
   "package": "iterationT",
   "macro": "OGX_PROFILE_ITERATIONT",
   "shader": "omni-gfx/profiles/iterationt/profile.frag",
-  "sha256": "570d4a9ba1ccc6817aa1201bceb92cb54a35d65cca8c248e158ebb175ee07620",
-  "lines": 16904,
+  "sha256": "64025422596487bdde03056f6b41a836c65f094d43fa66780867f588709fd4e3",
+  "lines": 15991,
   "compiled": true,
   "compiler": "glslang.exe",
   "compilerOutput": "D:\\kernyr\\shader\\Omni\\omni-gfx\\profiles\\iterationt\\profile.frag"
