@@ -148,7 +148,7 @@ def parse_functions(path: Path) -> list[dict]:
 def library_index() -> dict[str, str]:
     """返回 小写函数名 → `模块.函数` 的索引，供同名直配使用。
 
-    模块名取 `src` 下的相对路径，文件夹会出现在键里；这样 `cloud/eclipse`
+    模块名取 `src` 下的相对路径，文件夹会出现在键里；这样 `cloud/layers`
     这类变体文件不会和顶层模块重名。
     """
     index = {}  # 名字到下标的映射。

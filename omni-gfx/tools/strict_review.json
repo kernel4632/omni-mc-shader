@@ -585,19 +585,19 @@
       "target": "shadow/eclipse.ogxEclipseCustomRotation"
     },
     "hash2": {
-      "target": "cloud/eclipse/shape.ogxEclipseHash2"
+      "target": "cloud/layers/shape.ogxLayersHash2"
     },
     "normalize_hash": {
-      "target": "cloud/eclipse/shape.ogxEclipseNormalizeHash"
+      "target": "cloud/layers/shape.ogxLayersNormalizeHash"
     },
     "perlin_gradient": {
-      "target": "cloud/eclipse/shape.ogxEclipsePerlinGradient"
+      "target": "cloud/layers/shape.ogxLayersPerlinGradient"
     },
     "curl2D": {
-      "target": "cloud/eclipse/shape.ogxEclipseCurl2D"
+      "target": "cloud/layers/shape.ogxLayersCurl2D"
     },
     "getPlanetShadow": {
-      "target": "cloud/eclipse/shadow.ogxEclipseGetPlanetShadow"
+      "target": "cloud/layers/shadow.ogxLayersGetPlanetShadow"
     },
     "spotShape": {
       "target": "spotShape"
@@ -1778,10 +1778,10 @@
       "target": "voxel/voxel.ogxGetVoxelEmission"
     },
     "getRayOrigin": {
-      "target": "cloud/eclipse/shadow.ogxEclipseGetRayOrigin"
+      "target": "cloud/layers/shadow.ogxLayersGetRayOrigin"
     },
     "getCloudLighting": {
-      "target": "cloud/eclipse/lighting.ogxEclipseGetCloudLighting"
+      "target": "cloud/layers/lighting.ogxLayersGetCloudLighting"
     },
     "ViewPos_From_ScreenPos_DH": {
       "target": "camera.ogxViewPosFromScreenPosDh",
@@ -1930,7 +1930,7 @@
       }
     },
     "getCloudShape": {
-      "target": "cloud/eclipse/layers.ogxEclipseCloudShapeLayer",
+      "target": "cloud/layers/shape.ogxLayersCloudShapeLayer",
       "resources": {
         "noiseTexture": "texture",
         "altostratusCoverage": "value",
@@ -1942,7 +1942,7 @@
       }
     },
     "getCumulonimbusShape": {
-      "target": "cloud/eclipse/layers.ogxEclipseCumulonimbusShapeLayer",
+      "target": "cloud/layers/shape.ogxLayersCumulonimbusShapeLayer",
       "resources": {
         "noiseTexture": "texture",
         "cloudMovement": "value",
@@ -1952,7 +1952,7 @@
       }
     },
     "getLightningPosition": {
-      "target": "cloud/eclipse/layers.ogxEclipseLightningPositionBolt",
+      "target": "cloud/layers/shadow.ogxLayersLightningPositionBolt",
       "resources": {
         "noiseTexture": "texture",
         "cloudMovement": "value",
@@ -1963,10 +1963,10 @@
       }
     },
     "phaseCloud": {
-      "target": "cloud/eclipse/layers.ogxEclipsePhaseCloudHenyey"
+      "target": "cloud/layers/lighting.ogxLayersPhaseCloudHenyey"
     },
     "GetCloudShadow": {
-      "target": "cloud/eclipse/layers.ogxEclipseCloudShadowLayer",
+      "target": "cloud/layers/shadow.ogxLayersCloudShadowLayer",
       "resources": {
         "noiseTexture": "texture",
         "lightningBoltPosition": "value",
@@ -1983,7 +1983,7 @@
       }
     },
     "getCloudScattering": {
-      "target": "cloud/eclipse/layers.ogxEclipseCloudScatteringSamples",
+      "target": "cloud/layers/lighting.ogxLayersCloudScatteringSamples",
       "resources": {
         "noiseTexture": "texture",
         "minHeight": "value",
@@ -1999,7 +1999,7 @@
       }
     },
     "raymarchCloudSimple": {
-      "target": "cloud/eclipse/exact.ogxEclipseCloudAbsorbanceSimple",
+      "target": "cloud/layers/march.ogxLayersCloudAbsorbanceSimple",
       "resources": {
         "noiseTexture": "texture",
         "cloudMovement": "value",
@@ -2016,7 +2016,7 @@
       }
     },
     "GetVolumetricCloudsSimple": {
-      "target": "cloud/eclipse/exact.ogxEclipseCloudTransmittanceSimple",
+      "target": "cloud/layers/march.ogxLayersCloudTransmittanceSimple",
       "resources": {
         "noiseTexture": "texture",
         "cloudMovement": "value",
@@ -2804,7 +2804,7 @@
       "allowExtraConstants": true
     },
     "raymarchCloud": {
-      "target": "cloud/eclipse/exact.ogxEclipseRaymarchCloudExact",
+      "target": "cloud/layers/march.ogxLayersRaymarchCloudExact",
       "refDefines": {
         "OVERWORLD_SHADER": 1,
         "END_SHADER": 0,
@@ -2890,7 +2890,7 @@
       "allowExtraConstants": true
     },
     "GetVolumetricClouds": {
-      "target": "cloud/eclipse/exact.ogxEclipseGetVolumetricCloudsExact",
+      "target": "cloud/layers/march.ogxLayersGetVolumetricCloudsExact",
       "refDefines": {
         "OVERWORLD_SHADER": 1,
         "END_SHADER": 0,

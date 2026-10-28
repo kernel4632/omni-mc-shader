@@ -432,7 +432,7 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 
 ### 拆分
 
-- `cloud/eclipse.slang`：shape、shadow、lighting、march、layers、exact 六个子文件。
+- `cloud/eclipse.slang`：shape、shadow、lighting、march、layers、exact 六个子文件（下一版已改为 `cloud/layers.slang` 的四个子文件）。
 - `math.slang`：basics、shading、pattern、filter 四个子文件。
 - `atmosphere/atmosphere.slang`：scattering、sun、mapping、planet 四个子文件。
 - `post/post.slang`：bloom、dof、effects 三个子文件。
@@ -454,3 +454,33 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 ### 未验证
 
 没有启动 Minecraft；游戏内画面、菜单、选项切换、性能与其他显卡仍未验证。SPIR-V 只是模块编译探针，不是可运行的 Vulkan 管线。README 已写明许可证尚未确定，发布前必须补齐。
+
+## 二十一、层状体积云改名与功能完整性核对（2026-10-28）
+
+本轮只做重命名与结构归位：`cloud/eclipse` 改为 `cloud/layers`，六个子文件按算法合并成 `shape`、`shadow`、`lighting`、`march` 四个；函数与类型统一换成 `ogxLayers*` / `OgxLayers*`，不再带来源名。生成物仍是一模块一份，算法、常数与采样顺序不变。
+
+### 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `python omni-gfx/build.py generate` | 48 个模块、49 个文件、GLSL 15531 行 |
+| `python omni-gfx/build.py spirv` | 48/48 个探针通过，编译器 2026.20 |
+| `python omni-gfx/build.py check` | 生成文件与源一致；测试世界 2 个、光影验证场景 2 个 GLSL 审计通过 |
+| `python omni-gfx/build.py strict-parity` | 505 个参考函数：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 |
+| `python omni-gfx/build.py profiles` | iterationt 15605 行、eclipse 15604 行，两份 profile 编译通过 |
+| `python build.py audit` | 524 个代码文件通过中文说明与实现审计 |
+| `python build.py verify` | 160 个测试、9 组编译探针与打包通过，约 6.3 秒 |
+| `python build.py compile` | 2 种配置、280 组唯一程序、0 错误 |
+| `python omni-gfx/build.py count` | 手写核心 18891 行，上限 18900 |
+
+### 函数体与完整性
+
+- 重命名前后各解析 779 个顶层函数；把旧名字映射到新名字、去掉注释与空白后比较函数体，缺失 0、新增 0、改动 0。
+- 48 个模块全部有生成 GLSL、SPIR-V 探针与制品；生成清单与 SPIR-V 清单的模块顺序都和生成器一致。
+- 逐模块比较“模块源加子文件”与生成 GLSL 的顶层函数，源 779 个、生成 779 个，没有遗漏或额外函数；生成库的 `#include` 都能落到真实文件。
+- 旧的 `shaders/omni-gfx/cloud/eclipse.glsl` 与 `generated/spirv/cloud/eclipse.spv` 已删除，生成目录没有过期模块。
+- 严格对照的 474 条 exact、5 条 reference_broken、26 条 mc_glue 全部保留承接，missing 为 0；只改目标路径与函数名，不改变判定口径。
+
+### 数量与未验证
+
+选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变。没有启动 Minecraft；游戏内画面、菜单切换、性能与其他显卡仍未验证。`verify` 的测试并发从 8 降到 4，是为了减少测试进程和编译探针抢 CPU，测试数量与检查范围没有减少。

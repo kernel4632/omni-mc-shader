@@ -394,7 +394,7 @@ def function_index(paths: list[Path], defines: dict[str, str] | None = None,
     """建立 `模块.函数名` 到完整签名的索引；同名重载按出现顺序都保留。
 
     `root` 给出时必须位于所有路径的上级；模块名取相对路径，因此
-    `src/cloud/eclipse.slang` 的键是 `cloud/eclipse.ogx...`，不会把变体文件
+    `src/cloud/layers.slang` 的键是 `cloud/layers.ogx...`，不会把变体文件
     误当成顶层模块。省略 `root` 时退回文件名词干。
     """
     index = {}

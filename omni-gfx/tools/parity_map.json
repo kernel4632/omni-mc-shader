@@ -177,7 +177,7 @@
     "normalize_safe": "math/basics.ogxNormalize",
     "perlin_gradient": "noise.ogxPerlinGradient2",
     "phaseRayleigh": "math/filter.ogxRayleighPhaseElek",
-    "phaseCloud": "cloud/cloud.ogxCloudPhaseEclipse",
+    "phaseCloud": "cloud/cloud.ogxCloudPhaseLayered",
     "phaseEND": "fog/fog/end.ogxEndFogPhaseEclipse",
     "endFogPhase": "fog/fog/end.ogxEndVortexLightPhase",
     "physics_waveHeight": "water/ocean.ogxOceanWaveHeight",

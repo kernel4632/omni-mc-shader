@@ -7,8 +7,8 @@
 `omni-gfx/src/**/*.slang` 是唯一手写算法源，按实际效果分文件夹。构建分两条路：
 
 ```text
-src/cloud/eclipse.slang ─┬─ 生成器转换 ─→ shaders/omni-gfx/cloud/eclipse.glsl  （唯一 GLSL 产物）
-                         └─ slangc 探针 ─→ generated/spirv/cloud/eclipse.spv    （编译验证产物）
+src/cloud/layers.slang ─┬─ 生成器转换 ─→ shaders/omni-gfx/cloud/layers.glsl  （唯一 GLSL 产物）
+                        └─ slangc 探针 ─→ generated/spirv/cloud/layers.spv    （编译验证产物）
 ```
 
 GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang 自带的 GLSL 后端。原因是实测后端输出 `#version 450`、把函数改名为 `toneMap_0` 并附带自己的 `main()`，无法作为库被光影 `#include`。降级表只覆盖本项目实际使用的差异：
@@ -49,7 +49,7 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `atmosphere/sky.slang` | Eclipse 日月圆盘、球面映射、双三次采样、天空盒查表、大气积分与极光 | `math`、`atmosphere` |
 | `cloud/cloud.slang` | 球壳求交、程序化云密度、朝阳光照、沿视线步进、云影与平面云 | `math`、`noise` |
 | `cloud/volume.slang` | 体积云形状、光照、步进、闪电与云影贴图 | `cloud`、`color`、`math` |
-| `cloud/eclipse.slang` | Eclipse 五层云形状、云影、朝光散射与主步进循环；实现在 `cloud/eclipse/` 的六个子文件 | `cloud`、`atmosphere/sky`、`math` |
+| `cloud/layers.slang` | 层状五层云形状、云影、朝光散射与主步进循环；实现在 `cloud/layers/` 的四个子文件 | `cloud`、`atmosphere/sky`、`math` |
 | `cloud/planar.slang` | iterationT 平面云密度与光照深度 | `cloud`、`math`、`atmosphere/model` |
 | `fog/fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分、雾相位与末地雾阴影；实现在 `fog/fog/` 的两个子文件 | `math`、`noise` |
 | `fog/volume.slang` | 体积雾密度、光照吸收、步进、暴风、水下光柱与下界烟 | `fog`、`weather`、`shadow`、`water`、`color`、`sampling` |

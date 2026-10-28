@@ -880,7 +880,7 @@
 | `getPlanetShadow` | 404 | `planet.ogxPlanetEnd` | 已迁入 | 承接算法：末地行星 |
 | `GetCloudShadow` | 412 | — | MC 专用 | 函数体直接读取宿主符号：lightningBoltPosition、sunElevation；云层高度来自编译期配置 CloudLayer0_height 等 |
 | `getRayOrigin` | 464 | — | MC 专用 | 体积云光线起点，依赖相机位置与视场内插 |
-| `phaseCloud` | 491 | `cloud/cloud.ogxCloudPhaseEclipse` | 已迁入 | 承接算法：云形状、光照与云影 |
+| `phaseCloud` | 491 | `cloud/cloud.ogxCloudPhaseLayered` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `getCloudScattering` | 512 | `cloud/cloud.ogxCloudMarch` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `getCloudLighting` | 578 | `cloud/cloud.ogxCloudLight` | 已迁入 | 承接算法：云形状、光照与云影 |
 | `raymarchCloud` | 628 | — | MC 专用 | 函数体直接读取宿主符号：`shadowtex`、`shadowcolor`、`cameraPosition`、`shadowModelView`、`lightningBoltPosition`、`sunElevation` |

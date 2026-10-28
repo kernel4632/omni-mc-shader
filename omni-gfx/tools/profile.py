@@ -65,7 +65,7 @@ MODULES = (
     "math", "color", "sampling", "sampling/anisotropic", "noise", "camera", "surface", "water", "upscale",
     "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
     "atmosphere/atmosphere", "atmosphere/model", "atmosphere/sky",
-    "cloud/cloud", "cloud/volume", "cloud/eclipse", "cloud/planar",
+    "cloud/cloud", "cloud/volume", "cloud/layers", "cloud/planar",
     "fog/fog", "fog/volume", "shadow/shadow", "shadow/eclipse",
     "voxel/voxel", "voxel/trace",
     "gi/gi", "gi/diffuse", "gi/indirect", "gi/ambientocclusion",

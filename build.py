@@ -1147,7 +1147,7 @@ def main() -> None:
     generate()  # 构建与同步都先生成来源对应的真实入口与菜单。
     if args.command == "verify":  # 自动检查同时运行工具测试和光影检查，共享同一个十秒总预算。
         modules = sorted(path.stem for path in (ROOT / "tests").glob("test_*.py"))  # 每个测试文件独立进程，慢模块不再串行等待。
-        with ThreadPoolExecutor(max_workers=min(8, len(modules))) as pool:
+        with ThreadPoolExecutor(max_workers=min(4, len(modules))) as pool:
             tests = [pool.submit(subprocess.run, [sys.executable, "-m", "unittest", "discover", "-s", "tests", "-p", f"{module}.py"], cwd=ROOT, check=True) for module in modules]  # 测试写独立临时目录，可与只读检查并行。
             check()  # 任何一边失败都会拒绝生成交付包。
             for future in tests:  # 必须等全部真实测试结果，不能只启动就称通过。

@@ -416,15 +416,15 @@ float4 ogxCloudShadowBlur(Sampler2D shadowTex, int2 texel, int2 axis, int2 borde
     return blur; // 返回模糊后的云影贴图。
 }
 
-// Eclipse 的云相函数：和 Henyey-Greenstein 不是同一公式，分母固定除以 3.14。
-// Eclipse 云相位兼容层：把参考的双瓣散射写成同一个入口，供云光照复用。
-float ogxCloudPhaseEclipse(float x, float g)
+// 层状云的云相函数：和 Henyey-Greenstein 不是同一公式，分母固定除以 3.14。
+// 层状云相位兼容层：把参考的双瓣散射写成同一个入口，供云光照复用。
+float ogxCloudPhaseLayered(float x, float g)
 {
     float gg = g * g; // g 的平方。
     return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考实现直接写 3.14。
 }
 
-// Eclipse 的云密度三线性取样：不做平滑，直接用小数部分在两层噪声之间插值。
+// 层状云的云密度三线性取样：不做平滑，直接用小数部分在两层噪声之间插值。
 // 与 `ogxStormNoise` 的区别是后者先把小数部分做了 smoothstep，两者不能互换。
 float ogxCloudDensityAtPos(float3 position, Sampler2D noiseTexture, float noiseResolution)
 {

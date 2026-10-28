@@ -455,6 +455,8 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 
 **2026-10-28 按效果重排模块（0.16.0-dev.9）**：`itx_extra`、`eclipse_extra`、`eclipse_specular`、`cloud_eclipse` 等来源名不再作为顶层模块。`itx_extra` 的对焦与光斑进 `lens/lens`，曝光与泛光进 `post/exposure`，FXAA 进 `antialias/fxaa`，各向异性过滤进 `sampling/anisotropic`，雨纹进 `weather/rain`，传送门进 `world/portal`，陆地大气进 `atmosphere/model`；`eclipse_extra` 的 GTAO 进 `gi/ambientocclusion`，阴影修补进 `shadow/eclipse`，雾相位进 `fog/fog`，球面映射与抖动进 `sampling`，闪电进 `weather/lightning`，体素求交进 `voxel/trace`，GGX 与菲涅耳进 `reflection/specular`；`eclipse_specular` 拆成 `reflection/wsr`、`reflection/photonics`、`reflection/specular`、`shadow/eclipse` 与 `voxel/trace`；`cloud_eclipse` 移到 `cloud/eclipse`。函数实现、常数、采样顺序未改，严格统计仍为 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0；选项 519、入口 269、唯一程序 280、测试 160 不变。生成 GLSL 与源文件夹一一对应，旧平铺产物已删除。
 
+**2026-10-28 层状体积云改名（0.16.0-dev.11）**：`cloud/eclipse` 改为 `cloud/layers`，六个子文件按算法合并成 shape、shadow、lighting、march 四个；`ogxEclipse*` 与 `OgxEclipse*` 统一换成 `ogxLayers*` 与 `OgxLayers*`，两个 `ogxItxGetCloud*` 入口换成 `ogxLayersGetCloud*Reference`。算法、常数与采样顺序逐项保留，机器对比 779 个顶层函数体，缺失 0、新增 0、改动 0；严格统计仍为 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。48 个模块全部生成 GLSL 与 SPIR-V，生成库没有遗漏或额外函数；选项 519、入口 269、唯一程序 280、测试 160 不变。
+
 ## 十三、给子任务的工作方式
 
 每个子任务开工前先读：HOP 技能（`C:\Users\17137\.config\opencode\skills\hop\SKILL.md`）、`AGENTS.md`、本文件全文。

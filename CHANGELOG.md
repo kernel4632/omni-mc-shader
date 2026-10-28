@@ -1,4 +1,15 @@
 # 更新记录
+## 0.16.0-dev.11
+
+结构重构第五批：层状体积云改用效果名，模块、文件、函数与类型不再带来源名。
+
+- 重命名：`cloud/eclipse` 改为 `cloud/layers`，入口文件改为 `cloud/layers.slang`；六个子文件按算法合并为 `shape`、`shadow`、`lighting`、`march` 四个，生成的 GLSL 与 SPIR-V 仍是一模块一份。所有 `ogxEclipse*` 改为 `ogxLayers*`，结构与类型改为 `OgxLayers*`，两个 `ogxItxGetCloud*` 入口改为 `ogxLayersGetCloud*Reference`。
+- 不改算法：机器对比 `HEAD` 的 779 个顶层函数体，缺失 0、新增 0、改动 0；函数常数、分支与采样顺序逐项保留。`cloud/cloud.slang` 里只服务层状云的相函数同步改为 `ogxCloudPhaseLayered`。
+- 同步更新：生成器与 profile 的模块表、SPIR-V 探针、严格对照目标、人工对照表、生成 GLSL、两个 profile、探针文件与架构、验证文档。旧的 `shaders/omni-gfx/cloud/eclipse.glsl` 与旧 SPIR-V 已删除。
+- 功能完整性：48 个模块全部进入生成 GLSL 与 SPIR-V；779 个顶层函数全部出现在生成库，生成库没有额外函数；严格对照 exact 474、reference_broken 5、mc_glue 26、missing 0。
+- 验证工具：`verify` 的测试并发从 8 降到 4，减少测试进程与编译探针抢 CPU，十秒预算内稳定通过；测试数量与覆盖不变。
+- 数量：选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；手写核心 18891 行，低于 18900 上限。
+- 验证：`generate` 48 个模块、49 个文件；`spirv` 48/48；`check`、`strict-parity`、`profiles`、`audit`、`verify`、`compile` 通过。未启动 Minecraft，游戏内画面、菜单、性能与其他显卡仍未验证。
 ## 0.16.0-dev.10
 
 Slang 探针全通过与大文件拆分：48 个模块全部编译成 SPIR-V，八个过长主体拆进同名文件夹，生成物、探针与选项数量不变。

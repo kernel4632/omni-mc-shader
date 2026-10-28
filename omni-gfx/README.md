@@ -11,8 +11,8 @@ Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Mine
 | 路径 | 用途 |
 | --- | --- |
 | `src/` | Slang 源文件，按效果分文件夹，唯一手写算法来源 |
-| `src/<效果>/` | 复杂效果的主体与变体模块，例如 `cloud/eclipse.slang`、`reflection/wsr.slang` |
-| `src/<模块>/` | 同一模块的算法子文件，例如 `cloud/eclipse/shape.slang`；生成时内联进主模块，不单独生成 GLSL |
+| `src/<效果>/` | 复杂效果的主体与变体模块，例如 `cloud/layers.slang`、`reflection/wsr.slang` |
+| `src/<模块>/` | 同一模块的算法子文件，例如 `cloud/layers/shape.slang`；生成时内联进主模块，不单独生成 GLSL |
 | `shaders/omni-gfx/` | 自动生成的 GLSL，目录与模块一致，唯一产物位置 |
 | `generated/spirv/` | 本机生成的 SPIR-V 与清单，二进制不提交 |
 | `examples/world/` | 不启动 Minecraft 的程序化测试世界 |
