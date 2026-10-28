@@ -12,7 +12,7 @@
 """
 from __future__ import annotations
 
-from array import array  # 6MB 浮点缓冲用紧凑数组，上传时不必再转 Python 列表。
+from array import array  # 六兆字节级浮点缓冲用紧凑数组，上传时不必再转 Python 列表。
 import math  # ldexp 还原 RGBE 的指数。
 from pathlib import Path  # 资源路径。
 
@@ -77,7 +77,7 @@ def _decode_scanline(data: bytes, offset: int, width: int) -> tuple[list[int], i
                     pixels.extend((channels[0][index], channels[1][index], channels[2][index], channels[3][index]))
                 return pixels, offset
     pixels = []
-    for _ in range(width):  # 旧式：一行就是 width 个四字节像素。
+    for _ in range(width):  # 旧式：一行就是宽度个四字节像素。
         pixels.extend(data[offset:offset + 4])
         offset += 4
     return pixels, offset

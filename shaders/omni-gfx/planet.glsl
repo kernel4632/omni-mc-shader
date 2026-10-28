@@ -18,7 +18,8 @@ Omni 通用图形库行星模块：用解析射线画出整颗行星、光环与
 #define OGX_PLANET_INCLUDED
 
 // 数学提供求交、圆盘剖面与色温，大气提供米氏相位与行星双向反射。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
+// 大气提供散射、密度剖面与天球映射。
 #include "/omni-gfx/atmosphere/atmosphere.glsl"
 // 画一整颗行星：先与地表球求交，再叠光环与大气，最后把环带的遮挡乘回天空。
 // `eye` 是相机在行星坐标系里的位置，`rayDir` 是视线，`lightDir` 是光方向。
@@ -121,8 +122,7 @@ void ogxPlanetEnd(inout vec3 color, vec3 eye, vec3 rayDir, vec3 lightDir,
 // iterationT 末地天空的 p 曲线：四次方乘一次线性衰减，末端回到零。
 float ogxEndSkyPCurve(float x)
 {
-    float x2 = x * x; // 平方。
-    return 12.207 * x2 * x2 * (1.0 - x); // 四次方乘剩余量。
+    return ogxRadialCurve(x); // 环形径向轮廓只在数学模块维护一份。
 }
 
 #endif

@@ -21,7 +21,7 @@ Omni 通用图形库光传播体积模块：三维彩色间接光的取样、编
 #define OGX_LPV_INCLUDED
 
 // 光色与解码都要用颜色换算，直接引入颜色模块，它已经带上数学模块。
-#include "/omni-gfx/color.glsl"
+#include "/omni-gfx/common/color.glsl"
 // 方块光的亮度系数：存下的颜色取值零到十五，除以十五得到零到一。
 const float OGX_LPV_BLOCK_BRIGHTNESS = 0.066666;
 

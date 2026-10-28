@@ -1,6 +1,8 @@
 /* 体积雾的暴风密度：噪声雾团与低空层相加，雪暴才随高度变淡；由 `fog/volume.slang` 内联引入。
 可复制示例：`float density = ogxFogStormDensity(worldPos, media, noiseTexture);`
-设计取舍：纵向压扁后乘一百再滚动，噪声取反让高噪声处雾更浓。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 暴风浓雾：噪声雾团与低空层相加，雪暴才随高度变淡。
 float ogxFogStormDensity(float3 worldPos, OgxFogMedia media, Sampler2D noiseTexture)
@@ -12,3 +14,6 @@ float ogxFogStormDensity(float3 worldPos, OgxFogMedia media, Sampler2D noiseText
     float denseCloud = noise * noise * lerp(1.0, heightFade, media.snow_storm); // 噪声雾团。
     return 1.0 + denseCloud + media.daily_fog; // 低空层与噪声雾团相加。
 }
+
+// 闪电光柱照明，具体实现在子文件。
+// --- light ---

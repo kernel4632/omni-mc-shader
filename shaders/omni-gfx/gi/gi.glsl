@@ -13,19 +13,18 @@ Omni 通用图形库全局光模块：地平线遮蔽、反射阴影图反弹、
     `vec3 filtered = ogxGiSpatialFilter(coord, dist, normal, viewDir, view, history, 0.5);` 七乘七空间滤波。
 设计原因与取舍：
     纹理、矩阵、相机位置与选项全部由调用方传入，库不读取引擎状态；`OgxGiView` 把同一帧的
-    相机与屏幕参数打包，避免每个函数重复十几项。算法与旧 `shaders/gfx/gi.glsl` 逐项一致，
+    相机与屏幕参数打包，避免每个函数重复十几项。算法与迁移前的 GLSL 原型逐项一致，
     迁移只改名字和语法，默认画面因此不变；地平线遮蔽的采样仍由调用方负责，这里只做纯数学。
 */
 #ifndef OGX_GI_INCLUDED
 #define OGX_GI_INCLUDED
 
 // 饱和、快速反余弦、曲线编码与噪声来自数学模块；阴影投影来自阴影模块。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 #include "/omni-gfx/shadow/shadow.glsl"
-#include "/omni-gfx/sampling.glsl"
-// 螺旋采样的黄金角正余弦：每步旋转这个角度，样本沿螺旋均匀铺开。
-// 黄金角旋转由数学模块的 OGX_GOLDEN_ANGLE 提供，和参考宏同值。
-
+// 采样提供白噪声、蓝噪声与低差异序列。
+#include "/omni-gfx/common/sampling.glsl"
 // 一帧全局光需要的相机、投影与屏幕参数；字段名保持普通图形术语，不绑定任何宿主。
 struct OgxGiView
 {
@@ -44,10 +43,15 @@ struct OgxGiView
     vec2 texel_size; // 一个像素的屏幕坐标大小。
 };
 
-// 环境遮蔽多弹射：底色越亮补光越多，避免墙角完全变黑。
-
 // 地平线遮蔽、反射阴影图与 GTAO，具体实现在子文件。
 // 子文件：gi/gi/ao.slang。
+/*
+全局光子文件：地平线遮蔽的参考实现、多弹射补偿、双边升采样与反射阴影图。
+调用位置：由 `gi/gi.slang` 内联，全局光时间滤波与严格 profile 使用这里的入口。
+可复制示例：`float ao = ogxGroundTruthAo(viewPos, viewDir, normal, coord, aspect, depthTex, farTex, proj, invProj, farInvProj, params, noise);`
+设计原因与取舍：这是参考画质的多次切片遮蔽，供全局光内部使用；独立画面遮蔽的
+低成本版本在 `gi/ambientocclusion.slang`，两者按用途分工，不互相包含，避免把重算法带进轻量阶段。
+*/
 // 环境光遮蔽的多重反弹近似：用反照率补偿被遮住的间接光。
 vec3 ogxAoMultiBounce(float ao, vec3 albedo)
 {
@@ -89,7 +93,7 @@ vec3 ogxGiViewPos(vec2 coord, float depth, mat4 projection_inverse)
 }
 
 // 远景屏幕坐标与深度还原视空间位置；没有远景时调用方不会走到这里。
-vec3 ogxGiViewPosDh(vec2 coord, float depth, mat4 dh_projection_inverse)
+vec3 ogxGiViewPosDistant(vec2 coord, float depth, mat4 dh_projection_inverse)
 {
     vec3 ndc = vec3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
     vec4 pos = ogxMatrixMul(dh_projection_inverse, vec4(ndc, 1.0)); // 远景逆投影整矩阵乘法。
@@ -166,7 +170,7 @@ float ogxGroundTruthAo(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord, floa
                 if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
                 {
                     sampleDepth = textureLod(dhDepthTexture, sampleCoord, 0.0).x; // 远景深度。
-                    sampleVector = ogxGiViewPosDh(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
+                    sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
                 }
                 else // 近景样本正常还原。
                 {
@@ -194,7 +198,7 @@ float ogxGroundTruthAo(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord, floa
                 if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
                 {
                     sampleDepth = textureLod(dhDepthTexture, sampleCoord, 0.0).x; // 远景深度。
-                    sampleVector = ogxGiViewPosDh(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
+                    sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
                 }
                 else // 近景样本正常还原。
                 {
@@ -389,6 +393,12 @@ float ogxGtaoSlices(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord,
 
 // 相机速度与时间滤波，具体实现在子文件。
 // 子文件：gi/gi/temporal.slang。
+/*
+全局光子文件：相机速度、历史样本重投影与时间滤波。
+调用位置：由 `gi/gi.slang` 内联，全局光的时间累积与手部排除使用这里的入口。
+可复制示例：`vec2 v = ogxGiCameraVelocity(coord, depth, isDistant, materialIds, view, false, false, 0.1, 1.0);`
+设计原因与取舍：远景与近景、手与世界分别处理；历史权重与参考常数一致，不读取宿主状态。
+*/
 // 相机速度：区分远景与近景、手与世界，算出当前像素相对上一帧的屏幕位移。
 vec2 ogxGiCameraVelocity(vec2 coord, float depth, bool isDh, float materialIds, OgxGiView view,
     bool disableHand, bool disablePlayer, float handDepth, float playerMaterial)
@@ -489,7 +499,7 @@ vec4 ogxGiTemporalFilter(vec2 coord, ivec2 texelCoord, OgxGiView view,
             vec3 currViewPos = ogxGiViewPos(local, currDepth, view.projection_inverse); // 还原视空间位置。
             if (isDh) // 远景用远景逆投影。
             {
-                currViewPos = ogxGiViewPosDh(local, currDepth, view.dh_projection_inverse);
+                currViewPos = ogxGiViewPosDistant(local, currDepth, view.dh_projection_inverse);
             }
             vec3 gi = vec3(0.0); // 本帧反弹。
             bool applyRsm = true; // 默认所有像素都反弹。
@@ -568,6 +578,12 @@ vec4 ogxGiTemporalFilter(vec2 coord, ivec2 texelCoord, OgxGiView view,
 
 // 空间滤波与降噪，具体实现在子文件。
 // 子文件：gi/gi/spatial.slang。
+/*
+全局光子文件：七乘七空间滤波与参考签名版降噪。
+调用位置：由 `gi/gi.slang` 内联，全局光在时间累积之后调用空间滤波。
+可复制示例：`vec3 c = ogxGiSpatialFilter(coord, dist, normal, viewDir, view, history, 0.5);`
+设计原因与取舍：邻域偏移显式列出，权重按法线与深度筛选；边界夹紧与参考实现一致。
+*/
 // 七乘七邻域偏移按行列下标现算：x 从负三到三，y 同样，按行优先排列。
 // 全局光空间滤波：在七乘七邻域里按法线与深度加权平均，抑制半分辨率带来的噪点。
 vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGiView view, sampler2D historyTexture, float renderScale)

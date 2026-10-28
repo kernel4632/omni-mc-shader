@@ -7,8 +7,8 @@
 #ifndef OMNI_EFFECT_COLOR_COLOR_INCLUDED
 #define OMNI_EFFECT_COLOR_COLOR_INCLUDED
 // @effect {"label":{"zh_cn":"颜色与曝光","en_us":"Color & exposure"}}
-// @option {"label": {"zh_cn": "强光压缩方式", "en_us": "Tonemap"}, "description": {"zh_cn": "把高动态范围压到屏幕范围所用的曲线。这一项在项目里用序号表示，零为 AgX，一为 ACES，二为无压缩。", "en_us": "Curve that maps high dynamic range into display range. Stored as an index: zero AgX, one ACES, two none."}, "values": {"0": {"zh_cn": "AgX", "en_us": "AgX"}, "1": {"zh_cn": "ACES", "en_us": "ACES"}, "2": {"zh_cn": "无", "en_us": "None"}}}
-#define OMNI_TONEMAP_OPERATOR 0 // [0 1 2]
+// @option {"label": {"zh_cn": "强光压缩方式", "en_us": "Tonemap"}, "description": {"zh_cn": "把高动态范围压到屏幕范围所用的曲线。这一项在项目里用序号表示，零为 AgX，一为 ACES，二为无压缩，三为可配置 AgX。", "en_us": "Curve that maps high dynamic range into display range. Stored as an index: zero AgX, one ACES, two none, three configurable AgX."}, "values": {"0": {"zh_cn": "AgX", "en_us": "AgX"}, "1": {"zh_cn": "ACES", "en_us": "ACES"}, "2": {"zh_cn": "无", "en_us": "None"}, "3": {"zh_cn": "可配置 AgX", "en_us": "Configurable AgX"}}}
+#define OMNI_TONEMAP_OPERATOR 0 // [0 1 2 3]
 // @option {"label": {"zh_cn": "AgX 动态范围", "en_us": "AgX Dynamic Range"}, "slider": true, "description": {"zh_cn": "AgX 曲线承认的曝光范围，越大高光与暗部保留越多。", "en_us": "Exposure range the AgX curve accepts; larger keeps more highlight and shadow."}}
 #define OMNI_AGX_EV 13.0 // [8.0 8.5 9.0 9.5 10.0 10.5 11.0 11.5 12.0 12.5 13.0 13.5 14.0 14.5 15.0 15.5 16.0 16.5 17.0 17.5 18.0 24.0 32.0]
 // @option {"label": {"zh_cn": "阿布尼效应校正", "en_us": "Abney Effect Correction"}, "description": {"zh_cn": "抵消加亮时色相偏移，亮部颜色更接近真实。", "en_us": "Counteracts the hue shift when lightening, keeping highlights more natural."}}
@@ -99,7 +99,7 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 // 强光压缩算法放在通用库里，本文件只保留选项、曝光统计与调用。
-#include "/omni-gfx/color.glsl"
+#include "/omni-gfx/common/color.glsl"
 // 自动曝光的分块统计也在通用后期库，本文件只填参数。
 #include "/omni-gfx/post/post.glsl"
 // 全屏调试开关属于共享画面状态，调色、泛光与原版雾都从这里取同一份定义。

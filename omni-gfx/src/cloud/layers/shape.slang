@@ -1,6 +1,8 @@
 /* 层状体积云的形状：哈希、旋度噪声、逐层密度、积雨云与降雨加成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudShape(settings, 1, 1, position, minHeight, maxHeight, noise);`
-设计取舍：每层的高度、厚度、比例与覆盖来自结构体，函数按层号分支，采样顺序与参考一致。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 二维哈希：把格坐标打散成两个零到一的随机数，供云形状使用。
 float2 ogxLayersHash2(float2 p)

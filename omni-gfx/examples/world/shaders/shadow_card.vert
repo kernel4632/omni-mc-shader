@@ -15,8 +15,8 @@ out vec2 vUv; // 卡片纹理坐标。
 
 void main()
 {
-    vec3 position = aPosition;
-    float phase = aPosition.x * 0.62 + aPosition.z * 0.41;
+    vec3 position = aPosition; // 从世界坐标开始做风摆。
+    float phase = aPosition.x * 0.62 + aPosition.z * 0.41; // 位置决定相位，邻近叶片一起摆。
     float gust = 0.65 + 0.35 * sin(uTime * 0.37 + aPosition.x * 0.05);
     position.x += sin(uTime * 1.55 + phase) * 0.10 * aSway * uWind * gust;
     position.z += cos(uTime * 1.23 + phase * 1.31) * 0.07 * aSway * uWind * gust;

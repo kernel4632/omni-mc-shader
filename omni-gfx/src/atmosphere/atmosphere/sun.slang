@@ -1,3 +1,9 @@
+/*
+大气子文件：太阳与月亮圆盘、球壳距离、指数密度、星场与卫星轨道。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，天空与末地星空共用这里的圆盘和星点。
+可复制示例：`float disc = ogxSunDisc(viewDir, sunDir, 5e-5, 4e4);`
+设计原因与取舍：圆盘只返回遮罩或颜色，曝光与泛光由调用方处理；常数照参考保留。
+*/
 // 太阳圆盘：视线越接近太阳方向越亮，边缘用平滑曲线收口。
 float ogxSunDisc(float3 viewDirection, float3 sunDirection, float size, float hardness)
 {
@@ -19,7 +25,7 @@ float3 ogxSunDiscFixed(float3 worldDir, float3 sunDir)
 }
 
 // 球面几何的另一种写法：只给半径与高度角余弦，省掉每次重建起点向量。
-// 与旧 `shaders/gfx/atmosphere.glsl` 的算式逐项一致，供预计算查表的坐标映射使用。
+// 与迁移前 GLSL 原型的算式逐项一致，供预计算查表的坐标映射使用。
 float ogxSphereDistanceToTop(float r, float mu, float topRadius)
 {
     float discriminant = r * r * (mu * mu - 1.0) + topRadius * topRadius; // 交点判别式。

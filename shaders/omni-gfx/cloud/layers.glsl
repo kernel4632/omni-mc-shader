@@ -15,13 +15,16 @@ Omni 通用图形库层状体积云模块：五层云形状、云影、朝光散
     把太阳、月亮、闪电与噪声图显式传入，函数体仍按原来的层号分支和采样顺序执行。
     条件功能（积雨云、闪电、极光）用布尔开关保留；关闭时与参考实现的默认路径一致。
     `texture` 的隐式层级在这里统一写成显式零级，避免不同显卡对导数层级的实现差异。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。层状体积云目前只有探针与 profile 覆盖，顶层云入口仍走体积云与平面云。
 */
 #ifndef OGX_CLOUD_LAYERS_INCLUDED
 #define OGX_CLOUD_LAYERS_INCLUDED
 
 // 数学提供球面求交，云模块提供密度取样与相函数，天空提供云的环境色查表。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
+// 云提供球面求交、密度与单层步进。
 #include "/omni-gfx/cloud/cloud.glsl"
+// 天空提供云环境色、星空与日月圆盘。
 #include "/omni-gfx/atmosphere/sky.glsl"
 // 一层云的几何与覆盖：参考实现的宏逐项搬进字段，调用方按层号填写。
 struct OgxLayersCloudLayer
@@ -62,7 +65,9 @@ struct OgxLayersCloudSettings
 // 子文件：cloud/layers/shape.slang。
 /* 层状体积云的形状：哈希、旋度噪声、逐层密度、积雨云与降雨加成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudShape(settings, 1, 1, position, minHeight, maxHeight, noise);`
-设计取舍：每层的高度、厚度、比例与覆盖来自结构体，函数按层号分支，采样顺序与参考一致。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 二维哈希：把格坐标打散成两个零到一的随机数，供云形状使用。
 vec2 ogxLayersHash2(vec2 p)
@@ -508,7 +513,9 @@ float ogxLayersGetRainDensity(float currentDensity, float rainAmount, float thun
 // 子文件：cloud/layers/shadow.slang。
 /* 层状体积云的阴影：行星阴影、三层云影、闪电落点与步进起点；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudShadow(settings, playerPos, sunVector, 100, 1.0, cameraPos, noise);`
-设计取舍：云影沿太阳方向投到各层云底，按层密度累加，天上的云和地面的影共用同一份形状。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 闪电位置：在云层半径内取一个随机方向，并确认那里确实有积雨云。
 vec3 ogxLayersGetLightningPosition(OgxLayersCloudSettings s, float minHeight, float maxHeight, float cumulonimbusScale,
@@ -631,7 +638,9 @@ float ogxLayersCloudShadowLayer(vec3 playerPos, vec3 sunVector,
 // 子文件：cloud/layers/lighting.slang。
 /* 层状体积云的光照：相函数、朝光散射与单次散射合成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudLighting(index, shape, faded, shadowMask, sunColor, moonColor, ...);`
-设计取舍：直射按 Beer 定律衰减，前后散射按粉末效应插值，间接光按形状抬升。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 云的相函数：按 `mode` 选择 Henyey-Greenstein、Cornette-Shanks 或 HG-Draine。
 // 按云相位模式组合前向与背向散射，决定云边缘的透光方向。
@@ -712,8 +721,7 @@ vec3 ogxLayersGetCloudLighting(int layerIndex, float shape, float shapeFaded, fl
 // 为什么单列一条：参考默认只启用这一种相位，带类型开关的旧实现会多出其它模型的常数。
 float ogxLayersPhaseCloudHenyey(float g, float x)
 {
-    float gg = g * g; // 各向异性平方。
-    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考原式。
+    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考原式直接写 3.14。
 }
 
 // 层状云内散射：沿太阳或月亮方向取几个云形状样本，累加成透过率。
@@ -769,20 +777,16 @@ float ogxLayersCloudScatteringSamples(int layerIndex, vec3 rayPosition, vec3 sun
 }
 
 // 主体积云步进、低成本透过率与严格入口，具体实现在子文件。
-// 子文件：cloud/layers/march.slang。
-/* 层状体积云的步进目录：单层主步进、五层合成、两套低成本透过率与严格入口；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
-可复制示例：`ogxLayersGetVolumetricClouds(settings, viewPos, dither, sunVector, ...);`
-设计取舍：五个子文件各管一个算法，函数体与采样顺序照参考保留；本文件只按原顺序引用，不复制算法。 */
-
-// 单层主步进：五层共用同一套循环与光照。
-// 子文件：cloud/layers/march/ray.slang。
-/* 层状体积云的单层主步进：五层共用同一套循环与光照，按层号分支；由 `cloud/layers/march.slang` 内联引入，不单独生成 GLSL 或探针。
-可复制示例：`ogxLayersRaymarchCloud(settings, 1, samples, position, direction, dither, ...);`
-设计取舍：平面云只取一个样本，积云按步长循环；两条路径的提前返回与参考实现一致。 */
+// 子文件：cloud/layers/ray.slang。
+/* 层状体积云的单层主步进：五层共用同一套循环与光照，按层号分支；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
+可复制示例：`ogxCloudLayerMarch(settings, 1, samples, position, direction, dither, ...);`
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 单层云的步进：参考实现的主循环，逐层处理平面云与积云两条路径。
 // `cloudPlaneDistance` 的 `x` 是最近可见云的距离，`y` 是混合权重；由调用方按层合并。
-vec4 ogxLayersRaymarchCloud(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
+vec4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,
     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,
     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,
@@ -957,11 +961,13 @@ vec4 ogxLayersRaymarchCloud(OgxLayersCloudSettings s, int layerIndex, int sample
     return vec4(color, totalAbsorbance); // 未知层号原样返回。
 }
 
-// 五层合成：按参考顺序步进再按相机高度混合。
-// 子文件：cloud/layers/march/compose.slang。
-/* 层状体积云的五层合成：按参考顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合；由 `cloud/layers/march.slang` 内联引入。
+// 层状云合成提供五层顺序与相机高度混合。
+// 子文件：cloud/layers/compose.slang。
+/* 层状体积云的五层合成：按参考顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合；由 `cloud/layers.slang` 内联引入。
 可复制示例：`vec4 cloud = ogxLayersGetVolumetricClouds(settings, viewPos, dither, ...);`
-设计取舍：每层重算步长与起点，天空盒只在起点查一次，采样位置与参考一致。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 五层体积云总入口：按参考实现的顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合。
 // 天空色由本函数在步进起点处查天空盒，与参考 GetVolumetricClouds 的采样位置一致。
@@ -1029,7 +1035,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
     bool mixBelowLayer1 = cameraPos.y < s.layers[1].height; // 相机是否在大积云下方。
     vec4 smallCumulusClouds = cloudColorOriginal; // 小积云结果。
     vec2 cloudLayer0Distance = vec2(startDistance, 1.0); // 小积云距离。
-    smallCumulusClouds = ogxLayersRaymarchCloud(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+    smallCumulusClouds = ogxCloudLayerMarch(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
         sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer0Distance,
         backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
         shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 小积云。
@@ -1047,7 +1053,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
         cloudDist.xz = mix(vec2(255.0), vec2(5.0), cloudMix); // 大积云水平步长。
         rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist) / float(samples)); // 重算步长。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 重算起点。
-        largeCumulusClouds = ogxLayersRaymarchCloud(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+        largeCumulusClouds = ogxCloudLayerMarch(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer1Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
             shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 大积云。
@@ -1065,7 +1071,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
         cloudDist.xz = vec2(8.0); // 固定水平步长。
         rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist) / float(cumulonimbusSamples)); // 重算步长。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 重算起点。
-        cumulonimbusClouds = ogxLayersRaymarchCloud(s, 2, cumulonimbusSamples, rayPosition, rayDirection, dither.x, minHeight,
+        cumulonimbusClouds = ogxCloudLayerMarch(s, 2, cumulonimbusSamples, rayPosition, rayDirection, dither.x, minHeight,
             maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol,
             cloudLayer4Distance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds,
             deferred, noiseTexture, shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 积雨云。
@@ -1083,7 +1089,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
             clamp((maxHeight - 15.0) - cameraPos.y, 0.0, 1.0))); // 层内水平步长。
         rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist)); // 单步走到层顶。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点。
-        altoStratusClouds = ogxLayersRaymarchCloud(s, 3, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+        altoStratusClouds = ogxCloudLayerMarch(s, 3, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer2Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
             shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 高层云。
@@ -1100,7 +1106,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
             clamp((maxHeight - 15.0) - cameraPos.y, 0.0, 1.0))); // 层内水平步长。
         rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist)); // 单步走到层顶。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点。
-        cirrusClouds = ogxLayersRaymarchCloud(s, 4, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+        cirrusClouds = ogxCloudLayerMarch(s, 4, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer3Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
             shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 卷云。
@@ -1165,14 +1171,16 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
     return vec4(color, totalAbsorbance); // 交回云颜色与透过率。
 }
 
-// 设置版低成本透射率：只累计透过率，供云影与远景使用。
-// 子文件：cloud/layers/march/simple.slang。
-/* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers/march.slang` 内联引入。
+// 层状云低成本步进提供云影与远景透过率。
+// 子文件：cloud/layers/simple.slang。
+/* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers.slang` 内联引入。
 可复制示例：`vec4 t = ogxLayersGetVolumetricCloudsSimple(settings, dither, lightDir, offset, ...);`
-设计取舍：不做光照与阴影采样，三层共用同一份单层步进，命中顺序照参考保留。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 云影步进：只算透过率，不算光照，供阴影程序低成本使用。
-float ogxLayersRaymarchCloudSimple(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition,
+float ogxCloudLayerMarchSimple(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition,
     vec3 rayDirection, float dither, float minHeight, float maxHeight, vec3 startPos, vec3 cameraPos,
     sampler2D noiseTexture)
 {
@@ -1250,7 +1258,7 @@ vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, v
     vec3 rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist)); // 单步。
     vec3 rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
     rayPosition.xz += offset; // 阴影偏移。
-    float altoStratusClouds = ogxLayersRaymarchCloudSimple(s, 3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+    float altoStratusClouds = ogxCloudLayerMarchSimple(s, 3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
         startPos, cameraPos, noiseTexture); // 高层云。
     totalAbsorbance *= altoStratusClouds; // 更新透过率。
     float largeCumulusClouds = 1.0; // 大积云透过率。
@@ -1263,7 +1271,7 @@ vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, v
         rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 分层步长。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
         rayPosition.xz += offset; // 偏移。
-        largeCumulusClouds = ogxLayersRaymarchCloudSimple(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight,
+        largeCumulusClouds = ogxCloudLayerMarchSimple(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight,
             maxHeight, startPos, cameraPos, noiseTexture); // 大积云。
         totalAbsorbance *= largeCumulusClouds; // 更新透过率。
     }
@@ -1277,18 +1285,20 @@ vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, v
         rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 分层步长。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
         rayPosition.xz += offset; // 偏移。
-        smallCumulusClouds = ogxLayersRaymarchCloudSimple(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight,
+        smallCumulusClouds = ogxCloudLayerMarchSimple(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight,
             maxHeight, startPos, cameraPos, noiseTexture); // 小积云。
         totalAbsorbance *= smallCumulusClouds; // 更新透过率。
     }
     return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四个透过率。
 }
 
-// 参考签名版低成本透射率：天气与覆盖参数显式传入。
-// 子文件：cloud/layers/march/transmittance.slang。
-/* 层状体积云的参考签名低成本步进：天气与覆盖参数显式传入，不读设置结构体；由 `cloud/layers/march.slang` 内联引入。
+// 层状云参考签名步进提供天气参数入口。
+// 子文件：cloud/layers/transmittance.slang。
+/* 层状体积云的参考签名低成本步进：天气与覆盖参数显式传入，不读设置结构体；由 `cloud/layers.slang` 内联引入。
 可复制示例：`vec4 t = ogxLayersCloudTransmittanceSimple(dither, lightDir, offset, startPos, ...);`
-设计取舍：参考签名在前、噪声与天气追加在后；三层各走一次单层透过率，常数照参考保留。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 层状云低成本步进：只累计透过率，不做光照，供云影与远景使用。
 // 参考签名给层号、步数、位置与方向、抖动与上下界；噪声、天气与覆盖率显式追加。
@@ -1440,16 +1450,58 @@ vec4 ogxLayersCloudTransmittanceSimple(vec2 dither, vec3 lightDir, vec2 offset, 
     return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四层透过率。
 }
 
-// 严格参考签名入口：只重排参数并填写参考默认常数。
-// 子文件：cloud/layers/march/exact.slang。
-/* 层状体积云的严格入口：按参考签名重排参数并填写参考默认常数；由 `cloud/layers/march.slang` 内联引入。
+/*
+维护说明：低成本透过率为什么这样分层。
+
+层号与用途：
+    零号是小积云，云底二百五十米，向下扩三百五十米，厚度一百三十米。
+    一号是大积云，云底四百米，厚度二百八十米。
+    二号是积雨云，密度固定零点八，形状走积雨云的塔状分支。
+    三号是高层云，只做一次平面近似，不进入步进循环。
+
+采样顺序：
+    总入口固定从高层云开始，再算大积云，最后算小积云。
+    顺序不能换：后面的层会把当前总透过率当作提前结束条件，
+    先算哪一层会改变一共执行多少次噪声采样，严格对照会直接报差异。
+
+提前结束：
+    每一层结束都把透过率乘进总透过率；低于十万分之一就跳过后面的层。
+    这是参考实现的短路，不是优化开关；关掉它会多做采样，画面也会略暗。
+
+抖动：
+    密度阈值用抖动系数在极小值与层阈值之间插值。
+    这样做是为了让相邻像素的可见边缘错开，避免云影出现规则的同心圆。
+
+距离淡出：
+    积云用 smoothstep 在一百公里到五十公里之间淡出。
+    淡出的是密度而不是透过率；先乘密度再做指数吸收，远处的云影才会逐渐变浅。
+
+相机高度：
+    小积云的云底曾被向下扩了三百五十米，这是参考的固定写法。
+    它让低空相机也能看到小积云投下的影子，不能按“云底应该更高”去改。
+
+单位：
+    minHeight、maxHeight、rayDirection 与 startPos 全部用方块。
+    cloudDist 只是构造步长时的水平尺度，不是真实距离，不能拿去和世界坐标比较。
+
+修改入口时先确认三件事：
+    一是层号与云底、云顶的对应关系没有变；
+    二是高层云仍然只走一次平面采样；
+    三是四层返回值顺序仍然是“小积云、大积云、高层云、总透过率”。
+*/
+
+// 层状云严格入口提供参考默认常数。
+// 子文件：cloud/layers/exact.slang。
+/* 层状体积云的严格入口：按参考签名重排参数并填写参考默认常数；由 `cloud/layers.slang` 内联引入。
 可复制示例：`vec4 cloud = ogxLayersGetVolumetricCloudsExact(viewPos, dither, ...);`
-设计取舍：只重排参数，主体仍在 `ray.slang` 与 `compose.slang`，不复制第二份算法。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 严格参考签名的单层云步进入口：参考参数在前，云设置、相机与阴影资源追加在后。
-// 主体仍由 `ogxLayersRaymarchCloud` 执行，入口只负责把显式参数重新排好。
+// 主体仍由 `ogxCloudLayerMarch` 执行，入口只负责把显式参数重新排好。
 // 五层云的高度、厚度与距离按参考默认配置传入，避免把宿主菜单常数藏进结构体。
-vec4 ogxLayersRaymarchCloudExact(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
+vec4 ogxCloudLayerMarchExact(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,
     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,
     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,
@@ -1482,7 +1534,7 @@ vec4 ogxLayersRaymarchCloudExact(int layerIndex, int samples, vec3 rayPosition, 
     settings.cumulonimbusLightningBrightness = 100.0; // 参考默认 CUMULONIMBUS_LIGHTNING_BRIGHTNESS。
     settings.cumulonimbusLightningColor = vec3(customLightningRgb.x, 1.05 * customLightningRgb.y,
         1.22 * customLightningRgb.z); // 参考的积雨云闪电颜色。
-    return ogxLayersRaymarchCloud(settings, layerIndex, samples, rayPosition, rayDirection, dither, minHeight,
+    return ogxCloudLayerMarch(settings, layerIndex, samples, rayPosition, rayDirection, dither, minHeight,
         maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance,
         sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2,
         cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection,

@@ -5,6 +5,9 @@
 
 设计边界：只审计项目自己维护的源码和配置，不把环境目录、参考包、第三方代码和生成菜单
 当作需要人工补注释的主体；但自有的薄入口仍然要说明，因为它们是实际加载流程的一部分。
+`omni-gfx/src` 由 `check_slang` 按“每个顶层函数与结构体都有紧邻中文说明”检查，并额外要求
+文件头与每条引用的上一行说明；生成 GLSL、profile 与探针不重复做行覆盖率。开发工具与
+测试世界 Python 不进入光影 ZIP，只检查说明语言与接口，不按发布代码的 50% 行覆盖率要求。
 审计必须识别真正的注释，而不是把字符串里的井号或示例文字误算成说明；机器字段、可复制
 命令和文件名也单独处理，避免它们伪装成自然语言或被错误拒绝。
 """
@@ -22,20 +25,28 @@ from pathlib import Path  # 用项目相对路径固定审计范围并隐藏本�
 CHINESE = re.compile(r"[\u3400-\u9fff]")  # 只有汉字能证明说明不是纯英文标识符。
 DIRECTIVE = re.compile(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b")  # 属性文件里的条件指令是机器语句，加载器按选项宏挑选分支。
 MACHINE = re.compile(r"\s*(?:#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include)\b|const\s+\w+\s+\w+\s*=)")  # 注释里成行的机器语句（预处理指令、常量声明）不是给接手者的自然语言说明；普通注释仍按中文检查。
-EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__", "omni-gfx"}  # 环境、参考和第三方内容不是本项目的维护边界；omni-gfx 由自己的检查命令审计。
-GENERATED = ("omni-gfx/generated/", "shaders/omni-gfx/", "generated/glsl/")  # 自动生成的库文件只检查说明语言，不要求达到手写文件的比例；最后一项用于库内单独审计。
+EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__"}  # 环境、参考和第三方内容不是本项目的维护边界。
+# 这些目录有自己的检查或不是手写说明对象：Slang 源由 check_slang 按接口说明审查，
+# 生成产物与 profile 由生成器保证，探针是编译夹具，不重复要求行覆盖率。
+EXCLUDED_PATHS = ("omni-gfx/src/", "omni-gfx/generated/", "omni-gfx/profiles/", "omni-gfx/tests/probes/", "omni-gfx/vendor/", "shaders/omni-gfx/")  # 生成 GLSL 的说明来源于 Slang，由库检查负责，不在光影审计里重复。
+# 开发工具与测试世界不进入光影 ZIP，按 docs/omni-gfx-plan.md 的边界只检查说明语言与接口，
+# 不按玩家可见代码的 50% 行覆盖率要求；测试世界的 GLSL 仍然按 50% 检查，因为它会被真实编译。
+DEVELOPMENT = ("omni-gfx/tools/", "omni-gfx/examples/")
+GENERATED = ("omni-gfx/generated/", "omni-gfx/profiles/", "shaders/omni-gfx/", "generated/glsl/")  # 自动生成的库文件只检查说明语言，不要求达到手写文件的比例；最后一项用于库内单独审计。
 MACHINE_FILES = {"shaders/shaders.properties", "shaders/block.properties", "shaders/entity.properties", "shaders/item.properties"}  # 生成菜单和从 iterationT 原样移植的方块、实体、物品编号表是逐行可对照的机器数据，加中文说明会破坏对照；它们是数据不是业务代码。
-SUFFIXES = {".py", ".glsl", ".slang", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除；Slang 源由专门的范围检查。
-TERMS = set("GLSL glsl Slang slang slangc omni gfx ogx PNG zlib CRC GLFW PyOpenGL SPIR-V SPIRV SPIR Vulkan GitHub Python Iris Sodium Minecraft minecraft labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA256 HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup prepare SSBO AgX ACES Filmic Uncharted Narkowicz PCSS Omni iterationT Eclipse shadowcomp floodfill HSV TAU PI RGSS FSR FBM LOD BRDF ppss Disc exact approximate mc_glue missing shared".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
+SUFFIXES = {".py", ".glsl", ".slang", ".frag", ".vert", ".vsh", ".fsh", ".gsh", ".csh", ".tcs", ".tes", ".properties", ".yml", ".yaml"}  # 自有源码与配置接受说明，生成菜单在检查时单独排除；Slang 源由专门的范围检查。
+TERMS = set("GLSL glsl Slang slang slangc omni gfx ogx PNG zlib CRC GLFW PyOpenGL SPIR-V SPIRV SPIR Vulkan GitHub Python Iris Sodium Minecraft minecraft MC README labPBR PBR SSR SSAO TAA FXAA GPU CPU DH OpenGL RenderDoc PresentMon JSON CSV ZIP SHA tar HTTPS API UV RGB RGBA F0 LICENSE COPYING main root final shadow deferred composite normals specular texture gtexture include define const version true false tone map sRGB blocklight skylight lab alpha dev beta rc lambda docstring properties Unlicense MIT sampler2D vec2 vec3 vec4 Java Windows Linux Unicode YAML ASCII Actions data source profile options groups texcoord git add commit tag push pid PR AO shadowtex terrain gbuffers fsh GLSL330 CLI build export GGX Smith LPV setup prepare SSBO AgX ACES Filmic Uncharted Narkowicz PCSS Omni iterationT Eclipse shadowcomp floodfill HSV TAU PI RGSS FSR FBM LOD BRDF ppss Disc exact approximate mc_glue missing shared".split())  # 只放技术词和接口名，不用少量英语词去猜整句自然语言。
 # GLSL 的关键字、类型与内建函数是技术词，放进术语表，代码示例里的类型名和调用名不会被误报成英语说明。
 TERMS |= set("uniform in out void float int bool ivec2 ivec3 ivec4 mat2 mat3 mat4 if else for while return discard flat attribute varying layout location struct sampler2DShadow min max abs clamp mix floor ceil fract pow exp log sqrt dot cross length normalize reflect refract texture textureLod texelFetch smoothstep step saturate far near".split())  # 只补技术词，不放行整句英文。
+# 图形学算法名、格式名与开发工具名是技术词，不是英语说明；只补实际出现在自有注释里的名字。
+TERMS |= set("glslang Worley Perlin Nubis mipmap mip blit VPS GTAO Burley Gerstner Schlick Radiance RGBE RLE ldexp sampler Pillow numpy Paeth IDAT Poly Haven HDR PCF Lambert WSR Photonics SSS Frisvad GetHandLight inout fragment ifdef swizzle xy XZ YZ AB".split())  # 算法名与工具名不翻译，但整句仍必须是中文。
 EXTRA = {"VERSION", "CHANGELOG", "ROOT", "STAGES", "INCLUDE", "UTF", "BOM"}  # 自己源码里反复出现、又不必进术语表的大写标识符。
 # Slang 库源里的算法人名、参数名与图形学名词只服务库源注释；单独放行，不扩大 GLSL 审计的术语范围。
 SLANG_TERMS = frozenset(word.lower() for word in """
 Abney Albedo Bayer Beer CUMULONIMBUS Catmull Chandrasekhar Cornette Draine EV Elek Frisvad GI GTAO
-Gerstner GetHandLight GetVolumetricClouds GetVolumetricFog Greenstein HG Halton Henyey Hillaire Jodie LUT
-Lambert MATID Merlin NUBIS Nubis Perlin Photonics RSM Rec Reinhard Rom SSGI SSS SetCloudPos Shanks Uchimura
-WSR Worley XYZ albedo atlas background bits buffer cameraWorldPos centerDepthSmooth clip cloud color colortex
+Gerstner GetHandLight GetVolumetricClouds GetVolumetricFog Greenstein HG Halton Hejl Hable Henyey Hillaire Jodie LUT
+Lambert Lottes MATID Merlin NUBIS Nubis Perlin Photonics RSM Rec Reinhard Rom SSGI SSS SetCloudPos Shanks Uchimura
+WSR Worley Xonk XYZ albedo antialias atlas background bits buffer cameraWorldPos centerDepthSmooth clip cloud color colortex
 compression curve depth dir flashlight focus frame gi held hit hits indirect jitter job lightmap look media
 mie modelViewInverse noise normal ogxGameplayEffects ogxSsrtHandlightShadow ozone pixel
 prevCameraPos prevModelView previousCameraWorldPos previousModelView projection rayleigh rotation sharp sky
@@ -173,6 +184,8 @@ def check_slang(root: Path) -> list[dict]:
     只审计手写 Slang 源，才能让“库源码也要中文说明、只引用库内文件”成为可执行的合同。
     说明密度按“每个顶层函数与结构体都有紧邻的中文解释”检查，不按物理行比例：
     移植代码保留上游密集的局部变量，凑比例只会逼出复述语法的填充；对外接口才是接手者真正要读的部分。
+    文件头说明“这个文件管什么”，每条引用的上一行说明“为什么引入它”，这两项是本次新增的硬检查，
+    因为只靠函数说明时，打开文件仍然看不出模块边界与依赖意图。
     注释语言、未实现标记、引用边界和版本声明仍按与 GLSL 相同的规则检查。
     """
     reports, errors = [], []  # 与 GLSL 审计共用报告结构，失败时一次列出全部位置。
@@ -180,7 +193,35 @@ def check_slang(root: Path) -> list[dict]:
     for source in sources:
         relative_path = source.relative_to(root).as_posix()  # 报告使用项目相对路径。
         text = source.read_text(encoding="utf-8")  # 每个文件只读一次。
-        nonempty_lines = {number for number, line in enumerate(text.splitlines(), 1) if line.strip()}  # 空行不稀释比例。
+        lines = text.splitlines()  # 文件头与引用说明都按真实行号报告。
+        first = next((number for number, line in enumerate(lines) if line.strip()), None)  # 第一个非空行就是文件头起点。
+        header = ""  # 文件头正文，用于检查职责、调用位置、示例与取舍四项。
+        header_lines: set[int] = set()  # 文件头占用的行号；不能拿来给紧邻的函数充当说明。
+        if first is not None and lines[first].lstrip().startswith("/*"):
+            end = next((number for number in range(first, len(lines)) if "*/" in lines[number]), None)
+            if end is not None:
+                header = "\n".join(lines[first:end + 1])  # 块注释到闭合行为止，后面的函数体注释不算文件头。
+                header_lines = set(range(first + 1, end + 2))
+        elif first is not None and lines[first].lstrip().startswith("//"):
+            end = first
+            while end + 1 < len(lines) and lines[end + 1].lstrip().startswith("//"):
+                end += 1
+            header = "\n".join(lines[first:end + 1])  # 连续行注释同样只取文件开头这一段。
+            header_lines = set(range(first + 1, end + 2))
+        if not header:
+            errors.append(f"{relative_path}：缺少文件头说明")  # 没有文件头时接手者不知道这个文件管什么。
+        else:
+            if not CHINESE.search(header):
+                errors.append(f"{relative_path}：文件头必须是中文说明")  # 头部存在但语言不合格时单独报告。
+            for markers, label in ((("调用位置",), "调用位置"), (("示例", "用法"), "可复制示例"), (("设计原因", "设计取舍", "设计边界", "为什么"), "设计原因与取舍")):
+                if not any(marker in header for marker in markers):
+                    errors.append(f"{relative_path}：文件头缺少{label}")  # 只写一句“这个文件做什么”不足以判断改动边界。
+        for number, line in enumerate(lines):
+            if re.match(r'^\s*#include\s+"', line):
+                previous = lines[number - 1].strip() if number else ""
+                if not CHINESE.search(previous):
+                    errors.append(f"{relative_path}:{number + 1}：引用上一行缺少中文说明")  # Iris 要求说明放在引用上一行。
+        nonempty_lines = {number for number, line in enumerate(lines, 1) if line.strip()}  # 空行不稀释比例。
         _, fragments = comments(source, text)  # 复用同一套注释识别与语言规则；有效行稍后按 Slang 术语表重算。
         documented = set()  # 用 Slang 术语表再判一次，带算法人名的中文说明才算有效。
         for start_line, fragment in fragments:
@@ -197,11 +238,13 @@ def check_slang(root: Path) -> list[dict]:
                         "chineseCommentLines": len(documented & nonempty_lines), "ratio": ratio})
         # 库源的维护合同是“每个对外函数和结构体都能看懂”，不按物理行比例；
         # 移植算法保留了上游的密集局部变量，强行凑一半行数注释只会产生复述语法的填充。
+        # 顶层函数与结构体：返回类型可能是内建类型，也可能是 `Ogx...` 结构体。
+        # 旧写法只认小写基础类型，结构体返回的函数会绕过“必须有说明”的检查。
         for number, line in enumerate(text.splitlines(), 1):
-            if not re.match(r"^(?:\[[^\]]*\]\s*)?(?:static\s+)?(?:float[234]?|void|bool|int|uint|half|struct)\b[^;=]*[({]", line):
+            if not re.match(r"^(?:\[[^\]]*\]\s*)?(?:static\s+)?(?:const\s+)?[A-Za-z_]\w*(?:<[^>]+>)?\s+[A-Za-z_]\w*\s*[({]", line):
                 continue  # 只检查顶层函数与结构体，不要求每个局部变量都有说明。
-            if any(candidate in documented for candidate in range(max(1, number - 3), number + 1)):
-                continue  # 前三条以内或本行有合格中文说明即算已解释。
+            if any(candidate in documented - header_lines for candidate in range(max(1, number - 3), number + 1)):
+                continue  # 前三条以内或本行有合格中文说明即算已解释，文件头本身不算。
             errors.append(f"{relative_path}:{number}：顶层定义缺少紧邻的中文说明")  # 对外接口必须有说明。
         for line_number, fragment in fragments:
             if re.search(r"\b(?:TODO|FIXME)\b|待实现|尚未实现|未接入的占位", fragment):
@@ -220,8 +263,12 @@ def check_slang(root: Path) -> list[dict]:
         for reference in re.findall(r'#include\s+"([^"]+)"', masked):
             if reference.startswith("/") or not reference.endswith(".slang"):
                 errors.append(f"{relative_path}：库源只能引用同目录 Slang 文件：{reference}")  # 不回头引用光影实现。
-            elif not (source.parent / reference).is_file():
-                errors.append(f"{relative_path}：引用的 Slang 文件不存在：{reference}")  # 引用必须落到真实文件。
+            else:
+                target = (source.parent / reference).resolve()  # 解析真实路径后再判断，链接也不能跳出源码。
+                if not target.is_relative_to((root / "omni-gfx" / "src").resolve()):
+                    errors.append(f"{relative_path}：引用跳出库源码目录：{reference}")  # 子文件只能来自 `omni-gfx/src`。
+                elif not target.is_file():
+                    errors.append(f"{relative_path}：引用的 Slang 文件不存在：{reference}")  # 引用必须落到真实文件。
     if errors:
         raise ValueError("Slang 审计失败\n" + "\n".join(errors))  # 与 GLSL 审计分开报告，便于定位库源。
     return reports
@@ -242,13 +289,16 @@ def check(root: Path) -> list[dict]:
         for name in sorted(names):
             file_path = Path(current) / name
             relative_path = file_path.relative_to(root).as_posix()  # 报告使用项目相对路径，避免泄露本机目录。
+            if relative_path.startswith(EXCLUDED_PATHS): continue  # Slang 源、生成产物和探针由各自的检查负责。
             if file_path.suffix not in SUFFIXES or relative_path in MACHINE_FILES: continue  # 第三方、机器数据和生成菜单有自己的来源，不在这里重复审计。
             text = file_path.read_text(encoding="utf-8")  # 每个文件只读一次，比例统计和注释解析共用。
             nonempty_lines = {number for number, line in enumerate(text.splitlines(), 1) if line.strip()}  # 空行没有业务内容，不应稀释说明比例。
             commented_lines, fragments = comments(file_path, text)
             ratio = len(commented_lines & nonempty_lines) / max(len(nonempty_lines), 1)  # 行尾说明既是代码行也是说明行，分子分母都保留。
             reports.append({"file": relative_path, "nonempty": len(nonempty_lines), "chineseCommentLines": len(commented_lines & nonempty_lines), "ratio": ratio})
-            if ratio < 0.5 and not relative_path.startswith(GENERATED): errors.append(f"{relative_path}：中文有效注释 {ratio:.1%}，至少需要 50%")  # 一半是项目约定的最低接手说明密度。
+            # 开发脚本只要求接口说明与语言合格；发布到光影 ZIP 的代码仍要求一半非空行有中文说明。
+            development_script = file_path.suffix == ".py" and relative_path.startswith(DEVELOPMENT)
+            if ratio < 0.5 and not relative_path.startswith(GENERATED) and not development_script: errors.append(f"{relative_path}：中文有效注释 {ratio:.1%}，至少需要 50%")  # 一半是项目约定的最低接手说明密度。
             for line_number, fragment in fragments:
                 if fragment.lstrip().startswith(("// @option ", "// @effect ")):
                     try: chinese_explanation(fragment)

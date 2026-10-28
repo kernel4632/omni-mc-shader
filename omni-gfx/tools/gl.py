@@ -94,7 +94,6 @@ def build_program(vertex: Path, fragment: Path) -> int:
     失败时抛出带编译器日志的错误，日志保留完整的行号信息。
     """
     # 程序对象先建好，两个阶段编译成功后再链接，失败时日志仍带源文件路径。
-    # 程序对象先建好，两个阶段编译成功后再链接。
     program = GL.glCreateProgram()  # 先建程序对象。
     stages = []  # 已编译的阶段对象，链接后统一删除。
     for stage, path in ((GL.GL_VERTEX_SHADER, vertex), (GL.GL_FRAGMENT_SHADER, fragment)):

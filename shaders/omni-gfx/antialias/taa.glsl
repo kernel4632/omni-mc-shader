@@ -14,52 +14,48 @@ Omni 通用图形库时间抗锯齿取样模块：三乘三最近深度、远景
     参考实现用全局深度图与矩阵。库把纹理、像素坐标、材质编号与全部矩阵显式传入，
     这样三乘三取样与远近景切换可以单独测试，也不会把坐标约定藏在引擎里。
     采样顺序与参考实现一致：先按材质决定深度来源，再决定近景或远景重投影。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。时间取样目前只被库内抗锯齿模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_ANTIALIAS_TAA_INCLUDED
 #define OGX_ANTIALIAS_TAA_INCLUDED
 
 // 相机变换模块提供深度约定与投影，数学模块提供矩阵列展开。
-#include "/omni-gfx/camera.glsl"
-#include "/omni-gfx/math.glsl"
-// 读一个当前帧深度纹素。
-float ogxTaaCurrentDepthFetch(sampler2D depthTexture, ivec2 coord)
-{
-    return texelFetch(depthTexture, coord, 0).x; // 精确读取，不插值。
-}
-
+#include "/omni-gfx/common/camera.glsl"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "/omni-gfx/common/math.glsl"
 // 当前帧三乘三最近深度：九个样本取最小值，用来避开前景薄片。
 float ogxTaaCurrentDepthClosest3x3(sampler2D depthTexture, ivec2 coord)
 {
-    float depth0 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(-1, -1)); // 左上。
-    float depth1 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(0, -1)); // 上方。
-    float depth2 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(1, -1)); // 右上。
-    float depth3 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(-1, 0)); // 左侧。
-    float depth4 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(0, 0)); // 中心。
-    float depth5 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(1, 0)); // 右侧。
-    float depth6 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(-1, 1)); // 左下。
-    float depth7 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(0, 1)); // 下方。
-    float depth8 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(1, 1)); // 右下。
+    float depth0 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, -1)); // 左上。
+    float depth1 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, -1)); // 上方。
+    float depth2 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, -1)); // 右上。
+    float depth3 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, 0)); // 左侧。
+    float depth4 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, 0)); // 中心。
+    float depth5 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, 0)); // 右侧。
+    float depth6 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, 1)); // 左下。
+    float depth7 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, 1)); // 下方。
+    float depth8 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, 1)); // 右下。
     return min(depth0, min(depth1, min(depth2, min(depth3, min(depth4, min(depth5, min(depth6, min(depth7, depth8)))))))); // 九点最小值。
 }
 
 // 读一个远景深度纹素。
-float ogxTaaDhDepthFetch(sampler2D dhDepthTexture, ivec2 coord)
+float ogxTaaDistantDepthFetch(sampler2D dhDepthTexture, ivec2 coord)
 {
     return texelFetch(dhDepthTexture, coord, 0).x; // 远景深度图精确读取。
 }
 
 // 远景三乘三最近深度：与近景同样取九个样本的最小值。
-float ogxTaaDhDepthClosest3x3(sampler2D dhDepthTexture, ivec2 coord)
+float ogxTaaDistantDepthClosest3x3(sampler2D dhDepthTexture, ivec2 coord)
 {
-    float depth0 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(-1, -1)); // 左上。
-    float depth1 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(0, -1)); // 上方。
-    float depth2 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(1, -1)); // 右上。
-    float depth3 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(-1, 0)); // 左侧。
-    float depth4 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(0, 0)); // 中心。
-    float depth5 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(1, 0)); // 右侧。
-    float depth6 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(-1, 1)); // 左下。
-    float depth7 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(0, 1)); // 下方。
-    float depth8 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(1, 1)); // 右下。
+    float depth0 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(-1, -1)); // 左上。
+    float depth1 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(0, -1)); // 上方。
+    float depth2 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(1, -1)); // 右上。
+    float depth3 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(-1, 0)); // 左侧。
+    float depth4 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(0, 0)); // 中心。
+    float depth5 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(1, 0)); // 右侧。
+    float depth6 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(-1, 1)); // 左下。
+    float depth7 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(0, 1)); // 下方。
+    float depth8 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(1, 1)); // 右下。
     return min(depth0, min(depth1, min(depth2, min(depth3, min(depth4, min(depth5, min(depth6, min(depth7, depth8)))))))); // 九点最小值。
 }
 
@@ -81,7 +77,7 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
     }
     else // 默认只取中心。
     {
-        depth = ogxTaaCurrentDepthFetch(depthTexture0, texelCoord); // 中心深度。
+        depth = ogxSampleDepthFetch(depthTexture0, texelCoord); // 中心深度。
     }
     vec3 velocity = vec3(0.0); // 默认没有位移。
     if (materialIDs != endPortalId) // 末地传送门不做重投影。
@@ -90,8 +86,8 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
         vec3 projection = vec3(0.0); // 上一帧屏幕坐标。
         if (screenPos.z == 1.0) // 天空像素改用远景深度。
         {
-            if (closestDepth) screenPos.z = ogxTaaDhDepthClosest3x3(dhDepthTexture0, texelCoord); // 远景最近深度。
-            else screenPos.z = ogxTaaDhDepthFetch(dhDepthTexture0, texelCoord); // 远景中心深度。
+            if (closestDepth) screenPos.z = ogxTaaDistantDepthClosest3x3(dhDepthTexture0, texelCoord); // 远景最近深度。
+            else screenPos.z = ogxTaaDistantDepthFetch(dhDepthTexture0, texelCoord); // 远景中心深度。
             projection = screenPos * 2.0 - 1.0; // 转负一到一。
             projection = ogxProjectAndDivide(dhProjectionInverse, projection); // 远景逆投影到视空间。
             projection = ogxMatrixMulPoint(modelViewInverse, projection) + ogxMatrixTranslation(modelViewInverse); // 转世界。
@@ -99,8 +95,8 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
             projection = ogxMatrixMulPoint(previousModelView, projection) + ogxMatrixTranslation(previousModelView); // 转上一帧视空间。
             vec3 previousScreen = vec3(previousProjection[0][0], previousProjection[1][1], previousProjection[2][2]) * projection + ogxMatrixTranslation(previousProjection); // 上一帧投影。
             previousScreen = previousScreen / -projection.z * 0.5 + 0.5; // 用投影前的深度做透视除法。
-            screenPos.z = ogxScreenDepthFromDhScreenDepth(screenPos.z, dhProjectionInverse, projectionInverse); // 远景深度换成近景尺度。
-            previousScreen.z = ogxScreenDepthFromDhScreenDepth(previousScreen.z, dhProjectionInverse, projectionInverse); // 上一帧深度同样换算。
+            screenPos.z = ogxScreenDepthFromDistantScreenDepth(screenPos.z, dhProjectionInverse, projectionInverse); // 远景深度换成近景尺度。
+            previousScreen.z = ogxScreenDepthFromDistantScreenDepth(previousScreen.z, dhProjectionInverse, projectionInverse); // 上一帧深度同样换算。
             projection = previousScreen; // 交回上一帧屏幕坐标。
             depth = ogxSaturate(screenPos.z); // 输出近景尺度深度。
         }

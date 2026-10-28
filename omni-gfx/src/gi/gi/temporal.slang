@@ -1,3 +1,9 @@
+/*
+全局光子文件：相机速度、历史样本重投影与时间滤波。
+调用位置：由 `gi/gi.slang` 内联，全局光的时间累积与手部排除使用这里的入口。
+可复制示例：`vec2 v = ogxGiCameraVelocity(coord, depth, isDistant, materialIds, view, false, false, 0.1, 1.0);`
+设计原因与取舍：远景与近景、手与世界分别处理；历史权重与参考常数一致，不读取宿主状态。
+*/
 // 相机速度：区分远景与近景、手与世界，算出当前像素相对上一帧的屏幕位移。
 float2 ogxGiCameraVelocity(float2 coord, float depth, bool isDh, float materialIds, OgxGiView view,
     bool disableHand, bool disablePlayer, float handDepth, float playerMaterial)
@@ -98,7 +104,7 @@ float4 ogxGiTemporalFilter(float2 coord, int2 texelCoord, OgxGiView view,
             float3 currViewPos = ogxGiViewPos(local, currDepth, view.projection_inverse); // 还原视空间位置。
             if (isDh) // 远景用远景逆投影。
             {
-                currViewPos = ogxGiViewPosDh(local, currDepth, view.dh_projection_inverse);
+                currViewPos = ogxGiViewPosDistant(local, currDepth, view.dh_projection_inverse);
             }
             float3 gi = float3(0.0); // 本帧反弹。
             bool applyRsm = true; // 默认所有像素都反弹。

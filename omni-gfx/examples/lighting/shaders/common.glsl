@@ -7,10 +7,10 @@
 //   天空用单次散射，云用三维噪声体积步进，阴影用三级级联 PCSS，雾按阴影贴图取光柱。
 //   参数只在这里写一份，直射光、天空环境光、云、雾与水面反射不会各用一套太阳方向。
 // 数学、颜色与采样：向量、曲线、蓝噪声与抖动。
-#include "/omni-gfx/math.glsl"
-#include "/omni-gfx/sampling.glsl"
+#include "/omni-gfx/common/math.glsl"
+#include "/omni-gfx/common/sampling.glsl"
 // 噪声与云：三维形状、平面云与多次散射光照。
-#include "/omni-gfx/noise.glsl"
+#include "/omni-gfx/common/noise.glsl"
 #include "/omni-gfx/cloud/cloud.glsl"
 #include "/omni-gfx/cloud/volume.glsl"
 // 大气、雾、水与阴影：天空散射、空气透视、吸收、PCSS 与级联选择。
@@ -23,7 +23,7 @@
 #include "/omni-gfx/reflection/reflection.glsl"
 #include "/omni-gfx/post/post.glsl"
 #include "/omni-gfx/antialias/antialias.glsl"
-#include "/omni-gfx/color.glsl"
+#include "/omni-gfx/common/color.glsl"
 // 预计算大气查表：太阳与天空颜色直接来自 iterationT 的同一份数据。
 #include "/omni-gfx/atmosphere/model.glsl"
 

@@ -76,9 +76,10 @@
 // 共用纯计算：夹取、法线工具。
 #include "/common/math.glsl"
 // 颜色转换与饱和度矩阵放在通用库。
-#include "/omni-gfx/color.glsl"
+#include "/omni-gfx/common/color.glsl"
 // 手持光的三次方衰减在表面模块，供雾照明复用。
 #include "/omni-gfx/surface.glsl"
+#include "/omni-gfx/heldlight.glsl"
 // 体积光的取样、编码、坐标映射与边缘淡出都在通用库，本文件只保留纹理与体素接线。
 #include "/omni-gfx/lpv.glsl"
 

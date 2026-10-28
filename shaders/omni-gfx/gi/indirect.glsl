@@ -9,22 +9,21 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
 调用位置：需要复现 Eclipse `indirect_lighting_effects.glsl` 的程序；Minecraft 光影由
     `/omni-gfx/gi/indirect.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    vec3 dir = ogxTangentToWorld(normal, ogxCosineHemisphereDirection(xi));
-    vec3 hit = ogxGiRayTrace(rayDir, viewPos, dither, 5.0, nearPlane, farPlane, 1.0, depthTex, projection);
-    vec3 gi = ogxApplySsrt(indirect, blockLight, minimumLight, viewPos, normal, noise, lightmap,
-        false, false, pixel, frame, 8, 32, 1.0, sceneTex, depthTex, modelView, prevModelView,
-        modelViewInverse, prevProjection, cameraPos - prevCameraPos, texelSize);
+    `vec3 gi = ogxApplyScreenSpaceIndirect(indirect, blockLight, minimumLight, viewPos, normal, noise, lightmap, ...);`
 设计原因与取舍：
     参考实现直接读 `gl_FragCoord`、`frameCounter`、`gbufferModelView` 与缓冲编号。库把像素坐标、帧号、
     矩阵、纹理、射线数与开关全部改成显式参数；公式、循环顺序与分支条件保持参考实现。
     纹理只作为参数传入，库不绑定缓冲；调用方可以换分辨率、换历史缓冲，也可以独立测试。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。间接光目前只被库内反射模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_GI_INDIRECT_INCLUDED
 #define OGX_GI_INDIRECT_INCLUDED
 
 // 相机提供投影与屏幕换算；数学提供夹紧与 R2 采样。
-#include "/omni-gfx/camera.glsl"
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/camera.glsl"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "/omni-gfx/common/math.glsl"
+// 反射提供屏幕空间追踪与历史重投影。
 #include "/omni-gfx/reflection/reflection.glsl"
 // 余弦半球采样：把二维均匀随机数变成半球上的余弦分布方向。
 vec3 ogxCosineHemisphereDirection(vec2 xi)
@@ -45,11 +44,6 @@ vec3 ogxTangentToWorld(vec3 N, vec3 H)
     return (T * H.x) + (B * H.y) + (N * H.z); // 参考实现的线性组合。
 }
 
-// Eclipse 线性深度：屏幕深度换米制距离。
-float ogxLinearizeDepth(float depth, float nearPlane, float farPlane)
-{
-    return (2.0 * nearPlane) / (farPlane + nearPlane - depth * (farPlane - nearPlane)); // 参考实现的分式。
-}
 
 // Eclipse 线性深度反解：米制距离换屏幕深度。
 float ogxLinearToScreenDepth(float linearDepth, float nearPlane, float farPlane)
@@ -57,12 +51,6 @@ float ogxLinearToScreenDepth(float linearDepth, float nearPlane, float farPlane)
     return -((2.0 * nearPlane / linearDepth) - farPlane - nearPlane) / (farPlane - nearPlane); // 参考实现的反解。
 }
 
-// Eclipse R2 采样：低差异序列，给每个像素不同的射线相位。
-vec2 ogxR2Sequence(int n)
-{
-    vec2 alpha = vec2(0.75487765, 0.56984026); // 参考实现的常数。
-    return fract(alpha * float(n)); // 取小数。
-}
 
 // 取得纹理的像素尺寸：库需要显式尺寸，避免依赖宿主 `texelSize`。
 vec2 texelFetchSize(sampler2D tex)
@@ -186,7 +174,7 @@ vec4 ogxBilateralUpscaleSsaoReference(sampler2D source, sampler2D sourceDepth, v
 
 // SSGI 合成：多根余弦半球射线，命中时读历史场景色，未命中时保留天空贡献。
 // 把屏幕空间追踪结果混进间接光，按最小光色与遮挡权重取舍。
-vec3 ogxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
+vec3 ogxApplyScreenSpaceIndirect(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
     vec3 viewPos, vec3 normal, vec3 noise, float lightmap, bool isGrass, bool isLod,
     ivec2 pixelCoord, int frameCounter, int rayCount, int raySteps, float giStrength,
     sampler2D sceneTexture, sampler2D depthTexture, vec2 texelSize,
@@ -207,7 +195,7 @@ vec3 ogxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLigh
     for (int i = 0; i < nrays; i++) // 逐射线。
     {
         int seed = (frameCounter % 40000) * nrays + i; // 参考实现的帧序列。
-        vec2 ij = fract(ogxR2Sequence(seed) + noise.xy); // 采样点。
+        vec2 ij = fract(ogxR2Sample(seed) + noise.xy); // 采样点。
         vec3 rayDir = ogxTangentToWorld(normal, normalize(ogxCosineHemisphereDirection(ij))); // 世界方向。
         vec3 rayHit = highQuality
             ? ogxGiRayTrace(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos, noise.z, 5.0 * float(raySteps), nearPlane, farPlane, 1.0, depthTexture, quarterRes, projection)
@@ -238,7 +226,7 @@ vec3 ogxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLigh
 // Eclipse 的 SSGI 合成主循环：只走参考实现的低质量追踪分支，四根余弦半球射线。
 // 为什么单独一份：增强版还带高质量追踪、历史场景色与手部排除；参考默认路径只调用
 // `RT_alternate`，采样次数因此是四根射线各一次深度读取。
-vec3 ogxApplySsrtReference(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
+vec3 ogxApplyScreenSpaceIndirectReference(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
     vec3 viewPos, vec3 normal, vec3 noise, float lightmap, bool isGrass, bool isLod,
     ivec2 pixelCoord, int frameCounter, int rayCount, int raySteps, vec2 viewSize, vec2 texelSize,
     sampler2D depthTexture, mat4 modelView, mat4 modelViewInverse, mat4 projection,
@@ -255,7 +243,7 @@ vec3 ogxApplySsrtReference(vec3 unchangedIndirect, vec3 blockLightColor, vec3 mi
     for (int i = 0; i < nrays; i++) // 逐射线。
     {
         int seed = (frameCounter % 40000) * nrays + i; // 参考实现的帧序列。
-        vec2 ij = fract(ogxR2Sequence(seed) + noise.xy); // 采样点。
+        vec2 ij = fract(ogxR2Sample(seed) + noise.xy); // 采样点。
         vec3 rayDir = ogxTangentToWorld(normal, normalize(ogxCosineHemisphereDirection(ij))); // 世界方向。
         vec3 rayHit = ogxGiRayMarch(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos,
             noise.z, float(raySteps), isLod, curve, raySteps, nearPlane, farPlane, 1.0, viewSize, texelSize,

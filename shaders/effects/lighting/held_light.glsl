@@ -21,6 +21,7 @@
 #include "/effects/shared/light.glsl"
 #include "/omni-gfx/shadow/shadow.glsl"
 #include "/omni-gfx/surface.glsl"
+#include "/omni-gfx/heldlight.glsl"
 // --- 手电筒光斑形状：按光线与指向的夹角给出一束光的强度分布 ---
 // 为什么用曲线两次叠加：主瓣给中心亮区，副瓣给一点点外圈余晖；再乘一圈环形暗环，让光斑边界更像手电筒。
 float spotShape(float r){

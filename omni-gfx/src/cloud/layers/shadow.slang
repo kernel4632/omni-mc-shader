@@ -1,6 +1,8 @@
 /* 层状体积云的阴影：行星阴影、三层云影、闪电落点与步进起点；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudShadow(settings, playerPos, sunVector, 100, 1.0, cameraPos, noise);`
-设计取舍：云影沿太阳方向投到各层云底，按层密度累加，天上的云和地面的影共用同一份形状。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 闪电位置：在云层半径内取一个随机方向，并确认那里确实有积雨云。
 float3 ogxLayersGetLightningPosition(OgxLayersCloudSettings s, float minHeight, float maxHeight, float cumulonimbusScale,

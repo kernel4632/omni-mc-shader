@@ -5,11 +5,14 @@ Omni 通用图形库后期曝光模块：自动曝光分块统计、曝光值与
     float ev = ogxGetExposureValue(exposureTex, screenExtent, false, 0.0, 1.0, 1.0, 1.0, 0.0, true, false, 0.0, 0.0, true); // 取自动曝光值。
 设计原因与取舍：
     分块统计、测光权重与泛光量都按参考实现的分支保留；纹理、屏幕尺寸、维度与天气全部改成显式参数。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。曝光与泛光目前只被库内后期模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_POST_EXPOSURE_INCLUDED
 #define OGX_POST_EXPOSURE_INCLUDED
 
-#include "../math.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 #include "../shadow/shadow.slang"
 
 // 自动曝光的 tile 统计：把画面缩到六十四像素一格，逐格算亮度并按距离与夜视加权。
@@ -108,19 +111,19 @@ float3 ogxMergeBloom(float3 color, float bloomGuide, float2 texCoord, Sampler2D 
         rainAlpha = 1.0 - gbuffer0.Load(int3(texelCoord, 0)).a; // 第一张缓冲记录雨幕。
         rainAlpha *= rainVisibility; // 按可见度缩放。
         float depth = depthTex0.Load(int3(texelCoord, 0)).x; // 屏幕深度。
-        linearDepth = ogxShadowLinearDepth(depth, projectionInverse); // 换成米。
-        if (hasDh && depth == 1.0) linearDepth = ogxShadowLinearDepth(dhDepthTex0.Load(int3(texelCoord, 0)).x, dhProjectionInverse); // 天空像素读远景。
+        linearDepth = ogxLinearDepthFromScreenDepth(depth, projectionInverse); // 换成米。
+        if (hasDh && depth == 1.0) linearDepth = ogxLinearDepthFromScreenDepth(dhDepthTex0.Load(int3(texelCoord, 0)).x, dhProjectionInverse); // 天空像素读远景。
     }
     else if (dimension == 1) // 下界。
     {
-        linearDepth = ogxShadowLinearDepth(ogxUnpack2x16(gbuffer7.Load(int3(texelCoord, 0)).a).x, projectionInverse); // 第七张缓冲打包线性深度。
+        linearDepth = ogxLinearDepthFromScreenDepth(ogxUnpack2x16(gbuffer7.Load(int3(texelCoord, 0)).a).x, projectionInverse); // 第七张缓冲打包线性深度。
         if (!hasDh) linearDepth = min(linearDepth, farPlane); // 没有远景时限制到远平面。
     }
     else // 末地。
     {
         float depth = depthTex0.Load(int3(texelCoord, 0)).x; // 屏幕深度。
-        linearDepth = ogxShadowLinearDepth(depth, projectionInverse); // 换成米。
-        if (hasDh && depth == 1.0) linearDepth = ogxShadowLinearDepth(dhDepthTex0.Load(int3(texelCoord, 0)).x, dhProjectionInverse); // 天空像素读远景。
+        linearDepth = ogxLinearDepthFromScreenDepth(depth, projectionInverse); // 换成米。
+        if (hasDh && depth == 1.0) linearDepth = ogxLinearDepthFromScreenDepth(dhDepthTex0.Load(int3(texelCoord, 0)).x, dhProjectionInverse); // 天空像素读远景。
     }
     float3 bloom = ogxCurveToLinear3(bloomTexture.SampleLevel(texCoord * 0.5, 0.0).rgb); // 半分辨率泛光图。
     float amount = bloomAmount; // 泛光量。

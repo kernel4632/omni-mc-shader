@@ -10,19 +10,19 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 设计原因与取舍：
     纹理、像素大小、子图范围与模糊参数全部由调用方传入，库不读取引擎画面或屏幕尺寸。
     伽马编码沿用管线的四次方根近似，保证与原程序相同的亮度；五级泛光的子图排布属于宿主布局，
-    仍留在 `shaders/gfx/post.glsl` 的组合函数里，这里只提供每一级的核与统计公式。
+    仍留在效果层的组合函数里，这里只提供每一级的核与统计公式。
 */
 #ifndef OGX_POST_INCLUDED
 #define OGX_POST_INCLUDED
 
 // 亮度权重、四次方根编码与区间重映射来自数学模块。
-#include "../math.slang"
+#include "../common/math.slang"
 // 抖动要用噪声模块里的三角分布噪声。
-#include "../noise.slang"
-#include "../sampling.slang"
+#include "../common/noise.slang"
+// 采样提供白噪声、蓝噪声与低差异序列。
+#include "../common/sampling.slang"
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 #include "../shadow/shadow.slang"
-
-// 十三样本降采样：中心小、四角大，权重和为四，输出乘四分之一保持亮度。
 
 // 泛光、调色与屏幕图案，具体实现在子文件。
 #include "post/bloom.slang"

@@ -5,11 +5,13 @@ Omni 通用图形库末地传送门模块：每层旋转、缩放与平移的传
     float4x4 clip = ogxEndPortalLayer(3.0, frameTime); // 取该层的矩阵。
 设计原因与取舍：
     十六层各自不同旋转与平移，矩阵按参考实现的乘法顺序展开，调用方直接乘贴图坐标。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。末地传送门矩阵目前只有探针覆盖，顶层入口尚未接入。
 */
 #ifndef OGX_WORLD_PORTAL_INCLUDED
 #define OGX_WORLD_PORTAL_INCLUDED
 
-#include "../math.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
 
 // 末地传送门层：每层一个旋转、缩放与平移，叠出会流动的传送门纹理。
 float4x4 ogxEndPortalLayer(float layer, float timeSeconds)

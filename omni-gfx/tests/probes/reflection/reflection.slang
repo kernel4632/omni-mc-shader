@@ -18,9 +18,9 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     float3 ggx = ogxSampleGgxVndf(viewDir, 0.4, float2(0.3, 0.6)); // 可见法线采样。
     float3 viewPos = ogxReflectionViewPos(coord, 0.5, identity); // 还原视空间位置。
     float3 screenPos = ogxReflectionScreenPos(viewPos + float3(0.0, 1.0, 1.0), identity); // 投到屏幕。
-    float linear = ogxReflectionLinearDepth(0.5, identity); // 深度换米制。
-    float screen = ogxReflectionScreenDepth(linear + 1.0, identity); // 换回深度。
-    float dh = ogxReflectionDhToScreenDepth(0.5, identity, identity); // 远景深度换算。
+    float linear = ogxLinearDepthFromScreenDepth(0.5, identity); // 深度换米制。
+    float screen = ogxScreenDepthFromLinearDepth(linear + 1.0, identity); // 换回深度。
+    float dh = ogxScreenDepthFromDistantScreenDepth(0.5, identity, identity); // 远景深度换算。
     float3 dir = ogxReflectionDir(viewDir, normal, 0.2, float2(0.4, 0.5), false); // 反射方向。
     float3 scene = ogxReflectionSceneColor(gProbeTexture, coord); // 场景颜色。
     float facing = ogxReflectionSkyFacing(normal.y); // 天空朝向权重。

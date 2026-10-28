@@ -5,7 +5,7 @@
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
 */
 /*
-Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表面，并给出高光。
+Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表面，给出高光，并处理手光阴影。
 调用位置：需要动态手持光照的程序；Minecraft 光影由 `/omni-gfx/heldlight.glsl` 引入。
 可复制示例：
     vec3 held = ogxHeldLighting(viewPos, viewDir, normal, 0.4, ao, false, ...);
@@ -20,9 +20,14 @@ Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表
 
 // 表面模块提供手电筒光斑与指向，阴影模块提供屏幕空间阴影，数学与颜色模块提供漫反射、高光与色彩转换。
 #include "/omni-gfx/surface.glsl"
+// 相机提供投影、视空间与裁剪空间换算。
+#include "/omni-gfx/common/camera.glsl"
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 #include "/omni-gfx/shadow/shadow.glsl"
-#include "/omni-gfx/math.glsl"
-#include "/omni-gfx/color.glsl"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "/omni-gfx/common/math.glsl"
+// 颜色提供伽马、线性转换与色调映射。
+#include "/omni-gfx/common/color.glsl"
 // 手电筒模型的手持光：两个光源分别位于左右手，按光斑、距离衰减与漫反射累加。
 // `aimDir` 是光束指向，`heldLightShadow` 为真时每个光斑再乘屏幕空间阴影。
 vec3 ogxHeldLightingSpot(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3 ao, bool isHand,
@@ -221,6 +226,118 @@ vec3 ogxHandLightFromBlockData(int itemId, vec3 playerPos, inout float lightRang
         lightFinal = lightColor * NoL * max(falloff, 0.0); // 范围外为零。
     }
     return lightFinal; // 交回手持光颜色。
+}
+
+// 手电筒指向：打开相机平滑时按两个平滑角度滞后于视角，否则始终朝相机正前方。
+// 为什么单独成函数：光照与高光两处要同一个方向，分开写容易在改动时只改到一处。
+vec3 ogxFlashlightAimDirection(float eyeRx, float eyeRy, float smoothTime, bool cameraSmooth)
+{
+    if (!cameraSmooth) return vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
+    float angleRx = eyeRx * -smoothTime; // 俯仰角按过渡时长滞后。
+    float angleRy = eyeRy * -smoothTime; // 偏航角按过渡时长滞后。
+    mat3 rx = mat3(1.0, 0.0, 0.0, 0.0, cos(angleRx), sin(angleRx), 0.0, -sin(angleRx), cos(angleRx)); // 俯仰旋转。
+    mat3 ry = mat3(cos(angleRy), 0.0, -sin(angleRy), 0.0, 1.0, 0.0, sin(angleRy), 0.0, cos(angleRy)); // 偏航旋转。
+    return ogxMatrix3MulPoint(ry, ogxMatrix3MulPoint(rx, vec3(0.0, 0.0, -1.0))); // 合成旋转后的光束指向。
+}
+
+// 手持光：按物品的光色、照明半径与到相机的距离算一个球形光源。
+// `relativeEye` 是相机小数偏移，`playerPos` 是相机相对位置；两者相加才是到光源的真实距离。
+vec3 ogxHandLight(vec3 lightColor, float lightRange, vec3 playerPos, vec3 relativeEye)
+{
+    float dist = length(playerPos + relativeEye); // 到手持光源的距离。
+    float falloff = pow(1.0 - dist / lightRange, 3.0); // 线性衰减再取三次方。
+    return lightColor * max(falloff, 0.0); // 范围外为零。
+}
+
+// 手持光屏幕空间阴影：沿光线方向在深度图里步进，撞到遮挡就压暗。
+// 参考固定十步；远近景各取一张深度图，两条分支都写在函数体里，采样次数与参考一致。
+float ogxHandlightShadow(vec3 viewPos, bool depthCheck, vec3 lightDir, float noise,
+    vec3 normals, bool hand, mat4 modelViewInverse, float nearPlane, float farPlane,
+    float renderScale, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projection,
+    mat4 dhProjection, float dhVoxyNearPlane, float dhVoxyFarPlane, float texelSize, float strength)
+{
+    if (hand) return 1.0; // 手部不投手持光阴影。
+    vec3 worldLightDir = normalize(ogxMatrixMulPoint(modelViewInverse, lightDir)); // 光方向转世界，参考连平移一起乘。
+    float NdotL = smoothstep(0.0, 0.2, abs(dot(normals, worldLightDir))); // 法线朝向的软边。
+    float shadows = 1.0; // 阴影结果。
+    float samples = 10.0; // 参考固定十步。
+    float div = 0.0015; // 固定步长除数。
+    float _near = nearPlane; // 近平面。
+    float _far = farPlane * 4.0; // 远平面放大四倍。
+    if (depthCheck) // 远景使用远景裁剪参数。
+    {
+        _near = dhVoxyNearPlane;
+        _far = dhVoxyFarPlane;
+    }
+    vec3 position = ogxToClipSpace3Distant(viewPos, depthCheck, projection, dhProjection); // 起点投到裁剪空间。
+    float rayLength = ((viewPos.z + lightDir.z * _far * sqrt(3.0)) > -_near)
+        ? (-_near - viewPos.z) / lightDir.z : _far * sqrt(3.0); // 射线长度。
+    vec3 direction = ogxToClipSpace3Distant(viewPos + lightDir * rayLength, depthCheck, projection, dhProjection) - position; // 裁剪空间方向。
+    direction.xyz /= max(max(abs(direction.x) / div, abs(direction.y) / div), 400.0); // 固定步长。
+    direction *= 6.0; // 参考实现的步数放大。
+    position.xy *= renderScale;
+    direction.xy *= renderScale;
+    vec3 newPos = position + direction * noise; // 加抖动。
+    for (int i = 0; i < int(samples); i++) // 固定步数。
+    {
+        float samplePos;
+        if (depthCheck) // 远景深度图。
+        {
+            samplePos = texelFetch(dhDepthTexture, ivec2(newPos.xy / texelSize), 0).x;
+        }
+        else // 近景深度图。
+        {
+            samplePos = texelFetch(depthTexture, ivec2(newPos.xy / texelSize), 0).x;
+        }
+        if (samplePos < newPos.z && samplePos > 0.0) // 被遮挡。
+        {
+            shadows = 0.0;
+            break;
+        }
+        newPos += direction; // 前进一步。
+    }
+    return clamp(shadows * NdotL, 1.0 - strength, 1.0); // 参考实现的强度夹紧。
+}
+
+// 手电光：把屏幕位置换成手电筒锥，再按距离、圆斑与镜头脏污叠出光斑。
+// `specularData` 返回方向与强度，供高光阶段复用。
+// 参考签名是屏幕坐标、视空间位置、法线与底色；矩阵、相机位置、深度图与手电参数显式追加。
+vec3 ogxFlashlight(vec2 texcoord, vec3 viewPos, vec3 normal, vec3 albedo,
+    out vec4 specularData, bool hand, sampler2D noiseTexture, mat4 modelViewInverse,
+    mat4 previousModelView, vec3 cameraWorldPos, vec3 previousCameraWorldPos,
+    float centerDepthSmooth, mat4 projectionInverse, float range, float brightnessFalloff,
+    float brightness, float size, float red, float green, float blue)
+{
+    float forwardOffset = 0.5; // 参考实现的前向偏移。
+    vec3 shiftedViewPos = viewPos + vec3(-0.25, 0.2, 0.0); // 手电在视线左上方。
+    vec3 shiftedPlayerPos = ogxMatrix3MulPoint(mat3(modelViewInverse), shiftedViewPos) + ogxMatrixTranslation(modelViewInverse)
+        + (cameraWorldPos - previousCameraWorldPos) * 3.0; // 相机相对位置并补上相机移动。
+    shiftedViewPos = ogxMatrix3MulPoint(mat3(previousModelView), shiftedPlayerPos) + ogxMatrixTranslation(previousModelView); // 换到上一帧视空间，避免手电抖动。
+    vec2 scaledViewPos = shiftedViewPos.xy / max(-shiftedViewPos.z - forwardOffset, 1e-7); // 投到屏幕。
+    float linearDistance = length(shiftedPlayerPos); // 到手电的距离。
+    float shiftedLinearDistance = length(scaledViewPos); // 屏幕距离。
+    float lightFalloff = 1.0 - clamp(1.0 - linearDistance / range, -0.999, 1.0); // 距离衰减。
+    lightFalloff = max(exp(-10.0 * brightnessFalloff * lightFalloff), 0.0); // 指数衰减。
+    float specular = lightFalloff * exp2(-7.0 * shiftedLinearDistance * shiftedLinearDistance) * brightness; // 高光强度。
+    specularData = vec4(normalize(shiftedPlayerPos), specular); // 方向与强度。
+    float projectedCircle = clamp(1.0 - shiftedLinearDistance * size, 0.0, 1.0); // 圆斑。
+    float lensDirt = textureLod(noiseTexture, scaledViewPos * 0.2 + 0.1, 0.0).b; // 镜头脏污。
+    float lensShape = (pow(abs(pow(abs(projectedCircle - 1.0), 2.0) * 2.0 - 0.5), 2.0) + lensDirt * 0.2) * 10.0; // 光斑形状。
+    float offsetNdotL = clamp(dot(-normal, normalize(shiftedPlayerPos)), 0.0, 1.0); // 法线朝向。
+    vec3 diffuse = vec3(1.0) * lightFalloff * offsetNdotL * pow(1.0 - pow(1.0 - projectedCircle, 2.0), 2.0) * lensShape * brightness; // 漫反射光斑。
+    if (hand) // 手部不发光。
+    {
+        diffuse = vec3(0.0);
+        specularData = vec4(0.0);
+    }
+    float lightWidth = 1.0 + linearDistance * 3.0; // 手电在屏幕上的覆盖宽度。
+    vec3 pointPos = ogxToScreenSpace(vec3(texcoord, centerDepthSmooth), projectionInverse) + vec3(-0.25, 0.2, 0.0); // 命中点换回视空间。
+    pointPos = ogxMatrix3MulPoint(mat3(modelViewInverse), pointPos); // 换到相机相对世界位置。
+    float flashLightHitPoint = distance(pointPos, shiftedPlayerPos); // 命中点到手电的距离。
+    float indirectFlashLight = exp(-10.0 * (1.0 - clamp(1.0 - length(shiftedViewPos.xy) / lightWidth, 0.0, 1.0))); // 屏幕范围的柔光。
+    indirectFlashLight *= pow(clamp(1.0 - flashLightHitPoint / lightWidth, 0.0, 1.0), 2.0); // 越远越弱。
+    diffuse += albedo / 150.0 * indirectFlashLight * lightFalloff; // 被照表面的间接反光。
+    return diffuse * vec3(red, green, blue); // 按手电颜色输出。
 }
 
 #endif

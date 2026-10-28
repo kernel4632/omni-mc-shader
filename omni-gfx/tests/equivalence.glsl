@@ -1,19 +1,19 @@
 #version 330 core
 /*
-适配层与生成库的 GPU 对照测试：同一像素、同一输入，分别走旧 `gfx_` 入口和直接调用 `ogx_` 函数。
+适配层与生成库的 GPU 对照测试：同一像素、同一输入，分别走冻结的参考副本和直接调用 `ogx_` 函数。
 调用位置：`omni-gfx/build.py test-gpu` 运行；不属于 Minecraft 光影入口。
 设计原因与取舍：
-    第二次迁移后 `gfx_` 已经是转发层，本测试验证的是“适配层确实接到生成库、参数顺序没有错位”，
-    不再证明与迁移前的旧算式一致；迁移前的 26/26、最大差 0 记录见 `docs/verification.md`。
+    参考副本是 `tests/reference/` 里从旧库冻结的纯 GLSL，只用于数值对照，不进入光影包。
+    第二次迁移后生产代码已经删除 `gfx_` 转发层，本测试验证生成库与迁移前算式仍然一致。
     两边在同一驱动、同一精度下计算，输出写两张浮点附件，Python 侧直接读回，差异不会被八位量化掩盖。
-    贴图过滤函数仍然只在 C++/GPU 侧有实现，不在比较范围。
+    贴图过滤函数需要显式纹理尺寸，参考副本与生成库都从同一张噪声纹理取像素。
 */
-#include "/gfx/math.glsl"
-#include "/gfx/color.glsl"
-#include "/gfx/sampling.glsl"
-#include "/omni-gfx/math.glsl"
-#include "/omni-gfx/color.glsl"
-#include "/omni-gfx/sampling.glsl"
+#include "reference/math.glsl"
+#include "reference/color.glsl"
+#include "reference/sampling.glsl"
+#include "/omni-gfx/common/math.glsl"
+#include "/omni-gfx/common/color.glsl"
+#include "/omni-gfx/common/sampling.glsl"
 
 uniform int uCase;  // 当前比较的用例编号，由 Python 逐个绘制。
 uniform sampler2D uNoise;  // 两边共用的六十四像素噪声纹理。
@@ -105,12 +105,12 @@ vec4 newValue(int testCase, vec2 uv, vec3 c, vec3 n, vec3 v, vec3 l)
     if (testCase == 15) return vec4(ogxTangentBasis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0)).tangent.x, ogxTangentBasis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0)).bitangent.y, ogxTangentBasis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0)).normal.z, 0.0);  // 切线基三个方向。
     if (testCase == 16) return vec4(ogxWarpResult(uv, c), 1.0);  // 空间扭曲的辅助结果。
     if (testCase == 17) return vec4(ogxLinearToGamma(c).x, ogxGammaToLinear(c));  // 数学模块伽马。
-    if (testCase == 18) return vec4(ogxLinearToGamma2(c).x, ogxGammaToLinear2(c));  // 颜色模块伽马。
+    if (testCase == 18) return vec4(ogxLinearToGamma(c).x, ogxGammaToLinear(c));  // 颜色模块伽马。
     if (testCase == 19) return vec4(ogxAces(c, true), 1.0);  // ACES 带阿布尼校正。
     if (testCase == 20) return vec4(ogxAces(c, false), 1.0);  // ACES 不带校正。
     if (testCase == 21) return vec4(ogxAgx(c, 13.0, true), 1.0);  // AgX 带校正。
     if (testCase == 22) return vec4(ogxAgx(c, 13.0, false), 1.0);  // AgX 不带校正。
-    if (testCase == 23) return vec4(ogxTonemapNone(c).x, ogxAdvancedColor(c, 1.0, 0.0, 1.0, 1.0));  // 无压缩与高级调色。
+    if (testCase == 23) return vec4(ogxLinearToGamma(c).x, ogxAdvancedColor(c, 1.0, 0.0, 1.0, 1.0));  // 旧无压缩的伽马编码与高级调色。
     if (testCase == 24) return vec4(ogxPurkinjeResult(c).x, ogxWhiteBalance(c, vec3(1.0, 0.98, 0.95)));  // 暗视觉、白平衡与黑边。
     if (testCase == 25) return vec4(ogxBlueNoise(uNoise, ivec2(gl_FragCoord.xy)), ogxBlueNoiseTemporal(uNoise, ivec2(gl_FragCoord.xy), 7).x, ogxBayerTemporal(ivec2(gl_FragCoord.xy), 11));  // 采样模块。
     return vec4(0.0);  // 未定义编号返回零。

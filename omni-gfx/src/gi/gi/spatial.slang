@@ -1,3 +1,9 @@
+/*
+全局光子文件：七乘七空间滤波与参考签名版降噪。
+调用位置：由 `gi/gi.slang` 内联，全局光在时间累积之后调用空间滤波。
+可复制示例：`vec3 c = ogxGiSpatialFilter(coord, dist, normal, viewDir, view, history, 0.5);`
+设计原因与取舍：邻域偏移显式列出，权重按法线与深度筛选；边界夹紧与参考实现一致。
+*/
 // 七乘七邻域偏移按行列下标现算：x 从负三到三，y 同样，按行优先排列。
 // 全局光空间滤波：在七乘七邻域里按法线与深度加权平均，抑制半分辨率带来的噪点。
 float3 ogxGiSpatialFilter(float2 coord, float dist, float3 normal, float3 viewDir, OgxGiView view, Sampler2D historyTexture, float renderScale)

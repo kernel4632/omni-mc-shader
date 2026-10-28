@@ -22,9 +22,9 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     float2 duv2 = float2(0.0, 0.01); // 纹理坐标的纵向导数。
     float shadow = 1.0; // 阴影初值。
     int2 texel = ogxParallaxSmooth(float2(t, t), tangent, bitangent, axis, float3(0.2, 0.2, -1.0), duv1, duv2, viewPos,
-        probeTex2D, probeTex2D, float2(256.0, 256.0), 16.0, true, 40.0, 12, 4, 20, true, true, false, int2(0, 0), 1, 1, normal, shadow); // ?????
+        probeTex2D, probeTex2D, float2(256.0, 256.0), 16.0, true, 40.0, 12, 4, 20, true, true, false, int2(0, 0), 1, 1, normal, shadow); // 平滑步进入口。
     int2 sharpTexel = ogxParallaxSharp(float2(t, t), tangent, bitangent, axis, float3(0.2, 0.2, -1.0), duv1, duv2, viewPos,
-        probeTex2D, float2(256.0, 256.0), 16.0, true, 40.0, 12, 20, true, true, 1, normal, shadow); // ?????
+        probeTex2D, float2(256.0, 256.0), 16.0, true, 40.0, 12, 20, true, true, 1, normal, shadow); // 锐利步进入口。
     float3 c = normal + float3(height) + ogxParallaxHitNormal(probeTex2D, texel, normal, 1.0, true, 1); // 法线处理。
     return float4(c + float3(float2(texel), 0.0) + float3(float2(sharpTexel), 0.0), 1.0); // 有输出即可。
 }

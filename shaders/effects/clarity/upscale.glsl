@@ -40,7 +40,7 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 #include "/omni-gfx/upscale.glsl"
-#include "/omni-gfx/sampling.glsl"
+#include "/omni-gfx/common/sampling.glsl"
 
 // 参考签名兼容层：RGSS 旋转网格超采样在片元里自己取导数，宿主层补上贴图与像素大小。
 vec4 sampleRGSS(sampler2D tex, vec2 uv, vec2 pixelSize){

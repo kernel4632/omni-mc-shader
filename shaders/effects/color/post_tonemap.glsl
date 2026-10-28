@@ -12,13 +12,13 @@
 调用位置：`rendering/post.glsl` 的 `OMNI_COMPOSITE14_PASS` 分支先引入共享声明与曝光、镜头、泛光文件，再引入本文件，
     最后 `void main(){ TonemapColor(); }` 调用；输出 `compositeOutput1` 由主文件的程序块声明。
 可复制示例：`TonemapColor();`（要求调用方已提供 `texelCoord`、`texCoord`、`colortex1` 与各效果函数）。
-设计原因与取舍：曝光、白平衡与三条色调映射曲线在 `effects/color/color.glsl`，通用曲线本体在 `/omni-gfx/color.glsl`（由 Slang 源生成），暗角在 `effects/lens/lens.glsl`，
+设计原因与取舍：曝光、白平衡与三条色调映射曲线在 `effects/color/color.glsl`，通用曲线本体在 `/omni-gfx/common/color.glsl`（由 Slang 源生成），暗角在 `effects/lens/lens.glsl`，
     合并泛光在 `effects/color/bloom.glsl`；本文件只做程序级的顺序排布，逐行照 `composite14.fsh`。
     原程序在这里另声明了一个局部 `texelCoord`，值与共享声明相同，这里直接用共享声明，行为不变。
 */
 
 // 通用库颜色模块：强光压缩曲线由 Slang 源生成，下面的三条曲线都从这里调用。
-#include "/omni-gfx/color.glsl"
+#include "/omni-gfx/common/color.glsl"
 
 void TonemapColor(){
 	vec4 data1 = texelFetch(colortex1, texelCoord, 0); // 读一号画面，透明通道是泛光引导。
@@ -40,6 +40,8 @@ void TonemapColor(){
 		color = ogxAces(color, bool(OMNI_ABNEY_EFFECT_CORRECTION)); // 影院标准压缩曲线。
 	#elif OMNI_TONEMAP_OPERATOR == 2 // 序号二取无压缩。
 		color = ogxTonemapNone(color); // 只做伽马编码。
+	#elif OMNI_TONEMAP_OPERATOR == 3 // 序号三取可配置 AgX。
+		color = ogxAgxConfigurable(color); // 按 iterationT 的完整可配置曲线压缩。
 	#else // 其余（默认零）取 `ogxAgx`。
 		color = ogxAgx(color, OMNI_AGX_EV, bool(OMNI_ABNEY_EFFECT_CORRECTION)); // 宽色域压缩，保住高光颜色。
 	#endif

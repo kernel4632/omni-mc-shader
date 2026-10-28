@@ -1,6 +1,8 @@
 /* 体积雾的单步参数：密度模型选择与沿阳光方向的吸收步进；由 `fog/volume.slang` 内联引入。
 可复制示例：`float density = ogxFogDensity(pos, wind, true, 0.3, 1.0, 0.06, midnight, noise);`
-设计取舍：步长逐步放大，近处权重更高，避免远处几何把光吸干。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 雾密度：仅高度衰减或团雾，参数由效果层按选项给出。
 float ogxFogDensity(float3 fogPos, float3 wind, bool noisy, float heightA, float heightB, float falloff, float timeMidnight, Sampler2D noiseTexture)
@@ -20,3 +22,6 @@ float ogxFogLightMarch(inout float3 fogPos, float3 wind, OgxFogMedia media, bool
     }
     return lightingDensity; // 返回累计密度。
 }
+
+// 体积雾主体步进，具体实现在子文件。
+// --- march ---

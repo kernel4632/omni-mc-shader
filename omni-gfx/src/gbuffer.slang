@@ -9,13 +9,15 @@ Omni 通用图形库 G-buffer 解码模块：把多张中间画面还原成表�
     这样算法本身不依赖 Minecraft，调用方仍可按自己的缓冲布局填写。
     `GetGbufferData` 的每一行读取顺序与参考实现一致；材质编号只通过 `OgxMaterialIdTable`
     传入，避免把资源包的编号约定写死进通用库。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。延迟缓冲解码目前只有探针覆盖，宿主仍直接读取附件布局。
 */
 #ifndef OGX_GBUFFER_INCLUDED
 #define OGX_GBUFFER_INCLUDED
 
 // 表面模块提供 labPBR 材质解码，数学模块提供解包与法线解码。
 #include "surface.slang"
-#include "math.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "common/math.slang"
 
 // 材质编号表：参考实现的 MATID 常量由宿主资源包决定，这里集中成一个显式结构。
 struct OgxMaterialIdTable

@@ -14,7 +14,7 @@
     `vec3 sunDisc = RenderSunDisc(worldDir, worldSunVector);`
     `float moonDisc = RenderMoonDisc(worldDir, worldMoonVector);`
 设计原因与取舍：圆盘不是几何，而是视线与日月方向夹角的平滑遮罩；反射天空盒分辨率低，用更大的角半径换取可见。
-    圆盘形状与常数已经迁到 `shaders/gfx/atmosphere.glsl`，本文件只保留太阳色、尺寸档位分支与同名转发。
+    圆盘形状与常数已经迁到 `/omni-gfx/atmosphere/sky.glsl`，本文件只保留太阳色、尺寸档位分支与同名转发。
     真实月亮模式改用 Eclipse 的尺寸档位；月面法线贴图本项目没有，缺少时退回程序圆盘不额外调制。
     太阳圆盘最后乘 `omniSunTint()`，太阳色与辐照倍率由 `effects/sky/suncolor.glsl` 提供。
 */

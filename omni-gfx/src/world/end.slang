@@ -10,14 +10,18 @@ Omni 通用图形库 iterationT 末地补充模块：末地星空、行星 BRDF�
     参考实现直接读 `frameTimeCounter`、`worldSunVector`、`STAR_TYPE` 与云噪声选项。库把时间、光方向、
     纹理和开关全部改成显式参数，公式、常数、循环次数和采样顺序保持不变。
     噪点纹理只作为参数传入，库不假设它绑定在哪个缓冲；这样末地星空能独立测试，也能在光影里换槽位。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。末地效果目前只有探针与 profile 覆盖，顶层末地入口尚未接入。
 */
 #ifndef OGX_WORLD_END_INCLUDED
 #define OGX_WORLD_END_INCLUDED
 
 // 数学提供旋转、黑体色与夹紧；雾提供三维噪声与分形云；云提供顶部曲线；行星提供曲面曲线。
-#include "../math.slang"
+#include "../common/math.slang"
+// 雾提供高度密度、相位与粉末效应。
 #include "../fog/fog.slang"
+// 云提供球面求交、密度与单层步进。
 #include "../cloud/cloud.slang"
+// 行星提供末地天空与行星环。
 #include "../planet.slang"
 
 // iterationT 末地星空：按天球格子取哈希星点，星色用黑体温度。

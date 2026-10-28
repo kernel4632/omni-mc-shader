@@ -124,7 +124,7 @@ shaders/
 - 已完成：`gfx/gi.glsl` 增加反射阴影图反弹、历史重投影、时间滤波与空间滤波，相机参数打包成 `gfx_gi_view`；`effects/lighting/gi.glsl` 只保留阶段分支、选项换算与一次调用。
 - 已完成：`gfx/antialias.glsl` 增加当前帧与历史取样、邻域方差、历史裁剪与时间重投影；`effects/clarity/taa.glsl` 只保留相机速度、选项换算与重投影入口。
 - 已完成：新增 `gfx/cloud_volume.glsl`，体积云的密度、光照、沿视线步进、闪电与云影迁入通用库；`effects/cloud/volumetric.glsl` 只保留天气换算、附加层编排与空气透视合成。
-- 已完成：新增 `gfx/fog_volume.glsl`，体积雾的密度、光照吸收、步进、阴影、云影、闪电、暴风与群系迁入通用库；`effects/fog/volumetric.glsl` 只保留选项换算与一次调用，雾照明用 `GFX_FOG_LPV_STEP` 可选钩子接入。
+- 已完成：新增 `gfx/fog_volume.glsl`，体积雾的密度、光照吸收、步进、阴影、云影、闪电、暴风与群系迁入通用库；`effects/fog/volumetric.glsl` 只保留选项换算与一次调用，雾照明用 `OGX_FOG_LPV_STEP` 可选钩子接入。
 - 已完成：`gfx/reflection.glsl` 增加屏幕空间追踪的坐标换算、深度取样、远景转换、步进与二分细化；`effects/reflection/screenspace.glsl` 只保留深度图选择与质量选项换算。
 - 已完成：`gfx/reflection.glsl` 增加反射合并的菲涅耳、金属度、水吸收与亮度补正，`effects/reflection/screenspace.glsl` 的合成五号入口只做一次调用。
 - 已完成：`gfx/reflection.glsl` 增加反射主流程与三个维度的合成结构；天空兜底、体素回退、命中深度、视空间还原与反射雾改用 `GFX_REFLECTION_*` 钩子注入。`effects/reflection/screenspace.glsl` 只保留维度差异与一次调用，非注释行 331 降到 242。

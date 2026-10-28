@@ -3,7 +3,7 @@
 // 调用位置：测试世界的水面绘制之前，替代原来的一次帧缓冲拷贝。
 // 设计原因与取舍：整屏拷贝用一次全屏绘制完成，不依赖帧缓冲拷贝的附件格式匹配，
 // 每个像素都一定被写到；水面只需要颜色，深度继续用场景自己的深度附件。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 
 uniform sampler2D uSource; // 场景颜色。
 uniform vec2 uResolution; // 目标尺寸。

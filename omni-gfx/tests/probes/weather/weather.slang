@@ -17,6 +17,6 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     c += ogxFoliage(float3(0.2, 0.9, 0.2)); // 植被程度。
     c += ogxStormNoise(p, probeTex2D, 512.0); // 暴风噪声。
     c += ogxStormColor(0.4, 0.2); // 暴风颜色。
-    c += ogxWeatherHash11(t * 20.0); // 每日天气哈希。
+    c += ogxHash11(t * 20.0); // 每日天气哈希。
     return float4(c, 1.0); // 有输出即可。
 }

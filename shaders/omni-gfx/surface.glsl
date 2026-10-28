@@ -23,7 +23,7 @@ Omni 通用图形库表面模块：方块光曲线、材质法线、遮蔽换算
 #define OGX_SURFACE_INCLUDED
 
 // 数学模块提供法线解码、夹紧、湿面粗糙度与色相转换。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 // 天光曲线：先抬高低等级，再压暗高等级，等级越高越接近饱和。
 float ogxCurveBlockLightSky(float blockLight)
 {
@@ -174,26 +174,7 @@ float ogxSpotShape(float r, float fov)
     return shape; // 零到一的光斑强度。
 }
 
-// 手电筒指向：打开相机平滑时按两个平滑角度滞后于视角，否则始终朝相机正前方。
-// 为什么单独成函数：光照与高光两处要同一个方向，分开写容易在改动时只改到一处。
-vec3 ogxFlashlightAimDirection(float eyeRx, float eyeRy, float smoothTime, bool cameraSmooth)
-{
-    if (!cameraSmooth) return vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
-    float angleRx = eyeRx * -smoothTime; // 俯仰角按过渡时长滞后。
-    float angleRy = eyeRy * -smoothTime; // 偏航角按过渡时长滞后。
-    mat3 rx = mat3(1.0, 0.0, 0.0, 0.0, cos(angleRx), sin(angleRx), 0.0, -sin(angleRx), cos(angleRx)); // 俯仰旋转。
-    mat3 ry = mat3(cos(angleRy), 0.0, -sin(angleRy), 0.0, 1.0, 0.0, sin(angleRy), 0.0, cos(angleRy)); // 偏航旋转。
-    return ogxMatrix3MulPoint(ry, ogxMatrix3MulPoint(rx, vec3(0.0, 0.0, -1.0))); // 合成旋转后的光束指向。
-}
 
-// 手持光：按物品的光色、照明半径与到相机的距离算一个球形光源。
-// `relativeEye` 是相机小数偏移，`playerPos` 是相机相对位置；两者相加才是到光源的真实距离。
-vec3 ogxHandLight(vec3 lightColor, float lightRange, vec3 playerPos, vec3 relativeEye)
-{
-    float dist = length(playerPos + relativeEye); // 到手持光源的距离。
-    float falloff = pow(1.0 - dist / lightRange, 3.0); // 线性衰减再取三次方。
-    return lightColor * max(falloff, 0.0); // 范围外为零。
-}
 
 // Eclipse 间接光：天光按一条抬高次方的曲线缩放，再混入最低环境光。
 // `minAmount` 与 `minAmountInside` 分别是室外、室内的最低光比例，`nightVision` 是夜视附加量。

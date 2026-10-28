@@ -63,7 +63,7 @@
 // 照 Eclipse `dimensions/begin.csh:29-35` 的 `hash11` 一比一搬运，用于随机取档。
 // 为什么不用正弦哈希：原程序用这套乘加打散，逐位浮点结果与它一致，便于逐行对照。
 float omniWeatherHash(float p){
-	return ogxWeatherHash11(p); // 乘加打散在通用库。
+	return ogxHash11(p); // 乘加打散在通用库。
 }
 
 // --- 天气表：十天，每天四层云与两项雾 ---

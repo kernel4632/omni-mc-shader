@@ -15,8 +15,9 @@ Omni 通用图形库体素追踪模块：在规则三维网格里沿射线逐格
 #define OGX_VOXEL_INCLUDED
 
 // 数学提供夹紧与向量单位化，颜色提供 sRGB 到线性的转换。
-#include "../math.slang"
-#include "../color.slang"
+#include "../common/math.slang"
+// 颜色提供伽马、线性转换与色调映射。
+#include "../common/color.slang"
 
 // 半透明方块：水、冰、玻璃，光线穿过后只给后面的画面染色，不停下。
 bool ogxVoxelIsTranslucent(uint id) { return id == 8u || id == 79u || id == 95u; }
@@ -244,9 +245,7 @@ uint ogxPopulateShadowVoxelIndex(float3 playerPos, float3 cameraOffset, int3 mid
 // 参考用全局 Albedo，库版本显式接收颜色；常数与参考一致。
 float ogxPhotonicsEmission(float3 albedo)
 {
-    float3 hsv = ogxRgbToHsv(albedo); // 发光只跟色相饱和度与亮度有关。
-    float emissive = smoothstep(0.05, 0.15, hsv.y) * pow(hsv.z, 3.5); // 低饱和颜色不算发光。
-    return emissive * 0.5; // 参考把自发光压到一半。
+    return ogxGetVoxelEmission(albedo); // 自发光曲线只在体素模块维护一份。
 }
 
 // 解码一个体素面的完整数据：脸表纹理的第 y 行是六个面，x 轴是一维体素下标。

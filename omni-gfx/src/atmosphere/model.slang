@@ -12,11 +12,14 @@ Omni 通用图形库预计算大气查表模块：坐标映射、透过率、组
 #ifndef OGX_ATMOSPHERE_MODEL_INCLUDED
 #define OGX_ATMOSPHERE_MODEL_INCLUDED
 
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 #include "../shadow/shadow.slang"
 // 球面几何与相位函数来自大气模块，亮度与夹紧来自数学模块，色适应矩阵的按行乘法来自颜色模块。
 #include "atmosphere.slang"
-#include "../math.slang"
-#include "../color.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
+// 颜色提供伽马、线性转换与色调映射。
+#include "../common/color.slang"
 
 // 一次查表需要的全部常数与贴图尺寸；数值由宿主按原程序填写，本模块不保存默认值。
 struct OgxAtmosphereModel

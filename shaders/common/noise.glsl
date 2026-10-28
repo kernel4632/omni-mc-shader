@@ -18,9 +18,9 @@
 #include "/common/uniforms.glsl"
 #include "/common/math.glsl"
 // 采样算法放在通用库，本文件只把加载器纹理、像素坐标和帧号传进去。
-#include "/omni-gfx/sampling.glsl"
+#include "/omni-gfx/common/sampling.glsl"
 // 三角噪声与雾噪声在生成库，宿主兼容层直接引用。
-#include "/omni-gfx/noise.glsl"
+#include "/omni-gfx/common/noise.glsl"
 
 // 统一像素坐标：片元阶段用真实片元坐标，其它阶段取零；见文件头的取舍说明。
 #ifdef OMNI_FRAGMENT

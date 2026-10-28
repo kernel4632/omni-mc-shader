@@ -3,7 +3,7 @@
 // 调用位置：时间抗锯齿之后各画一次；天空不参与统计，亮云不会把地面压黑。
 // 设计原因与取舍：自动曝光让同一套光照在不同太阳高度下都能看清暗部；
 // 只统计几何像素，避免大面积明亮天空主导曝光。两次缩小都在显卡上完成，不回读 CPU。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 
 uniform sampler2D uSource; // 来源颜色。
 uniform sampler2D uDepth; // 深度，用来排除天空。
@@ -19,11 +19,11 @@ float logLuminance(vec3 color) // 返回以二为底的对数。
     return clamp(log2(luminance), -9.0, 5.0); // 约零点零零二到三十二。
 }
 
-void main()
+void main() // 两级缩小共用同一个入口。
 {
     if (uMode == 0) // 第一级：每个小像素取四个样本。
     {
-        vec2 base = gl_FragCoord.xy / uResolution; // 小图上的位置。
+        vec2 base = gl_FragCoord.xy / uResolution; // 小图上的位置，也是大块的中心。
         vec2 offset = 0.35 / uResolution; // 四个点落在大块内侧。
         vec2 uvs[4] = vec2[4](base + vec2(-offset.x, -offset.y), base + vec2(offset.x, -offset.y),
                               base + vec2(-offset.x, offset.y), base + vec2(offset.x, offset.y));

@@ -12,7 +12,7 @@ Omni 通用图形库放大与锐化模块：边缘方向重采样、对比度自
 #define OGX_UPSCALE_INCLUDED
 
 // 数学模块提供亮度、夹紧与单位化。
-#include "math.slang"
+#include "common/math.slang"
 
 // 单个采样点按离重采样中心的距离给权重，超出钳位半径的样本不再增加贡献。
 // 两层权重相乘让核在中心为一、边缘平滑收零，避免放大后出现一圈硬边。

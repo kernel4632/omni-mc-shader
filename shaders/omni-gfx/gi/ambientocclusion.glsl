@@ -11,11 +11,17 @@ Omni 通用图形库全局光环境光遮蔽模块：Eclipse GTAO 的弧段积�
     float ao = ogxGtaoHorizon(screenPos, viewPos, normal, dither, 4, 1.0, 8, 0.2, pixelSize, viewSize, 1.0, 0.0, 1.5708, depthTex, proj, invProj); // 计算环境光遮蔽。
 设计原因与取舍：
     沿切片搜索最近遮挡，切片数与步数由调用方给出；深度图、矩阵与手部深度显式传入，公式与参考实现逐项相同。
+    本模块只服务独立画面的低成本遮蔽，步数与切片数由画质档位控制；全局光内部使用的
+    多次切片参考实现放在 `gi/gi/ao.slang`，两者按调用场景分工，不互相包含，避免把重算法带进轻量阶段。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。独立环境光遮蔽目前只有探针覆盖，顶层画面走 gi/gi 的多切片实现。
 */
 #ifndef OGX_GI_AMBIENTOCCLUSION_INCLUDED
 #define OGX_GI_AMBIENTOCCLUSION_INCLUDED
-#include "/omni-gfx/camera.glsl"
-#include "/omni-gfx/math.glsl"
+
+// 相机提供投影、视空间与裁剪空间换算。
+#include "/omni-gfx/common/camera.glsl"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "/omni-gfx/common/math.glsl"
 // GTAO 的弧段积分：两个水平角之间覆盖的余弦积分。
 // 在单位圆上积分一段弧的贡献，供天空环境光近似。
 float ogxGtaoArcIntegral(vec2 h, float n, float cosN)
@@ -41,6 +47,7 @@ float ogxGtaoMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPos, 
         float depth = texelFetch(depthTexture, pixel, 0).x; // 读深度。
         if (depth == 1.0 || depth < handDepth || depth == screenPos.z) // 天空、手与自身都跳过。
         {
+            // 无效样本不参与最大角，但射线仍要前进，避免原地重复读取同一像素。
             rayPos += rayStep;
             continue;
         }
@@ -51,6 +58,7 @@ float ogxGtaoMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPos, 
         float cosTheta = dot(viewerDir, offset) * norm; // 夹角余弦。
         cosTheta = mix(cosTheta, -1.0, distanceFalloff); // 远处压到水平线以下。
         maxCosTheta = max(cosTheta, maxCosTheta); // 取最大。
+        // 沿切片方向推进一个固定步长；步长在循环外算好，循环内不再重复除法。
         rayPos += rayStep;
     }
     return ogxFastAcosPoly(clamp(maxCosTheta, -1.0, 1.0)); // 反余弦得到角度。

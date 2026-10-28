@@ -18,8 +18,9 @@ Omni 通用图形库视差模块：在地表材质的高度图上沿视线找可
 #define OGX_PARALLAX_INCLUDED
 
 // 数学模块提供法线解码、夹紧与位运算近似；采样模块提供时间蓝噪声。
-#include "/omni-gfx/math.glsl"
-#include "/omni-gfx/sampling.glsl"
+#include "/omni-gfx/common/math.glsl"
+// 采样提供白噪声、蓝噪声与低差异序列。
+#include "/omni-gfx/common/sampling.glsl"
 // 把向量转到切线空间：显式按切线基的三个列向量点乘。
 // 为什么不用矩阵乘：Slang 与 GLSL 的行列顺序不同，写成矩阵会在两个后端得到不同结果；
 // 三个点乘在两种语言里语义完全相同，也不会触发后端的矩阵类型限制。

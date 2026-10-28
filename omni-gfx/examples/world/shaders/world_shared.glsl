@@ -5,11 +5,11 @@
 // 设计原因与取舍：太阳颜色、云层与雾只写一份，各阶段的色温与云位置不会互相错开；
 // 像素到世界方向的换算也只写一份，升采样与时间累积才能逐像素对齐，不会出现接缝。
 // 数学：黑体、亮度、抖动与矩阵。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 // 采样：蓝噪声与按帧平移的抖动。
-#include "/omni-gfx/sampling.glsl"
+#include "/omni-gfx/common/sampling.glsl"
 // 噪声：云、雾与水面细节。
-#include "/omni-gfx/noise.glsl"
+#include "/omni-gfx/common/noise.glsl"
 // 大气：天空与空气透视。
 #include "/omni-gfx/atmosphere/atmosphere.glsl"
 // 水面：波法线与水面着色。
@@ -27,7 +27,7 @@
 // 抗锯齿：时间重投影与历史裁剪。
 #include "/omni-gfx/antialias/antialias.glsl"
 // 颜色：色调映射曲线。
-#include "/omni-gfx/color.glsl"
+#include "/omni-gfx/common/color.glsl"
 
 // 太阳颜色：五千八百开黑体，归一化亮度后由各阶段自己决定强度。
 vec3 worldSunColor() // 返回只含色度的太阳颜色。

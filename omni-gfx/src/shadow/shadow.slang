@@ -7,97 +7,26 @@ Omni 通用图形库阴影模块：阴影相机投影、边缘压缩、屏幕空
     OgxCascadeSelect s = ogxSelectCascade(viewDepth, float3(32.0, 64.0, 128.0), 6.0); // 选级联与过渡权重。
 设计原因与取舍：
     矩阵、纹理、分辨率与选项全部由调用方传入，库不读取引擎状态；深度图的格式由调用方决定。
-    算式与旧 `shaders/gfx/shadow.glsl` 逐项一致，迁移只改名字和语法，默认画面因此不变。
+    算式与迁移前的 GLSL 原型逐项一致，迁移只改名字和语法，默认画面因此不变。
     PCSS 与级联是阶段三新增能力：半影宽度由遮挡物距离推出，级联交界做线性过渡，避免硬边。
     矩阵乘法在 Slang 与 GLSL 的行列解释不同，这里统一走数学模块的列展开入口，不直接乘矩阵。
+    投影偏差与写入端压缩归 `shadow/map.slang`；本文件只保留读取端压缩、采样与滤波。
 */
 #ifndef OGX_SHADOW_INCLUDED
 #define OGX_SHADOW_INCLUDED
 
 // 饱和、矩阵列展开与圆周常数来自数学模块。
-#include "../math.slang"
-
-// Eclipse 的阴影修补：按相机距离把世界坐标抬离表面一点点，抵消阴影图的彼得潘效应。
-// 为什么用小数抖动而不是固定偏移：固定偏移会在不同距离留下阶梯，按世界坐标取小数能让误差散开。
-// `transition` 是阴影过渡量，越小越靠近阴影边缘，偏移越强；`flatNormal` 为保持原签名而保留，原程序未使用。
-void ogxGriAndEminShadowFix(inout float3 worldPos, float3 flatNormal, float transition, float3 cameraWorldPos, bool eyeInWater)
-{
-    transition = 1.0 - transition; // 过渡量取反，边缘处为一。
-    transition *= transition * transition * transition * transition * transition * transition; // 六次方，只让最边缘一段生效。
-    float zoomLevel = lerp(0.0, 0.5, transition); // 边缘处偏移半个格子。
-    if (zoomLevel > 0.001 && !eyeInWater) // 水下不做偏移，原程序同样跳过。
-    {
-        worldPos = worldPos - (fract(worldPos + cameraWorldPos - worldPos * 0.0001) * zoomLevel - zoomLevel * 0.5); // 按位置小数把坐标推到格子中心附近。
-    }
-}
-
-// Eclipse 的阴影偏差：按一个阴影像素对应一个方块的尺度，沿几何法线把投影坐标推出表面。
-// `shadowNormal` 是法线经过阴影相机旋转后的方向，`shadowDistance` 与 `shadowMapResolution` 决定纹素大小。
-void ogxApplyShadowBias(inout float3 projectedShadowPosition, float3 shadowNormal, float shadowDistance, float shadowMapResolution)
-{
-    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个纹素对应的世界尺度，再放大一倍。
-    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远，斜投影误差越大。
-    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大偏差。
-    projectedShadowPosition += shadowNormal * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
-}
-
-// Eclipse 的阴影偏差入口：参考签名保留 playerPos 但内部不使用，几何法线经阴影相机旋转后推坐标。
-// 为什么把矩阵显式传入：参考实现读 shadowModelView，库不绑定宿主矩阵。
-void ogxApplyShadowBiasMatrix(inout float3 projectedShadowPosition, float3 playerPos, float3 geoNormals,
-    float3x3 shadowNormalMatrix, float shadowDistance, float shadowMapResolution)
-{
-    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个阴影像素对应的世界尺度。
-    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远误差越大。
-    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大。
-    projectedShadowPosition += ogxMatrix3MulPoint(shadowNormalMatrix, geoNormals) * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
-}
+#include "../common/math.slang"
+// 相机模块提供阴影相机投影、屏幕深度与边缘压缩的唯一实现。
+#include "../common/camera.slang"
 
 // 黄金角的正弦与余弦：螺旋采样每步旋转这个角度，样本才不会排成放射状条纹。
 float2 ogxShadowGoldenRotation() { return float2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); }
 
-// 阴影相机空间里的位置：先做视图变换，再按正交投影缩放并把深度折半。
-// 为什么深度取半：阴影图存的是裁剪空间到零到一的压缩值，后面所有比较都按同一尺度进行。
-float3 ogxShadowViewPos(float3 worldPos, float4x4 shadowView, float4x4 shadowProjection)
-{
-    float3 shadowPos = ogxMatrixMulPoint(shadowView, worldPos) + ogxMatrixTranslation(shadowView); // 世界位置转到阴影相机空间。
-    float scale = shadowProjection[0][0]; // 正交投影的水平缩放，横纵相同。
-    shadowPos *= float3(scale, scale, -scale * 0.5); // 按投影缩放，深度取半。
-    return shadowPos; // 返回阴影相机空间的坐标。
-}
 
-// 投到阴影图，不做边缘压缩：坐标范围仍是负一到一。
-float3 ogxShadowScreenPos(float3 worldPos, float4x4 shadowView, float4x4 shadowProjection)
-{
-    return ogxShadowViewPos(worldPos, shadowView, shadowProjection) * 0.5 + 0.5; // 负一到一转成零到一。
-}
 
-// 投到阴影图并做边缘压缩：离中心越远压得越紧，边缘纹素因此覆盖更小的实际范围。
-float3 ogxShadowScreenPosDistorted(float3 worldPos, float4x4 shadowView, float4x4 shadowProjection, float bias)
-{
-    float3 shadowPos = ogxShadowViewPos(worldPos, shadowView, shadowProjection); // 先转到阴影相机空间。
-    float dist = length(shadowPos.xy); // 到阴影图中心的距离。
-    float distortFactor = (1.0 - bias) + dist * bias; // 边缘压缩系数，中心为一。
-    shadowPos.xy *= 0.95 / distortFactor; // 向内压缩，零点九五留出边界余量。
-    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一。
-}
 
-// 读取端补一次边缘压缩：写入端压过的坐标，读取时必须按同一系数还原。
-float2 ogxDistortShadowPos(float2 shadowPos, float bias)
-{
-    shadowPos = shadowPos * 2.0 - 1.0; // 零到一先转回负一到一。
-    float dist = length(shadowPos.xy); // 到中心距离。
-    float distortFactor = (1.0 - bias) + dist * bias; // 与写入端同一压缩系数。
-    shadowPos *= 0.95 / distortFactor; // 同一压缩量。
-    return shadowPos * 0.5 + 0.5; // 再转回零到一。
-}
 
-// 屏幕深度换米制距离：逆投影里只有深度那一列参与，两个系数就是全部信息。
-// 为什么不用整矩阵乘：这一步在每条步进的射线上都要算，取两个系数最省。
-float ogxShadowLinearDepth(float depth, float4x4 projectionInverse)
-{
-    depth = depth * 2.0 - 1.0; // 零到一转负一到一。
-    return 1.0 / (depth * projectionInverse[2][3] + projectionInverse[3][3]); // 逆投影的深度部分。
-}
 
 // 射线是否还在可靠深度范围内：近处像素的深度图只有半个屏幕可用。
 bool ogxInsideDepthRange(float3 samplePos)
@@ -128,7 +57,7 @@ float ogxScreenSpaceShadow(float3 viewPos, float3 viewDir, float3 normal, float3
     screenRayDir.xy *= 0.5; // 横纵方向换算到零到一坐标。
     start.xy += float2(projection[3][0], projection[3][1]); // 补上投影的平移项。
     start.xy *= 0.5; // 裁剪空间转到零到一。
-    float minDist = ogxShadowLinearDepth(0.7, projectionInverse); // 深度小于这个值的像素在前面，不再作为遮挡。
+    float minDist = ogxLinearDepthFromScreenDepth(0.7, projectionInverse); // 深度小于这个值的像素在前面，不再作为遮挡。
     float shadow = 1.0; // 可见度，初值全亮。
     float stepLength = 1.0; // 步长，逐步增大。
     for (int i = 0; i < steps; i++, start += screenRayDir * stepLength, stepLength += 0.3) // 步长递增覆盖更远。
@@ -154,11 +83,11 @@ float ogxScreenSpaceShadow(float3 viewPos, float3 viewDir, float3 normal, float3
         if (hasDh && sampleDepth == 1.0) // 近景是天空时改读远景深度。
         {
             sampleDepth = dhDepthTexture.SampleLevel(samplePos.xy, 0.0).x; // 改读远景深度。
-            sampleDist = ogxShadowLinearDepth(sampleDepth, dhProjectionInverse); // 远景深度换成距离。
+            sampleDist = ogxLinearDepthFromScreenDepth(sampleDepth, dhProjectionInverse); // 远景深度换成距离。
         }
         else
         {
-            sampleDist = ogxShadowLinearDepth(sampleDepthAgain, projectionInverse); // 近景深度换成距离。
+            sampleDist = ogxLinearDepthFromScreenDepth(sampleDepthAgain, projectionInverse); // 近景深度换成距离。
         }
         if (samplePos.z - sampleDist > 0.0) // 射线深度超过几何深度，说明几何在前面。
         {
@@ -213,11 +142,11 @@ float ogxSunScreenShadow(float3 viewPos, float3 viewDir, float3 normal, float3 s
         if (hasDh && sampleDepth == 1.0) // 近景是天空时才查远景。
         {
             sampleDepth = dhDepthTexture.SampleLevel(samplePos.xy, 0.0).x; // 改读远景深度。
-            sampleDist = ogxShadowLinearDepth(sampleDepth, dhProjectionInverse); // 远景深度换成距离。
+            sampleDist = ogxLinearDepthFromScreenDepth(sampleDepth, dhProjectionInverse); // 远景深度换成距离。
         }
         else
         {
-            sampleDist = ogxShadowLinearDepth(sampleDepth, projectionInverse); // 近景深度换成距离。
+            sampleDist = ogxLinearDepthFromScreenDepth(sampleDepth, projectionInverse); // 近景深度换成距离。
         }
         float depthDiff = samplePos.z - sampleDist; // 射线深度与几何深度之差，为正说明几何在前面。
         if (depthDiff > 0.0 && depthDiff < zThickness) // 落在厚度阈值内才算遮挡。

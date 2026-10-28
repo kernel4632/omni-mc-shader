@@ -15,7 +15,7 @@
 #ifndef OMNI_MATH_INCLUDED // 只引入一次，避免宏和函数重复定义。
 #define OMNI_MATH_INCLUDED // 置上标记。
 // 纯数学函数放在通用库；这里只保留引擎常数与转发。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 
 // 本文件的 `BicubicBlurTexture` 直接读 `noisetex`，所以自己先引入加载器输入声明。
 // 为什么放在文件内部而不是要求调用方先引入：引用顺序写错时只会报“未声明的标识符”，

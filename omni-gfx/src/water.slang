@@ -8,7 +8,7 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
     `OgxOceanWaveSum sum = ogxOceanWaveSum(float2(0.0), t, ogxOceanWavesDefault());` 迭代正弦海洋。
     `float h = ogxOceanWaveHeight(sum, 13.0, 1.0);` 归一化后的波高。
 设计原因与取舍：
-    波形来自旧 `shaders/gfx/water.glsl` 的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
+    波形来自迁移前 GLSL 原型的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
     只做单层水面，但保留长波、斜波、短波与细波纹四级，远处自动淡出高频，避免闪烁。
     反射与折射颜色由调用方传入，库不读取立方体贴图或屏幕纹理，因此能同时服务 Iris 与独立测试世界。
 */
@@ -16,8 +16,9 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
 #define OGX_WATER_INCLUDED
 
 // 数学模块提供菲涅尔、GGX 高光与夹紧，噪声模块打散规则波列。
-#include "math.slang"
-#include "noise.slang"
+#include "common/math.slang"
+// 噪声提供哈希、分形与云团细节。
+#include "common/noise.slang"
 
 // 一组水面光学参数；不同水体换字段即可，不必改波形与着色顺序。
 struct OgxWater
@@ -30,8 +31,6 @@ struct OgxWater
     float roughness; // 太阳高光粗糙度。
     float refraction; // 屏幕折射偏移强度。
 };
-
-// 默认水体：偏青的浅水、深蓝的深水，红光吸收最快。
 
 // 波法线、菲涅尔、吸收与岸边，具体实现在子文件。
 #include "water/waves.slang"

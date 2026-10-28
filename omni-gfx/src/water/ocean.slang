@@ -1,3 +1,9 @@
+/*
+水面子文件：海洋波参数、逐层波高与方向、海洋法线、泡沫与整像素着色。
+调用位置：由 `water.slang` 内联，水面效果与测试世界直接调用这里的海洋入口。
+可复制示例：`OgxOceanPixel p = ogxOceanPixel(position, 1.0, 13.0, time, waves, ...);`
+设计原因与取舍：层数、拖拽与频率全部显式传入；累加顺序照参考保留，默认海面形状不变。
+*/
 // 默认参数：iterationT 海洋扩展的常数，调用方只改真正要变的那几个字段。
 OgxOceanWaves ogxOceanWavesDefault()
 {
@@ -154,14 +160,6 @@ OgxOceanPixel ogxOceanPixel(float2 position, float factor, float iterations, flo
     return pixel; // 交回完整数据。
 }
 
-// 涟漪专用标量哈希：与 Eclipse `ripples.glsl` 的 `hash12` 保持同一组常数。
-// 为什么不用噪声模块的 `ogxHash12`：那个哈希混入了另一组偏移，值噪声依赖它；涟漪要照原图逐项复现，不能换。
-float ogxRippleHash12(float2 p)
-{
-    float3 p3 = fract(float3(p.x, p.y, p.x) * 0.1031); // 两个坐标扩成三个分量。
-    p3 += dot(p3, p3.yzx + 19.19); // 三个分量互相混合。
-    return fract((p3.x + p3.y) * p3.z); // 取小数部分。
-}
 
 // Eclipse 雨点涟漪：九个格子的雨滴各自扩散出圆环，取梯度得到法线。
 // `intensity` 控制每格大小，`time` 是累积秒数；九个方向相加后归一，结果与参考实现相同。
@@ -178,7 +176,7 @@ float3 ogxRainRipples(float2 fragCoord, float time, float intensity)
         {
             float2 pi = p0 + float2(float(i), float(j)); // 邻格坐标。
             float2 p = pi + ogxHash22(pi); // 雨点落在格内随机位置。
-            float t = fract(0.9 * time + ogxRippleHash12(pi)); // 这一滴的扩散相位。
+            float t = fract(0.9 * time + ogxHash12(pi)); // 这一滴的扩散相位。
             float2 v = p - uv; // 从雨点到当前像素。
             float d = length(v) - 2.0 * t * sizeCompensation; // 圆环半径随时间扩大。
             float d1 = d - 0.01; // 前后两个采样点。

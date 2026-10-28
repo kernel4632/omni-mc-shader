@@ -1,5 +1,9 @@
 # omni-gfx 验证记录
 
+<!-- stats:begin -->
+当前统计：48 个模块、90 个 Slang 源文件、15781 行生成 GLSL；函数对照 505 个，已迁入 407、MC 专用 98、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
+<!-- stats:end -->
+
 ## 〇、2026-10-26 光影验收 v5：按 iterationT 3.2.0 对齐
 
 设备：Intel(R) Arc(TM) Graphics，OpenGL 3.3.0 - Build 32.0.101.8531，Windows。本轮没有启动 Minecraft。
@@ -516,7 +520,7 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 
 ## 二十三、过长主体拆进同名文件夹（2026-10-28）
 
-本轮只搬函数，不改算法：cloud/layers/march.slang 的 729 行拆成 ray、compose、simple、transmittance、exact 五个子文件，og/volume.slang 的 518 行拆成 shadow、storm、light、step、march、underwater、exact、nether 八个子文件。主文件保留接口、结构体与按原顺序的中文引用说明，子文件不单独生成 GLSL，也不单独编译探针。
+本轮只搬函数，不改算法：cloud/layers/march.slang 的 729 行拆成 ray、compose、simple、transmittance、exact 五个子文件，fog/volume.slang 的 518 行拆成 shadow、storm、light、step、march、underwater、exact、nether 八个子文件。主文件保留接口、结构体与按原顺序的中文引用说明，子文件不单独生成 GLSL，也不单独编译探针。
 
 ### 命令与结果
 
@@ -536,10 +540,46 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 ### 函数体与完整性
 
 - 用 git archive HEAD 取出改动前的 73 个源文件，与当前 86 个源文件分别解析顶层函数，按名字、返回类型、参数方向与函数体组成多重集合比较：前后各 779 个，缺失 0、新增 0、改动 0。
-- 生成器把子文件按出现顺序内联，生成 GLSL 与清单同步刷新；shaders/omni-gfx/cloud/layers.glsl 与 og/volume.glsl 只新增子文件标记和文件头，函数体逐字节不变。
+- 生成器把子文件按出现顺序内联，生成 GLSL 与清单同步刷新；shaders/omni-gfx/cloud/layers.glsl 与 fog/volume.glsl 只新增子文件标记和文件头，函数体逐字节不变。
 - src 里 86 个 .slang 全部不超过 500 行，最大为 shadow/shadow.slang 的 459 行；两个原本超限的文件分别为 729 与 518 行。
-- 严格对照只改目标路径：cloud/layers/march/... 与 og/volume/...，判定口径与 474/0/5/26/0 的统计不变；人工对照表同步改三个 og/volume 目标。
+- 严格对照只改目标路径：cloud/layers/march/... 与 fog/volume/...，判定口径与 474/0/5/26/0 的统计不变；人工对照表同步改三个 fog/volume 目标。
 
 ### 数量与未验证
 
 选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；手写核心 18957 行。没有启动 Minecraft；游戏内画面、菜单切换、性能与其他显卡仍未验证。
+
+## 二十四、HOP 第二轮审计修复（2026-10-28）
+
+本轮按 `docs/hop-audit.md` 修完未打勾项，重点是模块消费者状态、算法拆分与去重、审计假阴性、下载安全和文档数字统一。没有启动 Minecraft，游戏内画面、菜单切换、性能与其他显卡仍未验证。
+
+### 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `python omni-gfx/build.py generate` | 48 个模块、49 个文件、GLSL 15781 行 |
+| `python omni-gfx/build.py spirv` | 48/48 个探针通过，编译器 2026.20 |
+| `python omni-gfx/build.py check` | 生成文件与源一致；测试世界 26 个、光影验证场景 21 个 GLSL 审计通过 |
+| `python omni-gfx/build.py strict-parity` | 505 个参考函数：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 |
+| `python omni-gfx/build.py profiles` | iterationt 15855 行、eclipse 15854 行，两份 profile 编译通过 |
+| `python omni-gfx/build.py test-gpu` | 26/26 个用例通过，冻结参考副本在 `tests/reference/` |
+| `python build.py audit` | 619 个代码文件通过中文说明与实现审计 |
+| `python build.py verify` | 166 个测试、9 组编译探针与打包通过 |
+| `python build.py compile` | 2 种配置、280 组唯一程序、0 错误 |
+| `python omni-gfx/build.py count` | 手写核心 19784 行，上限 19900 |
+
+### 本轮修了什么
+
+- 消费者状态：新增 `tools/catalog.py` 作为 48 个模块与仅探针状态的唯一来源；20 个没有顶层画面入口的模块在文件头写明“仅编译探针与 profile 覆盖”，测试核对声明与真实引用一致。
+- 结构：`common/math.slang` 拆进 `common/math/` 六个算法子文件，`fog/volume.slang` 拆进 `fog/volume/` 七个子文件，主文件都保留实际函数；颜色曲线按 ACES、AgX、Reinhard、Uchimura、胶片曲线与黑体拆开，`common/color.slang` 保留矩阵、黑边、白平衡与调色入口。
+- 去重：深度换算、阴影投影、像素取格、哈希、旋转、三角波、双三次权重、R2、自发光与相函数收口到 `common/`；参考签名需要的入口保留单行转调，不再复制算法体。
+- AgX 死簇：`ogxAgxConfigurable` 接入 Minecraft 的色调映射选项，`ogxAgxConfigurable1` 与矩阵版本由它调用，不再只靠 profile 探针续命。
+- 死函数与命名：删除 `ogxCloudFbmLq`；`ogxSwapperlinZ2` 改名为 `ogxLinearizeDepth` 并收口到相机模块。
+- 工具：`audit.py` 新增结构体返回、文件头四项、函数体内注释与引用边界检查；`parity.py` 在参考目录缺失或函数数不等于 505 时直接失败；生成器与 profile 共用模块表；Slang 下载校验 SHA-256 并拒绝越界成员；文档统计由 `tools/stats.py` 生成。
+- 文档：删除验证记录里的乱码与控制字符，README、对照表与验证记录改为同一份生成统计。
+
+### 未验证
+
+- 游戏内画面、菜单切换、维度切换与性能；离线编译、SPIR-V 探针和独立测试世界不能代替世界内效果。
+- 其他显卡与驱动；GPU 等值测试只代表本机 Intel Arc。
+- AgX 可配置选项的实际画面只证明编译与算法接线，没有游戏内截图对比。
+

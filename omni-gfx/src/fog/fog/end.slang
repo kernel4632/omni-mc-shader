@@ -1,3 +1,9 @@
+/*
+雾子文件：末地漩涡雾、群系雾色与密度、原版雾、选择框和末地阴影形状。
+调用位置：由 `fog/fog.slang` 内联，末地天空与雾效果直接调用这里的入口。
+可复制示例：`float4 fog = ogxEndVortexFog(cameraPos, worldDir, viewDist, dither, 12, 2.0, 128.0, ...);`
+设计原因与取舍：群系权重与光源位置显式传入，不读取宿主群系表；漩涡形状与参考采样顺序一致。
+*/
 // 末地雾形状与光源相位的提前声明：定义放在文件后半段。
 float ogxEndVortexShape(float3 pos, float time, Sampler2D noiseTexture, float noiseResolution);
 float ogxEndVortexLightPhase(float3 pos);
@@ -286,8 +292,7 @@ void ogxBiomeFogDensityReference(inout float4 uniformDensity, inout float4 cloud
 // Eclipse 末地雾的相函数：与云相函数同形，但常数用 3.14 而不是 pi，保留参考精度。
 float ogxEndFogPhaseAnisotropic(float x, float g)
 {
-    float gg = g * g; // g 的平方。
-    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考实现直接写 3.14。
+    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考实现直接写 3.14，保留同一精度。
 }
 
 // iterationT 的原版雾叠加：黑暗、失明、水下与岩浆四种状态分别压暗画面。

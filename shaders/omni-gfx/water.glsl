@@ -14,7 +14,7 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
     `OgxOceanWaveSum sum = ogxOceanWaveSum(vec2(0.0), t, ogxOceanWavesDefault());` 迭代正弦海洋。
     `float h = ogxOceanWaveHeight(sum, 13.0, 1.0);` 归一化后的波高。
 设计原因与取舍：
-    波形来自旧 `shaders/gfx/water.glsl` 的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
+    波形来自迁移前 GLSL 原型的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
     只做单层水面，但保留长波、斜波、短波与细波纹四级，远处自动淡出高频，避免闪烁。
     反射与折射颜色由调用方传入，库不读取立方体贴图或屏幕纹理，因此能同时服务 Iris 与独立测试世界。
 */
@@ -22,8 +22,9 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
 #define OGX_WATER_INCLUDED
 
 // 数学模块提供菲涅尔、GGX 高光与夹紧，噪声模块打散规则波列。
-#include "/omni-gfx/math.glsl"
-#include "/omni-gfx/noise.glsl"
+#include "/omni-gfx/common/math.glsl"
+// 噪声提供哈希、分形与云团细节。
+#include "/omni-gfx/common/noise.glsl"
 // 一组水面光学参数；不同水体换字段即可，不必改波形与着色顺序。
 struct OgxWater
 {
@@ -36,10 +37,15 @@ struct OgxWater
     float refraction; // 屏幕折射偏移强度。
 };
 
-// 默认水体：偏青的浅水、深蓝的深水，红光吸收最快。
-
 // 波法线、菲涅尔、吸收与岸边，具体实现在子文件。
 // 子文件：water/waves.slang。
+/*
+水面子文件：默认水体参数、解析方向波、Gerstner 波、菲涅尔、吸收、折射与水面着色。
+调用位置：由 `water.slang` 内联，水面效果与反射共用这里的法线和吸收曲线。
+可复制示例：`vec3 n = ogxWaterNormal(position, time, distance, 1.0, 1.0);`
+设计原因与取舍：波形是解析函数，不依赖噪声贴图；距离淡出与参考常数逐项一致。
+*/
+// 默认水体：偏青的浅水、深蓝的深水，红光吸收最快。
 OgxWater ogxWaterDefault()
 {
     OgxWater water; // 先声明再填写字段。
@@ -156,7 +162,7 @@ vec3 ogxWaterShade(OgxWater water, vec3 normal, vec3 viewDirection, vec3 sunDire
 }
 
 // 平滑噪声取样：先把坐标吸到最近的纹素中心，再用三次曲线改写小数部分，得到不会闪的平滑噪声。
-// 与旧 `shaders/gfx/water.glsl` 的算式一致，波纹形状因此不变。
+// 与迁移前的 GLSL 原型算式一致，波纹形状因此不变。
 vec4 ogxTextureSmooth(sampler2D noiseTexture, vec2 coord)
 {
     coord *= 64.0; // 放大到六十四格，再按格取平滑。
@@ -268,6 +274,12 @@ vec2 ogxWaterRefractionCoord(bool isWater, vec3 normal, vec3 viewPos, vec3 waveN
 
 // 水洼、雨纹与焦散，具体实现在子文件。
 // 子文件：water/rain.slang。
+/*
+水面子文件：水洼覆盖、雨点高光、水下雾、雨纹动画、波纹法线与焦散。
+调用位置：由 `water.slang` 内联，水面、雨天与水下效果调用这里的入口。
+可复制示例：`float p = ogxPuddleCoverage(halfWet, noise, size);`
+设计原因与取舍：湿度、噪声与时间显式传入，纹理由调用方绑定；雨量与参考常数保持一致。
+*/
 // 水洼覆盖：只有湿度超过噪声阈值的地方才积水，五次方让边缘收得很快。
 float ogxPuddleCoverage(float halfWet, float noise, float size)
 {
@@ -403,6 +415,12 @@ struct OgxOceanWaves
 
 // 海浪、泡沫与凹凸法线，具体实现在子文件。
 // 子文件：water/ocean.slang。
+/*
+水面子文件：海洋波参数、逐层波高与方向、海洋法线、泡沫与整像素着色。
+调用位置：由 `water.slang` 内联，水面效果与测试世界直接调用这里的海洋入口。
+可复制示例：`OgxOceanPixel p = ogxOceanPixel(position, 1.0, 13.0, time, waves, ...);`
+设计原因与取舍：层数、拖拽与频率全部显式传入；累加顺序照参考保留，默认海面形状不变。
+*/
 // 默认参数：iterationT 海洋扩展的常数，调用方只改真正要变的那几个字段。
 OgxOceanWaves ogxOceanWavesDefault()
 {
@@ -559,14 +577,6 @@ OgxOceanPixel ogxOceanPixel(vec2 position, float factor, float iterations, float
     return pixel; // 交回完整数据。
 }
 
-// 涟漪专用标量哈希：与 Eclipse `ripples.glsl` 的 `hash12` 保持同一组常数。
-// 为什么不用噪声模块的 `ogxHash12`：那个哈希混入了另一组偏移，值噪声依赖它；涟漪要照原图逐项复现，不能换。
-float ogxRippleHash12(vec2 p)
-{
-    vec3 p3 = fract(vec3(p.x, p.y, p.x) * 0.1031); // 两个坐标扩成三个分量。
-    p3 += dot(p3, p3.yzx + 19.19); // 三个分量互相混合。
-    return fract((p3.x + p3.y) * p3.z); // 取小数部分。
-}
 
 // Eclipse 雨点涟漪：九个格子的雨滴各自扩散出圆环，取梯度得到法线。
 // `intensity` 控制每格大小，`time` 是累积秒数；九个方向相加后归一，结果与参考实现相同。
@@ -583,7 +593,7 @@ vec3 ogxRainRipples(vec2 fragCoord, float time, float intensity)
         {
             vec2 pi = p0 + vec2(float(i), float(j)); // 邻格坐标。
             vec2 p = pi + ogxHash22(pi); // 雨点落在格内随机位置。
-            float t = fract(0.9 * time + ogxRippleHash12(pi)); // 这一滴的扩散相位。
+            float t = fract(0.9 * time + ogxHash12(pi)); // 这一滴的扩散相位。
             vec2 v = p - uv; // 从雨点到当前像素。
             float d = length(v) - 2.0 * t * sizeCompensation; // 圆环半径随时间扩大。
             float d1 = d - 0.01; // 前后两个采样点。

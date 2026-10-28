@@ -1,4 +1,18 @@
 # 更新记录
+## 0.16.0-dev.14
+
+按 HOP 第二轮审计整改。
+
+- 共享纯计算归入 `common/`，平面云、手光、阴影偏差、AO 等主体合并或明确归属；`math`、`fog/volume` 按算法拆回同名文件夹，最大源文件 367 行。
+- 删除 AgX 死簇与死函数，颜色曲线按 ACES、AgX、Reinhard、Uchimura、胶片、黑体拆文件。
+- 修复 `test-gpu` 对已删除 `/gfx/` 的引用，`.venv` 下 26/26 逐位一致。
+- `audit.py` 覆盖 `.slang`、`.frag`、`.vert`，新增结构体返回、文件头、函数说明与引用边界检查；`parity` 增加 references 目录与 505 数量断言。
+- 合并模块清单到 `tools/catalog.py`，新增 `tools/stats.py` 统一文档数字；重写验证记录乱码段。
+- 下载 Slang 工具增加 SHA-256 与解压路径检查。
+
+验证：`generate`、`spirv` 48/48、`check`、`strict-parity`、`profiles`、`test-gpu` 26/26、`audit` 619 个文件、`verify` 166 个测试、`compile` 280 组程序全部通过。游戏内画面未验证。
+
+
 ## 0.16.0-dev.13
 
 结构重构第七批：两个超过五百行的主体拆进同名文件夹，函数体、常数与采样顺序不变。

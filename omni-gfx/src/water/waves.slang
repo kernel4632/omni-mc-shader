@@ -1,3 +1,10 @@
+/*
+水面子文件：默认水体参数、解析方向波、Gerstner 波、菲涅尔、吸收、折射与水面着色。
+调用位置：由 `water.slang` 内联，水面效果与反射共用这里的法线和吸收曲线。
+可复制示例：`vec3 n = ogxWaterNormal(position, time, distance, 1.0, 1.0);`
+设计原因与取舍：波形是解析函数，不依赖噪声贴图；距离淡出与参考常数逐项一致。
+*/
+// 默认水体：偏青的浅水、深蓝的深水，红光吸收最快。
 OgxWater ogxWaterDefault()
 {
     OgxWater water; // 先声明再填写字段。
@@ -114,7 +121,7 @@ float3 ogxWaterShade(OgxWater water, float3 normal, float3 viewDirection, float3
 }
 
 // 平滑噪声取样：先把坐标吸到最近的纹素中心，再用三次曲线改写小数部分，得到不会闪的平滑噪声。
-// 与旧 `shaders/gfx/water.glsl` 的算式一致，波纹形状因此不变。
+// 与迁移前的 GLSL 原型算式一致，波纹形状因此不变。
 float4 ogxTextureSmooth(Sampler2D noiseTexture, float2 coord)
 {
     coord *= 64.0; // 放大到六十四格，再按格取平滑。

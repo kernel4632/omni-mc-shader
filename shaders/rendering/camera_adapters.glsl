@@ -8,7 +8,7 @@
 #ifndef OMNI_RENDER_CAMERA_ADAPTERS_INCLUDED
 #define OMNI_RENDER_CAMERA_ADAPTERS_INCLUDED
 // 相机投影函数在生成库，宿主兼容层直接引用。
-#include "/omni-gfx/camera.glsl"
+#include "/omni-gfx/common/camera.glsl"
 
 // 投影到裁剪空间：参考直接读 `gbufferProjection`。
 vec3 toClipSpace3(vec3 viewSpacePosition){ return ogxToClipSpace3(viewSpacePosition, gbufferProjection); }
@@ -27,11 +27,11 @@ vec3 toShadowSpaceProjected(vec3 p3){ return ogxToShadowSpaceProjected(p3, gbuff
 // 参考的远景版本在默认配置关闭，统一走近景逆投影。
 vec3 toScreenSpace_DH(vec2 texcoord, float depth, float dhDepth){
 	vec3 result = vec3(0.0); // 参考以零初始化，再按深度选择近景或远景矩阵。
-	result = ogxToScreenSpaceDh(texcoord, depth, dhDepth, gbufferProjectionInverse, gbufferProjectionInverse);
+	result = ogxToScreenSpaceDistant(texcoord, depth, dhDepth, gbufferProjectionInverse, gbufferProjectionInverse);
 	return result;
 }
 // 参考的远景裁剪同样默认走近景投影。
-vec3 toClipSpace3_DH(vec3 viewSpacePosition, bool depthCheck){ return ogxToClipSpace3Dh(viewSpacePosition, depthCheck, gbufferProjection, gbufferProjection); }
+vec3 toClipSpace3_DH(vec3 viewSpacePosition, bool depthCheck){ return ogxToClipSpace3Distant(viewSpacePosition, depthCheck, gbufferProjection, gbufferProjection); }
 // 参考在默认配置直接返回原矩阵。
 mat4 DH_shadowProjectionTweak(mat4 projection){ return projection; }
 // 屏幕坐标到视空间方向。

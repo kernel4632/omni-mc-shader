@@ -7,11 +7,13 @@ Omni 通用图形库闪电模块：闪电照亮表面、体积云与雾，末地
 设计原因与取舍：
     参考实现直接读 `lightningBoltPosition` 与末地宏。库把闪电位置、强度、光色和随机纹理显式传入，
     距离衰减、次表面相位与末地光柱混合的常数和分支保持参考实现。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。闪电目前只被库内反射模块间接引用，没有独立画面入口。
 */
 #ifndef OGX_WEATHER_LIGHTNING_INCLUDED
 #define OGX_WEATHER_LIGHTNING_INCLUDED
 
-#include "../math.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
 
 // 闪电照亮表面：距离衰减、次表面相位与法线朝向一起决定亮度。
 float3 ogxLightningFlash(float3 feetPlayerPos, float4 boltPosition, float3 worldNormal, float3 lightningEffect,

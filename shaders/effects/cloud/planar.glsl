@@ -18,6 +18,7 @@
     密度用三次模糊噪声、光照估计用更便宜的双线性噪声与更少层数，避免光照时重复跑高成本采样。
 */
 #include "/omni-gfx/cloud/cloud.glsl"
+#include "/omni-gfx/cloud/planar.glsl"
 // 由 effects/cloud/cloud.glsl 在三维云噪声可用的阶段打开；其它程序整段不编译。
 #ifdef OMNI_CLOUD_DENSITY_PASS
 // --- 三次模糊噪声：平面云专用，与共用数学里的版本返回类型和纹理都不同，按合同留在这里一份 ---

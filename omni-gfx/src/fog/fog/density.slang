@@ -1,3 +1,10 @@
+/*
+雾子文件：默认雾参数、高度密度、噪声雾团、相位、粉末效应与单次步进。
+调用位置：由 `fog/fog.slang` 内联，主世界、下界与末地的雾效果共用这里的密度曲线。
+可复制示例：`float d = ogxFogDensity(ogxFogDefault(), worldPos);`
+设计原因与取舍：密度只依赖位置与参数，天气与光源颜色由调用方乘进来；噪声层数照参考固定。
+*/
+// 默认低空雾：贴地薄雾，密度适中，云影下会自然变暗。
 OgxFog ogxFogDefault()
 {
     OgxFog fog; // 先声明再填写字段。
@@ -178,24 +185,6 @@ float ogxCloudFbm(float3 position, float3 shift, Sampler2D noiseTexture, float n
     return accum + octShift; // 返回归一化后的噪声。
 }
 
-// 云状分形噪声的低质量版本：三层、每层权重衰减零点九、频率乘二，供远景或低画质使用。
-// 与 `ogxCloudFbm` 分开保留，因为层数和衰减常数不同，不能用一个参数偷偷替换参考路径。
-float ogxCloudFbmLq(float3 position, float3 shift, Sampler2D noiseTexture, float noiseResolution)
-{
-    const int octaves = 3; // 三层。
-    const float octAlpha = 0.9; // 每层权重衰减。
-    const float octScale = 2.0; // 每层频率倍数。
-    const float octShift = (octAlpha / octScale) / float(octaves); // 层间偏移。
-    float accum = 0.0; // 累积噪声。
-    float alpha = 0.5; // 第一层权重。
-    for (int i = 0; i < octaves; i++) // 逐层叠加。
-    {
-        accum += alpha * ogxEnd3dNoise(position, noiseTexture, noiseResolution); // 加这一层。
-        position = (position + shift) * octScale; // 抬高频率并错开时间。
-        alpha *= octAlpha; // 权重衰减。
-    }
-    return accum + octShift; // 返回归一化后的噪声。
-}
 
 // 下界雾的单格密度：世界坐标折成三维格子，再查二维噪声图。
 float ogxNetherFogDensityAt(float3 pos, Sampler2D noiseTexture)

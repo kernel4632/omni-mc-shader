@@ -13,14 +13,16 @@ Omni 通用图形库反射模块：可见法线采样、屏幕空间追踪、反
     `ogxReflectionAtrousFilter(data, viewPos, viewDir, normal, roughness, 40.0, noise, uv, reflTex, depthTex, normalTex, pixelSize, projectionInverse);` 九点降噪。
 设计原因与取舍：
     深度图、投影、光色与天空都由参数传入，库不读取引擎状态；主机特有的天空兜底、体素回退与
-    反射雾仍留在 `shaders/gfx/reflection.glsl` 的合成流程里，那里只做开关组合，不再含采样循环。
+    反射雾仍留在效果层的合成流程里，那里只做开关组合，不再含采样循环。
     公式与旧实现逐项一致；矩阵乘法在 Slang 与 GLSL 的行列解释不同，统一走数学模块的显式展开。
 */
 #ifndef OGX_REFLECTION_INCLUDED
 #define OGX_REFLECTION_INCLUDED
 
 // 饱和、曲线编码、菲涅耳与法线解码来自数学模块。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
+// 相机模块提供深度换算与阴影投影的唯一实现。
+#include "/omni-gfx/common/camera.glsl"
 // 一个完整圆周，采样角度与旋转都用它。
 const float OGX_TAU = 6.28318530718;
 
@@ -55,28 +57,8 @@ vec3 ogxReflectionScreenPos(vec3 viewPos, mat4 projection)
     return pos * (0.5 / -viewPos.z) + 0.5; // 透视除法并转到零到一。
 }
 
-// 屏幕深度换米制距离。
-float ogxReflectionLinearDepth(float depth, mat4 projectionInverse)
-{
-    depth = depth * 2.0 - 1.0; // 零到一转负一到一。
-    return 1.0 / (depth * projectionInverse[2][3] + projectionInverse[3][3]); // 逆投影的深度部分。
-}
 
-// 米制距离换回屏幕深度。
-float ogxReflectionScreenDepth(float depth, mat4 projectionInverse)
-{
-    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 解出负一到一深度。
-    return depth * 0.5 + 0.5; // 转回零到一。
-}
 
-// 远景深度换成同一距离在近景投影下的深度。
-float ogxReflectionDhToScreenDepth(float depth, mat4 dhProjectionInverse, mat4 projectionInverse)
-{
-    depth = depth * 2.0 - 1.0; // 远景深度转到负一到一。
-    depth = 1.0 / (depth * dhProjectionInverse[2][3] + dhProjectionInverse[3][3]); // 先换成米。
-    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 再用近景投影换回深度。
-    return depth * 0.5 + 0.5; // 转回零到一。
-}
 
 // 读追踪采样点的深度：手部优先手部图，近景是天空时按开关改读远景。
 float ogxReflectionSampleDepth(vec2 coord, bool isHand, bool handSupported, sampler2D depthTexture, sampler2D handDepthTexture,
@@ -89,7 +71,7 @@ float ogxReflectionSampleDepth(vec2 coord, bool isHand, bool handSupported, samp
     float depth = textureLod(depthTexture, coord, 0.0).x; // 其他像素读普通不透明深度。
     if (hasDh && dhSsr && depth == 1.0) // 天空像素按开关改读远景。
     {
-        depth = ogxReflectionDhToScreenDepth(textureLod(dhDepthTexture, coord, 0.0).x, dhProjectionInverse, projectionInverse); // 远景深度换到近景尺度。
+        depth = ogxScreenDepthFromDistantScreenDepth(textureLod(dhDepthTexture, coord, 0.0).x, dhProjectionInverse, projectionInverse); // 远景深度换到近景尺度。
     }
     return depth; // 返回该坐标的深度。
 }
@@ -107,7 +89,7 @@ bool ogxScreenSpaceTrace(vec3 viewRayOri, vec3 viewRayDir, float ndotv, float no
     float stepLength = mix(minStepLength, rSteps, ndotv); // 正对视线时步长更大，掠射时更小。
     float zScaling = abs(1.0 / rayDir.z); // 深度方向的缩放。
     bool hit = false; // 命中标记。
-    float maxDepth = hasDh ? ogxReflectionScreenDepth(ogxReflectionLinearDepth(1.0, dhProjectionInverse), projectionInverse) : 1.0; // 有远景时步进上限是远景最远距离。
+    float maxDepth = hasDh ? ogxScreenDepthFromLinearDepth(ogxLinearDepthFromScreenDepth(1.0, dhProjectionInverse), projectionInverse) : 1.0; // 有远景时步进上限是远景最远距离。
     screenPos += rayDir * stepLength * noise; // 起点按噪声抖动，减少规则条纹。
     float depth = ogxReflectionSampleDepth(screenPos.xy, false, handSupported, depthTexture, handDepthTexture, dhDepthTexture,
         hasDh, dhSsr, dhProjectionInverse, projectionInverse); // 读起始点深度。
@@ -139,8 +121,8 @@ bool ogxScreenSpaceTrace(vec3 viewRayOri, vec3 viewRayDir, float ndotv, float no
             {
                 continue;
             }
-            float stepDist = ogxReflectionLinearDepth(screenPos.z, projectionInverse); // 射线点的米制距离。
-            float sampleDist = ogxReflectionLinearDepth(depth, projectionInverse); // 几何点的米制距离。
+            float stepDist = ogxLinearDepthFromScreenDepth(screenPos.z, projectionInverse); // 射线点的米制距离。
+            float sampleDist = ogxLinearDepthFromScreenDepth(depth, projectionInverse); // 几何点的米制距离。
             float distDiff = abs(sampleDist - stepDist) / stepDist; // 两点的相对深度差。
             if (distDiff < zDiffThreshold && screenPos.z > 0.0 && screenPos.z < maxDepth) // 差足够小且深度有效才算命中。
             {
@@ -260,7 +242,7 @@ void ogxReflectionAtrousFilter(inout vec4 reflectionData, vec3 viewPos, vec3 vie
         {
             continue;
         }
-        float sampleDepth = ogxReflectionLinearDepth(textureLod(depthTexture, sampleCoord, 0.0).x, projectionInverse); // 邻点米制深度。
+        float sampleDepth = ogxLinearDepthFromScreenDepth(textureLod(depthTexture, sampleCoord, 0.0).x, projectionInverse); // 邻点米制深度。
         vec3 sampleReflected = reflect(-viewDir, ogxDecodeNormal(textureLod(normalTexture, sampleCoord, 0.0).xy)); // 邻点反射方向。
         float normalWeight = pow(ogxSaturate(dot(sampleReflected, reflectedDir)), normalThreshold); // 反射方向越接近权重越大。
         float depthWeight = exp2(-(abs(sampleDepth - linearDepth) * 1.58)); // 深度越接近权重越大。

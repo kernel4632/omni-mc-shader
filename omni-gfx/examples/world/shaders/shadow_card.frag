@@ -9,8 +9,8 @@ in vec2 vUv; // 卡片纹理坐标。
 
 void main()
 {
-    if (texture(uCard, vUv).a < 0.30)
+    if (texture(uCard, vUv).a < 0.30) // 低于阈值的像素没有叶片。
     {
-        discard;
+        discard; // 不写深度，树冠阴影因此有缝隙。
     }
 }

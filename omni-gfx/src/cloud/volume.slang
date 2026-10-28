@@ -24,8 +24,9 @@ Omni 通用图形库体积云模块：Nubis / Hillaire 风格的积云形状、�
 // 云模块提供顶部曲线与相位函数，数学提供球面求交与夹紧。
 #include "cloud.slang"
 // 颜色模块提供参考的曲线函数。
-#include "../color.slang"
-#include "../math.slang"
+#include "../common/color.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
 
 // 体积云的一层参数；不同云层换字段即可复用同一套步进。
 struct OgxCumulusMedia
@@ -48,19 +49,7 @@ struct OgxCumulusMedia
     float lightning_strength; // 闪电亮度选项。
 };
 
-// 三次平滑曲线：把零到一压成两端缓、中间快的过渡。
-float ogxCumulusCurve(float x)
-{
-    return x * x * (3.0 - 2.0 * x); // 两端导数为零，云的口沿不会出现折线。
-}
 
-// NUBIS 的顶部曲线：以 1 为顶点、在 0 与 2 处落到零的抛物线，用来把云顶收圆。
-// 积云顶部的垂直密度曲线：底部厚、顶部逐渐变薄。
-float ogxCumulusCurveTop(float x)
-{
-    x = x - 1.0; // 把顶点移到一。
-    return 1.0 - x * x; // 二次曲线在两端降到零。
-}
 
 // 把步进位置换成云坐标：竖直方向按行星曲率弯曲，水平方向随高度剪切。
 // 曲率修正让远处的云跟着地球弧度下沉，否则云层会像一块硬板挂在天边。
@@ -87,11 +76,11 @@ float2 ogxCumulusSampleDensity(float4 cloudPos, OgxCumulusMedia media, bool samp
     float baseDensity = baseSample.y * 0.4 + baseSample.z * 0.4 + baseSample.w * 0.2;
     baseDensity = ogxRemapSaturate(baseSample.x, baseDensity - 1.0, 1.0);
     // 竖直包络：底部快速到达满密度形成平底，顶部用两段曲线收圆，云不会长成蘑菇柄。
-    float shapeCurve = ogxCumulusCurveTop(ogxSaturate(1.0 - cloudPos.w)) * 0.5;
-    shapeCurve += ogxCumulusCurve(ogxSaturate(1.15 - cloudPos.w * 1.43)) * 0.5;
+    float shapeCurve = ogxCloudTopCurve(ogxSaturate(1.0 - cloudPos.w)) * 0.5;
+    shapeCurve += ogxCurve01(ogxSaturate(1.15 - cloudPos.w * 1.43)) * 0.5;
     baseDensity *= shapeCurve;
     baseDensity *= ogxFastSqrt(ogxSaturate(cloudPos.w * 2.5)) * 0.2 + 0.8;
-    baseDensity *= lerp(1.0, ogxCumulusCurveTop(ogxSaturate(cloudPos.w * 3.0)), media.wetness);
+    baseDensity *= lerp(1.0, ogxCloudTopCurve(ogxSaturate(cloudPos.w * 3.0)), media.wetness);
     // 云量：同一纵列从云底到云顶共享同一份覆盖，积云才会从平底往上长。
     // 噪声低的地方阈值接近一，整列都是蓝天；噪声高的地方阈值下降，只留下被三维噪声填满的云块。
     float coverageNoise = baseNoise.SampleLevel(cloudPos.xyz * float3(8.5e-5, -1.0e-5, 8.5e-5)
@@ -99,8 +88,8 @@ float2 ogxCumulusSampleDensity(float4 cloudPos, OgxCumulusMedia media, bool samp
     coverage = ogxRemapSaturate(1.0 - coverageNoise, coverage * 0.2, coverage);
     baseDensity = ogxRemapSaturate(baseDensity, coverage, 1.0);
     // 密度控制：中段最厚，顶部收薄，底部保留平底；这两条曲线也决定云顶的亮边宽度。
-    baseDensity *= ogxCumulusCurve(ogxSaturate(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
-    baseDensity *= ogxCumulusCurveTop(ogxSaturate(cloudPos.w * 1.8));
+    baseDensity *= ogxCurve01(ogxSaturate(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
+    baseDensity *= ogxCloudTopCurve(ogxSaturate(cloudPos.w * 1.8));
     baseDensity = ogxSaturate(baseDensity);
     float detailedDensity = 0.0; // 高频侵蚀后的密度。
     if (baseDensity > 1.0e-6 && sampleDetail) // 只有基础密度存在才付细节成本。
@@ -123,12 +112,8 @@ float2 ogxCumulusSampleDensity(float4 cloudPos, OgxCumulusMedia media, bool samp
 // 闪电照亮参与散射的介质：把闪电当成一根竖直光柱，云采样点离柱越近越亮。
 float3 ogxCumulusLightning(float3 relativePos, OgxCumulusMedia media, float lightDistance, float falloff)
 {
-    if (media.lightning_intensity <= 0.0) return float3(0.0); // 没有闪电事件时不加。
-    float3 boltPos = float3(media.lightning_position.x, clamp(relativePos.y, media.lightning_position.y, media.lightning_position.y + 116.0), media.lightning_position.z);
-    float boltDistance = length(relativePos - boltPos); // 介质到光柱的距离。
-    float lightningLight = max(1.0 - boltDistance / lightDistance, 0.0); // 照明范围内线性衰减。
-    lightningLight = exp((1.0 - lightningLight) * falloff); // 换成更集中的指数衰减。
-    return float3(0.55, 0.65, 0.9) * (lightningLight * media.lightning_intensity * media.lightning_strength);
+    return ogxLightningGlow(relativePos, media.lightning_position, media.lightning_intensity,
+        media.lightning_strength, lightDistance, falloff); // 光柱计算只在数学模块一份。
 }
 
 // 云的光照：沿太阳方向五次取样，单次散射、宽相位与底光按 NUBIS 的权重组合。
@@ -155,7 +140,7 @@ float3 ogxCumulusLighting(float3 marchingPos, OgxCumulusMedia media, float2 clou
     direct += (1.0 / (lightingDensity * 0.2 + 1.0)) * (ogxHenyeyGreenstein(vdotl, 0.2) + 0.1); // 多次散射的宽相位。
     direct *= hg * 2.0 + 1.0; // 逆光侧整体提升。
     direct *= lerp(media.bottom_brightness, 0.005 + pow(cloudDensity.y, media.outscatter_factor),
-        ogxCumulusCurve(ogxSaturate(cloudPos.w * 3.333 - 0.333))); // 云底到云顶的亮度分配。
+        ogxCurve01(ogxSaturate(cloudPos.w * 3.333 - 0.333))); // 云底到云顶的亮度分配。
     direct *= pow(max(cloudPos.w, 0.05), 0.75); // 云顶更受光。
     float3 lightColor = media.light_color * (direct * media.lighting_strength.x * 36.0); // 直射项，系数与 iterationT 相同。
     // 天光：薄处与云顶接收更多环境光，云底保留蓝灰底色。
@@ -242,9 +227,6 @@ float ogxCumulusShadowTex(float2 coord, OgxCumulusMedia media, float3 worldLight
     return exp2(-cloudDensity * 20.0); // 密度换成透过率；系数与 iterationT 的云影一致。
 }
 
-// iterationT 的标量曲线：与参考 curve 同一个式子，用于云层竖直分布。
-// iterationT 的软曲线：把输入压到零到一之间，避免高光过曝。
-float ogxCumulusDensityCurve(float x) { return 1.0 - x / (1.0 + x); }
 
 // iterationT 云密度：基础三维噪声合成大尺度形状，覆盖率裁剪后再叠细节噪声。
 // 参考签名是云坐标、风向与是否取细节；三张噪声图、尺度与天气参数显式追加。
@@ -257,17 +239,17 @@ float2 ogxCumulusDensityExplicit(float4 cloudPos, float3 windDirection, bool sam
     float4 baseSample = baseNoise.SampleLevel(cloudPos.xyz * baseScale + windDirection * 10.0, 0.0);
     float baseDensity = baseSample.y * 0.4 + baseSample.z * 0.4 + baseSample.w * 0.2; // 三个尺度加权成基础密度。
     baseDensity = OGX_CLAMP01((baseSample.x - (baseDensity - 1.0)) / (1.0 - (baseDensity - 1.0))); // 按天气通道重映射。
-    float shapeCurve = ogxCumulusCurveTop(OGX_CLAMP01(1.0 - cloudPos.w)) * 0.5; // 顶部圆角。
-    shapeCurve += ogxCumulusDensityCurve(OGX_CLAMP01(1.15 - cloudPos.w * 1.43)) * 0.5; // 底部收口。
+    float shapeCurve = ogxCloudTopCurve(OGX_CLAMP01(1.0 - cloudPos.w)) * 0.5; // 顶部圆角。
+    shapeCurve += ogxSoftSaturate(OGX_CLAMP01(1.15 - cloudPos.w * 1.43)) * 0.5; // 底部收口。
     baseDensity *= shapeCurve;
     baseDensity *= sqrt(OGX_CLAMP01(cloudPos.w * 2.5)) * 0.2 + 0.8; // 低空加厚。
-    baseDensity *= lerp(1.0, ogxCumulusCurveTop(OGX_CLAMP01(cloudPos.w * 3.0)), wetness); // 雨天云顶更平。
+    baseDensity *= lerp(1.0, ogxCloudTopCurve(OGX_CLAMP01(cloudPos.w * 3.0)), wetness); // 雨天云顶更平。
     float coverageNoise = baseNoise.SampleLevel(cloudPos.xyz * float3(8.5e-5, -1.0e-5, 8.5e-5) + windDirection + coverageOffset, 0.0).x;
     float coverage = lerp(clearCoverage, rainCoverage, wetness); // 晴雨两档覆盖率。
     coverage = OGX_CLAMP01(((1.0 - coverageNoise) - coverage * 0.2) / (coverage - coverage * 0.2)); // 噪声决定边界。
     baseDensity = OGX_CLAMP01((baseDensity - coverage) / (1.0 - coverage)); // 覆盖率裁剪。
-    baseDensity *= ogxCumulusDensityCurve(OGX_CLAMP01(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
-    baseDensity *= ogxCumulusCurveTop(OGX_CLAMP01(cloudPos.w * 1.8));
+    baseDensity *= ogxSoftSaturate(OGX_CLAMP01(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
+    baseDensity *= ogxCloudTopCurve(OGX_CLAMP01(cloudPos.w * 1.8));
     baseDensity = OGX_CLAMP01(baseDensity);
     float detailedDensity = 0.0;
     if (baseDensity > 1e-6 && sampleDetail)
@@ -313,7 +295,7 @@ float3 ogxCumulusLightingExplicit(float3 marchingPos, float2 cloudAltitude, floa
     float directScattering = exp2(-lightingDensity * (cloudPos.w * 0.15 + 0.05)) * (hg + 0.02) * (1.0 - wetness * 0.8); // 直接散射。
     directScattering += (1.0 / (lightingDensity * 0.2 + 1.0)) * (ogxHenyeyGreenstein(VdotL, 0.2) + 0.1); // 弱前向的多次散射。
     directScattering *= hg * 2.0 + 1.0;
-    directScattering *= lerp(0.15, 0.005 + pow(cloudDensity.y, 1.3), ogxCumulusDensityCurve(OGX_CLAMP01(cloudPos.w * 3.333 - 0.333))); // 底部亮度与云顶外散射。
+    directScattering *= lerp(0.15, 0.005 + pow(cloudDensity.y, 1.3), ogxSoftSaturate(OGX_CLAMP01(cloudPos.w * 3.333 - 0.333))); // 底部亮度与云顶外散射。
     directScattering *= pow(max(cloudPos.w, 0.05), 0.75); // 越高越亮。
     float3 cloudColor = colorShadowlight * (directScattering * lightingStrength.x * 36.0); // 太阳侧颜色。
     float ambientScattering = 1.0 - cloudDensity.x; // 环境散射。

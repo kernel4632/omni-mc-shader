@@ -1,3 +1,9 @@
+/*
+水面子文件：水洼覆盖、雨点高光、水下雾、雨纹动画、波纹法线与焦散。
+调用位置：由 `water.slang` 内联，水面、雨天与水下效果调用这里的入口。
+可复制示例：`float p = ogxPuddleCoverage(halfWet, noise, size);`
+设计原因与取舍：湿度、噪声与时间显式传入，纹理由调用方绑定；雨量与参考常数保持一致。
+*/
 // 水洼覆盖：只有湿度超过噪声阈值的地方才积水，五次方让边缘收得很快。
 float ogxPuddleCoverage(float halfWet, float noise, float size)
 {

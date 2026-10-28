@@ -12,17 +12,28 @@ Omni 通用图形库WSR 反射模块：体素追踪、屏幕空间反射、LPV �
     vec4 cloud = ogxWsrFogMarch(origin, end, dither, light, ambient, average, 16, density, shadowTex, view, proj, cameraOffset, cameraPos, sun, far, 32, 1.0, 1.0, 0.0, 0.0, 1.0, rayleigh, mie, 0.9, 0.9, 1.0, 2048.0, bolt, lightning); // 积分空气雾。
 设计原因与取舍：
     体素命中、屏幕空间追踪、雾与水体都只读显式纹理和矩阵；指数步进、吸收与闪电照明的顺序与参考实现一致。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。WSR 反射目前只被库内高光模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_REFLECTION_WSR_INCLUDED
 #define OGX_REFLECTION_WSR_INCLUDED
-#include "/omni-gfx/math.glsl"
+
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "/omni-gfx/common/math.glsl"
+// 体素求交提供光线步进与遮挡判断。
 #include "/omni-gfx/voxel/trace.glsl"
+// 阴影贴图提供投影偏差、边缘压缩与体素阴影。
 #include "/omni-gfx/shadow/map.glsl"
+// 雾提供高度密度、相位与粉末效应。
 #include "/omni-gfx/fog/fog.glsl"
+// 水面提供吸收、波法线、泡沫与折射。
 #include "/omni-gfx/water.glsl"
+// 闪电提供落点、闪光与雾中照明。
 #include "/omni-gfx/weather/lightning.glsl"
+// 光传播体积提供方块光与天光采样。
 #include "/omni-gfx/lpv.glsl"
+// 手持光提供光斑、手电与手光阴影。
 #include "/omni-gfx/heldlight.glsl"
+// 间接光提供屏幕空间追踪与历史重投影。
 #include "/omni-gfx/gi/indirect.glsl"
 // 屏幕空间高光追踪的提前声明：环境反射函数会先调用它，定义放在文件后半段。
 vec3 ogxReflectionRayTrace(vec3 dir, vec3 position, float dither, float quality, bool hand,

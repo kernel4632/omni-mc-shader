@@ -14,7 +14,8 @@ Omni 通用图形库吸积盘模块：沿视线在黑洞附近步进，累加盘
 #define OGX_ACCRETION_INCLUDED
 
 // 数学提供黑体、旋转、径向轮廓与空间扭曲，雾模块提供分形噪声。
-#include "math.slang"
+#include "common/math.slang"
+// 雾提供高度密度、相位与粉末效应。
 #include "fog/fog.slang"
 
 // 吸积盘积分：`steps` 是步数，`startOffset` 是起始位置离黑洞的距离，

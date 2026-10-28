@@ -1,3 +1,9 @@
+/*
+大气子文件：行星表面双向反射、行星环噪声、相函数、空气质量与星光。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，末地天空与大气查表复用这里的相函数。
+可复制示例：`vec3 c = ogxPlanetBrdf(albedo, normal, eyeDir, lightDir);`
+设计原因与取舍：只接收显式参数，行星半径与反照率由调用方给出；算式逐项照参考保留。
+*/
 // 钱德拉塞卡近似：各项同性散射的倍增因子，反照率越高、余弦越大越亮。
 float3 ogxChandrasekharH(float3 albedo, float a)
 {

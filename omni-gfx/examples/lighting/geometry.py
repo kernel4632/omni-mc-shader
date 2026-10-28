@@ -225,7 +225,7 @@ def add_box(vertices: array, center, half_size, rotation: float, albedo, roughne
                 world_x = center[0] + local_x * cosine + local_z * sine  # 绕纵轴旋转。
                 world_z = center[2] - local_x * sine + local_z * cosine  # 同一旋转的纵向分量。
                 corners.append((world_x, center[1] + local_y, world_z))  # 角点高度不受旋转影响。
-    faces = (  # 每个面：四个角在 corners 里的下标，以及局部法线。
+    faces = (  # 每个面：四个角点的下标，以及局部法线。
         ((1, 5, 7, 3), (0.0, 0.0, 1.0)),  # 前。
         ((4, 0, 2, 6), (0.0, 0.0, -1.0)),  # 后。
         ((4, 6, 7, 5), (1.0, 0.0, 0.0)),  # 右。

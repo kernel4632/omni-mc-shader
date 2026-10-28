@@ -6,11 +6,14 @@ Omni 通用图形库体素求交模块：射线任务、包围盒、栅栏、裁
     float2 hit = ogxVoxelSampleOffset(3, 8.0, 0.5); // 取螺旋采样点。
 设计原因与取舍：
     所有求交只依赖整数格与几何参数；裁剪命中会读体素面表，其余路径不读取宿主纹理。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。体素求交目前只被库内反射与阴影模块间接引用，没有独立画面入口。
 */
 #ifndef OGX_VOXEL_TRACE_INCLUDED
 #define OGX_VOXEL_TRACE_INCLUDED
 
-#include "../math.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
+// 体素提供坐标、材质与发光读取。
 #include "voxel.slang"
 
 // 体素包围盒求交结果：命中、参数、位置与进入面轴。

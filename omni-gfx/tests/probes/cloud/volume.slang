@@ -35,6 +35,6 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     float3 hitOffset; // 平均命中位置。
     float4 layer = ogxCumulusMarch(normalize(float3(t, 0.2, 0.8)), media, float2(t, 0.5), hitOffset, probeBase, probeDetail, probeCurl, 4.0, 0.5, normalize(float3(0.3, 0.2, -0.9)), 1.0, 0.0, 1.0, 1.0); // 步进。
     float shadow = ogxCumulusShadowTex(float2(t, t), media, normalize(float3(0.3, 0.2, -0.9)), 1000.0, probeBase, probeCurl, 1.0, 0.0, 1.0, 1.0); // 云影。
-    float3 c = ogxCumulusLightning(hitOffset, media, 400.0, -10.0) + ogxCumulusCurve(t) * density.y; // 闪电与曲线。
+    float3 c = ogxCumulusLightning(hitOffset, media, 400.0, -10.0) + ogxCurve01(t) * density.y; // 闪电与曲线。
     return float4(layer.rgb + c + float3(shadow), layer.a); // 有输出即可。
 }

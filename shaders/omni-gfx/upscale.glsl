@@ -18,7 +18,7 @@ Omni 通用图形库放大与锐化模块：边缘方向重采样、对比度自
 #define OGX_UPSCALE_INCLUDED
 
 // 数学模块提供亮度、夹紧与单位化。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 // 单个采样点按离重采样中心的距离给权重，超出钳位半径的样本不再增加贡献。
 // 两层权重相乘让核在中心为一、边缘平滑收零，避免放大后出现一圈硬边。
 void ogxFsrEasuTap(inout vec3 aC, inout float aW, vec2 off, vec2 dir, vec2 len, float lob, float clp, vec3 c)

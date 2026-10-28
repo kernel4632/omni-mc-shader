@@ -21,6 +21,9 @@ sys.path.insert(0, str(LIB / "tools"))  # 工具目录不是包，直接加入�
 
 import count  # 行数口径与报告共用一份实现。
 import generate  # 生成器同时提供当前文本，测试不必重新实现转换。
+import catalog  # 模块顺序与仅探针状态只有一份来源。
+import profile  # profile 生成器的模块表必须与生成器一致。
+import stats  # 文档当前统计由源码与报告生成。
 
 FORBIDDEN = re.compile(r"\b(?:OMNI_[A-Z0-9_]+|colortex\d*|shadowtex\d*|noisetex|gaux\d*|screenSize|cameraPosition|frameTimeCounter|worldTime|rainStrength|gl_FragCoord|uniform)\b")  # 通用库不能出现宿主符号。
 
@@ -101,18 +104,73 @@ class OmniGfxTests(unittest.TestCase):
             with self.subTest(module=name):
                 self.assertTrue((LIB / "tests" / "probes" / f"{name}.slang").is_file())  # 缺一个就说明有写法从未过编译器。
 
+    def test_module_catalog_is_shared(self):
+        """生成器与 profile 生成器必须使用同一份模块表。"""
+        self.assertEqual(len(catalog.MODULES), 48)  # 模块数量是验证口径的一部分，改动时必须同步全部文档。
+        self.assertEqual(tuple(generate.MODULES), catalog.MODULES)  # 生成器不能私藏第二份顺序。
+        self.assertEqual(tuple(profile.MODULES), catalog.MODULES)  # profile 生成器同样只能读清单。
+
+    def test_probe_only_modules_are_honest(self):
+        """仅探针模块必须没有顶层消费者，文件头也要写明状态。"""
+        used = catalog.consumers()  # 真实引用扫描，不按目录名猜测。
+        for name, reason in catalog.PROBE_ONLY.items():
+            with self.subTest(module=name):
+                self.assertFalse(used[name], f"{name} 已有消费者，应从 PROBE_ONLY 移除")
+                header = (LIB / "src" / f"{name}.slang").read_text(encoding="utf-8").split("*/", 1)[0]
+                self.assertIn("仅编译探针", header)  # 文件头不能继续写成已经被画面引用。
+        for name in catalog.MODULES:
+            if name in catalog.PROBE_ONLY:
+                continue
+            with self.subTest(module=name):
+                self.assertTrue(used[name], f"{name} 没有顶层消费者，应登记到 PROBE_ONLY")
+
+    def test_docs_stats_are_current(self):
+        """README 与验证记录的当前统计必须和源码、对照报告一致。"""
+        stats.check()  # 数字过期时抛出并指出来源。
+
+    def test_slang_archive_rejects_unsafe_paths(self):
+        """Slang 下载解压必须拒绝跳出目录的成员。"""
+        import tempfile
+        import zipfile
+        import slang  # 下载与解压工具。
+        with tempfile.TemporaryDirectory() as temporary:
+            folder = Path(temporary)
+            archive = folder / "bad.zip"
+            with zipfile.ZipFile(archive, "w") as bundle:
+                bundle.writestr("../escape.txt", "x")
+            with self.assertRaisesRegex(ValueError, "跳出解压目录"):
+                slang._extract_zip(archive, folder / "out")  # 路径检查在解压前执行。
+            self.assertFalse((folder / "escape.txt").exists())  # 不能留下已经写出的文件。
+
+    def test_no_copied_function_bodies(self):
+        """不同名字的函数不能复制同一段算法；只允许参考签名的单行转调适配层。"""
+        import signature  # 解析规则与严格对照共用一份。
+        groups = {}
+        for path in sorted((LIB / "src").rglob("*.slang")):
+            for item in signature.parse_functions(path):
+                body = " ".join(item["body"].split())
+                groups.setdefault(body, []).append((path.as_posix(), item["name"]))
+        for body, items in groups.items():
+            names = {name for _, name in items}
+            if len(items) < 2 or len(names) == 1:
+                continue  # 同名重载不是复制，保留各自的参数类型。
+            if body.startswith("{ return ") and body.endswith("; }"):
+                continue  # 参考签名的单行转调适配层，算法仍只有一份。
+            self.fail("发现重复函数体：" + "、".join(f"{path}::{name}" for path, name in items))
+
     def test_parity_has_no_missing_functions(self):
         """函数级对照的缺口必须为零，且人工对照不能指向不存在的函数。"""
         import parity  # 生成文档与测试共用同一份判定，避免测试另写一套规则。
         index = parity.library_index()  # 当前库里的函数索引。
         rows = parity.collect_reference()  # 两份参考包的函数。
+        self.assertEqual(len(rows), parity.REFERENCE_FUNCTION_COUNT)  # 目录缺失时不能读成零个函数。
         mapping = json.loads(parity.MAP.read_text(encoding="utf-8"))  # 人工对照与状态覆盖。
         parity.classify(rows, index, mapping)  # 判定时会把坏目标直接抛错。
         missing = [row["name"] for row in rows if row["status"] == "缺失"]  # 真正缺口。
         self.assertEqual(missing, [])  # 有缺口说明对照表需要重新处理，不能只改文档。
 
     def test_handwritten_budget(self):
-        """手写核心（源、工具、测试）不超过计划给的三千行。"""
+        """手写核心（源、工具、测试）不超过 `count.py` 登记的预算。"""
         data = count.collect()  # 统计口径来自构建工具，不在测试里另写一份。
         self.assertLessEqual(data["handwrittenTotal"], data["handwrittenBudget"])  # 超限时先删重复实现或改口径并说明。
 

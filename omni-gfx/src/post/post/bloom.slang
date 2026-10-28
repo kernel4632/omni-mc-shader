@@ -1,3 +1,9 @@
+/*
+后期子文件：泛光降采样与链拷贝、轴向高斯模糊、三次纹理放大、色调曲线与颗粒。
+调用位置：由 `post/post.slang` 内联，合成阶段的泛光与调色直接调用这些入口。
+可复制示例：`vec3 b = ogxBloomDownsample(source, coord, texel);`
+设计原因与取舍：每级只做一次可复用的核，链的边界与混合由调用方决定；权重和与参考一致。
+*/
 // 泛光降采样：先做四点盒式取样，再转换到线性颜色。
 float3 ogxBloomDownsample(Sampler2D source, float2 coord, float2 texel)
 {
@@ -155,9 +161,3 @@ float ogxDofLensFactor(float focalLength, float aperture, float referenceFocal, 
     return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
 }
 
-// 米制距离换回非线性屏幕深度；景深写回下界历史时需要这个反向换算。
-float ogxScreenDepthFromLinearDepth(float depth, float4x4 projectionInverse)
-{
-    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 解出负一到一的深度。
-    return depth * 0.5 + 0.5; // 再转回零到一。
-}

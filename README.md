@@ -1,5 +1,9 @@
 # Omni
 
+<!-- stats:begin -->
+当前统计：48 个模块、90 个 Slang 源文件、15781 行生成 GLSL；函数对照 505 个，已迁入 407、MC 专用 98、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
+<!-- stats:end -->
+
 一个以共享配置、自定义画面和按需性能开销为目标的 Minecraft Java 光影项目。
 
 **当前为开发代码审查阶段，版本以 `VERSION` 为准。** 已接入基础世界绘制与完整效果流程、四套预设、配置分享及开发自动化。

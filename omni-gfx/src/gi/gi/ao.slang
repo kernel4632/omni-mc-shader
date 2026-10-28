@@ -1,3 +1,10 @@
+/*
+全局光子文件：地平线遮蔽的参考实现、多弹射补偿、双边升采样与反射阴影图。
+调用位置：由 `gi/gi.slang` 内联，全局光时间滤波与严格 profile 使用这里的入口。
+可复制示例：`float ao = ogxGroundTruthAo(viewPos, viewDir, normal, coord, aspect, depthTex, farTex, proj, invProj, farInvProj, params, noise);`
+设计原因与取舍：这是参考画质的多次切片遮蔽，供全局光内部使用；独立画面遮蔽的
+低成本版本在 `gi/ambientocclusion.slang`，两者按用途分工，不互相包含，避免把重算法带进轻量阶段。
+*/
 // 环境光遮蔽的多重反弹近似：用反照率补偿被遮住的间接光。
 float3 ogxAoMultiBounce(float ao, float3 albedo)
 {
@@ -39,7 +46,7 @@ float3 ogxGiViewPos(float2 coord, float depth, float4x4 projection_inverse)
 }
 
 // 远景屏幕坐标与深度还原视空间位置；没有远景时调用方不会走到这里。
-float3 ogxGiViewPosDh(float2 coord, float depth, float4x4 dh_projection_inverse)
+float3 ogxGiViewPosDistant(float2 coord, float depth, float4x4 dh_projection_inverse)
 {
     float3 ndc = float3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
     float4 pos = ogxMatrixMul(dh_projection_inverse, float4(ndc, 1.0)); // 远景逆投影整矩阵乘法。
@@ -116,7 +123,7 @@ float ogxGroundTruthAo(float3 viewPos, float3 viewDir, float3 normal, float2 coo
                 if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
                 {
                     sampleDepth = dhDepthTexture.SampleLevel(sampleCoord, 0.0).x; // 远景深度。
-                    sampleVector = ogxGiViewPosDh(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
+                    sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
                 }
                 else // 近景样本正常还原。
                 {
@@ -144,7 +151,7 @@ float ogxGroundTruthAo(float3 viewPos, float3 viewDir, float3 normal, float2 coo
                 if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
                 {
                     sampleDepth = dhDepthTexture.SampleLevel(sampleCoord, 0.0).x; // 远景深度。
-                    sampleVector = ogxGiViewPosDh(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
+                    sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
                 }
                 else // 近景样本正常还原。
                 {

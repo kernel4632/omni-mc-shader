@@ -3,7 +3,7 @@
 // 调用位置：体积云步进之后、天空合成之前；先横向再纵向各画一次。
 // 设计原因与取舍：云本身是软介质，模糊不会损失结构，却能把半分辨率采样与细节噪声藏起来；
 // 核只覆盖两个纹素，边缘保持花椰菜的鼓包，不会把整朵云糊成棉花糖。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 
 uniform sampler2D uSource; // 来源云纹理，rgb 预乘颜色，a 覆盖率。
 uniform vec2 uResolution; // 半分辨率尺寸。

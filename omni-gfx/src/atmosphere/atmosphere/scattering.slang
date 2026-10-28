@@ -1,3 +1,10 @@
+/*
+大气子文件：地球大气常数、臭氧与密度剖面、光线与球壳求交、光学深度与单次散射。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，供天空查表与空气透视使用。
+可复制示例：`vec3 sky = ogxAtmosphereSky(ogxAtmosphereEarth(), 0.0, viewDir, sunDir, 16);`
+设计原因与取舍：常数集中在地球默认值，其他行星可换结构体字段；步数与方向全部显式传入。
+*/
+// 地球默认大气：海平面半径六千三百六十公里，层顶八十公里，数值与参考一致。
 OgxAtmosphere ogxAtmosphereEarth()
 {
     OgxAtmosphere air; // 先声明再逐项填写，Slang 与 GLSL 都支持这种写法。

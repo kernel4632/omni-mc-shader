@@ -14,7 +14,7 @@
     `vec3 moonDir = CalculateWorldMoonVector(worldSunVector);`
     `float phase = CalculateMoonPhaseBrightness(worldSunVector, worldMoonVector);`
 设计原因与取舍：默认不改变画面——自定义轨道、月相亮度、真实月亮都默认关闭，月食默认开启但默认轨道下日月相对、永不接近。
-    轨道数学照 Eclipse `dimensions/begin.csh:73-95` 的 `moonDirection` 逐行移植，纯公式在 `shaders/gfx/atmosphere.glsl`；
+    轨道数学照 Eclipse `dimensions/begin.csh:73-95` 的 `moonDirection` 逐行移植，纯公式在 `/omni-gfx/shadow/map.glsl` 的旋转入口；
     平滑时间由加载器按 `pipeline.properties` 每帧算好。
 */
 // --- 月亮轨道、月食与月相 ---

@@ -136,8 +136,8 @@ def material_sources(asset: str) -> dict:
 def prepare_grass_ground() -> dict:
     """把 ambientCG 的草甸压缩包转成三张 512 PNG。
 
-    压缩包里的 Color、NormalGL、Roughness 都是 1K 八位 PNG；
-    解压后只读取需要的三张，避免把 20MB 的 whole 包留在仓库。
+    压缩包里的颜色、法线、粗糙度都是 1K 八位 PNG；
+    解压后只读取需要的三张，避免把二十兆字节的整包留在仓库。
     草叶颜色偏黄绿，脚本不做色相调整，着色器再按光照与远处雾气微调。
     """
     prefix, asset, purpose, url = GRASS_GROUND
@@ -158,7 +158,7 @@ def prepare_grass_ground() -> dict:
 
 
 def prepare_sky_hdr() -> dict:
-    """下载纯天空 HDR 到 assets，保留原始 Radiance 文件。
+    """下载纯天空 HDR 到资源目录，保留原始 Radiance 文件。
 
     HDR 已是最终格式，不再经过 PNG 降采样；测试世界启动时自行解码。
     """
@@ -301,7 +301,7 @@ def draw_leaf(rgba: bytearray, center_x: float, center_y: float, length: float, 
             leaf_color = vein if is_vein else tuple(int(c * shade) for c in color)  # 主脉压暗。
             old_alpha = rgba[base + 3] / 255.0  # 已有覆盖度，叶片重叠时保留上层。
             new_alpha = edge  # 本叶片覆盖度。
-            out_alpha = new_alpha + old_alpha * (1.0 - new_alpha)  # 标准 over 合成。
+            out_alpha = new_alpha + old_alpha * (1.0 - new_alpha)  # 标准覆盖合成。
             if out_alpha <= 0.001:  # 全透明像素不用写。
                 continue
             for channel in range(3):  # 颜色按覆盖度混合。

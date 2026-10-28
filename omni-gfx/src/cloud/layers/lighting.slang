@@ -1,6 +1,8 @@
 /* 层状体积云的光照：相函数、朝光散射与单次散射合成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudLighting(index, shape, faded, shadowMask, sunColor, moonColor, ...);`
-设计取舍：直射按 Beer 定律衰减，前后散射按粉末效应插值，间接光按形状抬升。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 云的相函数：按 `mode` 选择 Henyey-Greenstein、Cornette-Shanks 或 HG-Draine。
 // 按云相位模式组合前向与背向散射，决定云边缘的透光方向。
@@ -81,8 +83,7 @@ float3 ogxLayersGetCloudLighting(int layerIndex, float shape, float shapeFaded, 
 // 为什么单列一条：参考默认只启用这一种相位，带类型开关的旧实现会多出其它模型的常数。
 float ogxLayersPhaseCloudHenyey(float g, float x)
 {
-    float gg = g * g; // 各向异性平方。
-    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考原式。
+    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考原式直接写 3.14。
 }
 
 // 层状云内散射：沿太阳或月亮方向取几个云形状样本，累加成透过率。

@@ -18,7 +18,8 @@ Omni 通用图形库天空合成模块：太阳与月亮圆盘、球面投影、
 #define OGX_ATMOSPHERE_SKY_INCLUDED
 
 // 数学提供圆周率、夹紧与黑体色；大气提供射线求交与相函数。
-#include "../math.slang"
+#include "../common/math.slang"
+// 大气提供散射、密度剖面与天球映射。
 #include "atmosphere.slang"
 
 // Eclipse 太阳圆盘：按视方向与太阳方向的余弦算柔边，再乘太阳颜色与固定亮度。
@@ -60,23 +61,6 @@ float3 ogxSkyMoonDiscSized(float3 playerPos, float3 worldSunVec, float3 color, i
     return color / 750.0 * shape; // 参考实现的亮度缩放。
 }
 
-// 三次卷积权重：Catmull-Rom 核的四个分段，供双三次采样复用。
-// 三次卷积权重零号：离采样点最近的一侧。
-float ogxBicubicSplineWeight0(float a) { return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0); }
-// 三次卷积权重一号：与零号配对，组成左半核。
-float ogxBicubicSplineWeight1(float a) { return (1.0 / 6.0) * (a * a * (3.0 * a - 6.0) + 4.0); }
-// 三次卷积权重二号：右半核的第一项。
-float ogxBicubicSplineWeight2(float a) { return (1.0 / 6.0) * (a * (a * (-3.0 * a + 3.0) + 3.0) + 1.0); }
-// 三次卷积权重三号：离采样点最远的一侧。
-float ogxBicubicSplineWeight3(float a) { return (1.0 / 6.0) * (a * a * a); }
-// 左半核归一化：把零号与一号权重合在一起。
-float ogxBicubicSplineWeightSum0(float a) { return ogxBicubicSplineWeight0(a) + ogxBicubicSplineWeight1(a); }
-// 右半核归一化：把二号与三号权重合在一起。
-float ogxBicubicSplineWeightSum1(float a) { return ogxBicubicSplineWeight2(a) + ogxBicubicSplineWeight3(a); }
-// 左半核的偏移量：让采样点落在正确的纹素中心。
-float ogxBicubicSplineOffset0(float a) { return -1.0 + ogxBicubicSplineWeight1(a) / (ogxBicubicSplineWeight0(a) + ogxBicubicSplineWeight1(a)); }
-// 右半核的偏移量：与左半核一起完成三次插值。
-float ogxBicubicSplineOffset1(float a) { return 1.0 + ogxBicubicSplineWeight3(a) / (ogxBicubicSplineWeight2(a) + ogxBicubicSplineWeight3(a)); }
 
 // Eclipse 双三次纹理采样：四个角各取一次双线性，再按卷积权重合成。
 // `pixelSize` 是一像素的贴图坐标；参考实现把同样的值同时用作像素和倒数。
@@ -86,18 +70,18 @@ float4 ogxBicubicSplineTexture(Sampler2D tex, float2 uv, float2 pixelSize)
     uv = uv * texelSize.zw; // 换到像素坐标。
     float2 iuv = floor(uv); // 整数部分。
     float2 fuv = fract(uv); // 小数部分。
-    float g0x = ogxBicubicSplineWeightSum0(fuv.x); // 横轴左权重。
-    float g1x = ogxBicubicSplineWeightSum1(fuv.x); // 横轴右权重。
-    float h0x = ogxBicubicSplineOffset0(fuv.x); // 横轴左偏移。
-    float h1x = ogxBicubicSplineOffset1(fuv.x); // 横轴右偏移。
-    float h0y = ogxBicubicSplineOffset0(fuv.y); // 纵轴上偏移。
-    float h1y = ogxBicubicSplineOffset1(fuv.y); // 纵轴下偏移。
+    float g0x = ogxCubicWeightLow(fuv.x); // 横轴左权重。
+    float g1x = ogxCubicWeightHigh(fuv.x); // 横轴右权重。
+    float h0x = ogxCubicOffsetLow(fuv.x); // 横轴左偏移。
+    float h1x = ogxCubicOffsetHigh(fuv.x); // 横轴右偏移。
+    float h0y = ogxCubicOffsetLow(fuv.y); // 纵轴上偏移。
+    float h1y = ogxCubicOffsetHigh(fuv.y); // 纵轴下偏移。
     float2 p0 = (float2(iuv.x + h0x, iuv.y + h0y) - 0.5) * texelSize.xy; // 左上样本。
     float2 p1 = (float2(iuv.x + h1x, iuv.y + h0y) - 0.5) * texelSize.xy; // 右上样本。
     float2 p2 = (float2(iuv.x + h0x, iuv.y + h1y) - 0.5) * texelSize.xy; // 左下样本。
     float2 p3 = (float2(iuv.x + h1x, iuv.y + h1y) - 0.5) * texelSize.xy; // 右下样本。
-    return ogxBicubicSplineWeightSum0(fuv.y) * (g0x * tex.SampleLevel(p0, 0.0) + g1x * tex.SampleLevel(p1, 0.0))
-         + ogxBicubicSplineWeightSum1(fuv.y) * (g0x * tex.SampleLevel(p2, 0.0) + g1x * tex.SampleLevel(p3, 0.0)); // 参考实现的合成顺序。
+    return ogxCubicWeightLow(fuv.y) * (g0x * tex.SampleLevel(p0, 0.0) + g1x * tex.SampleLevel(p1, 0.0))
+         + ogxCubicWeightHigh(fuv.y) * (g0x * tex.SampleLevel(p2, 0.0) + g1x * tex.SampleLevel(p3, 0.0)); // 参考实现的合成顺序。
 }
 
 // 带圆形噪声偏移的双三次采样：用于体积云或天空盒旋转采样。
@@ -109,18 +93,18 @@ float4 ogxBicubicSplineTextureOffset(Sampler2D tex, float2 uv, float noise, floa
     uv = (uv + texelSize.xy) * texelSize.zw; // 先加一像素再换到像素坐标。
     float2 iuv = floor(uv + circleOffsets); // 整数部分加偏移。
     float2 fuv = fract(uv + circleOffsets); // 小数部分加偏移。
-    float g0x = ogxBicubicSplineWeightSum0(fuv.x); // 横轴左权重。
-    float g1x = ogxBicubicSplineWeightSum1(fuv.x); // 横轴右权重。
-    float h0x = ogxBicubicSplineOffset0(fuv.x); // 横轴左偏移。
-    float h1x = ogxBicubicSplineOffset1(fuv.x); // 横轴右偏移。
-    float h0y = ogxBicubicSplineOffset0(fuv.y); // 纵轴上偏移。
-    float h1y = ogxBicubicSplineOffset1(fuv.y); // 纵轴下偏移。
+    float g0x = ogxCubicWeightLow(fuv.x); // 横轴左权重。
+    float g1x = ogxCubicWeightHigh(fuv.x); // 横轴右权重。
+    float h0x = ogxCubicOffsetLow(fuv.x); // 横轴左偏移。
+    float h1x = ogxCubicOffsetHigh(fuv.x); // 横轴右偏移。
+    float h0y = ogxCubicOffsetLow(fuv.y); // 纵轴上偏移。
+    float h1y = ogxCubicOffsetHigh(fuv.y); // 纵轴下偏移。
     float2 p0 = (float2(iuv.x + h0x, iuv.y + h0y) - 0.5) * texelSize.xy; // 左上样本。
     float2 p1 = (float2(iuv.x + h1x, iuv.y + h0y) - 0.5) * texelSize.xy; // 右上样本。
     float2 p2 = (float2(iuv.x + h0x, iuv.y + h1y) - 0.5) * texelSize.xy; // 左下样本。
     float2 p3 = (float2(iuv.x + h1x, iuv.y + h1y) - 0.5) * texelSize.xy; // 右下样本。
-    return ogxBicubicSplineWeightSum0(fuv.y) * (g0x * tex.SampleLevel(p0, 0.0) + g1x * tex.SampleLevel(p1, 0.0))
-         + ogxBicubicSplineWeightSum1(fuv.y) * (g0x * tex.SampleLevel(p2, 0.0) + g1x * tex.SampleLevel(p3, 0.0)); // 与不带偏移版相同的合成顺序。
+    return ogxCubicWeightLow(fuv.y) * (g0x * tex.SampleLevel(p0, 0.0) + g1x * tex.SampleLevel(p1, 0.0))
+         + ogxCubicWeightHigh(fuv.y) * (g0x * tex.SampleLevel(p2, 0.0) + g1x * tex.SampleLevel(p3, 0.0)); // 与不带偏移版相同的合成顺序。
 }
 
 // Eclipse 球面方向转等距柱状坐标：经度用负方向，纬度用高度角。
@@ -284,36 +268,9 @@ float3 ogxSkyAtmosphereIntegral(float3 background, float3 viewVector, float3 upV
     return scatteringAmbient * background + scatteringSun * sunColorBase + scatteringMoon * moonColorBase * 0.5; // 参考实现的合成。
 }
 
-// Eclipse 极光哈希：一维输入打散成零到一。
-float ogxAuroraCurtainHash(float p)
-{
-    p = fract(p * 0.1031); // 先压到小数。
-    p *= p + 33.33; // 二次项。
-    p *= p + p; // 再乘两倍。
-    return fract(p); // 取小数。
-}
 
-// 极光二维旋转矩阵。
-float2x2 ogxAuroraRotation(float angle)
-{
-    float c = cos(angle); // 余弦。
-    float s = sin(angle); // 正弦。
-    return float2x2(c, s, -s, c); // 按参考实现的列顺序。
-}
 
-// 三角波：把任意输入压到零点零一到零点四九之间。
-float ogxAuroraTriangle(float x)
-{
-    return clamp(abs(fract(x) - 0.5), 0.01, 0.49); // 参考实现的范围。
-}
 
-// 二维三角波对：第二分量是第一分量与纵轴再次组合。
-float2 ogxAuroraTriangle2d(float2 p)
-{
-    float triX = ogxAuroraTriangle(p.x); // 横向三角波。
-    float triY = ogxAuroraTriangle(p.y); // 纵向三角波。
-    return float2(triX + triY, ogxAuroraTriangle(triX + p.y)); // 参考实现的组合。
-}
 
 // 行向量乘矩阵：GLSL 的 `p *= m` 是行向量约定，和常见的矩阵乘向量相反。
 float2 ogxAuroraRowMultiply(float2 p, float2x2 m)
@@ -327,20 +284,20 @@ float ogxAuroraTriangleNoise(float2 p, float time)
     float z = 1.8; // 第一层缩放。
     float z2 = 2.5; // 第二层缩放。
     float rz = 0.0; // 累加结果。
-    p = ogxAuroraRowMultiply(p, ogxAuroraRotation(p.x * 0.06)); // 初始旋转。
+    p = ogxAuroraRowMultiply(p, ogxRotate2Matrix(p.x * 0.06)); // 初始旋转。
     float2 bp = p; // 备份坐标。
-    float2x2 rotation = ogxAuroraRotation(time * 0.06); // 时间旋转。
+    float2x2 rotation = ogxRotate2Matrix(time * 0.06); // 时间旋转。
     float2x2 m2 = float2x2(0.95534, 0.29552, -0.29552, 0.95534); // 参考实现的固定旋转。
     for (int i = 0; i < 3; i++) // 三层。
     {
-        float2 dg = ogxAuroraTriangle2d(bp * 1.75) * 0.75; // 三角波偏移。
+        float2 dg = ogxTriangleGradient2d(bp * 1.75) * 0.75; // 三角波偏移。
         dg = ogxAuroraRowMultiply(dg, rotation); // 旋转偏移。
         p -= dg / z2; // 坐标扰动。
         bp *= 1.3; // 频率放大。
         z2 *= 0.45; // 下一层缩放。
         z *= 0.42; // 权重衰减。
         p *= 1.21 + (rz - 1.0) * 0.02; // 参考实现的比例。
-        rz += ogxAuroraTriangle(p.x + ogxAuroraTriangle(p.y)) * z; // 累加一层。
+        rz += ogxTriangleGradient(p.x + ogxTriangleGradient(p.y)) * z; // 累加一层。
         p = ogxAuroraRowMultiply(p, float2x2(-0.95534, -0.29552, 0.29552, -0.95534)); // 参考实现的 `p *= -m2`。
     }
     return clamp(1.0 / pow(rz * 29.0, 1.6), 0.0, 0.55); // 参考实现的收尾。

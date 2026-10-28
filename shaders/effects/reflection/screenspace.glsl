@@ -127,7 +127,7 @@ vec3 OmniReflectionVolumeFog(vec3 color, vec3 startWorld, vec3 endWorld, vec3 ra
 // 屏幕空间追踪、方向生成与降噪都在生成库；本文件只保留宿主合成流程。
 #include "/omni-gfx/reflection/reflection.glsl"
 // 数学模块提供饱和、法线解码与曲线编码。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 
 // 一次反射的输入几何：位置、方向与屏幕起点打包，主函数不必收一长串参数。
 struct ReflectionSurface { // 宿主合成用的输入结构。

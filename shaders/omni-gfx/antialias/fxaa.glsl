@@ -11,6 +11,7 @@ Omni 通用图形库抗锯齿 FXAA 模块：按亮度梯度找边缘方向，再
     vec3 sharp = ogxFxaa(color, texCoord, pixelSize, colorTexture); // 做一次边缘过滤。
 设计原因与取舍：
     只读一帧颜色，不需要历史缓冲；四个邻域和两组内侧样本的顺序与参考实现相同。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。FXAA 目前只有探针覆盖，顶层抗锯齿走 antialias/antialias。
 */
 #ifndef OGX_ANTIALIAS_FXAA_INCLUDED
 #define OGX_ANTIALIAS_FXAA_INCLUDED

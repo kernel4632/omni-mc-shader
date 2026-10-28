@@ -168,7 +168,7 @@ vec3 ripples(vec2 fragCoord){
 		for (int i = -MAX_RADIUS; i <= MAX_RADIUS; ++i){
 			vec2 pi = p0 + vec2(float(i), float(j));
 			vec2 p = pi + ogxHash22(pi);
-			float t = fract(0.9 * frameTimeCounter + ogxRippleHash12(pi));
+			float t = fract(0.9 * frameTimeCounter + ogxHash12(pi));
 			vec2 v = p - uv;
 			float d = length(v) - (float(MAX_RADIUS) + 1.0) * t * sizeCompensation;
 			const float h = 1e-2;

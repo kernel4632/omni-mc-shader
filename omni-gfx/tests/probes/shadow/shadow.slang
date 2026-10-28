@@ -17,7 +17,7 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     float3 shadowPosition = ogxShadowScreenPos(worldPosition, view, projection); // 不做压缩的投影。
     float3 distorted = ogxShadowScreenPosDistorted(worldPosition, view, projection, 0.9); // 带边缘压缩的投影。
     float2 restored = ogxDistortShadowPos(distorted.xy, 0.9); // 读取端补压缩。
-    float linearDepth = ogxShadowLinearDepth(0.5, view); // 屏幕深度换米制。
+    float linearDepth = ogxLinearDepthFromScreenDepth(0.5, view); // 屏幕深度换米制。
     OgxCascadeSelect cascade = ogxSelectCascade(t * 200.0, float3(32.0, 64.0, 128.0), 6.0); // 级联选择。
     float radius = ogxPcssFilterRadius(0.4, 0.5, 12.0, 40.0); // 半影半径。
     float3 result = shadowPosition + distorted + float3(restored, linearDepth);

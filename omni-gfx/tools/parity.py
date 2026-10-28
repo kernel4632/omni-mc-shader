@@ -48,6 +48,7 @@ LIB = ROOT / "omni-gfx"  # 通用库目录。
 DOC = ROOT / "docs" / "gfx-functions.md"  # 生成的对照表。
 GAPS = ROOT / ".dev" / "omni-gfx" / "gaps.txt"  # 缺口清单。
 MAP = LIB / "tools" / "parity_map.json"  # 人工对照数据。
+REFERENCE_FUNCTION_COUNT = 505  # 两份参考包去重后的函数总数；目录缺失或解析失败时不能悄悄变成零。
 
 # 只服务 Minecraft 或 Iris 的符号：缓冲名、材质与实体属性、游戏时间与阶段变量。
 # `gl_FragCoord` 与 `text.` 属于屏幕叠加：调试打印函数用它们定位并写字符，
@@ -166,11 +167,17 @@ def host_hits(body: str) -> list[str]:
 
 
 def collect_reference() -> list[dict]:
-    """按固定顺序收集两份参考包的函数定义，同名只保留第一次出现。"""
+    """按固定顺序收集两份参考包的函数定义，同名只保留第一次出现。
+
+    目录缺失或函数总数不等于登记值时直接失败：零个函数会让“缺失为零”的测试
+    看起来通过，实际上没有读到任何参考源码。
+    """
     rows = []  # 结果列表。
     seen = set()  # 已出现过的函数名。
     for root, pack in ((ROOT / "references/iterationT/shaders/Lib", "iterationT"),  # 第一份参考包。
                        (ROOT / "references/Eclipse/shaders/lib", "Eclipse")):  # 第二份参考包。
+        if not root.is_dir():
+            raise FileNotFoundError(f"参考目录不存在：{root.relative_to(ROOT)}")  # 不把缺目录当成零函数。
         for path in sorted(root.rglob("*.glsl")):  # 按路径排序，输出才稳定。
             for item in parse_functions(path):  # 逐个函数。
                 if item["name"] in seen:  # 另一份里出现过同一个名字。
@@ -179,6 +186,8 @@ def collect_reference() -> list[dict]:
                 item["pack"] = pack  # 来源包，统计要分开算。
                 item["path"] = path.relative_to(ROOT).as_posix()  # 仓库内相对路径。
                 rows.append(item)  # 收集。
+    if len(rows) != REFERENCE_FUNCTION_COUNT:
+        raise ValueError(f"参考函数数量应为 {REFERENCE_FUNCTION_COUNT}，实际读到 {len(rows)}；解析规则或参考目录已变化")
     return rows  # 总数等于需要移植的算法数量。
 
 

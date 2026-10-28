@@ -157,8 +157,8 @@ def evaluate_condition(expression: str, defines: dict[str, str]) -> bool:
         return False
     try:
         return bool(eval(text, {"__builtins__": {}}, {}))
-    except Exception:
-        return False
+    except Exception as error:
+        raise ValueError(f"无法解析预处理条件：{expression}") from error  # 语法错误不能当成假分支吞掉。
 
 
 def preprocess(text: str, defines: dict[str, str]) -> str:
@@ -310,14 +310,18 @@ def read_profile_defines(path: Path) -> dict[str, str]:
 
 
 def parse_functions(path: Path, defines: dict[str, str] | None = None,
-                    first_branch: bool = False) -> list[dict]:
+                    first_branch: bool = False, strict: bool = False) -> list[dict]:
     """解析一个源文件的函数定义，返回名字、行号、返回类型、参数与函数体。
 
     判据与旧对照工具一致：行首是返回类型，名字后紧跟参数表，参数表右括号后只能有
     空白再接左大括号。这样宏、控制流和函数声明不会被误认成定义。
     传入 `defines` 时先按默认配置预处理，未选中的条件分支不会进入签名比较。
+    `strict` 为真时，读写编码错误、括号或大括号不配对直接抛出，不能把解析失败
+    悄悄变成“没有这个函数”；参考包兼容宏较多，默认保留宽容模式。
     """
-    raw = path.read_text(encoding="utf-8", errors="replace")
+    raw = path.read_text(encoding="utf-8")  # 读不到或编码错误直接抛出。
+    if "\ufffd" in raw:
+        raise ValueError(f"源文件包含无法解码的替换字符：{path}")
     if first_branch:
         text = strip_comments(preprocess_first_branch(raw))
     else:
@@ -359,6 +363,8 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
                     break
             index += 1
         if index >= len(text):
+            if strict:
+                raise ValueError(f"{path}:{match.start()} 函数参数表括号不配对：{name}")
             continue
         rest = text[index + 1:]
         brace = rest.find("{")
@@ -375,6 +381,8 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
                     break
             cursor += 1
         if cursor >= len(text):
+            if strict:
+                raise ValueError(f"{path}:{match.start()} 函数体大括号不配对：{name}")
             continue
         found.append({
             "name": name,
@@ -390,7 +398,7 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
 
 
 def function_index(paths: list[Path], defines: dict[str, str] | None = None,
-                   root: Path | None = None) -> dict[str, dict]:
+                   root: Path | None = None, strict: bool = False) -> dict[str, dict]:
     """建立 `模块.函数名` 到完整签名的索引；同名重载按出现顺序都保留。
 
     `root` 给出时必须位于所有路径的上级；模块名取相对路径，因此
@@ -400,7 +408,7 @@ def function_index(paths: list[Path], defines: dict[str, str] | None = None,
     index = {}
     for path in sorted(paths):
         module = path.relative_to(root).with_suffix("").as_posix() if root else path.stem
-        for item in parse_functions(path, defines):
+        for item in parse_functions(path, defines, strict=strict):
             key = f"{module}.{item['name']}"
             variant = 1
             while key in index:  # 重载不能互相覆盖，编号后分别参与比较。
@@ -447,7 +455,7 @@ def global_constant_table(paths: list[Path], defines: dict[str, str] | None = No
 
 
 def evaluate_constant(expression: str, table: dict) -> list[float] | None:
-    """把常量表达式算成数值列表；无法安全求值时返回 None，不猜结果。"""
+    """把常量表达式算成数值列表；无法安全求值时返回空值，不猜结果。"""
     text = expression.strip()
     if text == "true":
         return [1.0]
@@ -492,7 +500,7 @@ def evaluate_constant(expression: str, table: dict) -> list[float] | None:
 
 
 def flatten_numbers(value) -> list[float] | None:
-    """把标量、向量或嵌套元组摊平成浮点列表；遇到非数字返回 None。"""
+    """把标量、向量或嵌套元组摊平成浮点列表；遇到非数字返回空值。"""
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
@@ -900,7 +908,7 @@ def call_sites(body: str) -> list[tuple[str, int]]:
 def evaluate_argument(argument: str, scope: dict, bool_scope: dict) -> list[float] | None:
     """把调用实参算成常数；支持 `bool(...)`、`int(...)` 这类显式转换。
 
-    Host 层常把选项宏写成 `bool(OMNI_COLORED_SHADOWS)`。直接求值会失败，循环和
+    宿主层常把选项宏写成 `bool(OMNI_COLORED_SHADOWS)`。直接求值会失败，循环和
     分支因此无法折叠，严格对照会把另一种配置的采样也算进来。这里先剥掉转换，
     用内部表达式的数值决定真假；只处理能静态求值的实参。
     """
@@ -1207,7 +1215,7 @@ def compare(ref: dict, impl: dict, ref_constants: dict, lib_constants: dict,
     在不同预处理分支下命中错误缓存。
 
     `resources` 给出参考签名之后允许追加的宿主资源参数，键是参数名，值是
-    texture/matrix/struct/value。参考参数必须逐项出现在实现参数表的最前面；
+    纹理、矩阵、结构体与数值资源。参考参数必须逐项出现在实现参数表的最前面；
     追加参数必须有声明、在函数体使用，纹理与矩阵的类型还要对得上。这样算法可以
     在库里显式接收阴影图、深度图和相机矩阵，而不是把整个效果藏在宿主胶水里。
     `bindings` 给新增数值参数提供默认值。参考里的选项宏通常是常数，显式参数化后

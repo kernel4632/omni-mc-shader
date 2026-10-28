@@ -1,16 +1,20 @@
 """定位并调用 Slang 编译器，把探针编译成 SPIR-V。
 
-调用位置：`omni-gfx/build.py spirv` 与 `omni-gfx/build.py all`。
+调用位置：`omni-gfx/build.py spirv`。
 设计原因与取舍：
     编译器是开发工具，下载到 `.dev/tools`，不进仓库；构建只用项目内路径，
     不依赖系统搜索顺序，换机器时行为一致。缺少编译器时给出明确获取方式，
     不自动联网，避免普通检查意外下载几十兆文件。
+    下载包必须带官方 SHA-256 摘要，解压前逐项检查路径，拒绝绝对路径、`..`
+    与符号链接；校验失败时不替换已有编译器。
 """
 from __future__ import annotations
 
+import hashlib  # 校验下载包的 SHA-256。
 import json  # 读取发布信息，选择与平台匹配的压缩包。
 import os  # 允许用环境变量临时指定编译器。
 import platform  # 判断下载哪个平台的压缩包。
+import re  # 拒绝 Windows 盘符形式的绝对路径。
 import shutil  # 解压后移动目录。
 import subprocess  # 调用编译器和版本命令。
 import sys  # 按平台选择可执行文件名。
@@ -58,11 +62,43 @@ def version() -> str:
     return (result.stdout or result.stderr).strip().splitlines()[0]  # 第一行通常就是版本号。
 
 
+def _safe_target(destination: Path, name: str) -> Path:
+    """把压缩包成员路径解析到临时目录内，拒绝绝对路径与跳出目录。"""
+    if not name or name.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", name):
+        raise ValueError(f"压缩包包含绝对路径：{name}")
+    target = (destination / name).resolve()
+    if not target.is_relative_to(destination.resolve()):
+        raise ValueError(f"压缩包成员跳出解压目录：{name}")
+    return target
+
+
+def _extract_zip(archive: Path, destination: Path) -> None:
+    """安全解压 zip：逐个成员检查路径，拒绝符号链接。"""
+    with zipfile.ZipFile(archive) as bundle:
+        for member in bundle.infolist():
+            _safe_target(destination, member.filename)
+            mode = member.external_attr >> 16
+            if mode and (mode & 0o170000) == 0o120000:
+                raise ValueError(f"压缩包包含符号链接：{member.filename}")
+        bundle.extractall(destination)
+
+
+def _extract_tar(archive: Path, destination: Path) -> None:
+    """安全解压 tar：逐个成员检查路径，拒绝符号链接与硬链接。"""
+    with tarfile.open(archive) as bundle:
+        for member in bundle.getmembers():
+            _safe_target(destination, member.name)
+            if member.issym() or member.islnk():
+                raise ValueError(f"压缩包包含链接成员：{member.name}")
+        bundle.extractall(destination)
+
+
 def download() -> Path:
     """下载最近发布的 Slang 压缩包并解压到项目工具目录，返回编译器路径。
 
-    只从 GitHub 官方发布地址下载，压缩包按平台选择；下载和解压都在临时目录完成，
-    成功后才替换正式目录，避免中断留下半套工具。调用方必须显式触发。
+    只从 GitHub 官方发布地址下载，压缩包按平台选择；下载包必须带官方
+    SHA-256 摘要，校验通过后才解压。解压逐项检查路径，成功后才替换正式目录，
+    避免中断或恶意成员留下半套工具。调用方必须显式触发。
     """
     if platform.system() == "Windows":
         pattern, suffix = "windows-x86_64.zip", "zip"  # Windows 使用普通发布包，不用调试信息包。
@@ -75,18 +111,23 @@ def download() -> Path:
     asset = next((item for item in release.get("assets", []) if pattern in item.get("name", "") and "debug" not in item.get("name", "")), None)  # 选普通发布包。
     if not asset:
         raise ValueError("发布页找不到匹配的 Slang 压缩包：" + pattern)
+    digest = asset.get("digest", "")  # GitHub 对发布资源提供 sha256:... 摘要。
+    if not isinstance(digest, str) or not digest.startswith("sha256:"):
+        raise ValueError("Slang 发布资源缺少 SHA-256 摘要，拒绝解压；请手动安装并设置 SLANGC")
+    expected = digest.split(":", 1)[1].lower()
     DEV_TOOLS.mkdir(parents=True, exist_ok=True)  # 首次下载时创建目录。
     with tempfile.TemporaryDirectory(prefix="slang-", dir=DEV_TOOLS) as temporary:  # 解压先放临时目录。
         archive = Path(temporary) / asset["name"]  # 下载文件名来自发布页，只用于本地。
         urllib.request.urlretrieve(asset["browser_download_url"], archive)  # 下载完整压缩包。
+        actual = hashlib.sha256(archive.read_bytes()).hexdigest()  # 对实际下载的字节计算摘要。
+        if actual != expected:
+            raise ValueError(f"Slang 压缩包 SHA-256 不匹配：期望 {expected}，实际 {actual}")
         unpacked = Path(temporary) / "unpacked"  # 解压目标。
         unpacked.mkdir()
         if suffix == "zip":
-            with zipfile.ZipFile(archive) as bundle:
-                bundle.extractall(unpacked)
+            _extract_zip(archive, unpacked)
         else:
-            with tarfile.open(archive) as bundle:
-                bundle.extractall(unpacked)
+            _extract_tar(archive, unpacked)
         if SLANG_DIR.exists():
             shutil.rmtree(SLANG_DIR)  # 替换旧版本，避免多份编译器混用。
         shutil.move(str(unpacked), str(SLANG_DIR))  # 完整解压后才进入正式位置。

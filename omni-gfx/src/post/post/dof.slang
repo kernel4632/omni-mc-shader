@@ -1,3 +1,9 @@
+/*
+后期子文件：景深线性深度、弥散范围扩散、参考签名版与完整景深合成。
+调用位置：由 `post/post.slang` 内联，合成阶段的景深效果调用这里的入口。
+可复制示例：`vec4 c = ogxDepthOfField(coord, colorTex, depthTex, farDepthTex, invProj, farInvProj, true, ...);`
+设计原因与取舍：深度图、矩阵与对焦参数显式传入，手部与远景的分支照参考保留。
+*/
 // 读一个坐标的米制深度；`useDh` 为真且近景没有几何时改读远景深度，再统一到近景尺度。
 // 为什么把下限夹在换米制之前：近处深度趋近于零时薄透镜公式会爆炸，先夹屏幕深度最稳。
 float ogxDofLinearDepth(float2 coord, Sampler2D depthTexture, Sampler2D dhDepthTexture, float4x4 projectionInverse,
@@ -68,7 +74,7 @@ float ogxDofCocSpreadReference(float2 coord, Sampler2D depthTexture, Sampler2D d
     if (focusMode == 0) // 自动对焦：读统计缓冲左下角的固定像素。
     {
         float4 stat = focusTexture.Load(int3(int2(60, screenExtent.y - 1), 0));
-        focus = ogxShadowLinearDepth(stat.a * 0.125 + 0.875, projectionInverse);
+        focus = ogxLinearDepthFromScreenDepth(stat.a * 0.125 + 0.875, projectionInverse);
     }
     else // 手动对焦直接使用调用方给的距离。
     {
@@ -119,7 +125,7 @@ float4 ogxDofReference(float2 coord, Sampler2D colorTexture, Sampler2D depthText
     if (focusMode == 0) // 自动对焦。
     {
         float4 stat = focusTexture.Load(int3(int2(60, screenExtent.y - 1), 0));
-        focus = ogxShadowLinearDepth(stat.a * 0.125 + 0.875, projectionInverse);
+        focus = ogxLinearDepthFromScreenDepth(stat.a * 0.125 + 0.875, projectionInverse);
     }
     else // 手动对焦。
     {

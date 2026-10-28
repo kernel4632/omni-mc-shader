@@ -16,21 +16,27 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 设计原因与取舍：
     纹理、像素大小、子图范围与模糊参数全部由调用方传入，库不读取引擎画面或屏幕尺寸。
     伽马编码沿用管线的四次方根近似，保证与原程序相同的亮度；五级泛光的子图排布属于宿主布局，
-    仍留在 `shaders/gfx/post.glsl` 的组合函数里，这里只提供每一级的核与统计公式。
+    仍留在效果层的组合函数里，这里只提供每一级的核与统计公式。
 */
 #ifndef OGX_POST_INCLUDED
 #define OGX_POST_INCLUDED
 
 // 亮度权重、四次方根编码与区间重映射来自数学模块。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 // 抖动要用噪声模块里的三角分布噪声。
-#include "/omni-gfx/noise.glsl"
-#include "/omni-gfx/sampling.glsl"
+#include "/omni-gfx/common/noise.glsl"
+// 采样提供白噪声、蓝噪声与低差异序列。
+#include "/omni-gfx/common/sampling.glsl"
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 #include "/omni-gfx/shadow/shadow.glsl"
-// 十三样本降采样：中心小、四角大，权重和为四，输出乘四分之一保持亮度。
-
 // 泛光、调色与屏幕图案，具体实现在子文件。
 // 子文件：post/post/bloom.slang。
+/*
+后期子文件：泛光降采样与链拷贝、轴向高斯模糊、三次纹理放大、色调曲线与颗粒。
+调用位置：由 `post/post.slang` 内联，合成阶段的泛光与调色直接调用这些入口。
+可复制示例：`vec3 b = ogxBloomDownsample(source, coord, texel);`
+设计原因与取舍：每级只做一次可复用的核，链的边界与混合由调用方决定；权重和与参考一致。
+*/
 // 泛光降采样：先做四点盒式取样，再转换到线性颜色。
 vec3 ogxBloomDownsample(sampler2D source, vec2 coord, vec2 texel)
 {
@@ -188,15 +194,15 @@ float ogxDofLensFactor(float focalLength, float aperture, float referenceFocal, 
     return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
 }
 
-// 米制距离换回非线性屏幕深度；景深写回下界历史时需要这个反向换算。
-float ogxScreenDepthFromLinearDepth(float depth, mat4 projectionInverse)
-{
-    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 解出负一到一的深度。
-    return depth * 0.5 + 0.5; // 再转回零到一。
-}
 
 // 景深、散景与光圈，具体实现在子文件。
 // 子文件：post/post/dof.slang。
+/*
+后期子文件：景深线性深度、弥散范围扩散、参考签名版与完整景深合成。
+调用位置：由 `post/post.slang` 内联，合成阶段的景深效果调用这里的入口。
+可复制示例：`vec4 c = ogxDepthOfField(coord, colorTex, depthTex, farDepthTex, invProj, farInvProj, true, ...);`
+设计原因与取舍：深度图、矩阵与对焦参数显式传入，手部与远景的分支照参考保留。
+*/
 // 读一个坐标的米制深度；`useDh` 为真且近景没有几何时改读远景深度，再统一到近景尺度。
 // 为什么把下限夹在换米制之前：近处深度趋近于零时薄透镜公式会爆炸，先夹屏幕深度最稳。
 float ogxDofLinearDepth(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projectionInverse,
@@ -267,7 +273,7 @@ float ogxDofCocSpreadReference(vec2 coord, sampler2D depthTexture, sampler2D dhD
     if (focusMode == 0) // 自动对焦：读统计缓冲左下角的固定像素。
     {
         vec4 stat = texelFetch(focusTexture, ivec2(60, screenExtent.y - 1), 0);
-        focus = ogxShadowLinearDepth(stat.a * 0.125 + 0.875, projectionInverse);
+        focus = ogxLinearDepthFromScreenDepth(stat.a * 0.125 + 0.875, projectionInverse);
     }
     else // 手动对焦直接使用调用方给的距离。
     {
@@ -318,7 +324,7 @@ vec4 ogxDofReference(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
     if (focusMode == 0) // 自动对焦。
     {
         vec4 stat = texelFetch(focusTexture, ivec2(60, screenExtent.y - 1), 0);
-        focus = ogxShadowLinearDepth(stat.a * 0.125 + 0.875, projectionInverse);
+        focus = ogxLinearDepthFromScreenDepth(stat.a * 0.125 + 0.875, projectionInverse);
     }
     else // 手动对焦。
     {
@@ -477,6 +483,12 @@ vec4 ogxDepthOfField(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
 
 // 动态模糊、曝光分块与眩光，具体实现在子文件。
 // 子文件：post/post/effects.slang。
+/*
+后期子文件：相机动态模糊、曝光瓦片平均、镜头光斑与远景噪声。
+调用位置：由 `post/post.slang` 内联，合成阶段的运动模糊与镜头效果调用这里。
+可复制示例：`vec3 c = ogxMotionBlur(colorTex, coord, texel, pixel, velocity, 180.0, 8, true);`
+设计原因与取舍：只处理整屏相机位移，没有实体速度缓冲；光斑形状与参考常数逐项一致。
+*/
 // 相机动态模糊：沿两帧之间的屏幕位移，在历史画面上取一串样本求平均。
 // 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理整屏位移。
 vec3 ogxMotionBlur(sampler2D colorTexture, vec2 coord, ivec2 texel, vec2 pixel, vec2 velocity,
@@ -656,7 +668,7 @@ vec3 ogxGlareRing(vec2 uv, vec2 pos, float dist, float chromaOffset, float blur)
 }
 
 // 远景地形噪点：按楼层量化坐标，再按亮度与材质给一个可正可负的亮度扰动。
-vec3 ogxDhNoise(vec3 color, vec3 pos, float materialIDs, int leafId, float steps, float strength)
+vec3 ogxDistantNoise(vec3 color, vec3 pos, float materialIDs, int leafId, float steps, float strength)
 {
     pos = floor(pos * steps) / steps; // 坐标量化到固定楼层，远景纹素不会闪烁。
     float weight = ogxLuminance(color) * 2.0 - 1.0; // 亮度映射到负一到一。

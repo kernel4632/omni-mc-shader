@@ -16,12 +16,13 @@ Omni 通用图形库 Eclipse 场景补充模块：受伤与入水画面效果、
 设计原因与取舍：
     参考实现直接读血量、眼在水中、`colortex7` 与末地雾密度纹理。库把数值、纹理与尺寸改成显式参数，
     分支、常数与采样顺序保持不变；场景控制只是把输入默认值抄到输出，参数表来自菜单来源。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。画面效果入口目前只有探针覆盖，顶层画面仍由各效果文件分别处理。
 */
 #ifndef OGX_POST_SCENE_INCLUDED
 #define OGX_POST_SCENE_INCLUDED
 
 // 数学提供夹紧与取模；颜色提供亮度权重。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 // 场景控制参数：没有自定义触发器时，把所有天气与云层参数原样输出。
 void ogxSceneControllerParameters(float smallCumulusCoverage, float smallCumulusDensity,
     float largeCumulusCoverage, float largeCumulusDensity, float altostratusCoverage,

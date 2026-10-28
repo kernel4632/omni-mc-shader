@@ -3,8 +3,8 @@
 // 调用位置：时间抗锯齿之后、曝光统计之前。
 // 设计原因与取舍：泛光只取超过阈值的部分，草地与石台不会被整体提亮；
 // 两级不同尺度的核让高光既有短而亮的芯，也有长而淡的晕，接近相机镜头而不是一团白雾。
-#include "/omni-gfx/math.glsl"
-#include "/omni-gfx/color.glsl"
+#include "/omni-gfx/common/math.glsl"
+#include "/omni-gfx/common/color.glsl"
 
 uniform sampler2D uSource; // 当前来源。
 uniform sampler2D uSmall; // 更粗一级的泛光。
@@ -29,7 +29,7 @@ vec3 sampleBright(vec2 uv) // 返回筛选后的颜色。
     return color * weight; // 筛选后的高光。
 }
 
-void main()
+void main() // 按模式选择筛选、降采样或升采样。
 {
     vec2 uv = gl_FragCoord.xy / uResolution; // 当前目标坐标。
     if (uMode == 0) // 第一级：从完整画面筛出高光。
@@ -39,7 +39,7 @@ void main()
     else if (uMode == 1) // 第二级：从第一级继续降采样。
     {
         vec2 texel = 1.0 / uSourceResolution; // 来源纹素。
-        vec3 color = texture(uSource, uv + texel * vec2(-1.0, -1.0)).rgb; // 四角平均。
+        vec3 color = texture(uSource, uv + texel * vec2(-1.0, -1.0)).rgb; // 四角平均，覆盖更粗的一级。
         color += texture(uSource, uv + texel * vec2(1.0, -1.0)).rgb;
         color += texture(uSource, uv + texel * vec2(-1.0, 1.0)).rgb;
         color += texture(uSource, uv + texel * vec2(1.0, 1.0)).rgb;

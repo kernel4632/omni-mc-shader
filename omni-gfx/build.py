@@ -27,6 +27,7 @@ sys.path.insert(0, str(LIB / "tools"))  # 工具目录不是包，直接加入�
 import generate  # 生成器只依赖标准库。
 import slang  # 编译器定位与调用。
 import count  # 行数统计，输出口径集中在单独文件。
+import stats  # 文档当前统计的生成与核对。
 
 
 def command_generate() -> None:
@@ -136,6 +137,12 @@ def command_strict_parity() -> None:
     subprocess.run([sys.executable, str(script)], cwd=ROOT, check=True)  # 目标不存在时脚本整体失败。
 
 
+def command_stats() -> None:
+    """重新生成 README 与验证记录里的当前统计块。"""
+    stats.write()
+    print(stats.render())
+
+
 def command_profiles() -> None:
     """生成两个严格 profile 的 GLSL 并调用 glslang 编译。"""
     script = LIB / "tools" / "profile.py"  # profile 生成器。
@@ -162,6 +169,7 @@ def main() -> None:
     counter.add_argument("--json", action="store_true", help="输出机器可读结果")  # 方便写入记录。
     sub.add_parser("parity", help="重新生成函数级覆盖对照表")  # 只读参考源码与库源码。
     sub.add_parser("strict-parity", help="生成严格函数对照 JSON 与中文摘要")  # 人工台账决定状态。
+    sub.add_parser("stats", help="生成并核对文档里的当前统计")  # 只读源码与报告。
     sub.add_parser("profiles", help="生成并编译 iterationT 与 Eclipse 两个严格 profile")  # 需要 glslang。
     args = parser.parse_args()  # 解析失败时参数解析器自行退出。
     if args.command == "generate":
@@ -182,6 +190,8 @@ def main() -> None:
         command_parity()
     elif args.command == "strict-parity":
         command_strict_parity()
+    elif args.command == "stats":
+        command_stats()
     elif args.command == "profiles":
         command_profiles()
     else:

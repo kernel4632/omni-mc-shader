@@ -24,14 +24,14 @@ out vec4 fragColor; // 线性天空颜色。
 void main()
 {
     vec3 direction; // 当前像素对应的世界方向。
-    if (uFace < 0)
+    if (uFace < 0) // 主画面按相机基向量还原视线。
     {
         direction = worldRayDirection(gl_FragCoord.xy, uResolution, uForward, uRight, uUp, uTanHalfFov, uAspect);
     }
-    else
+    else // 立方体贴图按面编号与面内坐标还原方向。
     {
-        vec2 uv = gl_FragCoord.xy / uResolution * 2.0 - 1.0;
-        direction = normalize(worldCubeDirection(uFace, uv));
+        vec2 uv = gl_FragCoord.xy / uResolution * 2.0 - 1.0; // 面内坐标转负一到一。
+        direction = normalize(worldCubeDirection(uFace, uv)); // 六个面的方向映射。
     }
     // 旋转天空：太阳从原图的右后方转到画面左前方，阴影与天空亮部对得上。
     float cos_r = cos(uSkyRotation);

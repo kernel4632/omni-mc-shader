@@ -13,7 +13,7 @@
 调用位置：由 `effects/fog/fog.glsl` 引入；合成五号、水面折射与反射都调用 `VolumetricFog`。
 可复制示例：`VolumetricFog(color, vec3(0.0), rayWorldPos, worldDir, globalCloudShadow, fogTimeFactor, fogTransmittance);`
 设计原因与取舍：密度、光照步进、阴影、云影与最终合成在 `gfx/fog_volume.glsl`；
-    雾照明需要宿主的三维图像与手持光表，用 `GFX_FOG_LPV_STEP` 宏作为可选钩子注入，默认关闭时是空操作。
+    雾照明需要宿主的三维图像与手持光表，用 `OGX_FOG_LPV_STEP` 宏作为可选钩子注入，默认关闭时是空操作。
     采样步数仍按 `const float steps = OMNI_VFOG_QUALITY` 的口径换算；闪电照明沿用 `omniLightningVolume`
     的竖直光柱公式，被点亮的空气在 `lightningFogLight` 里按每步吸收量累加，具体计算已随主循环放进通用库。
 */
@@ -39,7 +39,7 @@ vec3 FogLpvStep(vec3 fog_pos, float integral, out bool done){
 	#endif
 	return result; // 交回这一步的体积光。
 }
-#define GFX_FOG_LPV_STEP(fog_pos, integral, accum, done) { bool lpvDone = false; accum += FogLpvStep(fog_pos, integral, lpvDone); done = lpvDone; }
+#define OGX_FOG_LPV_STEP(fog_pos, integral, accum, done) { bool lpvDone = false; accum += FogLpvStep(fog_pos, integral, lpvDone); done = lpvDone; }
 #endif
 
 // 体积雾的密度、光照与阴影主循环在通用库。

@@ -22,7 +22,7 @@
 
 为什么先预处理：
     参考包用 `#if MC_VERSION >= 11605` 在两个贴图通道间二选一。不预处理会把两个
-    分支的采样都算进去，得到虚假的采样数差异。默认配置取自参考包的 Settings 与
+    分支的采样都算进去，得到虚假的采样数差异。默认配置取自参考包的设置文件与
     光影的 `profile.default`。
 """
 from __future__ import annotations
@@ -67,6 +67,8 @@ def reference_environment() -> tuple[dict, dict, dict]:
     """
     index, constants, defines = {}, {}, {}
     for pack, root in REFERENCE_ROOTS.items():
+        if not root.is_dir():
+            raise FileNotFoundError(f"参考目录不存在：{root.relative_to(ROOT)}")  # 缺目录不能当成零函数。
         paths = sorted(root.rglob("*.glsl"))
         macro = signature.collect_defines(paths, {"MC_VERSION": VERSION})
         defines[pack] = macro
@@ -175,7 +177,7 @@ def resolve_implementation(name: str, refs: list[dict], entry: dict,
 
     返回 `(参考重载, 实现, 层名)`。层名用于决定常数是否允许实现多出。
     没有同签名候选时仍返回最接近的一对，让报告能写出具体差异，而不是只报“找不到”。
-    台账声明 resources 时允许实现尾部追加显式资源参数。
+    台账声明资源参数时允许实现尾部追加显式资源参数。
     """
     target = entry.get("target", "")
     resources = entry.get("resources")
@@ -203,7 +205,7 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
     ref_index, ref_constants, _ = reference_environment()
     impl_index, impl_constants, impl_defines, path_index = implementation_environment()
     impl_structs = signature.struct_definitions(IMPL_PATHS, impl_defines)
-    library = signature.function_index(sorted((LIB / "src").rglob("*.slang")), root=LIB / "src")
+    library = signature.function_index(sorted((LIB / "src").rglob("*.slang")), root=LIB / "src", strict=True)
     exact = review.get("exact", {})
     glue = review.get("mcGlue", {})
     broken = review.get("referenceBroken", {})
@@ -270,7 +272,7 @@ def build_records(review: dict, raw_rows: list[dict]) -> tuple[list[dict], list[
             allow_extra = (layer == "host" or bool(entry.get("adapter"))
                            or bool(entry.get("allowExtraConstants"))) \
                 and "--strict-constants" not in sys.argv[1:]
-            # 参考包有时在不同目录定义同名同签名的变体（例如 `luma` 的 Rec.601 与
+            # 参考包有时在不同目录定义同名同签名的变体（例如 `luma` 的 601 标准与
             # 另一套权重）。实现只要与其中一个变体完全一致就算 exact，不能因为排序
             # 先读到另一个变体就误判。
             candidates = []

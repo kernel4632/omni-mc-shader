@@ -40,7 +40,7 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     params.dh_ao = false; // 远景不参与遮蔽。
     params.falloff_z_offset = false; // 默认衰减。
     float3 viewPos = ogxGiViewPos(coord, 0.5, identity); // 还原视空间位置。
-    float3 viewPosDh = ogxGiViewPosDh(coord, 0.5, identity); // 远景还原。
+    float3 viewPosDh = ogxGiViewPosDistant(coord, 0.5, identity); // 远景还原。
     float3 bounced = ogxAoMultiBounce(0.6, float3(0.4, 0.5, 0.3)); // 多弹射。
     float2 velocity = ogxGiCameraVelocity(coord, 0.5, false, 1.0, view, false, false, 0.1, 7.0); // 相机速度。
     float3 filtered = ogxGiSpatialFilter(coord, 10.0, float3(0.0, 1.0, 0.0), float3(0.0, 0.0, 1.0), view, gProbeTexture, 0.5); // 空间滤波。

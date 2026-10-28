@@ -23,7 +23,7 @@ def _chunk(kind: bytes, data: bytes) -> bytes:
 
 
 def _paeth(left: int, up: int, upper_left: int) -> int:
-    """Paeth 预测：选与当前像素最接近的邻居， photographic 贴图的残差因此更小。"""
+    """Paeth 预测：选与当前像素最接近的邻居，照片类贴图的残差因此更小。"""
     estimate = left + up - upper_left  # 线性预测。
     distance_left = abs(estimate - left)  # 与左邻居的差。
     distance_up = abs(estimate - up)  # 与上邻居的差。
@@ -77,13 +77,13 @@ def read_png(path) -> tuple[int, int, int, bytes]:
         source += 1
         line = bytearray(raw[source:source + stride])  # 当前行残差。
         source += stride
-        if filter_type == 1:  # Sub：只参考左邻居。
+        if filter_type == 1:  # 减法滤波：只参考左邻居。
             for index in range(pixel_bytes, stride):
                 line[index] = (line[index] + line[index - pixel_bytes]) & 0xFF
-        elif filter_type == 2:  # Up：只参考上邻居。
+        elif filter_type == 2:  # 向上滤波：只参考上邻居。
             for index in range(stride):
                 line[index] = (line[index] + previous[index]) & 0xFF
-        elif filter_type == 3:  # Average：左与上的平均。
+        elif filter_type == 3:  # 平均滤波：左与上的平均。
             for index in range(stride):
                 left = line[index - pixel_bytes] if index >= pixel_bytes else 0
                 line[index] = (line[index] + ((left + previous[index]) >> 1)) & 0xFF

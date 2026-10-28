@@ -5,13 +5,18 @@ Omni 通用图形库高光模块：GGX、可见法线采样、粗糙菲涅耳、
     vec3 color = ogxSpecularReflections(viewPos, playerPos, nPos, lightVec, noise, flatN, n, 0.4, 0.02, albedo, diffuse, light, 1.0, false, false, background, sun, 1.0, 50.0, true, true, flash, 1.0, sceneTex, depthTex, proj, invProj, view, invView, prevProj, prevView, 0.05, 1000.0, delta, 1.0, texel); // 合成高光。
 设计原因与取舍：
     金属、介电与水面共用同一套菲涅耳与 GGX；背景天空、环境反射和太阳高光按参考顺序合成。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。高光合成目前只被库内反射模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_REFLECTION_SPECULAR_INCLUDED
 #define OGX_REFLECTION_SPECULAR_INCLUDED
 
-#include "../math.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
+// 手持光提供光斑、手电与手光阴影。
 #include "../heldlight.slang"
+// 天空提供云环境色、星空与日月圆盘。
 #include "../atmosphere/sky.slang"
+// 反射提供体素与雾的合成入口。
 #include "wsr.slang"
 
 // 法线夹紧：把背向视线的法线朝视线方向拉回，避免掠射高光发黑。

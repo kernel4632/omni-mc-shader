@@ -5,11 +5,14 @@ Omni 通用图形库阴影贴图模块：边缘压缩、投影偏差、硬阴影
     float shadow = ogxVoxelShadowMap(direct, playerPos, 1.0, noise, normal, opaque, translucent, tint, view, proj, 128.0, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, false, m, p); // 计算体素阴影。
 设计原因与取舍：
     阴影图坐标、压缩系数与样本数全部显式传入；末地主岛光用独立矩阵，普通路径和参考实现一样先压缩再采样。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。阴影贴图写入目前只被库内其它生成模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_SHADOW_MAP_INCLUDED
 #define OGX_SHADOW_MAP_INCLUDED
 
-#include "../math.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
+// 体素求交提供光线步进与遮挡判断。
 #include "../voxel/trace.slang"
 
 // Eclipse 阴影边缘压缩：按到阴影图中心的距离给一个放大系数。
@@ -24,6 +27,41 @@ float4 ogxShadowProjectionBias(float4 projectedShadowSpacePosition, float a, flo
     float distortFactor = log(length(projectedShadowSpacePosition.xy) * b + a) * k; // 与读取端一致。
     projectedShadowSpacePosition.xy /= distortFactor; // 压缩横纵。
     return projectedShadowSpacePosition; // 交回坐标。
+}
+
+// Eclipse 的阴影修补：按相机距离把世界坐标抬离表面一点点，抵消阴影图的彼得潘效应。
+// 为什么用小数抖动而不是固定偏移：固定偏移会在不同距离留下阶梯，按世界坐标取小数能让误差散开。
+// `transition` 是阴影过渡量，越小越靠近阴影边缘，偏移越强；`flatNormal` 为保持原签名而保留，原程序未使用。
+void ogxGriAndEminShadowFix(inout float3 worldPos, float3 flatNormal, float transition, float3 cameraWorldPos, bool eyeInWater)
+{
+    transition = 1.0 - transition; // 过渡量取反，边缘处为一。
+    transition *= transition * transition * transition * transition * transition * transition; // 六次方，只让最边缘一段生效。
+    float zoomLevel = lerp(0.0, 0.5, transition); // 边缘处偏移半个格子。
+    if (zoomLevel > 0.001 && !eyeInWater) // 水下不做偏移，原程序同样跳过。
+    {
+        worldPos = worldPos - (fract(worldPos + cameraWorldPos - worldPos * 0.0001) * zoomLevel - zoomLevel * 0.5); // 按位置小数把坐标推到格子中心附近。
+    }
+}
+
+// Eclipse 的阴影偏差：按一个阴影像素对应一个方块的尺度，沿几何法线把投影坐标推出表面。
+// `shadowNormal` 是法线经过阴影相机旋转后的方向，`shadowDistance` 与 `shadowMapResolution` 决定纹素大小。
+void ogxApplyShadowBias(inout float3 projectedShadowPosition, float3 shadowNormal, float shadowDistance, float shadowMapResolution)
+{
+    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个纹素对应的世界尺度，再放大一倍。
+    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远，斜投影误差越大。
+    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大偏差。
+    projectedShadowPosition += shadowNormal * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
+}
+
+// Eclipse 的阴影偏差入口：参考签名保留 playerPos 但内部不使用，几何法线经阴影相机旋转后推坐标。
+// 为什么把矩阵显式传入：参考实现读 shadowModelView，库不绑定宿主矩阵。
+void ogxApplyShadowBiasMatrix(inout float3 projectedShadowPosition, float3 playerPos, float3 geoNormals,
+    float3x3 shadowNormalMatrix, float shadowDistance, float shadowMapResolution)
+{
+    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个阴影像素对应的世界尺度。
+    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远误差越大。
+    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大。
+    projectedShadowPosition += ogxMatrix3MulPoint(shadowNormalMatrix, geoNormals) * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
 }
 
 // 硬阴影：阴影图深度比接收点更远时返回零，否则一。

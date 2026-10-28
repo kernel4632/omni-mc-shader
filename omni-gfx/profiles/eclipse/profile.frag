@@ -1,10 +1,10 @@
+#version 330 compatibility
 /*
 生成文件：Eclipse 严格 profile。
 源文件是 omni-gfx 的生成模块与两个 profile 的严格函数集合，请勿手工修改。
 用途：不启动 Minecraft、不依赖具体引擎，验证两个 profile 的 GLSL 能独立编译。
 重新生成：python omni-gfx/build.py profiles
 */
-#version 330 compatibility
 #define OGX_PROFILE_ECLIPSE 1
 
 /*
@@ -15,15 +15,15 @@
 */
 /*
 Omni 通用图形库数学模块：曲线、编码、材质、光线求交、噪声与切线基。
-调用位置：任何需要纯数学函数的图形程序；Minecraft 光影由 `/omni-gfx/math.glsl` 引入。
+调用位置：任何需要纯数学函数的图形程序；Minecraft 光影由 `/omni-gfx/common/math.glsl` 引入。
 可复制示例：
     vec3 n = ogxDecodeNormal(ogxEncodeNormal(worldNormal)); // 法线编码后再解回。
     vec3 c = ogxBlackbody(6500.0); // 用色温生成颜色。
     float ao = ogxRemapSaturate(distance, 0.0, 1.0); // 把距离映射到零到一。
 设计原因与取舍：
     只接收显式参数，不读取任何引擎状态；函数名统一 `ogx` 前缀，避免和宿主重名。
-    常数与算式逐项来自旧 `shaders/gfx/math.glsl`，迁移只改名字和语法，保证画面不变。
-    贴图过滤函数需要宿主采样器状态，暂留在旧 GLSL；这里只收纯计算与显式取像素。
+    常数与算式逐项来自迁移前的 GLSL 原型，迁移只改名字和语法，保证画面不变。
+    贴图过滤函数把采样器与坐标全部作为显式参数，库不绑定纹理单元；取像素仍用显式层级。
     本文件同时是 Slang 源和 GLSL 生成源，因此只用两边都认得的写法，矩阵乘法显式展开。
 */
 #ifndef OGX_MATH_INCLUDED
@@ -44,10 +44,9 @@ const float OGX_GOLDEN_ANGLE = 2.39996322973;
 // 看见，所以新移植的算法也保留宏写法：两边看到同一组常数，不会因为换成函数而多出两个数。
 #define OGX_CLAMP01(value) clamp((value), 0.0, 1.0)
 
-// 把值夹到零到一，按标量和三种常用向量分别重载，GLSL 侧同样是函数重载。
 
-// 标量、矩阵与基础工具，具体实现在子文件。
-// 子文件：math/basics.slang。
+// --- 基础标量工具 ---
+
 // 基础标量工具：夹紧、亮度、符号、长度与插值，供所有模块复用。
 float ogxSaturate(float x) { return clamp(x, 0.0, 1.0); }
 vec2 ogxSaturate(vec2 x) { return clamp(x, vec2(0.0), vec2(1.0)); }
@@ -94,6 +93,13 @@ float ogxTriangleWave(float x) { return 1.0 - abs((x * 0.5 - floor(x * 0.5)) * 2
 vec2 ogxFma2(vec2 a, vec2 b, vec2 c) { return a * b + c; }
 // 标量乘加：参考包的 `fma2` 只处理三个标量，保留同签名重载给旧调用点。
 float ogxFma2(float a, float b, float c) { return a * b + c; }
+
+// 标量工具与矩阵展开，具体实现在子文件。
+// 子文件：common/math/scalar.slang。
+// 数学模块标量工具：向量夹紧、区间映射、极值、圆盘点列、归一化与矩阵乘向量。
+// 调用位置：由 `common/math.slang` 内联引入，不单独生成 GLSL 或探针。
+// 可复制示例：`vec2 p = ogxNormalize(vec2(1.0, 2.0));`
+// 设计原因与取舍：只收不依赖采样器的纯计算，算式与常数照旧库保留。
 
 // 同时给出正弦与余弦：极坐标采样需要两者，一次算出省掉一次三角函数。
 vec2 ogxSinCos(float angle) { return vec2(sin(angle), cos(angle)); }
@@ -199,7 +205,7 @@ vec4 ogxMatrixMul(mat4 m, vec4 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z 
 vec3 ogxMatrixMulPoint(mat4 m, vec3 v) { return m[0].xyz * v.x + m[1].xyz * v.y + m[2].xyz * v.z; }
 
 // 完整四维矩阵乘四维向量：末地透视阴影需要保留齐次分量。
-vec4 ogxMatrixMulPoint4(mat4 m, vec4 v) { return m[0] * v.x + m[1] * v.y + m[2] * v.z + m[3] * v.w; }
+vec4 ogxMatrixMulPoint4(mat4 m, vec4 v) { return ogxMatrixMul(m, v); }
 
 // 四乘四矩阵的平移列：GLSL 的第四列存放平移，Slang 与 GLSL 的下标指向同一块内存。
 vec3 ogxMatrixTranslation(mat4 m) { return m[3].xyz; }
@@ -223,6 +229,13 @@ float ogxFastAcos(float x)
     result *= ogxFastSqrt(1.0 - ax);
     return x >= 0.0 ? result : OGX_PI - result;
 }
+
+// 伽马、曲线、打包与法线编码，具体实现在子文件。
+// 子文件：common/math/encoding.slang。
+// 数学模块编码工具：伽马、曲线、八位与十六位打包、八面体法线编码。
+// 调用位置：由 `common/math.slang` 内联引入，颜色与延迟缓冲共用。
+// 可复制示例：`vec2 n = ogxEncodeNormal(worldNormal);`
+// 设计原因与取舍：编码与解码必须成对出现，放在同一文件里方便核对位运算顺序。
 
 // 线性颜色转显示伽马；二点二近似，和原管线一致，不在这里改成分段标准曲线。
 vec3 ogxLinearToGamma(vec3 color) { return pow(color, vec3(1.0 / 2.2)); }
@@ -259,8 +272,7 @@ vec3 ogxLinearToCurve3(vec3 color) { return pow(color, vec3(0.25)); }
 // 向量版本的四次方根解码，逐通道平方两次。
 vec3 ogxCurveToLinear3(vec3 color)
 {
-    color = color * color;
-    return color * color;
+    return vec3(ogxCurveToLinear(color.x), ogxCurveToLinear(color.y), ogxCurveToLinear(color.z)); // 逐通道走标量版本。
 }
 
 // 把两个八位分量打包进一个浮点；高八位放第一个，低八位放第二个。
@@ -323,8 +335,15 @@ vec3 ogxDecodeNormalTex(vec3 texNormal)
     return normal;
 }
 
-// 材质、黑体与光线求交，具体实现在子文件。
-// 子文件：math/shading.slang。
+// 材质、黑体、求交与相函数，具体实现在子文件。
+// 子文件：common/math/shading.slang。
+// 数学模块材质与求交：GGX、菲涅尔、黑体色温、射线与包围盒求交、相函数。
+// 调用位置：由 `common/math.slang` 内联引入，表面、大气与反射模块共用。
+// 可复制示例：`vec3 c = ogxBlackbody(6500.0);`
+// 设计原因与取舍：这些函数只做几何与光学近似，不读取任何宿主状态。
+
+// --- 材质、黑体与光线求交 ---
+
 // 沃尔特 GGX 分布：粗糙度越大，高光越散。
 float ogxDistributionGGX(float NdotH, float roughness)
 {
@@ -483,8 +502,36 @@ float ogxMiePhase(float g, float nu)
     return k * (1.0 + nu * nu) * pow(1.0 + gg - 2.0 * g * nu, -1.5);
 }
 
-// 抖动表、切线基与颜色图案，具体实现在子文件。
-// 子文件：math/pattern.slang。
+// 亨耶-格林斯坦相函数：把除以圆周率的部分作为显式参数，方便参考包保留自己的 3.14 常数。
+// 为什么参数化：云、雾与层状云参考实现的圆周率精度不同，统一常数会改变严格对照的数值。
+float ogxHenyeyGreensteinPhase(float cosAngle, float g, float inversePi)
+{
+    float gg = g * g;
+    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * cosAngle) + (gg + 1.0), -1.5) * 0.25 * inversePi;
+}
+
+// 闪电光柱照明：把闪电当成一根竖直光柱，按距离做指数衰减。
+// 云与雾的媒体结构字段不同，纯计算放在这里，两边只负责从自己的结构取出参数。
+vec3 ogxLightningGlow(vec3 relativePos, vec3 lightningPosition, float intensity, float strength,
+    float lightDistance, float falloff)
+{
+    if (intensity <= 0.0) return vec3(0.0); // 没有闪电事件时不加。
+    vec3 boltPos = vec3(lightningPosition.x, clamp(relativePos.y, lightningPosition.y, lightningPosition.y + 116.0), lightningPosition.z); // 光柱同一水平位置。
+    float boltDistance = length(relativePos - boltPos); // 介质采样点到光柱的距离。
+    float lightningLight = max(1.0 - boltDistance / lightDistance, 0.0); // 照明范围内线性衰减。
+    lightningLight = exp((1.0 - lightningLight) * falloff); // 换成更集中的指数衰减。
+    return vec3(0.55, 0.65, 0.9) * (lightningLight * intensity * strength); // 冷色闪光。
+}
+
+// 抖动、切线基、旋转与空间扭曲，具体实现在子文件。
+// 子文件：common/math/pattern.slang。
+// 数学模块图案工具：拜尔抖动、切线基、HSV、旋转矩阵、径向曲线与空间扭曲。
+// 调用位置：由 `common/math.slang` 内联引入，后期、天空与吸积盘共用。
+// 可复制示例：`float b = ogxInterleavedGradientNoise(pixelCoord);`
+// 设计原因与取舍：图案函数保持原来的常数与矩阵展开顺序，避免画面抖动改变。
+
+// --- 抖动表、切线基与颜色图案 ---
+
 // 交错梯度噪声：一个像素一个值，适合做抖动，常数来自原始论文。
 float ogxInterleavedGradientNoise(vec2 coordinate)
 {
@@ -595,8 +642,15 @@ void ogxDoNightEye(inout vec3 color)
     color = mix(color, luma * vec3(0.7771, 1.0038, 1.6190), vec3(0.5)); // 偏蓝亮度与原色各占一半。
 }
 
-// 纹理过滤、空间扭曲与随机采样，具体实现在子文件。
-// 子文件：math/filter.slang。
+// 双线性与双三次纹理过滤，具体实现在子文件。
+// 子文件：common/math/filter.slang。
+// 数学模块纹理过滤：双线性、天空盒图集双线性、三次 B 样条与双三次采样。
+// 调用位置：由 `common/math.slang` 内联引入，采样器与坐标由调用方传入。
+// 可复制示例：`vec4 c = ogxBilinearTexture(tex, uv, texSize);`
+// 设计原因与取舍：库不绑定任何纹理单元；取像素与层级采样都显式写在参数里。
+
+// --- 纹理过滤、空间扭曲与随机采样 ---
+
 // 双线性取像素：自己取四个相邻纹素再插值，不依赖硬件的线性过滤。
 // 为什么不用 `SampleLevel`：像素画风格的月亮贴图会把硬件过滤设成最近邻，画面上出现锯齿；
 // 按纹素中心取四次再按小数偏移插值，既保留最近邻的锐利，又能随屏幕坐标平滑移动。
@@ -709,6 +763,13 @@ vec4 ogxBicubicBlurTexture(sampler2D texSampler, vec2 coord)
                 mix(textureLod(texSampler, c.yz, 0.0), textureLod(texSampler, c.xz, 0.0), m.x), m.y); // 四次双线性采样得到十六像素的三次模糊。
 }
 
+// 低差异序列与半球采样，具体实现在子文件。
+// 子文件：common/math/sampling.slang。
+// 数学模块采样序列：R2、余弦半球、手部深度、三角波、快速反余弦与 Halton。
+// 调用位置：由 `common/math.slang` 内联引入，全局光、阴影与反射共用。
+// 可复制示例：`vec2 p = ogxR2Sample(frameIndex);`
+// 设计原因与取舍：低差异序列只在纯数学层实现，宿主只传序号或随机数。
+
 // R2 低差异序列：两个无理数比例把序号摊成平面上的均匀点，样本不会聚成一团。
 // 为什么用 R2 而不是随机数：随机数会成簇，R2 每加一个样本都把空隙补得更均匀。
 vec2 ogxR2Sample(int n)
@@ -819,14 +880,6 @@ mat2 ogxRotate2Matrix(float angle)
     return mat2(c, s, -s, c);
 }
 
-// iterationT 的实体旋转矩阵：只绕前后轴转，供法线与切线一起旋转。
-mat2 ogxMat2RotateZ(float angle)
-{
-    float c = cos(angle);
-    float s = sin(angle);
-    return mat2(c, s, -s, c);
-}
-
 // Eclipse 的半球方向：两个零到一的随机数变成一个朝上的单位向量。
 vec3 ogxGenUnitVector(vec2 xy)
 {
@@ -880,14 +933,15 @@ float ogxHaltonSeq2(int index)
 /*
 Omni 通用图形库颜色模块：线性颜色、亮度、伽马、强光压缩、黑边与调色。
 调用位置：任何需要把线性高动态范围颜色映射到显示空间或做最终调色的程序；
-    Minecraft 光影由 `/omni-gfx/color.glsl` 引入，引入后数学模块同时可用。
+    Minecraft 光影由 `/omni-gfx/common/color.glsl` 引入，引入后数学模块同时可用。
 可复制示例：
     vec3 a = ogxAces(linearColor, true); // 影院标准压缩。
     vec3 b = ogxAgx(linearColor, 13.0, true); // 宽色域压缩。
     vec3 c = ogxTonemapNone(linearColor); // 只做伽马编码。
 设计原因与取舍：
     只接收显式参数，不读取任何引擎状态；函数名统一 `ogx` 前缀。
-    伽马使用二点二近似，与旧 `shaders/gfx/color.glsl` 一致，不在这里做分段标准曲线。
+    常用颜色工具留在主文件，具体曲线按算法放进子文件，名字与内容一一对应。
+    伽马使用二点二近似，与迁移前的 GLSL 原型一致，不在这里做分段标准曲线。
     矩阵乘法展开成三列乘分量再相加，保持与 GLSL 矩阵乘向量的求和顺序一致。
 */
 #ifndef OGX_COLOR_INCLUDED
@@ -896,10 +950,6 @@ Omni 通用图形库颜色模块：线性颜色、亮度、伽马、强光压缩
 // 数学模块提供亮度权重、夹紧与编码函数。
 
 // 三列矩阵乘向量：GLSL 的矩阵乘向量就是三列分别乘分量再相加，这里照同一顺序展开。
-
-// 伽马、基础色调映射与白平衡，具体实现在子文件。
-// 子文件：color/tonemap.slang。
-// 矩阵按列加权：三列分别乘向量的三个分量，避免依赖矩阵行列约定。
 vec3 ogxApplyColumns(vec3 c0, vec3 c1, vec3 c2, vec3 v)
 {
     return c0 * v.x + c1 * v.y + c2 * v.z;
@@ -910,92 +960,6 @@ vec3 ogxApplyRows(vec3 c0, vec3 c1, vec3 c2, vec3 v)
 {
     return vec3(dot(v, c0), dot(v, c1), dot(v, c2));
 }
-
-// 线性颜色转显示伽马空间；二点二伽马，和原管线一致。
-vec3 ogxLinearToGamma2(vec3 color) { return pow(color, vec3(1.0 / 2.2)); }
-
-// 显示伽马空间转回线性，与上一函数互为逆运算。
-vec3 ogxGammaToLinear2(vec3 color) { return pow(color, vec3(2.2)); }
-
-// ACES 压缩曲线里的有理式：中间亮度拉直，两端压住。
-vec3 ogxRrtOdtFit(vec3 value)
-{
-    vec3 a = value * (value + 0.0245786) - 0.000090537;
-    vec3 b = value * (value + 0.4329510) + 0.238081;
-    return a / b;
-}
-
-// 阿布尼校正矩阵的三列，抵消加亮造成的色相偏移。
-const vec3 OGX_ABNEY_0 = vec3(0.99999976, -1.26657e-7, -1.29064e-9);
-const vec3 OGX_ABNEY_1 = vec3(1.67316e-8, 0.99999976, -5.32026e-9);
-const vec3 OGX_ABNEY_2 = vec3(-0.00725587, 6.47740e-9, 1.00725580);
-
-// 转 AP1 工作色域的三列。
-const vec3 OGX_AP1_0 = vec3(0.59719, 0.35458, 0.04823);
-const vec3 OGX_AP1_1 = vec3(0.07600, 0.90834, 0.01566);
-const vec3 OGX_AP1_2 = vec3(0.02840, 0.13383, 0.83777);
-
-// 从 AP1 转回显示色域的三列。
-const vec3 OGX_AP1_BACK_0 = vec3(1.60475, -0.53108, -0.07367);
-const vec3 OGX_AP1_BACK_1 = vec3(-0.10208, 1.10813, -0.00605);
-const vec3 OGX_AP1_BACK_2 = vec3(-0.00327, -0.07276, 1.07602);
-
-// 影院标准 ACES 近似：提亮、转工作色域、压缩、再转回显示色域。
-// `abney` 为真时附加一次很小的色域修正，抵消加亮造成的色相偏移。
-vec3 ogxAces(vec3 color, bool abney)
-{
-    color *= 1.4;
-    if (abney)
-    {
-        color = ogxApplyRows(OGX_ABNEY_0, OGX_ABNEY_1, OGX_ABNEY_2, color);
-    }
-    color = ogxApplyRows(OGX_AP1_0, OGX_AP1_1, OGX_AP1_2, color);
-    color = ogxRrtOdtFit(color);
-    color = ogxApplyRows(OGX_AP1_BACK_0, OGX_AP1_BACK_1, OGX_AP1_BACK_2, color);
-    return ogxLinearToGamma2(color);
-}
-
-// 参考包的 `ACES` 默认开启 Abney 效应校正；单参数重载让旧调用点保持原签名。
-// ACES 单参入口：保留旧调用方式，内部按默认白点走完整映射。
-vec3 ogxAces(vec3 color) { return ogxAces(color, true); }
-
-// AgX 对比度曲线：用六次多项式近似原查找表，省掉一张纹理。
-vec3 ogxAgxContrast(vec3 x)
-{
-    return (((((15.5 * x - 40.14) * x + 31.96) * x - 6.868) * x + 0.4298) * x + 0.1191) * x - 0.00232;
-}
-
-// 转 AgX 宽色域工作空间的三列。
-const vec3 OGX_AGX_0 = vec3(0.842479062253094, 0.0784335999999992, 0.0792237451477643);
-const vec3 OGX_AGX_1 = vec3(0.0423282422610123, 0.878468636469772, 0.0791661274605434);
-const vec3 OGX_AGX_2 = vec3(0.0423756549057051, 0.0784336, 0.879142973793104);
-
-// 从 AgX 宽色域转回显示原色的三列。
-const vec3 OGX_AGX_BACK_0 = vec3(1.19687900512017, -0.0980208811401368, -0.0990297440797205);
-const vec3 OGX_AGX_BACK_1 = vec3(-0.0528968517574562, 1.15190312990417, -0.0989611768448433);
-const vec3 OGX_AGX_BACK_2 = vec3(-0.0529716355144438, -0.0980434501171241, 1.15107367264116);
-
-// AgX 强光压缩：先按中间灰取对数并夹进承认范围，再用 S 曲线成形，尽量保住高光色相。
-// `ev` 是承认的动态范围，`abney` 与 ACES 版本含义相同。
-// AgX 宽色域压缩：参考的默认曝光是 13、半动态范围 6.5；显式传入两个常数，避免派生值丢失。
-vec3 ogxAgx(vec3 color, float ev, float hev, bool abney)
-{
-    color *= 2.3;
-    if (abney)
-    {
-        color = ogxApplyRows(OGX_ABNEY_0, OGX_ABNEY_1, OGX_ABNEY_2, color);
-    }
-    color = ogxApplyRows(OGX_AGX_0, OGX_AGX_1, OGX_AGX_2, color);
-    const float MIDDLE_GREY = 0.18;
-    color = clamp(log2(color / MIDDLE_GREY), vec3(-hev), vec3(hev));
-    color = (color + hev) / ev;
-    color = ogxAgxContrast(color);
-    color = ogxApplyRows(OGX_AGX_BACK_0, OGX_AGX_BACK_1, OGX_AGX_BACK_2, color);
-    return color;
-}
-
-// 旧三参数入口：半动态范围由曝光派生，保持现有调用点不变。
-vec3 ogxAgx(vec3 color, float ev, bool abney) { return ogxAgx(color, ev, ev * 0.5, abney); }
 
 // 无压缩：Eclipse 的 `no_tonemapper` 原样返回，不做伽马编码；伽马由最终输出阶段处理。
 vec3 ogxTonemapNone(vec3 color) { return color; }
@@ -1019,84 +983,6 @@ vec3 ogxLinearToSrgb(vec3 color)
     vec3 low = color * 12.92; // 暗部直线段。
     vec3 high = pow(color, vec3(1.0 / 2.4)) * 1.055 - 0.055; // 亮部幂曲线。
     return mix(low, high, step(vec3(0.0031308), color)); // 逐通道按阈值选择。
-}
-
-// 经济版电影曲线：一条有理式，成本低于 ACES 拟合，观感更硬、更亮。
-vec3 ogxTonemapAcesFilm(vec3 color)
-{
-    vec3 x = color * 0.9; // 先压一点曝光。
-    return (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.95) + 0.12); // 分子分母都是二次式。
-}
-
-// `Hejl` 2015 胶片曲线：先加一点偏移让纯黑离开零，再用两个有理式的比值压肩部。
-vec3 ogxTonemapHejl(vec3 color)
-{
-    vec4 vh = vec4(color * 0.85, 3.0); // 三个颜色通道加一个白点参考。
-    vec4 va = 1.75 * vh + 0.05; // 肩部斜率随亮度增加。
-    vec4 vf = ((vh * va + 0.004) / (vh * (va + 0.55) + 0.0491)) - 0.0821 + 0.000633604888; // 有理式压缩，末尾常数把黑点抬回零。
-    return vf.xyz / vf.w; // 用白点参考归一，最亮处回到一。
-}
-
-// `Hable` 胶片曲线：六个常数分别控制肩部、线性段与趾部，白点十一做归一。
-vec3 ogxTonemapHable(vec3 color)
-{
-    vec3 x = color * 2.0; // 先放大两倍，让中间灰落在曲线中段。
-    vec3 mapped = ((x * (0.6 * x + 0.1 * 0.5) + 0.5 * 0.01) / (x * (0.6 * x + 0.5) + 0.5 * 0.3)) - 0.01 / 0.3; // 肩部强度零点六、线性强度零点五、线性角度零点一、趾部强度零点五、趾部两项零点零一与零点三。
-    float w = 11.0; // 白点。
-    float white = ((w * (0.6 * w + 0.1 * 0.5) + 0.5 * 0.01) / (w * (0.6 * w + 0.5) + 0.5 * 0.3)) - 0.01 / 0.3; // 同一条曲线在白点处的值。
-    return mapped / white; // 归一后最亮处正好到一。
-}
-
-// `Reinhard` 简单曲线：先放大一点六六倍再除以一加自身，暗部提得最明显。
-vec3 ogxTonemapReinhard(vec3 color)
-{
-    vec3 x = color * 1.66; // 放大让中间灰更亮。
-    return x / (1.0 + x); // 双曲线压缩，结果永远不会超过一。
-}
-
-// `Lottes` 2016 曲线：指数控制对比度，肩部由输入中间灰与显示白点反推。
-// 为什么斜率和偏移写成普通变量：它们由幂函数算出，GLSL 的常量初始化不保证能折叠。
-vec3 ogxTonemapLottes(vec3 color)
-{
-    float a = 1.6; // 对比度指数。
-    float d = 0.977; // 肩部指数。
-    float hdrMax = 8.0; // 输入白点。
-    float midIn = 0.23; // 输入中间灰。
-    float midOut = 0.267; // 输出中间灰。
-    float b = (-pow(midIn, a) + pow(hdrMax, a) * midOut) / ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut); // 肩部斜率。
-    float c = (pow(hdrMax, a * d) * pow(midIn, a) - pow(hdrMax, a) * pow(midIn, a * d) * midOut) / ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut); // 肩部偏移。
-    return pow(color, vec3(a)) / (pow(color, vec3(a * d)) * b + c); // 两段幂函数之比。
-}
-
-// `Uchimura` 2017 曲线：分成趾部、线性段与肩部三截，再用平滑权重拼接。
-// 参考实现把平滑曲线的两个边界写反了，那样权重会出现负数；这里按边界在前的正确顺序写。
-vec3 ogxTonemapUchimura(vec3 color)
-{
-    float peak = 1.0; // 显示上限。
-    float contrast = 1.0; // 线性段斜率。
-    float mid = 0.12; // 线性段起点。
-    float length = 0.22; // 线性段折算长度。
-    float black = 1.0; // 趾部形状指数。
-    float l0 = ((peak - mid) * length) / contrast; // 折算后的线性段长度。
-    float s0 = mid + l0; // 肩部起点。
-    float s1 = mid + contrast * l0; // 肩部终点。
-    float c2 = (contrast * peak) / (peak - s1); // 肩部曲率。
-    float cp = c2 / peak; // 按显示上限归一。
-    vec3 w0 = 1.0 - smoothstep(vec3(0.0), vec3(mid), color); // 趾部权重。
-    vec3 w2 = step(vec3(s0), color); // 肩部权重。
-    vec3 w1 = 1.0 - w0 - w2; // 线性段权重，三者之和为一。
-    vec3 toe = mid * pow(color / mid, vec3(black)); // 趾部幂曲线。
-    vec3 shoulder = peak - (peak - s1) / (1.0 + cp * (color - s0)); // 肩部有理曲线，越亮越贴近显示上限。
-    vec3 linear = mid + contrast * (color - mid); // 中间直线段。
-    return clamp(toe * w0 + linear * w1 + shoulder * w2, vec3(0.0), vec3(1.0)); // 三段按权重拼接并夹紧。
-}
-
-// `Xonk` 曲线：先抬高三成伽马，再用一条有理式压肩部，暗部比 `Reinhard` 更亮。
-// 它是一条独立拟合，和 `ACES`、`AgX`、`Reinhard` 都不是同一条曲线，不能互相替代。
-vec3 ogxTonemapXonk(vec3 color)
-{
-    color = pow(color, vec3(1.3)); // 先抬伽马，暗部细节更容易看见。
-    return color / (0.333 + color); // 有理式软肩，最亮处趋近于一。
 }
 
 // 十六位打包值拆成两个分量：按整数与小数部分各取一次，绕开位运算。
@@ -1136,7 +1022,7 @@ vec3 ogxWhiteBalance(vec3 color, vec3 tint) { return color * tint; }
 // 高级调色：白光裁剪、亮度伽马与饱和度，全部在线性空间处理后再回显示空间。
 vec3 ogxAdvancedColor(vec3 color, float lumaGamma, float whiteClip, float saturation, float gamma)
 {
-    color = ogxGammaToLinear2(color);
+    color = ogxGammaToLinear(color);
     color = pow(length(color), 1.0 / lumaGamma) * normalize(color + 1e-20);
     color = clamp(color * (1.0 + whiteClip), vec3(0.0), vec3(1.0));
     color = mix(color, vec3(ogxLuminance(color)), vec3(1.0 - saturation));
@@ -1168,40 +1054,125 @@ vec3 ogxSrgbToLinearApprox(vec3 s) { return s * (s * (s * 0.305306011 + 0.682171
 // 亮度权重：Eclipse 的 `luma` 在场景亮度里用 Rec.601 系数。
 float ogxLuminanceRec601(vec3 color) { return dot(color, vec3(0.299, 0.587, 0.114)); }
 
+// 饱和度矩阵：把颜色朝灰阶收或向外推，一为原色。
+// 旧实现用四乘四矩阵，保留同一个构造顺序；生成 GLSL 后按列解释，与旧画面一致。
+mat4 ogxSaturationMatrix(float saturation)
+{
+    const vec3 luminance = vec3(0.3086, 0.6094, 0.0820); // 饱和度用的亮度权重。
+    vec3 lumSat = luminance * (1.0 - saturation); // 去饱和时混入的灰分量。
+    vec2 satZero = vec2(saturation, 0.0); // 原色保留量。
+    return mat4(
+        vec4(lumSat.r + satZero.xyy, 0.0),
+        vec4(lumSat.g + satZero.yxy, 0.0),
+        vec4(lumSat.b + satZero.yyx, 0.0),
+        vec4(0.0, 0.0, 0.0, 1.0)); // 三个颜色通道加一行齐次坐标。
+}
+
 // Eclipse `curve(vec3)`：软肩曲线 `1 - x/(1+x)`，与 iterationT 的宏 `curve` 不是同一条曲线。
 // 单独命名，避免和宿主层已有的 `curve` 宏展开冲突。
-vec3 ogxSoftSaturate3(vec3 x) { return 1.0 - x / (1.0 + x); }
+float ogxSoftSaturate(float x) { return 1.0 - x / (1.0 + x); }
+vec3 ogxSoftSaturate3(vec3 x) { return vec3(ogxSoftSaturate(x.x), ogxSoftSaturate(x.y), ogxSoftSaturate(x.z)); }
 
-// Eclipse，具体实现在子文件。
-// 子文件：color/agx.slang。
-// Eclipse 全范围 Reinhard：白点 10、提亮 0.5，保留完整有理式。
-// Reinhard 完整版：按最大通道压缩，保留色相。
-vec3 ogxTonemapReinhardFull(vec3 color)
+// ACES 曲线，具体实现在子文件。
+// 子文件：common/color/aces.slang。
+// 颜色模块 ACES：影院标准曲线、经济版电影曲线与 AP1 工作色域矩阵。
+// 调用位置：由 `common/color.slang` 内联引入，后期色调映射按选项调用。
+// 可复制示例：`vec3 c = ogxAces(linearColor, true);`
+// 设计原因与取舍：矩阵与常数集中在一处，方便和参考实现逐行核对。
+
+// ACES 压缩曲线里的有理式：中间亮度拉直，两端压住。
+vec3 ogxRrtOdtFit(vec3 value)
 {
-    float whitepoint = 10.0; // 参考实现固定白点。
-    float lighten = 0.5; // 参考实现固定提亮量。
-    return (color * (1.0 + color / (whitepoint * whitepoint))) / (lighten + color);
+    vec3 a = value * (value + 0.0245786) - 0.000090537;
+    vec3 b = value * (value + 0.4329510) + 0.238081;
+    return a / b;
 }
 
-// Eclipse 可编辑 Reinhard：先把颜色抬 1.2 次方，再用更低的提亮 0.333。
-// Reinhard 编辑版：用固定曝光近似，适合快速预览。
-vec3 ogxTonemapReinhardEdit(vec3 color)
+// 阿布尼校正矩阵的三列，抵消加亮造成的色相偏移。
+const vec3 OGX_ABNEY_0 = vec3(0.99999976, -1.26657e-7, -1.29064e-9);
+const vec3 OGX_ABNEY_1 = vec3(1.67316e-8, 0.99999976, -5.32026e-9);
+const vec3 OGX_ABNEY_2 = vec3(-0.00725587, 6.47740e-9, 1.00725580);
+
+// 转 AP1 工作色域的三列。
+const vec3 OGX_AP1_0 = vec3(0.59719, 0.35458, 0.04823);
+const vec3 OGX_AP1_1 = vec3(0.07600, 0.90834, 0.01566);
+const vec3 OGX_AP1_2 = vec3(0.02840, 0.13383, 0.83777);
+
+// 从 AP1 转回显示色域的三列。
+const vec3 OGX_AP1_BACK_0 = vec3(1.60475, -0.53108, -0.07367);
+const vec3 OGX_AP1_BACK_1 = vec3(-0.10208, 1.10813, -0.00605);
+const vec3 OGX_AP1_BACK_2 = vec3(-0.00327, -0.07276, 1.07602);
+
+// 影院标准 ACES 近似：提亮、转工作色域、压缩、再转回显示色域。
+// `abney` 为真时附加一次很小的色域修正，抵消加亮造成的色相偏移。
+vec3 ogxAces(vec3 color, bool abney)
 {
-    color = pow(color, vec3(1.2)); // 抬暗部，保持高光不动。
-    float whitepoint = 10.0; // 与全范围版相同的白点。
-    float lighten = 0.333; // 更低的提亮量，画面更亮。
-    return (color * (1.0 + color / (whitepoint * whitepoint))) / (lighten + color);
+    color *= 1.4;
+    if (abney)
+    {
+        color = ogxApplyRows(OGX_ABNEY_0, OGX_ABNEY_1, OGX_ABNEY_2, color);
+    }
+    color = ogxApplyRows(OGX_AP1_0, OGX_AP1_1, OGX_AP1_2, color);
+    color = ogxRrtOdtFit(color);
+    color = ogxApplyRows(OGX_AP1_BACK_0, OGX_AP1_BACK_1, OGX_AP1_BACK_2, color);
+    return ogxLinearToGamma(color);
 }
 
-// Reinhard-Jodie：同时算亮度压缩与逐通道压缩，再按逐通道结果混回去。
-// Reinhard-Jodie：按亮度与通道分别压缩，减少高光偏色。
-vec3 ogxTonemapReinhardJodie(vec3 color)
+// 参考包的 `ACES` 默认开启 Abney 效应校正；单参数重载让旧调用点保持原签名。
+// ACES 单参入口：保留旧调用方式，内部按默认白点走完整映射。
+vec3 ogxAces(vec3 color) { return ogxAces(color, true); }
+
+// 经济版电影曲线：一条有理式，成本低于 ACES 拟合，观感更硬、更亮。
+vec3 ogxTonemapAcesFilm(vec3 color)
 {
-    color *= 1.5; // 参考实现的曝光抬升。
-    vec3 tonemapLuminance = color / (1.0 + dot(color, vec3(0.21, 0.72, 0.07))); // 保色相的亮度压缩。
-    vec3 tonemapRgb = color / (1.0 + color); // 逐通道压缩，高光更容易去饱和。
-    return mix(tonemapLuminance, tonemapRgb, tonemapRgb * 0.8 + 0.2); // 亮部更多采用逐通道结果。
+    vec3 x = color * 0.9; // 先压一点曝光。
+    return (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.95) + 0.12); // 分子分母都是二次式。
 }
+
+// AgX 曲线与可配置色域矩阵，具体实现在子文件。
+// 子文件：common/color/agx.slang。
+// 颜色模块 AgX：对比曲线、宽色域压缩、可配置色域矩阵与三套参考变体。
+// 调用位置：由 `common/color.slang` 内联引入，默认强光压缩与可配置选项都走这里。
+// 可复制示例：`vec3 c = ogxAgx(linearColor, 13.0, true);`
+// 设计原因与取舍：普通版与可配置版共用矩阵工具，避免三套色域转换各写一份。
+
+// AgX 对比度曲线：用六次多项式近似原查找表，省掉一张纹理。
+vec3 ogxAgxContrast(vec3 x)
+{
+    return (((((15.5 * x - 40.14) * x + 31.96) * x - 6.868) * x + 0.4298) * x + 0.1191) * x - 0.00232;
+}
+
+// 转 AgX 宽色域工作空间的三列。
+const vec3 OGX_AGX_0 = vec3(0.842479062253094, 0.0784335999999992, 0.0792237451477643);
+const vec3 OGX_AGX_1 = vec3(0.0423282422610123, 0.878468636469772, 0.0791661274605434);
+const vec3 OGX_AGX_2 = vec3(0.0423756549057051, 0.0784336, 0.879142973793104);
+
+// 从 AgX 宽色域转回显示原色的三列。
+const vec3 OGX_AGX_BACK_0 = vec3(1.19687900512017, -0.0980208811401368, -0.0990297440797205);
+const vec3 OGX_AGX_BACK_1 = vec3(-0.0528968517574562, 1.15190312990417, -0.0989611768448433);
+const vec3 OGX_AGX_BACK_2 = vec3(-0.0529716355144438, -0.0980434501171241, 1.15107367264116);
+
+// AgX 强光压缩：先按中间灰取对数并夹进承认范围，再用 S 曲线成形，尽量保住高光色相。
+// `ev` 是承认的动态范围，`abney` 与 ACES 版本含义相同。
+// AgX 宽色域压缩：参考的默认曝光是 13、半动态范围 6.5；显式传入两个常数，避免派生值丢失。
+vec3 ogxAgx(vec3 color, float ev, float hev, bool abney)
+{
+    color *= 2.3;
+    if (abney)
+    {
+        color = ogxApplyRows(OGX_ABNEY_0, OGX_ABNEY_1, OGX_ABNEY_2, color);
+    }
+    color = ogxApplyRows(OGX_AGX_0, OGX_AGX_1, OGX_AGX_2, color);
+    const float MIDDLE_GREY = 0.18;
+    color = clamp(log2(color / MIDDLE_GREY), vec3(-hev), vec3(hev));
+    color = (color + hev) / ev;
+    color = ogxAgxContrast(color);
+    color = ogxApplyRows(OGX_AGX_BACK_0, OGX_AGX_BACK_1, OGX_AGX_BACK_2, color);
+    return color;
+}
+
+// 旧三参数入口：半动态范围由曝光派生，保持现有调用点不变。
+vec3 ogxAgx(vec3 color, float ev, bool abney) { return ogxAgx(color, ev, ev * 0.5, abney); }
 
 // Eclipse 的 AgX look：保留参考的偏移、斜率与幂变量，默认零偏移、单位斜率与幂，只把饱和度推到 1.25。
 // AgX 的 look 曲线：在色调映射后做一次对比与饱和调整。
@@ -1274,58 +1245,6 @@ vec3 ogxToneMapAgxMerlin(vec3 color)
     color = ogxApplyColumns(out0, out1, out2, color); // 回显示原色。
     color = pow(color, vec3(2.2)); // 线性化。
     return clamp(color, vec3(0.0), vec3(1.0)); // 夹紧。
-}
-
-// Eclipse 的 Uchimura 指数肩部版：肩部用 exp，参考实现保留反向 smoothstep 参数顺序。
-// Uchimura 指数版：按分段指数压缩高光，适合夜景。
-vec3 ogxTonemapUchimuraExp(vec3 x, float P, float a, float m, float l, float c, float b)
-{
-    float l0 = ((P - m) * l) / a; // 线性段折算长度。
-    float s0 = m + l0; // 肩部起点。
-    float s1 = m + a * l0; // 肩部终点。
-    float c2 = (a * P) / (P - s1); // 肩部曲率。
-    float cp = -c2 / P; // 指数肩部用的负曲率。
-    vec3 w0 = 1.0 - smoothstep(x, vec3(0.0), vec3(m)); // 保持参考实现的参数顺序，不改成正确顺序。
-    vec3 w2 = step(m + l0, x); // 肩部权重。
-    vec3 w1 = 1.0 - w0 - w2; // 线性段权重。
-    vec3 toe = m * pow(x / m, vec3(c)) + b; // 趾部幂曲线。
-    vec3 shoulder = P - (P - s1) * exp(cp * (x - s0)); // 指数肩部。
-    vec3 linear = m + a * (x - m); // 线性段。
-    return clamp(toe * w0 + linear * w1 + shoulder * w2, vec3(0.0), vec3(1.0)); // 三段拼接。
-}
-
-// Eclipse 的 Uchimura 修改版：肩部改成 smoothstep 曲线，其余参数与指数版相同。
-// Uchimura 改进版：用可调切线参数控制肩部过渡。
-vec3 ogxTonemapUchimuraModified(vec3 x, float P, float a, float m, float l, float c, float b)
-{
-    float l0 = ((P - m) * l) / a; // 线性段折算长度。
-    float s0 = m + l0; // 肩部起点。
-    float s1 = m + a * l0; // 肩部终点。
-    float c2 = (a * P) / (P - s1); // 肩部曲率。
-    float cp = c2 / P; // 曲线肩部的正曲率。
-    vec3 w0 = 1.0 - smoothstep(x, vec3(0.0), vec3(m)); // 保持参考实现的参数顺序。
-    vec3 w2 = step(m + l0, x); // 肩部权重。
-    vec3 w1 = 1.0 - w0 - w2; // 线性段权重。
-    vec3 toe = m * pow(x / m, vec3(c)) + b; // 趾部幂曲线。
-    vec3 y = cp * (x - s0); // 参考 `curve` 的输入。
-    vec3 shoulder = P - (P - s1) * (1.0 - y / (1.0 + y)); // 参考 `curve` 是 1 - y/(1+y)，不是 smoothstep。
-    vec3 linear = m + a * (x - m); // 线性段。
-    return clamp(toe * w0 + linear * w1 + shoulder * w2, vec3(0.0), vec3(1.0)); // 三段拼接。
-}
-
-// Eclipse 黑体色：按温度拟合 RGB，再转线性；和普朗克轨迹版是两个不同近似。
-vec3 ogxBlackbodyApprox(float temperature)
-{
-    float t = pow(temperature, -1.5); // 高温项。
-    float lt = log(temperature); // 对数项。
-    vec3 col = vec3(0.0); // 逐通道拟合结果。
-    col.x = 220000.0 * t + 0.58039215686; // 红通道。
-    col.y = 0.39231372549 * lt - 2.44549019608; // 绿通道低温段。
-    col.y = temperature > 6500.0 ? 138039.215686 * t + 0.72156862745 : col.y; // 高温段换拟合。
-    col.z = 0.76078431372 * lt - 5.68078431373; // 蓝通道。
-    col = ogxSaturate(col); // 先夹紧到零到一。
-    col = temperature < 1000.0 ? col * temperature * 0.001 : col; // 极低温按比例压暗。
-    return ogxSrgbToLinear(col); // 最后转线性。
 }
 
 // 三列矩阵：用三个列向量表示，避开 Slang 与 GLSL 的行列顺序差异。
@@ -1468,18 +1387,15 @@ float ogxAgxEquationFullCurve(float x, float xPivot, float yPivot, float slopePi
     return scale * hyperbolic + yPivot; // 还原到输出范围。
 }
 
+// 组合矩阵在前面定义，主入口先声明，避免依赖文件里的书写顺序。
+mat3 ogxAgxConfigurable1Mat3();
+
 // iterationT 的可配置 AgX：把 RGB 转到调整后的工作空间，再走完整曲线。
+// 组合矩阵由 `ogxAgxConfigurable1Mat3` 提供，和单独调用矩阵版本共用同一套原色常数。
 vec3 ogxAgxConfigurable(vec3 rgb)
 {
-    vec2 xyRed = vec2(0.64, 0.33); // 红原色色度。
-    vec2 xyGreen = vec2(0.3, 0.6); // 绿原色色度。
-    vec2 xyBlue = vec2(0.15, 0.06); // 蓝原色色度。
-    vec2 xyWhite = vec2(0.3127, 0.3290); // D65 白点。
-    OgxAgxMat3 srgbToXyz = ogxAgxPrimariesToMatrix(xyRed, xyGreen, xyBlue, xyWhite); // sRGB 到 XYZ。
-    OgxAgxMat3 adjustedToXyz = ogxAgxComputeCompressionMatrix(xyRed, xyGreen, xyBlue, xyWhite); // 调整后色域到 XYZ。
-    OgxAgxMat3 xyzToAdjusted = ogxAgxInverse(adjustedToXyz); // 逆矩阵。
-    vec3 xyz = ogxAgxVecMul(srgbToXyz, rgb); // 参考实现用行向量乘矩阵。
-    vec3 adjustedRgb = ogxAgxVecMul(xyzToAdjusted, xyz); // 转到调整后 RGB。
+    mat3 adjustedFromSrgb = ogxAgxConfigurable1Mat3(); // sRGB 到调整后空间的组合矩阵。
+    vec3 adjustedRgb = adjustedFromSrgb[0] * rgb.x + adjustedFromSrgb[1] * rgb.y + adjustedFromSrgb[2] * rgb.z; // 三列加权，避免行列约定差异。
     float minimumEv = -6.0; // 参考实现的最小曝光。
     float maximumEv = 6.0; // 最大曝光。
     float xPivot = abs(minimumEv) / (maximumEv - minimumEv); // 支点位置。
@@ -1506,20 +1422,6 @@ OgxAgxMat3 ogxAgxConfigurable1()
     return ogxAgxMulMat(srgbToXyz, ogxAgxInverse(adjustedToXyz)); // 组合成 sRGB 到调整后空间。
 }
 
-// 饱和度矩阵：把颜色朝灰阶收或向外推，一为原色。
-// 旧实现用四乘四矩阵，保留同一个构造顺序；生成 GLSL 后按列解释，与旧画面一致。
-mat4 ogxSaturationMatrix(float saturation)
-{
-    const vec3 luminance = vec3(0.3086, 0.6094, 0.0820); // 饱和度用的亮度权重。
-    vec3 lumSat = luminance * (1.0 - saturation); // 去饱和时混入的灰分量。
-    vec2 satZero = vec2(saturation, 0.0); // 原色保留量。
-    return mat4(
-        vec4(lumSat.r + satZero.xyy, 0.0),
-        vec4(lumSat.g + satZero.yxy, 0.0),
-        vec4(lumSat.b + satZero.yyx, 0.0),
-        vec4(0.0, 0.0, 0.0, 1.0)); // 三个颜色通道加一行齐次坐标。
-}
-
 // 把三列矩阵换成 GLSL 的 mat3：参考包的三原色函数返回 mat3，调用方按矩阵乘向量。
 mat3 ogxAgxMat3ToMat3(OgxAgxMat3 m)
 {
@@ -1544,6 +1446,186 @@ mat3 ogxAgxConfigurable1Mat3()
     return ogxAgxMat3ToMat3(ogxAgxConfigurable1());
 }
 
+// Reinhard 系列曲线，具体实现在子文件。
+// 子文件：common/color/reinhard.slang。
+// 颜色模块 Reinhard：基础、全范围、可编辑与 Reinhard-Jodie 四条曲线。
+// 调用位置：由 `common/color.slang` 内联引入，供对照与可选曲线使用。
+// 可复制示例：`vec3 c = ogxTonemapReinhard(linearColor);`
+// 设计原因与取舍：四条曲线常数不同，不能用一个参数互相替代。
+
+// Eclipse 全范围 Reinhard：白点 10、提亮 0.5，保留完整有理式。
+// Reinhard 完整版：按最大通道压缩，保留色相。
+vec3 ogxTonemapReinhardFull(vec3 color)
+{
+    float whitepoint = 10.0; // 参考实现固定白点。
+    float lighten = 0.5; // 参考实现固定提亮量。
+    return (color * (1.0 + color / (whitepoint * whitepoint))) / (lighten + color);
+}
+
+// Eclipse 可编辑 Reinhard：先把颜色抬 1.2 次方，再用更低的提亮 0.333。
+// Reinhard 编辑版：用固定曝光近似，适合快速预览。
+vec3 ogxTonemapReinhardEdit(vec3 color)
+{
+    color = pow(color, vec3(1.2)); // 抬暗部，保持高光不动。
+    float whitepoint = 10.0; // 与全范围版相同的白点。
+    float lighten = 0.333; // 更低的提亮量，画面更亮。
+    return (color * (1.0 + color / (whitepoint * whitepoint))) / (lighten + color);
+}
+
+// Reinhard-Jodie：同时算亮度压缩与逐通道压缩，再按逐通道结果混回去。
+// Reinhard-Jodie：按亮度与通道分别压缩，减少高光偏色。
+vec3 ogxTonemapReinhardJodie(vec3 color)
+{
+    color *= 1.5; // 参考实现的曝光抬升。
+    vec3 tonemapLuminance = color / (1.0 + dot(color, vec3(0.21, 0.72, 0.07))); // 保色相的亮度压缩。
+    vec3 tonemapRgb = color / (1.0 + color); // 逐通道压缩，高光更容易去饱和。
+    return mix(tonemapLuminance, tonemapRgb, tonemapRgb * 0.8 + 0.2); // 亮部更多采用逐通道结果。
+}
+
+// `Reinhard` 简单曲线：先放大一点六六倍再除以一加自身，暗部提得最明显。
+vec3 ogxTonemapReinhard(vec3 color)
+{
+    vec3 x = color * 1.66; // 放大让中间灰更亮。
+    return x / (1.0 + x); // 双曲线压缩，结果永远不会超过一。
+}
+
+// Uchimura 系列曲线，具体实现在子文件。
+// 子文件：common/color/uchimura.slang。
+// 颜色模块 Uchimura：基础三段曲线、指数肩部版与平滑肩部版。
+// 调用位置：由 `common/color.slang` 内联引入，供对照与可选曲线使用。
+// 可复制示例：`vec3 c = ogxTonemapUchimura(linearColor);`
+// 设计原因与取舍：参考实现的肩部与平滑顺序保留，避免改变高光过渡。
+
+// `Uchimura` 2017 曲线：分成趾部、线性段与肩部三截，再用平滑权重拼接。
+// 参考实现把平滑曲线的两个边界写反了，那样权重会出现负数；这里按边界在前的正确顺序写。
+vec3 ogxTonemapUchimura(vec3 color)
+{
+    float peak = 1.0; // 显示上限。
+    float contrast = 1.0; // 线性段斜率。
+    float mid = 0.12; // 线性段起点。
+    float length = 0.22; // 线性段折算长度。
+    float black = 1.0; // 趾部形状指数。
+    float l0 = ((peak - mid) * length) / contrast; // 折算后的线性段长度。
+    float s0 = mid + l0; // 肩部起点。
+    float s1 = mid + contrast * l0; // 肩部终点。
+    float c2 = (contrast * peak) / (peak - s1); // 肩部曲率。
+    float cp = c2 / peak; // 按显示上限归一。
+    vec3 w0 = 1.0 - smoothstep(vec3(0.0), vec3(mid), color); // 趾部权重。
+    vec3 w2 = step(vec3(s0), color); // 肩部权重。
+    vec3 w1 = 1.0 - w0 - w2; // 线性段权重，三者之和为一。
+    vec3 toe = mid * pow(color / mid, vec3(black)); // 趾部幂曲线。
+    vec3 shoulder = peak - (peak - s1) / (1.0 + cp * (color - s0)); // 肩部有理曲线，越亮越贴近显示上限。
+    vec3 linear = mid + contrast * (color - mid); // 中间直线段。
+    return clamp(toe * w0 + linear * w1 + shoulder * w2, vec3(0.0), vec3(1.0)); // 三段按权重拼接并夹紧。
+}
+
+// Eclipse 的 Uchimura 指数肩部版：肩部用 exp，参考实现保留反向 smoothstep 参数顺序。
+// Uchimura 指数版：按分段指数压缩高光，适合夜景。
+vec3 ogxTonemapUchimuraExp(vec3 x, float P, float a, float m, float l, float c, float b)
+{
+    float l0 = ((P - m) * l) / a; // 线性段折算长度。
+    float s0 = m + l0; // 肩部起点。
+    float s1 = m + a * l0; // 肩部终点。
+    float c2 = (a * P) / (P - s1); // 肩部曲率。
+    float cp = -c2 / P; // 指数肩部用的负曲率。
+    vec3 w0 = 1.0 - smoothstep(x, vec3(0.0), vec3(m)); // 保持参考实现的参数顺序，不改成正确顺序。
+    vec3 w2 = step(m + l0, x); // 肩部权重。
+    vec3 w1 = 1.0 - w0 - w2; // 线性段权重。
+    vec3 toe = m * pow(x / m, vec3(c)) + b; // 趾部幂曲线。
+    vec3 shoulder = P - (P - s1) * exp(cp * (x - s0)); // 指数肩部。
+    vec3 linear = m + a * (x - m); // 线性段。
+    return clamp(toe * w0 + linear * w1 + shoulder * w2, vec3(0.0), vec3(1.0)); // 三段拼接。
+}
+
+// Eclipse 的 Uchimura 修改版：肩部改成 smoothstep 曲线，其余参数与指数版相同。
+// Uchimura 改进版：用可调切线参数控制肩部过渡。
+vec3 ogxTonemapUchimuraModified(vec3 x, float P, float a, float m, float l, float c, float b)
+{
+    float l0 = ((P - m) * l) / a; // 线性段折算长度。
+    float s0 = m + l0; // 肩部起点。
+    float s1 = m + a * l0; // 肩部终点。
+    float c2 = (a * P) / (P - s1); // 肩部曲率。
+    float cp = c2 / P; // 曲线肩部的正曲率。
+    vec3 w0 = 1.0 - smoothstep(x, vec3(0.0), vec3(m)); // 保持参考实现的参数顺序。
+    vec3 w2 = step(m + l0, x); // 肩部权重。
+    vec3 w1 = 1.0 - w0 - w2; // 线性段权重。
+    vec3 toe = m * pow(x / m, vec3(c)) + b; // 趾部幂曲线。
+    vec3 y = cp * (x - s0); // 参考 `curve` 的输入。
+    vec3 shoulder = P - (P - s1) * (1.0 - y / (1.0 + y)); // 参考 `curve` 是 1 - y/(1+y)，不是 smoothstep。
+    vec3 linear = m + a * (x - m); // 线性段。
+    return clamp(toe * w0 + linear * w1 + shoulder * w2, vec3(0.0), vec3(1.0)); // 三段拼接。
+}
+
+// 胶片与肩部曲线，具体实现在子文件。
+// 子文件：common/color/curve.slang。
+// 颜色模块胶片曲线：Hejl、Hable、Lottes 与 Xonk 四条独立拟合。
+// 调用位置：由 `common/color.slang` 内联引入，按选项选择。
+// 可复制示例：`vec3 c = ogxTonemapHable(linearColor);`
+// 设计原因与取舍：每条曲线常数独立，合并会让对照失去可复核的边界。
+
+// `Hejl` 2015 胶片曲线：先加一点偏移让纯黑离开零，再用两个有理式的比值压肩部。
+vec3 ogxTonemapHejl(vec3 color)
+{
+    vec4 vh = vec4(color * 0.85, 3.0); // 三个颜色通道加一个白点参考。
+    vec4 va = 1.75 * vh + 0.05; // 肩部斜率随亮度增加。
+    vec4 vf = ((vh * va + 0.004) / (vh * (va + 0.55) + 0.0491)) - 0.0821 + 0.000633604888; // 有理式压缩，末尾常数把黑点抬回零。
+    return vf.xyz / vf.w; // 用白点参考归一，最亮处回到一。
+}
+
+// `Hable` 胶片曲线：六个常数分别控制肩部、线性段与趾部，白点十一做归一。
+vec3 ogxTonemapHable(vec3 color)
+{
+    vec3 x = color * 2.0; // 先放大两倍，让中间灰落在曲线中段。
+    vec3 mapped = ((x * (0.6 * x + 0.1 * 0.5) + 0.5 * 0.01) / (x * (0.6 * x + 0.5) + 0.5 * 0.3)) - 0.01 / 0.3; // 肩部强度零点六、线性强度零点五、线性角度零点一、趾部强度零点五、趾部两项零点零一与零点三。
+    float w = 11.0; // 白点。
+    float white = ((w * (0.6 * w + 0.1 * 0.5) + 0.5 * 0.01) / (w * (0.6 * w + 0.5) + 0.5 * 0.3)) - 0.01 / 0.3; // 同一条曲线在白点处的值。
+    return mapped / white; // 归一后最亮处正好到一。
+}
+
+// `Lottes` 2016 曲线：指数控制对比度，肩部由输入中间灰与显示白点反推。
+// 为什么斜率和偏移写成普通变量：它们由幂函数算出，GLSL 的常量初始化不保证能折叠。
+vec3 ogxTonemapLottes(vec3 color)
+{
+    float a = 1.6; // 对比度指数。
+    float d = 0.977; // 肩部指数。
+    float hdrMax = 8.0; // 输入白点。
+    float midIn = 0.23; // 输入中间灰。
+    float midOut = 0.267; // 输出中间灰。
+    float b = (-pow(midIn, a) + pow(hdrMax, a) * midOut) / ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut); // 肩部斜率。
+    float c = (pow(hdrMax, a * d) * pow(midIn, a) - pow(hdrMax, a) * pow(midIn, a * d) * midOut) / ((pow(hdrMax, a * d) - pow(midIn, a * d)) * midOut); // 肩部偏移。
+    return pow(color, vec3(a)) / (pow(color, vec3(a * d)) * b + c); // 两段幂函数之比。
+}
+
+// `Xonk` 曲线：先抬高三成伽马，再用一条有理式压肩部，暗部比 `Reinhard` 更亮。
+// 它是一条独立拟合，和 `ACES`、`AgX`、`Reinhard` 都不是同一条曲线，不能互相替代。
+vec3 ogxTonemapXonk(vec3 color)
+{
+    color = pow(color, vec3(1.3)); // 先抬伽马，暗部细节更容易看见。
+    return color / (0.333 + color); // 有理式软肩，最亮处趋近于一。
+}
+
+// 黑体近似色，具体实现在子文件。
+// 子文件：common/color/blackbody.slang。
+// 颜色模块黑体近似：按色温拟合 RGB，再转线性显示色。
+// 调用位置：由 `common/color.slang` 内联引入，光源色与调试色温共用。
+// 可复制示例：`vec3 c = ogxBlackbodyApprox(6500.0);`
+// 设计原因与取舍：这是 Eclipse 的拟合曲线，与数学模块的普朗克轨迹版不同。
+
+// Eclipse 黑体色：按温度拟合 RGB，再转线性；和普朗克轨迹版是两个不同近似。
+vec3 ogxBlackbodyApprox(float temperature)
+{
+    float t = pow(temperature, -1.5); // 高温项。
+    float lt = log(temperature); // 对数项。
+    vec3 col = vec3(0.0); // 逐通道拟合结果。
+    col.x = 220000.0 * t + 0.58039215686; // 红通道。
+    col.y = 0.39231372549 * lt - 2.44549019608; // 绿通道低温段。
+    col.y = temperature > 6500.0 ? 138039.215686 * t + 0.72156862745 : col.y; // 高温段换拟合。
+    col.z = 0.76078431372 * lt - 5.68078431373; // 蓝通道。
+    col = ogxSaturate(col); // 先夹紧到零到一。
+    col = temperature < 1000.0 ? col * temperature * 0.001 : col; // 极低温按比例压暗。
+    return ogxSrgbToLinear(col); // 最后转线性。
+}
+
 #endif
 
 /*
@@ -1554,7 +1636,7 @@ mat3 ogxAgxConfigurable1Mat3()
 */
 /*
 Omni 通用图形库采样模块：蓝噪声、时间抖动、拜尔抖动、纹理平滑过滤、旋转网格超采样与抗锯齿抖动序列。
-调用位置：任何需要每像素或每帧不同采样偏移的程序；Minecraft 光影由 `/omni-gfx/sampling.glsl` 引入。
+调用位置：任何需要每像素或每帧不同采样偏移的程序；Minecraft 光影由 `/omni-gfx/common/sampling.glsl` 引入。
 可复制示例：
     vec2 n = ogxBlueNoise(noiseTexture, ivec2(pixel)); // 取一张蓝噪声。
     float d = ogxBayerTemporal(ivec2(pixel), 0); // 取每帧变化的拜尔值。
@@ -1769,15 +1851,18 @@ vec3 ogxColorDither(vec3 color, vec2 texCoord, float frameTime, int mode)
 */
 /*
 Omni 通用图形库各向异性过滤模块：按屏幕导数构造椭圆核，沿长轴取多个样本。
-调用位置：斜视地面、水面与任何需要保持贴图细节的地形取样；由 `/omni-gfx/sampling/anisotropic.glsl` 引入。
+调用位置：斜视地面、水面与任何需要保持贴图细节的地形取样；由 `/omni-gfx/common/sampling/anisotropic.glsl` 引入。
 可复制示例：
     vec4 albedo = ogxSampleAnisotropic(tex, normals, specular, coord, duv1, duv2, atlasSize, 256.0, 4, true, true, true, normalTex, specularTex); // 做各向异性过滤。
 设计原因与取舍：
     导数只在片元阶段可用，因此本文件不并入基础采样模块；基础模块会被顶点与阴影程序引用。
     椭圆核、长轴步进与法线/材质加权保持参考实现，纹理和 atlas 尺寸全部显式传入。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。各向异性过滤目前只有编译探针覆盖，还没有顶层采样入口。
 */
 #ifndef OGX_SAMPLING_ANISOTROPIC_INCLUDED
 #define OGX_SAMPLING_ANISOTROPIC_INCLUDED
+
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
 // 各向异性采样：按屏幕导数构造椭圆核，沿长轴取多个样本做过滤，避免斜视时贴图糊成一片。
 // `quality` 是每像素样本数，`normalSpecular` 为真时同时过滤法线与材质图。
@@ -1840,7 +1925,7 @@ vec4 ogxSampleAnisotropic(sampler2D tex, sampler2D normals, sampler2D specular, 
 */
 /*
 Omni 通用图形库噪声模块：整数哈希、二维与三维值噪声、分形叠加。
-调用位置：云、雾、水面细节与测试世界的地形着色；Minecraft 光影由 `/omni-gfx/noise.glsl` 引入。
+调用位置：云、雾、水面细节与测试世界的地形着色；Minecraft 光影由 `/omni-gfx/common/noise.glsl` 引入。
 可复制示例：
     float n = ogxValueNoise3(position * 0.1); // 取一个平滑的三维噪声。
     float f = ogxFbm2(uv * 4.0, 4); // 四层二维分形噪声。
@@ -2071,7 +2156,7 @@ float ogxFogNoise(vec3 position, sampler2D noiseTexture)
 */
 /*
 Omni 通用图形库相机变换模块：屏幕、视空间、世界空间、阴影空间与远景投影的显式换算。
-调用位置：任何需要把深度图还原成位置、把世界点投到阴影图的程序；Minecraft 光影由 `/omni-gfx/camera.glsl` 引入。
+调用位置：任何需要把深度图还原成位置、把世界点投到阴影图的程序；Minecraft 光影由 `/omni-gfx/common/camera.glsl` 引入。
 可复制示例：
     vec3 viewPos = ogxViewPosFromScreenPos(coord, depth, jitter, 0.5, projectionInverse, true);
     vec3 shadowPos = ogxShadowScreenPosDistorted(worldPos, shadowView, shadowProjection, 0.9);
@@ -2123,11 +2208,64 @@ float ogxLinearDepthFromScreenDepth(float depth, mat4 projectionInverse)
     return 1.0 / (depth * projectionInverse[2][3] + projectionInverse[3][3]); // 逆投影深度部分。
 }
 
-// 米制距离换屏幕深度的函数在后期模块已有同式实现，这里不重复定义，避免同一编译单元重名。
+// 米制距离换屏幕深度：与上一函数互逆，后期景深把模糊后的距离写回深度缓冲时用。
+float ogxScreenDepthFromLinearDepth(float depth, mat4 projectionInverse)
+{
+    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 解出负一到一深度。
+    return depth * 0.5 + 0.5; // 转回零到一。
+}
+
+// 显式取一像素深度：抗锯齿与反射共用同一种取格写法，避免每个模块各写一份。
+float ogxSampleDepthFetch(sampler2D depthTexture, ivec2 coord)
+{
+    return texelFetch(depthTexture, coord, 0).x; // 取零号层级的单个深度值。
+}
+
+// 参考实现的深度线性化：近远平面把屏幕深度换回米制距离。
+float ogxLinearizeDepth(float depth, float nearPlane, float farPlane)
+{
+    return (2.0 * nearPlane) / (farPlane + nearPlane - depth * (farPlane - nearPlane)); // 参考实现的分式。
+}
+
+// 阴影相机空间里的位置：先做视图变换，再按正交投影缩放并把深度折半。
+// 为什么深度取半：阴影图存的是裁剪空间到零到一的压缩值，后面所有比较都按同一尺度进行。
+vec3 ogxShadowViewPos(vec3 worldPos, mat4 shadowView, mat4 shadowProjection)
+{
+    vec3 shadowPos = ogxMatrixMulPoint(shadowView, worldPos) + ogxMatrixTranslation(shadowView); // 世界位置转到阴影相机空间。
+    float scale = shadowProjection[0][0]; // 正交投影的水平缩放，横纵相同。
+    shadowPos *= vec3(scale, scale, -scale * 0.5); // 按投影缩放，深度取半。
+    return shadowPos; // 返回阴影相机空间的坐标。
+}
+
+// 投到阴影图，不做边缘压缩：坐标范围仍是负一到一。
+vec3 ogxShadowScreenPos(vec3 worldPos, mat4 shadowView, mat4 shadowProjection)
+{
+    return ogxShadowViewPos(worldPos, shadowView, shadowProjection) * 0.5 + 0.5; // 负一到一转成零到一。
+}
+
+// 投到阴影图并做边缘压缩：离中心越远压得越紧，边缘纹素因此覆盖更小的实际范围。
+vec3 ogxShadowScreenPosDistorted(vec3 worldPos, mat4 shadowView, mat4 shadowProjection, float bias)
+{
+    vec3 shadowPos = ogxShadowViewPos(worldPos, shadowView, shadowProjection); // 先转到阴影相机空间。
+    float dist = length(shadowPos.xy); // 到阴影图中心的距离。
+    float distortFactor = (1.0 - bias) + dist * bias; // 边缘压缩系数，中心为一。
+    shadowPos.xy *= 0.95 / distortFactor; // 向内压缩，零点九五留出边界余量。
+    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一。
+}
+
+// 读取端补一次边缘压缩：写入端压过的坐标，读取时必须按同一系数还原。
+vec2 ogxDistortShadowPos(vec2 shadowPos, float bias)
+{
+    shadowPos = shadowPos * 2.0 - 1.0; // 零到一先转回负一到一。
+    float dist = length(shadowPos.xy); // 到中心距离。
+    float distortFactor = (1.0 - bias) + dist * bias; // 与写入端同一压缩系数。
+    shadowPos *= 0.95 / distortFactor; // 同一压缩量。
+    return shadowPos * 0.5 + 0.5; // 再转回零到一。
+}
 
 // 远景屏幕坐标与深度还原远景视空间位置：用完整矩阵乘，远景投影不一定只有对角项。
 // 为什么用完整矩阵：远景投影可能带非对角项，只取对角项会在视野边缘把位置放大或缩小。
-vec3 ogxViewPosFromScreenPosDh(vec2 coord, float depth, vec2 taaJitter, bool useJitter, mat4 dhProjectionInverse)
+vec3 ogxViewPosFromScreenPosDistant(vec2 coord, float depth, vec2 taaJitter, bool useJitter, mat4 dhProjectionInverse)
 {
     if (useJitter) coord -= taaJitter * 0.5; // 参考只减半个抖动像素，与近景同一口径。
     vec3 ndc = vec3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
@@ -2140,7 +2278,7 @@ vec3 ogxViewPosFromScreenPosDh(vec2 coord, float depth, vec2 taaJitter, bool use
 }
 
 // 不做抖动修正的远景逆投影：屏幕空间追踪已经自己处理过抖动，这里不能再减。
-vec3 ogxViewPosFromScreenPosRawDh(vec2 coord, float depth, mat4 dhProjectionInverse)
+vec3 ogxViewPosFromScreenPosRawDistant(vec2 coord, float depth, mat4 dhProjectionInverse)
 {
     vec3 ndc = vec3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
     vec4 clip = vec4(ndc, 1.0); // 齐次坐标。
@@ -2152,7 +2290,7 @@ vec3 ogxViewPosFromScreenPosRawDh(vec2 coord, float depth, mat4 dhProjectionInve
 }
 
 // 远景视空间位置投到屏幕，可选补抖动。
-vec3 ogxScreenPosFromViewPosDh(vec3 viewPos, vec2 taaJitter, bool useJitter, mat4 dhProjection)
+vec3 ogxScreenPosFromViewPosDistant(vec3 viewPos, vec2 taaJitter, bool useJitter, mat4 dhProjection)
 {
     vec3 screenPos = vec3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + ogxMatrixTranslation(dhProjection); // 远景投影对角项与平移列。
     screenPos = screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法。
@@ -2161,28 +2299,28 @@ vec3 ogxScreenPosFromViewPosDh(vec3 viewPos, vec2 taaJitter, bool useJitter, mat
 }
 
 // 不补抖动的远景投影：追踪结果要落在未抖动的像素格上。
-vec3 ogxScreenPosFromViewPosRawDh(vec3 viewPos, mat4 dhProjection)
+vec3 ogxScreenPosFromViewPosRawDistant(vec3 viewPos, mat4 dhProjection)
 {
     vec3 screenPos = vec3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + ogxMatrixTranslation(dhProjection); // 远景投影对角项与平移列。
     return screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法后回到零到一。
 }
 
 // 远景屏幕深度换米制距离。
-float ogxLinearDepthFromScreenDepthDh(float depth, mat4 dhProjectionInverse)
+float ogxLinearDepthFromScreenDepthDistant(float depth, mat4 dhProjectionInverse)
 {
     depth = depth * 2.0 - 1.0; // 零到一转负一到一。
     return 1.0 / (depth * dhProjectionInverse[2][3] + dhProjectionInverse[3][3]); // 远景逆投影深度部分。
 }
 
 // 米制距离换远景屏幕深度。
-float ogxScreenDepthFromLinearDepthDh(float depth, mat4 dhProjectionInverse)
+float ogxScreenDepthFromLinearDepthDistant(float depth, mat4 dhProjectionInverse)
 {
     depth = (1.0 / depth - dhProjectionInverse[3][3]) / dhProjectionInverse[2][3]; // 解出负一到一深度。
     return depth * 0.5 + 0.5; // 转回零到一。
 }
 
 // 远景屏幕深度换成同一距离在近景投影下的屏幕深度：先换米，再用近景投影换回。
-float ogxScreenDepthFromDhScreenDepth(float depth, mat4 dhProjectionInverse, mat4 projectionInverse)
+float ogxScreenDepthFromDistantScreenDepth(float depth, mat4 dhProjectionInverse, mat4 projectionInverse)
 {
     depth = depth * 2.0 - 1.0; // 远景零到一转负一到一。
     depth = 1.0 / (depth * dhProjectionInverse[2][3] + dhProjectionInverse[3][3]); // 换成米。
@@ -2190,39 +2328,9 @@ float ogxScreenDepthFromDhScreenDepth(float depth, mat4 dhProjectionInverse, mat
     return depth * 0.5 + 0.5; // 转回零到一。
 }
 
-// 阴影相机空间位置：视图变换后按正交投影缩放，深度折半。
-vec3 ogxShadowViewPosExplicit(vec3 worldPos, mat4 shadowView, mat4 shadowProjection)
-{
-    vec3 shadowPos = ogxMatrixMulPoint(shadowView, worldPos) + ogxMatrixTranslation(shadowView); // 世界位置转阴影相机空间。
-    float scale = shadowProjection[0][0]; // 正交投影的水平缩放。
-    return shadowPos * vec3(scale, scale, -scale * 0.5); // 按投影缩放，深度折半。
-}
 
-// 世界位置投到阴影图，不做边缘压缩。
-vec3 ogxShadowScreenPosExplicit(vec3 worldPos, mat4 shadowView, mat4 shadowProjection)
-{
-    return ogxShadowViewPosExplicit(worldPos, shadowView, shadowProjection) * 0.5 + 0.5; // 负一到一转零到一。
-}
 
-// 世界位置投到阴影图并做边缘压缩，`bias` 是压缩强度。
-vec3 ogxShadowScreenPosDistortedExplicit(vec3 worldPos, mat4 shadowView, mat4 shadowProjection, float bias)
-{
-    vec3 shadowPos = ogxShadowViewPosExplicit(worldPos, shadowView, shadowProjection); // 先转到阴影相机空间。
-    float dist = length(shadowPos.xy); // 到阴影图中心距离。
-    float distortFactor = (1.0 - bias) + dist * bias; // 边缘压缩系数。
-    shadowPos.xy *= 0.95 / distortFactor; // 向内压缩。
-    return shadowPos * 0.5 + 0.5; // 转成零到一。
-}
 
-// 读取端补一次边缘压缩，与写入端使用同一个 `bias`。
-vec2 ogxDistortShadowPosExplicit(vec2 shadowPos, float bias)
-{
-    shadowPos = shadowPos * 2.0 - 1.0; // 零到一转负一到一。
-    float dist = length(shadowPos.xy); // 到中心距离。
-    float distortFactor = (1.0 - bias) + dist * bias; // 同一压缩系数。
-    shadowPos *= 0.95 / distortFactor; // 同一压缩量。
-    return shadowPos * 0.5 + 0.5; // 再转回零到一。
-}
 
 // 通用投影：取矩阵的对角项与最后两列，与参考实现的 `projMAD` 逐项一致。
 vec4 ogxProject(mat4 m, vec3 pos)
@@ -2303,7 +2411,7 @@ vec3 ogxToShadowSpaceProjected(vec3 p3, mat4 modelViewInverse, mat4 shadowView, 
 }
 
 // 远景屏幕坐标还原视空间：近景深度与远景深度分两条路。
-vec3 ogxToScreenSpaceDh(vec2 texcoord, float depth, float dhDepth, mat4 projectionInverse, mat4 dhProjectionInverse)
+vec3 ogxToScreenSpaceDistant(vec2 texcoord, float depth, float dhDepth, mat4 projectionInverse, mat4 dhProjectionInverse)
 {
     if (depth < 1.0) // 近景像素用近景逆投影。
     {
@@ -2313,14 +2421,14 @@ vec3 ogxToScreenSpaceDh(vec2 texcoord, float depth, float dhDepth, mat4 projecti
 }
 
 // 视空间位置投到裁剪空间，可按 `depthCheck` 选择远景矩阵。
-vec3 ogxToClipSpace3Dh(vec3 viewSpacePosition, bool depthCheck, mat4 projection, mat4 dhProjection)
+vec3 ogxToClipSpace3Distant(vec3 viewSpacePosition, bool depthCheck, mat4 projection, mat4 dhProjection)
 {
     mat4 projectionMatrix = depthCheck ? dhProjection : projection; // 按开关选矩阵。
     return ogxProjectAndDivide(projectionMatrix, viewSpacePosition) / -viewSpacePosition.z * 0.5 + 0.5; // 与近景同一算式。
 }
 
 // 远景阴影投影微调：把投影的远平面改成两倍远景距离，其余项保留。
-mat4 ogxDhShadowProjectionTweak(mat4 projection, float farPlane, float dhFarPlane, bool enabled)
+mat4 ogxDistantShadowProjectionTweak(mat4 projection, float farPlane, float dhFarPlane, bool enabled)
 {
     if (!enabled) return projection; // 开关关闭时原样返回。
     float tweakFar = 3.0 * farPlane; // 近景默认远平面。
@@ -2337,11 +2445,6 @@ vec3 ogxGetLpvPosition(vec3 worldPos, vec3 lpvOrigin, float voxelSize)
     return (worldPos - lpvOrigin) / voxelSize; // 换到体积格坐标。
 }
 
-// 深度约定交换：参考实现只把屏幕深度转成线性距离，不做数值变换。
-float ogxSwapperlinZ2(float depth, float nearPlane, float farPlane)
-{
-    return (2.0 * nearPlane) / (farPlane + nearPlane - depth * (farPlane - nearPlane)); // 参考实现的分式。
-}
 
 // 快速深度线性化：Eclipse 的屏幕深度转米制距离。
 float ogxInvertLinearizeDepthFast(float z, float nearPlane, float farPlane)
@@ -2543,26 +2646,7 @@ float ogxSpotShape(float r, float fov)
     return shape; // 零到一的光斑强度。
 }
 
-// 手电筒指向：打开相机平滑时按两个平滑角度滞后于视角，否则始终朝相机正前方。
-// 为什么单独成函数：光照与高光两处要同一个方向，分开写容易在改动时只改到一处。
-vec3 ogxFlashlightAimDirection(float eyeRx, float eyeRy, float smoothTime, bool cameraSmooth)
-{
-    if (!cameraSmooth) return vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
-    float angleRx = eyeRx * -smoothTime; // 俯仰角按过渡时长滞后。
-    float angleRy = eyeRy * -smoothTime; // 偏航角按过渡时长滞后。
-    mat3 rx = mat3(1.0, 0.0, 0.0, 0.0, cos(angleRx), sin(angleRx), 0.0, -sin(angleRx), cos(angleRx)); // 俯仰旋转。
-    mat3 ry = mat3(cos(angleRy), 0.0, -sin(angleRy), 0.0, 1.0, 0.0, sin(angleRy), 0.0, cos(angleRy)); // 偏航旋转。
-    return ogxMatrix3MulPoint(ry, ogxMatrix3MulPoint(rx, vec3(0.0, 0.0, -1.0))); // 合成旋转后的光束指向。
-}
 
-// 手持光：按物品的光色、照明半径与到相机的距离算一个球形光源。
-// `relativeEye` 是相机小数偏移，`playerPos` 是相机相对位置；两者相加才是到光源的真实距离。
-vec3 ogxHandLight(vec3 lightColor, float lightRange, vec3 playerPos, vec3 relativeEye)
-{
-    float dist = length(playerPos + relativeEye); // 到手持光源的距离。
-    float falloff = pow(1.0 - dist / lightRange, 3.0); // 线性衰减再取三次方。
-    return lightColor * max(falloff, 0.0); // 范围外为零。
-}
 
 // Eclipse 间接光：天光按一条抬高次方的曲线缩放，再混入最低环境光。
 // `minAmount` 与 `minAmountInside` 分别是室外、室内的最低光比例，`nightVision` 是夜视附加量。
@@ -2695,7 +2779,7 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
     `OgxOceanWaveSum sum = ogxOceanWaveSum(vec2(0.0), t, ogxOceanWavesDefault());` 迭代正弦海洋。
     `float h = ogxOceanWaveHeight(sum, 13.0, 1.0);` 归一化后的波高。
 设计原因与取舍：
-    波形来自旧 `shaders/gfx/water.glsl` 的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
+    波形来自迁移前 GLSL 原型的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
     只做单层水面，但保留长波、斜波、短波与细波纹四级，远处自动淡出高频，避免闪烁。
     反射与折射颜色由调用方传入，库不读取立方体贴图或屏幕纹理，因此能同时服务 Iris 与独立测试世界。
 */
@@ -2704,6 +2788,7 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
 
 // 数学模块提供菲涅尔、GGX 高光与夹紧，噪声模块打散规则波列。
 
+// 噪声提供哈希、分形与云团细节。
 
 // 一组水面光学参数；不同水体换字段即可，不必改波形与着色顺序。
 struct OgxWater
@@ -2717,10 +2802,15 @@ struct OgxWater
     float refraction; // 屏幕折射偏移强度。
 };
 
-// 默认水体：偏青的浅水、深蓝的深水，红光吸收最快。
-
 // 波法线、菲涅尔、吸收与岸边，具体实现在子文件。
 // 子文件：water/waves.slang。
+/*
+水面子文件：默认水体参数、解析方向波、Gerstner 波、菲涅尔、吸收、折射与水面着色。
+调用位置：由 `water.slang` 内联，水面效果与反射共用这里的法线和吸收曲线。
+可复制示例：`vec3 n = ogxWaterNormal(position, time, distance, 1.0, 1.0);`
+设计原因与取舍：波形是解析函数，不依赖噪声贴图；距离淡出与参考常数逐项一致。
+*/
+// 默认水体：偏青的浅水、深蓝的深水，红光吸收最快。
 OgxWater ogxWaterDefault()
 {
     OgxWater water; // 先声明再填写字段。
@@ -2837,7 +2927,7 @@ vec3 ogxWaterShade(OgxWater water, vec3 normal, vec3 viewDirection, vec3 sunDire
 }
 
 // 平滑噪声取样：先把坐标吸到最近的纹素中心，再用三次曲线改写小数部分，得到不会闪的平滑噪声。
-// 与旧 `shaders/gfx/water.glsl` 的算式一致，波纹形状因此不变。
+// 与迁移前的 GLSL 原型算式一致，波纹形状因此不变。
 vec4 ogxTextureSmooth(sampler2D noiseTexture, vec2 coord)
 {
     coord *= 64.0; // 放大到六十四格，再按格取平滑。
@@ -2949,6 +3039,12 @@ vec2 ogxWaterRefractionCoord(bool isWater, vec3 normal, vec3 viewPos, vec3 waveN
 
 // 水洼、雨纹与焦散，具体实现在子文件。
 // 子文件：water/rain.slang。
+/*
+水面子文件：水洼覆盖、雨点高光、水下雾、雨纹动画、波纹法线与焦散。
+调用位置：由 `water.slang` 内联，水面、雨天与水下效果调用这里的入口。
+可复制示例：`float p = ogxPuddleCoverage(halfWet, noise, size);`
+设计原因与取舍：湿度、噪声与时间显式传入，纹理由调用方绑定；雨量与参考常数保持一致。
+*/
 // 水洼覆盖：只有湿度超过噪声阈值的地方才积水，五次方让边缘收得很快。
 float ogxPuddleCoverage(float halfWet, float noise, float size)
 {
@@ -3084,6 +3180,12 @@ struct OgxOceanWaves
 
 // 海浪、泡沫与凹凸法线，具体实现在子文件。
 // 子文件：water/ocean.slang。
+/*
+水面子文件：海洋波参数、逐层波高与方向、海洋法线、泡沫与整像素着色。
+调用位置：由 `water.slang` 内联，水面效果与测试世界直接调用这里的海洋入口。
+可复制示例：`OgxOceanPixel p = ogxOceanPixel(position, 1.0, 13.0, time, waves, ...);`
+设计原因与取舍：层数、拖拽与频率全部显式传入；累加顺序照参考保留，默认海面形状不变。
+*/
 // 默认参数：iterationT 海洋扩展的常数，调用方只改真正要变的那几个字段。
 OgxOceanWaves ogxOceanWavesDefault()
 {
@@ -3240,14 +3342,6 @@ OgxOceanPixel ogxOceanPixel(vec2 position, float factor, float iterations, float
     return pixel; // 交回完整数据。
 }
 
-// 涟漪专用标量哈希：与 Eclipse `ripples.glsl` 的 `hash12` 保持同一组常数。
-// 为什么不用噪声模块的 `ogxHash12`：那个哈希混入了另一组偏移，值噪声依赖它；涟漪要照原图逐项复现，不能换。
-float ogxRippleHash12(vec2 p)
-{
-    vec3 p3 = fract(vec3(p.x, p.y, p.x) * 0.1031); // 两个坐标扩成三个分量。
-    p3 += dot(p3, p3.yzx + 19.19); // 三个分量互相混合。
-    return fract((p3.x + p3.y) * p3.z); // 取小数部分。
-}
 
 // Eclipse 雨点涟漪：九个格子的雨滴各自扩散出圆环，取梯度得到法线。
 // `intensity` 控制每格大小，`time` 是累积秒数；九个方向相加后归一，结果与参考实现相同。
@@ -3264,7 +3358,7 @@ vec3 ogxRainRipples(vec2 fragCoord, float time, float intensity)
         {
             vec2 pi = p0 + vec2(float(i), float(j)); // 邻格坐标。
             vec2 p = pi + ogxHash22(pi); // 雨点落在格内随机位置。
-            float t = fract(0.9 * time + ogxRippleHash12(pi)); // 这一滴的扩散相位。
+            float t = fract(0.9 * time + ogxHash12(pi)); // 这一滴的扩散相位。
             vec2 v = p - uv; // 从雨点到当前像素。
             float d = length(v) - 2.0 * t * sizeCompensation; // 圆环半径随时间扩大。
             float d1 = d - 0.01; // 前后两个采样点。
@@ -3542,6 +3636,7 @@ Omni 通用图形库视差模块：在地表材质的高度图上沿视线找可
 
 // 数学模块提供法线解码、夹紧与位运算近似；采样模块提供时间蓝噪声。
 
+// 采样提供白噪声、蓝噪声与低差异序列。
 
 // 把向量转到切线空间：显式按切线基的三个列向量点乘。
 // 为什么不用矩阵乘：Slang 与 GLSL 的行列顺序不同，写成矩阵会在两个后端得到不同结果；
@@ -3825,6 +3920,7 @@ Omni 通用图形库行星模块：用解析射线画出整颗行星、光环与
 
 // 数学提供求交、圆盘剖面与色温，大气提供米氏相位与行星双向反射。
 
+// 大气提供散射、密度剖面与天球映射。
 /*
 生成文件：大气模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
@@ -3839,7 +3935,7 @@ Omni 通用图形库大气模块：球面几何、密度剖面、单次散射与
     vec3 s = ogxAtmosphereSky(a, 0.03, viewDir, sunDir, 10); // 算天空颜色。
     vec3 h = ogxAerialPerspective(a, 0.03, viewDir, 1.5, sunDir, 5, t2); // 算远景空气散射。
 设计原因与取舍：
-    公式来自旧 `shaders/gfx/atmosphere.glsl` 的球面几何与密度剖面，并补上可独立运行的单次散射积分。
+    公式来自迁移前 GLSL 原型的球面几何与密度剖面，并补上可独立运行的单次散射积分。
     不读取预计算贴图，换机器与不启动 Minecraft 都能得到同一片天空；代价是每像素多几次指数运算。
     长度单位统一为公里，避免行星半径用米时 float 精度不足；调用方把米乘零点零零一。
     太阳与月亮方向、散射系数、行星半径全部由调用方传入，库不读取任何引擎状态。
@@ -3865,10 +3961,15 @@ struct OgxAtmosphere
     float sunIntensity; // 太阳辐照度的整体倍率。
 };
 
-// 地球参数：海平面半径六千三百六十公里，层顶八十公里，数值与旧库一致。
-
 // 行星大气、密度与单次散射，具体实现在子文件。
 // 子文件：atmosphere/atmosphere/scattering.slang。
+/*
+大气子文件：地球大气常数、臭氧与密度剖面、光线与球壳求交、光学深度与单次散射。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，供天空查表与空气透视使用。
+可复制示例：`vec3 sky = ogxAtmosphereSky(ogxAtmosphereEarth(), 0.0, viewDir, sunDir, 16);`
+设计原因与取舍：常数集中在地球默认值，其他行星可换结构体字段；步数与方向全部显式传入。
+*/
+// 地球默认大气：海平面半径六千三百六十公里，层顶八十公里，数值与参考一致。
 OgxAtmosphere ogxAtmosphereEarth()
 {
     OgxAtmosphere air; // 先声明再逐项填写，Slang 与 GLSL 都支持这种写法。
@@ -4093,6 +4194,12 @@ vec3 ogxAerialPerspective(OgxAtmosphere air, float cameraAltitude, vec3 viewDire
 
 // 太阳圆盘、球面求交与星场，具体实现在子文件。
 // 子文件：atmosphere/atmosphere/sun.slang。
+/*
+大气子文件：太阳与月亮圆盘、球壳距离、指数密度、星场与卫星轨道。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，天空与末地星空共用这里的圆盘和星点。
+可复制示例：`float disc = ogxSunDisc(viewDir, sunDir, 5e-5, 4e4);`
+设计原因与取舍：圆盘只返回遮罩或颜色，曝光与泛光由调用方处理；常数照参考保留。
+*/
 // 太阳圆盘：视线越接近太阳方向越亮，边缘用平滑曲线收口。
 float ogxSunDisc(vec3 viewDirection, vec3 sunDirection, float size, float hardness)
 {
@@ -4114,7 +4221,7 @@ vec3 ogxSunDiscFixed(vec3 worldDir, vec3 sunDir)
 }
 
 // 球面几何的另一种写法：只给半径与高度角余弦，省掉每次重建起点向量。
-// 与旧 `shaders/gfx/atmosphere.glsl` 的算式逐项一致，供预计算查表的坐标映射使用。
+// 与迁移前 GLSL 原型的算式逐项一致，供预计算查表的坐标映射使用。
 float ogxSphereDistanceToTop(float r, float mu, float topRadius)
 {
     float discriminant = r * r * (mu * mu - 1.0) + topRadius * topRadius; // 交点判别式。
@@ -4296,6 +4403,12 @@ float ogxStarsColored(vec3 viewPos, float brightness, float amount, out vec3 sta
 
 // 天空映射、云图与月盘，具体实现在子文件。
 // 子文件：atmosphere/atmosphere/mapping.slang。
+/*
+大气子文件：天球对齐、日月圆盘、天空盒坐标、云图集取样、极光与彩虹。
+调用位置：由 `atmosphere/atmosphere.slang` 按顺序内联，供大气、天空与云模块共用。
+可复制示例：`vec3 d = ogxAlignToSunAxis(worldDir, sunVector);`
+设计原因与取舍：只做方向与坐标换算，颜色、强度与天气由调用方传入；常数照参考保留。
+*/
 // 把视线方向绕太阳轴旋转对齐天球：罗德里格旋转公式，太阳方向由调用方传入。
 // 这样星场会跟着太阳的年周期转，而不是固定在天球上。
 vec3 ogxAlignToSunAxis(vec3 worldDir, vec3 sunVector)
@@ -4443,6 +4556,12 @@ vec3 ogxRainbow(vec3 color, vec3 direction, vec3 sunDirection, float wetness, fl
 
 // 行星 BRDF 与 Eclipse 天空近似，具体实现在子文件。
 // 子文件：atmosphere/atmosphere/planet.slang。
+/*
+大气子文件：行星表面双向反射、行星环噪声、相函数、空气质量与星光。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，末地天空与大气查表复用这里的相函数。
+可复制示例：`vec3 c = ogxPlanetBrdf(albedo, normal, eyeDir, lightDir);`
+设计原因与取舍：只接收显式参数，行星半径与反照率由调用方给出；算式逐项照参考保留。
+*/
 // 钱德拉塞卡近似：各项同性散射的倍增因子，反照率越高、余弦越大越亮。
 vec3 ogxChandrasekharH(vec3 albedo, float a)
 {
@@ -4667,8 +4786,7 @@ void ogxPlanetEnd(inout vec3 color, vec3 eye, vec3 rayDir, vec3 lightDir,
 // iterationT 末地天空的 p 曲线：四次方乘一次线性衰减，末端回到零。
 float ogxEndSkyPCurve(float x)
 {
-    float x2 = x * x; // 平方。
-    return 12.207 * x2 * x2 * (1.0 - x); // 四次方乘剩余量。
+    return ogxRadialCurve(x); // 环形径向轮廓只在数学模块维护一份。
 }
 
 #endif
@@ -4696,6 +4814,7 @@ Omni 通用图形库吸积盘模块：沿视线在黑洞附近步进，累加盘
 
 // 数学提供黑体、旋转、径向轮廓与空间扭曲，雾模块提供分形噪声。
 
+// 雾提供高度密度、相位与粉末效应。
 /*
 生成文件：雾模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
@@ -4710,7 +4829,7 @@ Omni 通用图形库雾模块：高度衰减、噪声雾团、粉末效应、混
     vec4 r = ogxFogMarch(f, camKm, worldKm, sunDir, sunColor, j, 10); // 沿视线积分雾。
     c = ogxFogApply(c, r); // 把雾合成到颜色。
 设计原因与取舍：
-    密度剖面与相位来自旧 `shaders/gfx/fog.glsl` 的 `gfx_fog_density_height`、`gfx_fog_density_noise`
+    密度剖面与相位来自迁移前 GLSL 原型的 `gfx_fog_density_height`、`gfx_fog_density_noise`
     与 `gfx_fog_phase`，把纹理噪声换成程序化值噪声，保持雾团边缘与高度衰减的手感。
     步数与抖动由调用方给出，库不读取天气、选项或宿主时间；返回预乘散射色与剩余透过率，
     调用方按自己的混合顺序合成，避免和大气散射重复叠加。
@@ -4720,6 +4839,7 @@ Omni 通用图形库雾模块：高度衰减、噪声雾团、粉末效应、混
 
 // 数学提供相函数，噪声提供雾团形状。
 
+// 噪声提供哈希、分形与云团细节。
 
 // 一层低空雾的参数；不同群系或天气换字段即可。
 struct OgxFog
@@ -4734,10 +4854,15 @@ struct OgxFog
     float sunStrength; // 阳光在雾里的散射强度。
 };
 
-// 默认低空雾：贴地薄雾，密度适中，云影下会自然变暗。
-
 // 高度雾、噪声雾与沿视线积分，具体实现在子文件。
 // 子文件：fog/fog/density.slang。
+/*
+雾子文件：默认雾参数、高度密度、噪声雾团、相位、粉末效应与单次步进。
+调用位置：由 `fog/fog.slang` 内联，主世界、下界与末地的雾效果共用这里的密度曲线。
+可复制示例：`float d = ogxFogDensity(ogxFogDefault(), worldPos);`
+设计原因与取舍：密度只依赖位置与参数，天气与光源颜色由调用方乘进来；噪声层数照参考固定。
+*/
+// 默认低空雾：贴地薄雾，密度适中，云影下会自然变暗。
 OgxFog ogxFogDefault()
 {
     OgxFog fog; // 先声明再填写字段。
@@ -4918,24 +5043,6 @@ float ogxCloudFbm(vec3 position, vec3 shift, sampler2D noiseTexture, float noise
     return accum + octShift; // 返回归一化后的噪声。
 }
 
-// 云状分形噪声的低质量版本：三层、每层权重衰减零点九、频率乘二，供远景或低画质使用。
-// 与 `ogxCloudFbm` 分开保留，因为层数和衰减常数不同，不能用一个参数偷偷替换参考路径。
-float ogxCloudFbmLq(vec3 position, vec3 shift, sampler2D noiseTexture, float noiseResolution)
-{
-    const int octaves = 3; // 三层。
-    const float octAlpha = 0.9; // 每层权重衰减。
-    const float octScale = 2.0; // 每层频率倍数。
-    const float octShift = (octAlpha / octScale) / float(octaves); // 层间偏移。
-    float accum = 0.0; // 累积噪声。
-    float alpha = 0.5; // 第一层权重。
-    for (int i = 0; i < octaves; i++) // 逐层叠加。
-    {
-        accum += alpha * ogxEnd3dNoise(position, noiseTexture, noiseResolution); // 加这一层。
-        position = (position + shift) * octScale; // 抬高频率并错开时间。
-        alpha *= octAlpha; // 权重衰减。
-    }
-    return accum + octShift; // 返回归一化后的噪声。
-}
 
 // 下界雾的单格密度：世界坐标折成三维格子，再查二维噪声图。
 float ogxNetherFogDensityAt(vec3 pos, sampler2D noiseTexture)
@@ -4968,6 +5075,12 @@ float ogxNetherFogCloudVolume(vec3 pos, float time, sampler2D noiseTexture)
 
 // 末地涡旋、群系与下界雾，具体实现在子文件。
 // 子文件：fog/fog/end.slang。
+/*
+雾子文件：末地漩涡雾、群系雾色与密度、原版雾、选择框和末地阴影形状。
+调用位置：由 `fog/fog.slang` 内联，末地天空与雾效果直接调用这里的入口。
+可复制示例：`vec4 fog = ogxEndVortexFog(cameraPos, worldDir, viewDist, dither, 12, 2.0, 128.0, ...);`
+设计原因与取舍：群系权重与光源位置显式传入，不读取宿主群系表；漩涡形状与参考采样顺序一致。
+*/
 // 末地雾形状与光源相位的提前声明：定义放在文件后半段。
 float ogxEndVortexShape(vec3 pos, float time, sampler2D noiseTexture, float noiseResolution);
 float ogxEndVortexLightPhase(vec3 pos);
@@ -5256,8 +5369,7 @@ void ogxBiomeFogDensityReference(inout vec4 uniformDensity, inout vec4 cloudyDen
 // Eclipse 末地雾的相函数：与云相函数同形，但常数用 3.14 而不是 pi，保留参考精度。
 float ogxEndFogPhaseAnisotropic(float x, float g)
 {
-    float gg = g * g; // g 的平方。
-    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考实现直接写 3.14。
+    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考实现直接写 3.14，保留同一精度。
 }
 
 // iterationT 的原版雾叠加：黑暗、失明、水下与岩浆四种状态分别压暗画面。
@@ -5530,12 +5642,14 @@ Omni 通用图形库 G-buffer 解码模块：把多张中间画面还原成表�
     这样算法本身不依赖 Minecraft，调用方仍可按自己的缓冲布局填写。
     `GetGbufferData` 的每一行读取顺序与参考实现一致；材质编号只通过 `OgxMaterialIdTable`
     传入，避免把资源包的编号约定写死进通用库。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。延迟缓冲解码目前只有探针覆盖，宿主仍直接读取附件布局。
 */
 #ifndef OGX_GBUFFER_INCLUDED
 #define OGX_GBUFFER_INCLUDED
 
 // 表面模块提供 labPBR 材质解码，数学模块提供解包与法线解码。
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
 // 材质编号表：参考实现的 MATID 常量由宿主资源包决定，这里集中成一个显式结构。
 struct OgxMaterialIdTable
@@ -5743,7 +5857,7 @@ OgxGbufferData ogxGetGbufferData(sampler2D gbuffer0, sampler2D gbuffer3, sampler
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
 */
 /*
-Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表面，并给出高光。
+Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表面，给出高光，并处理手光阴影。
 调用位置：需要动态手持光照的程序；Minecraft 光影由 `/omni-gfx/heldlight.glsl` 引入。
 可复制示例：
     vec3 held = ogxHeldLighting(viewPos, viewDir, normal, 0.4, ao, false, ...);
@@ -5758,6 +5872,9 @@ Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表
 
 // 表面模块提供手电筒光斑与指向，阴影模块提供屏幕空间阴影，数学与颜色模块提供漫反射、高光与色彩转换。
 
+// 相机提供投影、视空间与裁剪空间换算。
+
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 /*
 生成文件：阴影模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
@@ -5773,96 +5890,25 @@ Omni 通用图形库阴影模块：阴影相机投影、边缘压缩、屏幕空
     OgxCascadeSelect s = ogxSelectCascade(viewDepth, vec3(32.0, 64.0, 128.0), 6.0); // 选级联与过渡权重。
 设计原因与取舍：
     矩阵、纹理、分辨率与选项全部由调用方传入，库不读取引擎状态；深度图的格式由调用方决定。
-    算式与旧 `shaders/gfx/shadow.glsl` 逐项一致，迁移只改名字和语法，默认画面因此不变。
+    算式与迁移前的 GLSL 原型逐项一致，迁移只改名字和语法，默认画面因此不变。
     PCSS 与级联是阶段三新增能力：半影宽度由遮挡物距离推出，级联交界做线性过渡，避免硬边。
     矩阵乘法在 Slang 与 GLSL 的行列解释不同，这里统一走数学模块的列展开入口，不直接乘矩阵。
+    投影偏差与写入端压缩归 `shadow/map.slang`；本文件只保留读取端压缩、采样与滤波。
 */
 #ifndef OGX_SHADOW_INCLUDED
 #define OGX_SHADOW_INCLUDED
 
 // 饱和、矩阵列展开与圆周常数来自数学模块。
 
-// Eclipse 的阴影修补：按相机距离把世界坐标抬离表面一点点，抵消阴影图的彼得潘效应。
-// 为什么用小数抖动而不是固定偏移：固定偏移会在不同距离留下阶梯，按世界坐标取小数能让误差散开。
-// `transition` 是阴影过渡量，越小越靠近阴影边缘，偏移越强；`flatNormal` 为保持原签名而保留，原程序未使用。
-void ogxGriAndEminShadowFix(inout vec3 worldPos, vec3 flatNormal, float transition, vec3 cameraWorldPos, bool eyeInWater)
-{
-    transition = 1.0 - transition; // 过渡量取反，边缘处为一。
-    transition *= transition * transition * transition * transition * transition * transition; // 六次方，只让最边缘一段生效。
-    float zoomLevel = mix(0.0, 0.5, transition); // 边缘处偏移半个格子。
-    if (zoomLevel > 0.001 && !eyeInWater) // 水下不做偏移，原程序同样跳过。
-    {
-        worldPos = worldPos - (fract(worldPos + cameraWorldPos - worldPos * 0.0001) * zoomLevel - zoomLevel * 0.5); // 按位置小数把坐标推到格子中心附近。
-    }
-}
-
-// Eclipse 的阴影偏差：按一个阴影像素对应一个方块的尺度，沿几何法线把投影坐标推出表面。
-// `shadowNormal` 是法线经过阴影相机旋转后的方向，`shadowDistance` 与 `shadowMapResolution` 决定纹素大小。
-void ogxApplyShadowBias(inout vec3 projectedShadowPosition, vec3 shadowNormal, float shadowDistance, float shadowMapResolution)
-{
-    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个纹素对应的世界尺度，再放大一倍。
-    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远，斜投影误差越大。
-    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大偏差。
-    projectedShadowPosition += shadowNormal * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
-}
-
-// Eclipse 的阴影偏差入口：参考签名保留 playerPos 但内部不使用，几何法线经阴影相机旋转后推坐标。
-// 为什么把矩阵显式传入：参考实现读 shadowModelView，库不绑定宿主矩阵。
-void ogxApplyShadowBiasMatrix(inout vec3 projectedShadowPosition, vec3 playerPos, vec3 geoNormals,
-    mat3 shadowNormalMatrix, float shadowDistance, float shadowMapResolution)
-{
-    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个阴影像素对应的世界尺度。
-    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远误差越大。
-    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大。
-    projectedShadowPosition += ogxMatrix3MulPoint(shadowNormalMatrix, geoNormals) * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
-}
+// 相机模块提供阴影相机投影、屏幕深度与边缘压缩的唯一实现。
 
 // 黄金角的正弦与余弦：螺旋采样每步旋转这个角度，样本才不会排成放射状条纹。
 vec2 ogxShadowGoldenRotation() { return vec2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); }
 
-// 阴影相机空间里的位置：先做视图变换，再按正交投影缩放并把深度折半。
-// 为什么深度取半：阴影图存的是裁剪空间到零到一的压缩值，后面所有比较都按同一尺度进行。
-vec3 ogxShadowViewPos(vec3 worldPos, mat4 shadowView, mat4 shadowProjection)
-{
-    vec3 shadowPos = ogxMatrixMulPoint(shadowView, worldPos) + ogxMatrixTranslation(shadowView); // 世界位置转到阴影相机空间。
-    float scale = shadowProjection[0][0]; // 正交投影的水平缩放，横纵相同。
-    shadowPos *= vec3(scale, scale, -scale * 0.5); // 按投影缩放，深度取半。
-    return shadowPos; // 返回阴影相机空间的坐标。
-}
 
-// 投到阴影图，不做边缘压缩：坐标范围仍是负一到一。
-vec3 ogxShadowScreenPos(vec3 worldPos, mat4 shadowView, mat4 shadowProjection)
-{
-    return ogxShadowViewPos(worldPos, shadowView, shadowProjection) * 0.5 + 0.5; // 负一到一转成零到一。
-}
 
-// 投到阴影图并做边缘压缩：离中心越远压得越紧，边缘纹素因此覆盖更小的实际范围。
-vec3 ogxShadowScreenPosDistorted(vec3 worldPos, mat4 shadowView, mat4 shadowProjection, float bias)
-{
-    vec3 shadowPos = ogxShadowViewPos(worldPos, shadowView, shadowProjection); // 先转到阴影相机空间。
-    float dist = length(shadowPos.xy); // 到阴影图中心的距离。
-    float distortFactor = (1.0 - bias) + dist * bias; // 边缘压缩系数，中心为一。
-    shadowPos.xy *= 0.95 / distortFactor; // 向内压缩，零点九五留出边界余量。
-    return shadowPos * 0.5 + 0.5; // 负一到一转成零到一。
-}
 
-// 读取端补一次边缘压缩：写入端压过的坐标，读取时必须按同一系数还原。
-vec2 ogxDistortShadowPos(vec2 shadowPos, float bias)
-{
-    shadowPos = shadowPos * 2.0 - 1.0; // 零到一先转回负一到一。
-    float dist = length(shadowPos.xy); // 到中心距离。
-    float distortFactor = (1.0 - bias) + dist * bias; // 与写入端同一压缩系数。
-    shadowPos *= 0.95 / distortFactor; // 同一压缩量。
-    return shadowPos * 0.5 + 0.5; // 再转回零到一。
-}
 
-// 屏幕深度换米制距离：逆投影里只有深度那一列参与，两个系数就是全部信息。
-// 为什么不用整矩阵乘：这一步在每条步进的射线上都要算，取两个系数最省。
-float ogxShadowLinearDepth(float depth, mat4 projectionInverse)
-{
-    depth = depth * 2.0 - 1.0; // 零到一转负一到一。
-    return 1.0 / (depth * projectionInverse[2][3] + projectionInverse[3][3]); // 逆投影的深度部分。
-}
 
 // 射线是否还在可靠深度范围内：近处像素的深度图只有半个屏幕可用。
 bool ogxInsideDepthRange(vec3 samplePos)
@@ -5893,7 +5939,7 @@ float ogxScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowD
     screenRayDir.xy *= 0.5; // 横纵方向换算到零到一坐标。
     start.xy += vec2(projection[3][0], projection[3][1]); // 补上投影的平移项。
     start.xy *= 0.5; // 裁剪空间转到零到一。
-    float minDist = ogxShadowLinearDepth(0.7, projectionInverse); // 深度小于这个值的像素在前面，不再作为遮挡。
+    float minDist = ogxLinearDepthFromScreenDepth(0.7, projectionInverse); // 深度小于这个值的像素在前面，不再作为遮挡。
     float shadow = 1.0; // 可见度，初值全亮。
     float stepLength = 1.0; // 步长，逐步增大。
     for (int i = 0; i < steps; i++, start += screenRayDir * stepLength, stepLength += 0.3) // 步长递增覆盖更远。
@@ -5919,11 +5965,11 @@ float ogxScreenSpaceShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowD
         if (hasDh && sampleDepth == 1.0) // 近景是天空时改读远景深度。
         {
             sampleDepth = textureLod(dhDepthTexture, samplePos.xy, 0.0).x; // 改读远景深度。
-            sampleDist = ogxShadowLinearDepth(sampleDepth, dhProjectionInverse); // 远景深度换成距离。
+            sampleDist = ogxLinearDepthFromScreenDepth(sampleDepth, dhProjectionInverse); // 远景深度换成距离。
         }
         else
         {
-            sampleDist = ogxShadowLinearDepth(sampleDepthAgain, projectionInverse); // 近景深度换成距离。
+            sampleDist = ogxLinearDepthFromScreenDepth(sampleDepthAgain, projectionInverse); // 近景深度换成距离。
         }
         if (samplePos.z - sampleDist > 0.0) // 射线深度超过几何深度，说明几何在前面。
         {
@@ -5978,11 +6024,11 @@ float ogxSunScreenShadow(vec3 viewPos, vec3 viewDir, vec3 normal, vec3 shadowVec
         if (hasDh && sampleDepth == 1.0) // 近景是天空时才查远景。
         {
             sampleDepth = textureLod(dhDepthTexture, samplePos.xy, 0.0).x; // 改读远景深度。
-            sampleDist = ogxShadowLinearDepth(sampleDepth, dhProjectionInverse); // 远景深度换成距离。
+            sampleDist = ogxLinearDepthFromScreenDepth(sampleDepth, dhProjectionInverse); // 远景深度换成距离。
         }
         else
         {
-            sampleDist = ogxShadowLinearDepth(sampleDepth, projectionInverse); // 近景深度换成距离。
+            sampleDist = ogxLinearDepthFromScreenDepth(sampleDepth, projectionInverse); // 近景深度换成距离。
         }
         float depthDiff = samplePos.z - sampleDist; // 射线深度与几何深度之差，为正说明几何在前面。
         if (depthDiff > 0.0 && depthDiff < zThickness) // 落在厚度阈值内才算遮挡。
@@ -6223,7 +6269,9 @@ float ogxPcssVisibility(sampler2D shadowMap, vec3 shadowCoord, float texelSize,
 
 #endif
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
+// 颜色提供伽马、线性转换与色调映射。
 
 // 手电筒模型的手持光：两个光源分别位于左右手，按光斑、距离衰减与漫反射累加。
 // `aimDir` 是光束指向，`heldLightShadow` 为真时每个光斑再乘屏幕空间阴影。
@@ -6425,6 +6473,118 @@ vec3 ogxHandLightFromBlockData(int itemId, vec3 playerPos, inout float lightRang
     return lightFinal; // 交回手持光颜色。
 }
 
+// 手电筒指向：打开相机平滑时按两个平滑角度滞后于视角，否则始终朝相机正前方。
+// 为什么单独成函数：光照与高光两处要同一个方向，分开写容易在改动时只改到一处。
+vec3 ogxFlashlightAimDirection(float eyeRx, float eyeRy, float smoothTime, bool cameraSmooth)
+{
+    if (!cameraSmooth) return vec3(0.0, 0.0, -1.0); // 不平滑时始终朝相机正前方。
+    float angleRx = eyeRx * -smoothTime; // 俯仰角按过渡时长滞后。
+    float angleRy = eyeRy * -smoothTime; // 偏航角按过渡时长滞后。
+    mat3 rx = mat3(1.0, 0.0, 0.0, 0.0, cos(angleRx), sin(angleRx), 0.0, -sin(angleRx), cos(angleRx)); // 俯仰旋转。
+    mat3 ry = mat3(cos(angleRy), 0.0, -sin(angleRy), 0.0, 1.0, 0.0, sin(angleRy), 0.0, cos(angleRy)); // 偏航旋转。
+    return ogxMatrix3MulPoint(ry, ogxMatrix3MulPoint(rx, vec3(0.0, 0.0, -1.0))); // 合成旋转后的光束指向。
+}
+
+// 手持光：按物品的光色、照明半径与到相机的距离算一个球形光源。
+// `relativeEye` 是相机小数偏移，`playerPos` 是相机相对位置；两者相加才是到光源的真实距离。
+vec3 ogxHandLight(vec3 lightColor, float lightRange, vec3 playerPos, vec3 relativeEye)
+{
+    float dist = length(playerPos + relativeEye); // 到手持光源的距离。
+    float falloff = pow(1.0 - dist / lightRange, 3.0); // 线性衰减再取三次方。
+    return lightColor * max(falloff, 0.0); // 范围外为零。
+}
+
+// 手持光屏幕空间阴影：沿光线方向在深度图里步进，撞到遮挡就压暗。
+// 参考固定十步；远近景各取一张深度图，两条分支都写在函数体里，采样次数与参考一致。
+float ogxHandlightShadow(vec3 viewPos, bool depthCheck, vec3 lightDir, float noise,
+    vec3 normals, bool hand, mat4 modelViewInverse, float nearPlane, float farPlane,
+    float renderScale, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projection,
+    mat4 dhProjection, float dhVoxyNearPlane, float dhVoxyFarPlane, float texelSize, float strength)
+{
+    if (hand) return 1.0; // 手部不投手持光阴影。
+    vec3 worldLightDir = normalize(ogxMatrixMulPoint(modelViewInverse, lightDir)); // 光方向转世界，参考连平移一起乘。
+    float NdotL = smoothstep(0.0, 0.2, abs(dot(normals, worldLightDir))); // 法线朝向的软边。
+    float shadows = 1.0; // 阴影结果。
+    float samples = 10.0; // 参考固定十步。
+    float div = 0.0015; // 固定步长除数。
+    float _near = nearPlane; // 近平面。
+    float _far = farPlane * 4.0; // 远平面放大四倍。
+    if (depthCheck) // 远景使用远景裁剪参数。
+    {
+        _near = dhVoxyNearPlane;
+        _far = dhVoxyFarPlane;
+    }
+    vec3 position = ogxToClipSpace3Distant(viewPos, depthCheck, projection, dhProjection); // 起点投到裁剪空间。
+    float rayLength = ((viewPos.z + lightDir.z * _far * sqrt(3.0)) > -_near)
+        ? (-_near - viewPos.z) / lightDir.z : _far * sqrt(3.0); // 射线长度。
+    vec3 direction = ogxToClipSpace3Distant(viewPos + lightDir * rayLength, depthCheck, projection, dhProjection) - position; // 裁剪空间方向。
+    direction.xyz /= max(max(abs(direction.x) / div, abs(direction.y) / div), 400.0); // 固定步长。
+    direction *= 6.0; // 参考实现的步数放大。
+    position.xy *= renderScale;
+    direction.xy *= renderScale;
+    vec3 newPos = position + direction * noise; // 加抖动。
+    for (int i = 0; i < int(samples); i++) // 固定步数。
+    {
+        float samplePos;
+        if (depthCheck) // 远景深度图。
+        {
+            samplePos = texelFetch(dhDepthTexture, ivec2(newPos.xy / texelSize), 0).x;
+        }
+        else // 近景深度图。
+        {
+            samplePos = texelFetch(depthTexture, ivec2(newPos.xy / texelSize), 0).x;
+        }
+        if (samplePos < newPos.z && samplePos > 0.0) // 被遮挡。
+        {
+            shadows = 0.0;
+            break;
+        }
+        newPos += direction; // 前进一步。
+    }
+    return clamp(shadows * NdotL, 1.0 - strength, 1.0); // 参考实现的强度夹紧。
+}
+
+// 手电光：把屏幕位置换成手电筒锥，再按距离、圆斑与镜头脏污叠出光斑。
+// `specularData` 返回方向与强度，供高光阶段复用。
+// 参考签名是屏幕坐标、视空间位置、法线与底色；矩阵、相机位置、深度图与手电参数显式追加。
+vec3 ogxFlashlight(vec2 texcoord, vec3 viewPos, vec3 normal, vec3 albedo,
+    out vec4 specularData, bool hand, sampler2D noiseTexture, mat4 modelViewInverse,
+    mat4 previousModelView, vec3 cameraWorldPos, vec3 previousCameraWorldPos,
+    float centerDepthSmooth, mat4 projectionInverse, float range, float brightnessFalloff,
+    float brightness, float size, float red, float green, float blue)
+{
+    float forwardOffset = 0.5; // 参考实现的前向偏移。
+    vec3 shiftedViewPos = viewPos + vec3(-0.25, 0.2, 0.0); // 手电在视线左上方。
+    vec3 shiftedPlayerPos = ogxMatrix3MulPoint(mat3(modelViewInverse), shiftedViewPos) + ogxMatrixTranslation(modelViewInverse)
+        + (cameraWorldPos - previousCameraWorldPos) * 3.0; // 相机相对位置并补上相机移动。
+    shiftedViewPos = ogxMatrix3MulPoint(mat3(previousModelView), shiftedPlayerPos) + ogxMatrixTranslation(previousModelView); // 换到上一帧视空间，避免手电抖动。
+    vec2 scaledViewPos = shiftedViewPos.xy / max(-shiftedViewPos.z - forwardOffset, 1e-7); // 投到屏幕。
+    float linearDistance = length(shiftedPlayerPos); // 到手电的距离。
+    float shiftedLinearDistance = length(scaledViewPos); // 屏幕距离。
+    float lightFalloff = 1.0 - clamp(1.0 - linearDistance / range, -0.999, 1.0); // 距离衰减。
+    lightFalloff = max(exp(-10.0 * brightnessFalloff * lightFalloff), 0.0); // 指数衰减。
+    float specular = lightFalloff * exp2(-7.0 * shiftedLinearDistance * shiftedLinearDistance) * brightness; // 高光强度。
+    specularData = vec4(normalize(shiftedPlayerPos), specular); // 方向与强度。
+    float projectedCircle = clamp(1.0 - shiftedLinearDistance * size, 0.0, 1.0); // 圆斑。
+    float lensDirt = textureLod(noiseTexture, scaledViewPos * 0.2 + 0.1, 0.0).b; // 镜头脏污。
+    float lensShape = (pow(abs(pow(abs(projectedCircle - 1.0), 2.0) * 2.0 - 0.5), 2.0) + lensDirt * 0.2) * 10.0; // 光斑形状。
+    float offsetNdotL = clamp(dot(-normal, normalize(shiftedPlayerPos)), 0.0, 1.0); // 法线朝向。
+    vec3 diffuse = vec3(1.0) * lightFalloff * offsetNdotL * pow(1.0 - pow(1.0 - projectedCircle, 2.0), 2.0) * lensShape * brightness; // 漫反射光斑。
+    if (hand) // 手部不发光。
+    {
+        diffuse = vec3(0.0);
+        specularData = vec4(0.0);
+    }
+    float lightWidth = 1.0 + linearDistance * 3.0; // 手电在屏幕上的覆盖宽度。
+    vec3 pointPos = ogxToScreenSpace(vec3(texcoord, centerDepthSmooth), projectionInverse) + vec3(-0.25, 0.2, 0.0); // 命中点换回视空间。
+    pointPos = ogxMatrix3MulPoint(mat3(modelViewInverse), pointPos); // 换到相机相对世界位置。
+    float flashLightHitPoint = distance(pointPos, shiftedPlayerPos); // 命中点到手电的距离。
+    float indirectFlashLight = exp(-10.0 * (1.0 - clamp(1.0 - length(shiftedViewPos.xy) / lightWidth, 0.0, 1.0))); // 屏幕范围的柔光。
+    indirectFlashLight *= pow(clamp(1.0 - flashLightHitPoint / lightWidth, 0.0, 1.0), 2.0); // 越远越弱。
+    diffuse += albedo / 150.0 * indirectFlashLight * lightFalloff; // 被照表面的间接反光。
+    return diffuse * vec3(red, green, blue); // 按手电颜色输出。
+}
+
 #endif
 
 
@@ -6448,9 +6608,13 @@ Omni 通用图形库预计算大气查表模块：坐标映射、透过率、组
 #ifndef OGX_ATMOSPHERE_MODEL_INCLUDED
 #define OGX_ATMOSPHERE_MODEL_INCLUDED
 
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
+
 // 球面几何与相位函数来自大气模块，亮度与夹紧来自数学模块，色适应矩阵的按行乘法来自颜色模块。
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
+// 颜色提供伽马、线性转换与色调映射。
 
 // 一次查表需要的全部常数与贴图尺寸；数值由宿主按原程序填写，本模块不保存默认值。
 struct OgxAtmosphereModel
@@ -6876,6 +7040,7 @@ Omni 通用图形库天空合成模块：太阳与月亮圆盘、球面投影、
 
 // 数学提供圆周率、夹紧与黑体色；大气提供射线求交与相函数。
 
+// 大气提供散射、密度剖面与天球映射。
 
 // Eclipse 太阳圆盘：按视方向与太阳方向的余弦算柔边，再乘太阳颜色与固定亮度。
 vec3 ogxSkySunDisc(float cosY, vec3 sunlight)
@@ -6916,23 +7081,6 @@ vec3 ogxSkyMoonDiscSized(vec3 playerPos, vec3 worldSunVec, vec3 color, inout flo
     return color / 750.0 * shape; // 参考实现的亮度缩放。
 }
 
-// 三次卷积权重：Catmull-Rom 核的四个分段，供双三次采样复用。
-// 三次卷积权重零号：离采样点最近的一侧。
-float ogxBicubicSplineWeight0(float a) { return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0); }
-// 三次卷积权重一号：与零号配对，组成左半核。
-float ogxBicubicSplineWeight1(float a) { return (1.0 / 6.0) * (a * a * (3.0 * a - 6.0) + 4.0); }
-// 三次卷积权重二号：右半核的第一项。
-float ogxBicubicSplineWeight2(float a) { return (1.0 / 6.0) * (a * (a * (-3.0 * a + 3.0) + 3.0) + 1.0); }
-// 三次卷积权重三号：离采样点最远的一侧。
-float ogxBicubicSplineWeight3(float a) { return (1.0 / 6.0) * (a * a * a); }
-// 左半核归一化：把零号与一号权重合在一起。
-float ogxBicubicSplineWeightSum0(float a) { return ogxBicubicSplineWeight0(a) + ogxBicubicSplineWeight1(a); }
-// 右半核归一化：把二号与三号权重合在一起。
-float ogxBicubicSplineWeightSum1(float a) { return ogxBicubicSplineWeight2(a) + ogxBicubicSplineWeight3(a); }
-// 左半核的偏移量：让采样点落在正确的纹素中心。
-float ogxBicubicSplineOffset0(float a) { return -1.0 + ogxBicubicSplineWeight1(a) / (ogxBicubicSplineWeight0(a) + ogxBicubicSplineWeight1(a)); }
-// 右半核的偏移量：与左半核一起完成三次插值。
-float ogxBicubicSplineOffset1(float a) { return 1.0 + ogxBicubicSplineWeight3(a) / (ogxBicubicSplineWeight2(a) + ogxBicubicSplineWeight3(a)); }
 
 // Eclipse 双三次纹理采样：四个角各取一次双线性，再按卷积权重合成。
 // `pixelSize` 是一像素的贴图坐标；参考实现把同样的值同时用作像素和倒数。
@@ -6942,18 +7090,18 @@ vec4 ogxBicubicSplineTexture(sampler2D tex, vec2 uv, vec2 pixelSize)
     uv = uv * texelSize.zw; // 换到像素坐标。
     vec2 iuv = floor(uv); // 整数部分。
     vec2 fuv = fract(uv); // 小数部分。
-    float g0x = ogxBicubicSplineWeightSum0(fuv.x); // 横轴左权重。
-    float g1x = ogxBicubicSplineWeightSum1(fuv.x); // 横轴右权重。
-    float h0x = ogxBicubicSplineOffset0(fuv.x); // 横轴左偏移。
-    float h1x = ogxBicubicSplineOffset1(fuv.x); // 横轴右偏移。
-    float h0y = ogxBicubicSplineOffset0(fuv.y); // 纵轴上偏移。
-    float h1y = ogxBicubicSplineOffset1(fuv.y); // 纵轴下偏移。
+    float g0x = ogxCubicWeightLow(fuv.x); // 横轴左权重。
+    float g1x = ogxCubicWeightHigh(fuv.x); // 横轴右权重。
+    float h0x = ogxCubicOffsetLow(fuv.x); // 横轴左偏移。
+    float h1x = ogxCubicOffsetHigh(fuv.x); // 横轴右偏移。
+    float h0y = ogxCubicOffsetLow(fuv.y); // 纵轴上偏移。
+    float h1y = ogxCubicOffsetHigh(fuv.y); // 纵轴下偏移。
     vec2 p0 = (vec2(iuv.x + h0x, iuv.y + h0y) - 0.5) * texelSize.xy; // 左上样本。
     vec2 p1 = (vec2(iuv.x + h1x, iuv.y + h0y) - 0.5) * texelSize.xy; // 右上样本。
     vec2 p2 = (vec2(iuv.x + h0x, iuv.y + h1y) - 0.5) * texelSize.xy; // 左下样本。
     vec2 p3 = (vec2(iuv.x + h1x, iuv.y + h1y) - 0.5) * texelSize.xy; // 右下样本。
-    return ogxBicubicSplineWeightSum0(fuv.y) * (g0x * textureLod(tex, p0, 0.0) + g1x * textureLod(tex, p1, 0.0))
-         + ogxBicubicSplineWeightSum1(fuv.y) * (g0x * textureLod(tex, p2, 0.0) + g1x * textureLod(tex, p3, 0.0)); // 参考实现的合成顺序。
+    return ogxCubicWeightLow(fuv.y) * (g0x * textureLod(tex, p0, 0.0) + g1x * textureLod(tex, p1, 0.0))
+         + ogxCubicWeightHigh(fuv.y) * (g0x * textureLod(tex, p2, 0.0) + g1x * textureLod(tex, p3, 0.0)); // 参考实现的合成顺序。
 }
 
 // 带圆形噪声偏移的双三次采样：用于体积云或天空盒旋转采样。
@@ -6965,18 +7113,18 @@ vec4 ogxBicubicSplineTextureOffset(sampler2D tex, vec2 uv, float noise, float sc
     uv = (uv + texelSize.xy) * texelSize.zw; // 先加一像素再换到像素坐标。
     vec2 iuv = floor(uv + circleOffsets); // 整数部分加偏移。
     vec2 fuv = fract(uv + circleOffsets); // 小数部分加偏移。
-    float g0x = ogxBicubicSplineWeightSum0(fuv.x); // 横轴左权重。
-    float g1x = ogxBicubicSplineWeightSum1(fuv.x); // 横轴右权重。
-    float h0x = ogxBicubicSplineOffset0(fuv.x); // 横轴左偏移。
-    float h1x = ogxBicubicSplineOffset1(fuv.x); // 横轴右偏移。
-    float h0y = ogxBicubicSplineOffset0(fuv.y); // 纵轴上偏移。
-    float h1y = ogxBicubicSplineOffset1(fuv.y); // 纵轴下偏移。
+    float g0x = ogxCubicWeightLow(fuv.x); // 横轴左权重。
+    float g1x = ogxCubicWeightHigh(fuv.x); // 横轴右权重。
+    float h0x = ogxCubicOffsetLow(fuv.x); // 横轴左偏移。
+    float h1x = ogxCubicOffsetHigh(fuv.x); // 横轴右偏移。
+    float h0y = ogxCubicOffsetLow(fuv.y); // 纵轴上偏移。
+    float h1y = ogxCubicOffsetHigh(fuv.y); // 纵轴下偏移。
     vec2 p0 = (vec2(iuv.x + h0x, iuv.y + h0y) - 0.5) * texelSize.xy; // 左上样本。
     vec2 p1 = (vec2(iuv.x + h1x, iuv.y + h0y) - 0.5) * texelSize.xy; // 右上样本。
     vec2 p2 = (vec2(iuv.x + h0x, iuv.y + h1y) - 0.5) * texelSize.xy; // 左下样本。
     vec2 p3 = (vec2(iuv.x + h1x, iuv.y + h1y) - 0.5) * texelSize.xy; // 右下样本。
-    return ogxBicubicSplineWeightSum0(fuv.y) * (g0x * textureLod(tex, p0, 0.0) + g1x * textureLod(tex, p1, 0.0))
-         + ogxBicubicSplineWeightSum1(fuv.y) * (g0x * textureLod(tex, p2, 0.0) + g1x * textureLod(tex, p3, 0.0)); // 与不带偏移版相同的合成顺序。
+    return ogxCubicWeightLow(fuv.y) * (g0x * textureLod(tex, p0, 0.0) + g1x * textureLod(tex, p1, 0.0))
+         + ogxCubicWeightHigh(fuv.y) * (g0x * textureLod(tex, p2, 0.0) + g1x * textureLod(tex, p3, 0.0)); // 与不带偏移版相同的合成顺序。
 }
 
 // Eclipse 球面方向转等距柱状坐标：经度用负方向，纬度用高度角。
@@ -7140,36 +7288,9 @@ vec3 ogxSkyAtmosphereIntegral(vec3 background, vec3 viewVector, vec3 upVector, v
     return scatteringAmbient * background + scatteringSun * sunColorBase + scatteringMoon * moonColorBase * 0.5; // 参考实现的合成。
 }
 
-// Eclipse 极光哈希：一维输入打散成零到一。
-float ogxAuroraCurtainHash(float p)
-{
-    p = fract(p * 0.1031); // 先压到小数。
-    p *= p + 33.33; // 二次项。
-    p *= p + p; // 再乘两倍。
-    return fract(p); // 取小数。
-}
 
-// 极光二维旋转矩阵。
-mat2 ogxAuroraRotation(float angle)
-{
-    float c = cos(angle); // 余弦。
-    float s = sin(angle); // 正弦。
-    return mat2(c, s, -s, c); // 按参考实现的列顺序。
-}
 
-// 三角波：把任意输入压到零点零一到零点四九之间。
-float ogxAuroraTriangle(float x)
-{
-    return clamp(abs(fract(x) - 0.5), 0.01, 0.49); // 参考实现的范围。
-}
 
-// 二维三角波对：第二分量是第一分量与纵轴再次组合。
-vec2 ogxAuroraTriangle2d(vec2 p)
-{
-    float triX = ogxAuroraTriangle(p.x); // 横向三角波。
-    float triY = ogxAuroraTriangle(p.y); // 纵向三角波。
-    return vec2(triX + triY, ogxAuroraTriangle(triX + p.y)); // 参考实现的组合。
-}
 
 // 行向量乘矩阵：GLSL 的 `p *= m` 是行向量约定，和常见的矩阵乘向量相反。
 vec2 ogxAuroraRowMultiply(vec2 p, mat2 m)
@@ -7183,20 +7304,20 @@ float ogxAuroraTriangleNoise(vec2 p, float time)
     float z = 1.8; // 第一层缩放。
     float z2 = 2.5; // 第二层缩放。
     float rz = 0.0; // 累加结果。
-    p = ogxAuroraRowMultiply(p, ogxAuroraRotation(p.x * 0.06)); // 初始旋转。
+    p = ogxAuroraRowMultiply(p, ogxRotate2Matrix(p.x * 0.06)); // 初始旋转。
     vec2 bp = p; // 备份坐标。
-    mat2 rotation = ogxAuroraRotation(time * 0.06); // 时间旋转。
+    mat2 rotation = ogxRotate2Matrix(time * 0.06); // 时间旋转。
     mat2 m2 = mat2(0.95534, 0.29552, -0.29552, 0.95534); // 参考实现的固定旋转。
     for (int i = 0; i < 3; i++) // 三层。
     {
-        vec2 dg = ogxAuroraTriangle2d(bp * 1.75) * 0.75; // 三角波偏移。
+        vec2 dg = ogxTriangleGradient2d(bp * 1.75) * 0.75; // 三角波偏移。
         dg = ogxAuroraRowMultiply(dg, rotation); // 旋转偏移。
         p -= dg / z2; // 坐标扰动。
         bp *= 1.3; // 频率放大。
         z2 *= 0.45; // 下一层缩放。
         z *= 0.42; // 权重衰减。
         p *= 1.21 + (rz - 1.0) * 0.02; // 参考实现的比例。
-        rz += ogxAuroraTriangle(p.x + ogxAuroraTriangle(p.y)) * z; // 累加一层。
+        rz += ogxTriangleGradient(p.x + ogxTriangleGradient(p.y)) * z; // 累加一层。
         p = ogxAuroraRowMultiply(p, mat2(-0.95534, -0.29552, 0.29552, -0.95534)); // 参考实现的 `p *= -m2`。
     }
     return clamp(1.0 / pow(rz * 29.0, 1.6), 0.0, 0.55); // 参考实现的收尾。
@@ -7255,14 +7376,15 @@ vec3 ogxSkyAtmosphereIntegralReference(vec3 background, vec3 viewVector, vec3 up
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
 */
 /*
-Omni 通用图形库云模块：球壳求交、程序化密度、朝阳光照与沿视线步进。
-调用位置：天空与水面反射里的云；Minecraft 光影由 `/omni-gfx/cloud/cloud.glsl` 引入。
+Omni 通用图形库云模块：单层球面云的求交、程序化密度、朝阳光照、沿视线步进与云影取样。
+调用位置：天空与水面反射里的球面云；Minecraft 光影由 `/omni-gfx/cloud/cloud.glsl` 引入。
+平面云自己的密度、扭曲与光照在 `cloud/planar.slang`，本文件不再混放两套云算法。
 可复制示例：
     OgxCloudLayer l = ogxCloudLayerDefault(); // 取默认云层。
     vec4 c = ogxCloudMarch(l, camKm, viewDir, sunDir, sunColor, skyColor, j, 24); // 步进一层云。
     float k = ogxCloudShadow(l, groundKm, sunDir); // 取地面云影。
 设计原因与取舍：
-    形状来自旧 `shaders/gfx/cloud_volume.glsl` 的球面云坐标、云量重映射与光照步进，
+    形状来自迁移前 GLSL 原型的球面云坐标、云量重映射与光照步进，
     把纹理采样换成程序化值噪声，因此不需要额外贴图也能独立出图。
     只用一层云，但加入低频云量图、域扭曲和随高度剪切，专门消除平面云层的重复条纹。
     密度与光照步数全部由调用方传入，库不读取天气、选项或宿主状态。
@@ -7272,6 +7394,7 @@ Omni 通用图形库云模块：球壳求交、程序化密度、朝阳光照与
 
 // 噪声提供云团与细节，数学提供球面求交与相函数。
 
+// 噪声提供哈希、分形与云团细节。
 
 // 一层体积云的参数；不同云层换字段即可复用同一套步进。
 struct OgxCloudLayer
@@ -7461,7 +7584,7 @@ float ogxCloudShadow(OgxCloudLayer layer, vec3 groundPosition, vec3 sunDirection
 }
 
 // 亨耶-格林斯坦相函数：`g` 越大越向前集中，云的向阳边缘因此更亮。
-// 与旧 `shaders/gfx/cloud.glsl` 的算式一致，供平面云与体积云共用。
+// 与迁移前 GLSL 原型的算式一致，供球面云与体积云共用。
 float ogxHenyeyGreenstein(float cosAngle, float g)
 {
     float num = 1.0 - g * g; // 分子，决定整体强度。
@@ -7477,119 +7600,6 @@ float ogxCloudTopCurve(float x)
     return 1.0 - x * x; // 开口向下的抛物线。
 }
 
-// 双线性噪声取样：平面云用同一张噪声图，按世界尺度的万分之一缩放。
-float ogxBilinearNoise(vec2 position, sampler2D noiseTexture)
-{
-    return textureLod(noiseTexture, position * 1.2e-4, 0.0).w; // 第四个通道当同一张图。
-}
-
-// 三次模糊噪声取样：先算十六像素的三次核，再做四次双线性采样，云团边缘因此更软。
-float ogxBicubicBlurNoise(vec2 coord, sampler2D noiseTexture)
-{
-    coord = coord * (1.2e-4 * 64.0) - 0.5; // 噪声图每个纹素对应一万二千分之一的尺度。
-    vec2 p = floor(coord); // 整数纹素。
-    vec2 f = coord - p; // 小数偏移。
-    vec2 ff = f * f; // 偏移平方。
-    vec4 w0; // 前两个权重。
-    vec4 w1; // 后两个权重。
-    w0.xz = 1.0 - f; w0.xz *= w0.xz * w0.xz; // 第一个权重是反向偏移的三次方。
-    w1.yw = ff * f; // 第四个权重是偏移的三次方。
-    w1.xz = 3.0 * w1.yw + 4.0 - 6.0 * ff; // 第三个权重。
-    w0.yw = 6.0 - w1.xz - w1.yw - w0.xz; // 第二个权重由总和为一推出。
-    vec4 s = w0 + w1; // 每对权重和。
-    vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy + w1 / s; // 每对合并成一次双线性采样的位置。
-    c *= 1.0 / 64.0; // 换算到零到一坐标。
-    vec2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
-    return mix(mix(textureLod(noiseTexture, vec2(c.y, c.w), 0.0).w, textureLod(noiseTexture, vec2(c.x, c.w), 0.0).w, m.x),
-                mix(textureLod(noiseTexture, vec2(c.y, c.z), 0.0).w, textureLod(noiseTexture, vec2(c.x, c.z), 0.0).w, m.x), m.y); // 四次采样合成一层模糊噪声。
-}
-
-// 平面云扭曲：三层不同频率的噪声叠出大尺度扭曲量，云团因此不是规整的圆。
-float ogxPlanarDistortion(vec2 position, vec2 windDirection, sampler2D noiseTexture)
-{
-    float density = ogxBilinearNoise(position - windDirection, noiseTexture); // 第一层。
-    float scale = 4.0; // 起始频率。
-    for (int i = 0; i < 3; i++, scale *= 3.0) // 三层，频率逐级乘三。
-    {
-        density += ogxBilinearNoise(scale * (position - windDirection * ogxFastSqrt(scale)), noiseTexture) * pow(scale, -1.3); // 高频层衰减后叠加。
-    }
-    return density; // 返回扭曲量。
-}
-
-// 平面云密度：扭曲后的位置叠六层噪声，再按云量抬阈值并压边缘。
-float ogxPlanarDensity(vec2 position, vec2 windDirection, sampler2D noiseTexture, float noiseScale, float coverage)
-{
-    position *= noiseScale; // 按调用方给的空间尺度缩放。
-    float distortion = ogxPlanarDistortion(position, windDirection, noiseTexture); // 取扭曲量。
-    position += distortion * 50.0; // 用扭曲量偏移位置。
-    float octScale = 2.8; // 每层频率倍数。
-    float density = ogxBicubicBlurNoise(position - windDirection, noiseTexture); // 第一层密度。
-    float weights = 1.0; // 权重和。
-    for (float i = 1.0; i <= 6.0; i++) // 六层。
-    {
-        float scale = ogxFastSqrt(i); // 每层频率取平方根。
-        float turn = 2.39996322973 * i; // 累积旋转角：每层再转一个黄金角，方向与参考一致。
-        float grow = pow(octScale, i); // 累积缩放：层间矩阵每次都乘上频率倍数。
-        vec2 v = position - windDirection * scale; // 本层的偏移位置。
-        vec2 noisePosition = grow * vec2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大，与逐层乘矩阵的结果一致。
-        noisePosition *= vec2(1.0 - 0.35 * scale, 1.0 + 0.05 * scale); // 横向压扁，纵向拉伸。
-        float weight = pow(octScale, -0.85 * i); // 每层权重按频率衰减。
-        density += ogxBicubicBlurNoise(noisePosition, noiseTexture) * weight; // 累加这一层。
-        weights += weight; // 累加权重。
-    }
-    density /= weights; // 平均到零到一。
-    density = clamp(density + coverage - 1.0, 0.0, 1.0); // 按云量抬高阈值。
-    density *= exp(-distortion); // 扭曲强的地方压暗。
-    return density * density; // 平方让边缘收口。
-}
-
-// 平面云光照密度：层数更少，供云影与光照估计使用，便宜但不改变形状。
-float ogxPlanarLightingDensity(vec2 position, vec2 windDirection, sampler2D noiseTexture, float noiseScale, float coverage)
-{
-    position *= noiseScale; // 按空间尺度缩放。
-    float distortion = ogxPlanarDistortion(position, windDirection, noiseTexture); // 取扭曲量。
-    position += distortion * 50.0; // 用扭曲量偏移位置。
-    float octScale = 2.8; // 每层频率倍数。
-    float density = ogxBicubicBlurNoise(position - windDirection, noiseTexture); // 第一层。
-    float weights = 1.0; // 权重和。
-    for (float i = 1.0; i <= 3.0; i++) // 三层。
-    {
-        float scale = ogxFastSqrt(i); // 每层频率。
-        float turn = 2.39996322973 * i; // 累积旋转角。
-        float grow = pow(octScale, i); // 累积缩放。
-        vec2 v = position - windDirection * scale; // 本层的偏移位置。
-        vec2 noisePosition = grow * vec2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大。
-        noisePosition *= vec2(1.0 - 0.35 * scale, 1.0 + 0.05 * scale); // 横向压扁，纵向拉伸。
-        float weight = pow(octScale, -0.85 * i); // 每层权重。
-        density += ogxBilinearNoise(noisePosition, noiseTexture) * weight; // 用更便宜的取样累加。
-        weights += weight; // 累加权重。
-    }
-    density /= weights; // 平均。
-    density = clamp(density + coverage - 1.0, 0.0, 1.0); // 按云量抬高阈值。
-    density *= exp(-distortion); // 扭曲强的地方压暗。
-    return density * density; // 平方收口。
-}
-
-// 平面云的光照遮挡：沿光方向按逐步放大的步长走几步，累加光照密度乘步长。
-// 为什么步长逐次放大：离采样点越远云越稀，放大步长能用同样多的样本覆盖更远，
-// 原程序用四步、每步乘一点五；步数与增长交给调用方，库不预设画质档位。
-float ogxPlanarCloudLightingDepth(vec2 samplePosition, vec2 lightDirection, vec2 windDirection,
-    float dither, float firstStep, float stepGrowth, int steps,
-    sampler2D noiseTexture, float noiseScale, float coverage)
-{
-    vec2 position = samplePosition + firstStep * dither * lightDirection; // 起点先沿光方向抖一下，打散条带。
-    float stepLength = firstStep; // 当前步长。
-    float depth = 0.0; // 沿光方向累积的遮挡密度。
-    for (int i = 0; i < steps; i++) // 逐步前进。
-    {
-        depth += ogxPlanarLightingDensity(position, windDirection, noiseTexture, noiseScale, coverage) * stepLength; // 这一段的密度乘长度才是遮挡量。
-        position += lightDirection * stepLength; // 前进一整步。
-        stepLength *= stepGrowth; // 下一步更长。
-    }
-    return depth; // 交回累积遮挡，调用方取倒数得到阳光能量。
-}
-
-// 云影投影坐标：把世界点沿光方向投到云影所在的水平面，再换成零到一贴图坐标。
 // 为什么先加相机高度：云影贴图跟着相机平移，投影必须用相机相对的高度，否则走动时影子会漂。
 vec2 ogxCloudShadowCoord(vec3 worldPos, vec3 lightDir, float cameraY, float range)
 {
@@ -7675,8 +7685,7 @@ vec4 ogxCloudShadowBlur(sampler2D shadowTex, ivec2 texel, ivec2 axis, ivec2 bord
 // 层状云相位兼容层：把参考的双瓣散射写成同一个入口，供云光照复用。
 float ogxCloudPhaseLayered(float x, float g)
 {
-    float gg = g * g; // g 的平方。
-    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考实现直接写 3.14。
+    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考实现直接写 3.14，保留同一精度。
 }
 
 // 层状云的云密度三线性取样：不做平滑，直接用小数部分在两层噪声之间插值。
@@ -7727,6 +7736,7 @@ Omni 通用图形库体积云模块：Nubis / Hillaire 风格的积云形状、�
 
 // 颜色模块提供参考的曲线函数。
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
 // 体积云的一层参数；不同云层换字段即可复用同一套步进。
 struct OgxCumulusMedia
@@ -7749,19 +7759,7 @@ struct OgxCumulusMedia
     float lightning_strength; // 闪电亮度选项。
 };
 
-// 三次平滑曲线：把零到一压成两端缓、中间快的过渡。
-float ogxCumulusCurve(float x)
-{
-    return x * x * (3.0 - 2.0 * x); // 两端导数为零，云的口沿不会出现折线。
-}
 
-// NUBIS 的顶部曲线：以 1 为顶点、在 0 与 2 处落到零的抛物线，用来把云顶收圆。
-// 积云顶部的垂直密度曲线：底部厚、顶部逐渐变薄。
-float ogxCumulusCurveTop(float x)
-{
-    x = x - 1.0; // 把顶点移到一。
-    return 1.0 - x * x; // 二次曲线在两端降到零。
-}
 
 // 把步进位置换成云坐标：竖直方向按行星曲率弯曲，水平方向随高度剪切。
 // 曲率修正让远处的云跟着地球弧度下沉，否则云层会像一块硬板挂在天边。
@@ -7788,11 +7786,11 @@ vec2 ogxCumulusSampleDensity(vec4 cloudPos, OgxCumulusMedia media, bool sampleDe
     float baseDensity = baseSample.y * 0.4 + baseSample.z * 0.4 + baseSample.w * 0.2;
     baseDensity = ogxRemapSaturate(baseSample.x, baseDensity - 1.0, 1.0);
     // 竖直包络：底部快速到达满密度形成平底，顶部用两段曲线收圆，云不会长成蘑菇柄。
-    float shapeCurve = ogxCumulusCurveTop(ogxSaturate(1.0 - cloudPos.w)) * 0.5;
-    shapeCurve += ogxCumulusCurve(ogxSaturate(1.15 - cloudPos.w * 1.43)) * 0.5;
+    float shapeCurve = ogxCloudTopCurve(ogxSaturate(1.0 - cloudPos.w)) * 0.5;
+    shapeCurve += ogxCurve01(ogxSaturate(1.15 - cloudPos.w * 1.43)) * 0.5;
     baseDensity *= shapeCurve;
     baseDensity *= ogxFastSqrt(ogxSaturate(cloudPos.w * 2.5)) * 0.2 + 0.8;
-    baseDensity *= mix(1.0, ogxCumulusCurveTop(ogxSaturate(cloudPos.w * 3.0)), media.wetness);
+    baseDensity *= mix(1.0, ogxCloudTopCurve(ogxSaturate(cloudPos.w * 3.0)), media.wetness);
     // 云量：同一纵列从云底到云顶共享同一份覆盖，积云才会从平底往上长。
     // 噪声低的地方阈值接近一，整列都是蓝天；噪声高的地方阈值下降，只留下被三维噪声填满的云块。
     float coverageNoise = textureLod(baseNoise, cloudPos.xyz * vec3(8.5e-5, -1.0e-5, 8.5e-5)
@@ -7800,8 +7798,8 @@ vec2 ogxCumulusSampleDensity(vec4 cloudPos, OgxCumulusMedia media, bool sampleDe
     coverage = ogxRemapSaturate(1.0 - coverageNoise, coverage * 0.2, coverage);
     baseDensity = ogxRemapSaturate(baseDensity, coverage, 1.0);
     // 密度控制：中段最厚，顶部收薄，底部保留平底；这两条曲线也决定云顶的亮边宽度。
-    baseDensity *= ogxCumulusCurve(ogxSaturate(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
-    baseDensity *= ogxCumulusCurveTop(ogxSaturate(cloudPos.w * 1.8));
+    baseDensity *= ogxCurve01(ogxSaturate(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
+    baseDensity *= ogxCloudTopCurve(ogxSaturate(cloudPos.w * 1.8));
     baseDensity = ogxSaturate(baseDensity);
     float detailedDensity = 0.0; // 高频侵蚀后的密度。
     if (baseDensity > 1.0e-6 && sampleDetail) // 只有基础密度存在才付细节成本。
@@ -7824,12 +7822,8 @@ vec2 ogxCumulusSampleDensity(vec4 cloudPos, OgxCumulusMedia media, bool sampleDe
 // 闪电照亮参与散射的介质：把闪电当成一根竖直光柱，云采样点离柱越近越亮。
 vec3 ogxCumulusLightning(vec3 relativePos, OgxCumulusMedia media, float lightDistance, float falloff)
 {
-    if (media.lightning_intensity <= 0.0) return vec3(0.0); // 没有闪电事件时不加。
-    vec3 boltPos = vec3(media.lightning_position.x, clamp(relativePos.y, media.lightning_position.y, media.lightning_position.y + 116.0), media.lightning_position.z);
-    float boltDistance = length(relativePos - boltPos); // 介质到光柱的距离。
-    float lightningLight = max(1.0 - boltDistance / lightDistance, 0.0); // 照明范围内线性衰减。
-    lightningLight = exp((1.0 - lightningLight) * falloff); // 换成更集中的指数衰减。
-    return vec3(0.55, 0.65, 0.9) * (lightningLight * media.lightning_intensity * media.lightning_strength);
+    return ogxLightningGlow(relativePos, media.lightning_position, media.lightning_intensity,
+        media.lightning_strength, lightDistance, falloff); // 光柱计算只在数学模块一份。
 }
 
 // 云的光照：沿太阳方向五次取样，单次散射、宽相位与底光按 NUBIS 的权重组合。
@@ -7856,7 +7850,7 @@ vec3 ogxCumulusLighting(vec3 marchingPos, OgxCumulusMedia media, vec2 cloudDensi
     direct += (1.0 / (lightingDensity * 0.2 + 1.0)) * (ogxHenyeyGreenstein(vdotl, 0.2) + 0.1); // 多次散射的宽相位。
     direct *= hg * 2.0 + 1.0; // 逆光侧整体提升。
     direct *= mix(media.bottom_brightness, 0.005 + pow(cloudDensity.y, media.outscatter_factor),
-        ogxCumulusCurve(ogxSaturate(cloudPos.w * 3.333 - 0.333))); // 云底到云顶的亮度分配。
+        ogxCurve01(ogxSaturate(cloudPos.w * 3.333 - 0.333))); // 云底到云顶的亮度分配。
     direct *= pow(max(cloudPos.w, 0.05), 0.75); // 云顶更受光。
     vec3 lightColor = media.light_color * (direct * media.lighting_strength.x * 36.0); // 直射项，系数与 iterationT 相同。
     // 天光：薄处与云顶接收更多环境光，云底保留蓝灰底色。
@@ -7943,9 +7937,6 @@ float ogxCumulusShadowTex(vec2 coord, OgxCumulusMedia media, vec3 worldLight, fl
     return exp2(-cloudDensity * 20.0); // 密度换成透过率；系数与 iterationT 的云影一致。
 }
 
-// iterationT 的标量曲线：与参考 curve 同一个式子，用于云层竖直分布。
-// iterationT 的软曲线：把输入压到零到一之间，避免高光过曝。
-float ogxCumulusDensityCurve(float x) { return 1.0 - x / (1.0 + x); }
 
 // iterationT 云密度：基础三维噪声合成大尺度形状，覆盖率裁剪后再叠细节噪声。
 // 参考签名是云坐标、风向与是否取细节；三张噪声图、尺度与天气参数显式追加。
@@ -7958,17 +7949,17 @@ vec2 ogxCumulusDensityExplicit(vec4 cloudPos, vec3 windDirection, bool sampleDet
     vec4 baseSample = textureLod(baseNoise, cloudPos.xyz * baseScale + windDirection * 10.0, 0.0);
     float baseDensity = baseSample.y * 0.4 + baseSample.z * 0.4 + baseSample.w * 0.2; // 三个尺度加权成基础密度。
     baseDensity = OGX_CLAMP01((baseSample.x - (baseDensity - 1.0)) / (1.0 - (baseDensity - 1.0))); // 按天气通道重映射。
-    float shapeCurve = ogxCumulusCurveTop(OGX_CLAMP01(1.0 - cloudPos.w)) * 0.5; // 顶部圆角。
-    shapeCurve += ogxCumulusDensityCurve(OGX_CLAMP01(1.15 - cloudPos.w * 1.43)) * 0.5; // 底部收口。
+    float shapeCurve = ogxCloudTopCurve(OGX_CLAMP01(1.0 - cloudPos.w)) * 0.5; // 顶部圆角。
+    shapeCurve += ogxSoftSaturate(OGX_CLAMP01(1.15 - cloudPos.w * 1.43)) * 0.5; // 底部收口。
     baseDensity *= shapeCurve;
     baseDensity *= sqrt(OGX_CLAMP01(cloudPos.w * 2.5)) * 0.2 + 0.8; // 低空加厚。
-    baseDensity *= mix(1.0, ogxCumulusCurveTop(OGX_CLAMP01(cloudPos.w * 3.0)), wetness); // 雨天云顶更平。
+    baseDensity *= mix(1.0, ogxCloudTopCurve(OGX_CLAMP01(cloudPos.w * 3.0)), wetness); // 雨天云顶更平。
     float coverageNoise = textureLod(baseNoise, cloudPos.xyz * vec3(8.5e-5, -1.0e-5, 8.5e-5) + windDirection + coverageOffset, 0.0).x;
     float coverage = mix(clearCoverage, rainCoverage, wetness); // 晴雨两档覆盖率。
     coverage = OGX_CLAMP01(((1.0 - coverageNoise) - coverage * 0.2) / (coverage - coverage * 0.2)); // 噪声决定边界。
     baseDensity = OGX_CLAMP01((baseDensity - coverage) / (1.0 - coverage)); // 覆盖率裁剪。
-    baseDensity *= ogxCumulusDensityCurve(OGX_CLAMP01(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
-    baseDensity *= ogxCumulusCurveTop(OGX_CLAMP01(cloudPos.w * 1.8));
+    baseDensity *= ogxSoftSaturate(OGX_CLAMP01(cloudPos.w * 1.8 - 0.8)) * 2.0 + 1.0;
+    baseDensity *= ogxCloudTopCurve(OGX_CLAMP01(cloudPos.w * 1.8));
     baseDensity = OGX_CLAMP01(baseDensity);
     float detailedDensity = 0.0;
     if (baseDensity > 1e-6 && sampleDetail)
@@ -8014,7 +8005,7 @@ vec3 ogxCumulusLightingExplicit(vec3 marchingPos, vec2 cloudAltitude, float plan
     float directScattering = exp2(-lightingDensity * (cloudPos.w * 0.15 + 0.05)) * (hg + 0.02) * (1.0 - wetness * 0.8); // 直接散射。
     directScattering += (1.0 / (lightingDensity * 0.2 + 1.0)) * (ogxHenyeyGreenstein(VdotL, 0.2) + 0.1); // 弱前向的多次散射。
     directScattering *= hg * 2.0 + 1.0;
-    directScattering *= mix(0.15, 0.005 + pow(cloudDensity.y, 1.3), ogxCumulusDensityCurve(OGX_CLAMP01(cloudPos.w * 3.333 - 0.333))); // 底部亮度与云顶外散射。
+    directScattering *= mix(0.15, 0.005 + pow(cloudDensity.y, 1.3), ogxSoftSaturate(OGX_CLAMP01(cloudPos.w * 3.333 - 0.333))); // 底部亮度与云顶外散射。
     directScattering *= pow(max(cloudPos.w, 0.05), 0.75); // 越高越亮。
     vec3 cloudColor = colorShadowlight * (directScattering * lightingStrength.x * 36.0); // 太阳侧颜色。
     float ambientScattering = 1.0 - cloudDensity.x; // 环境散射。
@@ -8042,13 +8033,16 @@ Omni 通用图形库层状体积云模块：五层云形状、云影、朝光散
     把太阳、月亮、闪电与噪声图显式传入，函数体仍按原来的层号分支和采样顺序执行。
     条件功能（积雨云、闪电、极光）用布尔开关保留；关闭时与参考实现的默认路径一致。
     `texture` 的隐式层级在这里统一写成显式零级，避免不同显卡对导数层级的实现差异。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。层状体积云目前只有探针与 profile 覆盖，顶层云入口仍走体积云与平面云。
 */
 #ifndef OGX_CLOUD_LAYERS_INCLUDED
 #define OGX_CLOUD_LAYERS_INCLUDED
 
 // 数学提供球面求交，云模块提供密度取样与相函数，天空提供云的环境色查表。
 
+// 云提供球面求交、密度与单层步进。
 
+// 天空提供云环境色、星空与日月圆盘。
 
 // 一层云的几何与覆盖：参考实现的宏逐项搬进字段，调用方按层号填写。
 struct OgxLayersCloudLayer
@@ -8089,7 +8083,9 @@ struct OgxLayersCloudSettings
 // 子文件：cloud/layers/shape.slang。
 /* 层状体积云的形状：哈希、旋度噪声、逐层密度、积雨云与降雨加成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudShape(settings, 1, 1, position, minHeight, maxHeight, noise);`
-设计取舍：每层的高度、厚度、比例与覆盖来自结构体，函数按层号分支，采样顺序与参考一致。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 二维哈希：把格坐标打散成两个零到一的随机数，供云形状使用。
 vec2 ogxLayersHash2(vec2 p)
@@ -8535,7 +8531,9 @@ float ogxLayersGetRainDensity(float currentDensity, float rainAmount, float thun
 // 子文件：cloud/layers/shadow.slang。
 /* 层状体积云的阴影：行星阴影、三层云影、闪电落点与步进起点；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudShadow(settings, playerPos, sunVector, 100, 1.0, cameraPos, noise);`
-设计取舍：云影沿太阳方向投到各层云底，按层密度累加，天上的云和地面的影共用同一份形状。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 闪电位置：在云层半径内取一个随机方向，并确认那里确实有积雨云。
 vec3 ogxLayersGetLightningPosition(OgxLayersCloudSettings s, float minHeight, float maxHeight, float cumulonimbusScale,
@@ -8658,7 +8656,9 @@ float ogxLayersCloudShadowLayer(vec3 playerPos, vec3 sunVector,
 // 子文件：cloud/layers/lighting.slang。
 /* 层状体积云的光照：相函数、朝光散射与单次散射合成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetCloudLighting(index, shape, faded, shadowMask, sunColor, moonColor, ...);`
-设计取舍：直射按 Beer 定律衰减，前后散射按粉末效应插值，间接光按形状抬升。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 云的相函数：按 `mode` 选择 Henyey-Greenstein、Cornette-Shanks 或 HG-Draine。
 // 按云相位模式组合前向与背向散射，决定云边缘的透光方向。
@@ -8739,8 +8739,7 @@ vec3 ogxLayersGetCloudLighting(int layerIndex, float shape, float shapeFaded, fl
 // 为什么单列一条：参考默认只启用这一种相位，带类型开关的旧实现会多出其它模型的常数。
 float ogxLayersPhaseCloudHenyey(float g, float x)
 {
-    float gg = g * g; // 各向异性平方。
-    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考原式。
+    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考原式直接写 3.14。
 }
 
 // 层状云内散射：沿太阳或月亮方向取几个云形状样本，累加成透过率。
@@ -8796,20 +8795,16 @@ float ogxLayersCloudScatteringSamples(int layerIndex, vec3 rayPosition, vec3 sun
 }
 
 // 主体积云步进、低成本透过率与严格入口，具体实现在子文件。
-// 子文件：cloud/layers/march.slang。
-/* 层状体积云的步进目录：单层主步进、五层合成、两套低成本透过率与严格入口；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
-可复制示例：`ogxLayersGetVolumetricClouds(settings, viewPos, dither, sunVector, ...);`
-设计取舍：五个子文件各管一个算法，函数体与采样顺序照参考保留；本文件只按原顺序引用，不复制算法。 */
-
-// 单层主步进：五层共用同一套循环与光照。
-// 子文件：cloud/layers/march/ray.slang。
-/* 层状体积云的单层主步进：五层共用同一套循环与光照，按层号分支；由 `cloud/layers/march.slang` 内联引入，不单独生成 GLSL 或探针。
-可复制示例：`ogxLayersRaymarchCloud(settings, 1, samples, position, direction, dither, ...);`
-设计取舍：平面云只取一个样本，积云按步长循环；两条路径的提前返回与参考实现一致。 */
+// 子文件：cloud/layers/ray.slang。
+/* 层状体积云的单层主步进：五层共用同一套循环与光照，按层号分支；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
+可复制示例：`ogxCloudLayerMarch(settings, 1, samples, position, direction, dither, ...);`
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 单层云的步进：参考实现的主循环，逐层处理平面云与积云两条路径。
 // `cloudPlaneDistance` 的 `x` 是最近可见云的距离，`y` 是混合权重；由调用方按层合并。
-vec4 ogxLayersRaymarchCloud(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
+vec4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,
     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,
     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,
@@ -8984,11 +8979,13 @@ vec4 ogxLayersRaymarchCloud(OgxLayersCloudSettings s, int layerIndex, int sample
     return vec4(color, totalAbsorbance); // 未知层号原样返回。
 }
 
-// 五层合成：按参考顺序步进再按相机高度混合。
-// 子文件：cloud/layers/march/compose.slang。
-/* 层状体积云的五层合成：按参考顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合；由 `cloud/layers/march.slang` 内联引入。
+// 层状云合成提供五层顺序与相机高度混合。
+// 子文件：cloud/layers/compose.slang。
+/* 层状体积云的五层合成：按参考顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合；由 `cloud/layers.slang` 内联引入。
 可复制示例：`vec4 cloud = ogxLayersGetVolumetricClouds(settings, viewPos, dither, ...);`
-设计取舍：每层重算步长与起点，天空盒只在起点查一次，采样位置与参考一致。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 五层体积云总入口：按参考实现的顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合。
 // 天空色由本函数在步进起点处查天空盒，与参考 GetVolumetricClouds 的采样位置一致。
@@ -9056,7 +9053,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
     bool mixBelowLayer1 = cameraPos.y < s.layers[1].height; // 相机是否在大积云下方。
     vec4 smallCumulusClouds = cloudColorOriginal; // 小积云结果。
     vec2 cloudLayer0Distance = vec2(startDistance, 1.0); // 小积云距离。
-    smallCumulusClouds = ogxLayersRaymarchCloud(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+    smallCumulusClouds = ogxCloudLayerMarch(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
         sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer0Distance,
         backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
         shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 小积云。
@@ -9074,7 +9071,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
         cloudDist.xz = mix(vec2(255.0), vec2(5.0), cloudMix); // 大积云水平步长。
         rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist) / float(samples)); // 重算步长。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 重算起点。
-        largeCumulusClouds = ogxLayersRaymarchCloud(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+        largeCumulusClouds = ogxCloudLayerMarch(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer1Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
             shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 大积云。
@@ -9092,7 +9089,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
         cloudDist.xz = vec2(8.0); // 固定水平步长。
         rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist) / float(cumulonimbusSamples)); // 重算步长。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 重算起点。
-        cumulonimbusClouds = ogxLayersRaymarchCloud(s, 2, cumulonimbusSamples, rayPosition, rayDirection, dither.x, minHeight,
+        cumulonimbusClouds = ogxCloudLayerMarch(s, 2, cumulonimbusSamples, rayPosition, rayDirection, dither.x, minHeight,
             maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol,
             cloudLayer4Distance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds,
             deferred, noiseTexture, shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 积雨云。
@@ -9110,7 +9107,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
             clamp((maxHeight - 15.0) - cameraPos.y, 0.0, 1.0))); // 层内水平步长。
         rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist)); // 单步走到层顶。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点。
-        altoStratusClouds = ogxLayersRaymarchCloud(s, 3, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+        altoStratusClouds = ogxCloudLayerMarch(s, 3, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer2Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
             shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 高层云。
@@ -9127,7 +9124,7 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
             clamp((maxHeight - 15.0) - cameraPos.y, 0.0, 1.0))); // 层内水平步长。
         rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / cloudDist)); // 单步走到层顶。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点。
-        cirrusClouds = ogxLayersRaymarchCloud(s, 4, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+        cirrusClouds = ogxCloudLayerMarch(s, 4, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
             sunVector, moonVector, sunScattering, moonScattering, skyScattering, lViewPosM, sampledSkyCol, cloudLayer3Distance,
             backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture,
             shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort); // 卷云。
@@ -9192,14 +9189,16 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
     return vec4(color, totalAbsorbance); // 交回云颜色与透过率。
 }
 
-// 设置版低成本透射率：只累计透过率，供云影与远景使用。
-// 子文件：cloud/layers/march/simple.slang。
-/* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers/march.slang` 内联引入。
+// 层状云低成本步进提供云影与远景透过率。
+// 子文件：cloud/layers/simple.slang。
+/* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers.slang` 内联引入。
 可复制示例：`vec4 t = ogxLayersGetVolumetricCloudsSimple(settings, dither, lightDir, offset, ...);`
-设计取舍：不做光照与阴影采样，三层共用同一份单层步进，命中顺序照参考保留。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 云影步进：只算透过率，不算光照，供阴影程序低成本使用。
-float ogxLayersRaymarchCloudSimple(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition,
+float ogxCloudLayerMarchSimple(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition,
     vec3 rayDirection, float dither, float minHeight, float maxHeight, vec3 startPos, vec3 cameraPos,
     sampler2D noiseTexture)
 {
@@ -9277,7 +9276,7 @@ vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, v
     vec3 rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist)); // 单步。
     vec3 rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
     rayPosition.xz += offset; // 阴影偏移。
-    float altoStratusClouds = ogxLayersRaymarchCloudSimple(s, 3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+    float altoStratusClouds = ogxCloudLayerMarchSimple(s, 3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
         startPos, cameraPos, noiseTexture); // 高层云。
     totalAbsorbance *= altoStratusClouds; // 更新透过率。
     float largeCumulusClouds = 1.0; // 大积云透过率。
@@ -9290,7 +9289,7 @@ vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, v
         rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 分层步长。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
         rayPosition.xz += offset; // 偏移。
-        largeCumulusClouds = ogxLayersRaymarchCloudSimple(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight,
+        largeCumulusClouds = ogxCloudLayerMarchSimple(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight,
             maxHeight, startPos, cameraPos, noiseTexture); // 大积云。
         totalAbsorbance *= largeCumulusClouds; // 更新透过率。
     }
@@ -9304,18 +9303,20 @@ vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, v
         rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 分层步长。
         rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
         rayPosition.xz += offset; // 偏移。
-        smallCumulusClouds = ogxLayersRaymarchCloudSimple(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight,
+        smallCumulusClouds = ogxCloudLayerMarchSimple(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight,
             maxHeight, startPos, cameraPos, noiseTexture); // 小积云。
         totalAbsorbance *= smallCumulusClouds; // 更新透过率。
     }
     return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四个透过率。
 }
 
-// 参考签名版低成本透射率：天气与覆盖参数显式传入。
-// 子文件：cloud/layers/march/transmittance.slang。
-/* 层状体积云的参考签名低成本步进：天气与覆盖参数显式传入，不读设置结构体；由 `cloud/layers/march.slang` 内联引入。
+// 层状云参考签名步进提供天气参数入口。
+// 子文件：cloud/layers/transmittance.slang。
+/* 层状体积云的参考签名低成本步进：天气与覆盖参数显式传入，不读设置结构体；由 `cloud/layers.slang` 内联引入。
 可复制示例：`vec4 t = ogxLayersCloudTransmittanceSimple(dither, lightDir, offset, startPos, ...);`
-设计取舍：参考签名在前、噪声与天气追加在后；三层各走一次单层透过率，常数照参考保留。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 层状云低成本步进：只累计透过率，不做光照，供云影与远景使用。
 // 参考签名给层号、步数、位置与方向、抖动与上下界；噪声、天气与覆盖率显式追加。
@@ -9467,16 +9468,58 @@ vec4 ogxLayersCloudTransmittanceSimple(vec2 dither, vec3 lightDir, vec2 offset, 
     return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四层透过率。
 }
 
-// 严格参考签名入口：只重排参数并填写参考默认常数。
-// 子文件：cloud/layers/march/exact.slang。
-/* 层状体积云的严格入口：按参考签名重排参数并填写参考默认常数；由 `cloud/layers/march.slang` 内联引入。
+/*
+维护说明：低成本透过率为什么这样分层。
+
+层号与用途：
+    零号是小积云，云底二百五十米，向下扩三百五十米，厚度一百三十米。
+    一号是大积云，云底四百米，厚度二百八十米。
+    二号是积雨云，密度固定零点八，形状走积雨云的塔状分支。
+    三号是高层云，只做一次平面近似，不进入步进循环。
+
+采样顺序：
+    总入口固定从高层云开始，再算大积云，最后算小积云。
+    顺序不能换：后面的层会把当前总透过率当作提前结束条件，
+    先算哪一层会改变一共执行多少次噪声采样，严格对照会直接报差异。
+
+提前结束：
+    每一层结束都把透过率乘进总透过率；低于十万分之一就跳过后面的层。
+    这是参考实现的短路，不是优化开关；关掉它会多做采样，画面也会略暗。
+
+抖动：
+    密度阈值用抖动系数在极小值与层阈值之间插值。
+    这样做是为了让相邻像素的可见边缘错开，避免云影出现规则的同心圆。
+
+距离淡出：
+    积云用 smoothstep 在一百公里到五十公里之间淡出。
+    淡出的是密度而不是透过率；先乘密度再做指数吸收，远处的云影才会逐渐变浅。
+
+相机高度：
+    小积云的云底曾被向下扩了三百五十米，这是参考的固定写法。
+    它让低空相机也能看到小积云投下的影子，不能按“云底应该更高”去改。
+
+单位：
+    minHeight、maxHeight、rayDirection 与 startPos 全部用方块。
+    cloudDist 只是构造步长时的水平尺度，不是真实距离，不能拿去和世界坐标比较。
+
+修改入口时先确认三件事：
+    一是层号与云底、云顶的对应关系没有变；
+    二是高层云仍然只走一次平面采样；
+    三是四层返回值顺序仍然是“小积云、大积云、高层云、总透过率”。
+*/
+
+// 层状云严格入口提供参考默认常数。
+// 子文件：cloud/layers/exact.slang。
+/* 层状体积云的严格入口：按参考签名重排参数并填写参考默认常数；由 `cloud/layers.slang` 内联引入。
 可复制示例：`vec4 cloud = ogxLayersGetVolumetricCloudsExact(viewPos, dither, ...);`
-设计取舍：只重排参数，主体仍在 `ray.slang` 与 `compose.slang`，不复制第二份算法。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 严格参考签名的单层云步进入口：参考参数在前，云设置、相机与阴影资源追加在后。
-// 主体仍由 `ogxLayersRaymarchCloud` 执行，入口只负责把显式参数重新排好。
+// 主体仍由 `ogxCloudLayerMarch` 执行，入口只负责把显式参数重新排好。
 // 五层云的高度、厚度与距离按参考默认配置传入，避免把宿主菜单常数藏进结构体。
-vec4 ogxLayersRaymarchCloudExact(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
+vec4 ogxCloudLayerMarchExact(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,
     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,
     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,
@@ -9509,7 +9552,7 @@ vec4 ogxLayersRaymarchCloudExact(int layerIndex, int samples, vec3 rayPosition, 
     settings.cumulonimbusLightningBrightness = 100.0; // 参考默认 CUMULONIMBUS_LIGHTNING_BRIGHTNESS。
     settings.cumulonimbusLightningColor = vec3(customLightningRgb.x, 1.05 * customLightningRgb.y,
         1.22 * customLightningRgb.z); // 参考的积雨云闪电颜色。
-    return ogxLayersRaymarchCloud(settings, layerIndex, samples, rayPosition, rayDirection, dither, minHeight,
+    return ogxCloudLayerMarch(settings, layerIndex, samples, rayPosition, rayDirection, dither, minHeight,
         maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance,
         sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2,
         cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection,
@@ -9566,7 +9609,7 @@ vec4 ogxLayersGetVolumetricCloudsExact(vec3 viewPos, vec2 dither, vec3 sunVector
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
 */
 /*
-Omni 通用图形库平面云模块：在固定高度的一层云上取样、朝太阳求遮挡并合成空气透视。
+Omni 通用图形库平面云模块：扭曲、密度、光照密度、固定高度取样、朝太阳求遮挡并合成空气透视。
 调用位置：需要 iterationT 风格平面云的程序；Minecraft 光影由 `/omni-gfx/cloud/planar.glsl` 引入。
 可复制示例：
     ogxPlanarClouds(color, worldDir, camera, dither, transmittance, ...);
@@ -9578,11 +9621,127 @@ Omni 通用图形库平面云模块：在固定高度的一层云上取样、朝
 #ifndef OGX_PLANAR_INCLUDED
 #define OGX_PLANAR_INCLUDED
 
-// 云模块提供平面密度，数学提供球面求交与相函数，大气模块提供空气透视。
+// 云模块提供球面求交，数学提供相函数，大气模块提供空气透视；本文件自带平面云密度与光照。
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
+// 大气查表提供空气透视与日月辐照。
 
 // 平面云合成：沿视线与云层求交，取密度与朝阳光照，再把云和空气透视叠到背景。
+// 双线性噪声取样：平面云用同一张噪声图，按世界尺度的万分之一缩放。
+float ogxBilinearNoise(vec2 position, sampler2D noiseTexture)
+{
+    return textureLod(noiseTexture, position * 1.2e-4, 0.0).w; // 第四个通道当同一张图。
+}
+
+// 三次模糊噪声取样：先算十六像素的三次核，再做四次双线性采样，云团边缘因此更软。
+float ogxBicubicBlurNoise(vec2 coord, sampler2D noiseTexture)
+{
+    coord = coord * (1.2e-4 * 64.0) - 0.5; // 噪声图每个纹素对应一万二千分之一的尺度。
+    vec2 p = floor(coord); // 整数纹素。
+    vec2 f = coord - p; // 小数偏移。
+    vec2 ff = f * f; // 偏移平方。
+    vec4 w0; // 前两个权重。
+    vec4 w1; // 后两个权重。
+    w0.xz = 1.0 - f; w0.xz *= w0.xz * w0.xz; // 第一个权重是反向偏移的三次方。
+    w1.yw = ff * f; // 第四个权重是偏移的三次方。
+    w1.xz = 3.0 * w1.yw + 4.0 - 6.0 * ff; // 第三个权重。
+    w0.yw = 6.0 - w1.xz - w1.yw - w0.xz; // 第二个权重由总和为一推出。
+    vec4 s = w0 + w1; // 每对权重和。
+    vec4 c = p.xxyy + vec2(-0.5, 1.5).xyxy + w1 / s; // 每对合并成一次双线性采样的位置。
+    c *= 1.0 / 64.0; // 换算到零到一坐标。
+    vec2 m = s.xz / (s.xz + s.yw); // 两次采样之间的混合比例。
+    return mix(mix(textureLod(noiseTexture, vec2(c.y, c.w), 0.0).w, textureLod(noiseTexture, vec2(c.x, c.w), 0.0).w, m.x),
+                mix(textureLod(noiseTexture, vec2(c.y, c.z), 0.0).w, textureLod(noiseTexture, vec2(c.x, c.z), 0.0).w, m.x), m.y); // 四次采样合成一层模糊噪声。
+}
+
+// 平面云扭曲：三层不同频率的噪声叠出大尺度扭曲量，云团因此不是规整的圆。
+float ogxPlanarDistortion(vec2 position, vec2 windDirection, sampler2D noiseTexture)
+{
+    float density = ogxBilinearNoise(position - windDirection, noiseTexture); // 第一层。
+    float scale = 4.0; // 起始频率。
+    for (int i = 0; i < 3; i++, scale *= 3.0) // 三层，频率逐级乘三。
+    {
+        density += ogxBilinearNoise(scale * (position - windDirection * ogxFastSqrt(scale)), noiseTexture) * pow(scale, -1.3); // 高频层衰减后叠加。
+    }
+    return density; // 返回扭曲量。
+}
+
+// 平面云密度：扭曲后的位置叠六层噪声，再按云量抬阈值并压边缘。
+float ogxPlanarDensity(vec2 position, vec2 windDirection, sampler2D noiseTexture, float noiseScale, float coverage)
+{
+    position *= noiseScale; // 按调用方给的空间尺度缩放。
+    float distortion = ogxPlanarDistortion(position, windDirection, noiseTexture); // 取扭曲量。
+    position += distortion * 50.0; // 用扭曲量偏移位置。
+    float octScale = 2.8; // 每层频率倍数。
+    float density = ogxBicubicBlurNoise(position - windDirection, noiseTexture); // 第一层密度。
+    float weights = 1.0; // 权重和。
+    for (float i = 1.0; i <= 6.0; i++) // 六层。
+    {
+        float scale = ogxFastSqrt(i); // 每层频率取平方根。
+        float turn = 2.39996322973 * i; // 累积旋转角：每层再转一个黄金角，方向与参考一致。
+        float grow = pow(octScale, i); // 累积缩放：层间矩阵每次都乘上频率倍数。
+        vec2 v = position - windDirection * scale; // 本层的偏移位置。
+        vec2 noisePosition = grow * vec2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大，与逐层乘矩阵的结果一致。
+        noisePosition *= vec2(1.0 - 0.35 * scale, 1.0 + 0.05 * scale); // 横向压扁，纵向拉伸。
+        float weight = pow(octScale, -0.85 * i); // 每层权重按频率衰减。
+        density += ogxBicubicBlurNoise(noisePosition, noiseTexture) * weight; // 累加这一层。
+        weights += weight; // 累加权重。
+    }
+    density /= weights; // 平均到零到一。
+    density = clamp(density + coverage - 1.0, 0.0, 1.0); // 按云量抬高阈值。
+    density *= exp(-distortion); // 扭曲强的地方压暗。
+    return density * density; // 平方让边缘收口。
+}
+
+// 平面云光照密度：层数更少，供云影与光照估计使用，便宜但不改变形状。
+float ogxPlanarLightingDensity(vec2 position, vec2 windDirection, sampler2D noiseTexture, float noiseScale, float coverage)
+{
+    position *= noiseScale; // 按空间尺度缩放。
+    float distortion = ogxPlanarDistortion(position, windDirection, noiseTexture); // 取扭曲量。
+    position += distortion * 50.0; // 用扭曲量偏移位置。
+    float octScale = 2.8; // 每层频率倍数。
+    float density = ogxBicubicBlurNoise(position - windDirection, noiseTexture); // 第一层。
+    float weights = 1.0; // 权重和。
+    for (float i = 1.0; i <= 3.0; i++) // 三层。
+    {
+        float scale = ogxFastSqrt(i); // 每层频率。
+        float turn = 2.39996322973 * i; // 累积旋转角。
+        float grow = pow(octScale, i); // 累积缩放。
+        vec2 v = position - windDirection * scale; // 本层的偏移位置。
+        vec2 noisePosition = grow * vec2(cos(turn) * v.x - sin(turn) * v.y, sin(turn) * v.x + cos(turn) * v.y); // 旋转并放大。
+        noisePosition *= vec2(1.0 - 0.35 * scale, 1.0 + 0.05 * scale); // 横向压扁，纵向拉伸。
+        float weight = pow(octScale, -0.85 * i); // 每层权重。
+        density += ogxBilinearNoise(noisePosition, noiseTexture) * weight; // 用更便宜的取样累加。
+        weights += weight; // 累加权重。
+    }
+    density /= weights; // 平均。
+    density = clamp(density + coverage - 1.0, 0.0, 1.0); // 按云量抬高阈值。
+    density *= exp(-distortion); // 扭曲强的地方压暗。
+    return density * density; // 平方收口。
+}
+
+// 平面云的光照遮挡：沿光方向按逐步放大的步长走几步，累加光照密度乘步长。
+// 为什么步长逐次放大：离采样点越远云越稀，放大步长能用同样多的样本覆盖更远，
+// 原程序用四步、每步乘一点五；步数与增长交给调用方，库不预设画质档位。
+float ogxPlanarCloudLightingDepth(vec2 samplePosition, vec2 lightDirection, vec2 windDirection,
+    float dither, float firstStep, float stepGrowth, int steps,
+    sampler2D noiseTexture, float noiseScale, float coverage)
+{
+    vec2 position = samplePosition + firstStep * dither * lightDirection; // 起点先沿光方向抖一下，打散条带。
+    float stepLength = firstStep; // 当前步长。
+    float depth = 0.0; // 沿光方向累积的遮挡密度。
+    for (int i = 0; i < steps; i++) // 逐步前进。
+    {
+        depth += ogxPlanarLightingDensity(position, windDirection, noiseTexture, noiseScale, coverage) * stepLength; // 这一段的密度乘长度才是遮挡量。
+        position += lightDirection * stepLength; // 前进一整步。
+        stepLength *= stepGrowth; // 下一步更长。
+    }
+    return depth; // 交回累积遮挡，调用方取倒数得到阳光能量。
+}
+
+// 云影投影坐标：把世界点沿光方向投到云影所在的水平面，再换成零到一贴图坐标。
+
 // `cloudTransmittance` 进来时是上一层的剩余透过率，返回时已乘上这一层。
 void ogxPlanarClouds(inout vec3 color, vec3 worldDir, vec3 camera, float dither,
     inout float cloudTransmittance, OgxAtmosphereModel model, sampler3D lut, vec3 cameraWorldPos,
@@ -9652,26 +9811,28 @@ Omni 通用图形库体积雾模块：密度、阳光方向吸收、沿视线步
 设计原因与取舍：
     纹理、阴影矩阵、相机、光色与选项全部由调用方传入，库不读取宿主状态。
     雾照明与水下手持光属于可选的宿主能力，用两个钩子宏留给效果层注入；不定义时是完全的空操作。
-    钩子宏沿用旧名字：宿主在包含本文件之前就定义它们，改名需要同时改宿主，收益只有名字统一。
+    钩子宏名是库的公开接口，效果层在包含本文件前定义；要改名必须同时改宿主，当前保留稳定名字。
     步进顺序与常数照 iterationT 原程序保留，保证默认画面不变。
-    算法按主体拆进 `fog/volume/` 的八个子文件：云影、暴风、闪电、单步、主体、水下、严格入口与下界烟。
+    算法按内容分成云影、暴风、闪电、单步、主体、水下、严格入口与下界烟八段，子文件放在同名文件夹内；
+    主文件保留结构体、钩子和主体步进，打开文件就能看到完整步进顺序。
 */
 #ifndef OGX_FOG_VOLUME_INCLUDED
 #define OGX_FOG_VOLUME_INCLUDED
 
 // 可选的雾照明钩子：效果层在包含本文件前定义，不定义时完全为空。
 // 它接受当前雾点、这一步的吸收量、累计颜色与提前结束标记，由宿主决定是否采样体积光。
-#ifndef GFX_FOG_LPV_STEP
-#define GFX_FOG_LPV_STEP(fog_pos, integral, accum, done)
+#ifndef OGX_FOG_LPV_STEP
+#define OGX_FOG_LPV_STEP(fog_pos, integral, accum, done)
 #endif
 
 // 可选的水下手持光钩子：效果层把物品光采样接到这里，不定义时不加任何光。
-#ifndef GFX_UNDERWATER_HAND_LIGHT
-#define GFX_UNDERWATER_HAND_LIGHT(world_pos) vec3(0.0)
+#ifndef OGX_UNDERWATER_HAND_LIGHT
+#define OGX_UNDERWATER_HAND_LIGHT(world_pos) vec3(0.0)
 #endif
 
 // 雾密度、相位与粉末效应来自雾模块；暴风噪声来自天气，波法线与阴影坐标来自水面与阴影模块。
 
+// 天气提供云量、风、降雨与雷暴强度。
 /*
 生成文件：天气模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
@@ -9686,7 +9847,7 @@ Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、
     vec2 o = ogxRainWindOffset(worldPos, cameraPos, seconds, wind, 0.05, 1.0); // 雨雪的水平偏移。
     float n = ogxStormNoise(worldPos, noiseTexture, 512.0); // 暴风雾团密度。
     vec3 c = ogxStormColor(snowStorm, sandStorm); // 暴雪与沙暴的染色。
-    float h = ogxWeatherHash11(day); // 每日天气的随机取档。
+    float h = ogxHash11(day); // 每日天气的随机取档。
 设计原因与取舍：
     位置、时间、风向、扰动和露天系数全部由调用方传入，库不读取相机或天气全局量。
     倾斜随高度放大，露天系数为零时雨雪保持竖直，因此室内不会被风推斜。
@@ -9697,6 +9858,8 @@ Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、
 #define OGX_WEATHER_INCLUDED
 
 // 数学模块提供取模与夹紧，季节循环与时段划分要用。
+
+// 噪声模块提供每日天气哈希的唯一实现。
 
 // 雨雪随风摆动：固定风向叠一个缓慢旋转的扰动，再按高度放大。
 // 为什么扰动跟着世界位置走：不同位置的雨丝才不会像一整块布同步摆动。
@@ -9751,15 +9914,6 @@ vec3 ogxStormColor(float snowStorm, float sandStorm)
     return (sandStorm * sandCol + snowStorm * snowCol) / total; // 按强度加权后归一。
 }
 
-// 每日天气哈希：把整数天数打散成零到一的小数，照 Eclipse 的 `hash11`。
-// 三步混合让相邻天数看起来毫无关系，同时保持完全确定的重复性。
-float ogxWeatherHash11(float p)
-{
-    p = fract(p * 0.1031); // 先乘一个无理近似再取小数，打散相邻整数。
-    p *= p + 33.33; // 加偏移后再平方，让输入的小变化放大。
-    p *= p + p; // 再乘自身的两倍，进一步拉开分布。
-    return fract(p); // 取小数，得到零到一的哈希值。
-}
 
 // 四季调色板：树叶与非树叶各一套颜色，因为树叶的季节变化通常更明显。
 struct OgxSeasonPalette
@@ -9884,9 +10038,13 @@ void ogxYearCycleColorSeason(inout vec3 finalColor, vec3 glcolor, bool isLeaves,
 
 #endif
 
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 
+// 水面提供吸收、波法线、泡沫与折射。
 
+// 颜色提供伽马、线性转换与色调映射。
 
+// 采样提供白噪声、蓝噪声与低差异序列。
 
 // 一帧体积雾需要的相机、光照与天气参数。
 struct OgxFogMedia
@@ -9936,7 +10094,9 @@ struct OgxFogMedia
 // 子文件：fog/volume/shadow.slang。
 /* 体积雾的云影：把世界坐标投到云影贴图，并用四次双线性采样合成十六像素三次模糊；由 `fog/volume.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`float shadow = ogxFogCloudShadow(worldPos, media, cloudShadowTex, true);`
-设计取舍：贴图贴在画面右上角，坐标要翻转；边缘淡出与晴天雨天两档照参考保留。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 云影贴图的三次采样：取红通道，与云影写入端同一套模糊。
 // 四次双线性采样合成十六像素三次模糊，纹理读取次数只有逐像素方案的四分之一。
@@ -9983,10 +10143,15 @@ float ogxFogCloudShadow(vec3 worldPos, OgxFogMedia media, sampler2D cloudShadowT
 }
 
 // 暴风浓雾密度，具体实现在子文件。
+// --- storm ---
+
+// 暴风浓雾的噪声与高度衰减，具体实现在子文件。
 // 子文件：fog/volume/storm.slang。
 /* 体积雾的暴风密度：噪声雾团与低空层相加，雪暴才随高度变淡；由 `fog/volume.slang` 内联引入。
 可复制示例：`float density = ogxFogStormDensity(worldPos, media, noiseTexture);`
-设计取舍：纵向压扁后乘一百再滚动，噪声取反让高噪声处雾更浓。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 暴风浓雾：噪声雾团与低空层相加，雪暴才随高度变淡。
 float ogxFogStormDensity(vec3 worldPos, OgxFogMedia media, sampler2D noiseTexture)
@@ -10000,27 +10165,33 @@ float ogxFogStormDensity(vec3 worldPos, OgxFogMedia media, sampler2D noiseTextur
 }
 
 // 闪电光柱照明，具体实现在子文件。
+// --- light ---
+
+// 闪电光柱的照明衰减，具体实现在子文件。
 // 子文件：fog/volume/light.slang。
 /* 体积雾的闪电照明：把闪电当成一根竖直光柱，按距离做指数衰减；由 `fog/volume.slang` 内联引入。
 可复制示例：`vec3 light = ogxFogLightning(relativePos, media, 200.0, 4.0);`
-设计取舍：没有闪电事件时返回零，冷色闪光再乘事件强度与亮度选项。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 闪电照亮参与散射的介质：把闪电当成一根竖直光柱。
 vec3 ogxFogLightning(vec3 relativePos, OgxFogMedia media, float lightDistance, float falloff)
 {
-    if (media.lightning_intensity <= 0.0) return vec3(0.0); // 没有闪电事件时不加。
-    vec3 boltPos = vec3(media.lightning_position.x, clamp(relativePos.y, media.lightning_position.y, media.lightning_position.y + 116.0), media.lightning_position.z); // 光柱同一水平位置。
-    float boltDistance = length(relativePos - boltPos); // 介质采样点到光柱的距离。
-    float lightningLight = max(1.0 - boltDistance / lightDistance, 0.0); // 照明范围内线性衰减。
-    lightningLight = exp((1.0 - lightningLight) * falloff); // 换成更集中的指数衰减。
-    return vec3(0.55, 0.65, 0.9) * (lightningLight * media.lightning_intensity * media.lightning_strength); // 冷色闪光。
+    return ogxLightningGlow(relativePos, media.lightning_position, media.lightning_intensity,
+        media.lightning_strength, lightDistance, falloff); // 光柱计算只在数学模块一份。
 }
+
+// 密度模型选择与沿光方向吸收，具体实现在子文件。
+// --- step ---
 
 // 密度模型选择与沿光方向吸收，具体实现在子文件。
 // 子文件：fog/volume/step.slang。
 /* 体积雾的单步参数：密度模型选择与沿阳光方向的吸收步进；由 `fog/volume.slang` 内联引入。
 可复制示例：`float density = ogxFogDensity(pos, wind, true, 0.3, 1.0, 0.06, midnight, noise);`
-设计取舍：步长逐步放大，近处权重更高，避免远处几何把光吸干。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 雾密度：仅高度衰减或团雾，参数由效果层按选项给出。
 float ogxFogDensity(vec3 fogPos, vec3 wind, bool noisy, float heightA, float heightB, float falloff, float timeMidnight, sampler2D noiseTexture)
@@ -10042,7 +10213,8 @@ float ogxFogLightMarch(inout vec3 fogPos, vec3 wind, OgxFogMedia media, bool noi
 }
 
 // 体积雾主体步进，具体实现在子文件。
-// 子文件：fog/volume/march.slang。
+// --- march ---
+
 /* 体积雾主体：沿视线步进，同时沿光方向估遮挡，累加雾色与阳光散射；由 `fog/volume.slang` 内联引入。
 可复制示例：`ogxVolumetricFog(color, startPos, endPos, worldDir, media, ...);`
 设计取舍：步长按指数增长，阴影、云影、群系与体积光由布尔开关选择，关闭时不产生额外采样。 */
@@ -10136,7 +10308,7 @@ void ogxVolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDi
         transmittance *= absorption; // 透射率逐步衰减。
         lightningFog += lightningStep * integral; // 闪电按吸收量累加。
         bool lpvDone = false; // 雾照明走出体积时提前结束。
-        GFX_FOG_LPV_STEP(fogPos, integral, lpvFog, lpvDone) // 由效果层决定是否采样体积光。
+        OGX_FOG_LPV_STEP(fogPos, integral, lpvFog, lpvDone) // 由效果层决定是否采样体积光。
         if (lpvDone) break; // 走出体积就不再步进。
     }
     vec3 skylight = media.sky_color; // 雾的环境色以天光为主。
@@ -10165,10 +10337,15 @@ void ogxVolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDi
 }
 
 // 水下焦散与光柱，具体实现在子文件。
+// --- underwater ---
+
+// 水下焦散与光柱，具体实现在子文件。
 // 子文件：fog/volume/underwater.slang。
 /* 水下体积雾：焦散取样与光柱步进，输出汇聚的蓝色光柱；由 `fog/volume.slang` 内联引入。
 可复制示例：`vec3 light = ogxUnderwaterFog(startPos, endPos, worldDir, cloudShadow, ...);`
-设计取舍：光柱截断到四十米内；焦散三次方让亮纹更集中，远处按距离变弱。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 水下焦散：从当前位置向上找水面，按波法线折射后取交点距离，距离越近光柱越强。
 // 为什么单独一份：它与水面焦散的三乘三采样用途不同，这里只要一份范围很窄的值来收窄光柱。
@@ -10219,7 +10396,7 @@ vec3 ogxUnderwaterFog(vec3 startPos, vec3 endPos, vec3 worldDir, float globalClo
         shadow /= max(3.0, rayLength * 0.1); // 越远越弱。
         if (waterAbsorption) shadow *= pow(vec3(0.1, 0.6, 1.0) * 0.99, vec3(rayLength * 0.04 * waterDensity)); // 红衰减最快，光柱因此偏蓝。
         result += shadow; // 累加。
-        vec3 handLight = GFX_UNDERWATER_HAND_LIGHT(rayPos); // 手持光源在该点留下的光，由效果层注入。
+        vec3 handLight = OGX_UNDERWATER_HAND_LIGHT(rayPos); // 手持光源在该点留下的光，由效果层注入。
         if (waterAbsorption) handLight *= pow(vec3(0.1, 0.6, 1.0) * 0.99, vec3(rayLength * 0.04 * waterDensity)); // 与光柱同一套分波段吸收。
         handFog += handLight; // 累加。
     }
@@ -10235,10 +10412,15 @@ vec3 ogxUnderwaterFog(vec3 startPos, vec3 endPos, vec3 worldDir, float globalClo
 }
 
 // 严格参考签名入口，具体实现在子文件。
+// --- exact ---
+
+// 严格参考签名的雾与水下光柱入口，具体实现在子文件。
 // 子文件：fog/volume/exact.slang。
 /* 体积雾的严格入口：按 iterationT 默认路径逐行移植的雾与水下光柱；由 `fog/volume.slang` 内联引入。
 可复制示例：`ogxVolumetricFogExact(color, startPos, endPos, worldDir, cloudShadow, ...);`
-设计取舍：参考参数在前、画质资源追加在后；不转调通用入口，避免额外分支改变采样次数。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 严格参考签名的体积雾入口：按 iterationT 默认的 VFOG_NOISE_TYPE=0 路径逐行移植。
 // 参考参数在前，相机、阴影矩阵与画质资源追加在后；不读取宿主全局量。
@@ -10370,10 +10552,15 @@ vec3 ogxUnderwaterFogExact(vec3 startPos, vec3 endPos, vec3 worldDir,
 }
 
 // 下界三段体积雾，具体实现在子文件。
+// --- nether ---
+
+// 下界羽流、雾霭与顶部烟，具体实现在子文件。
 // 子文件：fog/volume/nether.slang。
 /* 下界的体积雾：羽流、雾霭与顶部烟在同一条视线上分开累加；由 `fog/volume.slang` 内联引入。
 可复制示例：`vec4 fog = ogxNetherVolumetricFog(rayDirection, cameraOffset, cameraWorldPos, ...);`
-设计取舍：三者密度来源与混合方式不同，羽流发光、雾霭只加色、顶部烟贴天花板。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // Eclipse 下界三段体积雾：羽流、雾霭与顶部烟在同一条视线上分开累加。
 // 为什么分三段：羽流发光、雾霭只加色不吸光、顶部烟贴天花板，三者的密度来源与混合方式都不同。
@@ -10436,10 +10623,14 @@ Omni 通用图形库阴影贴图模块：边缘压缩、投影偏差、硬阴影
     float shadow = ogxVoxelShadowMap(direct, playerPos, 1.0, noise, normal, opaque, translucent, tint, view, proj, 128.0, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, false, m, p); // 计算体素阴影。
 设计原因与取舍：
     阴影图坐标、压缩系数与样本数全部显式传入；末地主岛光用独立矩阵，普通路径和参考实现一样先压缩再采样。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。阴影贴图写入目前只被库内其它生成模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_SHADOW_MAP_INCLUDED
 #define OGX_SHADOW_MAP_INCLUDED
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+
+// 体素求交提供光线步进与遮挡判断。
 /*
 生成文件：体素求交模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
@@ -10454,10 +10645,14 @@ Omni 通用图形库体素求交模块：射线任务、包围盒、栅栏、裁
     vec2 hit = ogxVoxelSampleOffset(3, 8.0, 0.5); // 取螺旋采样点。
 设计原因与取舍：
     所有求交只依赖整数格与几何参数；裁剪命中会读体素面表，其余路径不读取宿主纹理。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。体素求交目前只被库内反射与阴影模块间接引用，没有独立画面入口。
 */
 #ifndef OGX_VOXEL_TRACE_INCLUDED
 #define OGX_VOXEL_TRACE_INCLUDED
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+
+// 体素提供坐标、材质与发光读取。
 /*
 生成文件：体素模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
@@ -10482,6 +10677,7 @@ Omni 通用图形库体素追踪模块：在规则三维网格里沿射线逐格
 
 // 数学提供夹紧与向量单位化，颜色提供 sRGB 到线性的转换。
 
+// 颜色提供伽马、线性转换与色调映射。
 
 // 半透明方块：水、冰、玻璃，光线穿过后只给后面的画面染色，不停下。
 bool ogxVoxelIsTranslucent(uint id) { return id == 8u || id == 79u || id == 95u; }
@@ -10709,9 +10905,7 @@ uint ogxPopulateShadowVoxelIndex(vec3 playerPos, vec3 cameraOffset, ivec3 midBlo
 // 参考用全局 Albedo，库版本显式接收颜色；常数与参考一致。
 float ogxPhotonicsEmission(vec3 albedo)
 {
-    vec3 hsv = ogxRgbToHsv(albedo); // 发光只跟色相饱和度与亮度有关。
-    float emissive = smoothstep(0.05, 0.15, hsv.y) * pow(hsv.z, 3.5); // 低饱和颜色不算发光。
-    return emissive * 0.5; // 参考把自发光压到一半。
+    return ogxGetVoxelEmission(albedo); // 自发光曲线只在体素模块维护一份。
 }
 
 // 解码一个体素面的完整数据：脸表纹理的第 y 行是六个面，x 轴是一维体素下标。
@@ -11056,6 +11250,41 @@ vec4 ogxShadowProjectionBias(vec4 projectedShadowSpacePosition, float a, float b
     return projectedShadowSpacePosition; // 交回坐标。
 }
 
+// Eclipse 的阴影修补：按相机距离把世界坐标抬离表面一点点，抵消阴影图的彼得潘效应。
+// 为什么用小数抖动而不是固定偏移：固定偏移会在不同距离留下阶梯，按世界坐标取小数能让误差散开。
+// `transition` 是阴影过渡量，越小越靠近阴影边缘，偏移越强；`flatNormal` 为保持原签名而保留，原程序未使用。
+void ogxGriAndEminShadowFix(inout vec3 worldPos, vec3 flatNormal, float transition, vec3 cameraWorldPos, bool eyeInWater)
+{
+    transition = 1.0 - transition; // 过渡量取反，边缘处为一。
+    transition *= transition * transition * transition * transition * transition * transition; // 六次方，只让最边缘一段生效。
+    float zoomLevel = mix(0.0, 0.5, transition); // 边缘处偏移半个格子。
+    if (zoomLevel > 0.001 && !eyeInWater) // 水下不做偏移，原程序同样跳过。
+    {
+        worldPos = worldPos - (fract(worldPos + cameraWorldPos - worldPos * 0.0001) * zoomLevel - zoomLevel * 0.5); // 按位置小数把坐标推到格子中心附近。
+    }
+}
+
+// Eclipse 的阴影偏差：按一个阴影像素对应一个方块的尺度，沿几何法线把投影坐标推出表面。
+// `shadowNormal` 是法线经过阴影相机旋转后的方向，`shadowDistance` 与 `shadowMapResolution` 决定纹素大小。
+void ogxApplyShadowBias(inout vec3 projectedShadowPosition, vec3 shadowNormal, float shadowDistance, float shadowMapResolution)
+{
+    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个纹素对应的世界尺度，再放大一倍。
+    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远，斜投影误差越大。
+    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大偏差。
+    projectedShadowPosition += shadowNormal * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
+}
+
+// Eclipse 的阴影偏差入口：参考签名保留 playerPos 但内部不使用，几何法线经阴影相机旋转后推坐标。
+// 为什么把矩阵显式传入：参考实现读 shadowModelView，库不绑定宿主矩阵。
+void ogxApplyShadowBiasMatrix(inout vec3 projectedShadowPosition, vec3 playerPos, vec3 geoNormals,
+    mat3 shadowNormalMatrix, float shadowDistance, float shadowMapResolution)
+{
+    float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个阴影像素对应的世界尺度。
+    float biasDistanceFactor = length(projectedShadowPosition.xy); // 离阴影图中心越远误差越大。
+    biasDistanceFactor = 1.0 + biasDistanceFactor * ((16.0 * 8.0) / shadowDistance) * 0.1; // 按距离放大。
+    projectedShadowPosition += ogxMatrix3MulPoint(shadowNormalMatrix, geoNormals) * biasSize * 0.15 * biasDistanceFactor; // 沿法线推出表面。
+}
+
 // 硬阴影：阴影图深度比接收点更远时返回零，否则一。
 float ogxHardShadowVisibility(float shadowDepth, vec3 shadowPosition, float bias)
 {
@@ -11195,7 +11424,7 @@ Omni 通用图形库全局光模块：地平线遮蔽、反射阴影图反弹、
     `vec3 filtered = ogxGiSpatialFilter(coord, dist, normal, viewDir, view, history, 0.5);` 七乘七空间滤波。
 设计原因与取舍：
     纹理、矩阵、相机位置与选项全部由调用方传入，库不读取引擎状态；`OgxGiView` 把同一帧的
-    相机与屏幕参数打包，避免每个函数重复十几项。算法与旧 `shaders/gfx/gi.glsl` 逐项一致，
+    相机与屏幕参数打包，避免每个函数重复十几项。算法与迁移前的 GLSL 原型逐项一致，
     迁移只改名字和语法，默认画面因此不变；地平线遮蔽的采样仍由调用方负责，这里只做纯数学。
 */
 #ifndef OGX_GI_INCLUDED
@@ -11203,10 +11432,9 @@ Omni 通用图形库全局光模块：地平线遮蔽、反射阴影图反弹、
 
 // 饱和、快速反余弦、曲线编码与噪声来自数学模块；阴影投影来自阴影模块。
 
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 
-
-// 螺旋采样的黄金角正余弦：每步旋转这个角度，样本沿螺旋均匀铺开。
-// 黄金角旋转由数学模块的 OGX_GOLDEN_ANGLE 提供，和参考宏同值。
+// 采样提供白噪声、蓝噪声与低差异序列。
 
 // 一帧全局光需要的相机、投影与屏幕参数；字段名保持普通图形术语，不绑定任何宿主。
 struct OgxGiView
@@ -11226,10 +11454,15 @@ struct OgxGiView
     vec2 texel_size; // 一个像素的屏幕坐标大小。
 };
 
-// 环境遮蔽多弹射：底色越亮补光越多，避免墙角完全变黑。
-
 // 地平线遮蔽、反射阴影图与 GTAO，具体实现在子文件。
 // 子文件：gi/gi/ao.slang。
+/*
+全局光子文件：地平线遮蔽的参考实现、多弹射补偿、双边升采样与反射阴影图。
+调用位置：由 `gi/gi.slang` 内联，全局光时间滤波与严格 profile 使用这里的入口。
+可复制示例：`float ao = ogxGroundTruthAo(viewPos, viewDir, normal, coord, aspect, depthTex, farTex, proj, invProj, farInvProj, params, noise);`
+设计原因与取舍：这是参考画质的多次切片遮蔽，供全局光内部使用；独立画面遮蔽的
+低成本版本在 `gi/ambientocclusion.slang`，两者按用途分工，不互相包含，避免把重算法带进轻量阶段。
+*/
 // 环境光遮蔽的多重反弹近似：用反照率补偿被遮住的间接光。
 vec3 ogxAoMultiBounce(float ao, vec3 albedo)
 {
@@ -11271,7 +11504,7 @@ vec3 ogxGiViewPos(vec2 coord, float depth, mat4 projection_inverse)
 }
 
 // 远景屏幕坐标与深度还原视空间位置；没有远景时调用方不会走到这里。
-vec3 ogxGiViewPosDh(vec2 coord, float depth, mat4 dh_projection_inverse)
+vec3 ogxGiViewPosDistant(vec2 coord, float depth, mat4 dh_projection_inverse)
 {
     vec3 ndc = vec3(coord, depth) * 2.0 - 1.0; // 零到一转负一到一。
     vec4 pos = ogxMatrixMul(dh_projection_inverse, vec4(ndc, 1.0)); // 远景逆投影整矩阵乘法。
@@ -11348,7 +11581,7 @@ float ogxGroundTruthAo(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord, floa
                 if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
                 {
                     sampleDepth = textureLod(dhDepthTexture, sampleCoord, 0.0).x; // 远景深度。
-                    sampleVector = ogxGiViewPosDh(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
+                    sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
                 }
                 else // 近景样本正常还原。
                 {
@@ -11376,7 +11609,7 @@ float ogxGroundTruthAo(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord, floa
                 if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
                 {
                     sampleDepth = textureLod(dhDepthTexture, sampleCoord, 0.0).x; // 远景深度。
-                    sampleVector = ogxGiViewPosDh(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
+                    sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
                 }
                 else // 近景样本正常还原。
                 {
@@ -11571,6 +11804,12 @@ float ogxGtaoSlices(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord,
 
 // 相机速度与时间滤波，具体实现在子文件。
 // 子文件：gi/gi/temporal.slang。
+/*
+全局光子文件：相机速度、历史样本重投影与时间滤波。
+调用位置：由 `gi/gi.slang` 内联，全局光的时间累积与手部排除使用这里的入口。
+可复制示例：`vec2 v = ogxGiCameraVelocity(coord, depth, isDistant, materialIds, view, false, false, 0.1, 1.0);`
+设计原因与取舍：远景与近景、手与世界分别处理；历史权重与参考常数一致，不读取宿主状态。
+*/
 // 相机速度：区分远景与近景、手与世界，算出当前像素相对上一帧的屏幕位移。
 vec2 ogxGiCameraVelocity(vec2 coord, float depth, bool isDh, float materialIds, OgxGiView view,
     bool disableHand, bool disablePlayer, float handDepth, float playerMaterial)
@@ -11671,7 +11910,7 @@ vec4 ogxGiTemporalFilter(vec2 coord, ivec2 texelCoord, OgxGiView view,
             vec3 currViewPos = ogxGiViewPos(local, currDepth, view.projection_inverse); // 还原视空间位置。
             if (isDh) // 远景用远景逆投影。
             {
-                currViewPos = ogxGiViewPosDh(local, currDepth, view.dh_projection_inverse);
+                currViewPos = ogxGiViewPosDistant(local, currDepth, view.dh_projection_inverse);
             }
             vec3 gi = vec3(0.0); // 本帧反弹。
             bool applyRsm = true; // 默认所有像素都反弹。
@@ -11750,6 +11989,12 @@ vec4 ogxGiTemporalFilter(vec2 coord, ivec2 texelCoord, OgxGiView view,
 
 // 空间滤波与降噪，具体实现在子文件。
 // 子文件：gi/gi/spatial.slang。
+/*
+全局光子文件：七乘七空间滤波与参考签名版降噪。
+调用位置：由 `gi/gi.slang` 内联，全局光在时间累积之后调用空间滤波。
+可复制示例：`vec3 c = ogxGiSpatialFilter(coord, dist, normal, viewDir, view, history, 0.5);`
+设计原因与取舍：邻域偏移显式列出，权重按法线与深度筛选；边界夹紧与参考实现一致。
+*/
 // 七乘七邻域偏移按行列下标现算：x 从负三到三，y 同样，按行优先排列。
 // 全局光空间滤波：在七乘七邻域里按法线与深度加权平均，抑制半分辨率带来的噪点。
 vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGiView view, sampler2D historyTexture, float renderScale)
@@ -11847,75 +12092,20 @@ vec3 ogxGiSpatialFilterReference(float dist, vec3 normal, vec3 viewDir, vec2 coo
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
 */
 /*
-Omni 通用图形库 Eclipse 漫反射补充模块：手持光阴影、方块光合成与手电光。
+Omni 通用图形库方块光模块：光照图曲线、LPV 体积混合与体素版方块光。
 调用位置：需要复现 Eclipse `diffuse_lighting.glsl` 的程序；Minecraft 光影由
     `/omni-gfx/gi/diffuse.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    float shadow = ogxSsrtHandlightShadow(viewPos, false, lightDir, noise, normal, false,
-        modelViewInverse, nearPlane, farPlane, 1.0, depthTex, projection, 10.0, 0.0015, 0.3);
-    vec3 flashlight = ogxFlashlight(texcoord, viewPos, normal, albedo,
-        specularData, false, noiseTex, modelViewInverse, previousModelView, cameraWorldPos,
-        previousCameraWorldPos, centerDepthSmooth, projectionInverse, 32.0, 1.0, 1.0, 2.0, 1.0, 0.9, 0.8);
+    `vec3 light = ogxBlockLightLighting(lightColor, lightmap, lpvSample, handLight, lpvPos, 32.0, 4.0, 1.0, true, true);`
 设计原因与取舍：
-    参考实现直接读 `depthtex2`、`gbufferModelViewInverse` 与手电菜单。库把深度图、矩阵、尺寸与
-    手电颜色全部改成显式参数；分支、常数和采样顺序保持参考实现。
-    手电的镜头脏污只接噪声纹理参数，不绑定 `noisetex`；这样独立测试与光影可以换纹理。
+    参考实现直接读 `lightmap`、LPV 图与手光颜色。库把这些输入全部改成显式参数；
+    分支、常数和采样顺序保持参考实现。
+    手持光、手电与手光阴影统一放在 `heldlight.slang`，本文件只负责方块光合成，
+    避免同一个手光主体分成两个模块。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。漫反射光照目前只被库内 Photonics 模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_GI_DIFFUSE_INCLUDED
 #define OGX_GI_DIFFUSE_INCLUDED
-
-// 相机提供投影与裁剪空间换算；数学提供夹紧与线性深度。
-
-
-// 手持光屏幕空间阴影：沿光线方向在深度图里步进，撞到遮挡就压暗。
-// 参考固定十步；远近景各取一张深度图，两条分支都写在函数体里，采样次数与参考一致。
-float ogxSsrtHandlightShadow(vec3 viewPos, bool depthCheck, vec3 lightDir, float noise,
-    vec3 normals, bool hand, mat4 modelViewInverse, float nearPlane, float farPlane,
-    float renderScale, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projection,
-    mat4 dhProjection, float dhVoxyNearPlane, float dhVoxyFarPlane, float texelSize, float strength)
-{
-    if (hand) return 1.0; // 手部不投手持光阴影。
-    vec3 worldLightDir = normalize(ogxMatrixMulPoint(modelViewInverse, lightDir)); // 光方向转世界，参考连平移一起乘。
-    float NdotL = smoothstep(0.0, 0.2, abs(dot(normals, worldLightDir))); // 法线朝向的软边。
-    float shadows = 1.0; // 阴影结果。
-    float samples = 10.0; // 参考固定十步。
-    float div = 0.0015; // 固定步长除数。
-    float _near = nearPlane; // 近平面。
-    float _far = farPlane * 4.0; // 远平面放大四倍。
-    if (depthCheck) // 远景使用远景裁剪参数。
-    {
-        _near = dhVoxyNearPlane;
-        _far = dhVoxyFarPlane;
-    }
-    vec3 position = ogxToClipSpace3Dh(viewPos, depthCheck, projection, dhProjection); // 起点投到裁剪空间。
-    float rayLength = ((viewPos.z + lightDir.z * _far * sqrt(3.0)) > -_near)
-        ? (-_near - viewPos.z) / lightDir.z : _far * sqrt(3.0); // 射线长度。
-    vec3 direction = ogxToClipSpace3Dh(viewPos + lightDir * rayLength, depthCheck, projection, dhProjection) - position; // 裁剪空间方向。
-    direction.xyz /= max(max(abs(direction.x) / div, abs(direction.y) / div), 400.0); // 固定步长。
-    direction *= 6.0; // 参考实现的步数放大。
-    position.xy *= renderScale;
-    direction.xy *= renderScale;
-    vec3 newPos = position + direction * noise; // 加抖动。
-    for (int i = 0; i < int(samples); i++) // 固定步数。
-    {
-        float samplePos;
-        if (depthCheck) // 远景深度图。
-        {
-            samplePos = texelFetch(dhDepthTexture, ivec2(newPos.xy / texelSize), 0).x;
-        }
-        else // 近景深度图。
-        {
-            samplePos = texelFetch(depthTexture, ivec2(newPos.xy / texelSize), 0).x;
-        }
-        if (samplePos < newPos.z && samplePos > 0.0) // 被遮挡。
-        {
-            shadows = 0.0;
-            break;
-        }
-        newPos += direction; // 前进一步。
-    }
-    return clamp(shadows * NdotL, 1.0 - strength, 1.0); // 参考实现的强度夹紧。
-}
 
 // 方块光合成：原版光照图曲线、LPV 体积、手持光与手电阴影一起决定最终方块光。
 // `lpvSample` 与 `handLight` 由调用方先算好，库只负责曲线与混合。
@@ -11942,46 +12132,6 @@ vec3 ogxBlockLightLighting(vec3 lightColor, float lightmap, vec3 lpvSample,
     return blockLight * torchAmount; // 参考实现的亮度缩放。
 }
 
-// 手电光：把屏幕位置换成手电筒锥，再按距离、圆斑与镜头脏污叠出光斑。
-// `specularData` 返回方向与强度，供高光阶段复用。
-// 参考签名是屏幕坐标、视空间位置、法线与底色；矩阵、相机位置、深度图与手电参数显式追加。
-vec3 ogxFlashlight(vec2 texcoord, vec3 viewPos, vec3 normal, vec3 albedo,
-    out vec4 specularData, bool hand, sampler2D noiseTexture, mat4 modelViewInverse,
-    mat4 previousModelView, vec3 cameraWorldPos, vec3 previousCameraWorldPos,
-    float centerDepthSmooth, mat4 projectionInverse, float range, float brightnessFalloff,
-    float brightness, float size, float red, float green, float blue)
-{
-    float forwardOffset = 0.5; // 参考实现的前向偏移。
-    vec3 shiftedViewPos = viewPos + vec3(-0.25, 0.2, 0.0); // 手电在视线左上方。
-    vec3 shiftedPlayerPos = ogxMatrix3MulPoint(mat3(modelViewInverse), shiftedViewPos) + ogxMatrixTranslation(modelViewInverse)
-        + (cameraWorldPos - previousCameraWorldPos) * 3.0; // 相机相对位置并补上相机移动。
-    shiftedViewPos = ogxMatrix3MulPoint(mat3(previousModelView), shiftedPlayerPos) + ogxMatrixTranslation(previousModelView); // 换到上一帧视空间，避免手电抖动。
-    vec2 scaledViewPos = shiftedViewPos.xy / max(-shiftedViewPos.z - forwardOffset, 1e-7); // 投到屏幕。
-    float linearDistance = length(shiftedPlayerPos); // 到手电的距离。
-    float shiftedLinearDistance = length(scaledViewPos); // 屏幕距离。
-    float lightFalloff = 1.0 - clamp(1.0 - linearDistance / range, -0.999, 1.0); // 距离衰减。
-    lightFalloff = max(exp(-10.0 * brightnessFalloff * lightFalloff), 0.0); // 指数衰减。
-    float specular = lightFalloff * exp2(-7.0 * shiftedLinearDistance * shiftedLinearDistance) * brightness; // 高光强度。
-    specularData = vec4(normalize(shiftedPlayerPos), specular); // 方向与强度。
-    float projectedCircle = clamp(1.0 - shiftedLinearDistance * size, 0.0, 1.0); // 圆斑。
-    float lensDirt = textureLod(noiseTexture, scaledViewPos * 0.2 + 0.1, 0.0).b; // 镜头脏污。
-    float lensShape = (pow(abs(pow(abs(projectedCircle - 1.0), 2.0) * 2.0 - 0.5), 2.0) + lensDirt * 0.2) * 10.0; // 光斑形状。
-    float offsetNdotL = clamp(dot(-normal, normalize(shiftedPlayerPos)), 0.0, 1.0); // 法线朝向。
-    vec3 diffuse = vec3(1.0) * lightFalloff * offsetNdotL * pow(1.0 - pow(1.0 - projectedCircle, 2.0), 2.0) * lensShape * brightness; // 漫反射光斑。
-    if (hand) // 手部不发光。
-    {
-        diffuse = vec3(0.0);
-        specularData = vec4(0.0);
-    }
-    float lightWidth = 1.0 + linearDistance * 3.0; // 手电在屏幕上的覆盖宽度。
-    vec3 pointPos = ogxToScreenSpace(vec3(texcoord, centerDepthSmooth), projectionInverse) + vec3(-0.25, 0.2, 0.0); // 命中点换回视空间。
-    pointPos = ogxMatrix3MulPoint(mat3(modelViewInverse), pointPos); // 换到相机相对世界位置。
-    float flashLightHitPoint = distance(pointPos, shiftedPlayerPos); // 命中点到手电的距离。
-    float indirectFlashLight = exp(-10.0 * (1.0 - clamp(1.0 - length(shiftedViewPos.xy) / lightWidth, 0.0, 1.0))); // 屏幕范围的柔光。
-    indirectFlashLight *= pow(clamp(1.0 - flashLightHitPoint / lightWidth, 0.0, 1.0), 2.0); // 越远越弱。
-    diffuse += albedo / 150.0 * indirectFlashLight * lightFalloff; // 被照表面的间接反光。
-    return diffuse * vec3(red, green, blue); // 按手电颜色输出。
-}
 
 // 方块光体素版：LPV 采样与手持光由调用方传入，曲线和边缘淡出与参考实现相同。
 vec3 ogxBlockLightLightingVoxel(vec3 lightColor, float lightmap, vec3 lpvSample,
@@ -12032,22 +12182,21 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
 调用位置：需要复现 Eclipse `indirect_lighting_effects.glsl` 的程序；Minecraft 光影由
     `/omni-gfx/gi/indirect.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    vec3 dir = ogxTangentToWorld(normal, ogxCosineHemisphereDirection(xi));
-    vec3 hit = ogxGiRayTrace(rayDir, viewPos, dither, 5.0, nearPlane, farPlane, 1.0, depthTex, projection);
-    vec3 gi = ogxApplySsrt(indirect, blockLight, minimumLight, viewPos, normal, noise, lightmap,
-        false, false, pixel, frame, 8, 32, 1.0, sceneTex, depthTex, modelView, prevModelView,
-        modelViewInverse, prevProjection, cameraPos - prevCameraPos, texelSize);
+    `vec3 gi = ogxApplyScreenSpaceIndirect(indirect, blockLight, minimumLight, viewPos, normal, noise, lightmap, ...);`
 设计原因与取舍：
     参考实现直接读 `gl_FragCoord`、`frameCounter`、`gbufferModelView` 与缓冲编号。库把像素坐标、帧号、
     矩阵、纹理、射线数与开关全部改成显式参数；公式、循环顺序与分支条件保持参考实现。
     纹理只作为参数传入，库不绑定缓冲；调用方可以换分辨率、换历史缓冲，也可以独立测试。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。间接光目前只被库内反射模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_GI_INDIRECT_INCLUDED
 #define OGX_GI_INDIRECT_INCLUDED
 
 // 相机提供投影与屏幕换算；数学提供夹紧与 R2 采样。
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
+// 反射提供屏幕空间追踪与历史重投影。
 /*
 生成文件：反射模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
@@ -12063,13 +12212,15 @@ Omni 通用图形库反射模块：可见法线采样、屏幕空间追踪、反
     `ogxReflectionAtrousFilter(data, viewPos, viewDir, normal, roughness, 40.0, noise, uv, reflTex, depthTex, normalTex, pixelSize, projectionInverse);` 九点降噪。
 设计原因与取舍：
     深度图、投影、光色与天空都由参数传入，库不读取引擎状态；主机特有的天空兜底、体素回退与
-    反射雾仍留在 `shaders/gfx/reflection.glsl` 的合成流程里，那里只做开关组合，不再含采样循环。
+    反射雾仍留在效果层的合成流程里，那里只做开关组合，不再含采样循环。
     公式与旧实现逐项一致；矩阵乘法在 Slang 与 GLSL 的行列解释不同，统一走数学模块的显式展开。
 */
 #ifndef OGX_REFLECTION_INCLUDED
 #define OGX_REFLECTION_INCLUDED
 
 // 饱和、曲线编码、菲涅耳与法线解码来自数学模块。
+
+// 相机模块提供深度换算与阴影投影的唯一实现。
 
 // 一个完整圆周，采样角度与旋转都用它。
 const float OGX_TAU = 6.28318530718;
@@ -12105,28 +12256,8 @@ vec3 ogxReflectionScreenPos(vec3 viewPos, mat4 projection)
     return pos * (0.5 / -viewPos.z) + 0.5; // 透视除法并转到零到一。
 }
 
-// 屏幕深度换米制距离。
-float ogxReflectionLinearDepth(float depth, mat4 projectionInverse)
-{
-    depth = depth * 2.0 - 1.0; // 零到一转负一到一。
-    return 1.0 / (depth * projectionInverse[2][3] + projectionInverse[3][3]); // 逆投影的深度部分。
-}
 
-// 米制距离换回屏幕深度。
-float ogxReflectionScreenDepth(float depth, mat4 projectionInverse)
-{
-    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 解出负一到一深度。
-    return depth * 0.5 + 0.5; // 转回零到一。
-}
 
-// 远景深度换成同一距离在近景投影下的深度。
-float ogxReflectionDhToScreenDepth(float depth, mat4 dhProjectionInverse, mat4 projectionInverse)
-{
-    depth = depth * 2.0 - 1.0; // 远景深度转到负一到一。
-    depth = 1.0 / (depth * dhProjectionInverse[2][3] + dhProjectionInverse[3][3]); // 先换成米。
-    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 再用近景投影换回深度。
-    return depth * 0.5 + 0.5; // 转回零到一。
-}
 
 // 读追踪采样点的深度：手部优先手部图，近景是天空时按开关改读远景。
 float ogxReflectionSampleDepth(vec2 coord, bool isHand, bool handSupported, sampler2D depthTexture, sampler2D handDepthTexture,
@@ -12139,7 +12270,7 @@ float ogxReflectionSampleDepth(vec2 coord, bool isHand, bool handSupported, samp
     float depth = textureLod(depthTexture, coord, 0.0).x; // 其他像素读普通不透明深度。
     if (hasDh && dhSsr && depth == 1.0) // 天空像素按开关改读远景。
     {
-        depth = ogxReflectionDhToScreenDepth(textureLod(dhDepthTexture, coord, 0.0).x, dhProjectionInverse, projectionInverse); // 远景深度换到近景尺度。
+        depth = ogxScreenDepthFromDistantScreenDepth(textureLod(dhDepthTexture, coord, 0.0).x, dhProjectionInverse, projectionInverse); // 远景深度换到近景尺度。
     }
     return depth; // 返回该坐标的深度。
 }
@@ -12157,7 +12288,7 @@ bool ogxScreenSpaceTrace(vec3 viewRayOri, vec3 viewRayDir, float ndotv, float no
     float stepLength = mix(minStepLength, rSteps, ndotv); // 正对视线时步长更大，掠射时更小。
     float zScaling = abs(1.0 / rayDir.z); // 深度方向的缩放。
     bool hit = false; // 命中标记。
-    float maxDepth = hasDh ? ogxReflectionScreenDepth(ogxReflectionLinearDepth(1.0, dhProjectionInverse), projectionInverse) : 1.0; // 有远景时步进上限是远景最远距离。
+    float maxDepth = hasDh ? ogxScreenDepthFromLinearDepth(ogxLinearDepthFromScreenDepth(1.0, dhProjectionInverse), projectionInverse) : 1.0; // 有远景时步进上限是远景最远距离。
     screenPos += rayDir * stepLength * noise; // 起点按噪声抖动，减少规则条纹。
     float depth = ogxReflectionSampleDepth(screenPos.xy, false, handSupported, depthTexture, handDepthTexture, dhDepthTexture,
         hasDh, dhSsr, dhProjectionInverse, projectionInverse); // 读起始点深度。
@@ -12189,8 +12320,8 @@ bool ogxScreenSpaceTrace(vec3 viewRayOri, vec3 viewRayDir, float ndotv, float no
             {
                 continue;
             }
-            float stepDist = ogxReflectionLinearDepth(screenPos.z, projectionInverse); // 射线点的米制距离。
-            float sampleDist = ogxReflectionLinearDepth(depth, projectionInverse); // 几何点的米制距离。
+            float stepDist = ogxLinearDepthFromScreenDepth(screenPos.z, projectionInverse); // 射线点的米制距离。
+            float sampleDist = ogxLinearDepthFromScreenDepth(depth, projectionInverse); // 几何点的米制距离。
             float distDiff = abs(sampleDist - stepDist) / stepDist; // 两点的相对深度差。
             if (distDiff < zDiffThreshold && screenPos.z > 0.0 && screenPos.z < maxDepth) // 差足够小且深度有效才算命中。
             {
@@ -12310,7 +12441,7 @@ void ogxReflectionAtrousFilter(inout vec4 reflectionData, vec3 viewPos, vec3 vie
         {
             continue;
         }
-        float sampleDepth = ogxReflectionLinearDepth(textureLod(depthTexture, sampleCoord, 0.0).x, projectionInverse); // 邻点米制深度。
+        float sampleDepth = ogxLinearDepthFromScreenDepth(textureLod(depthTexture, sampleCoord, 0.0).x, projectionInverse); // 邻点米制深度。
         vec3 sampleReflected = reflect(-viewDir, ogxDecodeNormal(textureLod(normalTexture, sampleCoord, 0.0).xy)); // 邻点反射方向。
         float normalWeight = pow(ogxSaturate(dot(sampleReflected, reflectedDir)), normalThreshold); // 反射方向越接近权重越大。
         float depthWeight = exp2(-(abs(sampleDepth - linearDepth) * 1.58)); // 深度越接近权重越大。
@@ -12352,11 +12483,6 @@ vec3 ogxTangentToWorld(vec3 N, vec3 H)
     return (T * H.x) + (B * H.y) + (N * H.z); // 参考实现的线性组合。
 }
 
-// Eclipse 线性深度：屏幕深度换米制距离。
-float ogxLinearizeDepth(float depth, float nearPlane, float farPlane)
-{
-    return (2.0 * nearPlane) / (farPlane + nearPlane - depth * (farPlane - nearPlane)); // 参考实现的分式。
-}
 
 // Eclipse 线性深度反解：米制距离换屏幕深度。
 float ogxLinearToScreenDepth(float linearDepth, float nearPlane, float farPlane)
@@ -12364,12 +12490,6 @@ float ogxLinearToScreenDepth(float linearDepth, float nearPlane, float farPlane)
     return -((2.0 * nearPlane / linearDepth) - farPlane - nearPlane) / (farPlane - nearPlane); // 参考实现的反解。
 }
 
-// Eclipse R2 采样：低差异序列，给每个像素不同的射线相位。
-vec2 ogxR2Sequence(int n)
-{
-    vec2 alpha = vec2(0.75487765, 0.56984026); // 参考实现的常数。
-    return fract(alpha * float(n)); // 取小数。
-}
 
 // 取得纹理的像素尺寸：库需要显式尺寸，避免依赖宿主 `texelSize`。
 vec2 texelFetchSize(sampler2D tex)
@@ -12493,7 +12613,7 @@ vec4 ogxBilateralUpscaleSsaoReference(sampler2D source, sampler2D sourceDepth, v
 
 // SSGI 合成：多根余弦半球射线，命中时读历史场景色，未命中时保留天空贡献。
 // 把屏幕空间追踪结果混进间接光，按最小光色与遮挡权重取舍。
-vec3 ogxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
+vec3 ogxApplyScreenSpaceIndirect(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
     vec3 viewPos, vec3 normal, vec3 noise, float lightmap, bool isGrass, bool isLod,
     ivec2 pixelCoord, int frameCounter, int rayCount, int raySteps, float giStrength,
     sampler2D sceneTexture, sampler2D depthTexture, vec2 texelSize,
@@ -12514,7 +12634,7 @@ vec3 ogxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLigh
     for (int i = 0; i < nrays; i++) // 逐射线。
     {
         int seed = (frameCounter % 40000) * nrays + i; // 参考实现的帧序列。
-        vec2 ij = fract(ogxR2Sequence(seed) + noise.xy); // 采样点。
+        vec2 ij = fract(ogxR2Sample(seed) + noise.xy); // 采样点。
         vec3 rayDir = ogxTangentToWorld(normal, normalize(ogxCosineHemisphereDirection(ij))); // 世界方向。
         vec3 rayHit = highQuality
             ? ogxGiRayTrace(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos, noise.z, 5.0 * float(raySteps), nearPlane, farPlane, 1.0, depthTexture, quarterRes, projection)
@@ -12545,7 +12665,7 @@ vec3 ogxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLigh
 // Eclipse 的 SSGI 合成主循环：只走参考实现的低质量追踪分支，四根余弦半球射线。
 // 为什么单独一份：增强版还带高质量追踪、历史场景色与手部排除；参考默认路径只调用
 // `RT_alternate`，采样次数因此是四根射线各一次深度读取。
-vec3 ogxApplySsrtReference(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
+vec3 ogxApplyScreenSpaceIndirectReference(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
     vec3 viewPos, vec3 normal, vec3 noise, float lightmap, bool isGrass, bool isLod,
     ivec2 pixelCoord, int frameCounter, int rayCount, int raySteps, vec2 viewSize, vec2 texelSize,
     sampler2D depthTexture, mat4 modelView, mat4 modelViewInverse, mat4 projection,
@@ -12562,7 +12682,7 @@ vec3 ogxApplySsrtReference(vec3 unchangedIndirect, vec3 blockLightColor, vec3 mi
     for (int i = 0; i < nrays; i++) // 逐射线。
     {
         int seed = (frameCounter % 40000) * nrays + i; // 参考实现的帧序列。
-        vec2 ij = fract(ogxR2Sequence(seed) + noise.xy); // 采样点。
+        vec2 ij = fract(ogxR2Sample(seed) + noise.xy); // 采样点。
         vec3 rayDir = ogxTangentToWorld(normal, normalize(ogxCosineHemisphereDirection(ij))); // 世界方向。
         vec3 rayHit = ogxGiRayMarch(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos,
             noise.z, float(raySteps), isLod, curve, raySteps, nearPlane, farPlane, 1.0, viewSize, texelSize,
@@ -12608,10 +12728,16 @@ Omni 通用图形库全局光环境光遮蔽模块：Eclipse GTAO 的弧段积�
     float ao = ogxGtaoHorizon(screenPos, viewPos, normal, dither, 4, 1.0, 8, 0.2, pixelSize, viewSize, 1.0, 0.0, 1.5708, depthTex, proj, invProj); // 计算环境光遮蔽。
 设计原因与取舍：
     沿切片搜索最近遮挡，切片数与步数由调用方给出；深度图、矩阵与手部深度显式传入，公式与参考实现逐项相同。
+    本模块只服务独立画面的低成本遮蔽，步数与切片数由画质档位控制；全局光内部使用的
+    多次切片参考实现放在 `gi/gi/ao.slang`，两者按调用场景分工，不互相包含，避免把重算法带进轻量阶段。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。独立环境光遮蔽目前只有探针覆盖，顶层画面走 gi/gi 的多切片实现。
 */
 #ifndef OGX_GI_AMBIENTOCCLUSION_INCLUDED
 #define OGX_GI_AMBIENTOCCLUSION_INCLUDED
 
+// 相机提供投影、视空间与裁剪空间换算。
+
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
 // GTAO 的弧段积分：两个水平角之间覆盖的余弦积分。
 // 在单位圆上积分一段弧的贡献，供天空环境光近似。
@@ -12638,6 +12764,7 @@ float ogxGtaoMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPos, 
         float depth = texelFetch(depthTexture, pixel, 0).x; // 读深度。
         if (depth == 1.0 || depth < handDepth || depth == screenPos.z) // 天空、手与自身都跳过。
         {
+            // 无效样本不参与最大角，但射线仍要前进，避免原地重复读取同一像素。
             rayPos += rayStep;
             continue;
         }
@@ -12648,6 +12775,7 @@ float ogxGtaoMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPos, 
         float cosTheta = dot(viewerDir, offset) * norm; // 夹角余弦。
         cosTheta = mix(cosTheta, -1.0, distanceFalloff); // 远处压到水平线以下。
         maxCosTheta = max(cosTheta, maxCosTheta); // 取最大。
+        // 沿切片方向推进一个固定步长；步长在循环外算好，循环内不再重复除法。
         rayPos += rayStep;
     }
     return ogxFastAcosPoly(clamp(maxCosTheta, -1.0, 1.0)); // 反余弦得到角度。
@@ -12706,14 +12834,22 @@ Omni 通用图形库WSR 反射模块：体素追踪、屏幕空间反射、LPV �
     vec4 cloud = ogxWsrFogMarch(origin, end, dither, light, ambient, average, 16, density, shadowTex, view, proj, cameraOffset, cameraPos, sun, far, 32, 1.0, 1.0, 0.0, 0.0, 1.0, rayleigh, mie, 0.9, 0.9, 1.0, 2048.0, bolt, lightning); // 积分空气雾。
 设计原因与取舍：
     体素命中、屏幕空间追踪、雾与水体都只读显式纹理和矩阵；指数步进、吸收与闪电照明的顺序与参考实现一致。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。WSR 反射目前只被库内高光模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_REFLECTION_WSR_INCLUDED
 #define OGX_REFLECTION_WSR_INCLUDED
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
+// 体素求交提供光线步进与遮挡判断。
 
+// 阴影贴图提供投影偏差、边缘压缩与体素阴影。
 
+// 雾提供高度密度、相位与粉末效应。
 
+// 水面提供吸收、波法线、泡沫与折射。
+
+// 闪电提供落点、闪光与雾中照明。
 /*
 生成文件：闪电模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
@@ -12729,9 +12865,12 @@ Omni 通用图形库闪电模块：闪电照亮表面、体积云与雾，末地
 设计原因与取舍：
     参考实现直接读 `lightningBoltPosition` 与末地宏。库把闪电位置、强度、光色和随机纹理显式传入，
     距离衰减、次表面相位与末地光柱混合的常数和分支保持参考实现。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。闪电目前只被库内反射模块间接引用，没有独立画面入口。
 */
 #ifndef OGX_WEATHER_LIGHTNING_INCLUDED
 #define OGX_WEATHER_LIGHTNING_INCLUDED
+
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
 // 闪电照亮表面：距离衰减、次表面相位与法线朝向一起决定亮度。
 vec3 ogxLightningFlash(vec3 feetPlayerPos, vec4 boltPosition, vec3 worldNormal, vec3 lightningEffect,
@@ -12812,8 +12951,11 @@ vec3 ogxLightSourceColors(float vortexBounds, float lightningflash, vec3 vortexC
 
 #endif
 
+// 光传播体积提供方块光与天光采样。
 
+// 手持光提供光斑、手电与手光阴影。
 
+// 间接光提供屏幕空间追踪与历史重投影。
 
 // 屏幕空间高光追踪的提前声明：环境反射函数会先调用它，定义放在文件后半段。
 vec3 ogxReflectionRayTrace(vec3 dir, vec3 position, float dither, float quality, bool hand,
@@ -13206,13 +13348,20 @@ Omni 通用图形库Photonics 反射模块：命中面着色、方块光、云�
     vec4 color = ogxPhotonicsReflection(job, hits, count, dir, normal, noise, mask, tint, ids, colors, direct, ambient, indirect, 1.0, 0.0, 0.0, 0.0, 0.0, torch, lpv, hand, lpvPos, 64.0, 1.0, 2.0, true, 128.0, 1.0, 1.0, sun, opaque, translucent, tintTex, view, proj, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, 1.0, 1.0, true);
 设计原因与取舍：
     半透明命中逐层染色，不透明命中再合成；阴影、方块光与自发光全部走显式参数，采样顺序与参考实现相同。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。Photonics 反射目前只被库内高光模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_REFLECTION_PHOTONICS_INCLUDED
 #define OGX_REFLECTION_PHOTONICS_INCLUDED
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
+// 体素提供坐标、材质与发光读取。
 
+// 阴影贴图提供投影偏差、边缘压缩与体素阴影。
 
+// 方块光提供光照图曲线与 LPV 混合。
+
+// 间接光提供屏幕空间追踪与历史重投影。
 
 // Photonics 反射着色：间接光、方块光、阴影、云影与自发光一起决定命中面颜色。
 // 光子学反射着色：把体素命中、手光与阴影合成为反射颜色。
@@ -13388,12 +13537,18 @@ Omni 通用图形库高光模块：GGX、可见法线采样、粗糙菲涅耳、
     vec3 color = ogxSpecularReflections(viewPos, playerPos, nPos, lightVec, noise, flatN, n, 0.4, 0.02, albedo, diffuse, light, 1.0, false, false, background, sun, 1.0, 50.0, true, true, flash, 1.0, sceneTex, depthTex, proj, invProj, view, invView, prevProj, prevView, 0.05, 1000.0, delta, 1.0, texel); // 合成高光。
 设计原因与取舍：
     金属、介电与水面共用同一套菲涅耳与 GGX；背景天空、环境反射和太阳高光按参考顺序合成。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。高光合成目前只被库内反射模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_REFLECTION_SPECULAR_INCLUDED
 #define OGX_REFLECTION_SPECULAR_INCLUDED
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
+// 手持光提供光斑、手电与手光阴影。
 
+// 天空提供云环境色、星空与日月圆盘。
+
+// 反射提供体素与雾的合成入口。
 
 // 法线夹紧：把背向视线的法线朝视线方向拉回，避免掠射高光发黑。
 vec3 ogxClampReflectionNormal(vec3 n, vec3 v)
@@ -13683,7 +13838,7 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 设计原因与取舍：
     纹理、像素大小、子图范围与模糊参数全部由调用方传入，库不读取引擎画面或屏幕尺寸。
     伽马编码沿用管线的四次方根近似，保证与原程序相同的亮度；五级泛光的子图排布属于宿主布局，
-    仍留在 `shaders/gfx/post.glsl` 的组合函数里，这里只提供每一级的核与统计公式。
+    仍留在效果层的组合函数里，这里只提供每一级的核与统计公式。
 */
 #ifndef OGX_POST_INCLUDED
 #define OGX_POST_INCLUDED
@@ -13692,12 +13847,18 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 
 // 抖动要用噪声模块里的三角分布噪声。
 
+// 采样提供白噪声、蓝噪声与低差异序列。
 
-
-// 十三样本降采样：中心小、四角大，权重和为四，输出乘四分之一保持亮度。
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 
 // 泛光、调色与屏幕图案，具体实现在子文件。
 // 子文件：post/post/bloom.slang。
+/*
+后期子文件：泛光降采样与链拷贝、轴向高斯模糊、三次纹理放大、色调曲线与颗粒。
+调用位置：由 `post/post.slang` 内联，合成阶段的泛光与调色直接调用这些入口。
+可复制示例：`vec3 b = ogxBloomDownsample(source, coord, texel);`
+设计原因与取舍：每级只做一次可复用的核，链的边界与混合由调用方决定；权重和与参考一致。
+*/
 // 泛光降采样：先做四点盒式取样，再转换到线性颜色。
 vec3 ogxBloomDownsample(sampler2D source, vec2 coord, vec2 texel)
 {
@@ -13855,15 +14016,15 @@ float ogxDofLensFactor(float focalLength, float aperture, float referenceFocal, 
     return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
 }
 
-// 米制距离换回非线性屏幕深度；景深写回下界历史时需要这个反向换算。
-float ogxScreenDepthFromLinearDepth(float depth, mat4 projectionInverse)
-{
-    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 解出负一到一的深度。
-    return depth * 0.5 + 0.5; // 再转回零到一。
-}
 
 // 景深、散景与光圈，具体实现在子文件。
 // 子文件：post/post/dof.slang。
+/*
+后期子文件：景深线性深度、弥散范围扩散、参考签名版与完整景深合成。
+调用位置：由 `post/post.slang` 内联，合成阶段的景深效果调用这里的入口。
+可复制示例：`vec4 c = ogxDepthOfField(coord, colorTex, depthTex, farDepthTex, invProj, farInvProj, true, ...);`
+设计原因与取舍：深度图、矩阵与对焦参数显式传入，手部与远景的分支照参考保留。
+*/
 // 读一个坐标的米制深度；`useDh` 为真且近景没有几何时改读远景深度，再统一到近景尺度。
 // 为什么把下限夹在换米制之前：近处深度趋近于零时薄透镜公式会爆炸，先夹屏幕深度最稳。
 float ogxDofLinearDepth(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projectionInverse,
@@ -13934,7 +14095,7 @@ float ogxDofCocSpreadReference(vec2 coord, sampler2D depthTexture, sampler2D dhD
     if (focusMode == 0) // 自动对焦：读统计缓冲左下角的固定像素。
     {
         vec4 stat = texelFetch(focusTexture, ivec2(60, screenExtent.y - 1), 0);
-        focus = ogxShadowLinearDepth(stat.a * 0.125 + 0.875, projectionInverse);
+        focus = ogxLinearDepthFromScreenDepth(stat.a * 0.125 + 0.875, projectionInverse);
     }
     else // 手动对焦直接使用调用方给的距离。
     {
@@ -13985,7 +14146,7 @@ vec4 ogxDofReference(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
     if (focusMode == 0) // 自动对焦。
     {
         vec4 stat = texelFetch(focusTexture, ivec2(60, screenExtent.y - 1), 0);
-        focus = ogxShadowLinearDepth(stat.a * 0.125 + 0.875, projectionInverse);
+        focus = ogxLinearDepthFromScreenDepth(stat.a * 0.125 + 0.875, projectionInverse);
     }
     else // 手动对焦。
     {
@@ -14144,6 +14305,12 @@ vec4 ogxDepthOfField(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
 
 // 动态模糊、曝光分块与眩光，具体实现在子文件。
 // 子文件：post/post/effects.slang。
+/*
+后期子文件：相机动态模糊、曝光瓦片平均、镜头光斑与远景噪声。
+调用位置：由 `post/post.slang` 内联，合成阶段的运动模糊与镜头效果调用这里。
+可复制示例：`vec3 c = ogxMotionBlur(colorTex, coord, texel, pixel, velocity, 180.0, 8, true);`
+设计原因与取舍：只处理整屏相机位移，没有实体速度缓冲；光斑形状与参考常数逐项一致。
+*/
 // 相机动态模糊：沿两帧之间的屏幕位移，在历史画面上取一串样本求平均。
 // 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理整屏位移。
 vec3 ogxMotionBlur(sampler2D colorTexture, vec2 coord, ivec2 texel, vec2 pixel, vec2 velocity,
@@ -14323,7 +14490,7 @@ vec3 ogxGlareRing(vec2 uv, vec2 pos, float dist, float chromaOffset, float blur)
 }
 
 // 远景地形噪点：按楼层量化坐标，再按亮度与材质给一个可正可负的亮度扰动。
-vec3 ogxDhNoise(vec3 color, vec3 pos, float materialIDs, int leafId, float steps, float strength)
+vec3 ogxDistantNoise(vec3 color, vec3 pos, float materialIDs, int leafId, float steps, float strength)
 {
     pos = floor(pos * steps) / steps; // 坐标量化到固定楼层，远景纹素不会闪烁。
     float weight = ogxLuminance(color) * 2.0 - 1.0; // 亮度映射到负一到一。
@@ -14350,10 +14517,14 @@ Omni 通用图形库后期曝光模块：自动曝光分块统计、曝光值与
     float ev = ogxGetExposureValue(exposureTex, screenExtent, false, 0.0, 1.0, 1.0, 1.0, 0.0, true, false, 0.0, 0.0, true); // 取自动曝光值。
 设计原因与取舍：
     分块统计、测光权重与泛光量都按参考实现的分支保留；纹理、屏幕尺寸、维度与天气全部改成显式参数。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。曝光与泛光目前只被库内后期模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_POST_EXPOSURE_INCLUDED
 #define OGX_POST_EXPOSURE_INCLUDED
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 
 // 自动曝光的 tile 统计：把画面缩到六十四像素一格，逐格算亮度并按距离与夜视加权。
 // `aeMode` 与 `luminanceWeightMode` 对应参考实现的对应宏，`caveMode` 与 `dimension` 决定分支。
@@ -14451,19 +14622,19 @@ vec3 ogxMergeBloom(vec3 color, float bloomGuide, vec2 texCoord, sampler2D bloomT
         rainAlpha = 1.0 - texelFetch(gbuffer0, texelCoord, 0).a; // 第一张缓冲记录雨幕。
         rainAlpha *= rainVisibility; // 按可见度缩放。
         float depth = texelFetch(depthTex0, texelCoord, 0).x; // 屏幕深度。
-        linearDepth = ogxShadowLinearDepth(depth, projectionInverse); // 换成米。
-        if (hasDh && depth == 1.0) linearDepth = ogxShadowLinearDepth(texelFetch(dhDepthTex0, texelCoord, 0).x, dhProjectionInverse); // 天空像素读远景。
+        linearDepth = ogxLinearDepthFromScreenDepth(depth, projectionInverse); // 换成米。
+        if (hasDh && depth == 1.0) linearDepth = ogxLinearDepthFromScreenDepth(texelFetch(dhDepthTex0, texelCoord, 0).x, dhProjectionInverse); // 天空像素读远景。
     }
     else if (dimension == 1) // 下界。
     {
-        linearDepth = ogxShadowLinearDepth(ogxUnpack2x16(texelFetch(gbuffer7, texelCoord, 0).a).x, projectionInverse); // 第七张缓冲打包线性深度。
+        linearDepth = ogxLinearDepthFromScreenDepth(ogxUnpack2x16(texelFetch(gbuffer7, texelCoord, 0).a).x, projectionInverse); // 第七张缓冲打包线性深度。
         if (!hasDh) linearDepth = min(linearDepth, farPlane); // 没有远景时限制到远平面。
     }
     else // 末地。
     {
         float depth = texelFetch(depthTex0, texelCoord, 0).x; // 屏幕深度。
-        linearDepth = ogxShadowLinearDepth(depth, projectionInverse); // 换成米。
-        if (hasDh && depth == 1.0) linearDepth = ogxShadowLinearDepth(texelFetch(dhDepthTex0, texelCoord, 0).x, dhProjectionInverse); // 天空像素读远景。
+        linearDepth = ogxLinearDepthFromScreenDepth(depth, projectionInverse); // 换成米。
+        if (hasDh && depth == 1.0) linearDepth = ogxLinearDepthFromScreenDepth(texelFetch(dhDepthTex0, texelCoord, 0).x, dhProjectionInverse); // 天空像素读远景。
     }
     vec3 bloom = ogxCurveToLinear3(textureLod(bloomTexture, texCoord * 0.5, 0.0).rgb); // 半分辨率泛光图。
     float amount = bloomAmount; // 泛光量。
@@ -14527,6 +14698,7 @@ Omni 通用图形库 Eclipse 场景补充模块：受伤与入水画面效果、
 设计原因与取舍：
     参考实现直接读血量、眼在水中、`colortex7` 与末地雾密度纹理。库把数值、纹理与尺寸改成显式参数，
     分支、常数与采样顺序保持不变；场景控制只是把输入默认值抄到输出，参数表来自菜单来源。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。画面效果入口目前只有探针覆盖，顶层画面仍由各效果文件分别处理。
 */
 #ifndef OGX_POST_SCENE_INCLUDED
 #define OGX_POST_SCENE_INCLUDED
@@ -14655,10 +14827,14 @@ Omni 通用图形库镜头模块：对焦距离、桶形光斑、彩色鬼影、
     vec3 color = ogxLensFlare(texCoord, sunCoord, aspect, projectionYY, true, true, 1.0, 1.0, sunColor, 1.0, 0.0, 1.0); // 叠镜头光斑。
 设计原因与取舍：
     对焦与光斑都只依赖屏幕坐标、投影与太阳位置；纹理、开关和强度显式传入，常数与参考实现逐项相同。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。镜头光斑目前只有探针覆盖，还没有顶层画面入口。
 */
 #ifndef OGX_LENS_LENS_INCLUDED
 #define OGX_LENS_LENS_INCLUDED
 
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 
 // 对焦距离：参考实现从第二张缓冲左下角取一个对比度统计值，或直接使用手动焦距。
 float ogxGetFocus(sampler2D focusTexture, ivec2 screenExtent, int focusMode, float focalPoint, mat4 projectionInverse)
@@ -14667,7 +14843,7 @@ float ogxGetFocus(sampler2D focusTexture, ivec2 screenExtent, int focusMode, flo
     if (focusMode == 0) // 自动对焦：读取统计像素。
     {
         vec4 stat = texelFetch(focusTexture, ivec2(60, screenExtent.y - 1), 0); // 固定取横向第六十个像素。
-        focus = ogxShadowLinearDepth(stat.a * 0.125 + 0.875, projectionInverse); // 编码值还原成米。
+        focus = ogxLinearDepthFromScreenDepth(stat.a * 0.125 + 0.875, projectionInverse); // 编码值还原成米。
     }
     else // 手动对焦。
     {
@@ -14791,13 +14967,15 @@ Omni 通用图形库抗锯齿模块：YCoCg 颜色空间、历史邻域裁剪、
     `vec4 r = ogxTaaReproject(coord, velocity, depth, current, history, viewport, texel, projectionInverse, farPlane, jitter, 0.9, 1.0, 1e-4, false, false, true, false, false, referenceDepth);` 时间重投影。
 设计原因与取舍：
     只做纯计算与显式采样，不读取历史画面或深度缓冲的全局名字；重投影的位移由调用方算好。
-    YCoCg 让亮度与色差分开裁剪，避免高对比边缘出现彩边；算式与旧 `shaders/gfx/antialias.glsl` 一致。
+    YCoCg 让亮度与色差分开裁剪，避免高对比边缘出现彩边；算式与迁移前的 GLSL 原型一致。
     Slang 没有 GLSL 的按分量选择 `mix`，裁剪改成逐分量三元表达式，结果完全相同。
 */
 #ifndef OGX_ANTIALIAS_INCLUDED
 #define OGX_ANTIALIAS_INCLUDED
 
 // 饱和、位打包与反余弦来自数学模块。
+
+// 相机模块提供深度换算与阴影投影的唯一实现。
 
 // 把线性颜色转到亮度与色差空间，亮度单独处理。
 vec3 ogxRgbToYCoCg(vec3 color)
@@ -14872,19 +15050,7 @@ vec4 ogxBicubicTexture4(sampler2D source, vec2 coord, vec2 texSize)
     return color / (w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y); // 归一化。
 }
 
-// 屏幕深度换米制距离；时间抗锯齿的深度比较与参考深度都用这一套。
-float ogxTaaLinearDepth(float depth, mat4 projectionInverse)
-{
-    depth = depth * 2.0 - 1.0; // 零到一转负一到一。
-    return 1.0 / (depth * projectionInverse[2][3] + projectionInverse[3][3]); // 逆投影的深度部分。
-}
 
-// 米制距离换回屏幕深度，写历史参考深度时用。
-float ogxTaaScreenDepth(float depth, mat4 projectionInverse)
-{
-    depth = (1.0 / depth - projectionInverse[3][3]) / projectionInverse[2][3]; // 解出负一到一深度。
-    return depth * 0.5 + 0.5; // 转回零到一。
-}
 
 // 读当前帧颜色；`packedDepth` 为真时透明度是屏幕深度，读完换成米制，供下界历史使用。
 vec4 ogxTaaSampleCurrent(sampler2D colorTexture, vec2 coord, vec2 viewport, mat4 projectionInverse, bool packedDepth, bool bicubic)
@@ -14895,7 +15061,7 @@ vec4 ogxTaaSampleCurrent(sampler2D colorTexture, vec2 coord, vec2 viewport, mat4
     if (packedDepth) // 下界把颜色与深度放在同一张图。
     {
         data.rgb = ogxRgbToYCoCg(data.rgb); // 颜色转亮度色差空间。
-        data.a = ogxTaaLinearDepth(data.a, projectionInverse); // 深度换米制。
+        data.a = ogxLinearDepthFromScreenDepth(data.a, projectionInverse); // 深度换米制。
         return data; // 交回四分量。
     }
     return vec4(ogxRgbToYCoCg(data.rgb), 0.0); // 深度占位为零。
@@ -14908,7 +15074,7 @@ vec4 ogxTaaFetchCurrent(sampler2D colorTexture, ivec2 coord, mat4 projectionInve
     if (packedDepth) // 下界连深度一起读。
     {
         data.rgb = ogxRgbToYCoCg(data.rgb); // 颜色转亮度色差空间。
-        data.a = ogxTaaLinearDepth(data.a, projectionInverse); // 深度换米制。
+        data.a = ogxLinearDepthFromScreenDepth(data.a, projectionInverse); // 深度换米制。
         return data; // 四分量带深度。
     }
     return vec4(ogxRgbToYCoCg(data.rgb), 0.0); // 主世界与末地只要颜色。
@@ -14936,7 +15102,7 @@ vec4 ogxTaaSamplePrevious(sampler2D historyTexture, vec2 coord, vec2 viewport, m
     if (packedDepth) // 下界历史带参考深度。
     {
         float prevDepth = ogxTaaPrevDepthBilinear(historyTexture, coord, viewport).x; // 解包上一帧参考深度。
-        return vec4(ogxRgbToYCoCg(data.rgb), ogxTaaLinearDepth(prevDepth, projectionInverse)); // 颜色与米制参考深度。
+        return vec4(ogxRgbToYCoCg(data.rgb), ogxLinearDepthFromScreenDepth(prevDepth, projectionInverse)); // 颜色与米制参考深度。
     }
     return vec4(ogxRgbToYCoCg(data.rgb), 0.0); // 参考深度占位。
 }
@@ -15029,7 +15195,7 @@ vec4 ogxTaaReproject(vec2 coord, vec3 velocity, float currDepthMin, sampler2D cu
     if (depthCompare) // 深度比较通过才保留历史权重。
     {
         vec2 prevDepth = ogxTaaPrevDepthMinmax(historyTexture, prevCoord, viewport, packedDepth); // 上一帧深度范围。
-        float currDist = ogxTaaLinearDepth(currDepthMin, projectionInverse); // 当前帧换成米制。
+        float currDist = ogxLinearDepthFromScreenDepth(currDepthMin, projectionInverse); // 当前帧换成米制。
         float threshold = max(depthThreshold - currDist / farPlane * 0.2 * depthThreshold, 1e-5); // 越远阈值越小。
         blend *= step(prevDepth.x - currDepthMin + velocity.z, threshold); // 历史更深一侧的一致性判断。
         blend *= step(currDepthMin - velocity.z - prevDepth.y, threshold); // 历史更浅一侧的一致性判断。
@@ -15042,7 +15208,7 @@ vec4 ogxTaaReproject(vec2 coord, vec3 velocity, float currDepthMin, sampler2D cu
     if (packedDepth) // 下界参考深度也按权重混合。
     {
         referenceDepth = mix(currData.a, prevData.a, blend); // 混合参考深度。
-        referenceDepth = ogxTaaScreenDepth(referenceDepth, projectionInverse); // 换回屏幕深度再打包。
+        referenceDepth = ogxScreenDepthFromLinearDepth(referenceDepth, projectionInverse); // 换回屏幕深度再打包。
     }
     else // 普通维度不需要参考深度。
     {
@@ -15051,24 +15217,26 @@ vec4 ogxTaaReproject(vec2 coord, vec3 velocity, float currDepthMin, sampler2D cu
     return vec4(ogxYCoCgToRgb(currColor), currDepthMin); // 返回颜色与代表深度。
 }
 
-// iterationT 的远景单点深度：参考签名不带纹理，库把深度图作为显式资源。
-float ogxSampleDepthDhFetch(ivec2 coord, sampler2D depthTexture)
+
+// iterationT 参考签名的单像素深度读取：参数顺序是坐标在前、纹理在后，内部转调相机模块。
+// 为什么保留这一层：参考调用把纹理写在第二个参数，严格对照按原签名核对资源位置。
+float ogxSampleDepthDistantFetch(ivec2 coord, sampler2D depthTexture)
 {
-    return texelFetch(depthTexture, coord, 0).x; // 精确读一个像素。
+    return ogxSampleDepthFetch(depthTexture, coord); // 取格实现只在相机模块一份。
 }
 
 // iterationT 的远景最近三乘三深度：九个像素取最小值，避免细缝把背景深度拉远。
-float ogxSampleCurrDepthDhFetchClosest3x3(ivec2 coord, sampler2D depthTexture)
+float ogxSampleCurrDepthDistantFetchClosest3x3(ivec2 coord, sampler2D depthTexture)
 {
-    float d0 = ogxSampleDepthDhFetch(coord + ivec2(-1, -1), depthTexture); // 左上。
-    float d1 = ogxSampleDepthDhFetch(coord + ivec2(0, -1), depthTexture); // 上。
-    float d2 = ogxSampleDepthDhFetch(coord + ivec2(1, -1), depthTexture); // 右上。
-    float d3 = ogxSampleDepthDhFetch(coord + ivec2(-1, 0), depthTexture); // 左。
-    float d4 = ogxSampleDepthDhFetch(coord + ivec2(0, 0), depthTexture); // 中。
-    float d5 = ogxSampleDepthDhFetch(coord + ivec2(1, 0), depthTexture); // 右。
-    float d6 = ogxSampleDepthDhFetch(coord + ivec2(-1, 1), depthTexture); // 左下。
-    float d7 = ogxSampleDepthDhFetch(coord + ivec2(0, 1), depthTexture); // 下。
-    float d8 = ogxSampleDepthDhFetch(coord + ivec2(1, 1), depthTexture); // 右下。
+    float d0 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, -1)); // 左上。
+    float d1 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, -1)); // 上。
+    float d2 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, -1)); // 右上。
+    float d3 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, 0)); // 左。
+    float d4 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, 0)); // 中。
+    float d5 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, 0)); // 右。
+    float d6 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, 1)); // 左下。
+    float d7 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, 1)); // 下。
+    float d8 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, 1)); // 右下。
     return min(d0, min(d1, min(d2, min(d3, min(d4, min(d5, min(d6, min(d7, d8)))))))); // 九点最小。
 }
 
@@ -15097,7 +15265,7 @@ vec4 ogxTaaTemporalBlend(vec2 coord, vec3 velocity, float currDepthMin,
     blend *= sqrt(pixelVelocity.x * pixelVelocity.y) * 0.25 + 0.75; // 运动越大越信当前帧。
     blend *= float(ogxEqual(ogxSaturate(coord), coord)); // 出屏坐标不混历史。
     vec2 prevDepth = ogxTaaPrevDepthMinmax(historyTexture, prevCoord, viewport, false); // 上一帧九邻域参考深度。
-    float currDist = ogxTaaLinearDepth(currDepthMin, projectionInverse); // 当前深度换成米制。
+    float currDist = ogxLinearDepthFromScreenDepth(currDepthMin, projectionInverse); // 当前深度换成米制。
     float threshold = max(depthThreshold - currDist / farPlane * 0.2 * depthThreshold, 1e-5); // 越远阈值越小。
     blend *= step(prevDepth.x - currDepthMin + velocity.z, threshold); // 历史更深一侧的一致性。
     blend *= step(currDepthMin - velocity.z - prevDepth.y, threshold); // 历史更浅一侧的一致性。
@@ -15107,10 +15275,6 @@ vec4 ogxTaaTemporalBlend(vec2 coord, vec3 velocity, float currDepthMin,
     return vec4(currColor, currDepthMin); // 带回代表深度。
 }
 
-float ogxTaaSampleDepthFetch(sampler2D depthTexture, ivec2 coord)
-{
-    return texelFetch(depthTexture, coord, 0).x; // 当前像素的深度。
-}
 
 #endif
 
@@ -15130,52 +15294,48 @@ Omni 通用图形库时间抗锯齿取样模块：三乘三最近深度、远景
     参考实现用全局深度图与矩阵。库把纹理、像素坐标、材质编号与全部矩阵显式传入，
     这样三乘三取样与远近景切换可以单独测试，也不会把坐标约定藏在引擎里。
     采样顺序与参考实现一致：先按材质决定深度来源，再决定近景或远景重投影。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。时间取样目前只被库内抗锯齿模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_ANTIALIAS_TAA_INCLUDED
 #define OGX_ANTIALIAS_TAA_INCLUDED
 
 // 相机变换模块提供深度约定与投影，数学模块提供矩阵列展开。
 
-
-// 读一个当前帧深度纹素。
-float ogxTaaCurrentDepthFetch(sampler2D depthTexture, ivec2 coord)
-{
-    return texelFetch(depthTexture, coord, 0).x; // 精确读取，不插值。
-}
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
 // 当前帧三乘三最近深度：九个样本取最小值，用来避开前景薄片。
 float ogxTaaCurrentDepthClosest3x3(sampler2D depthTexture, ivec2 coord)
 {
-    float depth0 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(-1, -1)); // 左上。
-    float depth1 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(0, -1)); // 上方。
-    float depth2 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(1, -1)); // 右上。
-    float depth3 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(-1, 0)); // 左侧。
-    float depth4 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(0, 0)); // 中心。
-    float depth5 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(1, 0)); // 右侧。
-    float depth6 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(-1, 1)); // 左下。
-    float depth7 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(0, 1)); // 下方。
-    float depth8 = ogxTaaCurrentDepthFetch(depthTexture, coord + ivec2(1, 1)); // 右下。
+    float depth0 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, -1)); // 左上。
+    float depth1 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, -1)); // 上方。
+    float depth2 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, -1)); // 右上。
+    float depth3 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, 0)); // 左侧。
+    float depth4 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, 0)); // 中心。
+    float depth5 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, 0)); // 右侧。
+    float depth6 = ogxSampleDepthFetch(depthTexture, coord + ivec2(-1, 1)); // 左下。
+    float depth7 = ogxSampleDepthFetch(depthTexture, coord + ivec2(0, 1)); // 下方。
+    float depth8 = ogxSampleDepthFetch(depthTexture, coord + ivec2(1, 1)); // 右下。
     return min(depth0, min(depth1, min(depth2, min(depth3, min(depth4, min(depth5, min(depth6, min(depth7, depth8)))))))); // 九点最小值。
 }
 
 // 读一个远景深度纹素。
-float ogxTaaDhDepthFetch(sampler2D dhDepthTexture, ivec2 coord)
+float ogxTaaDistantDepthFetch(sampler2D dhDepthTexture, ivec2 coord)
 {
     return texelFetch(dhDepthTexture, coord, 0).x; // 远景深度图精确读取。
 }
 
 // 远景三乘三最近深度：与近景同样取九个样本的最小值。
-float ogxTaaDhDepthClosest3x3(sampler2D dhDepthTexture, ivec2 coord)
+float ogxTaaDistantDepthClosest3x3(sampler2D dhDepthTexture, ivec2 coord)
 {
-    float depth0 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(-1, -1)); // 左上。
-    float depth1 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(0, -1)); // 上方。
-    float depth2 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(1, -1)); // 右上。
-    float depth3 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(-1, 0)); // 左侧。
-    float depth4 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(0, 0)); // 中心。
-    float depth5 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(1, 0)); // 右侧。
-    float depth6 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(-1, 1)); // 左下。
-    float depth7 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(0, 1)); // 下方。
-    float depth8 = ogxTaaDhDepthFetch(dhDepthTexture, coord + ivec2(1, 1)); // 右下。
+    float depth0 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(-1, -1)); // 左上。
+    float depth1 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(0, -1)); // 上方。
+    float depth2 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(1, -1)); // 右上。
+    float depth3 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(-1, 0)); // 左侧。
+    float depth4 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(0, 0)); // 中心。
+    float depth5 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(1, 0)); // 右侧。
+    float depth6 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(-1, 1)); // 左下。
+    float depth7 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(0, 1)); // 下方。
+    float depth8 = ogxTaaDistantDepthFetch(dhDepthTexture, coord + ivec2(1, 1)); // 右下。
     return min(depth0, min(depth1, min(depth2, min(depth3, min(depth4, min(depth5, min(depth6, min(depth7, depth8)))))))); // 九点最小值。
 }
 
@@ -15197,7 +15357,7 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
     }
     else // 默认只取中心。
     {
-        depth = ogxTaaCurrentDepthFetch(depthTexture0, texelCoord); // 中心深度。
+        depth = ogxSampleDepthFetch(depthTexture0, texelCoord); // 中心深度。
     }
     vec3 velocity = vec3(0.0); // 默认没有位移。
     if (materialIDs != endPortalId) // 末地传送门不做重投影。
@@ -15206,8 +15366,8 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
         vec3 projection = vec3(0.0); // 上一帧屏幕坐标。
         if (screenPos.z == 1.0) // 天空像素改用远景深度。
         {
-            if (closestDepth) screenPos.z = ogxTaaDhDepthClosest3x3(dhDepthTexture0, texelCoord); // 远景最近深度。
-            else screenPos.z = ogxTaaDhDepthFetch(dhDepthTexture0, texelCoord); // 远景中心深度。
+            if (closestDepth) screenPos.z = ogxTaaDistantDepthClosest3x3(dhDepthTexture0, texelCoord); // 远景最近深度。
+            else screenPos.z = ogxTaaDistantDepthFetch(dhDepthTexture0, texelCoord); // 远景中心深度。
             projection = screenPos * 2.0 - 1.0; // 转负一到一。
             projection = ogxProjectAndDivide(dhProjectionInverse, projection); // 远景逆投影到视空间。
             projection = ogxMatrixMulPoint(modelViewInverse, projection) + ogxMatrixTranslation(modelViewInverse); // 转世界。
@@ -15215,8 +15375,8 @@ vec3 ogxTaaCameraVelocity(sampler2D depthTexture0, sampler2D depthTexture1, samp
             projection = ogxMatrixMulPoint(previousModelView, projection) + ogxMatrixTranslation(previousModelView); // 转上一帧视空间。
             vec3 previousScreen = vec3(previousProjection[0][0], previousProjection[1][1], previousProjection[2][2]) * projection + ogxMatrixTranslation(previousProjection); // 上一帧投影。
             previousScreen = previousScreen / -projection.z * 0.5 + 0.5; // 用投影前的深度做透视除法。
-            screenPos.z = ogxScreenDepthFromDhScreenDepth(screenPos.z, dhProjectionInverse, projectionInverse); // 远景深度换成近景尺度。
-            previousScreen.z = ogxScreenDepthFromDhScreenDepth(previousScreen.z, dhProjectionInverse, projectionInverse); // 上一帧深度同样换算。
+            screenPos.z = ogxScreenDepthFromDistantScreenDepth(screenPos.z, dhProjectionInverse, projectionInverse); // 远景深度换成近景尺度。
+            previousScreen.z = ogxScreenDepthFromDistantScreenDepth(previousScreen.z, dhProjectionInverse, projectionInverse); // 上一帧深度同样换算。
             projection = previousScreen; // 交回上一帧屏幕坐标。
             depth = ogxSaturate(screenPos.z); // 输出近景尺度深度。
         }
@@ -15257,6 +15417,7 @@ Omni 通用图形库抗锯齿 FXAA 模块：按亮度梯度找边缘方向，再
     vec3 sharp = ogxFxaa(color, texCoord, pixelSize, colorTexture); // 做一次边缘过滤。
 设计原因与取舍：
     只读一帧颜色，不需要历史缓冲；四个邻域和两组内侧样本的顺序与参考实现相同。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。FXAA 目前只有探针覆盖，顶层抗锯齿走 antialias/antialias。
 */
 #ifndef OGX_ANTIALIAS_FXAA_INCLUDED
 #define OGX_ANTIALIAS_FXAA_INCLUDED
@@ -15310,9 +15471,12 @@ Omni 通用图形库天气雨纹模块：三层动画雨纹、降水分布与湿
     vec2 n = ogxGetRainNormal(pos, strength, wet, rainTex1, rainTex2, rainTex3, noiseTex, time, 2.0); // 取雨滴法线。
 设计原因与取舍：
     雨纹按每秒六十帧离散滚动，三层强度由大尺度降水分布决定；湿润度在函数内更新，采样顺序与参考实现一致。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。雨纹目前只被库内水面模块间接引用，没有独立画面入口。
 */
 #ifndef OGX_WEATHER_RAIN_INCLUDED
 #define OGX_WEATHER_RAIN_INCLUDED
+
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
 // 单张雨纹的对比度重整：先转到负一到一，再按幂次拉对比，最后恢复符号。
 vec2 ogxRainAnimationTex(sampler2D texSampler, vec2 coord, float rp);
@@ -15373,14 +15537,18 @@ Omni 通用图形库 iterationT 末地补充模块：末地星空、行星 BRDF�
     参考实现直接读 `frameTimeCounter`、`worldSunVector`、`STAR_TYPE` 与云噪声选项。库把时间、光方向、
     纹理和开关全部改成显式参数，公式、常数、循环次数和采样顺序保持不变。
     噪点纹理只作为参数传入，库不假设它绑定在哪个缓冲；这样末地星空能独立测试，也能在光影里换槽位。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。末地效果目前只有探针与 profile 覆盖，顶层末地入口尚未接入。
 */
 #ifndef OGX_WORLD_END_INCLUDED
 #define OGX_WORLD_END_INCLUDED
 
 // 数学提供旋转、黑体色与夹紧；雾提供三维噪声与分形云；云提供顶部曲线；行星提供曲面曲线。
 
+// 雾提供高度密度、相位与粉末效应。
 
+// 云提供球面求交、密度与单层步进。
 
+// 行星提供末地天空与行星环。
 
 // iterationT 末地星空：按天球格子取哈希星点，星色用黑体温度。
 // `starType` 为零时由调用方决定是否叠加；本函数只负责算出星点。
@@ -15627,9 +15795,12 @@ Omni 通用图形库末地传送门模块：每层旋转、缩放与平移的传
     mat4 clip = ogxEndPortalLayer(3.0, frameTime); // 取该层的矩阵。
 设计原因与取舍：
     十六层各自不同旋转与平移，矩阵按参考实现的乘法顺序展开，调用方直接乘贴图坐标。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。末地传送门矩阵目前只有探针覆盖，顶层入口尚未接入。
 */
 #ifndef OGX_WORLD_PORTAL_INCLUDED
 #define OGX_WORLD_PORTAL_INCLUDED
+
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
 
 // 末地传送门层：每层一个旋转、缩放与平移，叠出会流动的传送门纹理。
 mat4 ogxEndPortalLayer(float layer, float timeSeconds)

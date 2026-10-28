@@ -1,6 +1,8 @@
 /* 体积雾的云影：把世界坐标投到云影贴图，并用四次双线性采样合成十六像素三次模糊；由 `fog/volume.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`float shadow = ogxFogCloudShadow(worldPos, media, cloudShadowTex, true);`
-设计取舍：贴图贴在画面右上角，坐标要翻转；边缘淡出与晴天雨天两档照参考保留。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 云影贴图的三次采样：取红通道，与云影写入端同一套模糊。
 // 四次双线性采样合成十六像素三次模糊，纹理读取次数只有逐像素方案的四分之一。
@@ -45,3 +47,6 @@ float ogxFogCloudShadow(float3 worldPos, OgxFogMedia media, Sampler2D cloudShado
     }
     return ((media.rain_shadow - 1.0) * media.wetness + 1.0) * cloudShadow + (media.wetness - media.rain_shadow * media.wetness); // 晴天与雨天两档之间插值。
 }
+
+// 暴风浓雾密度，具体实现在子文件。
+// --- storm ---

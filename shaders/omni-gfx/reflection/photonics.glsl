@@ -11,13 +11,20 @@ Omni 通用图形库Photonics 反射模块：命中面着色、方块光、云�
     vec4 color = ogxPhotonicsReflection(job, hits, count, dir, normal, noise, mask, tint, ids, colors, direct, ambient, indirect, 1.0, 0.0, 0.0, 0.0, 0.0, torch, lpv, hand, lpvPos, 64.0, 1.0, 2.0, true, 128.0, 1.0, 1.0, sun, opaque, translucent, tintTex, view, proj, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, 1.0, 1.0, true);
 设计原因与取舍：
     半透明命中逐层染色，不透明命中再合成；阴影、方块光与自发光全部走显式参数，采样顺序与参考实现相同。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。Photonics 反射目前只被库内高光模块间接引用，没有顶层画面入口。
 */
 #ifndef OGX_REFLECTION_PHOTONICS_INCLUDED
 #define OGX_REFLECTION_PHOTONICS_INCLUDED
-#include "/omni-gfx/math.glsl"
+
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "/omni-gfx/common/math.glsl"
+// 体素提供坐标、材质与发光读取。
 #include "/omni-gfx/voxel/voxel.glsl"
+// 阴影贴图提供投影偏差、边缘压缩与体素阴影。
 #include "/omni-gfx/shadow/map.glsl"
+// 方块光提供光照图曲线与 LPV 混合。
 #include "/omni-gfx/gi/diffuse.glsl"
+// 间接光提供屏幕空间追踪与历史重投影。
 #include "/omni-gfx/gi/indirect.glsl"
 // Photonics 反射着色：间接光、方块光、阴影、云影与自发光一起决定命中面颜色。
 // 光子学反射着色：把体素命中、手光与阴影合成为反射颜色。

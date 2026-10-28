@@ -174,7 +174,7 @@
 
 // 水下手持光钩子：体积雾通用库在包含前读取它，不定义时默认不加光。
 #if defined OMNI_LPV_FOG_LIGHT && defined OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER
-	#define GFX_UNDERWATER_HAND_LIGHT(world_pos) (omniLpvHandLight(heldItemId, world_pos) + omniLpvHandLight(heldItemId2, world_pos)) // 两手光源的光色乘距离衰减。
+	#define OGX_UNDERWATER_HAND_LIGHT(world_pos) (omniLpvHandLight(heldItemId, world_pos) + omniLpvHandLight(heldItemId2, world_pos)) // 两手光源的光色乘距离衰减。
 #endif
 
 // --- 参考签名兼容层：末地三维噪声与云 FBM 分形噪声，分辨率取参考的 64 ---

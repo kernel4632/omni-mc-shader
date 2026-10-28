@@ -10,7 +10,7 @@
 末地雾：把宿主选项、时间与相机数据转成通用库参数，并区分两种返回形状。
 来源：解析雾照 iterationT `Lib/IndividualFounctions/EndSky.glsl` 的 `EndFog`；体积涡旋雾照 Eclipse
   `lib/end_fog.glsl`（`docs/eclipse-parity.md` 第 39 行列出的未合并项「体积末地雾（涡旋）」）。
-职责：本文件只保留选项接线、按远景与时间抗锯齿选择步进参数，然后调用 `shaders/gfx/fog.glsl`；
+职责：本文件只保留选项接线、按远景与时间抗锯齿选择步进参数，然后调用 `/omni-gfx/fog/fog.glsl`；
   `EndVortexFog` 处理涡旋体积雾的宿主分支，`EndFogLayers` 叠加解析雾与体积雾，
   `EndFogWithTransmittance` 把散射色与剩余透射率一起交回合成阶段，`EndFog` 只交回散射色给反射与折射。
 调用位置：由 `effects/world/end.glsl` 引入；合成五号经 `EndFogWithTransmittance` 调用，

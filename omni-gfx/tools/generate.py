@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import hashlib  # 清单记录源文件与产物摘要，便于核对是否过期。
+import catalog  # 模块顺序与仅探针状态只有一份来源。
 import posixpath  # 模块引用按斜杠路径规范化，Windows 与 Linux 生成相同文本。
 import re  # 只替换完整单词，避免把更长标识符拆坏。
 from functools import lru_cache  # 同一次构建里重复读取同一模块时复用转换结果。
@@ -22,76 +23,14 @@ ROOT = LIB.parent  # 仓库根目录，用于写入光影包。
 SRC = LIB / "src"  # Slang 源文件目录，唯一手写算法来源。
 SHADER_OUT = ROOT / "shaders" / "omni-gfx"  # 唯一生成位置，Minecraft 直接引入。
 MANIFEST = LIB / "generated" / "manifest.json"  # 生成清单，不含时间戳。
-MODULES = ("math", "color", "sampling", "sampling/anisotropic", "noise", "camera", "surface", "water", "upscale",
-           "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
-           "atmosphere/atmosphere", "atmosphere/model", "atmosphere/sky",
-           "cloud/cloud", "cloud/volume", "cloud/layers", "cloud/planar",
-           "fog/fog", "fog/volume", "shadow/shadow", "shadow/map",
-           "voxel/voxel", "voxel/trace",
-           "gi/gi", "gi/diffuse", "gi/indirect", "gi/ambientocclusion",
-           "reflection/reflection", "reflection/wsr", "reflection/photonics", "reflection/specular",
-           "post/post", "post/exposure", "post/scene", "lens/lens",
-           "antialias/antialias", "antialias/taa", "antialias/fxaa",
-           "weather/weather", "weather/rain", "weather/lightning",
-           "world/end", "world/portal")  # 按实际效果组织；多文件效果使用同名文件夹，清单顺序固定。
-
-# 生成说明里使用中文模块名，避免机器产物出现裸英文单词。
-DISPLAY = {
-    "math": "数学",
-    "color": "颜色",
-    "sampling": "采样",
-    "sampling/anisotropic": "各向异性过滤",
-    "noise": "噪声",
-    "camera": "相机变换",
-    "surface": "表面",
-    "water": "水面",
-    "upscale": "放大",
-    "parallax": "视差",
-    "planet": "行星",
-    "accretion": "吸积盘",
-    "lpv": "光传播体积",
-    "gbuffer": "延迟缓冲",
-    "heldlight": "手持光",
-    "atmosphere/atmosphere": "大气",
-    "atmosphere/model": "大气查表",
-    "atmosphere/sky": "天空",
-    "cloud/cloud": "云",
-    "cloud/volume": "体积云",
-    "cloud/layers": "层状体积云",
-    "cloud/planar": "平面云",
-    "fog/fog": "雾",
-    "fog/volume": "体积雾",
-    "shadow/shadow": "阴影",
-    "shadow/map": "阴影贴图",
-    "voxel/voxel": "体素",
-    "voxel/trace": "体素求交",
-    "gi/gi": "全局光",
-    "gi/diffuse": "漫反射光照",
-    "gi/indirect": "间接光",
-    "gi/ambientocclusion": "环境光遮蔽",
-    "reflection/reflection": "反射",
-    "reflection/wsr": "WSR 反射",
-    "reflection/photonics": "Photonics 反射",
-    "reflection/specular": "高光",
-    "post/post": "后期",
-    "post/exposure": "曝光与泛光",
-    "post/scene": "画面效果",
-    "lens/lens": "镜头",
-    "antialias/antialias": "抗锯齿",
-    "antialias/taa": "时间取样",
-    "antialias/fxaa": "FXAA",
-    "weather/weather": "天气",
-    "weather/rain": "雨纹",
-    "weather/lightning": "闪电",
-    "world/end": "末地",
-    "world/portal": "末地传送门",
-}  # 每个生成文件头里的中文模块名，顺序与模块表一致。
+MODULES = catalog.MODULES
+DISPLAY = catalog.DISPLAY
 
 # 类型名按从长到短排列，避免 `float3` 先把 `float3x3` 的前半段换掉。
-# 三维纹理句柄排在最后，因为它们的名字不会与向量类型混淆。
+# 三维纹理句柄排在最后，因为它们的名字不会与向量类型混淆；`float` 与 GLSL 同名，不放进表。
 TYPE_WORDS = {
     "float4x4": "mat4", "float3x3": "mat3", "float2x2": "mat2",
-    "float4": "vec4", "float3": "vec3", "float2": "vec2", "float": "float",
+    "float4": "vec4", "float3": "vec3", "float2": "vec2",
     "int4": "ivec4", "int3": "ivec3", "int2": "ivec2", "int": "int",
     "uint4": "uvec4", "uint3": "uvec3", "uint2": "uvec2", "uint": "uint",
     "Sampler3DShadow": "sampler3DShadow", "Usampler3D": "usampler3D", "Sampler3D": "sampler3D",
@@ -114,16 +53,9 @@ LOWERINGS = (
     (re.compile(r"\basint\s*\("), "floatBitsToInt(", "Slang 的有符号取位对应 GLSL 的 floatBitsToInt。"),
 )
 
-# 纹理取像素的写法：`tex.Load(int3(pixel, level))` 与 GLSL 的 `texelFetch` 一一对应。
-# 生成器只认这两种取格写法，换别的形式会落到残留检查里报错。
-LOAD = re.compile(r"(\w+)\.Load\(\s*int3\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 坐标参数允许再套一层构造函数。
-# 三维纹理的层级是坐标的第四个分量，所以源码写 `int4`；GLSL 仍然把层级当独立参数。
-LOAD3D = re.compile(r"(\w+)\.Load\(\s*int4\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")
-# 一维纹理在 Slang 里用 `int2(位置, 层级)`，GLSL 的 texelFetch 只收一个整数位置。
-LOAD1D = re.compile(r"(\w+)\.Load\(\s*int2\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 只有体素追踪用三维取格。
-
-# 带细节层级的采样：Slang 用成员方法，GLSL 用自由函数；参数里允许一层括号，够放构造函数。
-SAMPLE_LEVEL = re.compile(r"(\w+)\.SampleLevel\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*\)")  # 参数里允许一层括号，够放构造函数。
+# 纹理取像素的写法由 `_replace_loads` 用括号配对统一处理；这里只保留一维纹理的
+# `Load(int2(位置, 层级))`，GLSL 的 `texelFetch` 仍然接收位置与层级两个参数。
+LOAD1D = re.compile(r"(\w+)\.Load\(\s*int2\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^()]+?)\s*\)\s*\)")  # 一维纹理只出现在方块光表。
 
 # 带屏幕导数的采样：GLSL 用 `textureGrad`，两个导数决定各向异性层级。
 SAMPLE_GRAD = re.compile(r"(\w+)\.SampleGrad\(\s*((?:[^(),]|\([^()]*\))+?)\s*,\s*([^(),]+?)\s*,\s*([^(),]+?)\s*\)")  # 坐标、横纵两个方向导数。
@@ -332,12 +264,9 @@ def _lower_text(text: str, name: str) -> str:
     """
     text = _replace_loads(text)  # 任意嵌套的取格先换，避免复杂深度表达式漏转。
     text = _replace_sample_levels(text)  # 任意嵌套的采样层级写法也先换成 GLSL 自由函数。
-    text = LOAD3D.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 三维取格先换，避免 `int4` 被当成残留写法。
     text = LOAD1D.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 一维取格只保留位置与层级。
-    text = LOAD.sub(lambda m: f"texelFetch({m[1]}, {m[2]}, {m[3]})", text)  # 再换二维取格，此时 `int3` 还没改名。
     text = SAMPLE_CMP.sub(lambda m: f"textureLod({m[1]}, vec3({m[2]}, {m[3]}), 0.0)", text)  # 比较采样先展开成三分量坐标。
     text = SAMPLE_GRAD.sub(lambda m: f"textureGrad({m[1]}, {m[2]}, {m[3]}, {m[4]})", text)  # 带导数的采样换成 GLSL 自由函数。
-    text = SAMPLE_LEVEL.sub(lambda m: f"textureLod({m[1]}, {m[2]}, {m[3]})", text)  # 带层级采样换成 GLSL 自由函数。
     text = _replace_types(text)  # 类型名随后统一。
     for pattern, replacement, _reason in LOWERINGS:  # 逐项处理函数名与关键字。
         text = pattern.sub(replacement, text)
@@ -452,11 +381,31 @@ def manifest_text(texts: dict[Path, str] | None = None) -> str:
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"  # 固定缩进与结尾换行。
 
 
+def check_include_comments() -> None:
+    """确认每条生成引用上一行都有中文说明。
+
+    加载器要求说明放在引用上一行；源文件已按同一规则检查，这里再看最终产物，
+    防止内联子文件时把说明与引用拆开，或者生成器以后改写顺序。
+    """
+    problems = []  # 一次报告全部位置，避免补一条又冒出下一条。
+    for name in MODULES:
+        lines = module_text(name).splitlines()
+        for index, line in enumerate(lines):
+            if not re.match(r'^\s*#include\s+"', line):
+                continue  # 只看真实引用行。
+            previous = lines[index - 1].strip() if index else ""
+            if not re.search(r"[\u3400-\u9fff]", previous):
+                problems.append(f"{name}.glsl:{index + 1}")
+    if problems:
+        raise ValueError("生成引用上一行缺少中文说明：" + "、".join(problems))
+
+
 def check_modules() -> None:
-    """确认磁盘上的生成文件与当前源一致，过期时报告需要执行的命令。
+    """确认磁盘上的生成文件与当前源一致，并检查产物里的引用说明。
 
     只读取和比较，不写文件；构建脚本的只读检查和回归测试都调用这里。
     """
+    check_include_comments()  # 生成文本先满足加载器的引用说明规则。
     stale = []  # 收集所有不一致的路径，一次报告完整。
     for path, expected in outputs().items():  # 期望文本由当前源实时计算。
         actual = path.read_text(encoding="utf-8") if path.is_file() else None  # 缺失也按过期处理。

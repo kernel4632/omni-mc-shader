@@ -3,7 +3,7 @@
 // 调用位置：水面合成之后、后期之前各绘制一次，第一次缩到六十四乘三十六，第二次缩到一个像素。
 // 设计原因与取舍：用对数亮度而不是算术平均，亮部不会因为一片太阳高光把整幅压暗；
 // 每级只取固定数量的样本，成本可以忽略，也不需要把像素读回 CPU，避免显卡等待。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 
 uniform sampler2D uSource; // 来源纹理，第一级是全分辨率颜色，第二级是上一级的小图。
 uniform sampler2D uDepth; // 场景深度，第一级用它排除天空，避免亮天空压暗地面。
@@ -29,9 +29,9 @@ void main()
                               base + vec2(-offset.x, offset.y), base + vec2(offset.x, offset.y));
         float sum = 0.0; // 几何像素的对数亮度之和。
         float weight = 0.0; // 几何像素数量。
-        for (int i = 0; i < 4; i++)
+        for (int i = 0; i < 4; i++) // 四个角各取一次。
         {
-            float depth = texture(uDepth, uvs[i]).r;
+            float depth = texture(uDepth, uvs[i]).r; // 读该点的场景深度。
             if (depth < 0.999) // 天空不参与曝光统计，亮云不会把草坡压黑。
             {
                 sum += logLuminance(texture(uSource, uvs[i]).rgb);
@@ -43,17 +43,17 @@ void main()
     else // 第二级：把六十四乘三十六的小图缩成一个像素。
     {
         float sum = 0.0; // 几何样本的和。
-        float count = 0.0;
+        float count = 0.0; // 有效样本数。
         for (int y = 0; y < 8; y++) // 八乘八共六十四个样本。
         {
-            for (int x = 0; x < 8; x++)
+            for (int x = 0; x < 8; x++) // 逐列取样。
             {
-                vec2 uv = (vec2(float(x), float(y)) + 0.5) / 8.0; // 均匀铺满上一级小图。
+                vec2 uv = (vec2(float(x), float(y)) + 0.5) / 8.0; // 均匀铺满上一级小图。 // 均匀铺满上一级小图。
                 float value = texture(uSource, uv).r; // 上一级已经是对数亮度。
                 if (value > -20.0) // 跳过全天空的格子。
                 {
-                    sum += value;
-                    count += 1.0;
+                    sum += value; // 累加有效格子的对数亮度。
+                    count += 1.0; // 记录有效格子数。
                 }
             }
         }

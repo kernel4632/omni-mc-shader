@@ -6,11 +6,14 @@ Omni 通用图形库镜头模块：对焦距离、桶形光斑、彩色鬼影、
     vec3 color = ogxLensFlare(texCoord, sunCoord, aspect, projectionYY, true, true, 1.0, 1.0, sunColor, 1.0, 0.0, 1.0); // 叠镜头光斑。
 设计原因与取舍：
     对焦与光斑都只依赖屏幕坐标、投影与太阳位置；纹理、开关和强度显式传入，常数与参考实现逐项相同。
+当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。镜头光斑目前只有探针覆盖，还没有顶层画面入口。
 */
 #ifndef OGX_LENS_LENS_INCLUDED
 #define OGX_LENS_LENS_INCLUDED
 
-#include "../math.slang"
+// 数学提供夹紧、矩阵列展开、相函数与光线求交。
+#include "../common/math.slang"
+// 阴影提供屏幕空间阴影、PCSS 与级联选择。
 #include "../shadow/shadow.slang"
 
 // 对焦距离：参考实现从第二张缓冲左下角取一个对比度统计值，或直接使用手动焦距。
@@ -20,7 +23,7 @@ float ogxGetFocus(Sampler2D focusTexture, int2 screenExtent, int focusMode, floa
     if (focusMode == 0) // 自动对焦：读取统计像素。
     {
         float4 stat = focusTexture.Load(int3(int2(60, screenExtent.y - 1), 0)); // 固定取横向第六十个像素。
-        focus = ogxShadowLinearDepth(stat.a * 0.125 + 0.875, projectionInverse); // 编码值还原成米。
+        focus = ogxLinearDepthFromScreenDepth(stat.a * 0.125 + 0.875, projectionInverse); // 编码值还原成米。
     }
     else // 手动对焦。
     {

@@ -1,3 +1,9 @@
+/*
+后期子文件：相机动态模糊、曝光瓦片平均、镜头光斑与远景噪声。
+调用位置：由 `post/post.slang` 内联，合成阶段的运动模糊与镜头效果调用这里。
+可复制示例：`vec3 c = ogxMotionBlur(colorTex, coord, texel, pixel, velocity, 180.0, 8, true);`
+设计原因与取舍：只处理整屏相机位移，没有实体速度缓冲；光斑形状与参考常数逐项一致。
+*/
 // 相机动态模糊：沿两帧之间的屏幕位移，在历史画面上取一串样本求平均。
 // 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理整屏位移。
 float3 ogxMotionBlur(Sampler2D colorTexture, float2 coord, int2 texel, float2 pixel, float2 velocity,
@@ -177,7 +183,7 @@ float3 ogxGlareRing(float2 uv, float2 pos, float dist, float chromaOffset, float
 }
 
 // 远景地形噪点：按楼层量化坐标，再按亮度与材质给一个可正可负的亮度扰动。
-float3 ogxDhNoise(float3 color, float3 pos, float materialIDs, int leafId, float steps, float strength)
+float3 ogxDistantNoise(float3 color, float3 pos, float materialIDs, int leafId, float steps, float strength)
 {
     pos = floor(pos * steps) / steps; // 坐标量化到固定楼层，远景纹素不会闪烁。
     float weight = ogxLuminance(color) * 2.0 - 1.0; // 亮度映射到负一到一。

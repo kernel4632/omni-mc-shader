@@ -46,6 +46,28 @@ class ReviewTests(unittest.TestCase):
             with self.assertRaises(ValueError): audit.chinese_explanation('// @option ["A beautiful cloud"]')  # 不能用伪造机器前缀免除英语检查。
             with self.assertRaises(ValueError): audit.chinese_explanation('// @option {"label":{"zh_cn":"云 A beautiful cloud","en_us":"Cloud"}}')  # 英文翻译豁免不能扩展到中文字段。
 
+    def test_slang_audit_rejects_header_and_structure_gaps(self):
+        """Slang 审计必须拦住结构体返回、缺失文件头字段和跳出源码目录的引用。"""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            source = root / "omni-gfx" / "src" / "subject.slang"
+            source.parent.mkdir(parents=True)
+            header = "/*\n测试模块：验证审计边界。\n调用位置：测试入口。\n可复制示例：`OgxThing value;`\n设计原因与取舍：只做边界检查。\n*/\n"
+            source.write_text(header + "struct OgxThing { float value; };\nOgxThing makeThing() { OgxThing item; return item; }\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "顶层定义缺少"):
+                audit.check_slang(root)  # 结构体返回函数也必须紧邻说明。
+            source.write_text(header + "float value() {\n    // 说明放在函数体内。\n    return 1.0;\n}\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "顶层定义缺少"):
+                audit.check_slang(root)  # 函数体内注释不能替代接口说明。
+            source.write_text("/*\n测试模块。\n调用位置：测试入口。\n设计原因与取舍：只做边界检查。\n*/\n// 函数说明。\nfloat value() { return 1.0; }\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "缺少可复制示例"):
+                audit.check_slang(root)  # 文件头必须给出可复制示例。
+            outside = root / "outside.slang"
+            outside.write_text("// 源码目录之外的文件。\n", encoding="utf-8")
+            source.write_text(header + '// 故意跳出源码目录。\n#include "../../outside.slang"\n// 函数说明。\nfloat value() { return 1.0; }\n', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "引用跳出库源码目录"):
+                audit.check_slang(root)  # 子文件不能借相对路径读出 `omni-gfx/src`。
+
     def test_dimensions_and_overlay_body_contract(self):
         """三个维度各自提供完整程序集；叠加与半透明程序复用登记好的绘制主体，水只写四号、六号与贴图色。"""
         generated = build.program_files()  # 真实生成入口。

@@ -12,7 +12,7 @@ Omni 通用图形库雾模块：高度衰减、噪声雾团、粉末效应、混
     vec4 r = ogxFogMarch(f, camKm, worldKm, sunDir, sunColor, j, 10); // 沿视线积分雾。
     c = ogxFogApply(c, r); // 把雾合成到颜色。
 设计原因与取舍：
-    密度剖面与相位来自旧 `shaders/gfx/fog.glsl` 的 `gfx_fog_density_height`、`gfx_fog_density_noise`
+    密度剖面与相位来自迁移前 GLSL 原型的 `gfx_fog_density_height`、`gfx_fog_density_noise`
     与 `gfx_fog_phase`，把纹理噪声换成程序化值噪声，保持雾团边缘与高度衰减的手感。
     步数与抖动由调用方给出，库不读取天气、选项或宿主时间；返回预乘散射色与剩余透过率，
     调用方按自己的混合顺序合成，避免和大气散射重复叠加。
@@ -21,8 +21,9 @@ Omni 通用图形库雾模块：高度衰减、噪声雾团、粉末效应、混
 #define OGX_FOG_INCLUDED
 
 // 数学提供相函数，噪声提供雾团形状。
-#include "/omni-gfx/math.glsl"
-#include "/omni-gfx/noise.glsl"
+#include "/omni-gfx/common/math.glsl"
+// 噪声提供哈希、分形与云团细节。
+#include "/omni-gfx/common/noise.glsl"
 // 一层低空雾的参数；不同群系或天气换字段即可。
 struct OgxFog
 {
@@ -36,10 +37,15 @@ struct OgxFog
     float sunStrength; // 阳光在雾里的散射强度。
 };
 
-// 默认低空雾：贴地薄雾，密度适中，云影下会自然变暗。
-
 // 高度雾、噪声雾与沿视线积分，具体实现在子文件。
 // 子文件：fog/fog/density.slang。
+/*
+雾子文件：默认雾参数、高度密度、噪声雾团、相位、粉末效应与单次步进。
+调用位置：由 `fog/fog.slang` 内联，主世界、下界与末地的雾效果共用这里的密度曲线。
+可复制示例：`float d = ogxFogDensity(ogxFogDefault(), worldPos);`
+设计原因与取舍：密度只依赖位置与参数，天气与光源颜色由调用方乘进来；噪声层数照参考固定。
+*/
+// 默认低空雾：贴地薄雾，密度适中，云影下会自然变暗。
 OgxFog ogxFogDefault()
 {
     OgxFog fog; // 先声明再填写字段。
@@ -220,24 +226,6 @@ float ogxCloudFbm(vec3 position, vec3 shift, sampler2D noiseTexture, float noise
     return accum + octShift; // 返回归一化后的噪声。
 }
 
-// 云状分形噪声的低质量版本：三层、每层权重衰减零点九、频率乘二，供远景或低画质使用。
-// 与 `ogxCloudFbm` 分开保留，因为层数和衰减常数不同，不能用一个参数偷偷替换参考路径。
-float ogxCloudFbmLq(vec3 position, vec3 shift, sampler2D noiseTexture, float noiseResolution)
-{
-    const int octaves = 3; // 三层。
-    const float octAlpha = 0.9; // 每层权重衰减。
-    const float octScale = 2.0; // 每层频率倍数。
-    const float octShift = (octAlpha / octScale) / float(octaves); // 层间偏移。
-    float accum = 0.0; // 累积噪声。
-    float alpha = 0.5; // 第一层权重。
-    for (int i = 0; i < octaves; i++) // 逐层叠加。
-    {
-        accum += alpha * ogxEnd3dNoise(position, noiseTexture, noiseResolution); // 加这一层。
-        position = (position + shift) * octScale; // 抬高频率并错开时间。
-        alpha *= octAlpha; // 权重衰减。
-    }
-    return accum + octShift; // 返回归一化后的噪声。
-}
 
 // 下界雾的单格密度：世界坐标折成三维格子，再查二维噪声图。
 float ogxNetherFogDensityAt(vec3 pos, sampler2D noiseTexture)
@@ -270,6 +258,12 @@ float ogxNetherFogCloudVolume(vec3 pos, float time, sampler2D noiseTexture)
 
 // 末地涡旋、群系与下界雾，具体实现在子文件。
 // 子文件：fog/fog/end.slang。
+/*
+雾子文件：末地漩涡雾、群系雾色与密度、原版雾、选择框和末地阴影形状。
+调用位置：由 `fog/fog.slang` 内联，末地天空与雾效果直接调用这里的入口。
+可复制示例：`vec4 fog = ogxEndVortexFog(cameraPos, worldDir, viewDist, dither, 12, 2.0, 128.0, ...);`
+设计原因与取舍：群系权重与光源位置显式传入，不读取宿主群系表；漩涡形状与参考采样顺序一致。
+*/
 // 末地雾形状与光源相位的提前声明：定义放在文件后半段。
 float ogxEndVortexShape(vec3 pos, float time, sampler2D noiseTexture, float noiseResolution);
 float ogxEndVortexLightPhase(vec3 pos);
@@ -558,8 +552,7 @@ void ogxBiomeFogDensityReference(inout vec4 uniformDensity, inout vec4 cloudyDen
 // Eclipse 末地雾的相函数：与云相函数同形，但常数用 3.14 而不是 pi，保留参考精度。
 float ogxEndFogPhaseAnisotropic(float x, float g)
 {
-    float gg = g * g; // g 的平方。
-    return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考实现直接写 3.14。
+    return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考实现直接写 3.14，保留同一精度。
 }
 
 // iterationT 的原版雾叠加：黑暗、失明、水下与岩浆四种状态分别压暗画面。

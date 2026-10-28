@@ -4,7 +4,7 @@ Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Mine
 
 当前有 48 个模块，覆盖数学、颜色、采样、噪声、相机、表面、水面、大气、云、雾、阴影、体素、全局光、反射、后期、抗锯齿、天气与末地。测试世界直接使用生成的 GLSL，不启动 Minecraft 也能出图、截图和记录帧时。函数级覆盖对照见 `docs/gfx-functions.md`。
 
-最近一次 1280×720 固定机位：户外测试世界平均 23.0 毫秒（约 43.5 帧每秒），截图 `.dev/omni-gfx/world-realistic.png`，帧时 `.dev/omni-gfx/world-realistic.json`；光影验证场景最新一轮平均 15.76 毫秒（约 63.4 帧每秒），截图 `.dev/omni-gfx/world-lighting-v4.png`，帧时 `.dev/omni-gfx/perf-lighting-v4.json`。帧时会随本机同时运行的程序波动，详细记录在 `docs/verification.md`。
+最近一次 1280×720 固定机位：户外测试世界平均 23.0 毫秒（约 43.5 帧每秒），截图 `.dev/omni-gfx/world-realistic.png`，帧时 `.dev/omni-gfx/world-realistic.json`；光影验证场景最新一轮平均 15.76 毫秒（约 63.4 帧每秒），截图 `.dev/omni-gfx/world-lighting-v4.png`，帧时 `.dev/omni-gfx/perf-lighting-v4.json`。帧时会随本机同时运行的程序波动，详细记录在 `omni-gfx/docs/verification.md`。
 
 ## 目录
 
@@ -76,7 +76,7 @@ python omni-gfx/build.py spirv
 .venv\Scripts\python.exe omni-gfx\tests\equivalence.py
 ```
 
-同一个片段着色器同时调用旧 `gfx_` 库与新 `ogx_` 库，逐像素比较浮点输出。当前 26 个用例全部逐位一致，结果写入 `.dev/omni-gfx/equivalence.json`。
+同一个片段着色器同时调用冻结的参考副本与新 `ogx_` 库，逐像素比较浮点输出。当前 26 个用例全部逐位一致，结果写入 `.dev/omni-gfx/equivalence.json`。参考副本在 `tests/reference/`，只用于测试，不进入光影包。
 
 ## 代码量
 
@@ -92,7 +92,7 @@ python omni-gfx/build.py count
 python omni-gfx/build.py parity
 ```
 
-从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 401、MC 专用 104、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。
+从 `references/iterationT/shaders/Lib` 与 `references/Eclipse/shaders/lib` 逐个函数扫描，写到 `docs/gfx-functions.md`：505 个函数里已迁入 407、MC 专用 98、缺失 0、调试输出 0。人工对照数据在 `tools/parity_map.json`，指向不存在的函数会让命令直接失败。
 
 严格结论以 `tools/parity_report.json` 为准：
 
@@ -110,7 +110,7 @@ python build.py verify
 python build.py compile
 ```
 
-`verify` 在十秒预算内完成生成、工具测试、关键光影检查与打包；`compile` 用两种代表配置和基础/开远景环境编译全部程序。当前口径：519 个选项、269 个入口、280 组唯一程序、160 个测试。游戏内画面、菜单、性能与其他显卡仍未验证。
+`verify` 在十秒预算内完成生成、工具测试、关键光影检查与打包；`compile` 用两种代表配置和基础/开远景环境编译全部程序。当前口径：519 个选项、269 个入口、280 组唯一程序、166 个测试。游戏内画面、菜单、性能与其他显卡仍未验证。
 
 ## 许可证
 

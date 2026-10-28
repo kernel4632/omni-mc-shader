@@ -18,8 +18,8 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     color = ogxYCoCgToRgb(color); // 再换回来。
     color = ogxClipAabb(color, float3(0.1), color * 0.9, true); // 历史裁剪。
     float4 bicubic = ogxBicubicTexture4(gProbeTexture, coord, viewport); // 三次采样。
-    float linear = ogxTaaLinearDepth(t, identity); // 深度换米制。
-    float screen = ogxTaaScreenDepth(linear + 1.0, identity); // 换回屏幕深度。
+    float linear = ogxLinearDepthFromScreenDepth(t, identity); // 深度换米制。
+    float screen = ogxScreenDepthFromLinearDepth(linear + 1.0, identity); // 换回屏幕深度。
     float reference; // 参考深度。
     float4 reprojected = ogxTaaReproject(coord, float3(0.01, 0.0, 0.0), t, gProbeTexture, gProbeTexture,
         viewport, int2(position.xy), identity, 1000.0, float2(0.0), 0.9, 1.0, 1e-4, false, false, true, false, false, false, reference); // 时间重投影。

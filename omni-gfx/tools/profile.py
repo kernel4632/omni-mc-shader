@@ -23,6 +23,8 @@ import subprocess  # 调用 glslang 做编译验证。
 import sys  # 缺编译器时以非零状态退出。
 from pathlib import Path  # 统一路径。
 
+import catalog  # 模块顺序与生成器共用一份。
+
 LIB = Path(__file__).resolve().parent.parent  # omni-gfx 根目录。
 ROOT = LIB.parent  # 仓库根目录。
 SHADER_LIB = ROOT / "shaders" / "omni-gfx"  # 已生成的 GLSL。
@@ -61,20 +63,7 @@ PROFILES = {
     },
 }  # 两个 profile 的编译期开关与各自的代表性函数；两组函数不会互相混用。
 
-MODULES = (
-    "math", "color", "sampling", "sampling/anisotropic", "noise", "camera", "surface", "water", "upscale",
-    "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
-    "atmosphere/atmosphere", "atmosphere/model", "atmosphere/sky",
-    "cloud/cloud", "cloud/volume", "cloud/layers", "cloud/planar",
-    "fog/fog", "fog/volume", "shadow/shadow", "shadow/map",
-    "voxel/voxel", "voxel/trace",
-    "gi/gi", "gi/diffuse", "gi/indirect", "gi/ambientocclusion",
-    "reflection/reflection", "reflection/wsr", "reflection/photonics", "reflection/specular",
-    "post/post", "post/exposure", "post/scene", "lens/lens",
-    "antialias/antialias", "antialias/taa", "antialias/fxaa",
-    "weather/weather", "weather/rain", "weather/lightning",
-    "world/end", "world/portal",
-)  # 与生成器模块表一致；顺序按效果依赖排列，展开结果可复现。
+MODULES = catalog.MODULES  # 与生成器模块表一致；顺序按效果依赖排列，展开结果可复现。
 
 
 def _expand(name: str, stack: tuple[str, ...], seen: set[str]) -> str:
@@ -105,14 +94,15 @@ def profile_text(name: str, meta: dict) -> str:
     body = ""
     for module in MODULES:
         body += "\n" + _expand(module, (), seen)
+    # 版本声明必须是文件第一个记号；GLSL 编译器不接受它前面出现任何注释或空行。
     header = (
+        "#version 330 compatibility\n"
         "/*\n"
         f"生成文件：{meta['display']}。\n"
         "源文件是 omni-gfx 的生成模块与两个 profile 的严格函数集合，请勿手工修改。\n"
         "用途：不启动 Minecraft、不依赖具体引擎，验证两个 profile 的 GLSL 能独立编译。\n"
         "重新生成：python omni-gfx/build.py profiles\n"
         "*/\n"
-        "#version 330 compatibility\n"
         f"#define {meta['macro']} 1\n"
     )
     tail = (
@@ -127,7 +117,7 @@ def profile_text(name: str, meta: dict) -> str:
 
 
 def compiler() -> Path | None:
-    """返回本机 glslang 可执行文件；没有时返回 None，由调用方明确报错。"""
+    """返回本机 glslang 可执行文件；没有时返回空值，由调用方明确报错。"""
     candidates = (
         ROOT / ".dev" / "tools" / "glslang" / "bin" / "glslang.exe",
         ROOT / ".dev" / "tools" / "glslang" / "bin" / "glslang",

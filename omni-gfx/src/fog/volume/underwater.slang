@@ -1,6 +1,8 @@
 /* 水下体积雾：焦散取样与光柱步进，输出汇聚的蓝色光柱；由 `fog/volume.slang` 内联引入。
 可复制示例：`float3 light = ogxUnderwaterFog(startPos, endPos, worldDir, cloudShadow, ...);`
-设计取舍：光柱截断到四十米内；焦散三次方让亮纹更集中，远处按距离变弱。 */
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
 
 // 水下焦散：从当前位置向上找水面，按波法线折射后取交点距离，距离越近光柱越强。
 // 为什么单独一份：它与水面焦散的三乘三采样用途不同，这里只要一份范围很窄的值来收窄光柱。
@@ -51,7 +53,7 @@ float3 ogxUnderwaterFog(float3 startPos, float3 endPos, float3 worldDir, float g
         shadow /= max(3.0, rayLength * 0.1); // 越远越弱。
         if (waterAbsorption) shadow *= pow(float3(0.1, 0.6, 1.0) * 0.99, float3(rayLength * 0.04 * waterDensity)); // 红衰减最快，光柱因此偏蓝。
         result += shadow; // 累加。
-        float3 handLight = GFX_UNDERWATER_HAND_LIGHT(rayPos); // 手持光源在该点留下的光，由效果层注入。
+        float3 handLight = OGX_UNDERWATER_HAND_LIGHT(rayPos); // 手持光源在该点留下的光，由效果层注入。
         if (waterAbsorption) handLight *= pow(float3(0.1, 0.6, 1.0) * 0.99, float3(rayLength * 0.04 * waterDensity)); // 与光柱同一套分波段吸收。
         handFog += handLight; // 累加。
     }
@@ -65,3 +67,6 @@ float3 ogxUnderwaterFog(float3 startPos, float3 endPos, float3 worldDir, float g
     result += handFog * (range / float(steps)) * handLightScale; // 手持光不随阳光相位与云影变化，最后叠上。
     return result; // 返回光柱颜色。
 }
+
+// 严格参考签名入口，具体实现在子文件。
+// --- exact ---

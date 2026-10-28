@@ -1,3 +1,9 @@
+/*
+大气子文件：天球对齐、日月圆盘、天空盒坐标、云图集取样、极光与彩虹。
+调用位置：由 `atmosphere/atmosphere.slang` 按顺序内联，供大气、天空与云模块共用。
+可复制示例：`float3 d = ogxAlignToSunAxis(worldDir, sunVector);`
+设计原因与取舍：只做方向与坐标换算，颜色、强度与天气由调用方传入；常数照参考保留。
+*/
 // 把视线方向绕太阳轴旋转对齐天球：罗德里格旋转公式，太阳方向由调用方传入。
 // 这样星场会跟着太阳的年周期转，而不是固定在天球上。
 float3 ogxAlignToSunAxis(float3 worldDir, float3 sunVector)

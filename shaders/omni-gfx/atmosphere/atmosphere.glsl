@@ -12,7 +12,7 @@ Omni 通用图形库大气模块：球面几何、密度剖面、单次散射与
     vec3 s = ogxAtmosphereSky(a, 0.03, viewDir, sunDir, 10); // 算天空颜色。
     vec3 h = ogxAerialPerspective(a, 0.03, viewDir, 1.5, sunDir, 5, t2); // 算远景空气散射。
 设计原因与取舍：
-    公式来自旧 `shaders/gfx/atmosphere.glsl` 的球面几何与密度剖面，并补上可独立运行的单次散射积分。
+    公式来自迁移前 GLSL 原型的球面几何与密度剖面，并补上可独立运行的单次散射积分。
     不读取预计算贴图，换机器与不启动 Minecraft 都能得到同一片天空；代价是每像素多几次指数运算。
     长度单位统一为公里，避免行星半径用米时 float 精度不足；调用方把米乘零点零零一。
     太阳与月亮方向、散射系数、行星半径全部由调用方传入，库不读取任何引擎状态。
@@ -21,9 +21,9 @@ Omni 通用图形库大气模块：球面几何、密度剖面、单次散射与
 #define OGX_ATMOSPHERE_INCLUDED
 
 // 数学模块提供相函数、射线求交与夹紧。
-#include "/omni-gfx/math.glsl"
+#include "/omni-gfx/common/math.glsl"
 // 星点温度到颜色的黑体函数在颜色模块，星场需要它。
-#include "/omni-gfx/color.glsl"
+#include "/omni-gfx/common/color.glsl"
 // 一次大气计算需要的全部常数；不同星球换一组字段即可，不必改算法。
 struct OgxAtmosphere
 {
@@ -38,10 +38,15 @@ struct OgxAtmosphere
     float sunIntensity; // 太阳辐照度的整体倍率。
 };
 
-// 地球参数：海平面半径六千三百六十公里，层顶八十公里，数值与旧库一致。
-
 // 行星大气、密度与单次散射，具体实现在子文件。
 // 子文件：atmosphere/atmosphere/scattering.slang。
+/*
+大气子文件：地球大气常数、臭氧与密度剖面、光线与球壳求交、光学深度与单次散射。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，供天空查表与空气透视使用。
+可复制示例：`vec3 sky = ogxAtmosphereSky(ogxAtmosphereEarth(), 0.0, viewDir, sunDir, 16);`
+设计原因与取舍：常数集中在地球默认值，其他行星可换结构体字段；步数与方向全部显式传入。
+*/
+// 地球默认大气：海平面半径六千三百六十公里，层顶八十公里，数值与参考一致。
 OgxAtmosphere ogxAtmosphereEarth()
 {
     OgxAtmosphere air; // 先声明再逐项填写，Slang 与 GLSL 都支持这种写法。
@@ -266,6 +271,12 @@ vec3 ogxAerialPerspective(OgxAtmosphere air, float cameraAltitude, vec3 viewDire
 
 // 太阳圆盘、球面求交与星场，具体实现在子文件。
 // 子文件：atmosphere/atmosphere/sun.slang。
+/*
+大气子文件：太阳与月亮圆盘、球壳距离、指数密度、星场与卫星轨道。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，天空与末地星空共用这里的圆盘和星点。
+可复制示例：`float disc = ogxSunDisc(viewDir, sunDir, 5e-5, 4e4);`
+设计原因与取舍：圆盘只返回遮罩或颜色，曝光与泛光由调用方处理；常数照参考保留。
+*/
 // 太阳圆盘：视线越接近太阳方向越亮，边缘用平滑曲线收口。
 float ogxSunDisc(vec3 viewDirection, vec3 sunDirection, float size, float hardness)
 {
@@ -287,7 +298,7 @@ vec3 ogxSunDiscFixed(vec3 worldDir, vec3 sunDir)
 }
 
 // 球面几何的另一种写法：只给半径与高度角余弦，省掉每次重建起点向量。
-// 与旧 `shaders/gfx/atmosphere.glsl` 的算式逐项一致，供预计算查表的坐标映射使用。
+// 与迁移前 GLSL 原型的算式逐项一致，供预计算查表的坐标映射使用。
 float ogxSphereDistanceToTop(float r, float mu, float topRadius)
 {
     float discriminant = r * r * (mu * mu - 1.0) + topRadius * topRadius; // 交点判别式。
@@ -469,6 +480,12 @@ float ogxStarsColored(vec3 viewPos, float brightness, float amount, out vec3 sta
 
 // 天空映射、云图与月盘，具体实现在子文件。
 // 子文件：atmosphere/atmosphere/mapping.slang。
+/*
+大气子文件：天球对齐、日月圆盘、天空盒坐标、云图集取样、极光与彩虹。
+调用位置：由 `atmosphere/atmosphere.slang` 按顺序内联，供大气、天空与云模块共用。
+可复制示例：`vec3 d = ogxAlignToSunAxis(worldDir, sunVector);`
+设计原因与取舍：只做方向与坐标换算，颜色、强度与天气由调用方传入；常数照参考保留。
+*/
 // 把视线方向绕太阳轴旋转对齐天球：罗德里格旋转公式，太阳方向由调用方传入。
 // 这样星场会跟着太阳的年周期转，而不是固定在天球上。
 vec3 ogxAlignToSunAxis(vec3 worldDir, vec3 sunVector)
@@ -616,6 +633,12 @@ vec3 ogxRainbow(vec3 color, vec3 direction, vec3 sunDirection, float wetness, fl
 
 // 行星 BRDF 与 Eclipse 天空近似，具体实现在子文件。
 // 子文件：atmosphere/atmosphere/planet.slang。
+/*
+大气子文件：行星表面双向反射、行星环噪声、相函数、空气质量与星光。
+调用位置：由 `atmosphere/atmosphere.slang` 内联，末地天空与大气查表复用这里的相函数。
+可复制示例：`vec3 c = ogxPlanetBrdf(albedo, normal, eyeDir, lightDir);`
+设计原因与取舍：只接收显式参数，行星半径与反照率由调用方给出；算式逐项照参考保留。
+*/
 // 钱德拉塞卡近似：各项同性散射的倍增因子，反照率越高、余弦越大越亮。
 vec3 ogxChandrasekharH(vec3 albedo, float a)
 {

@@ -6,7 +6,7 @@ Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、
     float2 o = ogxRainWindOffset(worldPos, cameraPos, seconds, wind, 0.05, 1.0); // 雨雪的水平偏移。
     float n = ogxStormNoise(worldPos, noiseTexture, 512.0); // 暴风雾团密度。
     float3 c = ogxStormColor(snowStorm, sandStorm); // 暴雪与沙暴的染色。
-    float h = ogxWeatherHash11(day); // 每日天气的随机取档。
+    float h = ogxHash11(day); // 每日天气的随机取档。
 设计原因与取舍：
     位置、时间、风向、扰动和露天系数全部由调用方传入，库不读取相机或天气全局量。
     倾斜随高度放大，露天系数为零时雨雪保持竖直，因此室内不会被风推斜。
@@ -17,7 +17,9 @@ Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、
 #define OGX_WEATHER_INCLUDED
 
 // 数学模块提供取模与夹紧，季节循环与时段划分要用。
-#include "../math.slang"
+#include "../common/math.slang"
+// 噪声模块提供每日天气哈希的唯一实现。
+#include "../common/noise.slang"
 
 // 雨雪随风摆动：固定风向叠一个缓慢旋转的扰动，再按高度放大。
 // 为什么扰动跟着世界位置走：不同位置的雨丝才不会像一整块布同步摆动。
@@ -72,15 +74,6 @@ float3 ogxStormColor(float snowStorm, float sandStorm)
     return (sandStorm * sandCol + snowStorm * snowCol) / total; // 按强度加权后归一。
 }
 
-// 每日天气哈希：把整数天数打散成零到一的小数，照 Eclipse 的 `hash11`。
-// 三步混合让相邻天数看起来毫无关系，同时保持完全确定的重复性。
-float ogxWeatherHash11(float p)
-{
-    p = fract(p * 0.1031); // 先乘一个无理近似再取小数，打散相邻整数。
-    p *= p + 33.33; // 加偏移后再平方，让输入的小变化放大。
-    p *= p + p; // 再乘自身的两倍，进一步拉开分布。
-    return fract(p); // 取小数，得到零到一的哈希值。
-}
 
 // 四季调色板：树叶与非树叶各一套颜色，因为树叶的季节变化通常更明显。
 struct OgxSeasonPalette

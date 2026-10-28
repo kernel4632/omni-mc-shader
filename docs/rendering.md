@@ -100,7 +100,7 @@ Iris 的执行顺序是：阴影 → 不透明几何 → deferred 0–8 → 半�
 | 6 | `ground/grass_geometry.glsl` 的 `j` 循环 | 一片草叶分成几段 | 留阶段层 |
 | 7 | `ground/grass_geometry.glsl` 的 `i` 循环 | 每段三个顶点 | 留阶段层 |
 | 8 | `ground/terrain_surface.glsl` 的 `SampleAnisotropic` | 沿特征向量在方块图集上取样 | 留阶段层 |
-| 9 | `world/nether.glsl` 的 `NetherVolumetricFog` | 下界体积雾沿视线步进 | 已迁库：`ogxNetherVolumetricFog`（`omni-gfx/src/fog/volume/nether.slang`） |
+| 9 | `world/nether.glsl` 的 `NetherVolumetricFog` | 下界体积雾沿视线步进 | 已迁库：`ogxNetherVolumetricFog`（`omni-gfx/src/fog/volume.slang`） |
 | 10 | `celestial.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
 | 11 | `terrain.glsl` 的 `main` | 几何阶段转发三个顶点 | 留阶段层 |
 | 12 | `entities.glsl` 的 `EndPortalColor` | 末地传送门叠十六层 | 已迁效果层：`effects/entity/entity.glsl` |
