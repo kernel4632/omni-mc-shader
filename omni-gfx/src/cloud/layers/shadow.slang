@@ -73,10 +73,10 @@ float3 ogxLayersLightningPositionBolt(float minHeight, float maxHeight,
     Sampler2D noiseTexture, float3 cameraWorldPos, float cloudMovement, float thunderStrength,
     float cumulonimbusStrength, float lightningTimer)
 {
-    float angle = fract(sin(dot(float2(lightningTimer, lightningTimer * 2.0), float2(12.9898, 78.233))) * 43758.5453) * OGX_TAU; // 时间哈希转角度。
+    float angle = ogxWhiteNoise(lightningTimer) * OGX_TAU; // 时间哈希转角度，随机数与参考 `rand` 相同。
     float rMin = 7000.0; // 最近落点半径。
     float rMax = 13000.0; // 最远落点半径。
-    float radius = sqrt(lerp(rMin * rMin, rMax * rMax, fract(sin(dot(float2(lightningTimer + 1, (lightningTimer + 1) * 2.0), float2(12.9898, 78.233))) * 43758.5453))); // 在环形区域里取半径。
+    float radius = sqrt(lerp(rMin * rMin, rMax * rMax, ogxWhiteNoise(lightningTimer + 1.0))); // 在环形区域里取半径。
     float3 lightningPos = float3(radius * cos(angle), minHeight + 0.62 * (maxHeight - minHeight), radius * sin(angle)); // 极坐标转云层坐标。
     float shapeAtLightningPos = ogxLayersCumulonimbusShapeLayer(0, lightningPos, minHeight, maxHeight,
         noiseTexture, cameraWorldPos, cloudMovement, thunderStrength, cumulonimbusStrength).x; // 落点处的积雨云形状。

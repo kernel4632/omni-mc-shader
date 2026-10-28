@@ -8,7 +8,7 @@
 Omni 通用图形库相机变换模块：屏幕、视空间、世界空间、阴影空间与远景投影的显式换算。
 调用位置：任何需要把深度图还原成位置、把世界点投到阴影图的程序；Minecraft 光影由 `/omni-gfx/common/camera.glsl` 引入。
 可复制示例：
-    vec3 viewPos = ogxViewPosFromScreenPos(coord, depth, jitter, 0.5, projectionInverse, true); // 当前步骤的中间量。
+    vec3 viewPos = ogxViewPosFromScreenPos(coord, depth, jitter, 0.5, projectionInverse, true);
     vec3 shadowPos = ogxShadowScreenPosDistorted(worldPos, shadowView, shadowProjection, 0.9);
     vec3 clip = ogxProjectAndDivide(projection, viewPos);
 设计原因与取舍：
@@ -16,6 +16,13 @@ Omni 通用图形库相机变换模块：屏幕、视空间、世界空间、阴
     调用方必须自己给出数据来源；这样同一套公式能用于主世界、远景与测试场景，也方便审查矩阵布局。
     所有函数只做几何换算：深度还原、投影、阴影坐标与远景微调；不读取缓冲、不改写选项，因此不是宿主胶水。
 */
+
+// --- 算法步骤 ---
+// 相机模块只做坐标与深度换算，不读取引擎状态：
+// 屏幕坐标加深度经逆投影得到视空间位置，视空间位置经投影回到屏幕；两套函数分别保留原始与带抖动版本。
+// 深度在线性与屏幕空间之间转换，远景版本用远景投影矩阵，近景与远景之间再按深度尺度对齐。
+// 阴影相机用独立的视图投影矩阵，扭曲版本先把坐标压到阴影贴图的有效范围。
+
 #ifndef OGX_CAMERA_INCLUDED
 #define OGX_CAMERA_INCLUDED
 
@@ -307,5 +314,9 @@ vec3 ogxToScreenSpace2(vec3 p, bool depthCheck, mat4 projectionInverse, mat4 dhP
     vec4 fragPosition = inverseDiag * p3.xyzz + matrix[3]; // 对角项乘坐标再加平移。
     return fragPosition.xyz / fragPosition.w; // 齐次除法。
 }
+
+// 投影与逆投影必须成对使用，调用方不要混用两套矩阵。
+// 深度线性化按近远裁剪面换算，远景版本使用远景矩阵。
+// 阴影坐标的扭曲只改变屏幕位置，不改变深度比较。
 
 #endif

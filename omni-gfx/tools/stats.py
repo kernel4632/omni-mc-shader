@@ -51,7 +51,8 @@ def render() -> str:
     total, migrated, mc, missing = _parity_counts()
     strict = _strict_counts()
     text = (
-        f"当前统计：{len(catalog.MODULES)} 个模块、{source_files} 个 Slang 源文件、"
+        f"当前统计：{len(catalog.MODULES)} 个生成模块（另有 {len(catalog.REFERENCE)} 个参考后端，共 "
+        f"{len(catalog.MODULES) + len(catalog.REFERENCE)} 个源模块）、{source_files} 个 Slang 源文件、"
         f"{generated_lines} 行生成 GLSL；函数对照 {total} 个，已迁入 {migrated}、"
         f"MC 专用 {mc}、缺失 {missing}；严格对照 exact {strict['exact']}、"
         f"approximate {strict['approximate']}、reference_broken {strict['reference_broken']}、"

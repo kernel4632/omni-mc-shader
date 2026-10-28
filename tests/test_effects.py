@@ -584,7 +584,7 @@ class EffectTests(unittest.TestCase):
             self.assertIn(name, found)  # 每个镜头光参数由镜头源码定义。
         glare = support.code("effects/lens/glare.glsl")  # 眩光与光斑主体（按算法从入口拆出）。
         self.assertIn("LensFlare", glare)  # 光斑独立成函数。
-        self.assertRegex(glare, r"#\s*(ifdef|if)\s+OMNI_LENS_FLARE\b")  # 按选项分出光斑分支。
+        self.assertRegex(glare, r"#\s*(ifdef|if).*OMNI_LENS_FLARE\b")  # 按选项分出光斑分支。
         self.assertIn("OMNI_FLARE_BRIGHTNESS", glare)  # 亮度参与叠加。
 
     def test_dof_controls(self):

@@ -5,7 +5,7 @@ Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Mine
 当前统计块由 `python omni-gfx/build.py stats` 生成，覆盖模块、源码、生成 GLSL 与对照数量；测试世界直接使用生成的 GLSL，不启动 Minecraft 也能出图、截图和记录帧时。函数级覆盖对照见 `docs/gfx-functions.md`。
 
 <!-- stats:begin -->
-当前统计：48 个模块、95 个 Slang 源文件、15917 行生成 GLSL；函数对照 505 个，已迁入 404、MC 专用 101、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
+当前统计：44 个生成模块（另有 4 个参考后端，共 48 个源模块）、94 个 Slang 源文件、14147 行生成 GLSL；函数对照 505 个，已迁入 404、MC 专用 101、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
 <!-- stats:end -->
 
 最近一次 1280×720 固定机位：户外测试世界平均 23.0 毫秒（约 43.5 帧每秒），截图 `.dev/omni-gfx/world-realistic.png`，帧时 `.dev/omni-gfx/world-realistic.json`；光影验证场景最新一轮平均 15.76 毫秒（约 63.4 帧每秒），截图 `.dev/omni-gfx/world-lighting-v4.png`，帧时 `.dev/omni-gfx/perf-lighting-v4.json`。帧时会随本机同时运行的程序波动，详细记录在 `omni-gfx/docs/verification.md`。
@@ -55,7 +55,7 @@ python omni-gfx/build.py spirv --download
 python omni-gfx/build.py spirv
 ```
 
-当前 48 个模块的探针全部通过，编译结果在 `omni-gfx/generated/spirv/`，`manifest.json` 记录编译器版本、大小与 SHA-256。探针只证明模块能编译成 SPIR-V，不是可直接运行的 Vulkan 管线。
+当前 44 个生成模块的探针全部通过（另有 4 个参考后端只保留源码，不生成探针），编译结果在 `omni-gfx/generated/spirv/`，`manifest.json` 记录编译器版本、大小与 SHA-256。探针只证明模块能编译成 SPIR-V，不是可直接运行的 Vulkan 管线。
 
 ## 运行测试世界
 

@@ -2,7 +2,7 @@
 Eclipse 漫反射模块编译探针：调用方块光合成与手电阴影参数，覆盖主要纯计算入口。
 调用位置：`omni-gfx/build.py spirv` 逐模块编译；探针只验证类型与函数调用，不进入光影包。
 */
-#include "../../../src/gi/diffuse.slang"
+#include "../../../src/gi/blocklight.slang"
 
 [shader("fragment")]
 float4 probeMain(float4 position : SV_Position) : SV_Target

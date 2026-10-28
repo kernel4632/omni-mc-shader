@@ -219,7 +219,7 @@
       "target": "LinearDepth_From_ScreenDepth"
     },
     "mat2_rotate_z": {
-      "target": "common/math.ogxMat2RotateZ"
+      "target": "common/math/sampling.ogxRotate2Matrix"
     },
     "BilinearTexture": {
       "target": "common/math/filter.ogxBilinearTexture"
@@ -693,10 +693,19 @@
       "target": "SamplePrevious"
     },
     "BlueNoiseTemproal": {
-      "target": "BlueNoiseTemproal"
+      "target": "common/sampling.ogxBlueNoiseTemporal",
+      "resources": {
+        "noiseTexture": "texture",
+        "pixel": "value",
+        "frame": "value"
+      }
     },
     "BayerTemproal": {
-      "target": "BayerTemproal"
+      "target": "common/sampling.ogxBayerTemporal",
+      "resources": {
+        "pixel": "value",
+        "frame": "value"
+      }
     },
     "VanillaFog": {
       "target": "VanillaFog"
@@ -809,7 +818,10 @@
       "target": "CalculateSpecularReflections"
     },
     "Get3DNoise": {
-      "target": "Get3DNoise"
+      "target": "common/noise.ogxFogNoise",
+      "resources": {
+        "noiseTexture": "texture"
+      }
     },
     "GetModulatedRainSpecular": {
       "target": "GetModulatedRainSpecular"
@@ -872,10 +884,16 @@
       "target": "aurora"
     },
     "bayerDither": {
-      "target": "bayerDither"
+      "target": "common/math/sampling.ogxBayer4Dither",
+      "resources": {
+        "pixel": "value"
+      }
     },
     "triangWhiteNoise": {
-      "target": "triangWhiteNoise"
+      "target": "common/sampling.ogxTriangularWhiteNoise",
+      "resources": {
+        "frameTime": "value"
+      }
     },
     "fp10Dither": {
       "target": "fp10Dither"
@@ -959,7 +977,7 @@
       "target": "common/math.ogxSafeInvLength"
     },
     "linear_step": {
-      "target": "linear_step"
+      "target": "common/math/scalar.ogxRemapSaturate"
     },
     "screen_to_view_space": {
       "target": "screen_to_view_space"
@@ -1043,7 +1061,7 @@
       "target": "linZ2"
     },
     "frisvad": {
-      "target": "frisvad"
+      "target": "reflection/specular.ogxFrisvad"
     },
     "invertLinearizeDepthFast": {
       "target": "invertLinearizeDepthFast"
@@ -1092,7 +1110,7 @@
       "target": "sphereToCart"
     },
     "rand": {
-      "target": "rand"
+      "target": "common/noise.ogxWhiteNoise#2"
     },
     "getRainDensity": {
       "target": "getRainDensity"
@@ -1168,7 +1186,7 @@
       }
     },
     "applyGameplayEffects": {
-      "target": "post/scene/gameplay.ogxGameplayEffects",
+      "target": "post/scene.ogxGameplayEffects",
       "resources": {
         "currentHealth": "value",
         "maxHealth": "value",
@@ -1200,7 +1218,7 @@
       "allowExtraConstants": true
     },
     "doBlockLightLightingVoxel": {
-      "target": "gi/diffuse.ogxBlockLightLightingVoxelExact",
+      "target": "gi/blocklight.ogxBlockLightLightingVoxelExact",
       "resources": {
         "torchAmount": "value"
       },

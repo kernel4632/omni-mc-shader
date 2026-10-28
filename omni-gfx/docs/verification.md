@@ -1,7 +1,7 @@
 # omni-gfx 验证记录
 
 <!-- stats:begin -->
-当前统计：48 个模块、95 个 Slang 源文件、15917 行生成 GLSL；函数对照 505 个，已迁入 404、MC 专用 101、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
+当前统计：44 个生成模块（另有 4 个参考后端，共 48 个源模块）、94 个 Slang 源文件、14147 行生成 GLSL；函数对照 505 个，已迁入 404、MC 专用 101、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
 <!-- stats:end -->
 
 ## 〇、2026-10-26 光影验收 v5：按 iterationT 3.2.0 对齐
@@ -565,11 +565,11 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 | `python build.py audit` | 619 个代码文件通过中文说明与实现审计 |
 | `python build.py verify` | 166 个测试、9 组编译探针与打包通过 |
 | `python build.py compile` | 2 种配置、280 组唯一程序、0 错误 |
-| `python omni-gfx/build.py count` | 手写核心 19784 行，上限 19900 |
+| `python omni-gfx/build.py count` | 手写核心 20735 行，上限 21000 |
 
 ### 本轮修了什么
 
-- 消费者状态：新增 `tools/catalog.py` 作为 48 个模块与仅探针状态的唯一来源；20 个没有顶层画面入口的模块在文件头写明“仅编译探针与 profile 覆盖”，测试核对声明与真实引用一致。
+- 消费者状态：新增 `tools/catalog.py` 作为模块与消费者状态的唯一来源；本轮改为 44 个生成模块加 4 个参考后端，调用图核对真实入口。
 - 结构：`common/math.slang` 拆进 `common/math/` 六个算法子文件，`fog/volume.slang` 拆进 `fog/volume/` 七个子文件，主文件都保留实际函数；颜色曲线按 ACES、AgX、Reinhard、Uchimura、胶片曲线与黑体拆开，`common/color.slang` 保留矩阵、黑边、白平衡与调色入口。
 - 去重：深度换算、阴影投影、像素取格、哈希、旋转、三角波、双三次权重、R2、自发光与相函数收口到 `common/`；参考签名需要的入口保留单行转调，不再复制算法体。
 - AgX 死簇：`ogxAgxConfigurable` 接入 Minecraft 的色调映射选项，`ogxAgxConfigurable1` 与矩阵版本由它调用，不再只靠 profile 探针续命。
@@ -583,3 +583,34 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 - 其他显卡与驱动；GPU 等值测试只代表本机 Intel Arc。
 - AgX 可配置选项的实际画面只证明编译与算法接线，没有游戏内截图对比。
 
+
+## 2026-10-29 第五轮 HOP 审计
+
+| 命令 | 结果 |
+| --- | --- |
+| `python omni-gfx/build.py generate` | 44 个生成模块、45 个文件、GLSL 14114 行 |
+| `python omni-gfx/build.py spirv` | 44/44 个探针通过，编译器 2026.20 |
+| `python omni-gfx/build.py strict-parity` | 505 个函数：exact 459、approximate 15、reference_broken 5、mc_glue 26、missing 0 |
+| `python omni-gfx/build.py profiles` | iterationt 14184 行、eclipse 14183 行，均编译通过 |
+| `.venv\Scripts\python.exe omni-gfx\tests\equivalence.py` | 26/26 通过 |
+| `python build.py verify` | 166 个测试、9 组编译探针与打包通过 |
+| `python build.py compile` | 2 种配置、280 组唯一程序、0 错误 |
+
+- 48 个源模块中 44 个生成 GLSL；`cloud/layers`、`reflection/wsr`、`reflection/photonics`、`reflection/specular` 是没有当前选项的参考后端，只保留源码供严格对照。
+- 严格对照的 15 条 approximate 主要来自删除零调用转发名字与改用真实入口，逐条记录在 `parity_report.json`；没有把近似写成 exact。
+- 未启动 Minecraft；游戏内画面、菜单、性能与其他显卡仍未验证。
+
+
+## 2026-10-29 第五轮审计补记（strict 台账修复）
+
+| 命令 | 结果 |
+| --- | --- |
+| `python omni-gfx/build.py generate` | 44 个生成模块、45 个文件、GLSL 14147 行 |
+| `python omni-gfx/build.py strict-parity` | 505 个函数：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 |
+| `python omni-gfx/build.py spirv` | 44/44 个探针通过，编译器 2026.20 |
+| `python omni-gfx/build.py profiles` | iterationt 14217 行、eclipse 14216 行，均编译通过 |
+| `python build.py verify` | 166 个测试、623 个代码文件审计、9 组编译探针与打包通过 |
+| `python build.py compile` | 2 种配置、280 组唯一程序、0 错误 |
+
+- 15 条旧目标改到通用库真实实现；`frisvad` 与 `rand` 补可调用入口，G-buffer 去掉重复采样，GTAO 恢复参考常数，镜头改用库内 `atan2`，各向异性静态分支补大括号。
+- 280 组离线编译与两份 profile 编译都覆盖了受影响的入口；游戏内画面仍未验证。

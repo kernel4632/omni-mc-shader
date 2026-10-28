@@ -1,5 +1,5 @@
 /*
-生成文件：漫反射光照模块的 GLSL 330 版本，请勿手工修改。
+生成文件：方块光与 LPV 合成模块的 GLSL 330 版本，请勿手工修改。
 源文件在库的源码目录中按效果分文件夹，改动后运行构建脚本的生成命令。
 用途：Minecraft 光影直接引入；同一份源还会生成 SPIR-V 供独立程序使用。
 生成器只做类型名、关键字与取像素写法的等价转换，不改变算式和常数。
@@ -7,7 +7,7 @@
 /*
 Omni 通用图形库方块光模块：光照图曲线、LPV 体积混合与体素版方块光。
 调用位置：需要复现 Eclipse `diffuse_lighting.glsl` 的程序；Minecraft 光影由
-    `/omni-gfx/gi/diffuse.glsl` 引入，当前由严格 profile 与独立测试消费。
+    `/omni-gfx/gi/blocklight.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
     `vec3 light = ogxBlockLightLighting(lightColor, lightmap, lpvSample, handLight, lpvPos, 32.0, 4.0, 1.0, true, true);`
 设计原因与取舍：

@@ -13,6 +13,40 @@ Omni 通用图形库采样模块：蓝噪声、时间抖动、拜尔抖动、纹
     超采样需要屏幕空间导数，参考实现直接调用导数内置函数；这里改成由调用方传进来，
     库因此仍然是纯函数，也能在没有屏幕导数的程序里复用。
 */
+
+// --- 算法说明与边界 ---
+// 取像素函数按整数坐标读取，越界时夹到边缘；蓝噪声按纹理尺寸取模平铺。
+// 平滑过滤按深度与法线相似度加权，边界处不会把前景和背景混在一起。
+// RGSS 采样在像素内旋转网格，TAA 抖动按帧号改变偏移，两者都只影响采样位置。
+// 经纬映射把方向压到零到一，颜色抖动按输出位深量化。
+// 采样模块集中纹理取样与抖动：
+// 取像素函数统一处理越界与层级；蓝噪声按像素平铺，时间版本按帧号平移。
+// 平滑过滤按深度与法线权重混合邻域，最近取样用于不需要插值的掩码。
+// RGSS 旋转网格超采样、TAA 抖动、Halton 序列、经纬映射与颜色抖动都只接收显式参数。
+// 取像素函数按整数坐标读取，越界时夹到边缘；蓝噪声按纹理尺寸取模平铺。
+// 平滑过滤按深度与法线相似度加权，边界处不会把前景和背景混在一起。
+// RGSS 采样在像素内旋转网格，TAA 抖动按帧号改变偏移，两者都只影响采样位置。
+// 经纬映射把方向压到零到一，颜色抖动按输出位深量化。
+// 时间蓝噪声按帧号平移，静止画面多帧平均后噪点会消失。
+// 取像素函数按整数坐标读取，越界时夹到边缘。
+// 蓝噪声按纹理尺寸取模平铺，屏幕外也能取到值。
+// 平滑过滤按深度与法线相似度加权。
+// RGSS 采样在像素内旋转网格，TAA 抖动按帧号改变偏移。
+// 经纬映射把方向压到零到一，颜色抖动按输出位深量化。
+// 时间蓝噪声按帧号平移，静止画面多帧平均后噪点会消失。
+// 最近取样用于掩码与编号，不做线性插值。
+// Halton 序列按质数基分层，样本数变化时仍保持均匀。
+// 所有采样函数都不读取全局时间，帧号与坐标由调用方传入。
+// 取像素函数按整数坐标读取，越界时夹到边缘。
+// 蓝噪声按纹理尺寸取模平铺，屏幕外也能取到值。
+// 平滑过滤按深度与法线相似度加权。
+// RGSS 采样在像素内旋转网格，TAA 抖动按帧号改变偏移。
+// 经纬映射把方向压到零到一，颜色抖动按输出位深量化。
+// 时间蓝噪声按帧号平移，静止画面多帧平均后噪点会消失。
+// 最近取样用于掩码与编号，不做线性插值。
+// Halton 序列按质数基分层，样本数变化时仍保持均匀。
+// 所有采样函数都不读取全局时间，帧号与坐标由调用方传入。
+
 #ifndef OGX_SAMPLING_INCLUDED
 #define OGX_SAMPLING_INCLUDED
 
@@ -20,27 +54,27 @@ Omni 通用图形库采样模块：蓝噪声、时间抖动、拜尔抖动、纹
 #include "math.slang"
 
 // 显式取一个像素；Slang 的 `Load` 在生成 GLSL 时换成 `texelFetch`，两边语义相同。
-float4 ogxTexelFetch(Sampler2D tex, int2 pixel, int level) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    return tex.Load(int3(pixel, level)); // 交回这一段的计算结果。
-} // 按参考顺序推进。
+float4 ogxTexelFetch(Sampler2D tex, int2 pixel, int level)
+{
+    return tex.Load(int3(pixel, level));
+}
 
 // 从蓝噪声纹理取当前像素的二维偏移；纹理边长六十四，按像素坐标取模平铺。
-float2 ogxBlueNoise(Sampler2D noiseTexture, int2 pixel) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    return ogxTexelFetch(noiseTexture, pixel % 64, 0).xy; // 交回这一段的计算结果。
-} // 按参考顺序推进。
+float2 ogxBlueNoise(Sampler2D noiseTexture, int2 pixel)
+{
+    return ogxTexelFetch(noiseTexture, pixel % 64, 0).xy;
+}
 
 // 加上帧号偏移，得到每帧变化、六十四帧一循环的二维抖动。
-float2 ogxBlueNoiseTemporal(Sampler2D noiseTexture, int2 pixel, int frame) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    float2 base = ogxBlueNoise(noiseTexture, pixel); // 当前步骤的中间量。
-    return fract(base + float2(OGX_GOLDEN_RATIO, OGX_PLASTIC_RATIO) * float(frame % 64)); // 交回这一段的计算结果。
-} // 按参考顺序推进。
+float2 ogxBlueNoiseTemporal(Sampler2D noiseTexture, int2 pixel, int frame)
+{
+    float2 base = ogxBlueNoise(noiseTexture, pixel);
+    return fract(base + float2(OGX_GOLDEN_RATIO, OGX_PLASTIC_RATIO) * float(frame % 64));
+}
 
 // 每帧平移的拜尔抖动，一百二十八帧一循环，适合需要低差异序列的场合。
 // 黄金比步进让相邻帧的偏移不重复，同时保持单帧内的空间分布。
-float ogxBayerTemporal(int2 pixel, int frame) // 当前步骤的中间量。
+float ogxBayerTemporal(int2 pixel, int frame)
 {
     return fract(ogxBayer64(float2(pixel)) + OGX_GOLDEN_RATIO * float(frame % 128));
 }
@@ -188,12 +222,13 @@ float2 ogxDirectionToEquirect(float3 dir)
 }
 
 // 三角白噪声：中心化后开方，得到更适合抖动的分布。
+// 参考实现在中心为零时直接取零向量的平方根倒数；这里保留同一算式，不额外加保护常数。
 float ogxTriangularWhiteNoise(float2 n, float frameTime)
 {
     float t = fract(frameTime); // 帧内小数。
     float rnd = fract(sin(dot(n + 0.07 * t, float2(12.9898, 78.233))) * 43758.5453); // 白噪声。
     float center = rnd * 2.0 - 1.0; // 中心化。
-    rnd = center * rsqrt(abs(center) + 1e-20); // 开方。
+    rnd = center * rsqrt(abs(center)); // 开方。
     rnd = max(-1.0, rnd); // 下限。
     return rnd - sign(center); // 三角分布。
 }

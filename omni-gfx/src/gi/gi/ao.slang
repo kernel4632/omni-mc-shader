@@ -151,7 +151,8 @@ float ogxGroundTruthAo(float3 viewPos, float3 viewDir, float3 normal, float2 coo
             maxCosHorizonAngle.y = max(cosHorizonAngleNeg, maxCosHorizonAngle.y); // 取可见地平线角。
         }
         maxCosHorizonAngle = float2(-ogxFastAcos(maxCosHorizonAngle.y), ogxFastAcos(maxCosHorizonAngle.x)) * 2.0; // 两侧换成开口角。
-        float horizonAngleIntegra = 2.0 * cosNormalAngle + (maxCosHorizonAngle.x + maxCosHorizonAngle.y) * sin(normalAngle) - cos(maxCosHorizonAngle.x - normalAngle) - cos(maxCosHorizonAngle.y - normalAngle); // 这一片的半球可见缺口。
+        // 弧面积分由参考后端统一维护；输入完整开口角，与参考算式逐项一致。
+        float horizonAngleIntegra = ogxGtaoHorizonGap(maxCosHorizonAngle, normalAngle, cosNormalAngle);
         ao += horizonAngleIntegra / rProjNormalLength; // 累加。
     }
     ao *= 0.25 * rSteps; // 平均。
@@ -258,8 +259,8 @@ float ogxGtaoSlices(float3 viewPos, float3 viewDir, float3 normal, float2 coord,
             maxCosHorizonAngle.y = max(cosHorizonAngle, maxCosHorizonAngle.y); // 取更大的一侧。
         }
         maxCosHorizonAngle = float2(-ogxFastAcos(maxCosHorizonAngle.y), ogxFastAcos(maxCosHorizonAngle.x)) * 2.0; // 转成角度。
-        float horizonAngleIntegra = 2.0 * cosNormalAngle + (maxCosHorizonAngle.x + maxCosHorizonAngle.y) * sin(normalAngle)
-            - cos(maxCosHorizonAngle.x - normalAngle) - cos(maxCosHorizonAngle.y - normalAngle); // 弧面积分。
+        // 与上面的地平线遮蔽共用同一份完整角积分，常数与参考算式一致。
+        float horizonAngleIntegra = ogxGtaoHorizonGap(maxCosHorizonAngle, normalAngle, cosNormalAngle);
         ao += horizonAngleIntegra / rProjNormalLength; // 累加。
     }
     ao *= 0.25 * rSteps; // 平均。

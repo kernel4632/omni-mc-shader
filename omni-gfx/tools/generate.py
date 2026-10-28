@@ -424,3 +424,4 @@ def check_modules() -> None:
             stale.append(extra.relative_to(ROOT).as_posix())
     if stale:
         raise ValueError("omni-gfx 生成文件已过期，请运行构建脚本的生成命令：" + "、".join(stale))
+    catalog.check_consumers()  # 生成模块必须有真实函数调用，不能只靠引用或探针存活。

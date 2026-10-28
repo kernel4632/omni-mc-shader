@@ -1,7 +1,7 @@
 /*
 Omni 通用图形库方块光模块：光照图曲线、LPV 体积混合与体素版方块光。
 调用位置：需要复现 Eclipse `diffuse_lighting.glsl` 的程序；Minecraft 光影由
-    `/omni-gfx/gi/diffuse.glsl` 引入，当前由严格 profile 与独立测试消费。
+    `/omni-gfx/gi/blocklight.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
     `vec3 light = ogxBlockLightLighting(lightColor, lightmap, lpvSample, handLight, lpvPos, 32.0, 4.0, 1.0, true, true);`
 设计原因与取舍：

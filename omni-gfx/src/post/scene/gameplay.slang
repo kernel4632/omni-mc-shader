@@ -3,18 +3,27 @@
 // 设计原因与取舍：三种扭曲各自成一个函数，入口只按优先级取最大值；这样新增一种效果不必改另外两种的算式。
 // 可复制示例：`ogxGameplayEffects(color, uv, noise, 20.0, 20.0, 0.0, 0.0, 0.0, 0.0, false, false, false, false, 0.0, 0.0, 0.0, 0.0, sceneTex, noiseTex, 1.777, frameTime, 1.0, 1.0);`
 
+// --- 算法说明与边界 ---
+// 受伤扭曲的暗角权重在中心为零、边缘为一，重击时把边缘权重换成半基础量加噪声。
+// 入水波纹从中心向外推，水珠噪声在出水时更强；着火噪声从底部向上滚动。
+// 血量上色先算红色亮度，再按低血量、受伤、死亡三种状态混合，死亡压到最暗。
+// 受伤与场景扭曲：受伤扭曲按心跳与暗角缩放屏幕坐标，重击时整屏抖动。
+// 入水扭曲读水珠噪声并从中心向外推波纹；着火扭曲让底部火焰噪声向上滚动。
+// 血量上色按低血量、受伤与死亡三种状态染红，入口按优先级取最大扭曲。
+
+
 // 受伤扭曲：低血量按心跳做轻微缩放，暴击时放大；死亡状态直接给最强的暗角扭曲。
-float ogxDamageDistortion(float2 texcoord, float noise, float currentHealth, float maxHealth, // 当前步骤的中间量。
-    float threeHeart, float criticalDamage, float motionAmount, float frameTime, // 当前步骤的中间量。
-    bool lowHealthEffect, bool damageTakenEffect) // 按参考顺序推进。
-{ // 按参考顺序推进。
+float ogxDamageDistortion(float2 texcoord, float noise, float currentHealth, float maxHealth,
+    float threeHeart, float criticalDamage, float motionAmount, float frameTime,
+    bool lowHealthEffect, bool damageTakenEffect)
+{
     bool isDead = currentHealth * maxHealth <= 0.0 && currentHealth > -1.0; // 血量归零。
     float vignette = sqrt(clamp(dot(texcoord * 2.0 - 1.0, texcoord * 2.0 - 1.0) * 0.5, 0.0, 1.0)); // 暗角。
     float heartBeat = pow(sin(frameTime * 15.0) * 0.5 + 0.5, 2.0) * 0.2 + 0.1; // 心跳频率。
     float damageDistortion = vignette * noise * heartBeat * threeHeart; // 低血量扭曲。
     damageDistortion = lerp(damageDistortion, vignette * (0.5 + noise), criticalDamage) * motionAmount; // 暴击扭曲。
     return isDead ? vignette * (0.7 + noise * 0.3) : damageDistortion; // 死亡优先。
-} // 按参考顺序推进。
+}
 
 // 入水扭曲：镜头带水时读水珠噪声，入水时从中心向外推一圈波纹，两者取较大值。
 float ogxWaterDistortion(float2 texcoord, Sampler2D noiseTexture, float aspectRatio,
@@ -69,28 +78,4 @@ void ogxGameplayColor(inout float3 color, float3 distortedColor, float vignette,
         color = lerp(color, distortedLuma, sqrt(criticalDamage)); // 暴击伤害。
     }
     if (isDead) color = distortedLuma * 0.35; // 死亡画面。
-}
-
-// 画面效果入口：三种扭曲按优先级取最大，再统一做一次场景缩放与血量上色。
-void ogxGameplayEffects(inout float3 color, float2 texcoord, float noise,
-    float currentHealth, float maxHealth, float oneHeart, float threeHeart,
-    float criticalDamage, float minorDamage, bool lowHealthEffect, bool damageTakenEffect,
-    bool waterOnCamera, bool fireDistort, float exitWater, float enterWater, float exitLava,
-    float isEyeInWater, Sampler2D sceneTexture, Sampler2D noiseTexture, float aspectRatio,
-    float frameTime, float motionAmount, float fireStrength)
-{
-    bool isDead = currentHealth * maxHealth <= 0.0 && currentHealth > -1.0; // 血量归零。
-    float vignette = sqrt(clamp(dot(texcoord * 2.0 - 1.0, texcoord * 2.0 - 1.0) * 0.5, 0.0, 1.0)); // 暗角。
-    float distortMask = 0.0; // 屏幕扭曲量。
-    if (lowHealthEffect || damageTakenEffect) distortMask = ogxDamageDistortion(texcoord, noise, currentHealth, maxHealth,
-        threeHeart, criticalDamage, motionAmount, frameTime, lowHealthEffect, damageTakenEffect); // 受伤优先。
-    if (waterOnCamera) distortMask = max(distortMask, ogxWaterDistortion(texcoord, noiseTexture, aspectRatio,
-        exitWater, enterWater, isEyeInWater)); // 入水其次。
-    if (fireDistort && exitLava > 0.0) distortMask = max(distortMask, ogxFireDistortion(texcoord, noiseTexture,
-        aspectRatio, frameTime, fireStrength, exitLava)); // 着火最后。
-    float2 zoomUV = 0.5 + (texcoord - 0.5) * (1.0 - distortMask); // 以中心缩放。
-    float3 distortedColor = sceneTexture.SampleLevel(zoomUV, 0.0).rgb; // 读扭曲后的场景。
-    if ((waterOnCamera && exitWater > 0.01) || (fireDistort && exitLava > 0.01)) color = distortedColor; // 水或火覆盖时替换场景。
-    ogxGameplayColor(color, distortedColor, vignette, oneHeart, threeHeart, criticalDamage, minorDamage, isDead,
-        lowHealthEffect, damageTakenEffect); // 血量上色。
 }

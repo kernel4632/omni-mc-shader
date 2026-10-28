@@ -29,98 +29,30 @@
 
 // 各向异性过滤：沿屏幕上的纹理压缩方向多采几步，换回更清晰的远处方块。
 vec4 SampleAnisotropic(vec2 coord, vec2 duv1, vec2 duv2, inout vec3 normalTex, inout vec4 specularTex, out float materialAO){
-	materialAO = 1.0; // 材质遮蔽系数默认一：没有法线贴图或没开遮蔽时都不压暗底色。
-	vec2 atlasTiles = vec2(atlasSize) / textureResolution; // 图集里横纵各有多少图块。
-	vec2 tilesCoord = coord * atlasTiles; // 坐标换到图块单位。
-
-	// 采样方向由屏幕导数求出，参考原程序给出的着色器写法。
-	mat2 qd = inverse(mat2(dFdx(tilesCoord), dFdy(tilesCoord))); // 屏幕导数矩阵求逆。
-	qd = transpose(qd) * qd; // 转成对称矩阵。
-
-	float d = determinant(qd); // 行列式。
-	float t = (qd[0][0] + qd[1][1]) * 0.5; // 迹的一半。
-
-	float D = sqrt(abs(t * t - d)); // 特征值差的半值。
-	float V = t - D; // 较小的特征值。
-	float v = t + D; // 较大的特征值。
-	vec2 A = vec2(-qd[0][1], qd[0][0] - V); // 对应较小特征值的特征向量。
-	A *= inversesqrt(V * dot(A, A) + 1e-20); // 归一化，避免除零。
-
-	float lod = log2(inversesqrt(v) * textureResolution); // 由较大特征值推出采样层级。
-
-	const float steps = OMNI_ANISOTROPIC_FILTERING_QUALITY; // 采样步数来自选项。
-	const float rSteps = 1.0 / OMNI_ANISOTROPIC_FILTERING_QUALITY; // 每步的比例。
-
-	A *= rSteps; // 特征向量缩放成每步位移。
-
-	vec4 albedoSample = vec4(0.0); // 底色累加量。
-	#ifdef OMNI_ANISOTROPIC_FILTERING_NORMAL_SPECULAR // 开关时连法线与高光一起过滤。
-		vec3 normalSample = vec3(0.0); // 法线累加量。
-		vec4 specularSample = vec4(0.0); // 高光累加量。
-	#endif
-
-	vec2 tilesBaseCoord = floor(tilesCoord); // 当前图块位置。
-
-	for (float i = 0.5 - steps * 0.5; i < steps * 0.5; i++){ // 沿特征向量均匀取几步。
-		vec2 sampleCoord = i * A; // 这一步的偏移。
-		sampleCoord = (tilesBaseCoord + fract(tilesCoord + sampleCoord)) / atlasTiles; // 回到零到一坐标，图块内回绕避免跨块。
-
-		vec4 sampleAlbedo = textureLod(tex, sampleCoord, lod); // 读一步底色。
-
-		albedoSample += vec4(sampleAlbedo.rgb * sampleAlbedo.a, sampleAlbedo.a); // 颜色按透明度加权累加。
-
-		#ifdef OMNI_ANISOTROPIC_FILTERING_NORMAL_SPECULAR
-
-			#ifdef MC_NORMAL_MAP
-				normalSample += textureLod(normals, sampleCoord, lod).rgb * sampleAlbedo.a; // 法线按透明度加权。
-			#endif
-
-			#ifdef MC_SPECULAR_MAP
-				#if OMNI_TEXTURE_EMISSIVENESS_MODE == 0
-					specularSample += textureLod(specular, sampleCoord, lod) * sampleAlbedo.a; // 仅硬编码模式也过滤高光。
-				#endif
-			#endif
-
-		#endif
-	}
-
-	float weights = 1.0 / albedoSample.a; // 权重和的倒数。
-
-	#ifdef OMNI_ANISOTROPIC_FILTERING_NORMAL_SPECULAR
-
-		#ifdef MC_NORMAL_MAP
-			vec4 materialNormal = omniMaterialNormal(normalSample * weights); // 归一化后解码法线，并按选项缩放起伏、取出材质遮蔽。
-			normalTex = materialNormal.xyz; // 缩放后的切线空间法线。
-			materialAO = materialNormal.w; // 材质遮蔽系数，未开材质遮蔽时为一。
-		#endif
-
-		#ifdef MC_SPECULAR_MAP
-			#if OMNI_TEXTURE_EMISSIVENESS_MODE == 0
-				specularTex = specularSample * weights; // 归一化高光。
-			#else
-				specularTex = textureLod(specular, coord, 0.0); // 其余模式不过滤高光，只取一次。
-			#endif
-		#endif
-
+	#ifdef MC_NORMAL_MAP
+		const bool useNormal = true; // 资源包提供法线图时才过滤法线。
 	#else
-
-		#ifdef MC_NORMAL_MAP
-			vec4 materialNormal = omniMaterialNormal(textureGrad(normals, coord, duv1, duv2).rgb); // 按屏幕导数采法线，并按选项缩放起伏、取出材质遮蔽。
-			normalTex = materialNormal.xyz; // 缩放后的切线空间法线。
-			materialAO = materialNormal.w; // 材质遮蔽系数，未开材质遮蔽时为一。
-		#endif
-
-		#ifdef MC_SPECULAR_MAP
-			#if OMNI_TEXTURE_EMISSIVENESS_MODE == 0
-				specularTex = textureGrad(specular, coord, duv1, duv2); // 仅硬编码模式按屏幕导数采高光。
-			#else
-				specularTex = textureLod(specular, coord, 0.0); // 其余模式只取一次。
-			#endif
-		#endif
-
+		const bool useNormal = false; // 没有法线图时库不碰输出参数。
 	#endif
-	
-	return vec4(albedoSample.rgb * weights, textureLod(tex, coord, 0.0).a); // 颜色归一化，透明度取原始值。
+	#if defined MC_SPECULAR_MAP && OMNI_TEXTURE_EMISSIVENESS_MODE == 0
+		const bool useSpecular = true; // 只有硬编码自发光模式需要过滤高光图。
+	#else
+		const bool useSpecular = false; // 其它模式只取一次高光图，不参与椭圆核。
+	#endif
+	#ifdef OMNI_ANISOTROPIC_FILTERING_NORMAL_SPECULAR
+		const bool normalSpecular = true; // 选项开启时连法线与高光一起过滤。
+	#else
+		const bool normalSpecular = false; // 关闭时法线与高光按屏幕导数各取一次。
+	#endif
+	const bool useMaterialAo = OMNI_MATERIAL_AO != 0; // 选项开启时才从蓝通道取材质遮蔽。
+	vec4 result = ogxSampleAnisotropic(tex, normals, specular, coord, duv1, duv2, vec2(atlasSize), textureResolution,
+		int(OMNI_ANISOTROPIC_FILTERING_QUALITY), normalSpecular, useNormal, useSpecular, useMaterialAo,
+		normalTex, specularTex, materialAO); // 椭圆核、步进与加权在通用库。
+	if (useNormal) normalTex = omniMaterialNormalScale(normalTex); // 解码后按选项缩放起伏。
+	#if defined MC_SPECULAR_MAP && OMNI_TEXTURE_EMISSIVENESS_MODE != 0
+		specularTex = textureLod(specular, coord, 0.0); // 非硬编码模式不过滤高光图，只取中心值。
+	#endif
+	return result; // 颜色与透明度由通用库算好。
 }
 
 // 参考签名兼容层：参考没有材质遮蔽输出，多出的输出由适配层丢弃。

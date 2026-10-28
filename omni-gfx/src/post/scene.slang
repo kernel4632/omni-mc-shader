@@ -22,4 +22,30 @@ Omni 通用图形库 Eclipse 场景补充模块：受伤与入水画面效果、
 // 场景控制：把云层、密度与雾系数原样输出。
 #include "scene/controller.slang"
 
+// 画面效果入口：三种扭曲按优先级取最大，再统一做一次场景缩放与血量上色。
+// 为什么入口留在主文件：三种扭曲的公共顺序（受伤优先、入水其次、着火最后）是这一层的职责，
+// 子文件只保留各自的算式；改动优先级时只需要看这一处。
+void ogxGameplayEffects(inout float3 color, float2 texcoord, float noise,
+    float currentHealth, float maxHealth, float oneHeart, float threeHeart,
+    float criticalDamage, float minorDamage, bool lowHealthEffect, bool damageTakenEffect,
+    bool waterOnCamera, bool fireDistort, float exitWater, float enterWater, float exitLava,
+    float isEyeInWater, Sampler2D sceneTexture, Sampler2D noiseTexture, float aspectRatio,
+    float frameTime, float motionAmount, float fireStrength)
+{
+    bool isDead = currentHealth * maxHealth <= 0.0 && currentHealth > -1.0; // 血量归零。
+    float vignette = sqrt(clamp(dot(texcoord * 2.0 - 1.0, texcoord * 2.0 - 1.0) * 0.5, 0.0, 1.0)); // 暗角。
+    float distortMask = 0.0; // 屏幕扭曲量。
+    if (lowHealthEffect || damageTakenEffect) distortMask = ogxDamageDistortion(texcoord, noise, currentHealth, maxHealth,
+        threeHeart, criticalDamage, motionAmount, frameTime, lowHealthEffect, damageTakenEffect); // 受伤优先。
+    if (waterOnCamera) distortMask = max(distortMask, ogxWaterDistortion(texcoord, noiseTexture, aspectRatio,
+        exitWater, enterWater, isEyeInWater)); // 入水其次。
+    if (fireDistort && exitLava > 0.0) distortMask = max(distortMask, ogxFireDistortion(texcoord, noiseTexture,
+        aspectRatio, frameTime, fireStrength, exitLava)); // 着火最后。
+    float2 zoomUV = 0.5 + (texcoord - 0.5) * (1.0 - distortMask); // 以中心缩放。
+    float3 distortedColor = sceneTexture.SampleLevel(zoomUV, 0.0).rgb; // 读扭曲后的场景。
+    if ((waterOnCamera && exitWater > 0.01) || (fireDistort && exitLava > 0.01)) color = distortedColor; // 水或火覆盖时替换场景。
+    ogxGameplayColor(color, distortedColor, vignette, oneHeart, threeHeart, criticalDamage, minorDamage, isDead,
+        lowHealthEffect, damageTakenEffect); // 血量上色。
+}
+
 #endif

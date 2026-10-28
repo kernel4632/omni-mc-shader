@@ -60,6 +60,8 @@
 #include "/common/uniforms.glsl"
 // 共用数学：提供 `InterleavedGradientNoise`。
 #include "/common/math.glsl"
+// 受伤扭曲、血量上色与死亡暗红在通用场景模块。
+#include "/omni-gfx/post/scene.glsl"
 
 // Iris 的玩家状态输入：只在开启效果且运行在 Iris 上时声明，避免在其它加载器上出现未声明标识符。
 #if OMNI_HURT_EFFECT && defined IS_IRIS
@@ -102,55 +104,28 @@ vec3 omniHurtEffect(vec3 color, vec2 texcoord){
 	color = omniWaterOnCamera(color, texcoord);
 #if OMNI_HURT_EFFECT && defined IS_IRIS // 开启效果且是 Iris 才展开，否则直接返回。
 	float absHealth = currentPlayerHealth * maxPlayerHealth; // 绝对血量，单位半颗心。
-	bool alive = currentPlayerHealth > -1.0; // 负一是创造或旁观，不是有效生存态。
-	bool isDead = alive && absHealth <= 0.0; // 生存态下血量归零就是死亡。
-
-	float threeHeart = 0.0; // 低血量红屏与心跳的强度；未开低血量时保持零，心跳与形变随之消失。
+	float threeHeart = 0.0; // 低血量红屏与心跳的强度；未开低血量时保持零。
+	float oneHeart = 0.0; // 危急阈值对应的更强红屏强度。
 	#if OMNI_HURT_LOW_HEALTH // 开启低血量时才按血量算强度。
 		threeHeart = 1.0 - smoothstep(OMNI_HURT_LOW_HEALTH_START, OMNI_HURT_LOW_HEALTH_START + 1.0, absHealth); // 低于阈值拉满，高出一个半步的心回到零。
-		float oneHeart = 1.0 - smoothstep(OMNI_HURT_CRITICAL_START, OMNI_HURT_CRITICAL_START + 1.0, absHealth); // 危急阈值同样做阶跃。
+		oneHeart = 1.0 - smoothstep(OMNI_HURT_CRITICAL_START, OMNI_HURT_CRITICAL_START + 1.0, absHealth); // 危急阈值同样做阶跃。
 	#endif
-
-	// 到画面中心的距离：中心接近零、边缘接近一，红边的形状由它决定，照原程序。
-	float vignette = sqrt(clamp(dot(texcoord * 2.0 - 1.0, texcoord * 2.0 - 1.0) * 0.5, 0.0, 1.0));
 	float noise = InterleavedGradientNoise(gl_FragCoord.xy); // 每像素交错的零到一噪声，照原程序。
-
-	// 心跳脉冲：正弦平方做出“砰、砰”的节奏，基值与幅度照原程序。
-	float heartBeat = pow(sin(frameTimeCounter * 15.0) * 0.5 + 0.5, 2.0) * 0.2 + 0.1;
-	// 形变量：低血量按心跳在边缘抖动；重击时把边缘抖动升级成整屏抖动；强度统一由选项缩放；死亡时整个画面都在抖。
-	float damageDistortion = vignette * noise * heartBeat * threeHeart;
-	#if OMNI_HURT_DAMAGE // 重击时整屏抖，照 Eclipse 把边缘权重换成「半个基础量加噪声」。
-		damageDistortion = mix(damageDistortion, vignette * (0.5 + noise), CriticalDamageTaken);
-	#endif
-	damageDistortion *= OMNI_HURT_MOTION;
-	float distortMask = isDead ? vignette * (0.7 + noise * 0.3) : damageDistortion;
-
-	// 形变采样：以画面中心为轴把坐标向内收，畸变越大收得越多，边缘先动。
-	vec2 zoomUV = 0.5 + (texcoord - 0.5) * (1.0 - distortMask);
-	vec3 distortedColor = texture(colortex1, zoomUV).rgb; // 取形变后的场景色。
-	// 红色分量的亮度：只留红光，红屏与红边都用它。
-	vec3 distortedLuma = vec3(1.0, 0.0, 0.0) * dot(distortedColor, vec3(0.21, 0.72, 0.07));
-
-	#if OMNI_HURT_LOW_HEALTH // 低血量：边缘按强度染红。
-		float colorLuma = dot(color, vec3(0.21, 0.72, 0.07)); // 当前像素的亮度。
-		vec3 lumaRedEdges = mix(vec3(colorLuma), vec3(1.0, 0.3, 0.3) * distortedLuma.r, vignette); // 灰度画面在边缘偏红。
-		color = mix(color, lumaRedEdges, mix(vignette * threeHeart, oneHeart, oneHeart)); // 越危急混得越多。
-	#endif
-	#if OMNI_HURT_DAMAGE // 受击：小伤染红边缘，重击整屏染红，照 Eclipse。
-		color = mix(color, distortedLuma, vignette * sqrt(min(MinorDamageTaken, 1.0))); // 小伤只在边缘，越靠边越红。
-		color = mix(color, distortedLuma, sqrt(CriticalDamageTaken)); // 重击不乘边缘权重，整屏变红，越重越红。
-	#endif
+	// 受伤扭曲、血量上色与死亡暗红由通用场景模块一次完成；这里只负责把宿主输入换算成显式参数。
+	ogxGameplayEffects(color, texcoord, noise, currentPlayerHealth, maxPlayerHealth, oneHeart, threeHeart,
+		CriticalDamageTaken, MinorDamageTaken, bool(OMNI_HURT_LOW_HEALTH), bool(OMNI_HURT_DAMAGE), false, false,
+		0.0, 0.0, 0.0, float(isEyeInWater == 1), colortex1, noisetex, aspectRatio, frameTimeCounter,
+		OMNI_HURT_MOTION, 1.0);
 	#if OMNI_HURT_FIRE // 着火：边缘染橙并随火焰抖动。
 		float burning = float(is_burning); // 身上着火时为一。
 		vec3 fireEdge = vec3(1.0, 0.45, 0.12) * max(dot(color, vec3(0.21, 0.72, 0.07)), 0.15); // 橙色边缘的基色，至少留一点亮。
-		color = mix(color, mix(color, fireEdge, 0.6), vignette * burning * (0.5 + noise * 0.5)); // 越靠边缘染得越多，噪声让火焰跳动。
+		color = mix(color, mix(color, fireEdge, 0.6), sqrt(dot(texcoord * 2.0 - 1.0, texcoord * 2.0 - 1.0) * 0.5) * burning * (0.5 + noise * 0.5)); // 越靠边缘染得越多，噪声让火焰跳动。
 	#endif
 	#if OMNI_HURT_DROWNING // 溺水：水下且血量偏低时整屏偏蓝压暗。
 		// 为什么这样近似：原版溺水按氧气量表现，Iris 不提供氧气量；这里用“在水下且血量低于低血量阈值”代表已经快淹死。
 		float drowning = float(isEyeInWater == 1) * step(absHealth, OMNI_HURT_LOW_HEALTH_START); // 在水下且血量偏低时为一时压暗。
 		color = mix(color, color * vec3(0.55, 0.7, 1.0), drowning * 0.5); // 偏蓝压暗一半。
 	#endif
-	if (isDead) color = distortedLuma * 0.35; // 死亡：整屏压成暗红。
 #endif // 效果开关结束。
 	return color; // 返回处理后的画面色。
 }

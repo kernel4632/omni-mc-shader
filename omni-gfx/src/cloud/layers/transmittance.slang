@@ -4,19 +4,56 @@
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
 
+// --- 算法说明与边界 ---
+// 吸收按密度乘步长累加，密度为零的样本直接跳过，不增加循环开销。
+// 平均命中距离按吸收权重归一，调用方用它决定后续层的起点；没有命中时返回零距离。
+// 透过率夹在零到一之间，数值误差不会让云变成发光体。
+// 层状云吸收与透过率：沿视线在单层内取样，按密度累加吸收。
+// 函数返回剩余透过率与平均命中距离，调用方用它决定是否继续采样后面的层。
+// 每个样本的密度先乘层内步长，再乘吸收系数；步长由层厚与采样数决定，层越厚单步越长。
+// 密度为零时直接跳过累加，循环仍要前进，不能停在原地重复读同一个样本。
+// 吸收量取负指数得到透过率，数值上等价于 `exp(-opticalDepth)`，但省掉一次指数。
+// 平均命中距离按吸收权重归一，吸收越强的地方权重越高；没有吸收时返回零，调用方据此提前结束。
+// 透过率夹在零到一之间，浮点误差不会让云变成负吸收或发光。
+// `samples` 为零时函数直接返回全透，调用方不该传零。
+// 层内起点必须落在云底与云顶之间，越界样本按零密度处理。
+// 吸收系数由调用方给出，函数本身不读取天气或云类型。
+// 透过率返回零到一，调用方用它乘后面的层颜色。
+// 平均命中距离为零表示没有有效吸收，调用方可以提前结束。
+// 步长按层厚均分，层越厚单步越长，采样数不足时会出现条带。
+// 密度采样使用三维噪声纹理，越界坐标由采样器夹到边缘。
+// 吸收量取负指数，数值稳定性由夹紧保证。
+// 函数不写输出纹理，只返回标量，便于云影与远景复用。
+// 天气参数只影响密度，不改变吸收系数。
+// 层号用于选择噪声相位，层与层之间不会同步闪动。
+// 参考签名版本把天气参数显式传入，内部仍走同一套采样。
+// 调用方负责保证 `minHeight` 小于 `maxHeight`。
+// 返回值不包含自发光，云的颜色由光照阶段另算。
+// 吸收系数为零时整层透明，调用方可以跳过后续采样。
+// 层厚为零时逐样本步长也为零，函数返回全透。
+// 采样数越大条带越少，但每层开销线性增加。
+// 密度采样使用三线性过滤，低频云块不会出现明显格点。
+// 透过率与吸收量互逆，调用方不要重复取指数。
+// 平均命中距离按吸收权重归一，没有吸收时为零。
+// 天气参数只改密度，不改变层高与采样数。
+// 吸收量按步长累加，层厚与采样数必须由调用方保证一致。
+// 透过率返回后不再修改，调用方直接乘后面的层颜色。
+// 没有吸收时平均命中距离为零，调用方可以提前结束。
+
+
 // 层状云低成本步进：只累计透过率，不做光照，供云影与远景使用。
 // 参考签名给层号、步数、位置与方向、抖动与上下界；噪声、天气与覆盖率显式追加。
 // 透射率为什么按层累加：每层云的高度与密度不同，先分别算吸收再相乘，
 // 比把所有层混成一个密度更接近参考，也能让高层云在低层云之上正确遮挡。
 // 阈值检查在循环前：密度太低时直接返回，省掉整段步进；
 // 射线在云层上方或下方时也直接返回，避免无意义的采样。
-float ogxLayersCloudAbsorbanceSimple(int layerIndex, int samples, float3 rayPosition, float3 rayDirection, // 当前步骤的中间量。
-    float dither, float minHeight, float maxHeight, float3 startPos, // 当前步骤的中间量。
-    Sampler2D noiseTexture, float3 cameraWorldPos, float cloudMovement, float rainAmount, // 当前步骤的中间量。
-    float thunderStrength, float cumulonimbusStrength, float altostratusCoverage, // 当前步骤的中间量。
-    float largeCumulusCoverage, float smallCumulusCoverage, // 当前步骤的中间量。
-    float altostratusRain, float largeCumulusRain, float smallCumulusRain) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float ogxLayersCloudAbsorbanceSimple(int layerIndex, int samples, float3 rayPosition, float3 rayDirection,
+    float dither, float minHeight, float maxHeight, float3 startPos,
+    Sampler2D noiseTexture, float3 cameraWorldPos, float cloudMovement, float rainAmount,
+    float thunderStrength, float cumulonimbusStrength, float altostratusCoverage,
+    float largeCumulusCoverage, float smallCumulusCoverage,
+    float altostratusRain, float largeCumulusRain, float smallCumulusRain)
+{
     float totalAbsorbance = 1.0; // 累积透过率。
     float distanceFactor = length(rayDirection); // 每步长度。
     float densityTresholdCheck = 0.0; // 密度阈值，按层选择。
@@ -25,23 +62,23 @@ float ogxLayersCloudAbsorbanceSimple(int layerIndex, int samples, float3 rayPosi
     if (layerIndex == 3) densityTresholdCheck = 0.01; // 按参考条件选择这一支。
     densityTresholdCheck = lerp(1e-5, densityTresholdCheck, dither); // 用抖动在极小值与阈值之间插值。
     if (layerIndex == 3) // 高层云只做一次平面近似。
-    { // 按参考顺序推进。
-        float3 newPos = rayPosition - startPos; // 当前步骤的中间量。
-        float density = altostratusRain; // 当前步骤的中间量。
+    {
+        float3 newPos = rayPosition - startPos;
+        float density = altostratusRain;
         density *= smoothstep(150000.0, 150000.0 * 0.5, length(newPos)); // 超出距离后淡出。
-        if (density == 0.0) return totalAbsorbance; // 交回这一段的计算结果。
+        if (density == 0.0) return totalAbsorbance;
         bool ifAboveOrBelowPlane = max(lerp(-1.0, 1.0, clamp(startPos.y - minHeight, 0.0, 1.0)) * normalize(rayDirection).y + 0.0001, 0.0) > 0.0; // 相机在云层上方或下方时就跳过。
-        if (ifAboveOrBelowPlane) return totalAbsorbance; // 交回这一段的计算结果。
-        float shape = ogxLayersCloudShapeLayer(layerIndex, 1, rayPosition, minHeight, maxHeight, // 当前步骤的中间量。
-            noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage, // 按参考顺序推进。
-            rainAmount, thunderStrength, cloudMovement); // 按参考顺序推进。
-        float shapeWithDensity = shape * density; // 当前步骤的中间量。
+        if (ifAboveOrBelowPlane) return totalAbsorbance;
+        float shape = ogxLayersCloudShapeLayer(layerIndex, 1, rayPosition, minHeight, maxHeight,
+            noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+            rainAmount, thunderStrength, cloudMovement);
+        float shapeWithDensity = shape * density;
         if (shapeWithDensity > 1e-5) // 按参考条件选择这一支。
-        { // 按参考顺序推进。
+        {
             float densityCoeff = exp(-distanceFactor * shapeWithDensity); // 单步吸收。
             totalAbsorbance *= densityCoeff; // 按参考写法推进这一步。
-        } // 按参考顺序推进。
-        return totalAbsorbance; // 交回这一段的计算结果。
+        }
+        return totalAbsorbance;
     }
     if (layerIndex < 3) // 积云与积雨云按步数前进。
     {
@@ -94,7 +131,7 @@ float ogxLayersCloudAbsorbanceSimple(int layerIndex, int samples, float3 rayPosi
 // 三层透射率从高到低叠加：高层云先算，积云其次，小积云最后；
 // 每层都把剩余透射率乘进去，前一层挡住的光不会在后一层重复计算。
 // 采样数只给积云与小积云，高层云很薄，单样本就够；
-// 这样在保持参考顺序的同时，把最贵的步进留给真正有体积的层。
+// 这样在保持参考实现的顺序的同时，把最贵的步进留给真正有体积的层。
 float4 ogxLayersCloudTransmittanceSimple(float2 dither, float3 lightDir, float2 offset, float3 startPos,
     Sampler2D noiseTexture, float3 cameraWorldPos, float cloudMovement, float rainAmount,
     float thunderStrength, float cumulonimbusStrength, float altostratusCoverage,

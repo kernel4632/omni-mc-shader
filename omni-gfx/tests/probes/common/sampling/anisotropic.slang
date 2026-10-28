@@ -13,7 +13,8 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     float t = position.x * 0.001 + 0.25; // 随像素变化的输入。
     float3 normal = float3(0.0, 0.0, 1.0); // 切线法线输出。
     float4 specular = float4(1.0); // 材质输出。
+    float materialAo = 1.0; // 材质遮蔽输出。
     float4 color = ogxSampleAnisotropic(probeTexture, probeTexture, probeTexture, float2(t, t),
-        float2(0.01, 0.0), float2(0.0, 0.01), float2(256.0), 256.0, 4, true, true, true, normal, specular); // 各向异性过滤。
+        float2(0.01, 0.0), float2(0.0, 0.01), float2(256.0), 256.0, 4, true, true, true, true, normal, specular, materialAo); // 各向异性过滤。
     return float4(color.rgb + normal, 1.0); // 有输出即可。
 }

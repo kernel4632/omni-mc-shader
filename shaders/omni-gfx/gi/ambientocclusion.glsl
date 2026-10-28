@@ -13,7 +13,7 @@ Omni 通用图形库全局光环境光遮蔽模块：Eclipse GTAO 的弧段积�
     沿切片搜索最近遮挡，切片数与步数由调用方给出；深度图、矩阵与手部深度显式传入，公式与参考实现逐项相同。
     本模块只服务独立画面的低成本遮蔽，步数与切片数由画质档位控制；全局光内部使用的
     多次切片参考实现放在 `gi/gi/ao.slang`，两者按调用场景分工，不互相包含，避免把重算法带进轻量阶段。
-当前状态：由 `gi/gi` 引入并编译；顶层画面仍走 `gi/gi` 的多切片实现。
+当前状态：由 `gi/gi` 引入并调用 `ogxGtaoArcIntegral`；地平线弧面积分只维护这一份。
 */
 #ifndef OGX_GI_AMBIENTOCCLUSION_INCLUDED
 #define OGX_GI_AMBIENTOCCLUSION_INCLUDED
@@ -28,6 +28,14 @@ float ogxGtaoArcIntegral(vec2 h, float n, float cosN)
 {
     vec2 tmp = cosN + 2.0 * h * sin(n) - cos(2.0 * h - n); // 参考实现的积分核。
     return 0.25 * (tmp.x + tmp.y); // 两个方向取平均。
+}
+
+// iterationT 的半球可见缺口：输入完整开口角，返回这一片的积分。
+// 为什么与上一函数并存：两个参考包把同一段弧写成两种参数化，半角乘四分之一与
+// 完整角不缩放代入后并不相等；保留各自的写法，严格对照才能逐项对上常数与算式。
+float ogxGtaoHorizonGap(vec2 h, float n, float cosN)
+{
+    return 2.0 * cosN + (h.x + h.y) * sin(n) - cos(h.x - n) - cos(h.y - n);
 }
 
 // 单个切片的最大水平角：沿切片方向在深度图里找最高遮挡。

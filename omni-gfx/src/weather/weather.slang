@@ -13,6 +13,20 @@ Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、
     噪声贴图采样固定用零号层级：旧实现的即时采样在单层噪声图上等价，
     固定层级还能让同一份源在 Vulkan 探针里编译。
 */
+
+// --- 算法说明与边界 ---
+// 雨雪偏移按风向与时间推进，植被颜色按季节插值，暴风噪声给云与雾加扰动。
+// 季节颜色只改草叶与树叶，水面与天空保持原色；雾密度按群系与高度组合。
+// 天气：雨雪随风偏移，植被按季节改变颜色，暴风噪声给出云与雾的扰动。
+// 季节函数按游戏日计算温度与叶色，年周期颜色把季节映射到草叶与雾气。
+// 雾密度按群系、高度与天气组合，给下界与末地的特殊雾提供入口。
+// 雨雪偏移按风向与时间推进，植被颜色按季节插值，暴风噪声给云与雾加扰动。
+// 季节颜色只改草叶与树叶，水面与天空保持原色；雾密度按群系与高度组合。
+// 暴风颜色把云与雾一起压暗，雷暴时再叠一层闪电色。
+// 雨雪偏移按风向与时间推进，植被颜色按季节插值。
+// 季节颜色只改草叶与树叶，水面与天空保持原色。
+// 暴风颜色把云与雾一起压暗，雷暴时再叠一层闪电色。
+
 #ifndef OGX_WEATHER_INCLUDED
 #define OGX_WEATHER_INCLUDED
 
@@ -26,8 +40,8 @@ Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、
 // 为什么按高度放大：雨丝从云底落到地面，越高的部分受风时间越长，偏移自然更大；
 // 贴着地面的雨滴几乎竖直，屋檐与树下不会出现横向穿模的雨。
 // 扰动用世界位置做相位，避免整片雨幕同步摆动；露天系数为零时整段归零，室内不受影响。
-float2 ogxRainWindOffset(float3 worldPos, float3 cameraPos, float time, float2 wind, float disturbance, float outdoor) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float2 ogxRainWindOffset(float3 worldPos, float3 cameraPos, float time, float2 wind, float disturbance, float outdoor)
+{
     // 相位随世界位置变化：相邻雨丝不会同步摆动，整片雨幕才不像一块布。
     float angle = dot(worldPos + cameraPos, float3(3.0, 0.5, 3.0)) + time * 0.2; // 位置与时间决定的摆动相位。
     // 单位圆上的方向：正弦与余弦一起给出旋转，不需要再归一化。
@@ -36,18 +50,18 @@ float2 ogxRainWindOffset(float3 worldPos, float3 cameraPos, float time, float2 w
     float2 offset = (wind + rotation * disturbance) * worldPos.y; // 固定风向加摆动，按高度放大。
     // 露天系数为零时整段偏移归零，室内雨雪保持竖直，不需要另写分支。
     return outdoor * offset; // 只有露天时倾斜。
-} // 按参考顺序推进。
+}
 
 // 植被程度：顶点色里绿色比红、蓝多出越多，越像群系染过的植被。
 // 乘四是为了让普通草色接近一，避免季节色只有一点点。
-float ogxFoliage(float3 vertexColor) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float ogxFoliage(float3 vertexColor)
+{
     return clamp((vertexColor.g - max(vertexColor.r, vertexColor.b)) * 4.0, 0.0, 1.0); // 用绿色优势判断是否植被。
-} // 按参考顺序推进。
+}
 
 // 季节上色：植被按一年相位混入秋色，再按色调参数整体偏暖或偏冷。
 // `phase` 是零到一的一年进度，`tint` 是负到正的冷暖偏置，`enabled` 关闭时原样返回。
-float3 ogxSeason(float3 albedo, float3 vertexColor, float phase, float tint, bool enabled) // 当前步骤的中间量。
+float3 ogxSeason(float3 albedo, float3 vertexColor, float phase, float tint, bool enabled)
 {
     if (!enabled) return albedo; // 关闭时不做任何改动。
     float foliage = ogxFoliage(vertexColor); // 这一面有多像植被。
@@ -204,5 +218,21 @@ void ogxYearCycleColorSeason(inout float3 finalColor, float3 glcolor, bool isLea
     if (isTintIndex) finalColor = springToSummer;
 }
 
+
+// 雨雪偏移按风向与时间推进，植被颜色按季节插值。
+// 季节颜色只改草叶与树叶，水面与天空保持原色。
+// 暴风颜色把云与雾一起压暗，雷暴时再叠一层闪电色。
+// 雾密度按群系与高度组合，下界与末地各有入口。
+// 年周期颜色把季节映射到草叶与雾气。
+// 天气哈希按游戏日取值，同一天内结果稳定。
+// 风向与风速由调用方给出，模块不读取全局天气。
+// 所有颜色都夹在零到一，叠加不会溢出。
+
+// 季节插值先算年周期相位，再在春夏秋冬四档之间混合。
+// 暴风噪声只改密度与颜色，不改变地形或水面几何。
+// 天气哈希使用游戏日与维度，切换维度不会沿用旧天气。
+// 雾密度返回值已经过高度与群系权重，调用方直接使用。
+// 颜色输出保持线性空间，显示编码由调用方负责。
+// 风向单位是弧度，风速单位是方块每秒。
 
 #endif

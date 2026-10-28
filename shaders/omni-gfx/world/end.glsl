@@ -7,9 +7,9 @@
 /*
 Omni 通用图形库末地模块：末地星空、行星 BRDF、黑洞吸积盘包装与云影查表。
 调用位置：`shaders/effects/world/end_sky.glsl` 的 `CalculateStars` 调用 `ogxEndStars`；
-    其余入口供严格 profile 与需要复现 iterationT 末地的程序使用。
+    主文件提供 ogxPlanetShading 入口，其余函数由子文件与严格 profile 使用。
 可复制示例：
-    vec3 stars = ogxEndStars(worldDir, sunVector, frameTime, 1, 1.0, 1.0); // 当前步骤的中间量。
+    vec3 stars = ogxEndStars(worldDir, sunVector, frameTime, 1, 1.0, 1.0);
     vec3 disc = ogxBlackHoleStars(color, rayDir, lightDir, 0.5, frameTime, true, true, sunVector, 1, noiseTex, 512.0);
     float shadow = ogxCloudShadowTex(coord, altitude, wind, cameraXZ, sunVector, baseTex, 0.5, offset, 0.4, 0.7, 0.0, 512.0);
 设计原因与取舍：
@@ -18,6 +18,14 @@ Omni 通用图形库末地模块：末地星空、行星 BRDF、黑洞吸积盘�
     四个职责按内容拆在同名文件夹：星空、行星着色、吸积盘参数、云影查表；主文件只排引用顺序，
     所以一处算式只读一个文件，也不会因为拆分改变编译顺序。
 */
+
+// --- 算法说明与边界 ---
+// 行星着色只保留一个入口，内部调用通用 BRDF；第五参数不参与计算，只为参考签名兼容。
+// 星空、吸积盘与云影各自在子文件里，主文件只按依赖顺序引入并提供行星入口。
+// 末地模块组合星空、行星着色、吸积盘与云影：
+// 行星着色保留参考签名，内部直接调用通用行星 BRDF，避免两份相同公式漂移。
+// 星空按天球格子取哈希星点，吸积盘沿视线积分，云影按太阳方向取两次云密度。
+
 #ifndef OGX_WORLD_END_INCLUDED
 #define OGX_WORLD_END_INCLUDED
 
@@ -67,23 +75,6 @@ vec3 ogxEndStars(vec3 worldDir, vec3 worldSunVector, float time, int starType, f
     return maxLuminance * ogxRemapSaturate(r, 0.25, 0.0) * c * c * ogxBlackbody(mix(minTemperature, maxTemperature, hash.y)); // 星点亮度乘色温。
 }
 
-// 末地行星：钱德拉塞卡近似与 Lambert 曲线。
-// 子文件：world/end/planet.slang。
-// 末地行星子文件：用钱德拉塞卡近似与 Lambert 曲线给行星表面着色。
-// 调用位置：由 `world/end.slang` 内联；需要复现 iterationT 行星 BRDF 的程序调用 `ogxPlanetShading`。
-// 设计原因与取舍：只接收反照率、法线与方向；行星本体的求交与光环在 `planet` 模块，这里只保留着色。
-// 可复制示例：`vec3 c = ogxPlanetShading(albedo, normal, eyeDir, lightDir, 0.0);`
-
-// iterationT 行星 BRDF：用 Chandrasekhar H 函数与 Lambert 曲线近似行星表面。
-vec3 ogxPlanetShading(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir, float s)
-{
-    float NdotL = dot(normal, lightDir); // 光线与法线。
-    float NdotV = dot(normal, eyeDir); // 视线与法线。
-    albedo *= ogxCurve01(ogxSaturate(NdotL)); // 参考实现的曲线。
-    vec3 color = albedo * ogxChandrasekharH(albedo, NdotL) * ogxChandrasekharH(albedo, NdotV) / (4.0 * OGX_PI * (NdotL + NdotV)); // 双向反射。
-    return ogxSaturate(color); // 夹到合法范围。
-}
-
 // 吸积盘包装：天空版与反射版只填参数。
 // 子文件：world/end/accretion.slang。
 // 末地吸积盘子文件：只保留天空版与反射版的参数，积分本身调用 `accretion` 模块。
@@ -91,7 +82,16 @@ vec3 ogxPlanetShading(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir, floa
 // 设计原因与取舍：两个版本原来各抄一份五十行积分，盘面算式改一次要改两处；现在只剩步数、起点与噪声幂次不同。
 // 可复制示例：`vec3 c = ogxBlackHoleStars(color, rayDir, lightDir, 0.5, time, true, true, sunVector, 1, noiseTex, 512.0);`
 
-// 黑洞吸积盘主函数：调用通用积分，再按参考顺序叠星空并让盘面遮挡背景。
+// --- 算法说明与边界 ---
+// 吸积盘积分沿视线在盘面内取样，半径越大越暗，多普勒项让朝向相机的一侧更亮。
+// 天空版把颜色加到星空，反射版只返回颜色；两者共用同一套积分与噪声。
+// 末地吸积盘：沿视线在盘面上积分，按半径与角度取噪声细节，再叠多普勒增亮。
+// 天空版把盘面颜色加到星空上，反射版只返回颜色给反射合成；两者共用同一套积分。
+// 吸积盘积分沿视线在盘面内取样，半径越大越暗，多普勒项让朝向相机的一侧更亮。
+// 天空版把颜色加到星空，反射版只返回颜色；两者共用同一套积分与噪声。
+
+
+// 黑洞吸积盘主函数：调用通用积分，再按参考实现的顺序叠星空并让盘面遮挡背景。
 // `detailAlongLongitude`、`doppler` 与 `starType` 对应参考实现的三个菜单开关。
 vec3 ogxBlackHoleStars(vec3 color, vec3 rayDir, vec3 lightDir, float noise, float time,
     bool detailAlongLongitude, bool doppler, vec3 worldSunVector, int starType,
@@ -161,6 +161,13 @@ vec3 ogxCloudShadowDensity(vec4 cloudPos, sampler3D baseNoise, float baseScale, 
     baseDensity *= ogxCloudTopCurve(ogxSaturate(cloudPos.w * 1.8)); // 顶部衰减。
     baseDensity = ogxSaturate(baseDensity); // 夹紧。
     return vec3(baseDensity); // 没有细节层。
+}
+
+// 末地行星着色：保留参考签名，实际算式与 `planet` 模块的行星 BRDF 相同。
+// 参考的第五参数不参与着色，保留它只为让严格对照能按原签名调用。
+vec3 ogxPlanetShading(vec3 albedo, vec3 normal, vec3 eyeDir, vec3 lightDir, float s)
+{
+    return ogxPlanetBrdf(albedo, normal, eyeDir, lightDir); // 同一公式只维护一份；第五参数只为签名兼容。
 }
 
 #endif

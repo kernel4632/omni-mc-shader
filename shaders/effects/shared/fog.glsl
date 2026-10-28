@@ -14,4 +14,5 @@
 #include "/effects/shared/water.glsl"
 // 水下体积雾读水面选项与雾质量，只能放在水面之后。
 #include "/effects/shared/fog/underwater_fog.glsl"
+
 #endif // OMNI_SHARED_FOG_INCLUDED

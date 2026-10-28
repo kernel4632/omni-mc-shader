@@ -26,7 +26,7 @@ Omni 通用图形库全局光模块：地平线遮蔽、反射阴影图反弹、
 // 采样提供白噪声、蓝噪声与低差异序列。
 #include "/omni-gfx/common/sampling.glsl"
 // 方块光合成与间接光属于同一全局光效果，放在同名子文件里，主文件只排引用顺序。
-#include "/omni-gfx/gi/diffuse.glsl"
+#include "/omni-gfx/gi/blocklight.glsl"
 // 间接光追踪与最低亮度补光，供反射命中面与全局光共用。
 #include "/omni-gfx/gi/indirect.glsl"
 // 独立环境光遮蔽的后备实现，和地平线遮蔽共用相机约定。
@@ -210,7 +210,8 @@ float ogxGroundTruthAo(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord, floa
             maxCosHorizonAngle.y = max(cosHorizonAngleNeg, maxCosHorizonAngle.y); // 取可见地平线角。
         }
         maxCosHorizonAngle = vec2(-ogxFastAcos(maxCosHorizonAngle.y), ogxFastAcos(maxCosHorizonAngle.x)) * 2.0; // 两侧换成开口角。
-        float horizonAngleIntegra = 2.0 * cosNormalAngle + (maxCosHorizonAngle.x + maxCosHorizonAngle.y) * sin(normalAngle) - cos(maxCosHorizonAngle.x - normalAngle) - cos(maxCosHorizonAngle.y - normalAngle); // 这一片的半球可见缺口。
+        // 弧面积分由参考后端统一维护；输入完整开口角，与参考算式逐项一致。
+        float horizonAngleIntegra = ogxGtaoHorizonGap(maxCosHorizonAngle, normalAngle, cosNormalAngle);
         ao += horizonAngleIntegra / rProjNormalLength; // 累加。
     }
     ao *= 0.25 * rSteps; // 平均。
@@ -317,8 +318,8 @@ float ogxGtaoSlices(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord,
             maxCosHorizonAngle.y = max(cosHorizonAngle, maxCosHorizonAngle.y); // 取更大的一侧。
         }
         maxCosHorizonAngle = vec2(-ogxFastAcos(maxCosHorizonAngle.y), ogxFastAcos(maxCosHorizonAngle.x)) * 2.0; // 转成角度。
-        float horizonAngleIntegra = 2.0 * cosNormalAngle + (maxCosHorizonAngle.x + maxCosHorizonAngle.y) * sin(normalAngle)
-            - cos(maxCosHorizonAngle.x - normalAngle) - cos(maxCosHorizonAngle.y - normalAngle); // 弧面积分。
+        // 与上面的地平线遮蔽共用同一份完整角积分，常数与参考算式一致。
+        float horizonAngleIntegra = ogxGtaoHorizonGap(maxCosHorizonAngle, normalAngle, cosNormalAngle);
         ao += horizonAngleIntegra / rProjNormalLength; // 累加。
     }
     ao *= 0.25 * rSteps; // 平均。
@@ -517,14 +518,50 @@ vec4 ogxGiTemporalFilter(vec2 coord, ivec2 texelCoord, OgxGiView view,
 可复制示例：`vec3 c = ogxGiSpatialFilter(coord, dist, normal, viewDir, view, history, 0.5);`
 设计原因与取舍：邻域偏移显式列出，权重按法线与深度筛选；边界夹紧与参考实现一致。
 */
+
+// --- 算法说明与边界 ---
+// 七乘七核按距离分三档，近处权重高，远处权重低；法线差超过阈值直接丢弃。
+// 亮度相似度用指数衰减，反射高光不会被邻域平均成灰块。
+// 参考版本保留原循环顺序，正式版本把参数收进结构体，两者核相同。
+// 全局光空间滤波：七乘七邻域按深度、法线与亮度相似度加权，抹掉屏幕空间追踪的噪点。
+// 参考版本保留原程序的循环顺序与权重，供严格对照；正式版本用同样的核但把参数收进结构体。
+// 七乘七核按距离分三档，近处权重高，远处权重低；法线差超过阈值直接丢弃。
+// 亮度相似度用指数衰减，反射高光不会被邻域平均成灰块。
+// 深度差按当前像素距离归一，远处容差更大，近处更严。
+// 参考版本保留原循环顺序，正式版本把参数收进结构体，两者核相同。
+// 滤波后的结果仍按原亮度范围夹紧，避免边缘出现负值。
+// 七乘七核按距离分三档，近处权重高，远处权重低。
+// 法线差超过阈值直接丢弃，前景与背景不会混在一起。
+// 亮度相似度用指数衰减，反射高光不会被平均成灰块。
+// 深度差按当前像素距离归一，远处容差更大。
+// 参考版本保留原循环顺序，正式版本把参数收进结构体。
+// 滤波结果按原亮度范围夹紧，边缘不会出现负值。
+// 核半径由粗糙度与命中距离缩放，粗糙表面滤波更宽。
+// 空间滤波只处理当前帧，不写历史纹理。
+// 法线从画面解码，编码误差由阈值吸收。
+// 权重和为负时按零处理，避免除法得到非数。
+// 滤波后的反射方向不重算，只混合颜色。
+// 调用方负责提供像素大小与屏幕尺寸。
+// 参考版本与正式版本的核相同，差异只在参数组织。
+// 七乘七核按距离分三档，近处权重高，远处权重低。
+// 法线差超过阈值直接丢弃，前景与背景不会混在一起。
+// 亮度相似度用指数衰减，反射高光不会被平均成灰块。
+// 深度差按当前像素距离归一，远处容差更大。
+// 参考版本保留原循环顺序，正式版本把参数收进结构体。
+// 滤波结果按原亮度范围夹紧，边缘不会出现负值。
+// 核半径由粗糙度与命中距离缩放，粗糙表面滤波更宽。
+// 空间滤波只处理当前帧，不写历史纹理。
+// 法线从画面解码，编码误差由阈值吸收。
+// 权重和为负时按零处理，避免除法得到非数。
+
 // 七乘七邻域偏移按行列下标现算：x 从负三到三，y 同样，按行优先排列。
 // 全局光空间滤波：在七乘七邻域里按法线与深度加权平均，抑制半分辨率带来的噪点。
 // 空间滤波为什么按法线与深度拒绝样本：全局光是低频信号，但几何边缘不是；
 // 不拒绝会把前景的亮色抹到背景，出现一圈光晕。
 // 七乘七核已经够大，再大只会增加成本；时间滤波负责补剩下的噪声。
 // 权重用平方反比，近处样本话语权更高，远处只做平滑补充。
-vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGiView view, sampler2D historyTexture, float renderScale) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGiView view, sampler2D historyTexture, float renderScale)
+{
     vec2 local = coord * renderScale; // 全局光分辨率下的坐标。
     float weights = 0.0; // 权重和。
     vec3 gi = vec3(0.0); // 累积的反弹颜色。
@@ -535,21 +572,21 @@ vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGi
     vec2 offsetScale = view.texel_size * 4.0 * renderScale; // 邻域步长。
     // 七乘七偏移表与参考实现的数组逐项相同；显式列出而不是现算，常数集合才能逐项核对。
     vec2 offsets[49]; // 四十九个空间采样偏移，覆盖七乘七邻域。
-    offsets[0] = vec2(-3.0, -3.0); // 当前步骤的中间量。
-    offsets[1] = vec2(-2.0, -3.0); // 当前步骤的中间量。
-    offsets[2] = vec2(-1.0, -3.0); // 当前步骤的中间量。
-    offsets[3] = vec2(0.0, -3.0); // 当前步骤的中间量。
-    offsets[4] = vec2(1.0, -3.0); // 当前步骤的中间量。
-    offsets[5] = vec2(2.0, -3.0); // 当前步骤的中间量。
-    offsets[6] = vec2(3.0, -3.0); // 当前步骤的中间量。
-    offsets[7] = vec2(-3.0, -2.0); // 当前步骤的中间量。
-    offsets[8] = vec2(-2.0, -2.0); // 当前步骤的中间量。
-    offsets[9] = vec2(-1.0, -2.0); // 当前步骤的中间量。
-    offsets[10] = vec2(0.0, -2.0); // 当前步骤的中间量。
-    offsets[11] = vec2(1.0, -2.0); // 当前步骤的中间量。
-    offsets[12] = vec2(2.0, -2.0); // 当前步骤的中间量。
-    offsets[13] = vec2(3.0, -2.0); // 当前步骤的中间量。
-    offsets[14] = vec2(-3.0, -1.0); // 当前步骤的中间量。
+    offsets[0] = vec2(-3.0, -3.0);
+    offsets[1] = vec2(-2.0, -3.0);
+    offsets[2] = vec2(-1.0, -3.0);
+    offsets[3] = vec2(0.0, -3.0);
+    offsets[4] = vec2(1.0, -3.0);
+    offsets[5] = vec2(2.0, -3.0);
+    offsets[6] = vec2(3.0, -3.0);
+    offsets[7] = vec2(-3.0, -2.0);
+    offsets[8] = vec2(-2.0, -2.0);
+    offsets[9] = vec2(-1.0, -2.0);
+    offsets[10] = vec2(0.0, -2.0);
+    offsets[11] = vec2(1.0, -2.0);
+    offsets[12] = vec2(2.0, -2.0);
+    offsets[13] = vec2(3.0, -2.0);
+    offsets[14] = vec2(-3.0, -1.0);
     offsets[15] = vec2(-2.0, -1.0);
     offsets[16] = vec2(-1.0, -1.0);
     offsets[17] = vec2(0.0, -1.0);

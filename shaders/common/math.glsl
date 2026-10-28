@@ -56,20 +56,8 @@
 // --- 区间重映射 ---
 // 把落在 `e0` 到 `e1` 的值映射到零到一并夹紧。
 float remapSaturate(float x, float e0, float e1){ return ogxRemapSaturate(x, e0, e1); }
-// Eclipse 的 `linear_step` 与 remapSaturate 同式，只是名字不同。
-float linear_step(float x, float edge0, float edge1){ return remapSaturate(x, edge0, edge1); }
-
-// --- 角度近似 ---
-// 两参数反正切：返回从横轴到向量的角度，横分量为零时单独处理避免除零。
-float atan2(vec2 v){ return ogxAtan2(v); }
-
-// 快速反余弦近似：一次多项式乘近似平方根，精度够光照用。
-float facos(float x){ return ogxFastAcos(x); }
 
 // --- 颜色曲线：伽马与管线四次方根编码 ---
-// 线性转伽马空间，指数二点二。
-vec3 LinearToGamma(vec3 c){ return ogxLinearToGamma(c); }
-
 // 伽马空间转线性，贴图颜色进入光照前用。
 vec3 GammaToLinear(vec3 c){ return ogxGammaToLinear(c); }
 
@@ -105,9 +93,6 @@ vec2 Unpack2x16(float x){ return ogxUnpack2x16(x); }
 // 解码法线贴图：三通道和接近一点五才认为是有效法线，否则按朝外法线处理。
 vec3 DecodeNormalTex(vec3 texNormal){ return ogxDecodeNormalTex(texNormal); }
 
-// 八面体编码的折叠：把下半球翻到外圈。
-vec2 OctWrap(vec2 v){ return ogxOctWrap(v); }
-
 // 单位法线压成两个零到一的数，存进画面的两个通道。
 vec2 EncodeNormal(vec3 n){ return ogxEncodeNormal(n); }
 
@@ -115,15 +100,6 @@ vec2 EncodeNormal(vec3 n){ return ogxEncodeNormal(n); }
 vec3 DecodeNormal(vec2 en){ return ogxDecodeNormal(en); }
 
 // --- 光照模型 ---
-// 法线分布：微表面朝向半程向量的比例，粗糙度越大高光越散。
-float D_Walter(float NdotH, float roughness){ return ogxDistributionGGX(NdotH, roughness); }
-
-// 菲涅尔近似：掠射角反射更强，五次方曲线。
-float F_Schlick(float VdotH, float f0, float f90){ return ogxFresnelSchlick(VdotH, f0, f90); }
-
-// 可见性项：微表面互相遮挡的比例，已经乘了入射余弦。
-float V_Schlick(float NdotL, float NdotV, float roughness){ return ogxVisibilitySchlick(NdotL, NdotV, roughness); }
-
 // 漫反射：迪士尼模型，粗糙表面在掠射角更亮。
 float Fd_Burley(vec3 n, vec3 v, vec3 l, float roughness){ return ogxDiffuseBurley(n, v, l, roughness); }
 
@@ -152,11 +128,7 @@ float MiePhaseFunction(float g, float nu){ return ogxMiePhase(g, nu); }
 // 交错梯度噪声：按像素位置给出均匀分布的伪随机数。
 float InterleavedGradientNoise(vec2 c){ return ogxInterleavedGradientNoise(c); }
 
-// 二乘二拜尔矩阵：下面更大的矩阵由它递归组合。
-float bayer2(vec2 a){ return ogxBayer2(a); }
-
-float bayer4(vec2 a){ return ogxBayer4(a); }
-float bayer8(vec2 a){ return ogxBayer8(a); }
+// 八乘八拜尔矩阵：天空与末地雾的逐像素抖动。
 float bayer64(vec2 a){ return ogxBayer64(a); }
 
 // --- 三次采样：原程序在两种时间抗锯齿里各写一份且逐字相同，按移植合同合并到这里一份 ---
@@ -170,23 +142,9 @@ vec3 BicubicTexture(sampler2D texSampler, vec2 coord, vec2 texSize){ return ogxB
 vec4 BicubicBlurTexture(sampler2D texSampler, vec2 coord){ return ogxBicubicBlurTexture(texSampler, coord); }
 
 // --- Omni 额外函数：原程序没有，保留文件仍在使用 ---
-// 安全归一化：长度为零时普通归一化会得到无穷，光传播体积计算阶段用它算天体方向。
-vec3 omniNormalize(vec3 vector){ return ogxNormalize(vector); }
 // 颜色转色相、饱和度、明度：体积光染色与矿石/纹饰自发光都要拆出这三个量，来源 Eclipse `lib/hsv.glsl`。
 // 为什么放共用文件：两处以上效果（体积光、自发光矿石/纹饰）都要用，复制一份会与别处不一致。
 vec3 omniRgbToHsv(vec3 c){ return ogxRgbToHsv(c); }
-// Eclipse `frisvad`：由法线生成一组正交切线，退化方向单独处理。
-void frisvad(vec3 n, out vec3 f, out vec3 r){
-	if (n.z < -0.9){
-		f = vec3(0.0, -1.0, 0.0);
-		r = vec3(-1.0, 0.0, 0.0);
-	}else{
-		float a = 1.0 / (1.0 + n.z);
-		float b = -n.x * n.y * a;
-		f = vec3(1.0 - n.x * n.x * a, b, -n.x);
-		r = vec3(b, 1.0 - n.y * n.y * a, -n.y);
-	}
-}
 
 // 切线基：生成库返回三个向量，这里按列装回矩阵，保留旧调用点的 mat3 结果。
 mat3 omniTangentBasis(vec3 dp1, vec3 dp2, vec2 duv1, vec2 duv2){

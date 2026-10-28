@@ -13,7 +13,7 @@ Omni 通用图形库 G-buffer 解码模块：把多张中间画面还原成表�
     这样算法本身不依赖 Minecraft，调用方仍可按自己的缓冲布局填写。
     `GetGbufferData` 的每一行读取顺序与参考实现一致；材质编号只通过 `OgxMaterialIdTable`
     传入，避免把资源包的编号约定写死进通用库。
-当前状态：由 `shaders/bind/gbuffer.glsl` 引入并编译，作为材质编号与掩码解码的参考实现。
+当前状态：由 `shaders/bind/gbuffer.glsl` 的 `bind_gbuffer` 调用 `ogxGetGbufferData`；通道解码在通用库。
 */
 #ifndef OGX_GBUFFER_INCLUDED
 #define OGX_GBUFFER_INCLUDED
@@ -103,6 +103,8 @@ struct OgxGbufferData
     float waterMask; // 水面覆盖。
     float rainAlpha; // 雨幕透明度。
     float parallaxShadow; // 视差阴影。
+    vec4 specTex; // 五号画面解包后的表面贴图，供效果层按 PBR 格式解码。
+    float wet; // 湿润度，供效果层压暗吸水底色。
     OgxPbrMaterial material; // labPBR 材质参数。
 };
 
@@ -200,6 +202,8 @@ OgxGbufferData ogxGetGbufferData(sampler2D gbuffer0, sampler2D gbuffer3, sampler
     data.rainAlpha = 1.0 - g0.a; // 近景第四通道是雨幕。
     vec2 g5a = ogxUnpack2x8(g5.a); // 第五张透明通道打包了湿润度与视差阴影。
     data.parallaxShadow = g5a.y; // 第二个分量是视差阴影。
+    data.specTex = vec4(ogxUnpack2x8(g5.r), ogxUnpack2x8(g5.g)); // 红绿通道拆成四字节材质图。
+    data.wet = g5a.x; // 第一个分量是湿润度。
     if (pbr) // 开启 labPBR 才解码材质。
     {
         vec4 specTex = vec4(ogxUnpack2x8(g5.r), ogxUnpack2x8(g5.g)); // 红绿通道拆成四字节材质图。

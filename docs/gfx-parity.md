@@ -9,9 +9,9 @@
 
 ## 结论
 
-- `omni-gfx/src` 现有 38 个 Slang 模块。
+- `omni-gfx/src` 现有 48 个源模块：44 个生成 GLSL，4 个参考后端只保留源码供严格对照。
 - `shaders/gfx/` 的 22 个旧转发文件已在 2026-10-27 删除；效果文件直接引用 `shaders/omni-gfx/`，算式只在 `omni-gfx/src` 一份。
-- 模块级覆盖已完成；函数级逐条明细见 `docs/gfx-functions.md`（2026-10-26 由 `python omni-gfx/build.py parity` 从源码重建，505 个参考函数：已迁入 378、MC 专用 127、缺失 0、调试输出 0）。
+- 模块级覆盖已完成；函数级逐条明细见 `docs/gfx-functions.md`（2026-10-26 由 `python omni-gfx/build.py parity` 从源码重建，505 个参考函数：已迁入 404、MC 专用 101、缺失 0、调试输出 0）。
 - 严格对照另见 `docs/gfx-functions-strict.md` 与 `omni-gfx/tools/parity_report.json`：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。旧的“已迁入”只代表有承接函数，严格结论以这份新表为准。
 - 第五批把函数级缺口清零：20 个函数新进库（拜尔 16/32/128、月亮与天空盒双线性取像素、天空经纬投影与云图两级采样、双边升采样、Xonk 曲线、十六位分量解码、整数哈希、球面求交哨兵版、三次 B 样条权重八件），15 个按算法逐项对照到库内已有实现，1 个（`GetCloudShadow`）按宿主符号留在光影侧；采样器一律改为显式参数，不再以“库不绑定采样器”为由排除。
 - 没有启动 Minecraft，游戏内画面、性能与维度切换仍未验证。
@@ -68,9 +68,9 @@
 ## 验证
 
 - `python omni-gfx/build.py check` 通过；
-- 38 个模块生成 GLSL 到唯一位置；SPIR-V 探针按 `python omni-gfx/build.py spirv` 单独运行；
+- 44 个生成模块将 GLSL 写到唯一位置；SPIR-V 探针按 `python omni-gfx/build.py spirv` 单独运行；
 - `python build.py audit` 通过；
-- `python build.py verify` 通过 160 个测试、9 组编译探针与打包；
+- `python build.py verify` 通过 166 个测试、9 组编译探针与打包；
 - `python build.py compile` 通过 280 组唯一程序，0 错误。
 
 未验证：Minecraft 世界内画面、菜单、性能、Vulkan/Aperture 运行时、其他显卡。

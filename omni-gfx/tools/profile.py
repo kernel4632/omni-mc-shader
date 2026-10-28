@@ -129,6 +129,13 @@ def compiler() -> Path | None:
     return None
 
 
+def _relative_text(text: str) -> str:
+    """把编译器输出里的仓库根路径换成点，报告不泄露本机目录。"""
+    for prefix in (str(ROOT.resolve()), ROOT.resolve().as_posix(), str(ROOT), ROOT.as_posix()):
+        text = text.replace(prefix, ".")
+    return text
+
+
 def generate(compile_output: bool = True) -> dict:
     """写出两个 profile 并编译，返回机器可读摘要。"""
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
@@ -155,7 +162,7 @@ def generate(compile_output: bool = True) -> dict:
             process = subprocess.run([str(validator), "-l", str(shader)], capture_output=True,
                                      text=True, encoding="utf-8", errors="replace")
             entry["compiled"] = process.returncode == 0
-            entry["compilerOutput"] = (process.stdout + process.stderr).strip()[:4000]
+            entry["compilerOutput"] = _relative_text((process.stdout + process.stderr).strip()[:4000])
             if process.returncode != 0:
                 print(entry["compilerOutput"])
                 sys.exit(f"profile 编译失败：{name}")

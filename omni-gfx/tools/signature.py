@@ -35,6 +35,18 @@ from pathlib import Path  # 统一使用路径对象。
 # 原因记录在这里，由严格对照入口统一报告，避免静默丢函数。
 PARSE_ERRORS: list[str] = []
 
+
+def report_parse_errors() -> list[str]:
+    """返回并清空解析错误汇总；调用方必须把结果写进报告或终端。
+
+    参考包里确实存在无法恢复的片段，因此这里不直接失败；但调用方不能把
+    “记录后忘掉”当成通过，至少要在终端或机器报告里给出数量和位置。
+    """
+    errors = list(PARSE_ERRORS)
+    PARSE_ERRORS.clear()
+    return errors
+
+
 # 基础类型别名：GLSL 与 Slang 对同一种数据用不同拼写。
 TYPE_ALIASES = {
     "vec2": "float2", "vec3": "float3", "vec4": "float4",
@@ -370,7 +382,7 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
         if index >= len(text):
             if strict:
                 raise ValueError(f"{path}:{match.start()} 函数参数表括号不配对：{name}")
-            PARSE_ERRORS.append(f"{path}:{match.start()} 参数表括号不配对：{name}")
+            PARSE_ERRORS.append(f"{_source_path(path)}:{match.start()} 参数表括号不配对：{name}")
             continue
         rest = text[index + 1:]
         brace = rest.find("{")
@@ -389,7 +401,7 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
         if cursor >= len(text):
             if strict:
                 raise ValueError(f"{path}:{match.start()} 函数体大括号不配对：{name}")
-            PARSE_ERRORS.append(f"{path}:{match.start()} 函数体大括号不配对：{name}")
+            PARSE_ERRORS.append(f"{_source_path(path)}:{match.start()} 函数体大括号不配对：{name}")
             continue
         found.append({
             "name": name,
@@ -402,6 +414,17 @@ def parse_functions(path: Path, defines: dict[str, str] | None = None,
             "bodyEnd": cursor + 1,
         })
     return found
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]  # 仓库根目录，报告与错误信息只写相对路径。
+
+
+def _source_path(path: Path) -> str:
+    """把源码路径写成仓库相对形式，换机器后报告仍能对照。"""
+    try:
+        return path.resolve().relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        return path.name  # 仓库外的临时文件只留文件名，不泄露本机目录。
 
 
 def function_index(paths: list[Path], defines: dict[str, str] | None = None,
@@ -421,7 +444,7 @@ def function_index(paths: list[Path], defines: dict[str, str] | None = None,
             while key in index:  # 重载不能互相覆盖，编号后分别参与比较。
                 variant += 1
                 key = f"{module}.{item['name']}#{variant}"
-            item["path"] = path.as_posix()
+            item["path"] = _source_path(path)
             index[key] = item
     return index
 
@@ -1121,7 +1144,7 @@ def index_by_function_name(paths: list[Path], defines: dict[str, str] | None = N
     index: dict[str, list[dict]] = {}
     for path in sorted(paths):
         for item in parse_functions(path, defines, first_branch):
-            item["path"] = path.as_posix()
+            item["path"] = _source_path(path)
             index.setdefault(item["name"], []).append(item)
     return index
 

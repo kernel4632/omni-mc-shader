@@ -1,7 +1,7 @@
 /*
 Omni 通用图形库 WSR 反射模块：体素追踪、屏幕空间反射与历史重投影。
 调用位置：Eclipse WSR 风格反射；由 `/omni-gfx/reflection/wsr.glsl` 引入，高光模块再组合它。
-当前状态：由 `reflection/specular` 引入并编译；顶层画面还没有调用 WSR 后端。
+当前状态：参考后端，只被 `reflection/specular` 参考实现调用；不生成 GLSL 或探针。
 可复制示例：
     OgxRayJob job = ogxRayJob(origin, direction); // 构造射线任务。
     ogxWsrTrace(job, voxelIds, voxelColors, hits, hitCount, blockId, skylight, side, worldOffset); // 体素追踪。

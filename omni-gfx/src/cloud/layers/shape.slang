@@ -4,27 +4,76 @@
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
 
+// --- 算法说明与边界 ---
+// 哈希用分数正弦与点积混合，输入相同时结果稳定，不同层之间不会出现相同云块。
+// Perlin 梯度在格点取四个方向，双线性插值后再做五次平滑，接缝处不会出现折线。
+// 旋度噪声对梯度场做偏导，云边缘因此有卷曲的丝状结构，而不是圆滚滚的球。
+// 侵蚀噪声只在云块边缘生效，内部密度保持完整，避免整朵云被挖空。
+// 积雨云形状按高度拉伸，顶部比底部窄，配合降雨提高云量与密度。
+// 参考签名版本只改变参数顺序，内部仍调用同一套形状函数，避免第二份公式。
+// 层状云形状由哈希、Perlin 梯度、旋度噪声与三角噪声叠成：
+// 哈希把二维坐标打散成稳定随机数，Perlin 梯度给出连续起伏，旋度噪声让边缘卷曲。
+// 密度函数按层高度与云量阈值裁出云块，侵蚀噪声在边缘挖出碎口。
+// 积雨云额外叠一层高耸形状，降雨与雷暴提高云量与密度；参考签名版本只把参数顺序换回原程序。
+// 哈希函数先乘大质数再取小数，输入相差一个像素也会得到完全不同的值，云块不会出现重复图案。
+// Perlin 梯度在四个格点各取一个方向，插值前做五次平滑，云块边界不会出现折线。
+// 旋度噪声对梯度场求偏导，得到无散度的卷曲场；云边缘因此有丝状拉伸，而不是圆球。
+// 三角噪声用三个方向的条纹叠加，频率比 Perlin 高，负责云边缘的小碎块。
+// 密度阈值由云量决定：云量越高阈值越低，同样的形状会铺得更满。
+// 侵蚀噪声只在密度接近阈值的地方生效，云内部保持完整，边缘被挖出缺口。
+// 积雨云形状按高度拉伸，顶部收窄、底部宽，配合降雨提高密度。
+// 降雨加成按云量比例提高密度，雷暴再额外加一层，晴天不会凭空长云。
+// 参考签名版本只调整参数顺序，内部仍调用同一套形状函数，避免两份公式漂移。
+// `lod` 控制噪声细节层级，零为完整细节，数值越大越平滑，远景用它省采样。
+// 层高与层厚由调用方传入，形状函数只认相对高度，不读取全局云层设置。
+// 云量为零时形状直接返回零，后面的密度与侵蚀不再计算。
+// 侵蚀强度为零时保持原形状，边缘不会被噪声挖出缺口。
+// 积雨云缩放只影响顶部形状，底部仍按普通积云处理。
+// 降雨与雷暴加成夹在零到一，超过一的输入不会让密度溢出。
+// 参考签名版本把设置结构体拆成显式参数，内部仍调用同一套形状函数。
+// 哈希输入包含层号，不同层不会得到相同的云块分布。
+// Perlin 梯度在格点边界连续，云块之间不会出现明显的接缝。
+// 旋度噪声只改变方向，不改变密度总量，云量不会被卷曲场放大。
+// 三角噪声的频率高于 Perlin，负责边缘的小尺度碎块。
+// 密度阈值随云量下降，云量越高同样的形状铺得越满。
+// 侵蚀只作用在密度接近阈值的位置，云内部保持完整。
+// 形状函数不修改传入的设置结构体，调用方可以安全复用。
+// 所有长度单位为方块，调用方传入前先完成米到方块的换算。
+// 层号参与哈希与噪声相位，五层不会在同一位置同时长出云块。
+// 云量只改阈值，不改噪声频率，调整云量时云块位置保持稳定。
+// 侵蚀噪声的频率高于基础形状，边缘碎块不会影响云块整体轮廓。
+// 积雨云顶部收窄由高度比例控制，底部宽度仍由基础云量决定。
+// 降雨提高云量后仍会夹到一，密度不会超过纹理能表示的范围。
+// 参考签名版本不读设置结构体，调用方必须把每个参数都传全。
+// 形状函数只返回密度，不返回法线；光照阶段的法线由梯度另算。
+// 所有噪声采样都使用传入的纹理，模块不打开新的纹理槽。
+// 形状函数不修改传入的云层设置，调用方可以安全复用同一份参数。
+// 噪声纹理的采样层级由 `lod` 决定，远景可以传更大的值。
+// 侵蚀强度只影响边缘，不会把云块内部挖空。
+// 降雨加成与雷暴加成相加后再夹紧，密度不会溢出。
+
+
 // 二维哈希：把格坐标打散成两个零到一的随机数，供云形状使用。
-float2 ogxLayersHash2(float2 p) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float2 ogxLayersHash2(float2 p)
+{
     // 参考实现用 33.33，通用噪声的 `ogxHash22` 用 19.19；两者只差一个常数，
     // 但严格对照要求常数逐项一致，所以云模块保留自己的变体，不退化成转调。
     float3 p3 = fract(float3(p.x, p.y, p.x) * float3(0.1031, 0.1030, 0.0973)); // 三个不同频率的搅动。
     p3 += dot(p3, float3(p3.y, p3.z, p3.x) + 33.33); // 互相混合。
     return fract((float2(p3.x, p3.x) + float2(p3.y, p3.z)) * float2(p3.z, p3.y)); // 取两个独立分量。
-} // 按参考顺序推进。
+}
 
 // 归一化哈希向量：把格坐标变成一个单位方向，供 Perlin 梯度使用。
 // 把二维哈希值归一到零到一，避免负值让噪声出现暗带。
-float2 ogxLayersNormalizeHash(float2 p) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float2 ogxLayersNormalizeHash(float2 p)
+{
     return normalize(ogxLayersHash2(p) - 0.5); // 中心化后单位化。
-} // 按参考顺序推进。
+}
 
 // Perlin 梯度：返回解析梯度，供旋度噪声直接使用。
 // 由哈希选二维梯度方向，供 Perlin 噪声生成云形状。
-float2 ogxLayersPerlinGradient(float2 coord) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float2 ogxLayersPerlinGradient(float2 coord)
+{
     float2 i = floor(coord); // 整数格。
     float2 f = fract(coord); // 格内偏移。
     float2 u = f * f * (3.0 - 2.0 * f); // 平滑权重。
@@ -38,20 +87,20 @@ float2 ogxLayersPerlinGradient(float2 coord) // 当前步骤的中间量。
     float v2 = dot(g2, f - float2(0.0, 1.0)); // 左上贡献。
     float v3 = dot(g3, f - float2(1.0, 1.0)); // 右上贡献。
     float2 omu = 1.0 - u; // 反向平滑权重。
-    return float2(((v1 - v0) * omu.y + (v3 - v2) * u.y) * du.x, // 交回这一段的计算结果。
+    return float2(((v1 - v0) * omu.y + (v3 - v2) * u.y) * du.x,
                   ((v2 - v0) * omu.x + (v3 - v1) * u.x) * du.y); // 两个方向的梯度。
-} // 按参考顺序推进。
+}
 
 // 二维旋度：把梯度旋转九十度，得到无散度的流动场。
-float2 ogxLayersCurl2D(float2 coord) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float2 ogxLayersCurl2D(float2 coord)
+{
     float2 gradient = ogxLayersPerlinGradient(coord); // 取梯度。
     return float2(gradient.y, -gradient.x); // 旋转九十度。
-} // 按参考顺序推进。
+}
 
 // 极光的三维噪声：四个平移后的哈希值按距离加权，得到柔和的团块。
-float ogxLayersTriNoise2d(float2 coord, float time) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float ogxLayersTriNoise2d(float2 coord, float time)
+{
     float2 p = coord * 0.5; // 整体缩放。
     float2 i = floor(p); // 整数格。
     float2 f = fract(p); // 格内偏移。
@@ -63,12 +112,12 @@ float ogxLayersTriNoise2d(float2 coord, float time) // 当前步骤的中间量�
     float value = lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y); // 双线性插值。
     float wave = sin(time + value * OGX_TAU) * 0.5 + 0.5; // 时间相位。
     return value * wave; // 噪声乘相位。
-} // 按参考顺序推进。
+}
 
 // 三维噪声采样：把云坐标折到 512 见方噪声图的一列，再按纵向小数插值两行。
 // 参考把这一步写成独立函数；库版本把噪声图显式传入，算式与常数逐项保留。
-float ogxLayersDensityAtPos(float3 pos, Sampler2D noiseTexture) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float ogxLayersDensityAtPos(float3 pos, Sampler2D noiseTexture)
+{
     pos /= 18.0; // 换成噪声格坐标。
     pos.xz *= 0.5; // 横向压缩，让云细节更宽。
     float3 p = floor(pos); // 所在格子的整数坐标。
@@ -77,7 +126,7 @@ float ogxLayersDensityAtPos(float3 pos, Sampler2D noiseTexture) // 当前步骤�
     float2 coord = uv / 512.0; // 换成零到一纹理坐标。
     float2 xy = noiseTexture.SampleLevel(coord, 0.0).yx; // 图里存的是两层密度。
     return lerp(xy.r, xy.g, f.y); // 按纵向小数在两层之间插值。
-} // 按参考顺序推进。
+}
 
 // 单层云形状：按层号走参考实现的分支，返回零到一的密度。
 // 云层形状与云影的提前声明：入口放在定义之前。
@@ -85,16 +134,16 @@ float ogxLayersDensityAtPos(float3 pos, Sampler2D noiseTexture) // 当前步骤�
 // 这样新增一层只需要填参数，不必再抄一遍采样流程。
 // 大尺度噪声决定云团分布，小尺度噪声决定边缘侵蚀；两者分开采样，
 // 远处只用大尺度，近处才叠细节，避免远景闪烁。
-float ogxLayersGetCloudShape(OgxLayersCloudSettings s, int layerIndex, int lod, float3 position, // 当前步骤的中间量。
-    float minHeight, float maxHeight, Sampler2D noiseTexture); // 当前步骤的中间量。
-float ogxLayersGetCloudShadow(OgxLayersCloudSettings s, float3 playerPos, float3 sunVector, // 当前步骤的中间量。
-    int cloudShadowAmount, float cumulonimbusScale, float3 cameraPos, Sampler2D noiseTexture); // 当前步骤的中间量。
+float ogxLayersGetCloudShape(OgxLayersCloudSettings s, int layerIndex, int lod, float3 position,
+    float minHeight, float maxHeight, Sampler2D noiseTexture);
+float ogxLayersGetCloudShadow(OgxLayersCloudSettings s, float3 playerPos, float3 sunVector,
+    int cloudShadowAmount, float cumulonimbusScale, float3 cameraPos, Sampler2D noiseTexture);
 
 // 层状云层形状入口：参考签名只带层号、细节层级、位置与高度范围，云设置与噪声由宿主提供。
-float ogxLayersGetCloudShapeReference(int layerIndex, int lod, float3 position, float minHeight, float maxHeight, // 当前步骤的中间量。
-    OgxLayersCloudSettings s, Sampler2D noiseTexture) // 按参考顺序推进。
-{ // 按参考顺序推进。
-    return ogxLayersGetCloudShape(s, layerIndex, lod, position, minHeight, maxHeight, noiseTexture); // 交回这一段的计算结果。
+float ogxLayersGetCloudShapeReference(int layerIndex, int lod, float3 position, float minHeight, float maxHeight,
+    OgxLayersCloudSettings s, Sampler2D noiseTexture)
+{
+    return ogxLayersGetCloudShape(s, layerIndex, lod, position, minHeight, maxHeight, noiseTexture);
 }
 
 // 层状云影入口：参考签名只给世界位置与太阳方向，云设置、相机与噪声由宿主提供。

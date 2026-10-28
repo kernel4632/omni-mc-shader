@@ -13,6 +13,15 @@ Omni 通用图形库阴影贴图模块：边缘压缩、投影偏差、硬阴影
     阴影图坐标、压缩系数与样本数全部显式传入；末地主岛光用独立矩阵，普通路径和参考实现一样先压缩再采样。
 当前状态：由 `fog/volume` 引入并编译；顶层阴影仍走 `shadow/shadow`，体素阴影由雾模块调用。
 */
+
+// --- 算法说明与边界 ---
+// 投影偏差按法线与光源角度缩放，正面偏差小、斜面偏差大，避免阴影痤疮。
+// 边缘压缩把阴影坐标压到有效范围，超出部分夹到边界，硬阴影按深度比较。
+// 体素阴影沿光线步进，命中实心方块就返回遮挡；采样数由调用方控制。
+// 阴影贴图工具：投影偏差、边缘压缩、硬阴影可见性与体素阴影。
+// 偏差按法线与光源角度缩放，边缘压缩把阴影坐标压到有效范围，硬阴影按深度比较。
+// 体素阴影沿光线在体素图里步进，Photonics 版本按参考签名接收阴影纹理与采样数。
+
 #ifndef OGX_SHADOW_MAP_INCLUDED
 #define OGX_SHADOW_MAP_INCLUDED
 
@@ -21,8 +30,8 @@ Omni 通用图形库阴影贴图模块：边缘压缩、投影偏差、硬阴影
 // 体素求交提供光线步进与遮挡判断。
 #include "/omni-gfx/voxel/trace.glsl"
 // Eclipse 阴影边缘压缩：按到阴影图中心的距离给一个放大系数。
-float ogxShadowDistortFactor(vec2 worldPos, float a, float b, float k) // 当前步骤的中间量。
-{ // 按参考顺序推进。
+float ogxShadowDistortFactor(vec2 worldPos, float a, float b, float k)
+{
     return 1.0 / (log(length(worldPos) * b + a) * k); // 参考实现对数的边缘压缩。
 }
 

@@ -92,30 +92,25 @@ GbufferData bind_gbuffer(ivec2 texel, sampler2D albedo_tex, sampler2D normal_lig
 		sampler2D normal_light_tex, sampler2D specular_tex, sampler2D translucent_tex,
 		sampler2D depth_translucent_tex, sampler2D depth_opaque_tex){
 	GbufferData data; // 逐项填入。
-	vec4 gbuffer0 = texelFetch(albedo_tex, texel, 0); // 零号画面：不透明底色。
-	vec4 gbuffer3 = texelFetch(normal_light_translucent_tex, texel, 0); // 三号画面：不透明法线与光照图。
-	vec4 gbuffer4 = texelFetch(normal_light_tex, texel, 0); // 四号画面：半透明法线与光照图。
-	vec4 gbuffer5 = texelFetch(specular_tex, texel, 0); // 五号画面：不透明高光材质与湿润。
-	vec4 gbuffer6 = texelFetch(translucent_tex, texel, 0); // 六号画面：半透明颜色材质与水遮罩。
-	data.albedo = GammaToLinear(gbuffer0.rgb); // 底色从伽马空间转回线性。
-	data.albedoW = vec4(Unpack2x8(gbuffer6.r), Unpack2x8(gbuffer6.g)); // 半透明底色打包在两个通道里，先拆开。
-	data.albedoW.rgb = GammaToLinear(data.albedoW.rgb); // 拆开后的底色同样转线性。
-	data.normalL = DecodeNormal(gbuffer3.rg); // 三号画面的两个通道是半透明法线。
-	data.normalW = DecodeNormal(gbuffer4.rg); // 四号画面的两个通道是不透明法线。
-	data.depthL = texelFetch(depth_translucent_tex, texel, 0).x; // 半透明层深度。
-	data.depthW = texelFetch(depth_opaque_tex, texel, 0).x; // 不透明层深度。
-	data.lightmapL = gbuffer3.ba; // 三号画面的后两个通道是半透明光照图。
-	data.lightmapW = gbuffer4.ba; // 四号画面的后两个通道是不透明光照图。
-	data.lightmapL = vec2(data.lightmapL.r, ogxCurveBlockLightSky(data.lightmapL.g)); // 天光分量按曲线重整。
-	data.lightmapW = vec2(data.lightmapW.r, ogxCurveBlockLightSky(data.lightmapW.g)); // 不透明层同样处理。
-	data.materialIDL = gbuffer5.b; // 五号画面的蓝色通道是不透明材质编号。
-	data.materialIDW = gbuffer6.b; // 六号画面的蓝色通道是半透明材质编号。
-	data.waterMask = gbuffer6.a; // 六号画面的透明通道是水遮罩。
-	data.rainAlpha = 1.0 - gbuffer0.a; // 零号画面的透明度被雨雪乘过，取反得到雨量。
-	vec2 gbuffer5a = Unpack2x8(gbuffer5.a); // 五号画面的透明通道打包了湿润与视差阴影。
-	data.wet = gbuffer5a.x; // 第一个是湿润度。
-	data.parallaxShadow = gbuffer5a.y; // 第二个是视差自阴影。
-	data.specTex = vec4(Unpack2x8(gbuffer5.r), Unpack2x8(gbuffer5.g)); // 红绿通道里是表面贴图。
+	// 通道解码与天光曲线在通用库；这里只把绑定层自己的纹理名传进去。
+	OgxGbufferData raw = ogxGetGbufferData(albedo_tex, normal_light_translucent_tex, normal_light_tex, specular_tex,
+		translucent_tex, depth_translucent_tex, depth_opaque_tex, texel, false, false, 0, 0.0, 1.0, false,
+		1.0, 0.0, 0.0, 0.0, false);
+	data.albedo = raw.albedo; // 不透明底色，已转线性。
+	data.albedoW = raw.albedoW; // 半透明底色与透明度。
+	data.normalL = raw.normalL; // 半透明层法线。
+	data.normalW = raw.normalW; // 不透明层法线。
+	data.depthL = raw.depthL; // 半透明层深度。
+	data.depthW = raw.depthW; // 不透明层深度。
+	data.lightmapL = raw.lightmapL; // 半透明层光照图。
+	data.lightmapW = raw.lightmapW; // 不透明层光照图。
+	data.materialIDL = raw.materialIDL; // 半透明层材质编号。
+	data.materialIDW = raw.materialIDW; // 不透明层材质编号。
+	data.waterMask = raw.waterMask; // 水遮罩。
+	data.rainAlpha = raw.rainAlpha; // 雨雪遮罩。
+	data.parallaxShadow = raw.parallaxShadow; // 视差自阴影。
+	data.specTex = raw.specTex; // 表面贴图与通用库共用同一次读取，不再重复采样。
+	data.wet = raw.wet; // 湿润度同样来自那次读取。
 	return data; // 交回读回的数据。
 }
 

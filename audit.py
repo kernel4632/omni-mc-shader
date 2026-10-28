@@ -22,6 +22,8 @@ from functools import lru_cache  # 大量重复英文词只判断一次，避免
 from pathlib import Path  # 用项目相对路径固定审计范围并隐藏本机绝对路径。
 
 CHINESE = re.compile(r"[\u3400-\u9fff]")  # 只有汉字能证明说明不是纯英文标识符。
+PADDING = re.compile("当前" + "步骤|参考" + "顺序推进|交回" + "这一段|按参考" + "顺序")  # 上一轮为凑比例留下的空话，不能再回到源码。
+GARBLED = re.compile(r"\?\?\?\?")  # 编码转换失败留下的问号乱码。
 DIRECTIVE = re.compile(r"#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef)\b")  # 属性文件里的条件指令是机器语句，加载器按选项宏挑选分支。
 MACHINE = re.compile(r"\s*(?:#\s*(?:if|ifdef|ifndef|elif|else|endif|define|undef|include)\b|const\s+\w+\s+\w+\s*=)")  # 注释里成行的机器语句（预处理指令、常量声明）不是给接手者的自然语言说明；普通注释仍按中文检查。
 EXCLUDED = {".git", ".dev", ".venv", "references", "libraries", "vendor", "dist", "__pycache__"}  # 环境、参考和第三方内容不是本项目的维护边界。
@@ -39,7 +41,7 @@ TERMS = set("GLSL glsl Slang slang slangc omni gfx ogx PNG zlib CRC GLFW PyOpenG
 TERMS |= set("uniform in out void float int bool ivec2 ivec3 ivec4 mat2 mat3 mat4 if else for while return discard flat attribute varying layout location struct sampler2DShadow min max abs clamp mix floor ceil fract pow exp log sqrt dot cross length normalize reflect refract texture textureLod texelFetch smoothstep step saturate far near".split())  # 只补技术词，不放行整句英文。
 # 图形学算法名、格式名与开发工具名是技术词，不是英语说明；只补实际出现在自有注释里的名字。
 TERMS |= set("glslang Worley Perlin Nubis mipmap mip blit VPS GTAO Burley Gerstner Schlick Radiance RGBE RLE ldexp sampler Pillow numpy Paeth IDAT Poly Haven HDR PCF Lambert WSR Photonics SSS Frisvad GetHandLight inout fragment ifdef swizzle xy XZ YZ AB".split())  # 算法名与工具名不翻译，但整句仍必须是中文。
-EXTRA = {"VERSION", "CHANGELOG", "ROOT", "STAGES", "INCLUDE", "UTF", "BOM"}  # 自己源码里反复出现、又不必进术语表的大写标识符。
+EXTRA = {"VERSION", "CHANGELOG", "ROOT", "STAGES", "INCLUDE", "UTF", "BOM", "MODULES", "REFERENCE"}  # 自己源码里反复出现、又不必进术语表的大写标识符。
 # Slang 库源里的算法人名、参数名与图形学名词只服务库源注释；单独放行，不扩大 GLSL 审计的术语范围。
 SLANG_TERMS = frozenset(word.lower() for word in """
 Abney Albedo Bayer Beer CUMULONIMBUS Catmull Chandrasekhar Cornette Draine EV Elek Frisvad GI GTAO
@@ -193,6 +195,8 @@ def check_slang(root: Path) -> list[dict]:
     for source in sources:
         relative_path = source.relative_to(root).as_posix()  # 报告使用项目相对路径。
         text = source.read_text(encoding="utf-8")  # 每个文件只读一次。
+        if GARBLED.search(text):
+            errors.append(f"{relative_path}：存在问号乱码，请恢复可读中文")  # 乱码比缺注释更难接手。
         lines = text.splitlines()  # 文件头与引用说明都按真实行号报告。
         first = next((number for number, line in enumerate(lines) if line.strip()), None)  # 第一个非空行就是文件头起点。
         header = ""  # 文件头正文，用于检查职责、调用位置、示例与取舍四项。
@@ -231,6 +235,10 @@ def check_slang(root: Path) -> list[dict]:
                 previous = lines[number - 1].strip() if number else ""
                 if not CHINESE.search(previous):
                     errors.append(f"{relative_path}:{number + 1}：引用上一行缺少中文说明")  # Iris 要求说明放在引用上一行。
+        includes = re.findall(r'^\s*#include\s+"([^"]+)"', text, re.MULTILINE)
+        duplicates = sorted({name for name in includes if includes.count(name) > 1})
+        if duplicates:
+            errors.append(f"{relative_path}：重复引用 {'、'.join(duplicates)}")  # 同一份源不能引两次。
         nonempty_lines = {number for number, line in enumerate(lines, 1) if line.strip()}  # 空行不稀释比例。
         _, fragments = comments(source, text)  # 复用同一套注释识别与语言规则；有效行稍后按 Slang 术语表重算。
         documented = set()  # 用 Slang 术语表再判一次，带算法人名的中文说明才算有效。
@@ -261,6 +269,8 @@ def check_slang(root: Path) -> list[dict]:
         for line_number, fragment in fragments:
             if re.search(r"\b(?:TODO|FIXME)\b|待实现|尚未实现|未接入的占位", fragment):
                 errors.append(f"{relative_path}:{line_number}：存在未实现标记")  # 不把缺口留在库里。
+            if PADDING.search(fragment):
+                errors.append(f"{relative_path}:{line_number}：注释是填充空话，请改成业务步骤说明")  # 复述步骤不解释原因。
             for line_offset, text_line in enumerate(fragment.splitlines()):
                 if MACHINE.match(text_line):
                     continue  # 注释里的机器语句不是自然语言。
@@ -287,21 +297,69 @@ def check_slang(root: Path) -> list[dict]:
 
 
 def check_generated_ratio(root: Path) -> None:
-    """检查生成 GLSL 的中文说明比例，不再只靠源文件。
+    """检查生成 GLSL 与 profile 的中文说明比例、乱码与填充空话。
 
-    生成文件的内容由 Slang 源决定，语言错误已在源文件阶段报出；这里只补上
+    生成文件的内容由 Slang 源决定，语言错误已在源文件阶段报出；这里补上
     一半非空行有中文说明的比例要求，避免生成阶段把注释丢掉后没人发现。
+    profile 也是自动生成的玩家可见源码，和 GLSL 用同一套比例口径。
     """
     problems = []
-    for path in sorted((root / "shaders" / "omni-gfx").rglob("*.glsl")):
+    targets = list((root / "shaders" / "omni-gfx").rglob("*.glsl"))
+    targets += list((root / "omni-gfx" / "profiles").rglob("*.frag"))
+    for path in sorted(targets):
         text = path.read_text(encoding="utf-8")
-        nonempty = {number for number, line in enumerate(text.splitlines(), 1) if line.strip()}
-        documented, _ = comments(path, text)
-        ratio = len(documented & nonempty) / max(len(nonempty), 1)
+        relative = path.relative_to(root).as_posix()
+        if GARBLED.search(text):
+            problems.append(f"{relative}：存在问号乱码，请恢复可读中文")
+        if PADDING.search(text):
+            problems.append(f"{relative}：存在填充注释，请改回业务说明")
+        lines = text.splitlines()
+        nonempty = sum(1 for line in lines if line.strip())
+        documented = sum(1 for line in lines
+                         if CHINESE.search(line) and ("//" in line or line.lstrip().startswith(("*", "/*"))))
+        ratio = documented / max(nonempty, 1)
         if ratio < 0.5:
-            problems.append(f"{path.relative_to(root).as_posix()}：中文有效注释 {ratio:.1%}，至少需要 50%")
+            problems.append(f"{relative}：中文有效注释 {ratio:.1%}，至少需要 50%")
     if problems:
-        raise ValueError("生成 GLSL 说明不足\n" + "\n".join(problems))
+        raise ValueError("生成 GLSL 与 profile 说明不足\n" + "\n".join(problems))
+
+
+def check_legacy_forwarding(root: Path) -> None:
+    """检查旧转发层：`shaders/common/math.glsl` 与 `noise.glsl` 里只剩仍在调用的包装。
+
+    这两个文件是早期把生成库函数映射回 iterationT 旧名字的第二层。只保留
+    仍有调用点的名字；没有调用点的包装必须删掉，避免两套名字长期并存。
+    """
+    problems = []
+    host_blob = "\n".join(
+        host.read_text(encoding="utf-8", errors="replace")
+        for host in (root / "shaders").rglob("*.glsl")
+        if "omni-gfx" not in host.parts
+    )
+    for relative in ("shaders/common/math.glsl", "shaders/common/noise.glsl"):
+        path = root / relative
+        if not path.is_file():
+            continue  # 测试用的临时项目可能没有完整光影树。
+        text = path.read_text(encoding="utf-8")
+        wrappers = re.findall(r"^\s*[\w<>]+\s+(\w+)\s*\([^)]*\)\s*\{\s*(?:return\s+)?(?:ogx\w+|\w+)\s*\([^)]*\)\s*;\s*\}\s*$", text, re.MULTILINE)
+        for name in wrappers:
+            if name not in host_blob:
+                problems.append(f"{relative}：转发函数 {name} 没有调用点，请删除第二份名字")
+    if problems:
+        raise ValueError("旧转发层未清理\n" + "\n".join(problems))
+
+
+def check_garbled_docs(root: Path) -> None:
+    """检查文档里的问号乱码；编码事故不能在说明文件里留下不可读段落。"""
+    problems = []
+    for path in sorted(root.rglob("*.md")):
+        if any(part in EXCLUDED for part in path.parts):
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if GARBLED.search(text):
+            problems.append(path.relative_to(root).as_posix())
+    if problems:
+        raise ValueError("文档存在问号乱码，请恢复可读中文：" + "、".join(problems))
 
 
 def check(root: Path) -> list[dict]:
@@ -322,6 +380,8 @@ def check(root: Path) -> list[dict]:
             if relative_path.startswith(EXCLUDED_PATHS): continue  # Slang 源、生成产物和探针由各自的检查负责。
             if file_path.suffix not in SUFFIXES or relative_path in MACHINE_FILES: continue  # 第三方、机器数据和生成菜单有自己的来源，不在这里重复审计。
             text = file_path.read_text(encoding="utf-8")  # 每个文件只读一次，比例统计和注释解析共用。
+            if GARBLED.search(text): errors.append(f"{relative_path}：存在问号乱码，请恢复可读中文")  # 乱码直接报出。
+            if PADDING.search(text): errors.append(f"{relative_path}：存在填充注释，请改回业务说明")  # 空话不能靠比例混过去。
             nonempty_lines = {number for number, line in enumerate(text.splitlines(), 1) if line.strip()}  # 空行没有业务内容，不应稀释说明比例。
             commented_lines, fragments = comments(file_path, text)
             ratio = len(commented_lines & nonempty_lines) / max(len(nonempty_lines), 1)  # 行尾说明既是代码行也是说明行，分子分母都保留。
@@ -342,6 +402,8 @@ def check(root: Path) -> list[dict]:
                     except ValueError as error:
                         errors.append(f"{relative_path}:{line_number + line_offset}：{error}")  # 中英混合和纯英文说明使用同一严格规则。
     check_generated_ratio(root)  # 生成 GLSL 单独核对说明比例，语言错误已在源文件阶段处理。
+    check_legacy_forwarding(root)  # 旧名字包装只在仍有调用点时保留。
+    check_garbled_docs(root)  # 文档里的问号乱码也要在提交前拦下。
     slang_reports = check_slang(root)  # 手写 Slang 源单独审计，目录遍历不进入生成产物与测试世界。
     reports.extend(slang_reports)  # 报告数量包含库源，终端能看出覆盖范围。
     if errors: raise ValueError("源码审计失败\n" + "\n".join(errors))

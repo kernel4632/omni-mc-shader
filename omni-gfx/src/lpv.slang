@@ -11,6 +11,15 @@ Omni 通用图形库光传播体积模块：三维彩色间接光的取样、编
     编码沿用“色相照原样存、饱和度与天光取对数”的方案，解码必须与编码逐项对齐，
     否则一进一出之后光色会偏，这也是这对函数放在同一个文件里的原因。
 */
+
+// --- 算法说明与边界 ---
+// 三维坐标按体积尺寸归一，边缘像素夹到有效范围，越界样本返回零。
+// 编码把颜色与光照压进八位通道，解码时按同一曲线还原；距离淡出避免体积边界出现硬切。
+// 雾步进沿视线取样，样本数由调用方给出，LPV 颜色乘雾密度后加到散射。
+// 光传播体积：先把世界位置换成三维纹理坐标，再按三线性取样解码颜色与光照。
+// 方块光与天光分别编码，边缘按距离淡出；应用函数把 LPV 颜色混进表面光照。
+// 雾步进版本沿视线取样，给体积雾补上彩色光传播。
+
 #ifndef OGX_LPV_INCLUDED
 #define OGX_LPV_INCLUDED
 
@@ -20,11 +29,11 @@ Omni 通用图形库光传播体积模块：三维彩色间接光的取样、编
 #include "heldlight.slang"
 
 // 方块光的亮度系数：存下的颜色取值零到十五，除以十五得到零到一。
-static const float OGX_LPV_BLOCK_BRIGHTNESS = 0.066666; // 当前步骤的中间量。
+static const float OGX_LPV_BLOCK_BRIGHTNESS = 0.066666;
 
 // 体积光的亮度曲线：平方放大，让弱光抬起来、强光更快饱和。
 // 与解码端的曲线必须一致，改一处就要同步另一处，否则光强会整体漂移。
-float ogxLpvCurve(float value) { return value * value; } // 交回这一段的计算结果。
+float ogxLpvCurve(float value) { return value * value; }
 
 // 把归一化坐标换成三维纹理坐标：体积边长由调用方给出。
 float3 ogxLpvUvw(float3 lpvPos, float side) { return lpvPos / side; }
@@ -185,5 +194,9 @@ float4 ogxLpvFogMarchExact(float3 origin, float3 endPos, float dither,
     }
     return color; // 交回 LPV 雾。
 }
+
+// 三维坐标按体积尺寸归一，边缘像素夹到有效范围。
+// 编码把颜色与光照压进八位通道，解码按同一曲线还原。
+// 距离淡出避免体积边界出现硬切。
 
 #endif

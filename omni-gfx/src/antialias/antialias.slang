@@ -10,6 +10,15 @@ Omni 通用图形库抗锯齿模块：YCoCg 颜色空间、历史邻域裁剪、
     YCoCg 让亮度与色差分开裁剪，避免高对比边缘出现彩边；算式与迁移前的 GLSL 原型一致。
     Slang 没有 GLSL 的按分量选择 `mix`，裁剪改成逐分量三元表达式，结果完全相同。
 */
+
+// --- 算法说明与边界 ---
+// 裁剪范围按当前像素邻域的亮度和色度方差放宽，平坦区域收得更紧，细节区域保留更多历史。
+// 时间抗锯齿把当前画面与历史画面混合：先用 YCoCg 把亮度与色度分开，历史样本在亮度上做邻域裁剪，避免移动物体拖出长尾。
+// 当前像素取中心与四邻域，方差用来判断这一块是平坦还是高频；高频区域收窄历史权重，减少鬼影。
+// 历史样本用三次插值读取，深度用双线性权重比较，深度差太大的历史像素直接丢弃。
+// 重投影用上一帧的相机矩阵把当前世界位置投回上一帧屏幕，屏幕外的历史按零权重处理。
+// 最后按亮度差与深度差混合历史与当前，输出仍保持管线曲线编码，交给后续阶段。
+
 #ifndef OGX_ANTIALIAS_INCLUDED
 #define OGX_ANTIALIAS_INCLUDED
 
@@ -19,7 +28,7 @@ Omni 通用图形库抗锯齿模块：YCoCg 颜色空间、历史邻域裁剪、
 #include "../common/camera.slang"
 
 // 把线性颜色转到亮度与色差空间，亮度单独处理。
-float3 ogxRgbToYCoCg(float3 color) // 当前步骤的中间量。
+float3 ogxRgbToYCoCg(float3 color)
 {
     return float3(color.r * 0.25 + color.g * 0.5 + color.b * 0.25,
                   color.r * 0.5 - color.b * 0.5,
@@ -281,7 +290,7 @@ float ogxSampleCurrDepthDistantFetchClosest3x3(int2 coord, Sampler2D depthTextur
     return min(d0, min(d1, min(d2, min(d3, min(d4, min(d5, min(d6, min(d7, d8)))))))); // 九点最小。
 }
 
-// iterationT 时间重投影：当前帧颜色、三乘三方差、历史颜色与历史深度按参考顺序混合。
+// iterationT 时间重投影：当前帧颜色、三乘三方差、历史颜色与历史深度按参考实现的顺序混合。
 // 为什么单独一份：合并版 `ogxTaaReproject` 还带下界打包、微模糊等扩展，默认路径的
 // 采样顺序与参考不同；严格对照需要一条只走主世界参考分支的入口。
 float4 ogxTaaTemporalBlend(float2 coord, float3 velocity, float currDepthMin,

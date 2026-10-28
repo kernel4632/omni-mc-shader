@@ -3,7 +3,16 @@
 // 设计原因与取舍：两个版本原来各抄一份五十行积分，盘面算式改一次要改两处；现在只剩步数、起点与噪声幂次不同。
 // 可复制示例：`float3 c = ogxBlackHoleStars(color, rayDir, lightDir, 0.5, time, true, true, sunVector, 1, noiseTex, 512.0);`
 
-// 黑洞吸积盘主函数：调用通用积分，再按参考顺序叠星空并让盘面遮挡背景。
+// --- 算法说明与边界 ---
+// 吸积盘积分沿视线在盘面内取样，半径越大越暗，多普勒项让朝向相机的一侧更亮。
+// 天空版把颜色加到星空，反射版只返回颜色；两者共用同一套积分与噪声。
+// 末地吸积盘：沿视线在盘面上积分，按半径与角度取噪声细节，再叠多普勒增亮。
+// 天空版把盘面颜色加到星空上，反射版只返回颜色给反射合成；两者共用同一套积分。
+// 吸积盘积分沿视线在盘面内取样，半径越大越暗，多普勒项让朝向相机的一侧更亮。
+// 天空版把颜色加到星空，反射版只返回颜色；两者共用同一套积分与噪声。
+
+
+// 黑洞吸积盘主函数：调用通用积分，再按参考实现的顺序叠星空并让盘面遮挡背景。
 // `detailAlongLongitude`、`doppler` 与 `starType` 对应参考实现的三个菜单开关。
 float3 ogxBlackHoleStars(float3 color, float3 rayDir, float3 lightDir, float noise, float time,
     bool detailAlongLongitude, bool doppler, float3 worldSunVector, int starType,

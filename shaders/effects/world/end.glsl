@@ -100,6 +100,4 @@ float planetShadow = smoothstep(0.62, 0.35, timeFactor) + smoothstep(1.6, 1.87, 
 #include "/effects/world/end_fog.glsl"
 #include "/effects/world/end_island_light.glsl"
 #include "/effects/world/end_reflection.glsl"
-// 末地传送门的矩阵与颜色属于末地效果，编译进同一份产物。
-#include "/omni-gfx/world/portal.glsl"
 #endif // OMNI_EFFECT_WORLD_END_INCLUDED

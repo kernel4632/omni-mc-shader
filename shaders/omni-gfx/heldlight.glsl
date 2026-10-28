@@ -13,6 +13,12 @@ Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表
     调用方按自己的设置走其中一条，不会因缺少宏而得到另一种画面。
     屏幕空间阴影、投影矩阵、光色与强度全部显式传入；模块本身不读取任何相机或世界状态。
 */
+
+// --- 算法步骤 ---
+// 手持光：光斑按距离与锥角衰减，火把光按方块光曲线衰减，手电用方向与距离控制。
+// 手光阴影从阴影图读取遮挡，手电方向由相机与手部位置算出。
+// 所有函数只接收显式光色、位置与阴影纹理，不读取玩家状态。
+
 #ifndef OGX_HELDLIGHT_INCLUDED
 #define OGX_HELDLIGHT_INCLUDED
 
@@ -28,7 +34,7 @@ Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表
 #include "/omni-gfx/common/color.glsl"
 // 手电筒模型的手持光：两个光源分别位于左右手，按光斑、距离衰减与漫反射累加。
 // `aimDir` 是光束指向，`heldLightShadow` 为真时每个光斑再乘屏幕空间阴影。
-vec3 ogxHeldLightingSpot(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3 ao, bool isHand, // 当前步骤的中间量。
+vec3 ogxHeldLightingSpot(vec3 viewPos, vec3 viewDir, vec3 normal, float roughness, vec3 ao, bool isHand,
     float heldBlockLightValue, float heldBlockLightValue2, vec3 aimDir, vec3 lightColor, float brightness,
     float posRX, float posRY, float posLX, float posLY, float fov, float falloff, bool overworld, bool heldLightShadow,
     sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projection, mat4 projectionInverse,

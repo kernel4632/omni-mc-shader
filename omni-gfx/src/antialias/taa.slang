@@ -2,14 +2,24 @@
 Omni 通用图形库时间抗锯齿取样模块：三乘三最近深度、远景深度与相机速度。
 调用位置：需要时间抗锯齿输入的程序，算法与常数来自 iterationT 的 TAA；Minecraft 光影由 `/omni-gfx/antialias/taa.glsl` 引入。
 可复制示例：
-    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, texel); // 当前步骤的中间量。
-    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, ivec2(0)); // 当前步骤的中间量。
+    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, texel);
+    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, ivec2(0));
 设计原因与取舍：
     参考实现用全局深度图与矩阵。库把纹理、像素坐标、材质编号与全部矩阵显式传入，
     这样三乘三取样与远近景切换可以单独测试，也不会把坐标约定藏在引擎里。
     采样顺序与参考实现一致：先按材质决定深度来源，再决定近景或远景重投影。
 当前状态：由 `shaders/effects/clarity/taa.glsl` 引入并编译；宿主 `TaaCameraVelocity` 的远景分支调用 `ogxTaaCameraVelocity`。
 */
+
+// --- 算法说明与边界 ---
+// 三乘三最近深度只在片元阶段使用，顶点与阴影程序不编译这一段。
+// 远景深度换到近景尺度时保留原始深度用于比较，不把两张深度图的尺度混用。
+// 相机速度只补偿平移，旋转由重投影矩阵处理，两者分开避免重复补偿。
+// TAA 的深度辅助：当前帧取三乘三邻域里离相机最近的深度，避免前景边缘被背景深度误判。
+// 有远景时先读取远景深度图，把远景深度换到近景尺度，再参与最近深度比较。
+// 相机速度用两帧的相机位置差除以帧时，重投影时用它补偿相机自身移动。
+// 这些函数只返回深度、速度这类纯数据，混合策略留在主时间抗锯齿文件。
+
 #ifndef OGX_ANTIALIAS_TAA_INCLUDED
 #define OGX_ANTIALIAS_TAA_INCLUDED
 

@@ -14,6 +14,16 @@ Omni 通用图形库天空合成模块：太阳与月亮圆盘、球面投影、
     这样同一套天空可以用于独立测试世界、严格 profile 与 Minecraft，而库本身不读取宿主状态。
     纹理函数只接收采样器与尺寸，不绑定缓冲编号；调用方决定把哪张图放在哪个槽位。
 */
+
+// --- 算法说明与边界 ---
+// 日月圆盘的角度阈值来自参考程序，边缘平滑宽度按屏幕像素换算，远景里不会闪成硬点。
+// 天空模块把太阳、月亮、星空、云层查表、大气积分与极光分开：
+// 太阳与月亮先按角度算圆盘，边缘用平滑过渡避免锯齿；月亮尺寸版给反射与远景使用。
+// 天空盒方向先换成经纬坐标，再用双三次采样读取预计算的大气表；偏移采样用于模糊与色散。
+// 云查表按方向取云量，粗糙版少采几次给远景；体积查表沿视线累加密度。
+// 大气积分沿视线分段累加透射率与散射，极光用三角噪声叠出竖直帘幕。
+// 所有纹理、矩阵与时间都由调用方传入，模块不读取引擎状态。
+
 #ifndef OGX_ATMOSPHERE_SKY_INCLUDED
 #define OGX_ATMOSPHERE_SKY_INCLUDED
 
@@ -318,7 +328,7 @@ float3 ogxAuroraCurtain(float3 dir, int samples, float noise, float moonY, float
 }
 
 // Eclipse 实时大气入口：参考签名把两个输出放在第 6、7 位，库的主函数放在末尾。
-// 这里按参考顺序转发，调用方不需要知道库内部的重排。
+// 这里按参考实现的顺序转发，调用方不需要知道库内部的重排。
 float3 ogxSkyAtmosphereIntegralReference(float3 background, float3 viewVector, float3 upVector,
     float3 sunVector, float3 moonVector, out float2 pid, out float3 transmittance,
     int iSteps, float noise, float eyeAltitude, float cameraY, float3 sunColorBase,

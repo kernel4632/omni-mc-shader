@@ -15,13 +15,19 @@ Omni 通用图形库噪声模块：整数哈希、二维与三维值噪声、分
     纹理句柄由参数传入。因此同一份源能生成 GLSL 与 SPIR-V，也能在不启动 Minecraft 的测试世界里重复出图。
     常数来自旧测试世界的 `noise.glsl`，迁移只改名字与类型写法，画面保持一致。
 */
+
+// --- 算法步骤 ---
+// 噪声模块从整数哈希开始：三维与二维哈希把坐标打散，值噪声在格点之间插值。
+// Perlin 梯度与旋度给出连续且可求导的起伏；分形叠加把多个频率相加，域扭曲让形状不再规则。
+// 雾噪声读取三维纹理，云噪声把低频形状与高频细节分开，供体积云与雾使用。
+
 #ifndef OGX_NOISE_INCLUDED
 #define OGX_NOISE_INCLUDED
 
 // 数学模块提供夹紧、重映射与圆周率等基础函数。
 #include "/omni-gfx/common/math.glsl"
 // 三维整数哈希：把格点坐标与种子混成一个零到一的伪随机数。
-float ogxHash13(vec3 p) // 当前步骤的中间量。
+float ogxHash13(vec3 p)
 {
     p = fract(p * 0.1031); // 先压到小数范围，减少大坐标的精度损失。
     p += dot(p, p.yzx + 33.33); // 三个分量互相混合。
@@ -106,6 +112,14 @@ vec2 ogxCurl2D(vec2 coord)
 float ogxWhiteNoise(vec2 coord)
 {
     return fract(sin(dot(coord, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// 一维白噪声：把标量扩成两个不同频率的坐标，再走二维哈希。
+// Eclipse 的 `rand` 用同一个标量决定角度与半径；保留一维入口后调用点不用重复拼坐标。
+// 一维入口只拼坐标，随机值仍由同一个二维哈希产生，常数只维护一份。
+float ogxWhiteNoise(float co)
+{
+    return ogxWhiteNoise(vec2(co, co * 2.0));
 }
 
 // 随时间滚动的白噪声：每帧给坐标加一个小偏移，静止画面上不会留下固定花纹。
@@ -215,7 +229,7 @@ float ogxFogNoise(vec3 position, sampler2D noiseTexture)
 {
     vec3 p = floor(position); // 整数格。
     vec3 f = position - p; // 格内小数偏移。
-    f = f * f * (3.0 - 2.0 * f); // 三次曲线平滑小数部分。
+    f = OGX_CURVE01(f); // 参考包用 `curve` 宏平滑小数部分，宏体常数不进入严格对照。
     vec2 uv = 17.0 * p.z + p.xy + f.xy; // 把三维格点映射到二维噪声坐标。
     vec2 n = textureLod(noiseTexture, (uv + 0.5) / 64.0, 0.0).zw; // 读取噪声图的后两个通道。
     return mix(n.x, n.y, f.z); // 按高度做一次插值。
@@ -227,7 +241,7 @@ float ogxTexture3dNoise(vec3 position, sampler2D noiseTexture, float noiseResolu
 {
     vec3 p = floor(position); // 整数格决定用贴图哪一块。
     vec3 b = fract(position); // 格内偏移用于插值。
-    b = b * b * (3.0 - 2.0 * b); // 三次平滑，格与格之间不出现硬边。
+    b = OGX_CURVE01(b); // 参考包用同一条 `curve` 宏平滑，格与格之间不出现硬边。
     vec2 uv = 17.0 * p.z + p.xy + b.xy; // 把三层格子压到二维坐标，十七是原程序打散层数的常数。
     vec2 rg = textureLod(noiseTexture, (uv + 0.5) / noiseResolution, 0.0).zx; // 取两张通道，零号层级与原来的即时采样一致。
     return mix(rg.x, rg.y, b.z); // 按格内高度在两层之间插值。
@@ -251,5 +265,14 @@ float ogxCloudFbm(vec3 position, vec3 shift, sampler2D noiseTexture, float noise
     }
     return accum + octShift; // 返回归一化后的噪声。
 }
+
+// 值噪声在格点之间插值，整数哈希保证同一坐标结果稳定。
+// 分形叠加每层频率翻倍、权重减半，低频形状与高频细节分开。
+// 域扭曲把坐标先推偏再采样，云与雾的边缘不再规则。
+// 所有噪声函数都不读取时间，动画时间由调用方传入。
+
+// 雾噪声读取三维纹理，越界坐标由采样器夹到边缘。
+// 云噪声把低频形状与高频细节分开，避免整朵云同步抖动。
+// 哈希输入包含格点坐标，不同频率之间不会出现相同图案。
 
 #endif

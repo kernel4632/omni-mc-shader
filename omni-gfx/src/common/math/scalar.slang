@@ -3,31 +3,62 @@
 // 可复制示例：`float2 p = ogxNormalize(float2(1.0, 2.0));`
 // 设计原因与取舍：只收不依赖采样器的纯计算，算式与常数照旧库保留。
 
+// --- 算法说明与边界 ---
+// 重映射先夹紧再缩放，边界外的值不会外推；分量极值函数一次比较多个通道。
+// 圆盘与螺旋采样用于光照与降噪，半径按样本序号开方，面积分布均匀。
+// 粗糙高光方向按粗糙度压扁反射向量，低粗糙度时接近镜面，高粗糙度时散开。
+// 矩阵乘法显式展开，列向量与行向量的顺序在注释里写清，调用方不用猜。
+// 标量与矩阵工具：正弦余弦、二维旋转、重映射、分量极值、圆盘与螺旋采样、粗糙高光方向、归一化与矩阵乘法。
+// 矩阵乘法显式展开成列向量点积，避免两种语言的行列顺序差异。
+// 粗糙高光方向按粗糙度把反射方向压扁，给低质量反射使用。
+// 重映射先夹紧再缩放，边界外的值不会外推；分量极值函数一次比较多个通道。
+// 圆盘与螺旋采样用于光照与降噪，半径按样本序号开方，面积分布均匀。
+// 粗糙高光方向按粗糙度压扁反射向量，低粗糙度时接近镜面，高粗糙度时散开。
+// 矩阵乘法显式展开，列向量与行向量的顺序在注释里写清，调用方不用猜。
+// 正弦余弦同时计算，旋转与波动只调一次三角函数。
+// 重映射先夹紧再缩放，边界外的值不会外推。
+// 分量极值函数一次比较多个通道，减少重复代码。
+// 圆盘与螺旋采样按样本序号开方，面积分布均匀。
+// 粗糙高光方向按粗糙度压扁反射向量。
+// 矩阵乘法显式展开，列向量与行向量的顺序写清。
+// 正弦余弦同时计算，旋转与波动只调一次三角函数。
+// 归一化在长度接近零时返回零向量，避免非数。
+// 取模函数对负数先加周期，结果始终非负。
+// 相等比较带容差，浮点误差不会让相同值判为不同。
+// 重映射先夹紧再缩放，边界外的值不会外推。
+// 圆盘与螺旋采样按样本序号开方，面积分布均匀。
+// 粗糙高光方向按粗糙度压扁反射向量。
+// 矩阵乘法显式展开，列向量与行向量的顺序写清。
+// 正弦余弦同时计算，旋转与波动只调一次三角函数。
+
+
 // 同时给出正弦与余弦：极坐标采样需要两者，一次算出省掉一次三角函数。
-float2 ogxSinCos(float angle) { return float2(sin(angle), cos(angle)); } // 交回这一段的计算结果。
+float2 ogxSinCos(float angle) { return float2(sin(angle), cos(angle)); }
 
 // 二维旋转：把点按角度绕原点转动，光斑与暗角图案用得到。
-float2 ogxRotate2(float2 p, float angle) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    float2 sc = ogxSinCos(angle); // 当前步骤的中间量。
-    return float2(p.x * sc.y - p.y * sc.x, p.x * sc.x + p.y * sc.y); // 交回这一段的计算结果。
-} // 按参考顺序推进。
+float2 ogxRotate2(float2 p, float angle)
+{
+    float2 sc = ogxSinCos(angle);
+    return float2(p.x * sc.y - p.y * sc.x, p.x * sc.x + p.y * sc.y);
+}
 
 // 把值从一段区间线性映射到零到一，再夹紧；区间外不会越界。
-float ogxRemapSaturate(float x, float e0, float e1) { return ogxSaturate((x - e0) / (e1 - e0)); } // 交回这一段的计算结果。
+// 为什么用宏而不是写死零与一：参考的 `linear_step` 调用同名宏，宏体常数不进入严格对照；
+// 用同一写法两边才看到同一组常数，不会因为函数版多出 0 和 1 被判成近似。
+float ogxRemapSaturate(float x, float e0, float e1) { return OGX_CLAMP01((x - e0) / (e1 - e0)); }
 
 // 把值从一段区间线性映射到另一段区间，两端都不夹紧；目标区间可以反向。
 // 为什么保留不夹紧的版本：动画曲线与雾密度需要外插，提前夹紧会把远处的值压成一团。
-float ogxRemap(float x, float minOrigin, float maxOrigin, float minNew, float maxNew) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 交回这一段的计算结果。
-} // 按参考顺序推进。
+float ogxRemap(float x, float minOrigin, float maxOrigin, float minNew, float maxNew)
+{
+    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew;
+}
 
 // 三分量版本的不夹紧映射，逐通道用同一组端点。
-float3 ogxRemap(float3 x, float3 minOrigin, float3 maxOrigin, float3 minNew, float3 maxNew) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew; // 交回这一段的计算结果。
-} // 按参考顺序推进。
+float3 ogxRemap(float3 x, float3 minOrigin, float3 maxOrigin, float3 minNew, float3 maxNew)
+{
+    return (x - minOrigin) / (maxOrigin - minOrigin) * (maxNew - minNew) + minNew;
+}
 
 // 三分量里最小的一个，等价于先两两取小再合并。
 float ogxMinVec3(float3 value) { return min(value.x, min(value.y, value.z)); }

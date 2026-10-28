@@ -21,7 +21,7 @@ Omni 通用图形库全局光模块：地平线遮蔽、反射阴影图反弹、
 #include "../common/sampling.slang"
 
 // 方块光合成与间接光属于同一全局光效果，放在同名子文件里，主文件只排引用顺序。
-#include "../gi/diffuse.slang"
+#include "../gi/blocklight.slang"
 // 间接光追踪与最低亮度补光，供反射命中面与全局光共用。
 #include "../gi/indirect.slang"
 // 独立环境光遮蔽的后备实现，和地平线遮蔽共用相机约定。

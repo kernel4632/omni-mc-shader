@@ -108,7 +108,8 @@ class OmniGfxTests(unittest.TestCase):
 
     def test_module_catalog_is_shared(self):
         """生成器与 profile 生成器必须使用同一份模块表。"""
-        self.assertEqual(len(catalog.MODULES), 48)  # 模块数量是验证口径的一部分，改动时必须同步全部文档。
+        self.assertEqual(len(catalog.MODULES), 44)  # 生成模块；4 个参考后端只保留源码，见模块表的参考后端项。
+        self.assertEqual(len(catalog.MODULES) + len(catalog.REFERENCE), 48)  # 源模块总数不变。
         self.assertEqual(tuple(generate.MODULES), catalog.MODULES)  # 生成器不能私藏第二份顺序。
         self.assertEqual(tuple(profile.MODULES), catalog.MODULES)  # profile 生成器同样只能读清单。
 

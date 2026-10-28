@@ -7,8 +7,15 @@ Omni 通用图形库层状体积云模块：五层云形状、云影、朝光散
     把太阳、月亮、闪电与噪声图显式传入，函数体仍按原来的层号分支和采样顺序执行。
     条件功能（积雨云、闪电、极光）用布尔开关保留；关闭时与参考实现的默认路径一致。
     `texture` 的隐式层级在这里统一写成显式零级，避免不同显卡对导数层级的实现差异。
-当前状态：由 `shaders/effects/shared/cloud.glsl` 引入并编译；顶层云入口仍走体积云与平面云。
+当前状态：参考后端，当前没有画面选项选择它；只保留源码供严格对照，不生成 GLSL 或探针。
 */
+
+// --- 算法说明与边界 ---
+// 五层顺序固定为小积云、大积云、积雨云、高层云、卷云；前面的层更靠近相机，先合成能省掉被挡住的层。
+// 层状体积云入口按小积云、大积云、积雨云、高层云、卷云的顺序逐层步进，每层独立高度与厚度。
+// 单层步进前先算层内步长与起点：步长由层厚、视线方向与采样数决定，起点压到云底与云顶之间。
+// 每层结果按透过率从远到近合成，先被前面云挡住的像素不再采样后面的层，省掉看不见的计算。
+
 #ifndef OGX_CLOUD_LAYERS_INCLUDED
 #define OGX_CLOUD_LAYERS_INCLUDED
 
@@ -78,7 +85,7 @@ float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, fl
 #include "layers/exact.slang"
 
 // 单层步进准备：层厚、水平步长与采样数决定一步的长度，起点压到该层云底与云顶之间。
-// 五层原来各写两行同样的式子，抽成 ???? 后改步长公式只改一处，层与层之间不会漂移。
+// 五层原来各写两行同样的式子，抽成这个准备函数后改步长公式只改一处，层与层之间不会漂移。
 void ogxLayersLayerRay(float3 viewDir, float thickness, float3 cloudDist, int samples, float2 dither,
     float3 cameraPos, float minHeight, out float3 rayDirection, out float3 rayPosition)
 {
@@ -88,7 +95,7 @@ void ogxLayersLayerRay(float3 viewDir, float thickness, float3 cloudDist, int sa
 
 // 五层体积云总入口：按参考实现的顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合。
 // 为什么保留为单一入口：五层顺序、相机高度混合与距离合成共享同一份状态，拆开会让二十多个参数
-// 在子函数之间来回传递，反而更难核对参考顺序；其余超过一百行的函数已按算法拆分。
+// 在子函数之间来回传递，反而更难核对参考实现的顺序；其余超过一百行的函数已按算法拆分。
 // 天空色由本函数在步进起点处查天空盒，与参考 GetVolumetricClouds 的采样位置一致。
 float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, float2 dither, float3 sunVector,
     float3 moonVector, float3 directLightCol, float3 directLightCol2, float3 indirectLightCol,

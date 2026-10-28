@@ -8,6 +8,8 @@
 #define OMNI_UNDERWATER_FOG_INCLUDED
 // 阳光与天光强度由共享光照文件统一定义，水下光柱按同一口径计算。
 #include "/effects/shared/light.glsl"
+// 水下光柱要用阴影图坐标、偏差与焦散法线，自己保证依赖先于函数定义。
+#include "/effects/shared/shadow.glsl"
 /*
 水下体积雾：在水下沿视线步进阴影可见性并叠焦散，画出汇聚的蓝色光柱。
 来源：iterationT `Lib/IndividualFounctions/UnderwaterVolumetricFog.glsl` 一比一移植。

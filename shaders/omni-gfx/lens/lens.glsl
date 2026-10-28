@@ -12,7 +12,7 @@ Omni 通用图形库镜头模块：对焦距离、桶形光斑、彩色鬼影、
     vec3 color = ogxLensFlare(texCoord, sunCoord, aspect, projectionYY, true, true, 1.0, 1.0, sunColor, 1.0, 0.0, 1.0); // 叠镜头光斑。
 设计原因与取舍：
     对焦与光斑都只依赖屏幕坐标、投影与太阳位置；纹理、开关和强度显式传入，常数与参考实现逐项相同。
-当前状态：由 `shaders/effects/lens/lens.glsl` 引入并编译；镜头效果后续接到顶层入口。
+当前状态：由 `shaders/effects/lens/glare.glsl` 调用 `ogxLensFlare`；光斑、色散环与眩光只在通用库实现。
 */
 #ifndef OGX_LENS_LENS_INCLUDED
 #define OGX_LENS_LENS_INCLUDED
@@ -104,7 +104,7 @@ vec3 ogxLensFlare(vec2 texCoord, vec2 sunCoord, float aspectRatio, float project
         vec2 v = coord - sunPos; // 到太阳的屏幕向量。
         float dist = length(v); // 距离。
         float glareDist = dist * 13.0 / fovFactor; // 按视野归一化。
-        float phase = atan(v.y, v.x) + 0.131; // 方向角加固定相位。
+        float phase = ogxAtan2(v) + 0.131; // 方向角加固定相位；参考的自定义 atan2 带半圆与整圆常数。
         float glare = 2.0 - clamp(glareDist, 0.0, 1.0) + sin(phase * 12.0) * clamp(glareDist * 2.5 - 0.2, 0.0, 1.0); // 放射条纹。
         glare = glare * glare; // 平方让亮纹更集中。
         glareDist = glareDist * glareDist; // 距离平方。

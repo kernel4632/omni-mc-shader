@@ -4,9 +4,16 @@
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
 
+// --- 算法说明与边界 ---
+// 低成本步进不做太阳方向采样，只按密度累加吸收，因此云影贴图与远景可以共用。
+// 步数固定为调用方给的值，层内步长按层厚均分；完全不透明的层提前结束，后面的层不再采样。
+// 低成本层状云步进：只累计透过率与平均命中距离，不计算完整光照，供云影与远景使用。
+// 主入口按层顺序调用单层步进，遇到完全不透明的层就提前结束。
+
+
 // 云影步进：只算透过率，不算光照，供阴影程序低成本使用。
-float ogxCloudLayerMarchSimple(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition, // 当前步骤的中间量。
-    float3 rayDirection, float dither, float minHeight, float maxHeight, float3 startPos, float3 cameraPos, // 当前步骤的中间量。
+float ogxCloudLayerMarchSimple(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition,
+    float3 rayDirection, float dither, float minHeight, float maxHeight, float3 startPos, float3 cameraPos,
     Sampler2D noiseTexture)
 {
     float totalAbsorbance = 1.0; // 初始完全透明。

@@ -8,10 +8,19 @@
     写入函数不依赖追踪类型，单独放在子文件后，主文件只保留材质与读取。
 */
 
+// --- 算法说明与边界 ---
+// 写入前先检查坐标，越界直接返回，不写坏相邻格。
+// 一维下标按三维尺寸展开，读写使用同一套顺序；阴影阶段遍历可见方块，把编号与光照填进体素图。
+// 体素写入：先检查坐标是否在体积内，再按三维尺寸算一维下标。
+// 写入函数把方块编号与颜色存进纹理；阴影阶段遍历可见方块，把编号与光照填进体素图。
+// 写入前先检查坐标，越界直接返回，不写坏相邻格。
+// 一维下标按三维尺寸展开，读写使用同一套顺序；阴影阶段遍历可见方块，把编号与光照填进体素图。
+
+
 // 体素写入是否在体积内：三个轴都必须在零到边长减一之间，越界写会被丢弃。
-bool ogxVoxelWriteInBounds(int3 voxelPos, int size) // 当前步骤的计数或下标。
-{ // 按参考顺序推进。
-    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0 // 交回这一段的计算结果。
+bool ogxVoxelWriteInBounds(int3 voxelPos, int size)
+{
+    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0
         && voxelPos.x < size && voxelPos.y < size && voxelPos.z < size; // 逐轴判断，避免夹紧后写错格。
 }
 

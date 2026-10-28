@@ -1,7 +1,7 @@
 # Omni
 
 <!-- stats:begin -->
-当前统计：48 个模块、95 个 Slang 源文件、15917 行生成 GLSL；函数对照 505 个，已迁入 404、MC 专用 101、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
+当前统计：44 个生成模块（另有 4 个参考后端，共 48 个源模块）、94 个 Slang 源文件、14147 行生成 GLSL；函数对照 505 个，已迁入 404、MC 专用 101、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
 <!-- stats:end -->
 
 一个以共享配置、自定义画面和按需性能开销为目标的 Minecraft Java 光影项目。

@@ -2,11 +2,12 @@
 Omni 通用图形库各向异性过滤模块：按屏幕导数构造椭圆核，沿长轴取多个样本。
 调用位置：斜视地面、水面与任何需要保持贴图细节的地形取样；由 `/omni-gfx/common/sampling/anisotropic.glsl` 引入。
 可复制示例：
-    vec4 albedo = ogxSampleAnisotropic(tex, normals, specular, coord, duv1, duv2, atlasSize, 256.0, 4, true, true, true, normalTex, specularTex); // 做各向异性过滤。
+    vec4 albedo = ogxSampleAnisotropic(tex, normals, specular, coord, duv1, duv2, atlasSize, 256.0, 4, true, true, true, true, normalTex, specularTex, materialAo); // 做各向异性过滤。
 设计原因与取舍：
     导数只在片元阶段可用，因此本文件不并入基础采样模块；基础模块会被顶点与阴影程序引用。
     椭圆核、长轴步进与法线/材质加权保持参考实现，纹理和 atlas 尺寸全部显式传入。
-当前状态：由 `shaders/effects/ground/terrain_surface.glsl` 引入并编译；顶层各向异性过滤仍走宿主实现。
+    `useMaterialAo` 为真时按 labPBR 约定从法线贴图蓝通道取材质遮蔽，与 `surface` 模块的公式相同；
+    这里不引用 `surface`，避免通用采样层反向依赖材质业务模块。
 */
 #ifndef OGX_SAMPLING_ANISOTROPIC_INCLUDED
 #define OGX_SAMPLING_ANISOTROPIC_INCLUDED
@@ -18,8 +19,9 @@ Omni 通用图形库各向异性过滤模块：按屏幕导数构造椭圆核，
 // `quality` 是每像素样本数，`normalSpecular` 为真时同时过滤法线与材质图。
 float4 ogxSampleAnisotropic(Sampler2D tex, Sampler2D normals, Sampler2D specular, float2 coord, float2 duv1,
     float2 duv2, float2 atlasSize, float textureResolution, int quality, bool normalSpecular, bool useNormalMap,
-    bool useSpecularMap, inout float3 normalTex, inout float4 specularTex)
+    bool useSpecularMap, bool useMaterialAo, inout float3 normalTex, inout float4 specularTex, out float materialAo)
 {
+    materialAo = 1.0; // 默认不压暗底色；调用方没有法线图时保持一。
     float2 atlasTiles = atlasSize / textureResolution; // 一张贴图在 atlas 里占几格。
     float2 tilesCoord = coord * atlasTiles; // 换到格坐标。
     float2x2 qd = inverse(float2x2(ddx(tilesCoord), ddy(tilesCoord))); // 屏幕导数矩阵的逆。
@@ -52,16 +54,27 @@ float4 ogxSampleAnisotropic(Sampler2D tex, Sampler2D normals, Sampler2D specular
         }
     }
     float weights = 1.0 / albedoSample.a; // 透明度总和倒数。
+    float3 rawNormal = normalSample * weights; // 归一化后的贴图法线，蓝通道等会儿还要取遮蔽。
     if (normalSpecular) // 写回法线与材质。
     {
-        if (useNormalMap) normalTex = ogxDecodeNormalTex(normalSample * weights); // 解出切线法线。
+        if (useNormalMap) normalTex = ogxDecodeNormalTex(rawNormal); // 解出切线法线。
         if (useSpecularMap) specularTex = specularSample * weights; // 材质取加权平均。
     }
     else // 不过滤附加图时用梯度采样保持层级正确。
     {
-        if (useNormalMap) normalTex = ogxDecodeNormalTex(normals.SampleGrad(coord, duv1, duv2).rgb); // 法线用梯度采样。
-        if (useSpecularMap) specularTex = specular.SampleGrad(coord, duv1, duv2); // 材质用梯度采样。
+        // 两个分支都加大括号：严格对照会在选项关闭时静态裁掉整段，
+        // 没有大括号的 `if` 无法被裁掉，会把本该关闭的两次采样算进来。
+        if (useNormalMap)
+        {
+            rawNormal = normals.SampleGrad(coord, duv1, duv2).rgb;
+            normalTex = ogxDecodeNormalTex(rawNormal); // 法线用梯度采样。
+        }
+        if (useSpecularMap)
+        {
+            specularTex = specular.SampleGrad(coord, duv1, duv2); // 材质用梯度采样。
+        }
     }
+    if (useNormalMap && useMaterialAo) materialAo = rawNormal.b * 0.5 + 0.5; // labPBR 遮蔽存蓝通道，映射到零点五到一。
     return float4(albedoSample.rgb * weights, tex.SampleLevel(coord, 0.0).a); // 颜色取平均，透明度保留原值。
 }
 

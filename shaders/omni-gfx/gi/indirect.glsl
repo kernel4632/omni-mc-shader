@@ -16,6 +16,15 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
     纹理只作为参数传入，库不绑定缓冲；调用方可以换分辨率、换历史缓冲，也可以独立测试。
 当前状态：由 `gi/gi` 引入并编译；宿主 `doIndirectLighting` 调用 `ogxIndirectLighting`，反射命中面也共用。
 */
+
+// --- 算法说明与边界 ---
+// 屏幕空间追踪从当前像素出发，沿射线步进并在深度变近时命中；步数用完仍未命中就当天空。
+// 双边升采样按深度与法线加权，低分辨率遮蔽边缘不会糊到前景。
+// 间接光入口把环境色、方块光与最低亮度相加，洞穴里保留一点点可见度。
+// 间接光：余弦半球采样生成方向，切线空间转到世界空间，屏幕深度用于判断遮挡。
+// 追踪版本在屏幕空间步进，步进版本用固定步数；双边升采样把低分辨率结果按深度与法线放大。
+// 屏幕空间间接光把命中颜色叠回当前像素，间接光入口把环境色、方块光与最低亮度合成。
+
 #ifndef OGX_GI_INDIRECT_INCLUDED
 #define OGX_GI_INDIRECT_INCLUDED
 
@@ -26,7 +35,7 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
 // 反射提供屏幕空间追踪与历史重投影。
 #include "/omni-gfx/reflection/reflection.glsl"
 // 余弦半球采样：把二维均匀随机数变成半球上的余弦分布方向。
-vec3 ogxCosineHemisphereDirection(vec2 xi) // 当前步骤的中间量。
+vec3 ogxCosineHemisphereDirection(vec2 xi)
 {
     float theta = 2.0 * OGX_PI * xi.y; // 方位角。
     float r = sqrt(xi.x); // 半径。

@@ -45,7 +45,7 @@ vec3 EndCalculateStars(vec3 worldDir){
 // --- 参考签名兼容层：末地行星的两个参考函数直接转发到通用库 ---
 // `ppss` 的第五个参数在参考实现里没有参与 BRDF 双向反射算式；保留它只为与参考签名一致。
 vec3 ppss(vec3 albedo, vec3 normal, vec3 lightDir, vec3 eyeDir, float unused){
-	return ogxPlanetBrdf(albedo, normal, lightDir, eyeDir); // 参考的第五参数不参与 BRDF。
+	return ogxPlanetShading(albedo, normal, lightDir, eyeDir, 0.0); // 末地行星着色，第五参数不参与 BRDF。
 }
 // `Disc` 是圆盘边缘的软阈值曲线，参数顺序与参考一致。
 float Disc(float a, float s, float h){ return ogxDiscProfile(a, s, h); }

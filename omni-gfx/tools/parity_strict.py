@@ -470,12 +470,15 @@ def main() -> None:
     review = load_json(REVIEW)
     raw_rows = parity.collect_reference()
     records, errors = build_records(review, raw_rows)
+    parse_errors = signature.report_parse_errors()
     errors.extend(check_single_target(records))
     summary = summarize(records)
+    summary["parseErrors"] = len(parse_errors)
     payload = {
         "schemaVersion": 3,
         "generatedBy": "omni-gfx/tools/parity_strict.py",
         "statusValues": ["exact", "approximate", "reference_broken", "mc_glue", "missing"],
+        "parseErrors": parse_errors,
         "summary": summary,
         "records": records,
     }
@@ -488,6 +491,9 @@ def main() -> None:
     print(f"严格对照：{totals['referenceFunctions']} 个函数；exact {totals['exact']}，"
           f"approximate {totals['approximate']}，reference_broken {totals['reference_broken']}，"
           f"mc_glue {totals['mc_glue']}，missing {totals['missing']}；产物 {REPORT.relative_to(ROOT)}")
+    if parse_errors:
+        print(f"参考函数解析跳过 {len(parse_errors)} 处，已写入严格对照报告；前五处：\n"
+              + "\n".join(parse_errors[:5]))
     if errors:
         print("未通过的 exact 条目：\n" + "\n".join(errors[:20]))
 

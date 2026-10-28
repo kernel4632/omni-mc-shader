@@ -126,10 +126,6 @@ vec3 OmniReflectionVolumeFog(vec3 color, vec3 startWorld, vec3 endWorld, vec3 ra
 
 // 屏幕空间追踪、方向生成与降噪都在生成库；本文件只保留宿主合成流程。
 #include "/omni-gfx/reflection/reflection.glsl"
-// Eclipse 高光、WSR 与 Photonics 反射属于同一效果，编译进合成二号供后续入口使用。
-#include "/omni-gfx/reflection/specular.glsl"
-// Photonics 体素反射与命中面着色，和 WSR 共用体素图与间接光。
-#include "/omni-gfx/reflection/photonics.glsl"
 // 数学模块提供饱和、法线解码与曲线编码。
 #include "/omni-gfx/common/math.glsl"
 

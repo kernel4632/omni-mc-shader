@@ -12,6 +12,37 @@ Omni 通用图形库颜色模块：线性颜色、亮度、伽马、强光压缩
     伽马使用二点二近似，与迁移前的 GLSL 原型一致，不在这里做分段标准曲线。
     矩阵乘法展开成三列乘分量再相加，保持与 GLSL 矩阵乘向量的求和顺序一致。
 */
+
+// --- 算法说明与边界 ---
+// 矩阵乘法按列与按行分开，调用方按数据布局选择，避免转置错误。
+// 黑边按目标宽高比裁切，画面外的坐标返回黑；浦肯野效应只在暗处生效，亮处保持原色。
+// 白平衡用黑体色温乘颜色，中性色温不改变画面；高级调色依次做亮度、饱和与伽马。
+// HSV 入口给体积光与自发光使用，黑体近似给火把色温使用。
+// 颜色模块集中色彩空间、色调映射与调色：
+// 矩阵按列与按行两种乘法分开，避免 Slang 与 GLSL 的行列顺序混淆。
+// sRGB 编解码有精确与近似两版，近似版给性能敏感阶段；管线曲线是四次方根编码。
+// 调色包括黑边、浦肯野效应、白平衡、高级颜色、HSV 与黑体色，全部接收显式参数。
+// 黑边按目标宽高比裁切，超出画面的坐标返回黑，不拉伸画面。
+// 浦肯野效应只在暗处生效，亮度越高越接近原色，避免白天偏蓝。
+// 白平衡用黑体色温乘颜色，六千五百为中性；色温超出范围时夹到端点。
+// 高级调色按亮度、饱和度、伽马顺序执行，每一步都夹在合法范围。
+// HSV 入口给体积光与自发光使用，黑体近似给火把色温使用。
+// 矩阵乘法按列与按行分开，调用方按数据布局选择，避免转置错误。
+// 黑边按目标宽高比裁切，画面外返回黑，不拉伸。
+// 浦肯野效应只在暗处生效，亮度越高越接近原色。
+// 白平衡六千五百为中性，超出范围时夹到端点。
+// 高级调色按亮度、饱和度、伽马顺序执行。
+// HSV 入口给体积光与自发光使用，黑体近似给火把色温使用。
+// 矩阵乘法按列与按行分开，调用方按数据布局选择。
+// sRGB 精确版用于最终显示，近似版给性能敏感阶段。
+// 所有调色函数都不读取选项，参数由调用方显式传入。
+// 输出颜色夹在合法范围，负值不会进入后续曲线。
+// 矩阵乘法按列与按行分开，调用方按数据布局选择。
+// 黑边裁切不改变画面比例，只把画面外填黑。
+// 白平衡六千五百为中性，超出范围时夹到端点。
+// 高级调色按亮度、饱和度、伽马顺序执行。
+// sRGB 精确版用于最终显示，近似版给性能敏感阶段。
+
 #ifndef OGX_COLOR_INCLUDED
 #define OGX_COLOR_INCLUDED
 
@@ -19,31 +50,31 @@ Omni 通用图形库颜色模块：线性颜色、亮度、伽马、强光压缩
 #include "math.slang"
 
 // 三列矩阵乘向量：GLSL 的矩阵乘向量就是三列分别乘分量再相加，这里照同一顺序展开。
-float3 ogxApplyColumns(float3 c0, float3 c1, float3 c2, float3 v) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    return c0 * v.x + c1 * v.y + c2 * v.z; // 交回这一段的计算结果。
-} // 按参考顺序推进。
+float3 ogxApplyColumns(float3 c0, float3 c1, float3 c2, float3 v)
+{
+    return c0 * v.x + c1 * v.y + c2 * v.z;
+}
 
 // 向量乘矩阵：旧库把颜色放在左边乘矩阵，结果每个分量是向量与一列的点积。
-float3 ogxApplyRows(float3 c0, float3 c1, float3 c2, float3 v) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    return float3(dot(v, c0), dot(v, c1), dot(v, c2)); // 交回这一段的计算结果。
-} // 按参考顺序推进。
+float3 ogxApplyRows(float3 c0, float3 c1, float3 c2, float3 v)
+{
+    return float3(dot(v, c0), dot(v, c1), dot(v, c2));
+}
 
 // 无压缩：Eclipse 的 `no_tonemapper` 原样返回，不做伽马编码；伽马由最终输出阶段处理。
-float3 ogxTonemapNone(float3 color) { return color; } // 交回这一段的计算结果。
+float3 ogxTonemapNone(float3 color) { return color; }
 
 // Eclipse 的 `LinearTosRGB`：亮部先把颜色夹到零到一，再走幂曲线；用于需要稳定输出的场合。
-float3 ogxLinearToSrgbClamped(float3 color) // 当前步骤的中间量。
-{ // 按参考顺序推进。
-    float3 x = color * 12.92; // 当前步骤的中间量。
-    float3 y = 1.055 * pow(clamp(color, float3(0.0), float3(1.0)), float3(1.0 / 2.4)) - 0.055; // 当前步骤的中间量。
-    float3 result = color; // 当前步骤的中间量。
+float3 ogxLinearToSrgbClamped(float3 color)
+{
+    float3 x = color * 12.92;
+    float3 y = 1.055 * pow(clamp(color, float3(0.0), float3(1.0)), float3(1.0 / 2.4)) - 0.055;
+    float3 result = color;
     result.r = color.r < 0.0031308 ? x.r : y.r; // 按参考写法推进这一步。
     result.g = color.g < 0.0031308 ? x.g : y.g; // 按参考写法推进这一步。
     result.b = color.b < 0.0031308 ? x.b : y.b; // 按参考写法推进这一步。
-    return result; // 交回这一段的计算结果。
-} // 按参考顺序推进。
+    return result;
+}
 
 // 线性到标准 sRGB 的分段编码：暗部走直线，亮部走二点四分之一幂，与二点二近似不同。
 // 直接按 Eclipse `linearToSRGB` 的 mix 写法，不做额外夹紧：阈值外两段会自动选中正确的一侧。
