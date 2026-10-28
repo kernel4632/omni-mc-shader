@@ -326,7 +326,7 @@ float4 ogxItxTemporalReprojection(float2 coord, float3 velocity, float currDepth
 
 float ogxTaaSampleDepthFetch(Sampler2D depthTexture, int2 coord)
 {
-    return depthTexture.Load(int3(coord, 0)).x; // ??????????
+    return depthTexture.Load(int3(coord, 0)).x; // 当前像素的深度。
 }
 
 #endif

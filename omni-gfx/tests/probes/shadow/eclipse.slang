@@ -2,6 +2,7 @@
 Omni 通用图形库 shadow/eclipse 模块编译探针：覆盖该效果的主要入口。
 调用位置：`omni-gfx/build.py spirv` 逐模块编译；探针只验证类型与函数调用，不进入光影包。
 */
+#include "../sampler_alias.slang"
 #include "../../../src/shadow/eclipse.slang"
 
 [shader("fragment")]

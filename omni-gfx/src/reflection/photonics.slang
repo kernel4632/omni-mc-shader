@@ -119,7 +119,7 @@ void ogxEclipsePhotonicsReflectionShadingExact(inout float4 color, float3 normal
 }
 
 // Photonics 反射：先追踪体素，再给半透明与不透明命中着色，最后按雾吸收。
-vec4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHit translucentHits[10],
+float4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHit translucentHits[10],
     uint translucentHitsCount, float3 reflectedVector, float3 flatNormal, float2 noise,
     inout float backgroundReflectMask, inout float3 backgroundTint,
     Usampler3D voxelIds, Sampler3D voxelColors, float3 directLightColor, float3 ambientLightColor,
@@ -131,14 +131,14 @@ vec4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHi
     float distortA, float distortB, float distortK, float d0k, int shadowSampleCount, bool basicFilter,
     bool coloredShadows, float emissiveBrightness, float emissiveCurve, bool translucentInReflections)
 {
-    vec4 color = vec4(0.0); // 反射颜色。
+    float4 color = float4(0.0); // 反射颜色。
     int blockID = 0; // 最终方块编号。
     float skylightmap = 0.0; // 最终天光。
     if (translucentInReflections) // 只有开启半透明反射时才逐层染色。
     {
         for (uint i = 0u; i < translucentHitsCount; i++) // 逐层半透明。
         {
-            vec4 sampleColor = translucentHits[i].hitColor; // 半透明颜色。
+            float4 sampleColor = translucentHits[i].hitColor; // 半透明颜色。
             ogxEclipsePhotonicsReflectionShading(sampleColor, translucentHits[i].hitNormal,
                 translucentHits[i].hitPos, noise.y, directLightColor, ambientLightColor,
                 translucentHits[i].hitId, translucentHits[i].skylight, torchColor, lpvSample, handLight,
@@ -157,7 +157,7 @@ vec4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHi
     }
     if (job.resultHit) // 不透明命中。
     {
-        vec4 sampleColor = vec4(job.resultColor, 1.0); // 命中颜色。
+        float4 sampleColor = float4(job.resultColor, 1.0); // 命中颜色。
         ogxEclipsePhotonicsReflectionShading(sampleColor, job.resultNormal, job.resultPosition, noise.y,
             directLightColor, ambientLightColor, blockID, skylightmap, torchColor, lpvSample, handLight,
             lpvPos, lpvSize, fadeLength, torchAmount, vanillaMask, shadowDistance, ambientBrightness,

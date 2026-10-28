@@ -106,6 +106,9 @@ LOWERINGS = (
     (re.compile(r"\bSampler2D\b"), "sampler2D", "Slang 的纹理句柄类型名与 GLSL 不同。"),
     (re.compile(r"\brsqrt\s*\("), "inversesqrt(", "Slang 的平方根倒数在 GLSL 里叫 inversesqrt。"),
     (re.compile(r"\blerp\s*\("), "mix(", "Slang 的线性插值函数在 GLSL 里叫 mix。"),
+    (re.compile(r"\batan2\s*\("), "atan(", "Slang 的两参数反正切在 GLSL 里叫 atan。"),
+    (re.compile(r"\bddx\s*\("), "dFdx(", "Slang 的屏幕横向导数在 GLSL 里叫 dFdx。"),
+    (re.compile(r"\bddy\s*\("), "dFdy(", "Slang 的屏幕纵向导数在 GLSL 里叫 dFdy。"),
     (re.compile(r"\basfloat\s*\("), "uintBitsToFloat(", "Slang 的按位重解释对应 GLSL 的 uintBitsToFloat。"),
     (re.compile(r"\basuint\s*\("), "floatBitsToUint(", "Slang 的取位对应 GLSL 的 floatBitsToUint。"),
     (re.compile(r"\basint\s*\("), "floatBitsToInt(", "Slang 的有符号取位对应 GLSL 的 floatBitsToInt。"),
@@ -136,7 +139,9 @@ LEFTOVER = re.compile(r"\b(?:float[234](?:x[234])?|Sampler1D|Usampler1D|Sampler2
 VERSION = re.compile(r"(?m)^\s*#version\b")
 
 # 模块之间的引用在 Slang 里按相对路径写，在光影里按根路径写。
-# 只允许引用清单内的模块，拼错或引用光影文件都会在生成阶段失败。
+# 只允许引用清单内的模块或同名文件夹里的子文件，拼错或引用光影文件都会在生成阶段失败。
+# 子文件不单独生成 GLSL，也不单独编译探针；生成时按顺序内联进所属模块，
+# 这样 48 个模块的产物、探针数量与玩家看到的光影文件都保持不变。
 INCLUDE = re.compile(r'^\s*#include\s+"([\w./-]+)\.slang"\s*$', re.MULTILINE)
 
 
@@ -149,6 +154,70 @@ def _replace_types(text: str) -> str:
     for slang_name, glsl_name in TYPE_WORDS.items():
         text = re.sub(rf"\b{slang_name}\b", glsl_name, text)  # 完整单词边界是唯一条件。
     return text  # 返回替换后的整段文本。
+
+
+def _include_target(name: str, reference: str) -> str:
+    """把相对引用规范化成 `src` 下的模块名或子文件名。
+
+    `name` 是当前模块或子文件的路径，`reference` 是源文件里写的相对路径；
+    结果不含 `.slang` 后缀，和 `MODULES` 的命名方式一致。
+    """
+    return posixpath.normpath(posixpath.join(posixpath.dirname(name), reference))
+
+
+def _part_path(target: str) -> Path:
+    """返回子文件的绝对路径，并拒绝跳出源码目录的引用。
+
+    子文件是模块内部的实现分片，不是第二套模块；限制在 `src` 内，
+    可以避免拼错路径时读到仓库外的文件。
+    """
+    path = (SRC / f"{target}.slang").resolve()
+    if not path.is_relative_to(SRC.resolve()):
+        raise ValueError(f"子文件引用跳出源码目录：{target}")
+    return path
+
+
+def _collect_parts(name: str, stack: tuple[str, ...] = ()) -> list[str]:
+    """按出现顺序返回一个模块直接或间接引用的全部子文件。
+
+    模块引用保留给生成后的 GLSL；只有不在 `MODULES` 里的 `.slang` 引用
+    才当作子文件。循环引用直接报错，避免生成时无限展开。
+    """
+    source = (SRC / f"{name}.slang").read_text(encoding="utf-8")
+    parts: list[str] = []
+    for match in INCLUDE.finditer(source):
+        target = _include_target(name, match[1])
+        if target in MODULES:
+            continue
+        if target in stack or target == name:
+            raise ValueError(f"子文件循环引用：{name} -> {target}")
+        path = _part_path(target)
+        if not path.is_file():
+            raise ValueError(f"未知模块或子文件引用：{name} -> {match[1]}")
+        if target not in parts:
+            parts.append(target)
+        parts.extend(item for item in _collect_parts(target, (*stack, name)) if item not in parts)
+    return parts
+
+
+def _expand_parts(name: str, text: str, stack: tuple[str, ...]) -> str:
+    """把子文件引用替换成子文件正文，模块引用保持原样。
+
+    为什么在语法降级前展开：子文件和主文件使用同一套 Slang 写法，
+    先拼成完整模块再统一转换，才不会出现一半已转换、一半未转换的产物。
+    """
+    def replace(match: re.Match) -> str:
+        target = _include_target(name, match[1])
+        if target in MODULES:
+            return match.group(0)
+        if target in stack or target == name:
+            raise ValueError(f"子文件循环引用：{name} -> {target}")
+        path = _part_path(target)
+        if not path.is_file():
+            raise ValueError(f"未知模块或子文件引用：{name} -> {match[1]}")
+        body = path.read_text(encoding="utf-8")
+        return f"// 子文件：{target}.slang。\n" + _expand_parts(target, body, (*stack, name))
+    return INCLUDE.sub(replace, text)
 
 
 def _resolve_include(match: re.Match, name: str) -> str:
@@ -308,7 +377,8 @@ def module_text(name: str) -> str:
     不返回半成品，调用方因此可以信任返回的文本就是可写入的最终产物。
     """
     source = (SRC / f"{name}.slang").read_text(encoding="utf-8")  # 唯一手写来源，允许按效果分文件夹。
-    body = _lower_text(source, name)  # 先转换，失败时不会写任何文件。
+    expanded = _expand_parts(name, source, (name,))  # 子文件按源码顺序拼成完整模块。
+    body = _lower_text(expanded, name)  # 先转换，失败时不会写任何文件。
     return _header(name) + body  # 说明放在源文件注释之前。
 
 
@@ -362,14 +432,22 @@ def manifest_text(texts: dict[Path, str] | None = None) -> str:
         source_bytes = source.read_bytes()  # 按字节计算摘要，不受换行转换影响。
         shader_path = SHADER_OUT / f"{name}.glsl"  # 唯一产物路径。
         shader_text = texts[shader_path]  # 与写入内容完全相同的文本。
-        entries.append({
+        entry = {
             "module": name,
             "source": source.relative_to(ROOT).as_posix(),
             "sourceSha256": hashlib.sha256(source_bytes).hexdigest(),
             "shader": shader_path.relative_to(ROOT).as_posix(),
             "glslSha256": hashlib.sha256(shader_text.encode("utf-8")).hexdigest(),
             "glslLines": len(shader_text.splitlines()),
-        })
+        }
+        parts = _collect_parts(name)  # 子文件也参与过期判断，改子文件不会留下旧产物。
+        if parts:  # 没有拆分时省略空表，旧条目保持原样。
+            entry["parts"] = [
+                {"source": (SRC / f"{part}.slang").relative_to(ROOT).as_posix(),
+                 "sha256": hashlib.sha256((SRC / f"{part}.slang").read_bytes()).hexdigest()}
+                for part in parts
+            ]
+        entries.append(entry)
     payload = {"schemaVersion": 1, "tool": "omni-gfx/tools/generate.py", "modules": entries}
     return json.dumps(payload, ensure_ascii=False, indent=2) + "\n"  # 固定缩进与结尾换行。
 

@@ -352,7 +352,7 @@ void ogxItxVolumetricFogExact(inout float3 color, float3 startPos, float3 endPos
     float lightStepLength, float shadowBias, Sampler2D noiseTexture, float2 pixelCoord, int frameCounter)
 {
     fogTimeFactor *= media.time_midnight * 2.0 + 1.0; // 参考在高度雾模式下按午夜强度加浓。
-    float2 blueNoise = fract(texelFetch(noiseTexture, int2(pixelCoord) % 64, 0).xy + float2(1.61803398875, 1.32471795724) * float(frameCounter % 64)); // 参考的时序蓝噪声，两个黄金比例常数照原样保留。
+    float2 blueNoise = fract(noiseTexture.Load(int3(int2(pixelCoord) % 64, 0)).xy + float2(1.61803398875, 1.32471795724) * float(frameCounter % 64)); // 参考的时序蓝噪声，两个黄金比例常数照原样保留。
     float noise = blueNoise.y; // 参考取蓝噪声的 y 分量作为步进抖动。
     float VdotL = dot(worldDir, media.light_vector); // 视线与阳光方向的夹角。
     float rSteps = 1.0 / float(steps); // 步数的倒数，避免循环内重复除法。

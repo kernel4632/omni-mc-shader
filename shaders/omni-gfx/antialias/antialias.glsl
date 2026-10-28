@@ -331,7 +331,7 @@ vec4 ogxItxTemporalReprojection(vec2 coord, vec3 velocity, float currDepthMin,
 
 float ogxTaaSampleDepthFetch(sampler2D depthTexture, ivec2 coord)
 {
-    return texelFetch(depthTexture, coord, 0).x; // ??????????
+    return texelFetch(depthTexture, coord, 0).x; // 当前像素的深度。
 }
 
 #endif

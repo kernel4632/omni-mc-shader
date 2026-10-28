@@ -280,7 +280,11 @@ void ogxEclipseGetTexCoord(int3 voxelPos, inout float2 texcoord, float3 voxelNor
 void ogxEclipseSetVoxelBlock(int3 voxelPos, uint blockId, int voxelSize,
     inout int3 writePos, inout uint writeId)
 {
-    if (clamp(voxelPos, int3(0), int3(voxelSize - 1)) != voxelPos) return; // 越界写入丢弃。
+    // 为什么要逐分量比较：Slang 的向量 `!=` 返回布尔向量，不能直接当条件；
+    // 逐分量写清楚上下界，GLSL 与 Slang 的结果一致。
+    int maxVoxel = voxelSize - 1;
+    if (voxelPos.x < 0 || voxelPos.y < 0 || voxelPos.z < 0 ||
+        voxelPos.x > maxVoxel || voxelPos.y > maxVoxel || voxelPos.z > maxVoxel) return; // 越界写入丢弃。
     writePos = voxelPos; // 记录真正写入的格号。
     writeId = blockId; // 记录写入的方块编号。
 }

@@ -5,23 +5,51 @@
     {
       "module": "math",
       "source": "omni-gfx/src/math.slang",
-      "sourceSha256": "cb1430a8ee4a97d46f63048a75e3b88ec1ea10448f6f101d0cc1c209e2c206f7",
+      "sourceSha256": "389734685782c472ee577649d7f261ee17baea9b4a18d11226ee92f19b9eaecf",
       "shader": "shaders/omni-gfx/math.glsl",
-      "glslSha256": "3b8d303f8263ee7ca8cb9ee5897af29731f39694aa16af02f68d6ff9151dce6a",
-      "glslLines": 851
+      "glslSha256": "2dac93d89d2941d9ed2b47834572efddb3568c49520258965d16462e508e790b",
+      "glslLines": 863,
+      "parts": [
+        {
+          "source": "omni-gfx/src/math/basics.slang",
+          "sha256": "c50eb88ee5f0b15ab29084ca1e0d6cabcc62cba11635f1ca789e88e887b9cc7b"
+        },
+        {
+          "source": "omni-gfx/src/math/shading.slang",
+          "sha256": "78f8f7f6c673601cf98fa0fffc1ca95f72d45b60a18818bbe1a0a03f78baa86f"
+        },
+        {
+          "source": "omni-gfx/src/math/pattern.slang",
+          "sha256": "ff829b2358c9c99d716cd7b3a7d1476d004bb246ebb493095f0f91e2b149727d"
+        },
+        {
+          "source": "omni-gfx/src/math/filter.slang",
+          "sha256": "8870a417cdcb36611a44459806eca27c49ba0dd7590ff7c58cd86b29947bc43d"
+        }
+      ]
     },
     {
       "module": "color",
       "source": "omni-gfx/src/color.slang",
-      "sourceSha256": "6e567e7df388dfa82c9505dbefc799e7e4b99415cc9660c02c6adb44342e9a2d",
+      "sourceSha256": "658f511c1d858e3f26111d9b01e63d42eb1738ab21a7d7dbf4b0bee977a8a23e",
       "shader": "shaders/omni-gfx/color.glsl",
-      "glslSha256": "695bda2af5fdf53d50d8b235e870a1fb3286fb36db537e1df5363753e65999ba",
-      "glslLines": 668
+      "glslSha256": "4f83516ce0232879df5f180afe3ace45ff9996d0ea8ef3eee890e02aa2d74d8c",
+      "glslLines": 674,
+      "parts": [
+        {
+          "source": "omni-gfx/src/color/tonemap.slang",
+          "sha256": "91f0284f1b2e06a683eed5a0ae777ee1b6a5b881e5f9ad9bd87bff74f927d4ba"
+        },
+        {
+          "source": "omni-gfx/src/color/agx.slang",
+          "sha256": "d64b0f8431d932beae0f20bd768f7785468756edaefe2d1adedcd3a92ea098d0"
+        }
+      ]
     },
     {
       "module": "sampling",
       "source": "omni-gfx/src/sampling.slang",
-      "sourceSha256": "0e4b852bed125f3987ca895f7573385b05fd9aca612559dc9b3c60f6c0bdebd8",
+      "sourceSha256": "ed348a7b0e4c06cc5fe88560f5b86b57b44778c8a43fd530c7f8a4f231190932",
       "shader": "shaders/omni-gfx/sampling.glsl",
       "glslSha256": "da4f9de5ad2b24b5c1ef949050035b78e85a0ce158ce3d80e1d90e8213d1ee50",
       "glslLines": 214
@@ -29,7 +57,7 @@
     {
       "module": "sampling/anisotropic",
       "source": "omni-gfx/src/sampling/anisotropic.slang",
-      "sourceSha256": "3e73edd43b67d83620a591634f4633e6bbc05db1ca3ac4b8ec881bc4a1fdc4e3",
+      "sourceSha256": "9bc468747ee5ce251d3701761d2177fce2d7ab81c1e868e8c8a36da24333ddbd",
       "shader": "shaders/omni-gfx/sampling/anisotropic.glsl",
       "glslSha256": "6549c662262b7a5f8b325760a9ddb4bb86b65afa1e7f093b585634ab40ae5a8c",
       "glslLines": 70
@@ -61,10 +89,24 @@
     {
       "module": "water",
       "source": "omni-gfx/src/water.slang",
-      "sourceSha256": "ab257efa659e0262770efc58c5baa8dbe9c2fc0175f5ec77e50c17458cbbc213",
+      "sourceSha256": "03e17300affc51e8498c5fe79e71a9b5e438a27559d9d7aed67385ae0b951326",
       "shader": "shaders/omni-gfx/water.glsl",
-      "glslSha256": "7fa1ba1d9f3b212eba58e022dba14fd98252cc01d327f3a7abd3d7c9e5b733fb",
-      "glslLines": 663
+      "glslSha256": "860ab8c27de34c54503fbc6369e0467ebe0c9493baffa5ec74d530bff4bfa162",
+      "glslLines": 670,
+      "parts": [
+        {
+          "source": "omni-gfx/src/water/waves.slang",
+          "sha256": "49978d0793be4865a08f32c59fda52fad4fc510208ac2d226fa72924671ce7f0"
+        },
+        {
+          "source": "omni-gfx/src/water/rain.slang",
+          "sha256": "00b2020a59b17584a15ab709dd29b05e66e22430909310e7e4c0cc00fcc7e3be"
+        },
+        {
+          "source": "omni-gfx/src/water/ocean.slang",
+          "sha256": "2c788d5494ba79fd8801f98e5160fc741cc2d1215a3a827faa79e02c38398bb0"
+        }
+      ]
     },
     {
       "module": "upscale",
@@ -125,10 +167,28 @@
     {
       "module": "atmosphere/atmosphere",
       "source": "omni-gfx/src/atmosphere/atmosphere.slang",
-      "sourceSha256": "55aec316b83a0b67e735deea31bf3532e5c1a7a91dfb734a0fa621df059bdf36",
+      "sourceSha256": "9435181fd678fe7082189d374c5988e9c04262a5234d8e904894b5ff8f24b4b5",
       "shader": "shaders/omni-gfx/atmosphere/atmosphere.glsl",
-      "glslSha256": "197e2e33735e4241d95dc6a472732dc2a72798f4216ea95c42c8aa86a20907b7",
-      "glslLines": 731
+      "glslSha256": "739dc53f951941489d86b2b062a1e50470d37dcbdf5a37275ad3b420e7e9ab68",
+      "glslLines": 740,
+      "parts": [
+        {
+          "source": "omni-gfx/src/atmosphere/atmosphere/scattering.slang",
+          "sha256": "4320934292824e7392cebecd3a0e5878bd3c87d1841f159a9ff04f5c3112a8f7"
+        },
+        {
+          "source": "omni-gfx/src/atmosphere/atmosphere/sun.slang",
+          "sha256": "456e719c4950cea3e786c355ae5bd10d64bf07c6901ef0c8768a57ad3d69ec84"
+        },
+        {
+          "source": "omni-gfx/src/atmosphere/atmosphere/mapping.slang",
+          "sha256": "2411e72e8526aa093627634e16c7f5d76b27916ee4343c45bb6f2d40a02e22f6"
+        },
+        {
+          "source": "omni-gfx/src/atmosphere/atmosphere/planet.slang",
+          "sha256": "42cc1f25de9f26352d903f0920566dd46ee81c416ecd47f70173418da653b0a6"
+        }
+      ]
     },
     {
       "module": "atmosphere/model",
@@ -141,7 +201,7 @@
     {
       "module": "atmosphere/sky",
       "source": "omni-gfx/src/atmosphere/sky.slang",
-      "sourceSha256": "0c56ed161b85b0c29688515a8765c114c49b3463d904b8093cd406bfc441be54",
+      "sourceSha256": "4a34ac34b20019e72c4908534430504a62895d05d42470a79c88bdeef6072855",
       "shader": "shaders/omni-gfx/atmosphere/sky.glsl",
       "glslSha256": "9a35217d7c4619a57fefa4e31ebb7ff692d001baacd8fa33965044e15f164840",
       "glslLines": 398
@@ -157,7 +217,7 @@
     {
       "module": "cloud/volume",
       "source": "omni-gfx/src/cloud/volume.slang",
-      "sourceSha256": "3782be707094d89b3f9447fcb8f80760422dde97a61b321e6925f76d6fafbf25",
+      "sourceSha256": "a898404d86b1db258c40c89ae5bc085e7ec3d6956803399bbc9bcd451e2379e7",
       "shader": "shaders/omni-gfx/cloud/volume.glsl",
       "glslSha256": "5bf00fb7e46b3536acbbe78bf9f0202b0c8896fb4aad165100a3e4276e8b828e",
       "glslLines": 330
@@ -165,10 +225,36 @@
     {
       "module": "cloud/eclipse",
       "source": "omni-gfx/src/cloud/eclipse.slang",
-      "sourceSha256": "ee50683a45dbdc696d36dc2e2729a1344c0a22608e7bf8f3defd97fd6fc7a31f",
+      "sourceSha256": "f0ad5ec38ff3898bc4760a57c22bfd1cfbe84112695ba27d973f35203a8b3cc0",
       "shader": "shaders/omni-gfx/cloud/eclipse.glsl",
-      "glslSha256": "6b7747e217a6905a0cdd84d223b4e50eb25b884db1bfb643831df57b0135c91d",
-      "glslLines": 1479
+      "glslSha256": "09126debae1e20953ac9eb654336542812aef8023fc722432603da5abc1664fd",
+      "glslLines": 1493,
+      "parts": [
+        {
+          "source": "omni-gfx/src/cloud/eclipse/shape.slang",
+          "sha256": "bfdf63e602bbb9d87c4bce2837dcc70fa34d17700d55a241d1c8cc638185af04"
+        },
+        {
+          "source": "omni-gfx/src/cloud/eclipse/shadow.slang",
+          "sha256": "831ecc41c7bf57d1b50abcb2d39bff4bb5ea202bace05b71c356a7a685dd1dde"
+        },
+        {
+          "source": "omni-gfx/src/cloud/eclipse/lighting.slang",
+          "sha256": "9f9248513489e29e6fd8659acd2db28dc1ceade0609a64632489baccaae2aeb1"
+        },
+        {
+          "source": "omni-gfx/src/cloud/eclipse/march.slang",
+          "sha256": "cb2ca1796cec9801b853cd7de9e79020911192a1891b586eb124d55e8900ee81"
+        },
+        {
+          "source": "omni-gfx/src/cloud/eclipse/layers.slang",
+          "sha256": "a39f43282d05053096b2a60dd09ab570ac0a8970f6b729bc6821785b6f16d584"
+        },
+        {
+          "source": "omni-gfx/src/cloud/eclipse/exact.slang",
+          "sha256": "4de5b6d45d3978cfff586dc647d750ecd9b8e56bcb6f365863e13e1992e7bad3"
+        }
+      ]
     },
     {
       "module": "cloud/planar",
@@ -181,15 +267,25 @@
     {
       "module": "fog/fog",
       "source": "omni-gfx/src/fog/fog.slang",
-      "sourceSha256": "7791a2e2588a7ed4195ac5e44ea685883992d8b2caeb395d9f30baf09996960a",
+      "sourceSha256": "6219d99961d2261ef94ba8478b69c2bd39f9c727f04d8345e5047dd9908767e9",
       "shader": "shaders/omni-gfx/fog/fog.glsl",
-      "glslSha256": "bff1fea0d54c01df30afbb3949ec07df551ffcb5c903662a6aeada3be27df79d",
-      "glslLines": 615
+      "glslSha256": "62ea9c45f683313246b5e764a9650e987685a74835fc6a6c31d2898320754b25",
+      "glslLines": 620,
+      "parts": [
+        {
+          "source": "omni-gfx/src/fog/fog/density.slang",
+          "sha256": "55ab5b3b8c08e841307d8ce94279c2d60ce6e1b81bd7e43eebf15d09ee8643ed"
+        },
+        {
+          "source": "omni-gfx/src/fog/fog/end.slang",
+          "sha256": "cc1f536f225843a2f56e577b24eeb51af4d9f76dc6e9e5373991e14d99ff407c"
+        }
+      ]
     },
     {
       "module": "fog/volume",
       "source": "omni-gfx/src/fog/volume.slang",
-      "sourceSha256": "ae1c3237ccf0355a369eb4d34069445b769bae1d90e0ea3bdf036361611261db",
+      "sourceSha256": "2967649b14bdaab92530389ff7bc4ff28c4f00c91b748726e1db34961d481d05",
       "shader": "shaders/omni-gfx/fog/volume.glsl",
       "glslSha256": "b5bff47a5ddb4bc0bda8aa8b8fa308a380fd98cf55c9a8d433e4b655404d2380",
       "glslLines": 523
@@ -213,26 +309,40 @@
     {
       "module": "voxel/voxel",
       "source": "omni-gfx/src/voxel/voxel.slang",
-      "sourceSha256": "9aee2d7f7cd2136f927bad8b1667536c93559c03a1aa4001f86ec04bcedef402",
+      "sourceSha256": "92c21a9ecb92ec769cd5846fa6fe0e777fe629128640e0a1aaba41ffc9f8468d",
       "shader": "shaders/omni-gfx/voxel/voxel.glsl",
-      "glslSha256": "079cd158d4da0fe87e2ad8a84554c805f80e5402bc3e109fb9faf2bdde2320cd",
-      "glslLines": 340
+      "glslSha256": "1bf6ff1f31b910ccfc3d1759e58c71d4eae997a7e153afd520ef93b2b34facaf",
+      "glslLines": 344
     },
     {
       "module": "voxel/trace",
       "source": "omni-gfx/src/voxel/trace.slang",
-      "sourceSha256": "df9df17064cd451903e0cf325e668c38ac24ebdb642e2348b2075155796d3d30",
+      "sourceSha256": "a83f9e80a206b65df238e820a240160dac033f6073d17ea71c72b5863f12e0bb",
       "shader": "shaders/omni-gfx/voxel/trace.glsl",
-      "glslSha256": "9fa064bfd536ebbd0883ceb9478009c030aa415e3f0877a5b5007506a3cd0304",
-      "glslLines": 249
+      "glslSha256": "e1f1f28cfed896015b97e11b073306b84fe94de6d6a77345aa280638aec0f4da",
+      "glslLines": 257
     },
     {
       "module": "gi/gi",
       "source": "omni-gfx/src/gi/gi.slang",
-      "sourceSha256": "3dfbe42fb1f4b1cdb207f1a6363d9b4754e78c4c85fe69e7b77d6998cfba0e83",
+      "sourceSha256": "011f02cf2e9c99611667b917c22f552e2bb4653bb4d86ca1c2e06ea727e1a00a",
       "shader": "shaders/omni-gfx/gi/gi.glsl",
-      "glslSha256": "862a5c31bb52089240248d3debdf0fd089382dcf32712bc271c3763e2b65fd36",
-      "glslLines": 651
+      "glslSha256": "0063a45d4c302dacaa1727c133087041b6b7fa4acd8c8743f5f59d525bb6576b",
+      "glslLines": 659,
+      "parts": [
+        {
+          "source": "omni-gfx/src/gi/gi/ao.slang",
+          "sha256": "f71e0e7f24d7cf31f018449a016b077ff637e09916b1fadec163f3cde1235c00"
+        },
+        {
+          "source": "omni-gfx/src/gi/gi/temporal.slang",
+          "sha256": "a94dfcab430ec3549a3e81964cdde8a9292d3a56104a9bd3814d5948d3b6645c"
+        },
+        {
+          "source": "omni-gfx/src/gi/gi/spatial.slang",
+          "sha256": "a30cd769c42914a24905a1da9e1cb41426e3ef45a8f4785797b00ed76d08de79"
+        }
+      ]
     },
     {
       "module": "gi/diffuse",
@@ -261,15 +371,15 @@
     {
       "module": "reflection/reflection",
       "source": "omni-gfx/src/reflection/reflection.slang",
-      "sourceSha256": "f9d900e78056a219f12f8e790ff8eb888ca64eefed5ea7ffd3ef01b50ebe0b96",
+      "sourceSha256": "d39b0995c6c8ff660952033868154dee7b23f3cef2838e534109a7d86c6bda06",
       "shader": "shaders/omni-gfx/reflection/reflection.glsl",
-      "glslSha256": "f47a868a3317edc3c36fa72a192b3678cc5d0c5571866b0f1c5cda155d47cc2d",
-      "glslLines": 281
+      "glslSha256": "ec891dda278dcf3fdac4977e78b50a64b0856d21e53b9d6c824b20a08a650021",
+      "glslLines": 284
     },
     {
       "module": "reflection/wsr",
       "source": "omni-gfx/src/reflection/wsr.slang",
-      "sourceSha256": "c6333ad89b617b082e4ff0021938cafa86bb3e83552a3f788f2f0a99008de7a4",
+      "sourceSha256": "f3b015d4a1b23ef7ee913a8cdc26e8a5cbace33fcd8a63280a191400724f58f8",
       "shader": "shaders/omni-gfx/reflection/wsr.glsl",
       "glslSha256": "b8d8aa2f1be823ac69a559ced66b8f40c57b019cf47243bbc4b7978c66767c09",
       "glslLines": 403
@@ -277,7 +387,7 @@
     {
       "module": "reflection/photonics",
       "source": "omni-gfx/src/reflection/photonics.slang",
-      "sourceSha256": "a03dd061bc9bf89f31fa4963873a89adecd3a80bec74d7558727a1b5978c5ecc",
+      "sourceSha256": "80f3f4c7175bc49b303c936542bed5264278921a02459253f22a4045f35def10",
       "shader": "shaders/omni-gfx/reflection/photonics.glsl",
       "glslSha256": "b278978e8c9dbc2bcc1b8863806cdc626b1599fab5697cfe7ee97ef87842724a",
       "glslLines": 181
@@ -285,18 +395,32 @@
     {
       "module": "reflection/specular",
       "source": "omni-gfx/src/reflection/specular.slang",
-      "sourceSha256": "ff5ee8e118b19516204499498e6f43a0dc7944667c28cc5ddf0691b52c4b949b",
+      "sourceSha256": "4ce980d7e52c596806f9fa1489f1d9fe959cd42ea99bca94886c9ce72f5484ec",
       "shader": "shaders/omni-gfx/reflection/specular.glsl",
-      "glslSha256": "3967c5b1734e7eb40ee146171fb396d5e0c0026a73ae4a318a1265884ee0308d",
+      "glslSha256": "1545248a07cc2aef70e6b952d2497b6e0cb447bf8684f2e99cfbf3b7c9445ff3",
       "glslLines": 289
     },
     {
       "module": "post/post",
       "source": "omni-gfx/src/post/post.slang",
-      "sourceSha256": "5cc310753242fb7d9ff8ed2730774885b63ad051af29cb9694bce11fa68684aa",
+      "sourceSha256": "c15ebc38c5baa7e9ba40f0ac50b453a0921b877964e83525b51422d38c9e19c2",
       "shader": "shaders/omni-gfx/post/post.glsl",
-      "glslSha256": "ae03131b7def64b27c1b17e684950f0bcd5fb254ad8cc07db4fbdef6bd37240c",
-      "glslLines": 663
+      "glslSha256": "ea3ec6633494c2698ab58fd43bdb62fabea6eb219871552dd5a67f7303e0bee9",
+      "glslLines": 671,
+      "parts": [
+        {
+          "source": "omni-gfx/src/post/post/bloom.slang",
+          "sha256": "5bcc1c5d7fc20f896f846d787e77863084b09d95c512283dc52b8a8c1ff77b74"
+        },
+        {
+          "source": "omni-gfx/src/post/post/dof.slang",
+          "sha256": "ad8f714b4369dc5823a294b803a988aa19f05ab535aa5b03f1ff23362eeae69d"
+        },
+        {
+          "source": "omni-gfx/src/post/post/effects.slang",
+          "sha256": "bccad180106e93b08dc859b6868c8539c2e32def8462152524f440f4670f79b9"
+        }
+      ]
     },
     {
       "module": "post/exposure",
@@ -317,7 +441,7 @@
     {
       "module": "lens/lens",
       "source": "omni-gfx/src/lens/lens.slang",
-      "sourceSha256": "749149ad7e4138e09c76154fd39bb17f16092f2e2b5efa35ad7432db5d83ac03",
+      "sourceSha256": "9f52c7e2caf36a808735a10337283db586b91276a13e4aad3310ca768dc66cf9",
       "shader": "shaders/omni-gfx/lens/lens.glsl",
       "glslSha256": "f3777a4c7cff693ab62aadd64e99da3636e4d08138b0d791277fd7110764b3ce",
       "glslLines": 134
@@ -325,9 +449,9 @@
     {
       "module": "antialias/antialias",
       "source": "omni-gfx/src/antialias/antialias.slang",
-      "sourceSha256": "07063cb2df0e4313480d9dc62a27b4d42085d6350208d33673963540d1ff962c",
+      "sourceSha256": "c744261fb3df83e3f9cb8f993d4323a94113d7db4335206b330131677f11812e",
       "shader": "shaders/omni-gfx/antialias/antialias.glsl",
-      "glslSha256": "c356f811fb2ebf71e70d11e0f18fdc3bb20b0d4111d5723477a2058ba0028434",
+      "glslSha256": "4eb2a87455e7e37688be036ec8b6ea0c45b4a1f1b2c0abc54d30cc4bc4a76587",
       "glslLines": 337
     },
     {
@@ -349,9 +473,9 @@
     {
       "module": "weather/weather",
       "source": "omni-gfx/src/weather/weather.slang",
-      "sourceSha256": "a2bb97501e169dd2a33272d120e83e973cd170853bec4b53507a841faba5cd41",
+      "sourceSha256": "4fcb932a0291dc50b6d11a0981192413e383f41373228363e5c47ddf7cf94f76",
       "shader": "shaders/omni-gfx/weather/weather.glsl",
-      "glslSha256": "93086c996022f796859652759f8fa9cacb65357561f6a98b0bbbab4281e7ef73",
+      "glslSha256": "38f49b187d85a1d21b1e73b8518d35103244370a17318ccb4fefb7fc34656017",
       "glslLines": 211
     },
     {

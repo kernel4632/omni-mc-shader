@@ -231,8 +231,8 @@ float ogxCumulusShadowTex(float2 coord, OgxCumulusMedia media, float3 worldLight
     float3 groundPos = float3(coord.x + media.camera_position.x, 0.0, coord.y + media.camera_position.z); // 地面点。
     float thickness = media.altitude.y - media.altitude.x; // 云层厚度。
     float invLightY = 1.0 / max(worldLight.y, 0.05); // 低阳时限制投影距离。
-    vec3 samplePos = groundPos + worldLight * ((media.altitude.x + thickness * 0.25) * invLightY); // 投到云层下段。
-    vec4 cloudPos = ogxCumulusSetPos(samplePos, media);
+    float3 samplePos = groundPos + worldLight * ((media.altitude.x + thickness * 0.25) * invLightY); // 投到云层下段。
+    float4 cloudPos = ogxCumulusSetPos(samplePos, media);
     float cloudDensity = ogxCumulusSampleDensity(cloudPos, media, false, media.coverage, baseNoise, baseNoise, curlNoise,
         baseScale, coverageOffset, detailScale, detailStrength).y; // 下段密度。
     samplePos = groundPos + worldLight * ((media.altitude.x + thickness * 0.50) * invLightY); // 再往上一段。

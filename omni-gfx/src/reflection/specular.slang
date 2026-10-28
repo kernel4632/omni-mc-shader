@@ -105,7 +105,7 @@ float ogxEclipseGetReflectionVisibility(float f0, float roughness, float roughne
 }
 
 // 高光反射主函数：背景反射、环境反射、太阳 GGX 与手持光 GGX 的合成。
-vec3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 NplayerPos, float3 lightVec,
+float3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 NplayerPos, float3 lightVec,
     float2 noise, float3 flatNormal, float3 normal, float roughness, float f0, float3 albedo,
     float3 diffuseLighting, float3 lightColor, float lightmap, bool isHand, bool isMetalPass,
     float3 backgroundReflection, float3 sunlightColor, float sunSpecularMultiplier,
@@ -146,11 +146,11 @@ vec3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Npla
     float3 specular = diffuseLighting; // 高光结果。
     float visibility = ogxEclipseGetReflectionVisibility(f0, roughness, roughnessThreshold); // 可见度。
     float backgroundReflectMask = lightmap; // 背景遮罩。
-    vec4 environmentReflection = vec4(0.0); // 环境反射。
-    vec3 backgroundTint = float3(1.0); // 背景染色。
+    float4 environmentReflection = float4(0.0); // 环境反射。
+    float3 backgroundTint = float3(1.0); // 背景染色。
     if (visibility < 1.0) // 只在需要时算反射。
     {
-        vec3 darkened = isMetal ? diffuseLighting * (1.0 - lightmap) : diffuseLighting; // 金属压暗。
+        float3 darkened = isMetal ? diffuseLighting * (1.0 - lightmap) : diffuseLighting; // 金属压暗。
         if (backgroundEnabled) specular = lerp(darkened, backgroundReflection, backgroundReflectMask); // 背景反射。
         if (ssrEnabled) // 屏幕空间反射。
         {
@@ -166,13 +166,13 @@ vec3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Npla
     }
     if (sunSpecularMultiplier > 0.0) // 太阳高光。
     {
-        vec3 lightSourceReflection = backgroundReflectMask * sunSpecularMultiplier * sunlightColor
+        float3 lightSourceReflection = backgroundReflectMask * sunSpecularMultiplier * sunlightColor
             * ogxEclipseGgx(normal, -NplayerPos, lightVec, roughness, reflectance, metalAlbedoTint); // GGX。
         specular += lightSourceReflection * (1.0 - environmentReflection.a); // 环境反射占用后剩下的部分。
     }
     if (flashlightIntensity > 0.0) // 手电高光。
     {
-        vec3 flashLightReflection = flashlightColor * flashlightIntensity
+        float3 flashLightReflection = flashlightColor * flashlightIntensity
             * ogxEclipseGgx(normal, -normal, -normal, roughness, reflectance, metalAlbedoTint); // 参考实现的手电方向近似。
         specular += flashLightReflection;
     }
@@ -202,7 +202,7 @@ float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, floa
     f0 = f0 == 0.0 ? 0.02 : f0; // 默认介电常数。
     bool isMetal = f0 > 229.5 / 255.0; // 金属判定。
     float3x3 basis = ogxEclipseFrisvad(normal); // 切线基。
-    float3 viewDir = -NplayerPos * basis; // 转到切线空间。
+    float3 viewDir = float3(dot(basis[0], -NplayerPos), dot(basis[1], -NplayerPos), dot(basis[2], -NplayerPos)); // 转到切线空间。
     float3 reflectedVector = reflect(NplayerPos, normal); // 理想反射。
     float VdotN = dot(-normalize(viewDir), float3(0.0, 0.0, 1.0)); // 视线与法线。
     float shlickFresnel = ogxEclipseShlickFresnelRoughness(VdotN, roughness); // 粗糙菲涅耳。
@@ -230,7 +230,7 @@ float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, floa
     }
     float3 specular = diffuseLighting; // 高光结果。
     float visibility = ogxEclipseGetReflectionVisibility(f0, roughness, roughnessThreshold); // 可见度。
-    vec4 environmentReflection = vec4(0.0); // 环境反射。
+    float4 environmentReflection = float4(0.0); // 环境反射。
     float backgroundReflectMask = lightmap; // 背景遮罩从光照图开始。
     if (visibility < 1.0) // 只在需要时算反射。
     {
@@ -248,10 +248,10 @@ float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, floa
         specular = lerp(darkened, specular, F0); // 菲涅耳混合。
         specular = lerp(specular, darkened, visibility); // 可见度回退。
     }
-    vec3 lightSourceReflection = backgroundReflectMask * sunSpecularMultiplier * lightColor
+    float3 lightSourceReflection = backgroundReflectMask * sunSpecularMultiplier * lightColor
         * ogxEclipseGgx(normal, -NplayerPos, lightVec, roughness, reflectance, metalAlbedoTint); // 太阳 GGX。
     specular += lightSourceReflection * (1.0 - environmentReflection.a);
-    vec3 flashLightReflection = flashLightColor * flashLightStuff.a
+    float3 flashLightReflection = flashLightColor * flashLightStuff.a
         * ogxEclipseGgx(normal, -flashLightStuff.xyz, -flashLightStuff.xyz, roughness, reflectance, metalAlbedoTint); // 手电 GGX。
     specular += flashLightReflection;
     if (handHeldLights && !isHand && firstPersonCamera) // 手持光在反射里的高光。

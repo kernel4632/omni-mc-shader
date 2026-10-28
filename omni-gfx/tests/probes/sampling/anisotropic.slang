@@ -4,6 +4,7 @@ Omni 通用图形库 sampling/anisotropic 模块编译探针：覆盖各向异�
 */
 Sampler2D probeTexture; // 编译期纹理句柄，由调用方绑定。
 
+#include "../slang_compat.slang"
 #include "../../../src/sampling/anisotropic.slang"
 
 [shader("fragment")]

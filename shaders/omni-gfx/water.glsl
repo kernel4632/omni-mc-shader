@@ -37,6 +37,9 @@ struct OgxWater
 };
 
 // 默认水体：偏青的浅水、深蓝的深水，红光吸收最快。
+
+// 波法线、菲涅尔、吸收与岸边，具体实现在子文件。
+// 子文件：water/waves.slang。
 OgxWater ogxWaterDefault()
 {
     OgxWater water; // 先声明再填写字段。
@@ -263,6 +266,8 @@ vec2 ogxWaterRefractionCoord(bool isWater, vec3 normal, vec3 viewPos, vec3 waveN
     return coord; // 返回采样用的屏幕坐标。
 }
 
+// 水洼、雨纹与焦散，具体实现在子文件。
+// 子文件：water/rain.slang。
 // 水洼覆盖：只有湿度超过噪声阈值的地方才积水，五次方让边缘收得很快。
 float ogxPuddleCoverage(float halfWet, float noise, float size)
 {
@@ -396,6 +401,8 @@ struct OgxOceanWaves
     float angleStep; // 每层方向角增量，让各层方向错开。
 };
 
+// 海浪、泡沫与凹凸法线，具体实现在子文件。
+// 子文件：water/ocean.slang。
 // 默认参数：iterationT 海洋扩展的常数，调用方只改真正要变的那几个字段。
 OgxOceanWaves ogxOceanWavesDefault()
 {

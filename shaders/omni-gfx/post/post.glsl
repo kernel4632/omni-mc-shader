@@ -28,6 +28,10 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 #include "/omni-gfx/sampling.glsl"
 #include "/omni-gfx/shadow/shadow.glsl"
 // 十三样本降采样：中心小、四角大，权重和为四，输出乘四分之一保持亮度。
+
+// 泛光、调色与屏幕图案，具体实现在子文件。
+// 子文件：post/post/bloom.slang。
+// 泛光降采样：先做四点盒式取样，再转换到线性颜色。
 vec3 ogxBloomDownsample(sampler2D source, vec2 coord, vec2 texel)
 {
     vec3 blur = ogxCurveToLinear3(textureLod(source, coord, 0.0).rgb) * 0.125; // 中心样本。
@@ -191,6 +195,8 @@ float ogxScreenDepthFromLinearDepth(float depth, mat4 projectionInverse)
     return depth * 0.5 + 0.5; // 再转回零到一。
 }
 
+// 景深、散景与光圈，具体实现在子文件。
+// 子文件：post/post/dof.slang。
 // 读一个坐标的米制深度；`useDh` 为真且近景没有几何时改读远景深度，再统一到近景尺度。
 // 为什么把下限夹在换米制之前：近处深度趋近于零时薄透镜公式会爆炸，先夹屏幕深度最稳。
 float ogxDofLinearDepth(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projectionInverse,
@@ -469,6 +475,8 @@ vec4 ogxDepthOfField(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
     return vec4(ogxLinearToCurve3(dof), ogxScreenDepthFromLinearDepth(blendedDepth, projectionInverse)); // 返回颜色与换回的屏幕深度。
 }
 
+// 动态模糊、曝光分块与眩光，具体实现在子文件。
+// 子文件：post/post/effects.slang。
 // 相机动态模糊：沿两帧之间的屏幕位移，在历史画面上取一串样本求平均。
 // 为什么只做相机运动：没有实体速度缓冲，硬算会把静止物体也拖出鬼影，所以只处理整屏位移。
 vec3 ogxMotionBlur(sampler2D colorTexture, vec2 coord, ivec2 texel, vec2 pixel, vec2 velocity,

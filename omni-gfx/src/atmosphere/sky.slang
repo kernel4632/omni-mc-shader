@@ -35,7 +35,7 @@ float2 ogxEclipseSphereMap(float2 uv)
     float radius = dot(position, position); // 到中心的距离平方。
     if (radius > 1.0) return float2(0.0); // 圆外没有球面方向。
     float z = sqrt(1.0 - radius); // 球面上的第三分量。
-    float longitude = atan(position.x, z); // 经度。
+    float longitude = atan2(position.x, z); // 经度。
     float latitude = acos(position.y); // 纬度。
     float u = (longitude + OGX_PI) / (2.0 * OGX_PI); // 经度映射到零到一。
     float v = latitude / OGX_PI; // 纬度映射到零到一。
@@ -126,7 +126,7 @@ float4 ogxEclipseBicubicTextureOffset(Sampler2D tex, float2 uv, float noise, flo
 // Eclipse 球面方向转等距柱状坐标：经度用负方向，纬度用高度角。
 float2 ogxEclipseSphereToCarte(float3 dir)
 {
-    float lonlat = clamp(atan(-dir.x, -dir.z), -OGX_PI, OGX_PI); // 经度。
+    float lonlat = clamp(atan2(-dir.x, -dir.z), -OGX_PI, OGX_PI); // 经度。
     return float2(lonlat * (0.5 / OGX_PI) + 0.5, asin(dir.y) * (1.0 / OGX_PI) + 0.5); // 映射到零到一。
 }
 

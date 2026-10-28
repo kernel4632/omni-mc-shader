@@ -96,7 +96,7 @@ float3 ogxLensFlare(float2 texCoord, float2 sunCoord, float aspectRatio, float p
         float2 v = coord - sunPos; // 到太阳的屏幕向量。
         float dist = length(v); // 距离。
         float glareDist = dist * 13.0 / fovFactor; // 按视野归一化。
-        float phase = atan(v.y, v.x) + 0.131; // 方向角加固定相位。
+        float phase = atan2(v.y, v.x) + 0.131; // 方向角加固定相位。
         float glare = 2.0 - clamp(glareDist, 0.0, 1.0) + sin(phase * 12.0) * clamp(glareDist * 2.5 - 0.2, 0.0, 1.0); // 放射条纹。
         glare = glare * glare; // 平方让亮纹更集中。
         glareDist = glareDist * glareDist; // 距离平方。

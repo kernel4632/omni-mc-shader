@@ -23,6 +23,10 @@ Omni 通用图形库颜色模块：线性颜色、亮度、伽马、强光压缩
 // 数学模块提供亮度权重、夹紧与编码函数。
 #include "/omni-gfx/math.glsl"
 // 三列矩阵乘向量：GLSL 的矩阵乘向量就是三列分别乘分量再相加，这里照同一顺序展开。
+
+// 伽马、基础色调映射与白平衡，具体实现在子文件。
+// 子文件：color/tonemap.slang。
+// 矩阵按列加权：三列分别乘向量的三个分量，避免依赖矩阵行列约定。
 vec3 ogxApplyColumns(vec3 c0, vec3 c1, vec3 c2, vec3 v)
 {
     return c0 * v.x + c1 * v.y + c2 * v.z;
@@ -295,6 +299,8 @@ float ogxLuminanceRec601(vec3 color) { return dot(color, vec3(0.299, 0.587, 0.11
 // 单独命名，避免和宿主层已有的 `curve` 宏展开冲突。
 vec3 ogxEclipseCurve(vec3 x) { return 1.0 - x / (1.0 + x); }
 
+// Eclipse，具体实现在子文件。
+// 子文件：color/agx.slang。
 // Eclipse 全范围 Reinhard：白点 10、提亮 0.5，保留完整有理式。
 // Reinhard 完整版：按最大通道压缩，保留色相。
 vec3 ogxTonemapReinhardFull(vec3 color)

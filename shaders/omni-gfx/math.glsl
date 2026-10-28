@@ -36,6 +36,10 @@ const float OGX_GOLDEN_ANGLE = 2.39996322973;
 #define OGX_CLAMP01(value) clamp((value), 0.0, 1.0)
 
 // 把值夹到零到一，按标量和三种常用向量分别重载，GLSL 侧同样是函数重载。
+
+// 标量、矩阵与基础工具，具体实现在子文件。
+// 子文件：math/basics.slang。
+// 基础标量工具：夹紧、亮度、符号、长度与插值，供所有模块复用。
 float ogxSaturate(float x) { return clamp(x, 0.0, 1.0); }
 vec2 ogxSaturate(vec2 x) { return clamp(x, vec2(0.0), vec2(1.0)); }
 vec3 ogxSaturate(vec3 x) { return clamp(x, vec3(0.0), vec3(1.0)); }
@@ -68,6 +72,8 @@ float ogxLengthSquared(vec3 v) { return dot(v, v); }
 float ogxLengthSquared(vec2 v) { return dot(v, v); }
 
 // 取倒数长度：与 Eclipse `rcp_length` 相同，直接 inversesqrt(dot(v,v))；参考不接受零向量。
+// 为什么用 Slang 的平方根倒数名字：生成器会把它换成 GLSL 的倒数平方根；
+// 若直接写 GLSL 名字，Slang 探针会报未定义标识符。
 float ogxSafeInvLength(vec3 v) { return inversesqrt(dot(v, v)); }
 // 二分量版本，零向量同样退回零。
 float ogxSafeInvLength(vec2 v) { float d = dot(v, v); return d > 1e-12 ? 1.0 / sqrt(d) : 0.0; }
@@ -308,6 +314,8 @@ vec3 ogxDecodeNormalTex(vec3 texNormal)
     return normal;
 }
 
+// 材质、黑体与光线求交，具体实现在子文件。
+// 子文件：math/shading.slang。
 // 沃尔特 GGX 分布：粗糙度越大，高光越散。
 float ogxDistributionGGX(float NdotH, float roughness)
 {
@@ -466,6 +474,8 @@ float ogxMiePhase(float g, float nu)
     return k * (1.0 + nu * nu) * pow(1.0 + gg - 2.0 * g * nu, -1.5);
 }
 
+// 抖动表、切线基与颜色图案，具体实现在子文件。
+// 子文件：math/pattern.slang。
 // 交错梯度噪声：一个像素一个值，适合做抖动，常数来自原始论文。
 float ogxInterleavedGradientNoise(vec2 coordinate)
 {
@@ -576,6 +586,8 @@ void ogxDoNightEye(inout vec3 color)
     color = mix(color, luma * vec3(0.7771, 1.0038, 1.6190), vec3(0.5)); // 偏蓝亮度与原色各占一半。
 }
 
+// 纹理过滤、空间扭曲与随机采样，具体实现在子文件。
+// 子文件：math/filter.slang。
 // 双线性取像素：自己取四个相邻纹素再插值，不依赖硬件的线性过滤。
 // 为什么不用 `SampleLevel`：像素画风格的月亮贴图会把硬件过滤设成最近邻，画面上出现锯齿；
 // 按纹素中心取四次再按小数偏移插值，既保留最近邻的锐利，又能随屏幕坐标平滑移动。
@@ -768,7 +780,7 @@ float ogxRayleighPhaseElek(float cosTheta)
 // 为什么不用递归拜尔函数：递归构造出的是另一张矩阵，和参考的 16 项表不同。
 float ogxEclipseBayerDither(vec2 pixel)
 {
-    float bayer[16]; // ????? 4?4 ????????? GLSL 330?
+    float bayer[16]; // 参考实现的 4×4 表。
     bayer[0] = 0.0/16.0;
     bayer[1] = 8.0/16.0;
     bayer[2] = 2.0/16.0;
@@ -785,8 +797,8 @@ float ogxEclipseBayerDither(vec2 pixel)
     bayer[13] = 7.0/16.0;
     bayer[14] = 13.0/16.0;
     bayer[15] = 5.0/16.0; // 参考实现的 4×4 表。
-    int x = int(mod(pixel.x, 4.0)); // 横向格。
-    int y = int(mod(pixel.y, 4.0)); // 纵向格。
+    int x = int(ogxMod(pixel.x, 4.0)); // 横向格。
+    int y = int(ogxMod(pixel.y, 4.0)); // 纵向格。
     return bayer[x + y * 4]; // 按行优先取表。
 }
 

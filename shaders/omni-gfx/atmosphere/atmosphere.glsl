@@ -39,6 +39,9 @@ struct OgxAtmosphere
 };
 
 // 地球参数：海平面半径六千三百六十公里，层顶八十公里，数值与旧库一致。
+
+// 行星大气、密度与单次散射，具体实现在子文件。
+// 子文件：atmosphere/atmosphere/scattering.slang。
 OgxAtmosphere ogxAtmosphereEarth()
 {
     OgxAtmosphere air; // 先声明再逐项填写，Slang 与 GLSL 都支持这种写法。
@@ -261,6 +264,8 @@ vec3 ogxAerialPerspective(OgxAtmosphere air, float cameraAltitude, vec3 viewDire
     return max(scattered, vec3(0.0)); // 返回这段空气的散射色。
 }
 
+// 太阳圆盘、球面求交与星场，具体实现在子文件。
+// 子文件：atmosphere/atmosphere/sun.slang。
 // 太阳圆盘：视线越接近太阳方向越亮，边缘用平滑曲线收口。
 float ogxSunDisc(vec3 viewDirection, vec3 sunDirection, float size, float hardness)
 {
@@ -462,6 +467,8 @@ float ogxStarsColored(vec3 viewPos, float brightness, float amount, out vec3 sta
     return 75.0 * brightness * exp(s * -20.0 * (1.0 / amount)); // 系数与 Eclipse 相同。
 }
 
+// 天空映射、云图与月盘，具体实现在子文件。
+// 子文件：atmosphere/atmosphere/mapping.slang。
 // 把视线方向绕太阳轴旋转对齐天球：罗德里格旋转公式，太阳方向由调用方传入。
 // 这样星场会跟着太阳的年周期转，而不是固定在天球上。
 vec3 ogxAlignToSunAxis(vec3 worldDir, vec3 sunVector)
@@ -607,6 +614,8 @@ vec3 ogxRainbow(vec3 color, vec3 direction, vec3 sunDirection, float wetness, fl
     return color + spectrum * band * wetness * (1.0 - wetness) * smoothstep(0.0, 0.1, direction.y) * strength; // 只在雨停后仍湿润时出现。
 }
 
+// 行星 BRDF 与 Eclipse 天空近似，具体实现在子文件。
+// 子文件：atmosphere/atmosphere/planet.slang。
 // 钱德拉塞卡近似：各项同性散射的倍增因子，反照率越高、余弦越大越亮。
 vec3 ogxChandrasekharH(vec3 albedo, float a)
 {

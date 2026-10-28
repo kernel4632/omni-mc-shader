@@ -80,14 +80,14 @@ void ogxEclipseTraceWsr(inout OgxEclipseRayJob job, Usampler3D voxelIds, Sampler
 }
 
 // 环境反射：屏幕空间追踪加历史重投影，天空回退由调用方在 `backgroundReflection` 里处理。
-vec4 ogxEclipseGetEnvironmentReflections(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
+float4 ogxEclipseGetEnvironmentReflections(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
     float3 viewPos, float2 noise, bool isHand, float roughness, inout float backgroundReflectMask,
     inout float3 backgroundTint, bool isEyeInWater, float quality, Sampler2D sceneTexture, Sampler2D depthTexture,
     float4x4 projection, float4x4 projectionInverse, float4x4 modelView, float4x4 modelViewInverse,
     float4x4 previousProjection, float4x4 previousModelView, float nearPlane, float farPlane,
     float3 cameraDelta, float renderScale, float2 texelSize, float usePhotonics)
 {
-    vec4 reflection = vec4(0.0); // 反射结果。
+    float4 reflection = float4(0.0); // 反射结果。
     float reflectionLength = 0.0; // 反射长度。
     quality = quality > 0.0 ? quality : 30.0; // 参考实现的默认前向 SSR 质量。
     if (usePhotonics > 0.5) // Photonics 路径。
@@ -102,7 +102,7 @@ vec4 ogxEclipseGetEnvironmentReflections(float3 reflectedVector, float3 flatNorm
     if (raytracePos.z > 1.00001) return reflection; // 没命中。
     reflectionLength = min(max(reflectionLength - 0.1, 0.0) / 0.9, 1.0); // 参考实现的长度重整。
     float lod = lerp(0.0, 6.0 * (1.0 - exp(-15.0 * sqrt(roughness))), 1.0 - pow(1.0 - reflectionLength, 5.0)); // 粗糙度决定层级。
-    vec3 previousPosition = ogxToWorldSpace(ogxToScreenSpace(raytracePos, projectionInverse), modelViewInverse) + cameraDelta; // 历史位置。
+    float3 previousPosition = ogxToWorldSpace(ogxToScreenSpace(raytracePos, projectionInverse), modelViewInverse) + cameraDelta; // 历史位置。
     previousPosition = ogxMatrix3MulPoint(float3x3(previousModelView), previousPosition) + ogxMatrixTranslation(previousModelView);
     previousPosition.xy = ogxProject(previousProjection, previousPosition).xy / -previousPosition.z * 0.5 + 0.5; // 历史屏幕位置。
     if (previousPosition.x > 0.0 && previousPosition.y > 0.0 && previousPosition.x < 1.0 && previousPosition.y < 1.0)
@@ -157,16 +157,16 @@ float3 ogxEclipseRayTraceSpeculars(float3 dir, float3 position, float dither, fl
 
 // 体素反射的当前参考实现：追踪主体在原程序里被整段注释，只剩背景遮罩与清空颜色。
 // 保留参数与输出，后续恢复追踪时调用方不用改接口。
-vec4 ogxEclipseVoxelReflection(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
+float4 ogxEclipseVoxelReflection(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
     float noise, inout float backgroundReflectMask, float3 directLightColor, float3 ambientLightColor)
 {
     backgroundReflectMask = 1.0; // 参考实现固定回到背景反射。
-    return vec4(0.0); // 参考实现的当前颜色输出。
+    return float4(0.0); // 参考实现的当前颜色输出。
 }
 
 // 严格参考签名的体素反射入口：参考正文的追踪整段被注释，实际只算光源颜色并返回零。
 // `lightSourceColor` 与 `averageSkyColor` 是参考全局 SSBO 的显式输入，缩放常数照原样保留。
-vec4 ogxEclipseVoxelReflectionExact(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
+float4 ogxEclipseVoxelReflectionExact(float3 reflectedVector, float3 flatNormal, float3 normal, float3 origin,
     float noise, inout float backgroundReflectMask, float3 lightSourceColor, float3 averageSkyColor,
     float ambientBrightness)
 {
@@ -180,16 +180,16 @@ vec4 ogxEclipseVoxelReflectionExact(float3 reflectedVector, float3 flatNormal, f
 
 // WSR 的 LPV 体积雾：沿视线指数步进，用三维密度图与 LPV 图累积照明。
 // 参考实现直接调 `cloudVol` 与 `SampleLpvLinear`；库用同样布局的三维纹理代替。
-vec4 ogxEclipseRaymarchWsrLpv(float3 origin, float3 endPos, float dither, Sampler3D densityTexture,
+float4 ogxEclipseRaymarchWsrLpv(float3 origin, float3 endPos, float dither, Sampler3D densityTexture,
     Sampler3D lpvTexture, float3 cameraOffset, float lpvSize, float fadeLength, float minDensity,
     float mult, int sampleCount, float lpvBrightness, float3 handLight, float torchAmount, bool vanillaMask)
 {
-    if (length(origin - endPos) < 0.001) return vec4(0.0, 0.0, 0.0, 1.0); // 没有长度就没有雾。
+    if (length(origin - endPos) < 0.001) return float4(0.0, 0.0, 0.0, 1.0); // 没有长度就没有雾。
     float3 rayStart = endPos - origin - cameraOffset; // 相机相对射线。
     float rayLength = length(rayStart); // 射线长度。
     rayStart *= min(rayLength, min(256.0, 1e6)) / max(rayLength, 1e-6); // 参考实现的距离上限。
     rayLength = length(rayStart);
-    vec4 color = vec4(0.0, 0.0, 0.0, 1.0); // 累积颜色与透过率。
+    float4 color = float4(0.0, 0.0, 0.0, 1.0); // 累积颜色与透过率。
     const float expFactor = 11.0; // 指数步长。
     for (int i = 0; i < sampleCount; i++) // 固定步数。
     {
@@ -228,7 +228,7 @@ float4 ogxEclipseRaymarchWsrLpvExact(float3 origin, float3 endPos, float dither,
     float lpvRayLength = length(lpvRayStart); // 射线长度。
     lpvRayStart *= min(lpvRayLength, min(256.0, farPlane)) / lpvRayLength; // 参考实现的距离上限。
     lpvRayLength = length(lpvRayStart); // 截断后的长度。
-    vec4 color = vec4(0.0, 0.0, 0.0, 1.0); // 累积颜色与透过率。
+    float4 color = float4(0.0, 0.0, 0.0, 1.0); // 累积颜色与透过率。
     const float expFactor = 11.0; // 指数步长。
     for (int i = 0; i < sampleCount; i++) // 固定样本数。
     {
@@ -260,7 +260,7 @@ float4 ogxEclipseRaymarchWsrLpvExact(float3 origin, float3 endPos, float dither,
 
 // WSR 的空气雾：按 Eclipse 参考逐行移植指数步进、阴影、云密度与大气透视。
 // 参考参数在前，相机、阴影、密度场与选项资源追加在后；默认分支不读宿主全局量。
-vec4 ogxEclipseRaymarchWsrFog(float3 origin, float3 endPos, float2 dither, float3 lightColor,
+float4 ogxEclipseRaymarchWsrFog(float3 origin, float3 endPos, float2 dither, float3 lightColor,
     float3 ambientColor, float3 averagedAmbient, int sampleCount, Sampler3D densityTexture,
     Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float3 cameraOffset,
     float3 cameraWorldPos, float3 sunVector, float farPlane, float vlSamples, float cloudShadow,
@@ -268,7 +268,7 @@ vec4 ogxEclipseRaymarchWsrFog(float3 origin, float3 endPos, float2 dither, float
     float3 mieCoefficients, float distortA, float distortB, float distortK, float shadowResolution,
     float4 lightningBoltPosition, float3 lightningEffect)
 {
-    if (length(origin - endPos) < 0.001) return vec4(0.0, 0.0, 0.0, 1.0); // 没有长度就没有雾。
+    if (length(origin - endPos) < 0.001) return float4(0.0, 0.0, 0.0, 1.0); // 没有长度就没有雾。
     float mult = vlSamples / float(sampleCount) * 1.15; // 参考按体积光样本数缩放密度。
     float3 dVWorld = endPos - origin - cameraOffset; // 相机相对的射线位移。
     float rayLength = length(dVWorld); // 射线长度。
@@ -277,17 +277,17 @@ vec4 ogxEclipseRaymarchWsrFog(float3 origin, float3 endPos, float2 dither, float
     dVWorld *= maxLength; // 截断到远裁剪面。
     float dL = length(dVWorld) / 8.0; // 每段长度。
     const float expFactor = 11.0; // 指数步长。
-    vec3 color = float3(0.0); // 累积颜色。
+    float3 color = float3(0.0); // 累积颜色。
     float totalAbsorbance = 1.0; // 总透过率。
-    vec3 atmosphereAbsorbance = float3(1.0); // 大气透过率。
+    float3 atmosphereAbsorbance = float3(1.0); // 大气透过率。
     float SdotV = dot(sunVector, rayDir); // 阳光与视线夹角。
     float sunPhase = ogxEclipseFogPhase(SdotV) * 5.0; // 太阳相位。
     float skyPhase = 0.5 + pow(1.0 - pow(1.0 - clamp(rayDir.y * 0.5 + 0.5, 0.0, 1.0), 2.0), 5.0) * 2.0; // 天空相位。
     float rayL = ogxRayleighPhaseElek(SdotV); // 瑞利相位。
-    vec3 rC = float3(rayleighCoefficients.x * 1e-6, rayleighCoefficients.y * 1e-5, rayleighCoefficients.z * 1e-5); // 瑞利系数按参考量级缩放。
-    vec3 mC = mieCoefficients * 1e-6; // 米氏系数按参考量级缩放。
-    vec3 skyLightPhased = ambientColor * skyPhase; // 天空光乘相位。
-    vec3 lightSourcePhased = lightColor * sunPhase; // 直射光乘相位。
+    float3 rC = float3(rayleighCoefficients.x * 1e-6, rayleighCoefficients.y * 1e-5, rayleighCoefficients.z * 1e-5); // 瑞利系数按参考量级缩放。
+    float3 mC = mieCoefficients * 1e-6; // 米氏系数按参考量级缩放。
+    float3 skyLightPhased = ambientColor * skyPhase; // 天空光乘相位。
+    float3 lightSourcePhased = lightColor * sunPhase; // 直射光乘相位。
     float inACave = 1.0 - caveDetection; // 洞穴里减少雾。
     float lightLevelZero = pow(clamp(eyeBrightness / 240.0, 0.0, 1.0), 3.0); // 天空光等级的立方。
     for (int i = 0; i < sampleCount; i++) // 固定步数。
@@ -326,12 +326,12 @@ vec4 ogxEclipseRaymarchWsrFog(float3 origin, float3 endPos, float2 dither, float
         color += (atmosphere - atmosphere * atmosphereVolumeCoeff) / (airDensity + 1e-6) * atmosphereAbsorbance; // 累积大气透视。
         atmosphereAbsorbance *= atmosphereVolumeCoeff; // 累积大气透过率。
     }
-    return vec4(color, totalAbsorbance); // 交回雾。
+    return float4(color, totalAbsorbance); // 交回雾。
 }
 
 // WSR 水下体积：按 Eclipse 参考逐行移植水吸收、焦散、方向光与闪电照明。
 // 参考参数在前，相机、阴影、噪声与选项资源追加在后；默认分支不读宿主全局量。
-vec4 ogxEclipseWsrWaterVolumetrics(float3 origin, float3 endPos, float2 dither, float3 ambient,
+float4 ogxEclipseWsrWaterVolumetrics(float3 origin, float3 endPos, float2 dither, float3 ambient,
     float3 lightSource, float3 lpv, float3 waterAbsorption, float dirtAmount, float3 dirtColor,
     float waterAltitude, float sunElevation, float bubbleScale, float time, float waveSpeed,
     float patchyBlend, Sampler2D noiseTexture, float3 sunVector, float3 cameraOffset, float3 cameraWorldPos,
@@ -339,7 +339,7 @@ vec4 ogxEclipseWsrWaterVolumetrics(float3 origin, float3 endPos, float2 dither, 
     float distortA, float distortB, float distortK, float shadowResolution, float4 lightningPosition,
     float lightningFlash)
 {
-    if (length(origin - endPos) < 0.001) return vec4(0.0, 0.0, 0.0, 1.0); // 没有长度就没有水体。
+    if (length(origin - endPos) < 0.001) return float4(0.0, 0.0, 0.0, 1.0); // 没有长度就没有水体。
     const int sampleCount = 3; // 参考实现的固定三步。
     float lightSourceCheck = float(sunElevation > 1e-5) * 2.0 - 1.0; // 太阳在地平线上时翻转云影方向。
     float3 scatterCoef = dirtAmount * dirtColor / 3.14; // 参考的脏水散射系数。
@@ -347,9 +347,9 @@ vec4 ogxEclipseWsrWaterVolumetrics(float3 origin, float3 endPos, float2 dither, 
     float rayLength = length(dVWorld); // 射线长度。
     float maxLength = min(rayLength, farPlane) / rayLength; // 距离上限的比例。
     dVWorld *= maxLength; // 截断到远裁剪面。
-    vec3 absorbance = float3(1.0); // 累积吸收。
-    vec3 vL = float3(0.0); // 累积颜色。
-    vec3 rayDir = normalize(endPos - origin); // 射线方向。
+    float3 absorbance = float3(1.0); // 累积吸收。
+    float3 vL = float3(0.0); // 累积颜色。
+    float3 rayDir = normalize(endPos - origin); // 射线方向。
     float VdotL = dot(sunVector, rayDir); // 视线与阳光方向的夹角。
     float phase = ogxEclipseFogPhase(VdotL) * 5.0; // 参考的雾相位。
     float thing = -normalize(dVWorld).y; // 垂直方向。
@@ -376,7 +376,7 @@ vec4 ogxEclipseWsrWaterVolumetrics(float3 origin, float3 endPos, float2 dither, 
         }
         sh *= cloudShadow; // 参考的云影由宿主预计算成标量。
         float bubble = exp2(-10.0 * clamp(1.0 - length(d * dVWorld) / bubbleScale, 0.0, 1.0)); // 气泡形状。
-        float caustics = max(max(ogxWaterBumpCaustics(progressW, sunVector, -(progressW.y - waterAltitude), time, waveSpeed, patchyBlend, noiseTexture), phase * 0.5) * mix(0.5, 1.5, bubble), phase); // 参考的焦散与相位混合。
+        float caustics = max(max(ogxWaterBumpCaustics(progressW, sunVector, -(progressW.y - waterAltitude), time, waveSpeed, patchyBlend, noiseTexture), phase * 0.5) * lerp(0.5, 1.5, bubble), phase); // 参考的焦散与相位混合。
         float3 sunAbsorbance = exp(-waterAbsorption * (distanceFromWaterSurface / abs(sunVector.y))); // 阳光穿过水面的吸收。
         float3 waterAbsorbance = exp(-waterAbsorption * (distanceFromWaterSurface + thing)); // 水体吸收。
         float3 direct = lightSource * sh * phase * caustics * sunAbsorbance; // 直射。
@@ -393,7 +393,7 @@ vec4 ogxEclipseWsrWaterVolumetrics(float3 origin, float3 endPos, float2 dither, 
         vL += (light - light * volumeCoeff) / waterAbsorption * absorbance; // 累积散射。
         absorbance *= volumeCoeff; // 累积吸收。
     }
-    return vec4(vL, dot(absorbance, float3(0.333333))); // 交回水体颜色与透过率。
+    return float4(vL, dot(absorbance, float3(0.333333))); // 交回水体颜色与透过率。
 }
 
 #endif

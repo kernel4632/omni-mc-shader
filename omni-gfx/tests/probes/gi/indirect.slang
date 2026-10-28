@@ -2,6 +2,7 @@
 Eclipse 间接光模块编译探针：调用余弦半球采样、切线空间转换与反射可见度，覆盖主要纯计算入口。
 调用位置：`omni-gfx/build.py spirv` 逐模块编译；探针只验证类型与函数调用，不进入光影包。
 */
+#include "../slang_compat.slang"
 #include "../../../src/gi/indirect.slang"
 
 [shader("fragment")]

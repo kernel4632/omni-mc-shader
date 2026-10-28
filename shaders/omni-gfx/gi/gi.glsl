@@ -45,6 +45,10 @@ struct OgxGiView
 };
 
 // 环境遮蔽多弹射：底色越亮补光越多，避免墙角完全变黑。
+
+// 地平线遮蔽、反射阴影图与 GTAO，具体实现在子文件。
+// 子文件：gi/gi/ao.slang。
+// 环境光遮蔽的多重反弹近似：用反照率补偿被遮住的间接光。
 vec3 ogxAoMultiBounce(float ao, vec3 albedo)
 {
     vec3 a = 2.0404 * albedo - 0.3324; // 一次项系数。
@@ -383,6 +387,8 @@ float ogxItxGtao(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord,
     return ogxSaturate(mix(1.0, ao, strength)); // 按强度混向全亮。
 }
 
+// 相机速度与时间滤波，具体实现在子文件。
+// 子文件：gi/gi/temporal.slang。
 // 相机速度：区分远景与近景、手与世界，算出当前像素相对上一帧的屏幕位移。
 vec2 ogxGiCameraVelocity(vec2 coord, float depth, bool isDh, float materialIds, OgxGiView view,
     bool disableHand, bool disablePlayer, float handDepth, float playerMaterial)
@@ -560,6 +566,8 @@ vec4 ogxGiTemporalFilter(vec2 coord, ivec2 texelCoord, OgxGiView view,
     return prev; // 返回本帧要写回历史图的数据。
 }
 
+// 空间滤波与降噪，具体实现在子文件。
+// 子文件：gi/gi/spatial.slang。
 // 七乘七邻域偏移按行列下标现算：x 从负三到三，y 同样，按行优先排列。
 // 全局光空间滤波：在七乘七邻域里按法线与深度加权平均，抑制半分辨率带来的噪点。
 vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGiView view, sampler2D historyTexture, float renderScale)
@@ -573,7 +581,7 @@ vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGi
     vec2 border = vec2(renderScale) - view.texel_size * 2.0; // 边界。
     vec2 offsetScale = view.texel_size * 4.0 * renderScale; // 邻域步长。
     // 七乘七偏移表与参考实现的数组逐项相同；显式列出而不是现算，常数集合才能逐项核对。
-    vec2 offsets[49]; // ?????????????? GLSL 330 ??????
+    vec2 offsets[49]; // 四十九个空间采样偏移，覆盖七乘七邻域。
     offsets[0] = vec2(-3.0, -3.0);
     offsets[1] = vec2(-2.0, -3.0);
     offsets[2] = vec2(-1.0, -3.0);

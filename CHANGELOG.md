@@ -1,4 +1,15 @@
 # 更新记录
+## 0.16.0-dev.10
+
+Slang 探针全通过与大文件拆分：48 个模块全部编译成 SPIR-V，八个过长主体拆进同名文件夹，生成物、探针与选项数量不变。
+
+- Slang 兼容：`math` 的 `inversesqrt` 改 `rsqrt`，`gi` 三处同步；`math` 的 GLSL 取模改 `ogxMod`；`fog` 的 `mix` 改 `lerp`、`texelFetch` 改纹理取格；补一维/三维无符号纹理别名与 `inverse`、`textureSize` 探针兼容；修复 `vec` 类型、矩阵乘向量、向量比较、两参数 `atan`、`ddx`/`ddy` 等 Slang 不接受的写法。生成器同步补 `atan2`、`ddx`、`ddy` 的等价降级。
+- 拆分：`cloud/eclipse` 拆成 shape、shadow、lighting、march、layers、exact 六个子文件；`math` 四个、`atmosphere/atmosphere` 四个、`post/post` 三个、`gi/gi` 三个、`water` 三个、`color` 两个、`fog/fog` 两个。主文件保留模块入口与中文引用说明，子文件不单独生成 GLSL，也不单独编译探针。
+- 生成器：`generate.py` 支持子文件内联，`manifest.json` 记录每个子文件的摘要；改子文件同样会让 `check` 报过期。`.gitignore` 覆盖嵌套的 SPIR-V 产物。
+- README：更新到当前 48 个模块、户外 23.0 毫秒与光影验证场景 15.76 毫秒的帧时和当前命令，删除“阶段 0–3”旧说法；明确许可证尚未确定，发布前必须补齐。
+- 数量：选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；严格 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 不变；手写核心 18883 行，上限按拆分后的引用说明调到 18900。
+- 验证提速：严格对照的常量替换从逐个名字扫描改为一次正则替换，同一份参考源码的 `strict-parity` 从十分钟级降到约五分半，判定口径不变。
+- 验证：`generate` 生成 48 个模块、49 个文件；`spirv` 48 个探针全部通过；`check`、`strict-parity`、`profiles`、`audit`、`verify`（160 个测试）、`compile`（280 组唯一程序 0 错误）通过。未启动 Minecraft，游戏内画面、菜单、性能与其他显卡仍未验证。
 ## 0.16.0-dev.9
 
 结构重构第四批：`omni-gfx/src` 按实际效果重新组织，来源包名不再充当顶层模块。

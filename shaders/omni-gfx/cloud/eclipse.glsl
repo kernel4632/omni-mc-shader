@@ -59,6 +59,10 @@ struct OgxEclipseCloudSettings
 };
 
 // 二维哈希：把格坐标打散成两个零到一的随机数。
+
+// 哈希、噪声与五层云形状，具体实现在子文件。
+// 子文件：cloud/eclipse/shape.slang。
+// 二维哈希：把格坐标打散成两个零到一的随机数，供云形状使用。
 vec2 ogxEclipseHash2(vec2 p)
 {
     vec3 p3 = fract(vec3(p.x, p.y, p.x) * vec3(0.1031, 0.1030, 0.0973)); // 三个不同频率的搅动。
@@ -295,6 +299,8 @@ vec2 ogxEclipseGetCumulonimbusShape(OgxEclipseCloudSettings s, int lod, vec3 pos
     return vec2(0.0, isLarge); // 没有形状。
 }
 
+// 闪电、行星与云影，具体实现在子文件。
+// 子文件：cloud/eclipse/shadow.slang。
 // 闪电位置：在云层半径内取一个随机方向，并确认那里确实有积雨云。
 vec3 ogxEclipseGetLightningPosition(OgxEclipseCloudSettings s, float minHeight, float maxHeight, float cumulonimbusScale,
     vec3 cameraPos, sampler2D noiseTexture)
@@ -357,6 +363,8 @@ vec3 ogxEclipseGetRayOrigin(vec3 rayStartPos, vec3 cameraPos, float dither, floa
     return rayStartPos * dither + cameraPos + (rayStartPos / length(rayStartPos / cloudDist)) * flip; // 压到平面并加抖动。
 }
 
+// 云相函数、散射与光照，具体实现在子文件。
+// 子文件：cloud/eclipse/lighting.slang。
 // 云的相函数：按 `mode` 选择 Henyey-Greenstein、Cornette-Shanks 或 HG-Draine。
 // 按云相位模式组合前向与背向散射，决定云边缘的透光方向。
 float ogxEclipsePhaseCloud(float x, float g, int mode)
@@ -432,6 +440,8 @@ vec3 ogxEclipseGetCloudLighting(int layerIndex, float shape, float shapeFaded, f
     return indirectScattering + directScattering; // 合成。
 }
 
+// 主体积云步进与简化版本，具体实现在子文件。
+// 子文件：cloud/eclipse/march.slang。
 // 单层云的步进：参考实现的主循环，逐层处理平面云与积云两条路径。
 // `cloudPlaneDistance` 的 `x` 是最近可见云的距离，`y` 是混合权重；由调用方按层合并。
 vec4 ogxEclipseRaymarchCloud(OgxEclipseCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
@@ -580,7 +590,7 @@ vec4 ogxEclipseRaymarchCloud(OgxEclipseCloudSettings s, int layerIndex, int samp
                     if (s.lightningEnabled > 0 && (layerIndex == 2 || s.thunderStrength > 0.0)) // 积雨云闪电。
                     {
                         float lightningDist = length(newPos - lightningPos); // 到闪电位距离。
-                        if (lightningDist < 6000.0 && lightningPos != vec3(0.0)) // 在照明范围内。
+                        if (lightningDist < 6000.0 && length(lightningPos) > 0.0) // 在照明范围内。
                         {
                             float lightningIntensity = smoothstep(6000.0, 50.0, lightningDist) * smoothstep(0.15, 1.0, shapeWithDensity)
                                 * s.lightningFlash; // 距离与密度权重。
@@ -646,7 +656,7 @@ vec4 ogxEclipseGetVolumetricClouds(OgxEclipseCloudSettings s, vec3 viewPos, vec2
         sampledSkyCol = mix(sampledSkyCol, indirectLightCol, heightRelativeToClouds); // 与参考相同的混合。
     }
     sampledSkyCol *= skyBrightness; // 天空亮度。
-    vec3 playerPos = (modelViewInverse * vec4(viewPos, 1.0)).xyz; // 相机相对世界位置。
+    vec3 playerPos = ogxMatrixMulPoint4(modelViewInverse, vec4(viewPos, 1.0)).xyz; // 相机相对世界位置。
     float maxLength = min(length(playerPos), farPlane) / max(length(playerPos), 1e-4); // 限制到远平面。
     playerPos *= maxLength; // 截断。
     float startDistance = length(playerPos); // 到像素的距离。
@@ -924,6 +934,8 @@ vec4 ogxEclipseGetVolumetricCloudsSimple(OgxEclipseCloudSettings s, vec2 dither,
     return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四个透过率。
 }
 
+// 云层密度、形状层与采样，具体实现在子文件。
+// 子文件：cloud/eclipse/layers.slang。
 // 三维噪声采样：把云坐标折到 512 见方噪声图的一列，再按纵向小数插值两行。
 // 参考把这一步写成独立函数；库版本把噪声图显式传入，算式与常数逐项保留。
 float ogxEclipseDensityAtPos(vec3 pos, sampler2D noiseTexture)
@@ -1242,6 +1254,8 @@ float ogxEclipseCloudScatteringSamples(int layerIndex, vec3 rayPosition, vec3 su
     return shadow; // 交回云内遮挡量。
 }
 
+// 精确步进的吸收与透过率，具体实现在子文件。
+// 子文件：cloud/eclipse/exact.slang。
 // Eclipse 低成本云步进：只累计透过率，不做光照，供云影与远景使用。
 // 参考签名给层号、步数、位置与方向、抖动与上下界；噪声、天气与覆盖率显式追加。
 float ogxEclipseCloudAbsorbanceSimple(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,

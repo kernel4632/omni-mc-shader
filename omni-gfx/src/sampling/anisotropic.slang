@@ -20,7 +20,7 @@ float4 ogxSampleAnisotropic(Sampler2D tex, Sampler2D normals, Sampler2D specular
 {
     float2 atlasTiles = atlasSize / textureResolution; // 一张贴图在 atlas 里占几格。
     float2 tilesCoord = coord * atlasTiles; // 换到格坐标。
-    float2x2 qd = inverse(float2x2(dFdx(tilesCoord), dFdy(tilesCoord))); // 屏幕导数矩阵的逆。
+    float2x2 qd = inverse(float2x2(ddx(tilesCoord), ddy(tilesCoord))); // 屏幕导数矩阵的逆。
     qd = transpose(qd) * qd; // 逆矩阵的转置乘自身，得到椭圆核。
     float d = determinant(qd); // 行列式。
     float t = (qd[0][0] + qd[1][1]) * 0.5; // 迹的一半。

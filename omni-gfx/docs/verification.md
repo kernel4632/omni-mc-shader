@@ -411,3 +411,46 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 - 光柱已经可见，但仍是柔和体积光，不是硬边激光；把雾密度继续调高会重新把近景洗灰。
 - 水面反射是四分之一分辨率平面反射加模糊，近看比真实湖面软；石门倒影在太阳高光附近会被压亮。
 - 自动曝光平均对数亮度约 -5.2，仍靠约四倍曝光补偿把暗部抬起；画面已不再整片过曝，但离物理曝光还有差距。
+
+## 二十、Slang 探针全通过与大文件拆分（2026-10-28）
+
+本轮把 `omni-gfx` 的 48 个模块全部送入 Slang 编译器，并把八个过长主体拆进同名文件夹。生成物仍是每个模块一个 `.glsl`，探针仍是每个模块一个 `.slang`，模块数量、选项数量与程序数量都不变。
+
+### 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `python omni-gfx/build.py generate` | 48 个模块、49 个文件、GLSL 15521 行 |
+| `python omni-gfx/build.py spirv` | 48/48 个探针通过，编译器 2026.20 |
+| `python omni-gfx/build.py check` | 生成文件与源一致；测试世界 2 个、光影验证场景 2 个 GLSL 审计通过 |
+| `python omni-gfx/build.py strict-parity` | 505 个参考函数：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 |
+| `python omni-gfx/build.py profiles` | iterationt 15595 行、eclipse 15594 行，两份 profile 编译通过 |
+| `python build.py audit` | 526 个代码文件通过中文说明与实现审计 |
+| `python build.py verify` | 160 个测试、9 组编译探针与打包通过 |
+| `python build.py compile` | 280 组唯一程序、0 错误 |
+| `python omni-gfx/build.py count` | 手写核心 18883 行，上限 18900 |
+
+### 拆分
+
+- `cloud/eclipse.slang`：shape、shadow、lighting、march、layers、exact 六个子文件。
+- `math.slang`：basics、shading、pattern、filter 四个子文件。
+- `atmosphere/atmosphere.slang`：scattering、sun、mapping、planet 四个子文件。
+- `post/post.slang`：bloom、dof、effects 三个子文件。
+- `gi/gi.slang`：ao、temporal、spatial 三个子文件。
+- `water.slang`：waves、rain、ocean 三个子文件。
+- `color.slang`：tonemap、agx 两个子文件。
+- `fog/fog.slang`：density、end 两个子文件。
+- 拆分前后逐模块核对函数名与顶层声明：八个模块的函数数量分别为 117、59、35、40、57、28、13、34，全部一致；没有函数被重复或遗漏。
+- 生成器把子文件按源码顺序内联，`manifest.json` 的 `parts` 记录每个子文件摘要；改子文件也会被 `check` 发现。
+
+### Slang 兼容
+
+- `inversesqrt` 在 Slang 里叫 `rsqrt`；`math` 与 `gi` 的四处直接调用已改。
+- `mod` 在 Slang 里不可用；GLSL 取模语义统一走 `ogxMod`。
+- `mix`、`texelFetch`、两参数 `atan`、`dFdx`/`dFdy` 分别改用 `lerp`、纹理取格、`atan2`、`ddx`/`ddy`，生成器补等价降级。
+- 向量 `!=`/`==` 在 GLSL 返回单个布尔值、在 Slang 返回布尔向量，改成逐分量比较；矩阵乘向量按列显式展开。
+- 一维与三维无符号纹理用探针别名补 `Usampler1D` / `Usampler3D`；`inverse` 与 `textureSize` 只在探针兼容文件里补实现，不进入生成 GLSL。
+
+### 未验证
+
+没有启动 Minecraft；游戏内画面、菜单、选项切换、性能与其他显卡仍未验证。SPIR-V 只是模块编译探针，不是可运行的 Vulkan 管线。README 已写明许可证尚未确定，发布前必须补齐。

@@ -8,7 +8,7 @@
     这一步只补名字，不改模块里的算式与常数。
     输入用屏幕坐标构造，不追求画面正确，只要求类型、分支与取格写法全部走一遍。
 */
-typealias Usampler3D = Texture3D<uint4>; // 与 GLSL 的 usampler3D 等价：四通道无符号三维纹理。
+#include "../sampler_alias.slang"
 
 Usampler3D probeVoxelId; // 方块编号图，整数三维纹理，追踪的主数据。
 Sampler3D probeVoxelColor; // 颜色与打包光照图。

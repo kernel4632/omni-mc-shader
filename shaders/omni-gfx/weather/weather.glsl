@@ -195,7 +195,7 @@ void ogxYearCycleColorSeason(inout vec3 finalColor, vec3 glcolor, bool isLeaves,
     winterCol *= glcolor;
     springCol *= glcolor;
     int seasonLength = 24;
-    float yearLoop = mod(worldDay + 0.0 * float(seasonLength), float(seasonLength) * 4.0);
+    float yearLoop = ogxMod(worldDay + 0.0 * float(seasonLength), float(seasonLength) * 4.0);
     float summerTime = clamp(yearLoop, 0, float(seasonLength)) / float(seasonLength);
     float autumnTime = clamp(yearLoop - float(seasonLength), 0, float(seasonLength)) / float(seasonLength);
     float winterTime = clamp(yearLoop - float(seasonLength) * 2.0, 0, float(seasonLength)) / float(seasonLength);

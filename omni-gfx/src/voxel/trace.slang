@@ -184,9 +184,15 @@ bool ogxEclipseTraceQuarterVoxel(float3 reflectedVector, float3 invReflectedVect
         stepAxis.yz *= (1.0 - stepAxis.x); // 参考实现的轴选择。
         stepAxis.z *= (1.0 - stepAxis.y);
         quarterVoxelPos += stepAxis * stepDir; // 走一格。
-        if (clamp(quarterVoxelPos, float3(0.0), float3(side / 4)) != quarterVoxelPos) break; // 越界停止。
+        // 逐分量判断四分之一体素的边界：Slang 的向量比较返回布尔向量，不能直接当条件。
+        float maxQuarter = float(side / 4);
+        if (quarterVoxelPos.x < 0.0 || quarterVoxelPos.y < 0.0 || quarterVoxelPos.z < 0.0 ||
+            quarterVoxelPos.x > maxQuarter || quarterVoxelPos.y > maxQuarter || quarterVoxelPos.z > maxQuarter) break; // 越界停止。
         uint blockID = quarterVoxelMask.Load(int4(int3(quarterVoxelPos), 0)).r; // 读掩码。
-        if (blockID > 0u && quarterVoxelPos != originalQuarterVoxelPos) return true; // 命中非空。
+        // 逐分量比较：GLSL 的向量 != 返回单个布尔值，Slang 返回布尔向量，不能共用 any()。
+        if (blockID > 0u && (quarterVoxelPos.x != originalQuarterVoxelPos.x ||
+            quarterVoxelPos.y != originalQuarterVoxelPos.y ||
+            quarterVoxelPos.z != originalQuarterVoxelPos.z)) return true; // 命中非空。
         quarterNextDist += 4.0 * stepSizes * stepAxis - closestDist; // 推进边界。
     }
     return false; // 没有命中。
@@ -202,7 +208,9 @@ bool ogxEclipsePlaneIntersect(inout float3 currPos, float worldOffset, inout flo
     if (t > 0.0 && t < 2.0) // 只接受近处交点。
     {
         float3 hitPos = currPos + t * reflectedVector; // 交点。
-        if (all(equal(int3(voxelPos), int3(hitPos)))) // 仍在同一格。
+        // 逐分量比较：避免 GLSL 与 Slang 对向量 == 的返回值不同。
+        if (int3(voxelPos).x == int3(hitPos).x && int3(voxelPos).y == int3(hitPos).y &&
+            int3(voxelPos).z == int3(hitPos).z) // 仍在同一格。
         {
             currPos = hitPos;
             stepAxis = normal;

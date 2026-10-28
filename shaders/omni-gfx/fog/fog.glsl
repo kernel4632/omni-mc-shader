@@ -37,6 +37,9 @@ struct OgxFog
 };
 
 // 默认低空雾：贴地薄雾，密度适中，云影下会自然变暗。
+
+// 高度雾、噪声雾与沿视线积分，具体实现在子文件。
+// 子文件：fog/fog/density.slang。
 OgxFog ogxFogDefault()
 {
     OgxFog fog; // 先声明再填写字段。
@@ -265,6 +268,8 @@ float ogxNetherFogCloudVolume(vec3 pos, float time, sampler2D noiseTexture)
     return max((roofToFloor - plumes * (1.0 - erosion)) * 2.0, clamp((floorFalloff - floorPlumes * 0.5) * erosion, 0.0, 1.0)); // 两种形状取大者。
 }
 
+// 末地涡旋、群系与下界雾，具体实现在子文件。
+// 子文件：fog/fog/end.slang。
 // 末地雾形状与光源相位的提前声明：定义放在文件后半段。
 float ogxEndVortexShape(vec3 pos, float time, sampler2D noiseTexture, float noiseResolution);
 float ogxEndVortexLightPhase(vec3 pos);

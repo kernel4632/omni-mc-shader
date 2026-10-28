@@ -468,12 +468,15 @@ def evaluate_constant(expression: str, table: dict) -> list[float] | None:
     text = re.sub(r"\bTAU\b", f"({math.tau!r})", text)
     text = re.sub(r"(\d)[fFuU]\b", r"\1", text)  # 去掉 C 风格数字后缀。
     # 把已知常量名字换成数值；长名字优先，避免 A 抢先匹配 AB。
-    for name in sorted(table, key=len, reverse=True):
-        value = table.get(name)
-        if value is None:
-            continue
-        replacement = "(" + "+".join(f"({number!r})" for number in value) + ")"
-        text = re.sub(rf"\b{re.escape(name)}\b", replacement, text)
+    # 为什么合并成一次替换：逐个名字跑正则在长表达式上会反复扫描同一段文本，
+    # 严格对照要处理几十万行参考代码，单次替换能避免平方级耗时，语义保持不变。
+    known = [name for name in sorted(table, key=len, reverse=True) if table.get(name) is not None]
+    if known:
+        pattern = re.compile(r"\b(?:" + "|".join(re.escape(name) for name in known) + r")\b")
+        def replace_constant(match: re.Match) -> str:
+            value = table[match.group(0)]
+            return "(" + "+".join(f"({number!r})" for number in value) + ")"
+        text = pattern.sub(replace_constant, text)
     if re.search(r"(?<![0-9.])[A-Za-z_]\w*", text):  # 还有未知名字就不猜；科学计数法的 e 不算名字。
         unknown = set(re.findall(r"(?<![0-9.])[A-Za-z_]\w*", text)) - set(BUILTIN_MATH)
         if unknown:

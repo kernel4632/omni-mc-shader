@@ -180,7 +180,7 @@ float3 ogxEclipseCartToSphere(float2 coord)
 // 球面方向转笛卡尔纹理坐标。
 float2 ogxEclipseSphereToCart(float3 dir)
 {
-    float lonlat = atan(-dir.x, -dir.z); // 经度。
+    float lonlat = atan2(-dir.x, -dir.z); // 经度。
     return float2(lonlat / (2.0 * OGX_PI) + 0.5, 0.5 * dir.y + 0.5); // 与上一函数互逆。
 }
 
