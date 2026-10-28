@@ -1999,7 +1999,7 @@
       }
     },
     "raymarchCloudSimple": {
-      "target": "cloud/layers/march.ogxLayersCloudAbsorbanceSimple",
+      "target": "cloud/layers/march/transmittance.ogxLayersCloudAbsorbanceSimple",
       "resources": {
         "noiseTexture": "texture",
         "cloudMovement": "value",
@@ -2016,7 +2016,7 @@
       }
     },
     "GetVolumetricCloudsSimple": {
-      "target": "cloud/layers/march.ogxLayersCloudTransmittanceSimple",
+      "target": "cloud/layers/march/transmittance.ogxLayersCloudTransmittanceSimple",
       "resources": {
         "noiseTexture": "texture",
         "cloudMovement": "value",
@@ -2459,7 +2459,7 @@
       "allowExtraConstants": true
     },
     "UnderwaterVolumetricFog": {
-      "target": "fog/volume.ogxUnderwaterFogExact",
+      "target": "fog/volume/exact.ogxUnderwaterFogExact",
       "resources": {
         "cameraOffset": "value",
         "shadowLightVector": "value",
@@ -2495,7 +2495,7 @@
       "allowExtraConstants": true
     },
     "VolumetricFog": {
-      "target": "fog/volume.ogxVolumetricFogExact",
+      "target": "fog/volume/exact.ogxVolumetricFogExact",
       "resources": {
         "media": "struct",
         "shadowDepth0": "texture",
@@ -2804,7 +2804,7 @@
       "allowExtraConstants": true
     },
     "raymarchCloud": {
-      "target": "cloud/layers/march.ogxLayersRaymarchCloudExact",
+      "target": "cloud/layers/march/exact.ogxLayersRaymarchCloudExact",
       "refDefines": {
         "OVERWORLD_SHADER": 1,
         "END_SHADER": 0,
@@ -2890,7 +2890,7 @@
       "allowExtraConstants": true
     },
     "GetVolumetricClouds": {
-      "target": "cloud/layers/march.ogxLayersGetVolumetricCloudsExact",
+      "target": "cloud/layers/march/exact.ogxLayersGetVolumetricCloudsExact",
       "refDefines": {
         "OVERWORLD_SHADER": 1,
         "END_SHADER": 0,

@@ -458,6 +458,8 @@ iterationT 有些函数在多个文件各写一份。合进 Omni 后同一个程
 **2026-10-28 层状体积云改名（0.16.0-dev.11）**：`cloud/eclipse` 改为 `cloud/layers`，六个子文件按算法合并成 shape、shadow、lighting、march 四个；`ogxEclipse*` 与 `OgxEclipse*` 统一换成 `ogxLayers*` 与 `OgxLayers*`，两个 `ogxItxGetCloud*` 入口换成 `ogxLayersGetCloud*Reference`。算法、常数与采样顺序逐项保留，机器对比 779 个顶层函数体，缺失 0、新增 0、改动 0；严格统计仍为 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。48 个模块全部生成 GLSL 与 SPIR-V，生成库没有遗漏或额外函数；选项 519、入口 269、唯一程序 280、测试 160 不变。
 
 **2026-10-28 公开名字清零来源前缀（0.16.0-dev.12）**：154 个 `ogxItx*` / `ogxEclipse*` 函数、5 个 `*Eclipse` 后缀函数、3 个 `OgxEclipse*` 结构与 7 个含来源名的守卫全部改成按效果与算法命名；纯转发入口用 `Reference` 后缀表示按参考签名转调。`shadow/eclipse.slang` 改为 `shadow/map.slang`，因为文件内容是阴影边缘压缩、投影偏置与体素阴影图。严格对照只同步目标路径与函数名，判定口径不变：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0；算法、常数与采样顺序未改，779 个顶层函数体缺失 0、新增 0、改动 0。
+
+**2026-10-28 过长主体拆进同名文件夹（0.16.0-dev.13）**：`cloud/layers/march.slang` 按算法拆成 `march/ray`、`march/compose`、`march/simple`、`march/transmittance`、`march/exact`，`fog/volume.slang` 拆成 `volume/shadow`、`volume/storm`、`volume/light`、`volume/step`、`volume/march`、`volume/underwater`、`volume/exact`、`volume/nether`；主文件只保留接口、结构体与按原顺序的引用说明。机器对比 779 个顶层函数体，缺失 0、新增 0、改动 0；严格统计仍为 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。48 个模块、519 个选项、269 个入口、280 组唯一程序与 160 个测试不变。
 ## 十三、给子任务的工作方式
 
 每个子任务开工前先读：HOP 技能（`C:\Users\17137\.config\opencode\skills\hop\SKILL.md`）、`AGENTS.md`、本文件全文。

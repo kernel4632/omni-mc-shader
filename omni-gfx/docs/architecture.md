@@ -49,10 +49,10 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `atmosphere/sky.slang` | Eclipse 日月圆盘、球面映射、双三次采样、天空盒查表、大气积分与极光 | `math`、`atmosphere` |
 | `cloud/cloud.slang` | 球壳求交、程序化云密度、朝阳光照、沿视线步进、云影与平面云 | `math`、`noise` |
 | `cloud/volume.slang` | 体积云形状、光照、步进、闪电与云影贴图 | `cloud`、`color`、`math` |
-| `cloud/layers.slang` | 层状五层云形状、云影、朝光散射与主步进循环；实现在 `cloud/layers/` 的四个子文件 | `cloud`、`atmosphere/sky`、`math` |
+| `cloud/layers.slang` | 层状五层云形状、云影、朝光散射与主步进循环；实现在 `cloud/layers/` 的四个子文件，步进再拆 `march/` 五个 | `cloud`、`atmosphere/sky`、`math` |
 | `cloud/planar.slang` | iterationT 平面云密度与光照深度 | `cloud`、`math`、`atmosphere/model` |
 | `fog/fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分、雾相位与末地雾阴影；实现在 `fog/fog/` 的两个子文件 | `math`、`noise` |
-| `fog/volume.slang` | 体积雾密度、光照吸收、步进、暴风、水下光柱与下界烟 | `fog`、`weather`、`shadow`、`water`、`color`、`sampling` |
+| `fog/volume.slang` | 体积雾密度、光照吸收、步进、暴风、水下光柱与下界烟；实现在 `fog/volume/` 的八个子文件 | `fog`、`weather`、`shadow`、`water`、`color`、`sampling` |
 | `shadow/shadow.slang` | 阴影投影与边缘压缩、屏幕空间阴影、级联、PCSS、可变半影 | `math` |
 | `shadow/map.slang` | 阴影边缘压缩、投影偏差、硬阴影、轨道旋转与体素阴影图 | `math`、`voxel/trace` |
 | `voxel/voxel.slang` | 三维逐格步进、半透明染色、植物穿透、铁块镜面弹射 | `math`、`color` |

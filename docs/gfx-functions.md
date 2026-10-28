@@ -323,7 +323,7 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `UnderwaterVolumetricFog` | 39 | `fog/volume.ogxUnderwaterFog` | 已迁入 | 承接算法：体积雾 |
+| `UnderwaterVolumetricFog` | 39 | `fog/volume/underwater.ogxUnderwaterFog` | 已迁入 | 承接算法：fog/volume/underwater |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/VolumetricFog.glsl`
 
@@ -333,7 +333,7 @@
 | `FogPhase` | 8 | `fog/fog/density.ogxFogPhase` | 已迁入 | 承接算法：fog/fog/density |
 | `MultiScatteringPhases` | 12 | `fog/fog/density.ogxMultiScatteringPhases` | 已迁入 | 承接算法：fog/fog/density |
 | `FogDensity` | 34 | `fog/fog/density.ogxFogDensity` | 已迁入 | 承接算法：fog/fog/density |
-| `VolumetricFog` | 69 | `fog/volume.ogxVolumetricFog` | 已迁入 | 同名迁移：体积雾 |
+| `VolumetricFog` | 69 | `fog/volume/march.ogxVolumetricFog` | 已迁入 | 同名迁移：fog/volume/march |
 | `simpleScattering` | 275 | `atmosphere/atmosphere/scattering.ogxAtmosphereSky` | 已迁入 | 承接算法：atmosphere/atmosphere/scattering |
 | `LandAtmosphericScattering` | 300 | `atmosphere/model.ogxLandAtmosphericScattering` | 已迁入 | 同名迁移：预计算大气查表 |
 
@@ -657,9 +657,9 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `Iris_Lightningflash` | 8 | `fog/volume.ogxFogLightning` | 已迁入 | 承接算法：体积雾 |
+| `Iris_Lightningflash` | 8 | `fog/volume/light.ogxFogLightning` | 已迁入 | 承接算法：fog/volume/light |
 | `Iris_Lightningflash_VLcloud` | 31 | `cloud/volume.ogxCumulusLightning` | 已迁入 | 承接算法：体积云步进 |
-| `Iris_Lightningflash_VLfog` | 44 | `fog/volume.ogxFogLightning` | 已迁入 | 承接算法：体积雾 |
+| `Iris_Lightningflash_VLfog` | 44 | `fog/volume/light.ogxFogLightning` | 已迁入 | 承接算法：fog/volume/light |
 
 `references/Eclipse/shaders/lib/lpv_common.glsl`
 
@@ -738,7 +738,7 @@
 | `skyCloudsFromTex` | 186 | `atmosphere/atmosphere/mapping.ogxSkyCloudsFromTex` | 已迁入 | 同名迁移：atmosphere/atmosphere/mapping |
 | `skyCloudsFromTexBLUR` | 195 | `atmosphere/atmosphere/mapping.ogxSkyCloudsFromTex` | 已迁入 | 参考实现的 scaler 参数未参与计算，函数体与 skyCloudsFromTex 相同，库只保留一份 |
 | `skyCloudsFromTexLOD` | 210 | `atmosphere/atmosphere/mapping.ogxSkyCloudsFromTexLod` | 已迁入 | 同名迁移：atmosphere/atmosphere/mapping |
-| `volumetricsFromTex` | 229 | `fog/volume.ogxFogCloudBicubic` | 已迁入 | 承接算法：体积雾 |
+| `volumetricsFromTex` | 229 | `fog/volume/shadow.ogxFogCloudBicubic` | 已迁入 | 承接算法：fog/volume/shadow |
 
 `references/Eclipse/shaders/lib/specular.glsl`
 

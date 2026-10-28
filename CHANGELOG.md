@@ -1,4 +1,13 @@
 # 更新记录
+## 0.16.0-dev.13
+
+结构重构第七批：两个超过五百行的主体拆进同名文件夹，函数体、常数与采样顺序不变。
+
+- 拆分：`cloud/layers/march.slang` 的 729 行拆成 `march/ray`、`march/compose`、`march/simple`、`march/transmittance`、`march/exact` 五个子文件；`fog/volume.slang` 的 518 行拆成 `volume/shadow`、`volume/storm`、`volume/light`、`volume/step`、`volume/march`、`volume/underwater`、`volume/exact`、`volume/nether` 八个子文件。主文件只保留接口、结构体与按原顺序的中文引用说明，`src` 里 86 个 `.slang` 文件全部不超过 500 行（最大 459 行）。
+- 不改算法：机器对比 `HEAD` 的 779 个顶层函数体（名字、返回类型、参数方向与函数体逐项比较），缺失 0、新增 0、改动 0；常数、分支与采样顺序逐项保留。
+- 同步更新：生成器按子文件内联、生成 GLSL 与清单、两份 profile、严格对照目标（`cloud/layers/march/...`、`fog/volume/...`）、人工对照表、架构与渲染文档；手写核心上限随结构从 18900 调到 19050 行。
+- 数量：48 个模块、519 个选项、269 个入口、280 组唯一程序、160 个测试不变；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 不变。
+- 验证：`generate` 48 个模块 49 个文件 15610 行；`spirv` 48/48；`check`、`strict-parity`、`parity`（505 个函数、缺口 0）、`profiles`（iterationt 15684 行、eclipse 15683 行）、`audit`（537 个代码文件）、`verify`、`compile` 通过。未启动 Minecraft，游戏内画面、菜单、性能与其他显卡仍未验证。
 ## 0.16.0-dev.12
 
 结构重构第六批：库内公开名字不再带来源前缀，全部按效果与算法命名。

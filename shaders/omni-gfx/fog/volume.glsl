@@ -14,6 +14,7 @@ Omni 通用图形库体积雾模块：密度、阳光方向吸收、沿视线步
     雾照明与水下手持光属于可选的宿主能力，用两个钩子宏留给效果层注入；不定义时是完全的空操作。
     钩子宏沿用旧名字：宿主在包含本文件之前就定义它们，改名需要同时改宿主，收益只有名字统一。
     步进顺序与常数照 iterationT 原程序保留，保证默认画面不变。
+    算法按主体拆进 `fog/volume/` 的八个子文件：云影、暴风、闪电、单步、主体、水下、严格入口与下界烟。
 */
 #ifndef OGX_FOG_VOLUME_INCLUDED
 #define OGX_FOG_VOLUME_INCLUDED
@@ -80,6 +81,12 @@ struct OgxFogMedia
     float sun_density_option; // 散射强度选项。
 };
 
+// 云影贴图的三次采样与世界坐标投影，具体实现在子文件。
+// 子文件：fog/volume/shadow.slang。
+/* 体积雾的云影：把世界坐标投到云影贴图，并用四次双线性采样合成十六像素三次模糊；由 `fog/volume.slang` 内联引入，不单独生成 GLSL 或探针。
+可复制示例：`float shadow = ogxFogCloudShadow(worldPos, media, cloudShadowTex, true);`
+设计取舍：贴图贴在画面右上角，坐标要翻转；边缘淡出与晴天雨天两档照参考保留。 */
+
 // 云影贴图的三次采样：取红通道，与云影写入端同一套模糊。
 // 四次双线性采样合成十六像素三次模糊，纹理读取次数只有逐像素方案的四分之一。
 float ogxFogCloudBicubic(sampler2D source, vec2 coord, vec2 texSize)
@@ -124,6 +131,12 @@ float ogxFogCloudShadow(vec3 worldPos, OgxFogMedia media, sampler2D cloudShadowT
     return ((media.rain_shadow - 1.0) * media.wetness + 1.0) * cloudShadow + (media.wetness - media.rain_shadow * media.wetness); // 晴天与雨天两档之间插值。
 }
 
+// 暴风浓雾密度，具体实现在子文件。
+// 子文件：fog/volume/storm.slang。
+/* 体积雾的暴风密度：噪声雾团与低空层相加，雪暴才随高度变淡；由 `fog/volume.slang` 内联引入。
+可复制示例：`float density = ogxFogStormDensity(worldPos, media, noiseTexture);`
+设计取舍：纵向压扁后乘一百再滚动，噪声取反让高噪声处雾更浓。 */
+
 // 暴风浓雾：噪声雾团与低空层相加，雪暴才随高度变淡。
 float ogxFogStormDensity(vec3 worldPos, OgxFogMedia media, sampler2D noiseTexture)
 {
@@ -135,6 +148,12 @@ float ogxFogStormDensity(vec3 worldPos, OgxFogMedia media, sampler2D noiseTextur
     return 1.0 + denseCloud + media.daily_fog; // 低空层与噪声雾团相加。
 }
 
+// 闪电光柱照明，具体实现在子文件。
+// 子文件：fog/volume/light.slang。
+/* 体积雾的闪电照明：把闪电当成一根竖直光柱，按距离做指数衰减；由 `fog/volume.slang` 内联引入。
+可复制示例：`vec3 light = ogxFogLightning(relativePos, media, 200.0, 4.0);`
+设计取舍：没有闪电事件时返回零，冷色闪光再乘事件强度与亮度选项。 */
+
 // 闪电照亮参与散射的介质：把闪电当成一根竖直光柱。
 vec3 ogxFogLightning(vec3 relativePos, OgxFogMedia media, float lightDistance, float falloff)
 {
@@ -145,6 +164,12 @@ vec3 ogxFogLightning(vec3 relativePos, OgxFogMedia media, float lightDistance, f
     lightningLight = exp((1.0 - lightningLight) * falloff); // 换成更集中的指数衰减。
     return vec3(0.55, 0.65, 0.9) * (lightningLight * media.lightning_intensity * media.lightning_strength); // 冷色闪光。
 }
+
+// 密度模型选择与沿光方向吸收，具体实现在子文件。
+// 子文件：fog/volume/step.slang。
+/* 体积雾的单步参数：密度模型选择与沿阳光方向的吸收步进；由 `fog/volume.slang` 内联引入。
+可复制示例：`float density = ogxFogDensity(pos, wind, true, 0.3, 1.0, 0.06, midnight, noise);`
+设计取舍：步长逐步放大，近处权重更高，避免远处几何把光吸干。 */
 
 // 雾密度：仅高度衰减或团雾，参数由效果层按选项给出。
 float ogxFogDensity(vec3 fogPos, vec3 wind, bool noisy, float heightA, float heightB, float falloff, float timeMidnight, sampler2D noiseTexture)
@@ -164,6 +189,12 @@ float ogxFogLightMarch(inout vec3 fogPos, vec3 wind, OgxFogMedia media, bool noi
     }
     return lightingDensity; // 返回累计密度。
 }
+
+// 体积雾主体步进，具体实现在子文件。
+// 子文件：fog/volume/march.slang。
+/* 体积雾主体：沿视线步进，同时沿光方向估遮挡，累加雾色与阳光散射；由 `fog/volume.slang` 内联引入。
+可复制示例：`ogxVolumetricFog(color, startPos, endPos, worldDir, media, ...);`
+设计取舍：步长按指数增长，阴影、云影、群系与体积光由布尔开关选择，关闭时不产生额外采样。 */
 
 // 体积雾主体：沿视线步进，同时沿光方向估遮挡，累加雾色与阳光散射。
 // `dither` 是这一步的抖动；`volumetricLighting` 由效果层按体积光照开关选择单级或多级散射。
@@ -282,6 +313,12 @@ void ogxVolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDi
     color = transmittance * color + fogColor + rayColor + lightningFog + lpvFog; // 场景色先被吸收，再叠上雾与散射。
 }
 
+// 水下焦散与光柱，具体实现在子文件。
+// 子文件：fog/volume/underwater.slang。
+/* 水下体积雾：焦散取样与光柱步进，输出汇聚的蓝色光柱；由 `fog/volume.slang` 内联引入。
+可复制示例：`vec3 light = ogxUnderwaterFog(startPos, endPos, worldDir, cloudShadow, ...);`
+设计取舍：光柱截断到四十米内；焦散三次方让亮纹更集中，远处按距离变弱。 */
+
 // 水下焦散：从当前位置向上找水面，按波法线折射后取交点距离，距离越近光柱越强。
 // 为什么单独一份：它与水面焦散的三乘三采样用途不同，这里只要一份范围很窄的值来收窄光柱。
 float ogxUnderwaterCaustics(vec3 worldPos, vec3 shadowLightVector, sampler2D normalTexture,
@@ -345,6 +382,12 @@ vec3 ogxUnderwaterFog(vec3 startPos, vec3 endPos, vec3 worldDir, float globalClo
     result += handFog * (range / float(steps)) * handLightScale; // 手持光不随阳光相位与云影变化，最后叠上。
     return result; // 返回光柱颜色。
 }
+
+// 严格参考签名入口，具体实现在子文件。
+// 子文件：fog/volume/exact.slang。
+/* 体积雾的严格入口：按 iterationT 默认路径逐行移植的雾与水下光柱；由 `fog/volume.slang` 内联引入。
+可复制示例：`ogxVolumetricFogExact(color, startPos, endPos, worldDir, cloudShadow, ...);`
+设计取舍：参考参数在前、画质资源追加在后；不转调通用入口，避免额外分支改变采样次数。 */
 
 // 严格参考签名的体积雾入口：按 iterationT 默认的 VFOG_NOISE_TYPE=0 路径逐行移植。
 // 参考参数在前，相机、阴影矩阵与画质资源追加在后；不读取宿主全局量。
@@ -474,6 +517,12 @@ vec3 ogxUnderwaterFogExact(vec3 startPos, vec3 endPos, vec3 worldDir,
     result *= globalCloudShadow; // 按全局云影压暗。
     return result; // 交回光柱颜色。
 }
+
+// 下界三段体积雾，具体实现在子文件。
+// 子文件：fog/volume/nether.slang。
+/* 下界的体积雾：羽流、雾霭与顶部烟在同一条视线上分开累加；由 `fog/volume.slang` 内联引入。
+可复制示例：`vec4 fog = ogxNetherVolumetricFog(rayDirection, cameraOffset, cameraWorldPos, ...);`
+设计取舍：三者密度来源与混合方式不同，羽流发光、雾霭只加色、顶部烟贴天花板。 */
 
 // Eclipse 下界三段体积雾：羽流、雾霭与顶部烟在同一条视线上分开累加。
 // 为什么分三段：羽流发光、雾霭只加色不吸光、顶部烟贴天花板，三者的密度来源与混合方式都不同。

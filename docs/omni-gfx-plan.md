@@ -199,6 +199,7 @@ MC 光影编译 + 同场景对比
 - 2026-10-28 按实际效果重排 `omni-gfx/src`：`itx_extra`、`eclipse_extra`、`eclipse_specular`、`cloud_eclipse` 等来源名不再作为顶层模块；对焦与光斑进 `lens`，曝光与泛光进 `post/exposure`，FXAA 进 `antialias/fxaa`，各向异性过滤进 `sampling/anisotropic`，雨纹与闪电进 `weather`，GTAO 进 `gi/ambientocclusion`，WSR/Photonics/高光进 `reflection`，体素求交进 `voxel/trace`，Eclipse 层状云进 `cloud/eclipse`，末地与传送门进 `world`。函数实现、常数、采样顺序与 474 条 exact 未变；源与生成 GLSL 一一对应，生成目录只保留一份产物。
 - 2026-10-28 `cloud/eclipse` 改为 `cloud/layers`，六个子文件合并成 shape、shadow、lighting、march 四个；所有 `ogxEclipse*` 与 `OgxEclipse*` 换成 `ogxLayers*` 与 `OgxLayers*`。机器对比 779 个顶层函数体，缺失 0、新增 0、改动 0；48 个模块、519 个选项、269 个入口、280 组唯一程序与 160 个测试不变，严格对照仍为 exact 474、reference_broken 5、mc_glue 26、missing 0。
 - 2026-10-28 库内公开名字清零来源前缀：154 个 `ogxItx*` / `ogxEclipse*` 函数，以及 5 个 `*Eclipse` 后缀函数、3 个 `OgxEclipse*` 结构与 7 个含来源名的包含守卫，全部按效果与算法改名（TAA 取样、深度线性化、体素 AABB、极光、手光、双三次权重等）；纯转发入口统一用 `Reference` 后缀，表示按参考签名转调。`shadow/eclipse` 改为 `shadow/map`。机器对比 779 个顶层函数体，缺失 0、新增 0、改动 0；48 个模块、519 个选项、269 个入口、280 组唯一程序、160 个测试与严格对照 474/0/5/26/0 全部不变。
+- 2026-10-28 两个超过五百行的主体拆进同名文件夹：`cloud/layers/march.slang` 拆成 ray、compose、simple、transmittance、exact 五个子文件，`fog/volume.slang` 拆成 shadow、storm、light、step、march、underwater、exact、nether 八个子文件；主文件只保留接口、结构体与引用说明。机器对比 779 个顶层函数体，缺失 0、新增 0、改动 0；`src` 里 86 个 `.slang` 全部不超过 500 行；48 个模块、519 个选项、269 个入口、280 组唯一程序、160 个测试与严格对照 474/0/5/26/0 不变。
 - 下一步：把库内的 Eclipse 程序化雨点、阴影修补、水面高度/焦散与四季函数接到光影选项（需要先定默认画面与选项命名）；为 `voxel` 补整数三维纹理探针；阶段 5（完整 SPIR-V 演示管线）与阶段 6（文档、许可证、示例与发布）。
 
 ## 十四、决策记录

@@ -770,9 +770,15 @@ float ogxLayersCloudScatteringSamples(int layerIndex, vec3 rayPosition, vec3 sun
 
 // 主体积云步进、低成本透过率与严格入口，具体实现在子文件。
 // 子文件：cloud/layers/march.slang。
-/* 层状体积云的步进：五层主循环、低成本透过率与严格入口；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
+/* 层状体积云的步进目录：单层主步进、五层合成、两套低成本透过率与严格入口；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
 可复制示例：`ogxLayersGetVolumetricClouds(settings, viewPos, dither, sunVector, ...);`
-设计取舍：五层按参考顺序步进再按相机高度合成，简单版只累计透过率，严格版只重排参考签名。 */
+设计取舍：五个子文件各管一个算法，函数体与采样顺序照参考保留；本文件只按原顺序引用，不复制算法。 */
+
+// 单层主步进：五层共用同一套循环与光照。
+// 子文件：cloud/layers/march/ray.slang。
+/* 层状体积云的单层主步进：五层共用同一套循环与光照，按层号分支；由 `cloud/layers/march.slang` 内联引入，不单独生成 GLSL 或探针。
+可复制示例：`ogxLayersRaymarchCloud(settings, 1, samples, position, direction, dither, ...);`
+设计取舍：平面云只取一个样本，积云按步长循环；两条路径的提前返回与参考实现一致。 */
 
 // 单层云的步进：参考实现的主循环，逐层处理平面云与积云两条路径。
 // `cloudPlaneDistance` 的 `x` 是最近可见云的距离，`y` 是混合权重；由调用方按层合并。
@@ -950,6 +956,12 @@ vec4 ogxLayersRaymarchCloud(OgxLayersCloudSettings s, int layerIndex, int sample
     }
     return vec4(color, totalAbsorbance); // 未知层号原样返回。
 }
+
+// 五层合成：按参考顺序步进再按相机高度混合。
+// 子文件：cloud/layers/march/compose.slang。
+/* 层状体积云的五层合成：按参考顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合；由 `cloud/layers/march.slang` 内联引入。
+可复制示例：`vec4 cloud = ogxLayersGetVolumetricClouds(settings, viewPos, dither, ...);`
+设计取舍：每层重算步长与起点，天空盒只在起点查一次，采样位置与参考一致。 */
 
 // 五层体积云总入口：按参考实现的顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合。
 // 天空色由本函数在步进起点处查天空盒，与参考 GetVolumetricClouds 的采样位置一致。
@@ -1153,6 +1165,12 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
     return vec4(color, totalAbsorbance); // 交回云颜色与透过率。
 }
 
+// 设置版低成本透射率：只累计透过率，供云影与远景使用。
+// 子文件：cloud/layers/march/simple.slang。
+/* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers/march.slang` 内联引入。
+可复制示例：`vec4 t = ogxLayersGetVolumetricCloudsSimple(settings, dither, lightDir, offset, ...);`
+设计取舍：不做光照与阴影采样，三层共用同一份单层步进，命中顺序照参考保留。 */
+
 // 云影步进：只算透过率，不算光照，供阴影程序低成本使用。
 float ogxLayersRaymarchCloudSimple(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition,
     vec3 rayDirection, float dither, float minHeight, float maxHeight, vec3 startPos, vec3 cameraPos,
@@ -1265,6 +1283,12 @@ vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, v
     }
     return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四个透过率。
 }
+
+// 参考签名版低成本透射率：天气与覆盖参数显式传入。
+// 子文件：cloud/layers/march/transmittance.slang。
+/* 层状体积云的参考签名低成本步进：天气与覆盖参数显式传入，不读设置结构体；由 `cloud/layers/march.slang` 内联引入。
+可复制示例：`vec4 t = ogxLayersCloudTransmittanceSimple(dither, lightDir, offset, startPos, ...);`
+设计取舍：参考签名在前、噪声与天气追加在后；三层各走一次单层透过率，常数照参考保留。 */
 
 // 层状云低成本步进：只累计透过率，不做光照，供云影与远景使用。
 // 参考签名给层号、步数、位置与方向、抖动与上下界；噪声、天气与覆盖率显式追加。
@@ -1415,6 +1439,12 @@ vec4 ogxLayersCloudTransmittanceSimple(vec2 dither, vec3 lightDir, vec2 offset, 
     }
     return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四层透过率。
 }
+
+// 严格参考签名入口：只重排参数并填写参考默认常数。
+// 子文件：cloud/layers/march/exact.slang。
+/* 层状体积云的严格入口：按参考签名重排参数并填写参考默认常数；由 `cloud/layers/march.slang` 内联引入。
+可复制示例：`vec4 cloud = ogxLayersGetVolumetricCloudsExact(viewPos, dither, ...);`
+设计取舍：只重排参数，主体仍在 `ray.slang` 与 `compose.slang`，不复制第二份算法。 */
 
 // 严格参考签名的单层云步进入口：参考参数在前，云设置、相机与阴影资源追加在后。
 // 主体仍由 `ogxLayersRaymarchCloud` 执行，入口只负责把显式参数重新排好。

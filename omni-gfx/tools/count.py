@@ -98,7 +98,7 @@ def collect() -> dict:
             report["generatedTotal"] += nonempty
         elif name == "第三方":
             report["thirdPartyTotal"] += nonempty
-    report["handwrittenBudget"] = 18900  # 手写核心上限；本轮把八个过长主体拆成同名文件夹，主文件新增 27 组中文引用说明，预算随结构增加；算法行数没有重复，仍按实际验证过的源码计算。
+    report["handwrittenBudget"] = 19050  # 手写核心上限；把 `cloud/layers/march` 与 `fog/volume` 拆成十三个子文件后，文件头与引用说明增加 66 行；预算随结构上调，算法行数没有重复，仍按实际源码计算。
     return report
 
 

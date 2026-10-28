@@ -514,3 +514,32 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 
 选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；手写核心 18891 行。没有启动 Minecraft；游戏内画面、菜单切换、性能与其他显卡仍未验证。
 
+## 二十三、过长主体拆进同名文件夹（2026-10-28）
+
+本轮只搬函数，不改算法：cloud/layers/march.slang 的 729 行拆成 ray、compose、simple、transmittance、exact 五个子文件，og/volume.slang 的 518 行拆成 shadow、storm、light、step、march、underwater、exact、nether 八个子文件。主文件保留接口、结构体与按原顺序的中文引用说明，子文件不单独生成 GLSL，也不单独编译探针。
+
+### 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| python omni-gfx/build.py generate | 48 个模块、49 个文件、GLSL 15610 行 |
+| python omni-gfx/build.py spirv | 48/48 个探针通过，编译器 2026.20 |
+| python omni-gfx/build.py check | 生成文件与源一致；测试世界 2 个、光影验证场景 2 个 GLSL 审计通过 |
+| python omni-gfx/build.py strict-parity | 505 个参考函数：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 |
+| python omni-gfx/build.py parity | 505 个函数：已迁入 407、MC 专用 98、缺口 0 |
+| python omni-gfx/build.py profiles | iterationt 15684 行、eclipse 15683 行，两份 profile 编译通过 |
+| python build.py audit | 537 个代码文件通过中文说明与实现审计 |
+| python build.py verify | 160 个测试、9 组编译探针与打包通过，约 6 秒 |
+| python build.py compile | 2 种配置、280 组唯一程序、0 错误 |
+| python omni-gfx/build.py count | 手写核心 18957 行，上限 19050 |
+
+### 函数体与完整性
+
+- 用 git archive HEAD 取出改动前的 73 个源文件，与当前 86 个源文件分别解析顶层函数，按名字、返回类型、参数方向与函数体组成多重集合比较：前后各 779 个，缺失 0、新增 0、改动 0。
+- 生成器把子文件按出现顺序内联，生成 GLSL 与清单同步刷新；shaders/omni-gfx/cloud/layers.glsl 与 og/volume.glsl 只新增子文件标记和文件头，函数体逐字节不变。
+- src 里 86 个 .slang 全部不超过 500 行，最大为 shadow/shadow.slang 的 459 行；两个原本超限的文件分别为 729 与 518 行。
+- 严格对照只改目标路径：cloud/layers/march/... 与 og/volume/...，判定口径与 474/0/5/26/0 的统计不变；人工对照表同步改三个 og/volume 目标。
+
+### 数量与未验证
+
+选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；手写核心 18957 行。没有启动 Minecraft；游戏内画面、菜单切换、性能与其他显卡仍未验证。
