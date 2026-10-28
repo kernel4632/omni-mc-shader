@@ -8,8 +8,7 @@
 `omni-gfx/src` 由 `check_slang` 按“每个顶层函数与结构体都有紧邻中文说明”检查，并额外要求
 文件头与每条引用的上一行说明；生成 GLSL、profile 与探针不重复做行覆盖率。开发工具与
 测试世界 Python 不进入光影 ZIP，只检查说明语言与接口，不按发布代码的 50% 行覆盖率要求。
-审计必须识别真正的注释，而不是把字符串里的井号或示例文字误算成说明；机器字段、可复制
-命令和文件名也单独处理，避免它们伪装成自然语言或被错误拒绝。
+审计必须识别真正的注释，而不是把字符串里的井号或示例文字误算成说明；机器字段、可复制命令和文件名也单独处理，避免它们伪装成自然语言或被错误拒绝。
 """
 from __future__ import annotations
 
@@ -45,7 +44,7 @@ EXTRA = {"VERSION", "CHANGELOG", "ROOT", "STAGES", "INCLUDE", "UTF", "BOM"}  # �
 SLANG_TERMS = frozenset(word.lower() for word in """
 Abney Albedo Bayer Beer CUMULONIMBUS Catmull Chandrasekhar Cornette Draine EV Elek Frisvad GI GTAO
 Gerstner GetHandLight GetVolumetricClouds GetVolumetricFog Greenstein HG Halton Hejl Hable Henyey Hillaire Jodie LUT
-Lambert Lottes MATID Merlin NUBIS Nubis Perlin Photonics RSM Rec Reinhard Rom SSGI SSS SetCloudPos Shanks Uchimura
+Lambert Lottes MATID Merlin NUBIS Nubis Perlin Photonics RSM RRT ODT Rec Reinhard Rom SSGI SSS SetCloudPos Shanks Uchimura
 WSR Worley Xonk XYZ albedo antialias atlas background bits buffer cameraWorldPos centerDepthSmooth clip cloud color colortex
 compression curve depth dir flashlight focus frame gi held hit hits indirect jitter job lightmap look media
 mie modelViewInverse noise normal ogxGameplayEffects ogxSsrtHandlightShadow ozone pixel
@@ -182,7 +181,8 @@ def check_slang(root: Path) -> list[dict]:
 
     为什么不并进普通目录遍历：`omni-gfx` 里还有生成产物、参考下载和测试世界，那些有自己的检查；
     只审计手写 Slang 源，才能让“库源码也要中文说明、只引用库内文件”成为可执行的合同。
-    说明密度按“每个顶层函数与结构体都有紧邻的中文解释”检查，不按物理行比例：
+    说明密度同时检查两件事：每个顶层函数与结构体都有紧邻的中文解释，且不低于 50% 非空行；
+    库源不再只记录比例。为什么保留接口说明：只靠行覆盖率仍可能漏掉对外函数的语义，两项一起才够用。
     移植代码保留上游密集的局部变量，凑比例只会逼出复述语法的填充；对外接口才是接手者真正要读的部分。
     文件头说明“这个文件管什么”，每条引用的上一行说明“为什么引入它”，这两项是本次新增的硬检查，
     因为只靠函数说明时，打开文件仍然看不出模块边界与依赖意图。
@@ -234,10 +234,12 @@ def check_slang(root: Path) -> list[dict]:
                 except ValueError:
                     pass  # 语言错误在下面的循环里统一报告。
         ratio = len(documented & nonempty_lines) / max(len(nonempty_lines), 1)  # 报告仍给出说明密度供参考。
+        if ratio < 0.5:  # 库源也执行与光影相同的最低说明密度，避免只有接口说明、正文无人解释。
+            errors.append(f"{relative_path}：中文有效注释 {ratio:.1%}，至少需要 50%")
         reports.append({"file": relative_path, "nonempty": len(nonempty_lines),
                         "chineseCommentLines": len(documented & nonempty_lines), "ratio": ratio})
-        # 库源的维护合同是“每个对外函数和结构体都能看懂”，不按物理行比例；
-        # 移植算法保留了上游的密集局部变量，强行凑一半行数注释只会产生复述语法的填充。
+        # 库源的维护合同是“每个对外函数和结构体都能看懂”，同时保留 50% 行覆盖率；
+        # 移植算法保留了上游的密集局部变量，注释必须解释步骤而不是复述语法。
         # 顶层函数与结构体：返回类型可能是内建类型，也可能是 `Ogx...` 结构体。
         # 旧写法只认小写基础类型，结构体返回的函数会绕过“必须有说明”的检查。
         for number, line in enumerate(text.splitlines(), 1):

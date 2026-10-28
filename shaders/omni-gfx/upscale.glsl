@@ -7,7 +7,7 @@
 /*
 Omni 通用图形库放大与锐化模块：边缘方向重采样、对比度自适应锐化与放大后锐化。
 调用位置：任何把低分辨率画面放大到目标分辨率并恢复清晰度的程序；Minecraft 光影由
-    `/omni-gfx/upscale.glsl` 引入，`rendering/clarity/upscale.glsl` 只保留选项换算。
+    `shaders/effects/clarity/upscale.glsl` 引入，选项换算留在效果层。
 可复制示例：ogxFsrEasu 把输入画面放大，ogxCas 再做对比度自适应锐化。
 设计原因与取舍：采样器与画面尺寸由调用方传入，本模块不声明采样器、不读选项；
     公式与 iterationT 的边缘方向重采样和对比度自适应锐化逐行一致。

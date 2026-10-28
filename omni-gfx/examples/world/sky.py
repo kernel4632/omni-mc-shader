@@ -2,6 +2,8 @@
 
 调用位置：
     `omni-gfx/examples/world/render.py` 创建世界时调用 `load_sky()` 一次。
+调用示例：`sky = load_sky(path)`；取得纹理编号与太阳方向。
+
 设计原因与取舍：
     程序化体积云在半分辨率与十几步采样下，云边容易糊成团，达不到照片级的天空。
     这里改用 Poly Haven 的 CC0 全景天空，云层、色温与太阳位置来自真实拍摄；

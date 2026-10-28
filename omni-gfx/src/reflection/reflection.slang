@@ -18,8 +18,7 @@ Omni 通用图形库反射模块：可见法线采样、屏幕空间追踪、反
 // 相机模块提供深度换算与阴影投影的唯一实现。
 #include "../common/camera.slang"
 
-// 一个完整圆周，采样角度与旋转都用它。
-static const float OGX_TAU = 6.28318530718;
+// 一个完整圆周由数学模块的 OGX_TAU 提供，采样角度与旋转都用它。
 
 // 可见法线分布采样：按粗糙度把反射方向散开，得到模糊反射。
 float3 ogxSampleGgxVndf(float3 viewVector, float roughness, float2 noise)
@@ -48,8 +47,7 @@ float3 ogxReflectionViewPos(float2 coord, float depth, float4x4 projectionInvers
 // 视空间位置投到屏幕，不补抖动；追踪射线用原始投影。
 float3 ogxReflectionScreenPos(float3 viewPos, float4x4 projection)
 {
-    float3 pos = float3(projection[0][0], projection[1][1], projection[2][2]) * viewPos + ogxMatrixTranslation(projection); // 投影矩阵的非零项与平移列。
-    return pos * (0.5 / -viewPos.z) + 0.5; // 透视除法并转到零到一。
+    return ogxScreenPosFromViewPosRawDistant(viewPos, projection); // 投影与透视除法只在相机模块维护一份。
 }
 
 

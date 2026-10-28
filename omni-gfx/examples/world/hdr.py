@@ -3,6 +3,8 @@
 调用位置：
     `omni-gfx/tools/prepare_textures.py` 下载 CC0 天空后用本模块检查尺寸；
     `omni-gfx/examples/world/render.py` 启动时调用 `read_hdr` 并把浮点像素上传显卡。
+调用示例：`width, height, pixels = read_hdr(path)`。
+
 设计原因与取舍：
     测试世界原本用程序化大气加体积云，云的形状和边缘在低分辨率下容易糊成团。
     真实天空照片能立刻提供可信的云层、色温和太阳位置，也让环境光与水面反射同源。

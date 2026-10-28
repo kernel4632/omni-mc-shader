@@ -3,6 +3,7 @@
 调用位置：`python omni-gfx/build.py strict-parity`；修改参考包、库源码或
 `strict_review.json` 后重新运行。产物是 `omni-gfx/tools/parity_report.json`
 与 `docs/gfx-functions-strict.md`。
+可复制示例：在仓库根目录执行 `python omni-gfx/build.py strict-parity`。
 
 为什么不再只看名字：
     Eclipse 的 `circlemap` 返回二维向量，`circlemapL` 返回三维向量；旧台账把两者

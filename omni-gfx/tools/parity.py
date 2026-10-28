@@ -3,6 +3,7 @@
 调用位置：`python omni-gfx/build.py parity`，输出 `docs/gfx-functions.md` 与
 `.dev/omni-gfx/gaps.txt`；修改 `omni-gfx/src/` 或参考包后重新运行。
 产物是审查覆盖范围的唯一入口，对照表的第一行结论直接引用这里的统计。
+可复制示例：在仓库根目录执行 `python omni-gfx/build.py parity`。
 
 判定顺序：
     1. `parity_map.json` 的人工对照优先，键是参考函数名，值是 `模块.函数`，

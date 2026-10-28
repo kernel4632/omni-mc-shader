@@ -1,24 +1,34 @@
 /* 层状体积云的单层主步进：五层共用同一套循环与光照，按层号分支；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
-可复制示例：`ogxCloudLayerMarch(settings, 1, samples, position, direction, dither, ...);`
+可复制示例：`float4 clouds = ogxCloudLayerMarch(settings, 1, 32, rayPosition, rayDirection, dither, 500.0, 2500.0, sunVector, moonVector, sunScattering, moonScattering, skyScattering, 10000.0, skyColor, cloudDistance, 0.0, phases, 0.0, phases, cameraPos, true, false, noiseTexture, shadowTexture, shadowView, shadowProjection, 2048.0, 1.0);` 参数逐项与签名对应。
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
 
 // 单层云的步进：参考实现的主循环，逐层处理平面云与积云两条路径。
 // `cloudPlaneDistance` 的 `x` 是最近可见云的距离，`y` 是混合权重；由调用方按层合并。
-float4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition, float3 rayDirection,
-    float dither, float minHeight, float maxHeight, float3 sunVector, float3 moonVector, float3 sunScattering,
-    float3 moonScattering, float3 skyScattering, float referenceDistance, float3 sampledSkyCol,
-    inout float2 cloudPlaneDistance, float backScatterPhase, float4 phaseLevels, float backScatterPhase2,
-    float4 phaseLevels2, float3 cameraPos, bool terrainShadowOnClouds, bool deferred, Sampler2D noiseTexture,
-    Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float shadowResolution, float shadowDistort)
+// 平面云分支的提前声明：主入口先分派，具体步进放在文件后半段。
+float4 ogxCloudPlaneMarch(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition, float3 rayDirection,     float dither, float minHeight, float maxHeight, float3 sunVector, float3 moonVector, float3 sunScattering,     float3 moonScattering, float3 skyScattering, float referenceDistance, float3 sampledSkyCol,     inout float2 cloudPlaneDistance, float backScatterPhase, float4 phaseLevels, float backScatterPhase2,     float4 phaseLevels2, float3 cameraPos, bool terrainShadowOnClouds, bool deferred, Sampler2D noiseTexture,     Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float shadowResolution, float shadowDistort, float distanceFactor, float densityThresholdCheck);
+// 积云分支的提前声明：与平面云共用同一组输入，额外带上可见阈值。
+float4 ogxCloudCumulusMarch(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition, float3 rayDirection,     float dither, float minHeight, float maxHeight, float3 sunVector, float3 moonVector, float3 sunScattering,     float3 moonScattering, float3 skyScattering, float referenceDistance, float3 sampledSkyCol,     inout float2 cloudPlaneDistance, float backScatterPhase, float4 phaseLevels, float backScatterPhase2,     float4 phaseLevels2, float3 cameraPos, bool terrainShadowOnClouds, bool deferred, Sampler2D noiseTexture,     Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float shadowResolution, float shadowDistort, float distanceFactor, float densityThresholdCheck);
+
+// 单层云入口：按层号分派到平面云或积云路径。
+float4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition, float3 rayDirection,     float dither, float minHeight, float maxHeight, float3 sunVector, float3 moonVector, float3 sunScattering,     float3 moonScattering, float3 skyScattering, float referenceDistance, float3 sampledSkyCol,     inout float2 cloudPlaneDistance, float backScatterPhase, float4 phaseLevels, float backScatterPhase2,     float4 phaseLevels2, float3 cameraPos, bool terrainShadowOnClouds, bool deferred, Sampler2D noiseTexture,     Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float shadowResolution, float shadowDistort)
 {
-    float3 color = float3(0.0); // 累积散射色。
-    float totalAbsorbance = 1.0; // 累积透过率。
     float distanceFactor = length(rayDirection); // 一步的世界长度。
     float densityThresholdCheck = 0.0; // 可见阈值。
     if (layerIndex == 0) densityThresholdCheck = 0.06; // 小积云。
     if (layerIndex == 1 || layerIndex == 2) densityThresholdCheck = 0.02; // 大积云与积雨云。
+    if (layerIndex == 3 || layerIndex == 4) densityThresholdCheck = 0.01; // 平面云。
+    densityThresholdCheck = lerp(1e-5, densityThresholdCheck, dither); // 按抖动在极小与阈值之间插值。
+    if (layerIndex >= 3) return ogxCloudPlaneMarch(s, layerIndex, samples, rayPosition, rayDirection, dither, minHeight, maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance, sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort, distanceFactor, densityThresholdCheck); // 平面云只取一个样本。
+    return ogxCloudCumulusMarch(s, layerIndex, samples, rayPosition, rayDirection, dither, minHeight, maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance, sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort, distanceFactor, densityThresholdCheck); // 积云沿视线步进。
+}
+
+// 平面云路径：高层云与卷云只在视线穿过平面时取一个样本，不进入体积步进。
+float4 ogxCloudPlaneMarch(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition, float3 rayDirection,     float dither, float minHeight, float maxHeight, float3 sunVector, float3 moonVector, float3 sunScattering,     float3 moonScattering, float3 skyScattering, float referenceDistance, float3 sampledSkyCol,     inout float2 cloudPlaneDistance, float backScatterPhase, float4 phaseLevels, float backScatterPhase2,     float4 phaseLevels2, float3 cameraPos, bool terrainShadowOnClouds, bool deferred, Sampler2D noiseTexture,     Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float shadowResolution, float shadowDistort, float distanceFactor, float densityThresholdCheck)
+{
+    float3 color = float3(0.0); // 累积散射色。
+    float totalAbsorbance = 1.0; // 累积透过率。
     if (layerIndex == 3 || layerIndex == 4) densityThresholdCheck = 0.01; // 平面云。
     densityThresholdCheck = lerp(1e-5, densityThresholdCheck, dither); // 按抖动在极小与阈值之间插值。
     if (layerIndex == 3 || layerIndex == 4) // 平面云路径。
@@ -56,6 +66,52 @@ float4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples,
         }
         return float4(color, totalAbsorbance); // 平面云只取一个样本。
     }
+}
+
+// 地形阴影：把当前云样本投到阴影图，返回三通道受光系数。
+// 为什么单独成函数：积云与平面云都需要同一套投影、边缘压缩和范围判断，复制会漂移。
+float3 ogxCloudTerrainShadow(float3 relativePos, bool enabled, Sampler2D shadowTexture,
+    float4x4 shadowView, float4x4 shadowProjection, float shadowDistort)
+{
+    float3 shadow = float3(1.0); // 默认全亮。
+    if (!enabled) return shadow; // 关闭时不采样。
+    float3 fragPosition = ogxMatrixMulPoint(shadowView, relativePos) + ogxMatrixTranslation(shadowView); // 阴影相机空间。
+    fragPosition = float3(shadowProjection[0][0], shadowProjection[1][1], shadowProjection[2][2]) * fragPosition
+        + ogxMatrixTranslation(shadowProjection); // 阴影投影。
+    float distortFactor = shadowDistort > 0.0 ? 1.0 / (log(length(fragPosition.xy) * 0.61 + 1.0) * 1.8) : 1.0; // 参考实现的边缘压缩。
+    float3 shadowPos = float3(fragPosition.xy * distortFactor, fragPosition.z); // 压缩后的阴影坐标。
+    if (abs(shadowPos.x) >= 1.0 - 0.5 / 2048.0 || abs(shadowPos.y) >= 1.0 - 0.5 / 2048.0) return shadow; // 不在阴影图内。
+    shadowPos = shadowPos * float3(0.5, 0.5, 0.5 / 6.0) + 0.5; // 转零到一。
+    return float3(shadowTexture.SampleLevel(shadowPos.xy, 0.0).x); // 读阴影。
+}
+
+// 闪电照明：普通闪电按水平距离照亮云，积雨云闪电再按距离、密度、高度与时间淡出。
+// 单独成函数是为了让主步进只保留光照合成顺序，闪电的两套参数不挤在循环里。
+void ogxCloudLightningLighting(inout float3 lighting, OgxLayersCloudSettings s, int layerIndex,
+    float3 newPos, float density, float shapeWithDensity, float minHeight, float maxHeight,
+    float3 rayPosition, float3 lightningPos, float horizontalDist)
+{
+    if (horizontalDist < 7500.0 && s.lightningBoltPosition.w > 0.0) // 普通闪电照亮云。
+    {
+        float lightningIntensity = exp(-horizontalDist * 0.006) * density * s.lightningFlash; // 闪电强度。
+        lighting = lerp(lighting, float3(1.3, 1.5, 3.0), lightningIntensity); // 混向冷白。
+    }
+    if (s.lightningEnabled <= 0 || (layerIndex != 2 && s.thunderStrength <= 0.0)) return; // 没有积雨云闪电。
+    float lightningDist = length(newPos - lightningPos); // 到闪电位距离。
+    if (lightningDist >= 6000.0 || length(lightningPos) <= 0.0) return; // 不在照明范围内。
+    float lightningIntensity = smoothstep(6000.0, 50.0, lightningDist) * smoothstep(0.15, 1.0, shapeWithDensity) * s.lightningFlash; // 距离与密度权重。
+    lightningIntensity *= 1.0 - smoothstep(minHeight, 1.05 * maxHeight, rayPosition.y); // 高度淡出。
+    lightningIntensity *= smoothstep(17000.0, 14000.0, horizontalDist); // 水平淡出。
+    lightningIntensity *= s.lightningFade; // 时间淡出。
+    float3 lightningStrength = s.cumulonimbusLightningColor * s.cumulonimbusLightningBrightness * 0.125; // 闪电颜色。
+    lighting = lerp(lighting, lightningStrength, lightningIntensity); // 混向闪电。
+}
+
+// 积云路径：小积云、大积云与积雨云沿视线逐样本累积散射与透过率。
+float4 ogxCloudCumulusMarch(OgxLayersCloudSettings s, int layerIndex, int samples, float3 rayPosition, float3 rayDirection,     float dither, float minHeight, float maxHeight, float3 sunVector, float3 moonVector, float3 sunScattering,     float3 moonScattering, float3 skyScattering, float referenceDistance, float3 sampledSkyCol,     inout float2 cloudPlaneDistance, float backScatterPhase, float4 phaseLevels, float backScatterPhase2,     float4 phaseLevels2, float3 cameraPos, bool terrainShadowOnClouds, bool deferred, Sampler2D noiseTexture,     Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float shadowResolution, float shadowDistort, float distanceFactor, float densityThresholdCheck)
+{
+    float3 color = float3(0.0); // 累积散射色。
+    float totalAbsorbance = 1.0; // 累积透过率。
     if (layerIndex < 3) // 积云路径。
     {
         float3 newPos = rayPosition - cameraPos; // 相机相对位置。
@@ -96,20 +152,7 @@ float4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples,
                 }
                 if (shapeWithDensityFaded > 1e-5) // 有云才继续。
                 {
-                    float3 shadow = float3(1.0); // 地形阴影默认全亮。
-                    if (terrainShadowOnClouds) // 开启地形阴影时投到阴影图。
-                    {
-                        float3 fragPosition = ogxMatrixMulPoint(shadowView, newPos) + ogxMatrixTranslation(shadowView); // 阴影相机空间。
-                        fragPosition = float3(shadowProjection[0][0], shadowProjection[1][1], shadowProjection[2][2]) * fragPosition
-                            + ogxMatrixTranslation(shadowProjection); // 阴影投影。
-                        float distortFactor = shadowDistort > 0.0 ? 1.0 / (log(length(fragPosition.xy) * 0.61 + 1.0) * 1.8) : 1.0; // 参考实现的边缘压缩。
-                        float3 shadowPos = float3(fragPosition.xy * distortFactor, fragPosition.z); // 压缩后的阴影坐标。
-                        if (abs(shadowPos.x) < 1.0 - 0.5 / 2048.0 && abs(shadowPos.y) < 1.0 - 0.5 / 2048.0) // 在阴影图内。
-                        {
-                            shadowPos = shadowPos * float3(0.5, 0.5, 0.5 / 6.0) + 0.5; // 转零到一。
-                            shadow = float3(shadowTexture.SampleLevel(shadowPos.xy, 0.0).x); // 读阴影。
-                        }
-                    }
+                    float3 shadow = ogxCloudTerrainShadow(newPos, terrainShadowOnClouds, shadowTexture, shadowView, shadowProjection, shadowDistort); // 地形阴影。
                     float skylightOcclusion = 1.0; // 参考在极光开启时每个样本重算上层遮挡。
                     // 极光关闭（AURORA_LOCATION=0）的参考变体只算一次；这里按默认开启分支实现，
                     // 保证严格对照的 7621 次采样与默认配置一致。
@@ -144,25 +187,8 @@ float4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples,
                         sunScattering * shadow, moonScattering * shadow, indirectShadowMask, skyScattering * skylightOcclusion, rayPosition,
                         backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2); // 光照。
                     float horizontalDist = length(newPos.xz - s.lightningBoltPosition.xz); // 普通闪电水平距离。
-                    if (horizontalDist < 7500.0 && s.lightningBoltPosition.w > 0.0) // 普通闪电照亮云。
-                    {
-                        float lightningIntensity = exp(-horizontalDist * 0.006) * density * s.lightningFlash; // 闪电强度。
-                        lighting = lerp(lighting, float3(1.3, 1.5, 3.0), lightningIntensity); // 混向冷白。
-                    }
-                    if (s.lightningEnabled > 0 && (layerIndex == 2 || s.thunderStrength > 0.0)) // 积雨云闪电。
-                    {
-                        float lightningDist = length(newPos - lightningPos); // 到闪电位距离。
-                        if (lightningDist < 6000.0 && length(lightningPos) > 0.0) // 在照明范围内。
-                        {
-                            float lightningIntensity = smoothstep(6000.0, 50.0, lightningDist) * smoothstep(0.15, 1.0, shapeWithDensity)
-                                * s.lightningFlash; // 距离与密度权重。
-                            lightningIntensity *= 1.0 - smoothstep(minHeight, 1.05 * maxHeight, rayPosition.y); // 高度淡出。
-                            lightningIntensity *= smoothstep(17000.0, 14000.0, horizontalDist); // 水平淡出。
-                            lightningIntensity *= s.lightningFade; // 时间淡出。
-                            float3 lightningStrength = s.cumulonimbusLightningColor * s.cumulonimbusLightningBrightness * 0.125; // 闪电颜色。
-                            lighting = lerp(lighting, lightningStrength, lightningIntensity); // 混向闪电。
-                        }
-                    }
+                    ogxCloudLightningLighting(lighting, s, layerIndex, newPos, density, shapeWithDensity,
+                        minHeight, maxHeight, rayPosition, lightningPos, horizontalDist); // 普通与积雨云闪电。
                     lighting += s.auroraLighting * min(max(rayHeightInCloud, 0.0) / max(tallness, 1.0), 1.0) * skylightOcclusion * skylightOcclusion; // 参考的极光按云内高度与天光遮挡叠加。
                     newPos.xz /= max(newPos.y, 0.0) * 0.0025 + 1.0; // 空气透视距离压缩。
                     float distancefog = exp2(s.distanceFogScale * length(newPos.xz)); // 距离雾。
@@ -178,5 +204,4 @@ float4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples,
         }
         return float4(color, totalAbsorbance); // 交回这一层的颜色与透过率。
     }
-    return float4(color, totalAbsorbance); // 未知层号原样返回。
 }

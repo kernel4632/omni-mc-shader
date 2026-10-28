@@ -1,7 +1,7 @@
 /*
 Omni 通用图形库吸积盘模块：沿视线在黑洞附近步进，累加盘的颜色与透过率。
 调用位置：任何需要画黑洞吸积盘的程序；Minecraft 光影由 `/omni-gfx/accretion.glsl` 引入，
-    `rendering/world/end_disc.glsl` 的天空版与反射版只差参数，不再各写一份积分。
+    `shaders/effects/world/end_disc.glsl` 的天空版与反射版只差参数，不再各写一份积分。
 可复制示例：`float4 d = ogxAccretionDisc(rayDir, lightDir, noise, noiseTexture, seconds, 50, 3.0, 4, false, true);`
     返回 `rgb` 为盘颜色、`a` 为透过率。
 设计原因与取舍：

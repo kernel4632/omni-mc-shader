@@ -206,4 +206,42 @@ float3 ogxColorDither(float3 color, float2 texCoord, float frameTime, int mode)
     return color + dither * exp2(-16.0); // 十六位整数。
 }
 
+/*
+实现说明：采样序列与噪声纹理。
+一、白噪声：屏幕坐标与帧号合成种子，返回零到一的随机值。
+二、蓝噪声：从纹理取当前像素的阈值，空间上更均匀。
+三、Halton：二、三、五等基数生成低差异序列，适合少量样本。
+四、RGSS：旋转网格超采样，把多个样本折成一个偏移。
+五、时间偏移：每帧加不同的黄金比例偏移，累积后去掉固定图案。
+六、边界：纹理句柄由调用方传入，库不绑定纹理单元；序列函数不保存状态。
+*/
+/*
+函数索引：
+一、`ogxTexelFetch`：按整数坐标取一个像素。
+二、`ogxBlueNoise` 与 `ogxBlueNoiseTemporal`：蓝噪声与逐帧偏移。
+三、`ogxBayerTemporal`：Bayer 抖动加帧偏移。
+四、`ogxSmoothFilter` 与 `ogxShadowSmoothFilter`：平滑与阴影专用滤波。
+五、`ogxSampleNearest`：最近邻采样。
+六、`ogxRgssOffset` 与 `ogxRgssSample`：旋转网格超采样。
+七、`ogxTaaJitter`：时间抗锯齿的帧抖动。
+八、`ogxHalton2` 与 `ogxHalton3`：二维与三维 Halton 序列。
+九、`ogxEquirectToDirection` 与 `ogxDirectionToEquirect`：等距柱状投影互转。
+十、`ogxTriangularWhiteNoise`：三角分布白噪声。
+十一、`ogxColorDither`：颜色抖动。
+十二、边界：纹理句柄由调用方传入，库不绑定纹理单元。
+十三、顺序：先取像素再做偏移，避免坐标被重复缩放。
+*/
+/*
+参数与边界：
+一、纹理坐标必须在零到一之间，越界取像素由调用方夹紧。
+二、蓝噪声的帧偏移由调用方给出。
+三、Bayer 抖动的阶数固定。
+四、平滑滤波的半径由调用方给出。
+五、Halton 序列的序号从零开始。
+六、等距柱状投影的经度范围是负一到一。
+七、颜色抖动的强度由调用方给出。
+八、所有纹理句柄显式传入，库不绑定纹理单元。
+九、序列函数不保存状态，重复调用得到同一点。
+十、采样质量与样本数有关，少量样本要配合时间累积。
+*/
 #endif

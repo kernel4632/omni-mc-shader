@@ -6,13 +6,6 @@
 低成本版本在 `gi/ambientocclusion.slang`，两者按用途分工，不互相包含，避免把重算法带进轻量阶段。
 */
 // 环境光遮蔽的多重反弹近似：用反照率补偿被遮住的间接光。
-float3 ogxAoMultiBounce(float ao, float3 albedo)
-{
-    float3 a = 2.0404 * albedo - 0.3324; // 一次项系数。
-    float3 b = -4.7951 * albedo + 0.6417; // 二次项系数。
-    float3 c = 2.7552 * albedo + 0.6903; // 三次项系数。
-    return max(float3(ao), ((ao * a + b) * ao + c) * ao); // 取多项式与原始遮蔽的较大值。
-}
 
 // 双边升采样：把半分辨率的遮蔽（或任何四通道画面）放大到全分辨率。
 // 四个相邻纹素先按深度筛一次：只有与参考深度相差不超过阈值的样本参与，物体边界不会被糊开。
@@ -71,6 +64,40 @@ struct OgxGtaoParams
 
 // 地平线遮蔽：沿视线做多切片搜索最大地平线角，积分出半球被挡住的比重。
 // 深度图、投影矩阵、画面坐标、比例与噪声全部由调用方传入，库不读取任何引擎画面。
+// 一个地平线样本：按屏幕偏移取深度，天空样本改读远景，再按距离权重回落到地平线下限。
+// 正反两个方向共用这一份，避免两段相同的采样与权重代码各自漂移。
+float ogxAoHorizonSample(float2 coord, float2 sampleOffset, float3 viewPos, float3 viewDir, OgxGtaoParams params,
+    float4x4 projectionInverse, float4x4 dhProjectionInverse, Sampler2D depthTexture, Sampler2D dhDepthTexture,
+    float falloff, float lowerBound)
+{
+    float2 sampleCoord = coord + sampleOffset; // 采样坐标。
+    float sampleDepth = depthTexture.SampleLevel(sampleCoord, 0.0).x; // 采样深度。
+    float3 sampleVector; // 采样点相对当前点。
+    if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
+    {
+        sampleDepth = dhDepthTexture.SampleLevel(sampleCoord, 0.0).x; // 远景深度。
+        sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dhProjectionInverse) - viewPos; // 远景还原。
+    }
+    else // 近景样本正常还原。
+    {
+        sampleVector = ogxGiViewPos(sampleCoord, sampleDepth, projectionInverse) - viewPos; // 近景还原。
+    }
+    float rSampleDist = rsqrt(dot(sampleVector, sampleVector)); // 距离倒数。
+    float cosHorizonAngle = dot(sampleVector, viewDir) * rSampleDist; // 采样点给出的地平线余弦。
+    float falloffWeight; // 衰减权重。
+    if (params.falloff_z_offset) // 可选的深度加权。
+    {
+        float offsetDist = length(float3(sampleVector.xy, sampleVector.z * 1.7)); // 加权距离。
+        falloffWeight = ogxRemapSaturate(offsetDist, falloff * params.falloff_start, falloff); // 衰减权重。
+    }
+    else // 默认按距离加权。
+    {
+        falloffWeight = ogxRemapSaturate(1.0 / rSampleDist, falloff * params.falloff_start, falloff); // 衰减权重。
+    }
+    return lerp(cosHorizonAngle, lowerBound, falloffWeight); // 远处回落到下限。
+}
+
+// 地平线遮蔽：按切片方向搜索两侧可见地平线，再积分成遮蔽量。
 float ogxGroundTruthAo(float3 viewPos, float3 viewDir, float3 normal, float2 coord, float aspect,
     Sampler2D depthTexture, Sampler2D dhDepthTexture, float4x4 projection, float4x4 projection_inverse,
     float4x4 dh_projection_inverse, OgxGtaoParams params, float2 noise)
@@ -116,62 +143,12 @@ float ogxGroundTruthAo(float3 viewPos, float3 viewDir, float3 normal, float2 coo
             offset *= offset; // 平方让近处更密。
             float2 sampleOffset = offset * sliceDir.xy * sampleRadius; // 屏幕偏移。
             sampleOffset.y *= aspect; // 修正宽高比。
-            {
-                float2 sampleCoord = coord + sampleOffset; // 正向采样坐标。
-                float sampleDepth = depthTexture.SampleLevel(sampleCoord, 0.0).x; // 采样深度。
-                float3 sampleVector; // 采样点相对当前点。
-                if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
-                {
-                    sampleDepth = dhDepthTexture.SampleLevel(sampleCoord, 0.0).x; // 远景深度。
-                    sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
-                }
-                else // 近景样本正常还原。
-                {
-                    sampleVector = ogxGiViewPos(sampleCoord, sampleDepth, projection_inverse) - viewPos; // 近景还原。
-                }
-                float rSampleDist = rsqrt(dot(sampleVector, sampleVector)); // 距离倒数。
-                float cosHorizonAngle = dot(sampleVector, viewDir) * rSampleDist; // 采样点给出的地平线余弦。
-                float falloffWeight; // 衰减权重。
-                if (params.falloff_z_offset) // 可选的深度加权。
-                {
-                    float offsetDist = length(float3(sampleVector.xy, sampleVector.z * 1.7)); // 加权距离。
-                    falloffWeight = ogxRemapSaturate(offsetDist, falloff * params.falloff_start, falloff); // 衰减权重。
-                }
-                else // 默认按距离加权。
-                {
-                    falloffWeight = ogxRemapSaturate(1.0 / rSampleDist, falloff * params.falloff_start, falloff); // 衰减权重。
-                }
-                cosHorizonAngle = lerp(cosHorizonAngle, minCosHorizonAngle.x, falloffWeight); // 远处回落到下限。
-                maxCosHorizonAngle.x = max(cosHorizonAngle, maxCosHorizonAngle.x); // 取可见地平线角。
-            }
-            {
-                float2 sampleCoord = coord - sampleOffset; // 反向采样坐标。
-                float sampleDepth = depthTexture.SampleLevel(sampleCoord, 0.0).x; // 采样深度。
-                float3 sampleVector; // 采样点相对当前点。
-                if (params.has_dh && params.dh_ao && sampleDepth == 1.0) // 天空样本改读远景深度。
-                {
-                    sampleDepth = dhDepthTexture.SampleLevel(sampleCoord, 0.0).x; // 远景深度。
-                    sampleVector = ogxGiViewPosDistant(sampleCoord, sampleDepth, dh_projection_inverse) - viewPos; // 远景还原。
-                }
-                else // 近景样本正常还原。
-                {
-                    sampleVector = ogxGiViewPos(sampleCoord, sampleDepth, projection_inverse) - viewPos; // 近景还原。
-                }
-                float rSampleDist = rsqrt(dot(sampleVector, sampleVector)); // 距离倒数。
-                float cosHorizonAngle = dot(sampleVector, viewDir) * rSampleDist; // 采样点给出的地平线余弦。
-                float falloffWeight; // 衰减权重。
-                if (params.falloff_z_offset) // 可选的深度加权。
-                {
-                    float offsetDist = length(float3(sampleVector.xy, sampleVector.z * 1.7)); // 加权距离。
-                    falloffWeight = ogxRemapSaturate(offsetDist, falloff * params.falloff_start, falloff); // 衰减权重。
-                }
-                else // 默认按距离加权。
-                {
-                    falloffWeight = ogxRemapSaturate(1.0 / rSampleDist, falloff * params.falloff_start, falloff); // 衰减权重。
-                }
-                cosHorizonAngle = lerp(cosHorizonAngle, minCosHorizonAngle.y, falloffWeight); // 远处回落到下限。
-                maxCosHorizonAngle.y = max(cosHorizonAngle, maxCosHorizonAngle.y); // 取可见地平线角。
-            }
+            float cosHorizonAnglePos = ogxAoHorizonSample(coord, sampleOffset, viewPos, viewDir, params,
+                projection_inverse, dh_projection_inverse, depthTexture, dhDepthTexture, falloff, minCosHorizonAngle.x); // 正向采样。
+            maxCosHorizonAngle.x = max(cosHorizonAnglePos, maxCosHorizonAngle.x); // 取可见地平线角。
+            float cosHorizonAngleNeg = ogxAoHorizonSample(coord, -sampleOffset, viewPos, viewDir, params,
+                projection_inverse, dh_projection_inverse, depthTexture, dhDepthTexture, falloff, minCosHorizonAngle.y); // 反向采样。
+            maxCosHorizonAngle.y = max(cosHorizonAngleNeg, maxCosHorizonAngle.y); // 取可见地平线角。
         }
         maxCosHorizonAngle = float2(-ogxFastAcos(maxCosHorizonAngle.y), ogxFastAcos(maxCosHorizonAngle.x)) * 2.0; // 两侧换成开口角。
         float horizonAngleIntegra = 2.0 * cosNormalAngle + (maxCosHorizonAngle.x + maxCosHorizonAngle.y) * sin(normalAngle) - cos(maxCosHorizonAngle.x - normalAngle) - cos(maxCosHorizonAngle.y - normalAngle); // 这一片的半球可见缺口。
@@ -208,61 +185,6 @@ float3 ogxGiHistorySample(float3 currNormal, float currDist, float3 cameraVeloci
 
 // 反射阴影图反弹：从阴影图里可见的表面取底色，按法线朝向与距离给当前点补一份光。
 // `useSolidShadow` 对应支持遮挡贴图的显卡，`leakFix` 对应主世界的阳光泄漏修正，`underwater` 是眼睛在水下。
-float3 ogxGiRsm(float3 viewPos, float3 normal, OgxGiView view,
-    Sampler2D shadowDepth0, Sampler2D shadowDepth1, Sampler2D shadowColor0, Sampler2D shadowColor1,
-    float radius, int steps, float falloff, float shadowMapResolution, float shadowBias, float2 noise,
-    bool useSolidShadow, bool leakFix, bool underwater)
-{
-    float3 worldPos = ogxMatrixMulPoint(view.model_view_inverse, viewPos) + ogxMatrixTranslation(view.model_view_inverse); // 视空间位置换世界空间。
-    float3 shadowPosition = ogxShadowScreenPos(worldPos, view.shadow_view, view.shadow_projection); // 投到阴影图。
-    float3 shadow_normal = ogxMatrix3MulPoint(view.shadow_normal, normal); // 法线转到阴影相机空间；三乘三矩阵在调用方已经组合好。
-    float pixelOffset = radius * view.shadow_projection[0][0]; // 搜索半径换成阴影图像素。
-    float zScale = 1.0 / view.shadow_projection[0][0]; // 阴影深度的缩放系数。
-    float angle = noise.x * 6.28318530718; // 起始旋转角。
-    float2 rot = float2(cos(angle), sin(angle)); // 起始方向。
-    float rSteps = 1.0 / float(steps); // 采样次数倒数。
-    float3 rsm = float3(0.0); // 累积的反弹颜色。
-    for (int i = 0; i < steps; i++) // 螺旋逐点采样。
-    {
-        rot = float2(cos(OGX_GOLDEN_ANGLE) * rot.x + sin(OGX_GOLDEN_ANGLE) * rot.y,
-                     -sin(OGX_GOLDEN_ANGLE) * rot.x + cos(OGX_GOLDEN_ANGLE) * rot.y); // 每步旋转黄金角。
-        float r = (float(i) + noise.y) * rSteps; // 归一化半径。
-        float2 offset = rot * r * pixelOffset; // 屏幕偏移。
-        float2 offsetPosition = shadowPosition.xy + offset; // 采样点的阴影图坐标。
-        float2 sampleCoord = ogxDistortShadowPos(offsetPosition, shadowBias); // 还原压缩后的坐标。
-        int2 sampleTexel = int2(shadowMapResolution * sampleCoord); // 换成纹素。
-        float sampleDepth; // 按显卡能力选深度图；写成分支，严格对照才能按布尔参数裁掉另一张。
-        if (useSolidShadow) { sampleDepth = shadowDepth1.Load(int3(sampleTexel, 0)).x; }
-        else { sampleDepth = shadowDepth0.Load(int3(sampleTexel, 0)).x; }
-        if (sampleDepth == 0.0 || sampleDepth >= 1.0) // 没有几何或超出范围就跳过。
-        {
-            continue;
-        }
-        float3 sampleVector = float3(offsetPosition, sampleDepth) - shadowPosition; // 采样点相对当前点。
-        sampleVector *= float3(zScale, zScale, -zScale * 2.0); // 修正到统一的深度尺度。
-        float3 sampleDir = normalize(sampleVector); // 采样方向。
-        float nDotV = dot(sampleDir, shadow_normal); // 当前点法线与采样方向的夹角余弦。
-        if (nDotV <= 0.0) // 背对采样点不接收。
-        {
-            continue;
-        }
-        float4 sampleData = shadowColor1.Load(int3(sampleTexel, 0)); // 读阴影图里的法线与天光。
-        float3 sampleNormal = sampleData.rgb * 2.0 - 1.0; // 还原采样点法线。
-        float snDotV = dot(-sampleDir, sampleNormal) * 1.004 - 0.004; // 采样点法线与入射方向的夹角余弦，留一点余量。
-        if (snDotV < 0.0) // 背对方向不发光。
-        {
-            continue;
-        }
-        float3 sampleAlbedo = ogxGammaToLinear(shadowColor0.Load(int3(sampleTexel, 0)).rgb); // 采样点底色转线性。
-        sampleVector.z *= 1.5; // 深度方向加权，避免细长表面贡献过大。
-        float sampleDist = length(sampleVector); // 采样距离。
-        float distFalloff = pow(sampleDist + 0.035, -falloff) * ogxFastSqrt(1.0 - r); // 距离衰减与中心加权。
-        float lightMask = leakFix ? ogxSaturate(sampleData.a * 15.0 + float(underwater)) : 1.0; // 主世界只给接到天光或水里的点补光。
-        rsm += sampleAlbedo * (nDotV * snDotV * distFalloff * lightMask); // 累加一份反弹。
-    }
-    rsm *= rSteps * radius * 0.1; // 平均并按半径缩放。
-    return rsm; // 返回反弹颜色。
-}
 
 // iterationT 的 RSM 入口：先取时间蓝噪声，再把同一帧参数交给反弹主循环。
 // 为什么单独一层：参考函数内部自己取蓝噪声，主循环把噪声当参数；严格对照需要把

@@ -142,6 +142,23 @@ float4x4 ogxSaturationMatrix(float saturation)
 float ogxSoftSaturate(float x) { return 1.0 - x / (1.0 + x); }
 float3 ogxSoftSaturate3(float3 x) { return float3(ogxSoftSaturate(x.x), ogxSoftSaturate(x.y), ogxSoftSaturate(x.z)); }
 
+// Eclipse 黑体色：按温度拟合 RGB，再转线性；和普朗克轨迹版是两个不同近似。
+// 为什么保留这条拟合：光源色与调试色温需要和 Eclipse 参考逐项一致，
+// 数学模块的普朗克轨迹版偏物理，短波段的观感不同。
+float3 ogxBlackbodyApprox(float temperature)
+{
+    float t = pow(temperature, -1.5); // 高温项。
+    float lt = log(temperature); // 对数项。
+    float3 col = float3(0.0); // 逐通道拟合结果。
+    col.x = 220000.0 * t + 0.58039215686; // 红通道。
+    col.y = 0.39231372549 * lt - 2.44549019608; // 绿通道低温段。
+    col.y = temperature > 6500.0 ? 138039.215686 * t + 0.72156862745 : col.y; // 高温段换拟合。
+    col.z = 0.76078431372 * lt - 5.68078431373; // 蓝通道。
+    col = ogxSaturate(col); // 先夹紧到零到一。
+    col = temperature < 1000.0 ? col * temperature * 0.001 : col; // 极低温按比例压暗。
+    return ogxSrgbToLinear(col); // 最后转线性。
+}
+
 // ACES 曲线，具体实现在子文件。
 #include "color/aces.slang"
 // AgX 曲线与可配置色域矩阵，具体实现在子文件。
@@ -152,7 +169,50 @@ float3 ogxSoftSaturate3(float3 x) { return float3(ogxSoftSaturate(x.x), ogxSoftS
 #include "color/uchimura.slang"
 // 胶片与肩部曲线，具体实现在子文件。
 #include "color/curve.slang"
-// 黑体近似色，具体实现在子文件。
-#include "color/blackbody.slang"
 
+/*
+实现说明：颜色模块的公共工具。
+一、矩阵工具：`ogxApplyColumns` 与 `ogxApplyRows` 把矩阵乘向量展开成三列或三行，保证两个后端结果一致。
+二、色调映射入口：无压缩、ACES、AgX、Reinhard、Uchimura 与胶片曲线都在这里按需引入。
+三、sRGB：标准分段曲线与三次多项式近似各一份，前者用于最终显示，后者用于便宜的中间转换。
+四、亮度：现代权重与 Rec.601 权重分开命名，避免两种颜色空间混用。
+五、白平衡与饱和度：白平衡只乘色温颜色，饱和度矩阵把颜色朝灰阶收或向外推。
+六、黑体色：Eclipse 的拟合曲线与数学模块的普朗克轨迹版是两条不同近似，按用途选择。
+七、黑边与暗视觉：黑边按目标宽高比裁切，浦肯野效应在暗处把颜色混向偏蓝。
+八、边界：所有函数只接收显式颜色与参数，不读取引擎状态。
+*/
+/*
+函数索引：
+一、`ogxApplyColumns` 与 `ogxApplyRows`：矩阵乘向量的两种展开。
+二、`ogxTonemapNone`：只做伽马编码。
+三、`ogxLinearToSrgbClamped`：先夹紧再走标准 sRGB。
+四、`ogxLinearToSrgb`：分段标准曲线，暗部直线、亮部幂曲线。
+五、`ogxDecodeVec2x16`：不依赖浮点位模式的十六位解包。
+六、`ogxBlackBar`：按目标宽高比裁黑边。
+七、`ogxPurkinje`：暗视觉偏蓝。
+八、`ogxWhiteBalance`：乘色温颜色。
+九、`ogxAdvancedColor`：白光裁剪、亮度伽马与饱和度。
+十、`ogxHsvToRgb` 与 `ogxRgbToHsv`：色相、饱和度、明度互转。
+十一、`ogxSrgbToLinear` 与 `ogxSrgbToLinearApprox`：标准与多项式两条转换。
+十二、`ogxLuminanceRec601`：旧电视亮度权重。
+十三、`ogxSaturationMatrix`：四乘四饱和度矩阵。
+十四、`ogxSoftSaturate` 与 `ogxSoftSaturate3`：软肩曲线。
+十五、`ogxBlackbodyApprox`：Eclipse 黑体拟合。
+十六、边界：函数只接收显式颜色与参数，不读取引擎状态。
+十七、顺序：先做线性空间处理，再编码到显示空间。
+十八、取舍：标准 sRGB 与二点二近似分开命名，避免混用。
+*/
+/*
+参数与边界：
+一、sRGB 转换假设输入非负，负值会得到未定义结果。
+二、黑边函数的目标宽高比为零时表示不裁切。
+三、浦肯野效应的阈值必须大于零。
+四、白平衡的色温颜色通常接近一，过强会偏色。
+五、高级调色的亮度伽马不能为零。
+六、饱和度矩阵的一表示原色，零表示灰阶。
+七、黑体拟合在极低温时按比例压暗。
+八、所有函数只接收显式颜色与参数，不读取引擎状态。
+九、标准 sRGB 与二点二近似分开命名，避免混用。
+十、输出在线性空间或显示空间之间切换时，调用方要看清函数名。
+*/
 #endif

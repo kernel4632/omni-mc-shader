@@ -1,7 +1,7 @@
 /*
 水面子文件：海洋波参数、逐层波高与方向、海洋法线、泡沫与整像素着色。
 调用位置：由 `water.slang` 内联，水面效果与测试世界直接调用这里的海洋入口。
-可复制示例：`OgxOceanPixel p = ogxOceanPixel(position, 1.0, 13.0, time, waves, ...);`
+可复制示例：`OgxOceanWaves waves = ogxOceanWavesDefault();`
 设计原因与取舍：层数、拖拽与频率全部显式传入；累加顺序照参考保留，默认海面形状不变。
 */
 // 默认参数：iterationT 海洋扩展的常数，调用方只改真正要变的那几个字段。

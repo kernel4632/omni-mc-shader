@@ -83,56 +83,8 @@ float ogxFogPowder(float density, float nu)
 }
 
 // 沿视线积分雾：返回预乘散射色与剩余透过率。
-vec4 ogxFogMarch(OgxFog fog, vec3 camera, vec3 worldPosition, vec3 sunDirection,
-                   vec3 sunColor, float jitter, int steps)
-{
-    vec3 delta = worldPosition - camera; // 相机到目标点的向量。
-    float distance = length(delta); // 视线长度，公里。
-    if (distance <= 1e-5) // 零长度不产生雾。
-    {
-        return vec4(0.0, 0.0, 0.0, 1.0); // 完全透明。
-    }
-    vec3 viewDirection = delta / distance; // 单位视线方向。
-    const int maxSteps = 24; // 固定循环上限。
-    int count = min(max(steps, 1), maxSteps); // 调用方可以降低质量。
-    float stepLength = distance / float(count); // 每步长度。
-    float distanceAlongRay = stepLength * ogxSaturate(jitter); // 抖动起点，减少层状条纹。
-    float transmittance = 1.0; // 初始完全透明。
-    vec3 scattered = vec3(0.0); // 累积散射光。
-    float nu = dot(viewDirection, sunDirection); // 视线与阳光夹角。
-    float phase = ogxFogPhase(nu); // 混合相位。
-    for (int i = 0; i < maxSteps; i++) // 逐步穿过雾层。
-    {
-        if (i >= count) // 超过质量设置就停止。
-        {
-            break; // 提前结束。
-        }
-        vec3 position = camera + viewDirection * distanceAlongRay; // 当前采样点。
-        float density = ogxFogDensity(fog, position); // 当前密度。
-        if (density > 0.001) // 空区域跳过。
-        {
-            float height = exp(-max(position.y - fog.baseHeight, 0.0) / max(fog.heightFalloff, 1e-4)); // 高度包络。
-            float powder = ogxFogPowder(density, nu); // 薄雾的多次散射。
-            vec3 sun = sunColor * fog.sunStrength * (phase * 2.0 + 0.15) * height * powder; // 阳光散射。
-            vec3 ambient = fog.color * (0.30 + 0.70 * height); // 环境光。
-            float extinction = exp(-density * stepLength * 1.2); // 这一段的透过率。
-            scattered += (sun + ambient) * transmittance * (1.0 - extinction); // 按剩余透过率累加。
-            transmittance *= extinction; // 更新透过率。
-        }
-        distanceAlongRay += stepLength; // 前进一段。
-        if (transmittance < 0.02) // 几乎不透明就不再采样。
-        {
-            break; // 提前结束。
-        }
-    }
-    return vec4(scattered, transmittance); // 返回预乘散射色与剩余透过率。
-}
 
 // 把雾应用到已经着色的颜色：先乘剩余透过率，再加散射色。
-vec3 ogxFogApply(vec3 color, vec4 fog)
-{
-    return color * fog.a + fog.rgb; // 预乘散射色直接相加。
-}
 
 // 按比例淡出一层预乘雾：只缩放散射色，并把透过率朝一插值。
 // 为什么不能直接把四个分量一起乘小：透过率被乘小以后，颜色会被一起抹掉，
@@ -226,7 +178,6 @@ float ogxCloudFbm(vec3 position, vec3 shift, sampler2D noiseTexture, float noise
     return accum + octShift; // 返回归一化后的噪声。
 }
 
-
 // 下界雾的单格密度：世界坐标折成三维格子，再查二维噪声图。
 float ogxNetherFogDensityAt(vec3 pos, sampler2D noiseTexture)
 {
@@ -261,7 +212,7 @@ float ogxNetherFogCloudVolume(vec3 pos, float time, sampler2D noiseTexture)
 /*
 雾子文件：末地漩涡雾、群系雾色与密度、原版雾、选择框和末地阴影形状。
 调用位置：由 `fog/fog.slang` 内联，末地天空与雾效果直接调用这里的入口。
-可复制示例：`vec4 fog = ogxEndVortexFog(cameraPos, worldDir, viewDist, dither, 12, 2.0, 128.0, ...);`
+可复制示例：`float phase = ogxEndVortexLightPhase(lightPos);`
 设计原因与取舍：群系权重与光源位置显式传入，不读取宿主群系表；漩涡形状与参考采样顺序一致。
 */
 // 末地雾形状与光源相位的提前声明：定义放在文件后半段。
@@ -555,39 +506,6 @@ float ogxEndFogPhaseAnisotropic(float x, float g)
     return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考实现直接写 3.14，保留同一精度。
 }
 
-// iterationT 的原版雾叠加：黑暗、失明、水下与岩浆四种状态分别压暗画面。
-// 为什么按状态分开：每种状态的距离范围与目标颜色不同，合并会改变边界。
-vec3 ogxVanillaFog(vec3 color, float dist, float farPlane, float darkness, float blindness,
-    int eyeInWater, float torchBrightness)
-{
-    if (darkness > 0.0) // 黑暗效果：远处逐步变黑。
-    {
-        color = mix(color, vec3(0.0), smoothstep(5.0, mix(farPlane, 15.0, darkness), dist) * darkness);
-    }
-    if (blindness > 0.0) // 失明效果：更近距离变黑。
-    {
-        color = mix(color, vec3(0.0), smoothstep(1.5, mix(farPlane, 4.5, blindness), dist) * blindness);
-    }
-    if (eyeInWater == 3) // 细雪或粉雪：近处压成深灰。
-    {
-        color = mix(color, vec3(0.03), smoothstep(0.0, 2.0, dist));
-    }
-    if (eyeInWater == 2) // 岩浆：近处压成暖橙。
-    {
-        color = mix(color, vec3(0.3721, 0.0775, 0.0024) * torchBrightness, smoothstep(0.0, 1.0, dist));
-    }
-    return color; // 返回叠加后的颜色。
-}
-
-// iterationT 的选择框：选中方块时用贴图色乘曝光统计值，覆盖原画面。
-vec3 ogxSelectionBox(vec3 color, vec3 albedo, bool isSelection, float exposureEncoded, float exposureOutputFactor)
-{
-    if (!isSelection) return color; // 没有选中就不改。
-    float exposure = exposureEncoded * exposureEncoded * exposureEncoded * exposureEncoded; // CurveToLinear 的标量版。
-    exposure *= 1500.0 / exposureOutputFactor; // 参考实现的曝光缩放。
-    return albedo * exposure; // 选中框用贴图色乘曝光。
-}
-
 // 雾相位：Eclipse 的指数相位，光线越正对越亮。
 float ogxEndLightFalloff(float lightPoint)
 {
@@ -608,6 +526,56 @@ float ogxEndFogShadowShape(vec3 worldPos, vec3 lightPos, sampler3D fogShape, flo
         shadow += textureLod(fogShape, samplePos, 0.0).r * endStormDensity; // 取雾密度。
     }
     return clamp(exp2(shadow * -10.0), 0.0, 1.0); // 参考实现的衰减。
+}
+
+vec4 ogxFogMarch(OgxFog fog, vec3 camera, vec3 worldPosition, vec3 sunDirection,
+                   vec3 sunColor, float jitter, int steps)
+{
+    vec3 delta = worldPosition - camera; // 相机到目标点的向量。
+    float distance = length(delta); // 视线长度，公里。
+    if (distance <= 1e-5) // 零长度不产生雾。
+    {
+        return vec4(0.0, 0.0, 0.0, 1.0); // 完全透明。
+    }
+    vec3 viewDirection = delta / distance; // 单位视线方向。
+    const int maxSteps = 24; // 固定循环上限。
+    int count = min(max(steps, 1), maxSteps); // 调用方可以降低质量。
+    float stepLength = distance / float(count); // 每步长度。
+    float distanceAlongRay = stepLength * ogxSaturate(jitter); // 抖动起点，减少层状条纹。
+    float transmittance = 1.0; // 初始完全透明。
+    vec3 scattered = vec3(0.0); // 累积散射光。
+    float nu = dot(viewDirection, sunDirection); // 视线与阳光夹角。
+    float phase = ogxFogPhase(nu); // 混合相位。
+    for (int i = 0; i < maxSteps; i++) // 逐步穿过雾层。
+    {
+        if (i >= count) // 超过质量设置就停止。
+        {
+            break; // 提前结束。
+        }
+        vec3 position = camera + viewDirection * distanceAlongRay; // 当前采样点。
+        float density = ogxFogDensity(fog, position); // 当前密度。
+        if (density > 0.001) // 空区域跳过。
+        {
+            float height = exp(-max(position.y - fog.baseHeight, 0.0) / max(fog.heightFalloff, 1e-4)); // 高度包络。
+            float powder = ogxFogPowder(density, nu); // 薄雾的多次散射。
+            vec3 sun = sunColor * fog.sunStrength * (phase * 2.0 + 0.15) * height * powder; // 阳光散射。
+            vec3 ambient = fog.color * (0.30 + 0.70 * height); // 环境光。
+            float extinction = exp(-density * stepLength * 1.2); // 这一段的透过率。
+            scattered += (sun + ambient) * transmittance * (1.0 - extinction); // 按剩余透过率累加。
+            transmittance *= extinction; // 更新透过率。
+        }
+        distanceAlongRay += stepLength; // 前进一段。
+        if (transmittance < 0.02) // 几乎不透明就不再采样。
+        {
+            break; // 提前结束。
+        }
+    }
+    return vec4(scattered, transmittance); // 返回预乘散射色与剩余透过率。
+}
+
+vec3 ogxFogApply(vec3 color, vec4 fog)
+{
+    return color * fog.a + fog.rgb; // 预乘散射色直接相加。
 }
 
 #endif

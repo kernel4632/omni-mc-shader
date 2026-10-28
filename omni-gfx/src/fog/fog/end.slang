@@ -1,7 +1,7 @@
 /*
 雾子文件：末地漩涡雾、群系雾色与密度、原版雾、选择框和末地阴影形状。
 调用位置：由 `fog/fog.slang` 内联，末地天空与雾效果直接调用这里的入口。
-可复制示例：`float4 fog = ogxEndVortexFog(cameraPos, worldDir, viewDist, dither, 12, 2.0, 128.0, ...);`
+可复制示例：`float phase = ogxEndVortexLightPhase(lightPos);`
 设计原因与取舍：群系权重与光源位置显式传入，不读取宿主群系表；漩涡形状与参考采样顺序一致。
 */
 // 末地雾形状与光源相位的提前声明：定义放在文件后半段。
@@ -293,39 +293,6 @@ void ogxBiomeFogDensityReference(inout float4 uniformDensity, inout float4 cloud
 float ogxEndFogPhaseAnisotropic(float x, float g)
 {
     return ogxHenyeyGreensteinPhase(x, g, 1.0 / 3.14); // 参考实现直接写 3.14，保留同一精度。
-}
-
-// iterationT 的原版雾叠加：黑暗、失明、水下与岩浆四种状态分别压暗画面。
-// 为什么按状态分开：每种状态的距离范围与目标颜色不同，合并会改变边界。
-float3 ogxVanillaFog(float3 color, float dist, float farPlane, float darkness, float blindness,
-    int eyeInWater, float torchBrightness)
-{
-    if (darkness > 0.0) // 黑暗效果：远处逐步变黑。
-    {
-        color = lerp(color, float3(0.0), smoothstep(5.0, lerp(farPlane, 15.0, darkness), dist) * darkness);
-    }
-    if (blindness > 0.0) // 失明效果：更近距离变黑。
-    {
-        color = lerp(color, float3(0.0), smoothstep(1.5, lerp(farPlane, 4.5, blindness), dist) * blindness);
-    }
-    if (eyeInWater == 3) // 细雪或粉雪：近处压成深灰。
-    {
-        color = lerp(color, float3(0.03), smoothstep(0.0, 2.0, dist));
-    }
-    if (eyeInWater == 2) // 岩浆：近处压成暖橙。
-    {
-        color = lerp(color, float3(0.3721, 0.0775, 0.0024) * torchBrightness, smoothstep(0.0, 1.0, dist));
-    }
-    return color; // 返回叠加后的颜色。
-}
-
-// iterationT 的选择框：选中方块时用贴图色乘曝光统计值，覆盖原画面。
-float3 ogxSelectionBox(float3 color, float3 albedo, bool isSelection, float exposureEncoded, float exposureOutputFactor)
-{
-    if (!isSelection) return color; // 没有选中就不改。
-    float exposure = exposureEncoded * exposureEncoded * exposureEncoded * exposureEncoded; // CurveToLinear 的标量版。
-    exposure *= 1500.0 / exposureOutputFactor; // 参考实现的曝光缩放。
-    return albedo * exposure; // 选中框用贴图色乘曝光。
 }
 
 // 雾相位：Eclipse 的指数相位，光线越正对越亮。

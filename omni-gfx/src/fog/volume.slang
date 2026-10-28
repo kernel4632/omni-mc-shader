@@ -1,7 +1,7 @@
 /*
 Omni 通用图形库体积雾模块：密度、阳光方向吸收、沿视线步进、闪电、暴风、群系与云影。
 调用位置：任何需要体积雾的程序；Minecraft 光影由 `/omni-gfx/fog/volume.glsl` 引入，
-    `rendering/fog/volumetric.glsl` 只把选项、天气、群系与阴影贴图换成参数。
+    `shaders/effects/shared/fog/volumetric.glsl` 只把选项、天气、群系与阴影贴图换成参数。
 可复制示例：先填好一层雾的参数，再调用一次 `ogxVolumetricFog` 完成整段步进。
 设计原因与取舍：
     纹理、阴影矩阵、相机、光色与选项全部由调用方传入，库不读取宿主状态。
@@ -29,8 +29,12 @@ Omni 通用图形库体积雾模块：密度、阳光方向吸收、沿视线步
 #include "fog.slang"
 // 天气提供云量、风、降雨与雷暴强度。
 #include "../weather/weather.slang"
+// 闪电提供光柱照明，体积雾的闪电步进与云共用同一条曲线。
+#include "../weather/lightning.slang"
 // 阴影提供屏幕空间阴影、PCSS 与级联选择。
 #include "../shadow/shadow.slang"
+// 阴影贴图提供边缘压缩，WSR 空气雾与水下体积按参考实现复用同一坐标变换。
+#include "../shadow/map.slang"
 // 水面提供吸收、波法线、泡沫与折射。
 #include "../water.slang"
 // 颜色提供伽马、线性转换与色调映射。
@@ -84,16 +88,65 @@ struct OgxFogMedia
 
 // 云影贴图的三次采样与世界坐标投影，具体实现在子文件。
 #include "volume/shadow.slang"
-// 暴风浓雾的噪声与高度衰减，具体实现在子文件。
-#include "volume/storm.slang"
-// 闪电光柱的照明衰减，具体实现在子文件。
-#include "volume/light.slang"
-// 密度模型选择与沿光方向吸收，具体实现在子文件。
-#include "volume/step.slang"
 
-/* 体积雾主体：沿视线步进，同时沿光方向估遮挡，累加雾色与阳光散射；由 `fog/volume.slang` 内联引入。
-可复制示例：`ogxVolumetricFog(color, startPos, endPos, worldDir, media, ...);`
-设计取舍：步长按指数增长，阴影、云影、群系与体积光由布尔开关选择，关闭时不产生额外采样。 */
+// 暴风浓雾：噪声雾团与低空层相加，雪暴才随高度变淡。
+// 为什么纵向压扁再乘一百：暴风的云团在水平方向拉得很长，压扁后噪声才会形成横向雪带。
+float ogxFogStormDensity(float3 worldPos, OgxFogMedia media, Sampler2D noiseTexture)
+{
+    float3 scroll = float3(media.storm_time, 0.0, media.storm_time) * 15.0; // 随时间在横纵方向滚动。
+    float3 samplePos = (worldPos * float3(1.0, 1.0 / 48.0, 1.0) - scroll) * 100.0; // 纵向压扁、乘一百再减滚动量。
+    float noise = 1.0 - ogxStormNoise(samplePos, noiseTexture, 512.0); // 取反，让噪声高的地方雾更浓。
+    float heightFade = exp2(-0.06 * max(worldPos.y - (media.storm_height + 3.0), 0.0)); // 起始高度以上缓慢变淡。
+    float denseCloud = noise * noise * lerp(1.0, heightFade, media.snow_storm); // 噪声雾团。
+    return 1.0 + denseCloud + media.daily_fog; // 低空层与噪声雾团相加。
+}
+
+// 闪电照亮参与散射的介质：把闪电当成一根竖直光柱。
+// 光柱算法只在数学模块维护一份，这里把雾参数换成显式输入，避免再写一套衰减曲线。
+float3 ogxFogLightning(float3 relativePos, OgxFogMedia media, float lightDistance, float falloff)
+{
+    return ogxLightningGlow(relativePos, media.lightning_position, media.lightning_intensity,
+        media.lightning_strength, lightDistance, falloff); // 光柱计算只在数学模块一份。
+}
+
+// 雾密度：仅高度衰减或团雾，参数由效果层按选项给出。
+// 为什么用一个布尔开关：两种密度模型共享后续步进，分开写会让主体循环复制两份。
+float ogxFogDensity(float3 fogPos, float3 wind, bool noisy, float heightA, float heightB, float falloff, float timeMidnight, Sampler2D noiseTexture)
+{
+    return noisy
+        ? ogxFogDensityNoise(fogPos, wind, heightA, heightB, falloff, timeMidnight, noiseTexture)
+        : ogxFogDensityHeight(fogPos, heightA, heightB, falloff, timeMidnight); // 两种密度模型。
+}
+
+// 沿阳光方向估这一段雾对光的吸收：步长逐步放大，近处权重更高。
+// 步长放大而不是等距：靠近采样点的遮挡更重要，远处用大步长节省循环。
+float ogxFogLightMarch(inout float3 fogPos, float3 wind, OgxFogMedia media, bool noisy, float heightA, float heightB, float falloff, Sampler2D noiseTexture, int steps, float stepLength)
+{
+    float lightingDensity = 0.0; // 沿光方向累计的密度。
+    for (int i = 0; i < steps; i++, fogPos += media.light_vector * stepLength, stepLength *= 1.5) // 沿光方向步进，步长逐步放大。
+    {
+        lightingDensity += ogxFogDensity(fogPos, wind, noisy, heightA, heightB, falloff, media.time_midnight, noiseTexture) * stepLength; // 累加这一段密度。
+    }
+    return lightingDensity; // 返回累计密度。
+}
+
+// 阴影采样：按是否支持实心阴影选择深度图，再按是否开启半透明染色扣掉染色遮挡。
+// 返回受光系数；`shadowColorSample` 交回该点的半透明颜色，供后续散射染色。
+float ogxFogShadowAt(OgxFogMedia media, float3 shadowPos, Sampler2D shadowDepth0, Sampler2D shadowDepth1,
+    Sampler2D shadowColor0, bool useStained, bool useSolidShadow, out float3 shadowColorSample)
+{
+    shadowColorSample = float3(1.0); // 默认不染色。
+    if (!ogxEqual(ogxSaturate(shadowPos.xy), shadowPos.xy) || shadowPos.z >= 1.0) return 1.0; // 坐标在图外时保持全亮。
+    int2 shadowTexel = int2(shadowPos.xy * media.shadow_map_resolution); // 换成阴影图纹素。
+    float solidDepth = useSolidShadow ? shadowDepth1.Load(int3(shadowTexel, 0)).x : shadowDepth0.Load(int3(shadowTexel, 0)).x; // 按显卡能力选深度图。
+    float shadow = step(shadowPos.z, solidDepth); // 射线在遮挡物前面才受光。
+    if (!useStained) return shadow; // 不染色时只交回受光。
+    float transparentDepth = shadowDepth0.Load(int3(shadowTexel, 0)).x; // 读半透明深度。
+    shadowColorSample = ogxGammaToLinear(shadowColor0.Load(int3(shadowTexel, 0)).rgb); // 读半透明颜色。
+    float transparentShadow = step(transparentDepth, shadowPos.z) * shadow; // 半透明遮挡量。
+    shadowColorSample *= transparentShadow; // 颜色按遮挡量缩放。
+    return shadow - transparentShadow; // 从受光里扣掉半透明遮挡。
+}
 
 // 体积雾主体：沿视线步进，同时沿光方向估遮挡，累加雾色与阳光散射。
 // `dither` 是这一步的抖动；`volumetricLighting` 由效果层按体积光照开关选择单级或多级散射。
@@ -150,22 +203,8 @@ void ogxVolumetricFog(inout float3 color, float3 startPos, float3 endPos, float3
             stepRayDensity = ogxMiePhase(0.5, dot(worldDir, media.light_vector)) * 0.7 + 0.05;
         }
         shadowPos.xy = ogxDistortShadowPos(shadowPos.xy, media.shadow_bias); // 阴影图坐标补上边缘压缩。
-        float shadow = 1.0; // 这一点受不受阳光。
-        float3 shadowColorSample = float3(1.0); // 该点半透明染色。
-        if (ogxEqual(ogxSaturate(shadowPos.xy), shadowPos.xy) && shadowPos.z < 1.0) // 坐标落在阴影图内才采样。
-        {
-            int2 shadowTexel = int2(shadowPos.xy * media.shadow_map_resolution); // 换成阴影图纹素。
-            float solidDepth = useSolidShadow ? shadowDepth1.Load(int3(shadowTexel, 0)).x : shadowDepth0.Load(int3(shadowTexel, 0)).x; // 按显卡能力选深度图。
-            shadow *= step(shadowPos.z, solidDepth); // 射线在遮挡物前面才受光。
-            if (useStained) // 半透明染色。
-            {
-                float transparentDepth = shadowDepth0.Load(int3(shadowTexel, 0)).x; // 读半透明深度。
-                shadowColorSample = ogxGammaToLinear(shadowColor0.Load(int3(shadowTexel, 0)).rgb); // 读半透明颜色。
-                float transparentShadow = step(transparentDepth, shadowPos.z) * shadow; // 半透明遮挡量。
-                shadowColorSample *= transparentShadow; // 颜色按遮挡量缩放。
-                shadow -= transparentShadow; // 从受光里扣掉半透明遮挡。
-            }
-        }
+        float3 shadowColorSample; // 该点半透明染色。
+        float shadow = ogxFogShadowAt(media, shadowPos, shadowDepth0, shadowDepth1, shadowColor0, useStained, useSolidShadow, shadowColorSample); // 阴影与染色。
         float cloudShadow = 1.0; // 云影默认不压暗。
         if (useCloudShadow) cloudShadow = ogxFogCloudShadow(fogPos - media.camera_position, media, cloudShadowTex, false); // 读该点云影。
         float integral = transmittance - absorption * transmittance; // 这一段吸收掉的光量。
@@ -213,13 +252,81 @@ void ogxVolumetricFog(inout float3 color, float3 startPos, float3 endPos, float3
 }
 
 // 水下焦散与光柱，具体实现在子文件。
-// --- underwater ---
-
-// 水下焦散与光柱，具体实现在子文件。
 #include "volume/underwater.slang"
 // 严格参考签名的雾与水下光柱入口，具体实现在子文件。
 #include "volume/exact.slang"
 // 下界羽流、雾霭与顶部烟，具体实现在子文件。
 #include "volume/nether.slang"
+
+// 参考签名的空气雾入口：按 Eclipse 的指数步进累积雾色与大气透视。
+// 参考参数在前，相机、阴影、密度场与选项资源追加在后。
+float4 ogxFogVolumeMarchReference(float3 origin, float3 endPos, float2 dither, float3 lightColor,
+    float3 ambientColor, float3 averagedAmbient, int sampleCount, Sampler3D densityTexture,
+    Sampler2D shadowTexture, float4x4 shadowView, float4x4 shadowProjection, float3 cameraOffset,
+    float3 cameraWorldPos, float3 sunVector, float farPlane, float vlSamples, float cloudShadow,
+    float hazeAmount, float seaLevel, float caveDetection, float eyeBrightness, float3 rayleighCoefficients,
+    float3 mieCoefficients, float distortA, float distortB, float distortK, float shadowResolution,
+    float4 lightningBoltPosition, float3 lightningEffect)
+{
+    if (length(origin - endPos) < 0.001) return float4(0.0, 0.0, 0.0, 1.0); // 没有长度就没有雾。
+    float mult = vlSamples / float(sampleCount) * 1.15; // 参考按体积光样本数缩放密度。
+    float3 dVWorld = endPos - origin - cameraOffset; // 相机相对的射线位移。
+    float rayLength = length(dVWorld); // 射线长度。
+    float3 rayDir = normalize(endPos - origin); // 射线方向。
+    float maxLength = min(rayLength, farPlane) / rayLength; // 距离上限的比例。
+    dVWorld *= maxLength; // 截断到远裁剪面。
+    float dL = length(dVWorld) / 8.0; // 每段长度。
+    const float expFactor = 11.0; // 指数步长。
+    float3 color = float3(0.0); // 累积颜色。
+    float totalAbsorbance = 1.0; // 总透过率。
+    float3 atmosphereAbsorbance = float3(1.0); // 大气透过率。
+    float SdotV = dot(sunVector, rayDir); // 阳光与视线夹角。
+    float sunPhase = ogxEndLightFalloff(SdotV) * 5.0; // 太阳相位。
+    float skyPhase = 0.5 + pow(1.0 - pow(1.0 - clamp(rayDir.y * 0.5 + 0.5, 0.0, 1.0), 2.0), 5.0) * 2.0; // 天空相位。
+    float rayL = ogxRayleighPhaseElek(SdotV); // 瑞利相位。
+    float3 rC = float3(rayleighCoefficients.x * 1e-6, rayleighCoefficients.y * 1e-5, rayleighCoefficients.z * 1e-5); // 瑞利系数按参考量级缩放。
+    float3 mC = mieCoefficients * 1e-6; // 米氏系数按参考量级缩放。
+    float3 skyLightPhased = ambientColor * skyPhase; // 天空光乘相位。
+    float3 lightSourcePhased = lightColor * sunPhase; // 直射光乘相位。
+    float inACave = 1.0 - caveDetection; // 洞穴里减少雾。
+    float lightLevelZero = pow(clamp(eyeBrightness / 240.0, 0.0, 1.0), 3.0); // 天空光等级的立方。
+    for (int i = 0; i < sampleCount; i++) // 固定步数。
+    {
+        float d = (pow(expFactor, float(i) + dither.y) / expFactor - 1.0 / expFactor) / (1.0 - 1.0 / expFactor); // 步进比例。
+        float dd = pow(expFactor, float(i) + dither.x) * log(expFactor) / float(sampleCount) / (expFactor - 1.0); // 步长导数。
+        float3 progressP = cameraOffset + d * dVWorld + origin; // 相机相对位置。
+        float3 progressW = progressP + cameraWorldPos; // 绝对世界位置。
+        float3 fragposition = ogxMatrixMulPoint(shadowView, progressP) + ogxMatrixTranslation(shadowView); // 阴影相机空间坐标。
+        fragposition = float3(shadowProjection[0][0], shadowProjection[1][1], shadowProjection[2][2]) * fragposition + shadowProjection[3].xyz; // 按投影对角线缩放。
+        float distortFactor = ogxShadowDistortFactor(fragposition.xy, distortA, distortB, distortK); // 阴影边缘压缩。
+        float3 shadowPos = float3(fragposition.xy * distortFactor, fragposition.z); // 压缩后的阴影坐标。
+        float3 sh = float3(1.0); // 受光系数。
+        if (abs(shadowPos.x) < 1.0 - 0.5 / shadowResolution && abs(shadowPos.y) < 1.0 - 0.5 / shadowResolution) // 落在阴影图内才采样。
+        {
+            shadowPos = shadowPos * float3(0.5, 0.5, 0.5 / 6.0) + 0.5; // 换成零到一坐标。
+            sh = float3(shadowTexture.SampleLevel(shadowPos.xy, 0.0).x); // 只读不透明深度。
+        }
+        sh *= cloudShadow; // 参考的云影由宿主预计算成标量。
+        float fogDensity = densityTexture.SampleLevel(progressW, 0.0).r * inACave * mult; // 三维密度场与体积光缩放。
+        float fogVolumeCoeff = exp(-fogDensity * dd * dL); // 本段透过率。
+        float3 indirectLight = skyLightPhased; // 天空散射。
+        float3 directLight = lightSourcePhased * sh; // 太阳散射。
+        float3 lightning = ogxLightningFog(progressP, lightningBoltPosition, lightningEffect); // 参考的闪电照明。
+        float3 lighting = directLight + indirectLight + 0.0025 * lightning; // 本段照明。
+        color += (lighting - lighting * fogVolumeCoeff) * totalAbsorbance; // 累积散射。
+        totalAbsorbance *= lerp(1.0, fogVolumeCoeff, lightLevelZero); // 洞穴里减弱吸收。
+        if (totalAbsorbance < 0.01) break; // 足够浓就停。
+        float planetVolume = smoothstep(1.0 - exp(clamp(1.0 - length(progressP) / (16.0 * 150.0), 0.0, 1.0) * -10.0), 0.0, progressP.y - 500.0); // 行星遮挡的体积权重。
+        float2 airCoef = exp2(-max(progressW.y - seaLevel, 0.0) / float2(8.0e3, 1.2e3) * float2(6.0, 7.0)) * 192.0 * hazeAmount * planetVolume; // 空气密度。
+        float3 rL = rC * airCoef.x; // 瑞利部分。
+        float3 m = mC * (airCoef.y + min(hazeAmount * 1.25, 1.0)); // 米氏部分。
+        float3 airDensity = rL + m; // 总空气密度。
+        float3 atmosphereVolumeCoeff = exp(-airDensity * dd * dL); // 大气透过率。
+        float3 atmosphere = (lightSourcePhased * sh * (rayL * rL + sunPhase * m) + averagedAmbient * airDensity * (lightLevelZero * 0.99 + 0.01)) * inACave; // 大气散射色。
+        color += (atmosphere - atmosphere * atmosphereVolumeCoeff) / (airDensity + 1e-6) * atmosphereAbsorbance; // 累积大气透视。
+        atmosphereAbsorbance *= atmosphereVolumeCoeff; // 累积大气透过率。
+    }
+    return float4(color, totalAbsorbance); // 交回雾。
+}
 
 #endif

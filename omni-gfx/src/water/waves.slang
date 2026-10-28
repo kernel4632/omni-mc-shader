@@ -44,7 +44,7 @@ float3 ogxWaterNormal(float2 position, float time, float distance, float waveSca
 // 振幅已经折进 `steepness`，所以这里只交回水平梯度，调用方直接转成法线。
 float2 ogxGerstnerGradient(float2 position, float2 direction, float wavelength, float steepness, float time, float phase)
 {
-    float waveNumber = 6.28318530718 / max(wavelength, 0.05); // 每米多少个弧度。
+    float waveNumber = OGX_TAU / max(wavelength, 0.05); // 每米多少个弧度。
     float angularSpeed = sqrt(9.81 * waveNumber); // 深水色散关系，长波跑得快、短波跑得慢。
     float angle = waveNumber * dot(direction, position) - angularSpeed * time + phase; // 当前相位。
     return direction * (steepness * cos(angle)); // 正弦波高度的水平导数。
@@ -104,21 +104,6 @@ float ogxWaterFoam(float depth, float noise)
 }
 
 // 水面着色：折射色乘吸收，再按菲涅尔混入反射，最后叠太阳高光与泡沫。
-float3 ogxWaterShade(OgxWater water, float3 normal, float3 viewDirection, float3 sunDirection, float3 sunColor,
-                     float3 reflectionColor, float3 refractionColor, float depth, float foam, out float alpha)
-{
-    float facing = ogxSaturate(dot(normal, viewDirection)); // 正对程度。
-    float fresnel = ogxWaterFresnel(facing, 0.02); // 水的菲涅尔基础反射率约零点零二。
-    float3 transmitted = refractionColor * ogxWaterAbsorption(water, depth); // 水下颜色被水吸收。
-    // 深水会彻底吸收掉水底的颜色，只剩水本身的体色；不补这一步，深海会变成一块黑。
-    transmitted = lerp(water.deepColor, transmitted, exp(-depth * 0.32)); // 越深越接近深水体色。
-    transmitted = lerp(water.shallowColor, transmitted, ogxSaturate(depth * 0.25)); // 浅水保留更多水色。
-    float3 color = lerp(transmitted, reflectionColor, fresnel); // 折射与反射按菲涅尔混合。
-    color += ogxSpecularGGX(normal, viewDirection, sunDirection, water.roughness, 0.02) * sunColor * 1.5; // 太阳高光。
-    color += foam * water.shallowColor * 0.8; // 岸线泡沫。
-    alpha = ogxSaturate(fresnel * 0.85 + 0.22 + ogxSaturate(depth * 0.08)); // 深水更不透明。
-    return color; // 返回线性水面颜色。
-}
 
 // 平滑噪声取样：先把坐标吸到最近的纹素中心，再用三次曲线改写小数部分，得到不会闪的平滑噪声。
 // 与迁移前的 GLSL 原型算式一致，波纹形状因此不变。

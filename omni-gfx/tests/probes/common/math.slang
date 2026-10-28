@@ -44,7 +44,7 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     OgxTangentBasis basis = ogxTangentBasis(float3(1.0, 0.0, 0.0), float3(0.0, 1.0, 0.0), float2(1.0, 0.0), float2(0.0, 1.0));  // 切线基。
     acc += basis.tangent + basis.bitangent + basis.normal;  // 读取三个字段。
     float3 hsv = ogxRgbToHsv(n);  // 颜色转色相。
-    acc += ogxRadialCurve(t) * n + ogxPlanetCurvatureDrop(uv, 1.0) * n;  // 径向轮廓与曲率。
+    acc += ogxRadialCurve(t) * n + ogxCircleMapL(t, 8.0) * n;  // 径向轮廓与圆映射。
     float3 warpedDirection = l;  // 空间扭曲就地修改方向与位置。
     float3 warpedPosition = float3(1.0, 2.0, 3.0);  // 远离原点，避免除零。
     ogxWarpSpace(warpedDirection, warpedPosition);  // 调用扭曲。

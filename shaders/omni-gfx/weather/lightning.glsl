@@ -20,6 +20,19 @@ Omni 通用图形库闪电模块：闪电照亮表面、体积云与雾，末地
 
 // 数学提供夹紧、矩阵列展开、相函数与光线求交。
 #include "/omni-gfx/common/math.glsl"
+// 闪电光柱照明：把闪电当成一根竖直光柱，按距离做指数衰减。
+// 云与雾的媒体结构字段不同，这里只接收两者共用的标量，避免把两种结构体带进天气模块。
+vec3 ogxLightningGlow(vec3 relativePos, vec3 lightningPosition, float intensity, float strength,
+    float lightDistance, float falloff)
+{
+    if (intensity <= 0.0) return vec3(0.0); // 没有闪电事件时不加。
+    vec3 boltPos = vec3(lightningPosition.x, clamp(relativePos.y, lightningPosition.y, lightningPosition.y + 116.0), lightningPosition.z); // 光柱同一水平位置。
+    float boltDistance = length(relativePos - boltPos); // 介质采样点到光柱的距离。
+    float lightningLight = max(1.0 - boltDistance / lightDistance, 0.0); // 照明范围内线性衰减。
+    lightningLight = exp((1.0 - lightningLight) * falloff); // 换成更集中的指数衰减。
+    return vec3(0.55, 0.65, 0.9) * (lightningLight * intensity * strength); // 冷色闪光。
+}
+
 // 闪电照亮表面：距离衰减、次表面相位与法线朝向一起决定亮度。
 vec3 ogxLightningFlash(vec3 feetPlayerPos, vec4 boltPosition, vec3 worldNormal, vec3 lightningEffect,
     inout float phase)

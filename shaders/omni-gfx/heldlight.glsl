@@ -7,9 +7,7 @@
 /*
 Omni 通用图形库手持光模块：把玩家手持光源与手电筒照到表面，给出高光，并处理手光阴影。
 调用位置：需要动态手持光照的程序；Minecraft 光影由 `/omni-gfx/heldlight.glsl` 引入。
-可复制示例：
-    vec3 held = ogxHeldLighting(viewPos, viewDir, normal, 0.4, ao, false, ...);
-    ogxTorchSpecularHighlight(color, viewPos, viewDir, dist, albedo, normal, material, ...);
+可复制示例：`vec3 aim = ogxFlashlightAimDirection(0.0, 0.0, 0.1, false);`
 设计原因与取舍：
     参考实现用编译期开关选择手电筒或火把两种模型。库把开关变成显式参数，两条公式都保留，
     调用方按自己的设置走其中一条，不会因缺少宏而得到另一种画面。

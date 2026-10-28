@@ -1,28 +1,10 @@
 /*
-后期子文件：泛光降采样与链拷贝、轴向高斯模糊、三次纹理放大、色调曲线与颗粒。
+后期子文件：泛光链拷贝、轴向高斯模糊、三次纹理放大、色调曲线与颗粒。
 调用位置：由 `post/post.slang` 内联，合成阶段的泛光与调色直接调用这些入口。
-可复制示例：`vec3 b = ogxBloomDownsample(source, coord, texel);`
+可复制示例：`vec3 b = ogxBloomChainCopy(chain, local, originSize);`
 设计原因与取舍：每级只做一次可复用的核，链的边界与混合由调用方决定；权重和与参考一致。
+    降采样入口放在主文件，子文件只保留需要多行展开的核。
 */
-// 泛光降采样：先做四点盒式取样，再转换到线性颜色。
-float3 ogxBloomDownsample(Sampler2D source, float2 coord, float2 texel)
-{
-    float3 blur = ogxCurveToLinear3(source.SampleLevel(coord, 0.0).rgb) * 0.125; // 中心样本。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + float2(texel.x, texel.y), 0.0).rgb) * 0.5; // 右下对角。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + float2(texel.x, -texel.y), 0.0).rgb) * 0.5; // 右上对角。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + float2(-texel.x, texel.y), 0.0).rgb) * 0.5; // 左下对角。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + float2(-texel.x, -texel.y), 0.0).rgb) * 0.5; // 左上对角。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(texel.x, 0.0), 0.0).rgb) * 0.25; // 右两像素。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(0.0, texel.y), 0.0).rgb) * 0.25; // 上两像素。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(-texel.x, 0.0), 0.0).rgb) * 0.25; // 左两像素。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(0.0, -texel.y), 0.0).rgb) * 0.25; // 下两像素。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(texel.x, texel.y), 0.0).rgb) * 0.125; // 远处右下。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处右上。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(-texel.x, texel.y), 0.0).rgb) * 0.125; // 远处左下。
-    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(-texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处左上。
-    return ogxLinearToCurve3(blur * 0.25); // 权重和为四，乘四分之一保持亮度。
-}
-
 // 泛光链某一级的原样拷贝：坐标夹在这级子图范围里，零号层级读取后换回线性。
 // 为什么单独成一个函数：链上第二级的边界判断由宿主决定，但“夹紧后读一次”是纯计算，
 // 原程序在每个方向上各写一遍，迁进库后只保留一份。
@@ -120,10 +102,6 @@ float3 ogxFilmGrain(float3 color, float2 coord, float time, float strength)
 }
 
 // 弥散圆半径：按薄透镜公式估算一个点离对焦平面越远时散焦多大。
-float ogxCocRadius(float focus, float depth, float aperture)
-{
-    return abs(aperture * (depth - focus) / (depth * focus)); // 薄透镜近似。
-}
 
 // 浮点输出抖动：按目标格式的尾数位数，把三角噪声缩放到相邻两个可表示值之间。
 // 为什么按指数缩放：浮点数的间隔随数值变大，固定步长会在大值处看不见、小值处过重。
@@ -138,26 +116,5 @@ float3 ogxDitherFloat(float3 color, float2 coord, float time, float3 mantissaBit
 float3 ogxDitherFixed(float3 color, float2 coord, float time, float bits)
 {
     return color + ogxTriangleNoise(coord, time) * exp2(bits); // bits 用参考的负指数写法，例如 -8。
-}
-
-// 多边形光圈：把散焦偏移换成到多边形边的归一化距离，零在中心、一到边界。
-// 为什么用角度求半径：多边形每条边的半径随角度变化，直接取到边的距离比圆形核更接近真实光圈。
-float ogxBokehAperture(float2 offset, int blades, float rotation)
-{
-    float2 p = float2(offset.x * cos(rotation) - offset.y * sin(rotation), offset.x * sin(rotation) + offset.y * cos(rotation)); // 先按光圈转角旋转。
-    float radius = length(p); // 到中心的距离。
-    if (radius < 1e-6) return 1.0; // 中心点始终在光圈内。
-    float angle = ogxAtan2(p) + OGX_PI; // 角度换到零到二圆周率。
-    float sector = OGX_PI * 2.0 / float(max(blades, 3)); // 每条边对应的圆心角。
-    float edge = cos(sector * 0.5) / max(cos(ogxMod(angle, sector) - sector * 0.5), 1e-4); // 该角度上正多边形的半径。
-    return ogxSaturate(radius / edge); // 归一到零到一，边界之外大于一。
-}
-
-// 景深镜头倍数：焦距平方乘口径倍数，焦距与光圈取基准值时正好为一。
-float ogxDofLensFactor(float focalLength, float aperture, float referenceFocal, float referenceAperture)
-{
-    float focalRatio = focalLength / referenceFocal; // 焦距相对基准的倍数，越长越大。
-    float apertureRatio = referenceAperture / aperture; // f 值越小口径越大，取倒数表示反比。
-    return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
 }
 

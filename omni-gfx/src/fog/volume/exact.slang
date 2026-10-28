@@ -1,5 +1,5 @@
 /* 体积雾的严格入口：按 iterationT 默认路径逐行移植的雾与水下光柱；由 `fog/volume.slang` 内联引入。
-可复制示例：`ogxVolumetricFogExact(color, startPos, endPos, worldDir, cloudShadow, ...);`
+用法：调用下方 `ogxVolumetricFogExact`，参数顺序见函数签名。
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */

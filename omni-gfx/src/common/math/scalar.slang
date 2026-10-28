@@ -131,3 +131,56 @@ float ogxFastAcos(float x)
     result *= ogxFastSqrt(1.0 - ax);
     return x >= 0.0 ? result : OGX_PI - result;
 }
+
+/*
+实现说明：标量、向量与矩阵的小工具。
+一、矩阵乘向量：四乘四与三乘三各一份，按列展开后相加，避免行列约定差异。
+二、圆映射：方形到圆盘的折叠，返回二维或三维版本。
+三、三角函数：`ogxSinCos` 一次给出正弦与余弦，`ogxAtan2` 处理象限。
+四、快速反余弦：多项式近似，误差在可视范围内，节省反三角函数开销。
+五、极值：二、三、四分量各一份，避免调用方自己写比较链。
+六、重映射：把区间映射到零到一并夹紧，曲线与遮罩共用。
+七、边界：所有函数只做纯计算，不读取屏幕或时间。
+*/
+
+/*
+函数索引：
+一、`ogxSinCos`：一次给出正弦与余弦。
+二、`ogxRotate2`：二维旋转。
+三、`ogxRemapSaturate` 与 `ogxRemap`：区间重映射。
+四、`ogxMinVec2`、`ogxMinVec3`、`ogxMinVec4`、`ogxMaxVec2`、`ogxMaxVec3`、`ogxMaxVec4`：逐分量极值。
+五、`ogxCircleMap` 与 `ogxCircleMapL`：方形到圆盘。
+六、`ogxSpiralSample`：螺旋采样点。
+七、`ogxRoughSpecularDirection`：粗糙高光方向。
+八、`ogxNormalize`：安全归一化，零向量有回退。
+九、`ogxMod`：浮点取模，结果为非负。
+十、`ogxEqual`：向量相等判断。
+十一、`ogxMatrixMul`、`ogxMatrixMulPoint`、`ogxMatrixMulPoint4`、`ogxMatrixTranslation`、`ogxMatrix3MulPoint`：矩阵与向量工具。
+十二、`ogxAtan2`：两参数反正切。
+十三、`ogxFastAcos`：反余弦近似。
+十四、边界：所有函数只做纯计算，不读取屏幕或时间。
+十五、顺序：矩阵按列展开，和 GLSL 的列主序一致。
+*/
+
+/*
+参数与边界：
+一、矩阵乘向量假设矩阵按列主序存储。
+二、归一化在零向量时返回零向量，调用方要判断。
+三、取模的除数不能为零。
+四、相等判断使用绝对误差，阈值由调用方给出。
+五、反余弦近似只在零到一之间有效。
+六、圆映射的输入是负一到一。
+七、极值函数逐分量比较，不处理 NaN。
+八、旋转角度用弧度。
+九、所有函数都是纯函数，可以在任意阶段调用。
+十、矩阵平移只取第四列，不处理投影。
+*/
+
+/*
+补充说明：矩阵与向量。
+矩阵按列主序存储。
+归一化在零向量时返回零。
+取模的除数不能为零。
+反余弦近似只在零到一之间有效。
+画面验证看旋转与投影。
+*/

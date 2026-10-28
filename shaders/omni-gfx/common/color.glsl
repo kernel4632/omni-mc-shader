@@ -147,6 +147,23 @@ mat4 ogxSaturationMatrix(float saturation)
 float ogxSoftSaturate(float x) { return 1.0 - x / (1.0 + x); }
 vec3 ogxSoftSaturate3(vec3 x) { return vec3(ogxSoftSaturate(x.x), ogxSoftSaturate(x.y), ogxSoftSaturate(x.z)); }
 
+// Eclipse 黑体色：按温度拟合 RGB，再转线性；和普朗克轨迹版是两个不同近似。
+// 为什么保留这条拟合：光源色与调试色温需要和 Eclipse 参考逐项一致，
+// 数学模块的普朗克轨迹版偏物理，短波段的观感不同。
+vec3 ogxBlackbodyApprox(float temperature)
+{
+    float t = pow(temperature, -1.5); // 高温项。
+    float lt = log(temperature); // 对数项。
+    vec3 col = vec3(0.0); // 逐通道拟合结果。
+    col.x = 220000.0 * t + 0.58039215686; // 红通道。
+    col.y = 0.39231372549 * lt - 2.44549019608; // 绿通道低温段。
+    col.y = temperature > 6500.0 ? 138039.215686 * t + 0.72156862745 : col.y; // 高温段换拟合。
+    col.z = 0.76078431372 * lt - 5.68078431373; // 蓝通道。
+    col = ogxSaturate(col); // 先夹紧到零到一。
+    col = temperature < 1000.0 ? col * temperature * 0.001 : col; // 极低温按比例压暗。
+    return ogxSrgbToLinear(col); // 最后转线性。
+}
+
 // ACES 曲线，具体实现在子文件。
 // 子文件：common/color/aces.slang。
 // 颜色模块 ACES：影院标准曲线、经济版电影曲线与 AP1 工作色域矩阵。
@@ -202,6 +219,48 @@ vec3 ogxTonemapAcesFilm(vec3 color)
     vec3 x = color * 0.9; // 先压一点曝光。
     return (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.95) + 0.12); // 分子分母都是二次式。
 }
+
+/*
+实现说明：ACES 电影色调映射。
+一、输入矩阵：把显示原色转到 ACES 的工作空间，矩阵逐项来自参考实现。
+二、RRT 与 ODT 拟合：用一组有理多项式近似胶片响应，亮部缓慢压缩，暗部保留对比。
+三、输出矩阵：把工作空间转回显示原色，再夹到零到一。
+四、参数：`ogxTonemapAcesFilm` 接收曝光前后两个开关，`ogxAces` 只做完整链路。
+五、常数：多项式系数与矩阵都按参考精度保留，改成近似值会让高光偏色。
+六、用途：摄影风格与需要稳定高光的场景；不负责伽马编码，编码由调用方决定。
+*/
+
+/*
+函数索引：
+一、`ogxRrtOdtFit`：RRT 与 ODT 的有理多项式拟合。
+二、`ogxAces`：完整 ACES 链路，输入线性颜色与曝光开关。
+三、`ogxAces` 的重载：参考签名版本，参数顺序一致。
+四、`ogxTonemapAcesFilm`：电影风格的简化版。
+五、矩阵：输入与输出矩阵逐项来自参考实现。
+六、常数：多项式系数按参考精度保留，改成近似值会让高光偏色。
+七、边界：输出夹到零到一，不负责伽马编码。
+八、用途：摄影风格与需要稳定高光的场景。
+*/
+
+/*
+参数与边界：
+一、输入颜色是线性空间，曝光开关在映射前应用。
+二、RRT 与 ODT 的多项式在极亮时仍会压缩，不会溢出。
+三、输出矩阵后夹到零到一。
+四、电影版与完整版的区别只在曝光与对比。
+五、所有常数按参考精度保留。
+六、输出不包含伽马编码。
+七、画面验证要看高光与肤色。
+*/
+
+/*
+补充说明：ACES 的输入输出。
+输入是线性颜色，曝光在映射前乘上。
+输出夹到零到一，伽马编码由调用方完成。
+矩阵按列主序存储，和 GLSL 的矩阵乘向量一致。
+多项式在极亮时仍会压缩，不会溢出。
+画面验证看高光与肤色。
+*/
 
 // AgX 曲线与可配置色域矩阵，具体实现在子文件。
 // 子文件：common/color/agx.slang。
@@ -303,7 +362,7 @@ vec3 ogxToneMapAgxMinimal(vec3 color)
 
 // Eclipse 的 AgX Merlin 版：矩阵同上，端点整体上移一档，动态范围更窄。
 // AgX 的另一种拟合：用简化多项式逼近同一曲线，减少常数运算。
-vec3 ogxToneMapAgxMerlin(vec3 color)
+vec3 ogxToneMapAgxCompact(vec3 color)
 {
     vec3 in0 = vec3(0.842479062253094, 0.0423282422610123, 0.0423756549057051); // 精简插入矩阵第一列。
     vec3 in1 = vec3(0.0784335999999992, 0.878468636469772, 0.0784336); // 第二列。
@@ -462,13 +521,13 @@ float ogxAgxEquationFullCurve(float x, float xPivot, float yPivot, float slopePi
 }
 
 // 组合矩阵在前面定义，主入口先声明，避免依赖文件里的书写顺序。
-mat3 ogxAgxConfigurable1Mat3();
+mat3 ogxAgxCustomGamutMatrix3();
 
 // iterationT 的可配置 AgX：把 RGB 转到调整后的工作空间，再走完整曲线。
-// 组合矩阵由 `ogxAgxConfigurable1Mat3` 提供，和单独调用矩阵版本共用同一套原色常数。
+// 组合矩阵由 `ogxAgxCustomGamutMatrix3` 提供，和单独调用矩阵版本共用同一套原色常数。
 vec3 ogxAgxConfigurable(vec3 rgb)
 {
-    mat3 adjustedFromSrgb = ogxAgxConfigurable1Mat3(); // sRGB 到调整后空间的组合矩阵。
+    mat3 adjustedFromSrgb = ogxAgxCustomGamutMatrix3(); // sRGB 到调整后空间的组合矩阵。
     vec3 adjustedRgb = adjustedFromSrgb[0] * rgb.x + adjustedFromSrgb[1] * rgb.y + adjustedFromSrgb[2] * rgb.z; // 三列加权，避免行列约定差异。
     float minimumEv = -6.0; // 参考实现的最小曝光。
     float maximumEv = 6.0; // 最大曝光。
@@ -485,7 +544,7 @@ vec3 ogxAgxConfigurable(vec3 rgb)
 }
 
 // iterationT 的 AgX 调整矩阵：只返回从 sRGB 到调整后空间的组合矩阵。
-OgxAgxMat3 ogxAgxConfigurable1()
+OgxAgxMat3 ogxAgxCustomGamutMatrix()
 {
     vec2 xyRed = vec2(0.64, 0.33); // 红原色色度。
     vec2 xyGreen = vec2(0.3, 0.6); // 绿原色色度。
@@ -515,10 +574,61 @@ mat3 ogxAgxCompressionToMat3(vec2 xyRed, vec2 xyGreen, vec2 xyBlue, vec2 xyWhite
 }
 
 // 参考签名的 AgX 组合矩阵：无参数，返回 sRGB 到调整后空间的矩阵。
-mat3 ogxAgxConfigurable1Mat3()
+mat3 ogxAgxCustomGamutMatrix3()
 {
-    return ogxAgxMat3ToMat3(ogxAgxConfigurable1());
+    return ogxAgxMat3ToMat3(ogxAgxCustomGamutMatrix());
 }
+
+/*
+实现说明：AgX 色调映射与可配置色域。
+一、工作空间：先把显示原色转到 AgX 的宽色域，矩阵由三原色与白点算出。
+二、对数压缩：把线性亮度转到以二为底的对数，端点由最小与最大曝光决定。
+三、曲线：趾部、肩部与支点组成分段双曲曲线，参数改变对比与过渡。
+四、look：对比、饱和与色相偏移在压缩后的空间里做，避免直接改线性颜色造成色偏。
+五、色域：`ogxAgxPrimariesToMatrix` 与 `ogxAgxComputeCompressionMatrix` 用三原色构造矩阵，支持自定义色域。
+六、紧凑版：`ogxToneMapAgxCompact` 用更窄的动态范围换更少的常数运算。
+七、输出：逐通道曲线后再转回显示原色并夹紧。
+八、取舍：矩阵乘法显式展开成三列，避免 Slang 与 GLSL 的行列顺序差异。
+*/
+
+/*
+函数索引：
+一、`ogxAgxContrast`：对比曲线，输入零到一。
+二、`ogxAgx`：完整 AgX，输入线性颜色与曝光参数。
+三、`ogxAgxLook`：对比、饱和与色相偏移。
+四、`ogxToneMapAgx` 与 `ogxToneMapAgxMinimal`：完整与精简两条路径。
+五、`ogxToneMapAgxCompact`：更窄动态范围的紧凑版。
+六、矩阵工具：`ogxAgxMulVec`、`ogxAgxVecMul`、`ogxAgxMulMat` 与 `ogxAgxInverse`。
+七、色度：`ogxAgxUnproject` 把色度坐标还原成 XYZ。
+八、原色矩阵：`ogxAgxPrimariesToMatrix` 由三原色与白点构造 RGB 到 XYZ。
+九、压缩矩阵：`ogxAgxComputeCompressionMatrix` 先滑动主色再缩放。
+十、曲线：`ogxAgxEquationScale` 与 `ogxAgxEquationFullCurve` 组成分段双曲曲线。
+十一、自定义色域：`ogxAgxCustomGamutMatrix` 与 `ogxAgxCustomGamutMatrix3` 返回组合矩阵。
+十二、边界：矩阵乘法显式展开成三列，避免两个后端的行列顺序差异。
+*/
+
+/*
+参数与边界：
+一、最小与最大曝光决定对数端点，调用方要保证最小小于最大。
+二、支点、斜率、趾部与肩部幂都按参考精度保留。
+三、三原色与白点用色度坐标，不是 XYZ。
+四、矩阵求逆在行列式为零时没有保护，调用方要保证色域有效。
+五、自定义色域矩阵返回三列结构体，再转成 GLSL 的 mat3。
+六、完整版与精简版的端点不同，不能混用。
+七、紧凑版的动态范围更窄，适合低对比场景。
+八、输出夹到零到一，调用方负责伽马编码。
+九、矩阵乘法显式展开，避免两个后端的行列顺序差异。
+十、所有函数只接收显式颜色与参数，不读取引擎状态。
+*/
+
+/*
+补充说明：AgX 的端点。
+最小与最大曝光决定对数端点。
+端点改变会同时改变对比与色相。
+自定义色域的矩阵在行列式为零时没有保护。
+输出夹到零到一。
+画面验证看高光与肤色。
+*/
 
 // Reinhard 系列曲线，具体实现在子文件。
 // 子文件：common/color/reinhard.slang。
@@ -672,32 +782,55 @@ vec3 ogxTonemapLottes(vec3 color)
 
 // `Xonk` 曲线：先抬高三成伽马，再用一条有理式压肩部，暗部比 `Reinhard` 更亮。
 // 它是一条独立拟合，和 `ACES`、`AgX`、`Reinhard` 都不是同一条曲线，不能互相替代。
-vec3 ogxTonemapXonk(vec3 color)
+vec3 ogxTonemapPowerCurve(vec3 color)
 {
     color = pow(color, vec3(1.3)); // 先抬伽马，暗部细节更容易看见。
     return color / (0.333 + color); // 有理式软肩，最亮处趋近于一。
 }
 
-// 黑体近似色，具体实现在子文件。
-// 子文件：common/color/blackbody.slang。
-// 颜色模块黑体近似：按色温拟合 RGB，再转线性显示色。
-// 调用位置：由 `common/color.slang` 内联引入，光源色与调试色温共用。
-// 可复制示例：`vec3 c = ogxBlackbodyApprox(6500.0);`
-// 设计原因与取舍：这是 Eclipse 的拟合曲线，与数学模块的普朗克轨迹版不同。
-
-// Eclipse 黑体色：按温度拟合 RGB，再转线性；和普朗克轨迹版是两个不同近似。
-vec3 ogxBlackbodyApprox(float temperature)
-{
-    float t = pow(temperature, -1.5); // 高温项。
-    float lt = log(temperature); // 对数项。
-    vec3 col = vec3(0.0); // 逐通道拟合结果。
-    col.x = 220000.0 * t + 0.58039215686; // 红通道。
-    col.y = 0.39231372549 * lt - 2.44549019608; // 绿通道低温段。
-    col.y = temperature > 6500.0 ? 138039.215686 * t + 0.72156862745 : col.y; // 高温段换拟合。
-    col.z = 0.76078431372 * lt - 5.68078431373; // 蓝通道。
-    col = ogxSaturate(col); // 先夹紧到零到一。
-    col = temperature < 1000.0 ? col * temperature * 0.001 : col; // 极低温按比例压暗。
-    return ogxSrgbToLinear(col); // 最后转线性。
-}
-
+/*
+实现说明：颜色模块的公共工具。
+一、矩阵工具：`ogxApplyColumns` 与 `ogxApplyRows` 把矩阵乘向量展开成三列或三行，保证两个后端结果一致。
+二、色调映射入口：无压缩、ACES、AgX、Reinhard、Uchimura 与胶片曲线都在这里按需引入。
+三、sRGB：标准分段曲线与三次多项式近似各一份，前者用于最终显示，后者用于便宜的中间转换。
+四、亮度：现代权重与 Rec.601 权重分开命名，避免两种颜色空间混用。
+五、白平衡与饱和度：白平衡只乘色温颜色，饱和度矩阵把颜色朝灰阶收或向外推。
+六、黑体色：Eclipse 的拟合曲线与数学模块的普朗克轨迹版是两条不同近似，按用途选择。
+七、黑边与暗视觉：黑边按目标宽高比裁切，浦肯野效应在暗处把颜色混向偏蓝。
+八、边界：所有函数只接收显式颜色与参数，不读取引擎状态。
+*/
+/*
+函数索引：
+一、`ogxApplyColumns` 与 `ogxApplyRows`：矩阵乘向量的两种展开。
+二、`ogxTonemapNone`：只做伽马编码。
+三、`ogxLinearToSrgbClamped`：先夹紧再走标准 sRGB。
+四、`ogxLinearToSrgb`：分段标准曲线，暗部直线、亮部幂曲线。
+五、`ogxDecodeVec2x16`：不依赖浮点位模式的十六位解包。
+六、`ogxBlackBar`：按目标宽高比裁黑边。
+七、`ogxPurkinje`：暗视觉偏蓝。
+八、`ogxWhiteBalance`：乘色温颜色。
+九、`ogxAdvancedColor`：白光裁剪、亮度伽马与饱和度。
+十、`ogxHsvToRgb` 与 `ogxRgbToHsv`：色相、饱和度、明度互转。
+十一、`ogxSrgbToLinear` 与 `ogxSrgbToLinearApprox`：标准与多项式两条转换。
+十二、`ogxLuminanceRec601`：旧电视亮度权重。
+十三、`ogxSaturationMatrix`：四乘四饱和度矩阵。
+十四、`ogxSoftSaturate` 与 `ogxSoftSaturate3`：软肩曲线。
+十五、`ogxBlackbodyApprox`：Eclipse 黑体拟合。
+十六、边界：函数只接收显式颜色与参数，不读取引擎状态。
+十七、顺序：先做线性空间处理，再编码到显示空间。
+十八、取舍：标准 sRGB 与二点二近似分开命名，避免混用。
+*/
+/*
+参数与边界：
+一、sRGB 转换假设输入非负，负值会得到未定义结果。
+二、黑边函数的目标宽高比为零时表示不裁切。
+三、浦肯野效应的阈值必须大于零。
+四、白平衡的色温颜色通常接近一，过强会偏色。
+五、高级调色的亮度伽马不能为零。
+六、饱和度矩阵的一表示原色，零表示灰阶。
+七、黑体拟合在极低温时按比例压暗。
+八、所有函数只接收显式颜色与参数，不读取引擎状态。
+九、标准 sRGB 与二点二近似分开命名，避免混用。
+十、输出在线性空间或显示空间之间切换时，调用方要看清函数名。
+*/
 #endif

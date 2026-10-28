@@ -2,6 +2,8 @@
 
 调用位置：
     `omni-gfx/examples/world/render.py` 创建 `World` 时调用 `load()` 一次。
+调用示例：`textures = load()`；退出时删除字典里的纹理编号。
+
 设计原因与取舍：
     地面有草地、泥土、岩石、湿沙、腐殖土、树皮六种材质，每种三张图。
     如果每种材质各用一组 sampler，片元阶段很快会超过 OpenGL 3.3 保证的十六个纹理单元；
@@ -65,12 +67,11 @@ def _array_texture(internal_format: int, layers: list[bytes]) -> int:
     GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_WRAP_S, GL.GL_REPEAT)
     GL.glTexParameteri(GL.GL_TEXTURE_2D_ARRAY, GL.GL_TEXTURE_WRAP_T, GL.GL_REPEAT)
     GL.glGenerateMipmap(GL.GL_TEXTURE_2D_ARRAY)
-    try:  # 各向异性过滤是扩展参数，取不到就跳过。
+    extensions = GL.glGetString(GL.GL_EXTENSIONS) or b""  # 扩展名列表是字节串，缺失时用空串。
+    if b"GL_EXT_texture_filter_anisotropic" in extensions:  # 只有驱动声明支持时才读上限。
         maximum = GL.glGetFloatv(0x84FF)  # GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT。
         if maximum and maximum > 1.0:
             GL.glTexParameterf(GL.GL_TEXTURE_2D_ARRAY, 0x84FE, min(8.0, maximum))  # GL_TEXTURE_MAX_ANISOTROPY_EXT。
-    except Exception:
-        pass
     return texture
 
 

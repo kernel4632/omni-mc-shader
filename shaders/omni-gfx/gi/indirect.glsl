@@ -9,7 +9,7 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
 调用位置：需要复现 Eclipse `indirect_lighting_effects.glsl` 的程序；Minecraft 光影由
     `/omni-gfx/gi/indirect.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    `vec3 gi = ogxApplyScreenSpaceIndirect(indirect, blockLight, minimumLight, viewPos, normal, noise, lightmap, ...);`
+    `vec3 dir = ogxCosineHemisphereDirection(noise);` 生成一条余弦半球方向。
 设计原因与取舍：
     参考实现直接读 `gl_FragCoord`、`frameCounter`、`gbufferModelView` 与缓冲编号。库把像素坐标、帧号、
     矩阵、纹理、射线数与开关全部改成显式参数；公式、循环顺序与分支条件保持参考实现。
@@ -28,7 +28,7 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
 // 余弦半球采样：把二维均匀随机数变成半球上的余弦分布方向。
 vec3 ogxCosineHemisphereDirection(vec2 xi)
 {
-    float theta = 2.0 * 3.14159265359 * xi.y; // 方位角。
+    float theta = 2.0 * OGX_PI * xi.y; // 方位角。
     float r = sqrt(xi.x); // 半径。
     float x = r * cos(theta); // 横坐标。
     float y = r * sin(theta); // 纵坐标。

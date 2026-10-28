@@ -11,9 +11,9 @@ Omni 通用图形库噪声模块：整数哈希、二维与三维值噪声、分
     float n = ogxValueNoise3(position * 0.1); // 取一个平滑的三维噪声。
     float f = ogxFbm2(uv * 4.0, 4); // 四层二维分形噪声。
 设计原因与取舍：
-    全部用整数哈希与插值生成，不读取噪声贴图，因此同一份源能生成 GLSL 与 SPIR-V，
-    也能在不启动 Minecraft 的测试世界里重复出图。常数来自旧测试世界的 `noise.glsl`，
-    迁移只改名字与类型写法，画面保持一致。
+    大多数噪声用整数哈希与插值生成，不依赖贴图；少数函数按调用方要求读取蓝噪声或云噪声贴图，
+    纹理句柄由参数传入。因此同一份源能生成 GLSL 与 SPIR-V，也能在不启动 Minecraft 的测试世界里重复出图。
+    常数来自旧测试世界的 `noise.glsl`，迁移只改名字与类型写法，画面保持一致。
 */
 #ifndef OGX_NOISE_INCLUDED
 #define OGX_NOISE_INCLUDED
@@ -36,7 +36,7 @@ float ogxHash12(vec2 p)
     return fract((p3.x + p3.y) * p3.z); // 零到一的伪随机数。
 }
 
-// 标量哈希：Eclipse 的 `hash11` 与 `hash_aurora` 是同一算式，保留两个名字给不同调用点。
+// 标量哈希：Eclipse 的 `hash11` 与极光哈希是同一算式，库只保留一个实现。
 float ogxHash11(float p)
 {
     p = fract(p * 0.1031);
@@ -44,9 +44,6 @@ float ogxHash11(float p)
     p *= p + p;
     return fract(p);
 }
-
-// 标量哈希的极光别名：与 `hash11` 逐项相同，名字对应参考源码的用途。
-float ogxHashAurora(float p) { return ogxHash11(p); }
 
 // 三分量哈希：一个标量序号变成互相独立的三维随机值。
 vec3 ogxHash31(float p)
@@ -138,9 +135,6 @@ uvec3 ogxIntegerHash3(uvec3 x)
     return x; // 返回三个独立的整数随机值。
 }
 
-// Eclipse 的 `iqint2`：同一个整数混合器的独立入口，保留参考名字与常数。
-uvec3 ogxIqint2(uvec3 x) { return ogxIntegerHash3(x); }
-
 // 三维值噪声：八个格点各取哈希，再按平滑曲线插值。
 float ogxValueNoise3(vec3 p)
 {
@@ -227,4 +221,26 @@ float ogxFogNoise(vec3 position, sampler2D noiseTexture)
     return mix(n.x, n.y, f.z); // 按高度做一次插值。
 }
 
+/*
+实现说明：噪声与哈希。
+一、哈希：标量、二维、三分量与整数版本各一份，输入相同就得到相同随机值。
+二、值噪声：八个格点取哈希后按平滑曲线插值，二维与三维各一份。
+三、分形：多层值噪声按振幅减半叠加，层数由调用方决定。
+四、蓝噪声与云噪声：按调用方传入的纹理句柄取样，不假设纹理槽位。
+五、三角形噪声：均匀随机数折成三角分布，抖动与颗粒共用。
+六、边界：哈希不保存状态，同一坐标在不同帧得到同一值；需要动画时由调用方加时间偏移。
+*/
+/*
+函数索引：
+一、`ogxHash13`、`ogxHash12`、`ogxHash11`、`ogxHash31`、`ogxHash22`：不同维度的哈希。
+二、`ogxHashUint3` 与 `ogxIntegerHash3`：整数混合器。
+三、`ogxPerlinGradient2` 与 `ogxCurl2D`：梯度与旋度。
+四、`ogxWhiteNoise` 与 `ogxWhiteNoiseTemporal`：白噪声与逐帧白噪声。
+五、`ogxTriangleNoise`：三角分布噪声。
+六、`ogxValueNoise2` 与 `ogxValueNoise3`：二维与三维值噪声。
+七、`ogxFbm2` 与 `ogxFbm3`：分形叠加。
+八、`ogxWarp3`：三维扭曲。
+九、`ogxFogNoise`：雾噪声，读取调用方传入的纹理。
+十、边界：哈希不保存状态，同一坐标在不同帧得到同一值。
+*/
 #endif

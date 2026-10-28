@@ -77,6 +77,31 @@ float2 ogxGiCameraVelocity(float2 coord, float depth, bool isDh, float materialI
     return coord - previousScreen.xy; // 返回屏幕位移。
 }
 
+// 历史写回：顶行左侧一格存本帧法线与米制距离，天空像素写中性值。
+// 单独成函数是因为它与时间滤波的输入输出不同，放在一起会让主函数同时承担两件事。
+float4 ogxGiHistoryWrite(float4 prev, float2 local, OgxGiView view, Sampler2D depthTexture,
+    Sampler2D dhDepthTexture, Sampler2D normalTexture, bool has_dh, bool useDhAo)
+{
+    local.x -= 1.0; // 顶行左侧一格存法线与距离。
+    if (!ogxEqual(ogxSaturate(local), local)) return prev; // 超出范围时不写。
+    int2 texel = int2(floor(local * view.screen_size)); // 对应的屏幕纹素。
+    float depth = depthTexture.Load(int3(texel, 0)).x; // 不透明深度。
+    bool isDh = false; // 远景标记。
+    if (has_dh && useDhAo && depth == 1.0) // 天空像素改读远景深度。
+    {
+        depth = dhDepthTexture.Load(int3(texel, 0)).x; // 远景深度。
+        isDh = true; // 标记远景。
+    }
+    if (depth >= 1.0) return float4(float3(0.5), 0.0); // 天空像素写中性值。
+    float3 normal = ogxDecodeNormal(normalTexture.Load(int3(texel, 0)).xy); // 解法线。
+    float dist = 1.0 / ((depth * 2.0 - 1.0) * view.projection_inverse[2][3] + view.projection_inverse[3][3]); // 深度换米制距离。
+    if (isDh) // 远景换算。
+    {
+        dist = 1.0 / ((depth * 2.0 - 1.0) * view.dh_projection_inverse[2][3] + view.dh_projection_inverse[3][3]);
+    }
+    return float4(normal * 0.5 + 0.5, dist * 0.001); // 法线压到零到一，距离缩小存进透明通道。
+}
+
 // 全局光时间滤波：本帧反弹与历史帧按法线、深度和运动量混合，同时把法线与距离写回历史图。
 float4 ogxGiTemporalFilter(float2 coord, int2 texelCoord, OgxGiView view,
     Sampler2D historyTexture, Sampler2D normalTexture, Sampler2D materialTexture, Sampler2D depthTexture, Sampler2D dhDepthTexture,
@@ -152,31 +177,5 @@ float4 ogxGiTemporalFilter(float2 coord, int2 texelCoord, OgxGiView view,
             prev = float4(ogxLinearToCurve3(gi), 0.0); // 编码回历史格式。
         }
     }
-    local.x -= 1.0; // 顶行左侧一格存法线与距离。
-    if (ogxEqual(ogxSaturate(local), local)) // 只在有效范围内处理。
-    {
-        int2 texel = int2(floor(local * view.screen_size)); // 对应的屏幕纹素。
-        float depth = depthTexture.Load(int3(texel, 0)).x; // 不透明深度。
-        bool isDh = false; // 远景标记。
-        if (has_dh && useDhAo && depth == 1.0) // 天空像素改读远景深度。
-        {
-            depth = dhDepthTexture.Load(int3(texel, 0)).x; // 远景深度。
-            isDh = true; // 标记远景。
-        }
-        if (depth < 1.0) // 有几何才写历史数据。
-        {
-            float3 normal = ogxDecodeNormal(normalTexture.Load(int3(texel, 0)).xy); // 解法线。
-            float dist = 1.0 / ((depth * 2.0 - 1.0) * view.projection_inverse[2][3] + view.projection_inverse[3][3]); // 深度换米制距离。
-            if (isDh) // 远景换算。
-            {
-                dist = 1.0 / ((depth * 2.0 - 1.0) * view.dh_projection_inverse[2][3] + view.dh_projection_inverse[3][3]);
-            }
-            prev = float4(normal * 0.5 + 0.5, dist * 0.001); // 法线压到零到一，距离缩小存进透明通道。
-        }
-        else // 天空像素没有有效历史。
-        {
-            prev = float4(float3(0.5), 0.0); // 写入中性值。
-        }
-    }
-    return prev; // 返回本帧要写回历史图的数据。
+    return ogxGiHistoryWrite(prev, local, view, depthTexture, dhDepthTexture, normalTexture, has_dh, useDhAo); // 顶行左侧写回法线与距离。
 }

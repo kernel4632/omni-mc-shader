@@ -7,8 +7,7 @@
 /*
 Omni 通用图形库平面云模块：扭曲、密度、光照密度、固定高度取样、朝太阳求遮挡并合成空气透视。
 调用位置：需要 iterationT 风格平面云的程序；Minecraft 光影由 `/omni-gfx/cloud/planar.glsl` 引入。
-可复制示例：
-    ogxPlanarClouds(color, worldDir, camera, dither, transmittance, ...);
+可复制示例：`float density = ogxPlanarDensity(position, windDirection, noiseTexture, 0.01, 0.5);`
 设计原因与取舍：
     参考实现把噪声、风、云量与大气常数都写成全局宏。库把每一类输入显式传入，
     函数体仍保留原来的球面求交、四次光照步进与两次相函数，不改变画面手感。

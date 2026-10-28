@@ -7,7 +7,7 @@
 /*
 Omni 通用图形库天气模块：雨雪随风偏移、植被与季节上色、暴风噪声与颜色、每日天气哈希。
 调用位置：任何需要天气形状的程序；Minecraft 光影由 `/omni-gfx/weather/weather.glsl` 引入，
-    `rendering/weather/*` 的四个文件只保留选项换算并转发到这里。
+    `shaders/effects/shared/weather.glsl`、`dailyweather.glsl`、`storm.glsl` 与 `shaders/effects/weather/season.glsl` 只保留选项换算。
 可复制示例：
     vec2 o = ogxRainWindOffset(worldPos, cameraPos, seconds, wind, 0.05, 1.0); // 雨雪的水平偏移。
     float n = ogxStormNoise(worldPos, noiseTexture, 512.0); // 暴风雾团密度。
@@ -49,7 +49,7 @@ vec3 ogxSeason(vec3 albedo, vec3 vertexColor, float phase, float tint, bool enab
 {
     if (!enabled) return albedo; // 关闭时不做任何改动。
     float foliage = ogxFoliage(vertexColor); // 这一面有多像植被。
-    float autumn = 0.5 - 0.5 * cos(phase * 6.28318530718); // 一年过半时最接近秋天。
+    float autumn = 0.5 - 0.5 * cos(phase * OGX_TAU); // 一年过半时最接近秋天。
     vec3 seasonal = mix(vec3(1.0), vec3(1.15, 0.9, 0.5), autumn * 0.6); // 秋色最多混六成。
     seasonal *= vec3(1.0 + 0.2 * tint, 1.0, 1.0 - 0.2 * tint); // 整体偏暖或偏冷。
     return albedo * mix(vec3(1.0), seasonal, foliage); // 只按植被程度生效。
@@ -201,4 +201,36 @@ void ogxYearCycleColorSeason(inout vec3 finalColor, vec3 glcolor, bool isLeaves,
     if (isTintIndex) finalColor = springToSummer;
 }
 
+/*
+实现说明：天气形状。
+一、云量：按每日天气与群系权重混合，输出零到一的覆盖率。
+二、风：水平风向与风速由调用方传入，噪声坐标随时间平移。
+三、雷暴：闪电强度与云量分别输出，云与雾按自己的阈值使用。
+四、噪声：二维值噪声叠成云团，低频决定大块，高频决定边缘。
+五、边界：位置、时间、风向与露天系数全部显式传入，库不读取天气全局量。
+六、单位：世界坐标用方块，时间用秒；调用方负责把自己的时间缩放传入。
+*/
+/*
+函数索引：
+一、`ogxRainWindOffset`：雨天的风偏移。
+二、`ogxFoliage`：植被季节色。
+三、`ogxSeason`：季节权重。
+四、`ogxStormNoise`：雷暴噪声。
+五、`ogxStormColor`：雷暴染色。
+六、`ogxYearCycleColor` 与 `ogxYearCycleColorSeason`：年周期颜色。
+七、`ogxFogDensities`：按天气输出雾密度。
+八、边界：位置、时间、风向与露天系数全部显式传入。
+九、单位：世界坐标用方块，时间用秒。
+*/
+/*
+参数与边界：
+一、时间用秒，世界坐标用方块。
+二、风向是水平单位向量。
+三、露天系数在零到一之间，零表示完全遮蔽。
+四、季节权重按年周期插值。
+五、雷暴强度与降雨强度分开。
+六、雾密度按天气与群系混合。
+七、所有函数只接收显式参数，不读取天气全局量。
+八、画面验证要看雨、雪与雷暴三种天气。
+*/
 #endif

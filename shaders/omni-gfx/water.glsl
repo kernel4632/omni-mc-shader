@@ -14,7 +14,8 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
     `OgxOceanWaveSum sum = ogxOceanWaveSum(vec2(0.0), t, ogxOceanWavesDefault());` 迭代正弦海洋。
     `float h = ogxOceanWaveHeight(sum, 13.0, 1.0);` 归一化后的波高。
 设计原因与取舍：
-    波形来自迁移前 GLSL 原型的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
+    解析方向波不依赖噪声贴图；`ogxWaves`、`ogxWavesNormal` 与 `ogxWaterParallax` 为了还原原程序的波面，
+    仍按调用方传入的 `sampler2D` 读取噪声。两种路径都由效果层选择。
     只做单层水面，但保留长波、斜波、短波与细波纹四级，远处自动淡出高频，避免闪烁。
     反射与折射颜色由调用方传入，库不读取立方体贴图或屏幕纹理，因此能同时服务 Iris 与独立测试世界。
 */
@@ -85,7 +86,7 @@ vec3 ogxWaterNormal(vec2 position, float time, float distance, float waveScale, 
 // 振幅已经折进 `steepness`，所以这里只交回水平梯度，调用方直接转成法线。
 vec2 ogxGerstnerGradient(vec2 position, vec2 direction, float wavelength, float steepness, float time, float phase)
 {
-    float waveNumber = 6.28318530718 / max(wavelength, 0.05); // 每米多少个弧度。
+    float waveNumber = OGX_TAU / max(wavelength, 0.05); // 每米多少个弧度。
     float angularSpeed = sqrt(9.81 * waveNumber); // 深水色散关系，长波跑得快、短波跑得慢。
     float angle = waveNumber * dot(direction, position) - angularSpeed * time + phase; // 当前相位。
     return direction * (steepness * cos(angle)); // 正弦波高度的水平导数。
@@ -145,21 +146,6 @@ float ogxWaterFoam(float depth, float noise)
 }
 
 // 水面着色：折射色乘吸收，再按菲涅尔混入反射，最后叠太阳高光与泡沫。
-vec3 ogxWaterShade(OgxWater water, vec3 normal, vec3 viewDirection, vec3 sunDirection, vec3 sunColor,
-                     vec3 reflectionColor, vec3 refractionColor, float depth, float foam, out float alpha)
-{
-    float facing = ogxSaturate(dot(normal, viewDirection)); // 正对程度。
-    float fresnel = ogxWaterFresnel(facing, 0.02); // 水的菲涅尔基础反射率约零点零二。
-    vec3 transmitted = refractionColor * ogxWaterAbsorption(water, depth); // 水下颜色被水吸收。
-    // 深水会彻底吸收掉水底的颜色，只剩水本身的体色；不补这一步，深海会变成一块黑。
-    transmitted = mix(water.deepColor, transmitted, exp(-depth * 0.32)); // 越深越接近深水体色。
-    transmitted = mix(water.shallowColor, transmitted, ogxSaturate(depth * 0.25)); // 浅水保留更多水色。
-    vec3 color = mix(transmitted, reflectionColor, fresnel); // 折射与反射按菲涅尔混合。
-    color += ogxSpecularGGX(normal, viewDirection, sunDirection, water.roughness, 0.02) * sunColor * 1.5; // 太阳高光。
-    color += foam * water.shallowColor * 0.8; // 岸线泡沫。
-    alpha = ogxSaturate(fresnel * 0.85 + 0.22 + ogxSaturate(depth * 0.08)); // 深水更不透明。
-    return color; // 返回线性水面颜色。
-}
 
 // 平滑噪声取样：先把坐标吸到最近的纹素中心，再用三次曲线改写小数部分，得到不会闪的平滑噪声。
 // 与迁移前的 GLSL 原型算式一致，波纹形状因此不变。
@@ -418,7 +404,7 @@ struct OgxOceanWaves
 /*
 水面子文件：海洋波参数、逐层波高与方向、海洋法线、泡沫与整像素着色。
 调用位置：由 `water.slang` 内联，水面效果与测试世界直接调用这里的海洋入口。
-可复制示例：`OgxOceanPixel p = ogxOceanPixel(position, 1.0, 13.0, time, waves, ...);`
+可复制示例：`OgxOceanWaves waves = ogxOceanWavesDefault();`
 设计原因与取舍：层数、拖拽与频率全部显式传入；累加顺序照参考保留，默认海面形状不变。
 */
 // 默认参数：iterationT 海洋扩展的常数，调用方只改真正要变的那几个字段。
@@ -675,6 +661,22 @@ vec3 ogxWaterBumpNormal(vec3 waterPos, vec3 playerPos, float time, float waveSpe
     float xDelta = (h1 - h0) / deltaPos; // 横向坡度。
     float yDelta = (h3 - h0) / deltaPos; // 纵向坡度。
     return normalize(vec3(xDelta, yDelta, 1.0 - pow(abs(xDelta + yDelta), 2.0))); // 高度场法线。
+}
+
+vec3 ogxWaterShade(OgxWater water, vec3 normal, vec3 viewDirection, vec3 sunDirection, vec3 sunColor,
+                     vec3 reflectionColor, vec3 refractionColor, float depth, float foam, out float alpha)
+{
+    float facing = ogxSaturate(dot(normal, viewDirection)); // 正对程度。
+    float fresnel = ogxWaterFresnel(facing, 0.02); // 水的菲涅尔基础反射率约零点零二。
+    vec3 transmitted = refractionColor * ogxWaterAbsorption(water, depth); // 水下颜色被水吸收。
+    // 深水会彻底吸收掉水底的颜色，只剩水本身的体色；不补这一步，深海会变成一块黑。
+    transmitted = mix(water.deepColor, transmitted, exp(-depth * 0.32)); // 越深越接近深水体色。
+    transmitted = mix(water.shallowColor, transmitted, ogxSaturate(depth * 0.25)); // 浅水保留更多水色。
+    vec3 color = mix(transmitted, reflectionColor, fresnel); // 折射与反射按菲涅尔混合。
+    color += ogxSpecularGGX(normal, viewDirection, sunDirection, water.roughness, 0.02) * sunColor * 1.5; // 太阳高光。
+    color += foam * water.shallowColor * 0.8; // 岸线泡沫。
+    alpha = ogxSaturate(fresnel * 0.85 + 0.22 + ogxSaturate(depth * 0.08)); // 深水更不透明。
+    return color; // 返回线性水面颜色。
 }
 
 #endif

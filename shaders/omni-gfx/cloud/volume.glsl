@@ -7,9 +7,9 @@
 /*
 Omni 通用图形库体积云模块：Nubis / Hillaire 风格的积云形状、光照、步进与云影。
 调用位置：任何需要体积云的程序；Minecraft 光影由 `/omni-gfx/cloud/volume.glsl` 引入，
-    `rendering/cloud/volumetric.glsl` 只把选项、天气与纹理换成参数。
+    `shaders/effects/cloud/volumetric.glsl` 只把选项、天气与纹理换成参数。
 可复制示例：
-    OgxCumulusMedia media = ...; // 填好云底、云顶、风与光照强度。
+    OgxCumulusMedia media; // 调用方先填好云底、云顶、风与光照强度。
     vec3 hit; // 平均命中位置，供大气淡出使用。
     vec4 cloud = ogxCumulusMarch(viewDir, media, jitter, hit, baseTex, detailTex, curlTex,
                                    40.0, 1.0, sunDir, 1.0, 0.0, 3.0, 1.2);
@@ -33,6 +33,8 @@ Omni 通用图形库体积云模块：Nubis / Hillaire 风格的积云形状、�
 #include "/omni-gfx/common/color.glsl"
 // 数学提供夹紧、矩阵列展开、相函数与光线求交。
 #include "/omni-gfx/common/math.glsl"
+// 闪电提供光柱照明，云与雾共用同一条衰减曲线。
+#include "/omni-gfx/weather/lightning.glsl"
 // 体积云的一层参数；不同云层换字段即可复用同一套步进。
 struct OgxCumulusMedia
 {

@@ -2,6 +2,8 @@
 
 调用位置：项目根目录的 `python -m unittest discover -s tests` 自动发现；
     `python build.py verify` 会把它和光影检查一起跑。
+调用示例：在仓库根目录执行 `python -m unittest discover -s tests`。
+
 设计原因与取舍：
     这里不启动显卡、不调用 Slang 编译器，只检查可复现的文本产物，
     因此能放进十秒预算。GPU 等值测试与截图另由 omni-gfx 自己的命令运行。

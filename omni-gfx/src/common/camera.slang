@@ -8,7 +8,7 @@ Omni 通用图形库相机变换模块：屏幕、视空间、世界空间、阴
 设计原因与取舍：
     参考实现直接读 gbufferProjection 等全局变量。库把每个矩阵、抖动与是否处理抖动的开关都显式传入，
     调用方必须自己给出数据来源；这样同一套公式能用于主世界、远景与测试场景，也方便审查矩阵布局。
-    所有函数只做坐标换算，不读取缓冲、不改写选项，因此不是宿主胶水。
+    所有函数只做几何换算：深度还原、投影、阴影坐标与远景微调；不读取缓冲、不改写选项，因此不是宿主胶水。
 */
 #ifndef OGX_CAMERA_INCLUDED
 #define OGX_CAMERA_INCLUDED
@@ -135,10 +135,13 @@ float3 ogxViewPosFromScreenPosRawDistant(float2 coord, float depth, float4x4 dhP
 }
 
 // 远景视空间位置投到屏幕，可选补抖动。
+// 远景屏幕坐标的原始公式提前声明：带抖动的版本在它之前调用。
+float3 ogxScreenPosFromViewPosRawDistant(float3 viewPos, float4x4 dhProjection);
+
+// 远景屏幕坐标：带可选的抖动偏移。
 float3 ogxScreenPosFromViewPosDistant(float3 viewPos, float2 taaJitter, bool useJitter, float4x4 dhProjection)
 {
-    float3 screenPos = float3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + ogxMatrixTranslation(dhProjection); // 远景投影对角项与平移列。
-    screenPos = screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法。
+    float3 screenPos = ogxScreenPosFromViewPosRawDistant(viewPos, dhProjection); // 主体公式只有一份。
     if (useJitter) screenPos.xy += taaJitter * 0.5; // 补回半个抖动像素。
     return screenPos;
 }
@@ -284,13 +287,6 @@ float4x4 ogxDistantShadowProjectionTweak(float4x4 projection, float farPlane, fl
     return result; // 交回微调后的投影。
 }
 
-// 光传播体积坐标：世界位置减去体积原点，再落到体素格。
-float3 ogxGetLpvPosition(float3 worldPos, float3 lpvOrigin, float voxelSize)
-{
-    return (worldPos - lpvOrigin) / voxelSize; // 换到体积格坐标。
-}
-
-
 // 快速深度线性化：Eclipse 的屏幕深度转米制距离。
 float ogxInvertLinearizeDepthFast(float z, float nearPlane, float farPlane)
 {
@@ -305,12 +301,6 @@ float3 ogxToScreenSpace2(float3 p, bool depthCheck, float4x4 projectionInverse, 
     float3 p3 = p * 2.0 - 1.0; // 零到一转负一到一。
     float4 fragPosition = inverseDiag * p3.xyzz + matrix[3]; // 对角项乘坐标再加平移。
     return fragPosition.xyz / fragPosition.w; // 齐次除法。
-}
-
-// 光传播体积坐标：玩家相对位置加相机小数偏移，再平移到体积中心。
-float3 ogxGetLpvPositionExplicit(float3 playerPos, float3 cameraOffset, float lpvSize)
-{
-    return playerPos + cameraOffset + float3(lpvSize * 0.5); // 与参考实现的 `LpvSize3/2u` 相同。
 }
 
 #endif

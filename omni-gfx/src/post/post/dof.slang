@@ -1,9 +1,13 @@
 /*
 后期子文件：景深线性深度、弥散范围扩散、参考签名版与完整景深合成。
 调用位置：由 `post/post.slang` 内联，合成阶段的景深效果调用这里的入口。
-可复制示例：`vec4 c = ogxDepthOfField(coord, colorTex, depthTex, farDepthTex, invProj, farInvProj, true, ...);`
+可复制示例：`float coc = ogxCocRadius(10.0, 12.0, 4.0);`
 设计原因与取舍：深度图、矩阵与对焦参数显式传入，手部与远景的分支照参考保留。
 */
+
+// 弥散圆半径的提前声明：CocSpread 在文件前部调用它，定义放在文件末尾。
+float ogxCocRadius(float focus, float depth, float aperture);
+
 // 读一个坐标的米制深度；`useDh` 为真且近景没有几何时改读远景深度，再统一到近景尺度。
 // 为什么把下限夹在换米制之前：近处深度趋近于零时薄透镜公式会爆炸，先夹屏幕深度最稳。
 float ogxDofLinearDepth(float2 coord, Sampler2D depthTexture, Sampler2D dhDepthTexture, float4x4 projectionInverse,
@@ -36,7 +40,7 @@ float ogxDofCocSpread(float2 coord, Sampler2D depthTexture, Sampler2D dhDepthTex
     startRadius *= startRadius; // 平方，让搜索从中心附近开始。
     float spreadCoc = currCoc; // 弥散范围初值为当前点。
     float rSteps = 1.0 / float(steps); // 步数倒数。
-    float angle = noise.x * 6.28318530718; // 起始角由噪声给出，避免固定图案。
+    float angle = noise.x * OGX_TAU; // 起始角由噪声给出，避免固定图案。
     float2 rot = float2(cos(angle), sin(angle)); // 起始方向。
     float2 golden = float2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); // 黄金角旋转，和参考宏同值。
     for (int i = 0; i < steps; i++) // 螺旋逐点搜索。
@@ -86,7 +90,7 @@ float ogxDofCocSpreadReference(float2 coord, Sampler2D depthTexture, Sampler2D d
     float spreadCoc = currCoc; // 弥散范围初值。
     float rSteps = 1.0 / float(steps); // 步数倒数。
     float2 golden = float2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); // 黄金角旋转。
-    float angle = noise.x * 6.28318530718; // 起始角。
+    float angle = noise.x * OGX_TAU; // 起始角。
     float2 rot = float2(cos(angle), sin(angle)); // 起始方向。
     for (int i = 0; i < steps; i++) // 十步螺旋搜索。
     {
@@ -144,7 +148,7 @@ float4 ogxDofReference(float2 coord, Sampler2D colorTexture, Sampler2D depthText
     float rSteps = 1.0 / float(quality); // 步数倒数。
     float firstStepRadius = sqrt(rSteps); // 参考实现保留的首步半径声明。
     float2 golden = float2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); // 黄金角旋转。
-    float angle = noise.x * 6.28318530718; // 起始角。
+    float angle = noise.x * OGX_TAU; // 起始角。
     float2 rot = float2(cos(angle), sin(angle)); // 起始方向。
     for (int i = 0; i < quality; i++) // 十步螺旋采样。
     {
@@ -215,7 +219,7 @@ float4 ogxDepthOfField(float2 coord, Sampler2D colorTexture, Sampler2D depthText
     float blendedDepth = 0.0; // 散焦后的深度累加。
     float selfDepth = currDepth * 1e-20; // 当前点自计入深度初值极小。
     float rSteps = 1.0 / float(quality); // 步数倒数。
-    float angle = noise.x * 6.28318530718; // 起始角。
+    float angle = noise.x * OGX_TAU; // 起始角。
     float2 rot = float2(cos(angle), sin(angle)); // 起始方向。
     float2 golden = float2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); // 黄金角旋转，和参考宏同值。
     for (int i = 0; i < quality; i++) // 螺旋采样。
@@ -280,4 +284,20 @@ float4 ogxDepthOfField(float2 coord, Sampler2D colorTexture, Sampler2D depthText
     blendedDepth += selfDepth * (1.0 + selfWeights / selfSamples); // 下界把深度按同一套补偿。
     blendedDepth /= weights + selfSamples + selfWeights; // 归一化深度。
     return float4(ogxLinearToCurve3(dof), ogxScreenDepthFromLinearDepth(blendedDepth, projectionInverse)); // 返回颜色与换回的屏幕深度。
+}
+
+// 弥散圆半径：按薄透镜公式估算一个点离对焦平面越远时散焦多大。
+// 近距离时深度趋近零会让分母爆炸，调用方传入的深度已经夹过下限。
+float ogxCocRadius(float focus, float depth, float aperture)
+{
+    return abs(aperture * (depth - focus) / (depth * focus)); // 薄透镜近似。
+}
+
+// 景深镜头倍数：焦距平方乘口径倍数，焦距与光圈取基准值时正好为一。
+// 焦距越长、f 值越小，弥散越大；两个比值相乘让参数能独立调整。
+float ogxDofLensFactor(float focalLength, float aperture, float referenceFocal, float referenceAperture)
+{
+    float focalRatio = focalLength / referenceFocal; // 焦距相对基准的倍数，越长越大。
+    float apertureRatio = referenceAperture / aperture; // f 值越小口径越大，取倒数表示反比。
+    return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
 }

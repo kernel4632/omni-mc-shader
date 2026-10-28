@@ -3,6 +3,8 @@
 调用位置：`omni-gfx/build.py generate` 与测试都会调用 `module_text`；
 生成的 GLSL 只写入 `shaders/omni-gfx/`，不再保留第二份镜像。
 
+调用示例：在仓库根目录执行 `python omni-gfx/build.py generate`。
+
 设计原因与取舍：
     Slang 自带的 GLSL 后端只输出带入口点的完整程序，函数会被改名并带有 `#version 450`，
     不能作为光影库直接 `#include`。这里只转换本项目实际使用的一小组语法差异，
@@ -31,11 +33,11 @@ DISPLAY = catalog.DISPLAY
 TYPE_WORDS = {
     "float4x4": "mat4", "float3x3": "mat3", "float2x2": "mat2",
     "float4": "vec4", "float3": "vec3", "float2": "vec2",
-    "int4": "ivec4", "int3": "ivec3", "int2": "ivec2", "int": "int",
-    "uint4": "uvec4", "uint3": "uvec3", "uint2": "uvec2", "uint": "uint",
+    "int4": "ivec4", "int3": "ivec3", "int2": "ivec2",
+    "uint4": "uvec4", "uint3": "uvec3", "uint2": "uvec2",
     "Sampler3DShadow": "sampler3DShadow", "Usampler3D": "usampler3D", "Sampler3D": "sampler3D",
     "Usampler1D": "usampler1D", "Sampler1D": "sampler1D",
-}  # 三维与一维纹理句柄也要替换，体积云、体素追踪与方块光表都靠它取格。
+}  # 只列真正改名的类型；`int` 与 `uint` 在 GLSL 同名，不写空替换。
 
 # 逐项替换的语法差异；每项都配一条原因，方便新会话判断能不能扩展。
 # 表内每条都只做等价改写：改名字、改写法，不改算式与常数。

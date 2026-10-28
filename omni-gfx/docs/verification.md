@@ -1,7 +1,7 @@
 # omni-gfx 验证记录
 
 <!-- stats:begin -->
-当前统计：48 个模块、90 个 Slang 源文件、15781 行生成 GLSL；函数对照 505 个，已迁入 407、MC 专用 98、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
+当前统计：48 个模块、87 个 Slang 源文件、16830 行生成 GLSL；函数对照 505 个，已迁入 404、MC 专用 101、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
 <!-- stats:end -->
 
 ## 〇、2026-10-26 光影验收 v5：按 iterationT 3.2.0 对齐

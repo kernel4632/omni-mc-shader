@@ -7,9 +7,7 @@
 /*
 Omni 通用图形库 G-buffer 解码模块：把多张中间画面还原成表面数据、材质与光源标记。
 调用位置：需要读取延迟着色中间画面的程序；Minecraft 光影由 `/omni-gfx/gbuffer.glsl` 引入。
-可复制示例：
-    OgxGbufferData d = ogxGetGbufferData(g0, g3, g4, g5, g6, depth1, depth0, texel, true, ...);
-    OgxMaterialMask m = ogxCalculateMasks(d.materialIDL, ids);
+可复制示例：`OgxMaterialMask mask = ogxCalculateMasks(materialIDs, ids);`
 设计原因与取舍：
     参考实现直接读取 colortex 与固定材质编号。库改成显式传入纹理、像素坐标、编号表与选项，
     这样算法本身不依赖 Minecraft，调用方仍可按自己的缓冲布局填写。

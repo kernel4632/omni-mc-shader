@@ -8,7 +8,8 @@ Omni 通用图形库水面模块：方向波法线、菲涅尔、吸收、折射
     `OgxOceanWaveSum sum = ogxOceanWaveSum(float2(0.0), t, ogxOceanWavesDefault());` 迭代正弦海洋。
     `float h = ogxOceanWaveHeight(sum, 13.0, 1.0);` 归一化后的波高。
 设计原因与取舍：
-    波形来自迁移前 GLSL 原型的六层噪声叠加思路，换成解析方向波，省掉噪声贴图。
+    解析方向波不依赖噪声贴图；`ogxWaves`、`ogxWavesNormal` 与 `ogxWaterParallax` 为了还原原程序的波面，
+    仍按调用方传入的 `Sampler2D` 读取噪声。两种路径都由效果层选择。
     只做单层水面，但保留长波、斜波、短波与细波纹四级，远处自动淡出高频，避免闪烁。
     反射与折射颜色由调用方传入，库不读取立方体贴图或屏幕纹理，因此能同时服务 Iris 与独立测试世界。
 */
@@ -38,5 +39,21 @@ struct OgxWater
 #include "water/rain.slang"
 // 海浪、泡沫与凹凸法线，具体实现在子文件。
 #include "water/ocean.slang"
+
+float3 ogxWaterShade(OgxWater water, float3 normal, float3 viewDirection, float3 sunDirection, float3 sunColor,
+                     float3 reflectionColor, float3 refractionColor, float depth, float foam, out float alpha)
+{
+    float facing = ogxSaturate(dot(normal, viewDirection)); // 正对程度。
+    float fresnel = ogxWaterFresnel(facing, 0.02); // 水的菲涅尔基础反射率约零点零二。
+    float3 transmitted = refractionColor * ogxWaterAbsorption(water, depth); // 水下颜色被水吸收。
+    // 深水会彻底吸收掉水底的颜色，只剩水本身的体色；不补这一步，深海会变成一块黑。
+    transmitted = lerp(water.deepColor, transmitted, exp(-depth * 0.32)); // 越深越接近深水体色。
+    transmitted = lerp(water.shallowColor, transmitted, ogxSaturate(depth * 0.25)); // 浅水保留更多水色。
+    float3 color = lerp(transmitted, reflectionColor, fresnel); // 折射与反射按菲涅尔混合。
+    color += ogxSpecularGGX(normal, viewDirection, sunDirection, water.roughness, 0.02) * sunColor * 1.5; // 太阳高光。
+    color += foam * water.shallowColor * 0.8; // 岸线泡沫。
+    alpha = ogxSaturate(fresnel * 0.85 + 0.22 + ogxSaturate(depth * 0.08)); // 深水更不透明。
+    return color; // 返回线性水面颜色。
+}
 
 #endif

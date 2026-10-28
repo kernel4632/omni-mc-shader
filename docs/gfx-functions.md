@@ -6,15 +6,15 @@
 ## 结论
 
 - 参考函数共 505 个（同名跨包只算一次）：iterationT 240 个，Eclipse 265 个。
-- 已迁入：407 个。
-- MC 专用：98 个。
+- 已迁入：404 个。
+- MC 专用：101 个。
 - 缺失：0 个。
 - 调试输出：0 个。
 
 | 参考包 | 已迁入 | MC 专用 | 缺失 | 调试输出 |
 | --- | --- | --- | --- | --- |
-| iterationT | 217 | 23 | 0 | 0 |
-| Eclipse | 190 | 75 | 0 | 0 |
+| iterationT | 215 | 25 | 0 | 0 |
+| Eclipse | 189 | 76 | 0 | 0 |
 
 ## 判定口径
 
@@ -132,8 +132,8 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `VanillaFog` | 3 | `fog/fog/end.ogxVanillaFog` | 已迁入 | 承接算法：fog/fog/end |
-| `SelectionBox` | 14 | `fog/fog/end.ogxSelectionBox` | 已迁入 | 承接算法：fog/fog/end |
+| `VanillaFog` | 3 | — | MC 专用 | 原版雾叠加由宿主最终阶段直接处理，通用库不再保留无人调用的函数 |
+| `SelectionBox` | 14 | — | MC 专用 | 选择框由宿主最终阶段直接按曝光值着色，通用库不再保留无人调用的函数 |
 
 `references/iterationT/shaders/Lib/GbufferData.glsl`
 
@@ -160,13 +160,13 @@
 | `equation_scale` | 94 | `common/color/agx.ogxAgxEquationScale` | 已迁入 | 承接算法：common/color/agx |
 | `equation_full_curve` | 98 | `common/color/agx.ogxAgxEquationFullCurve` | 已迁入 | 承接算法：common/color/agx |
 | `AgXConfigurable` | 116 | `common/color/agx.ogxAgxConfigurable` | 已迁入 | 承接算法：common/color/agx |
-| `AgXConfigurable1` | 148 | `common/color/agx.ogxAgxConfigurable1` | 已迁入 | 承接算法：common/color/agx |
+| `AgXConfigurable1` | 148 | `common/color/agx.ogxAgxCustomGamutMatrix` | 已迁入 | 承接算法：common/color/agx |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/Bloom.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `BloomDownSample` | 20 | `post/post/bloom.ogxBloomDownsample` | 已迁入 | 承接算法：post/post/bloom |
+| `BloomDownSample` | 20 | `post/post.ogxBloomDownsample` | 已迁入 | 承接算法：后期与泛光 |
 | `AxialGaussianBlur` | 41 | `post/post/bloom.ogxAxialGaussianBlur` | 已迁入 | 承接算法：post/post/bloom |
 | `BicubicBlurTexture` | 64 | `common/math/filter.ogxBicubicBlurTexture` | 已迁入 | 承接算法：common/math/filter |
 
@@ -181,7 +181,7 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `CalculateCoCRadius` | 3 | `post/post/bloom.ogxCocRadius` | 已迁入 | 同一薄透镜弥散圆公式，参数顺序一致 |
+| `CalculateCoCRadius` | 3 | `post/post/dof.ogxCocRadius` | 已迁入 | 同一薄透镜弥散圆公式，参数顺序一致 |
 | `GetLinearDepth` | 7 | `post/post/dof.ogxDofLinearDepth` | 已迁入 | 承接算法：post/post/dof |
 | `GetFocus` | 19 | `lens/lens.ogxGetFocus` | 已迁入 | 同名迁移：lens/lens |
 | `CoCSpread` | 29 | `post/post/dof.ogxDofCocSpread` | 已迁入 | 承接算法：post/post/dof |
@@ -219,13 +219,13 @@
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
 | `GroundTruthBasedAmbientOcclusion` | 3 | `gi/gi/ao.ogxGroundTruthAo` | 已迁入 | 承接算法：gi/gi/ao |
-| `GTAOMultiBounce` | 140 | `gi/gi/ao.ogxAoMultiBounce` | 已迁入 | 承接算法：gi/gi/ao |
+| `GTAOMultiBounce` | 140 | `gi/gi.ogxAoMultiBounce` | 已迁入 | 承接算法：全局光与遮蔽 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/GlobalIllumination.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `RSM` | 9 | `gi/gi/ao.ogxGiRsm` | 已迁入 | 承接算法：gi/gi/ao |
+| `RSM` | 9 | `gi/gi.ogxGiRsm` | 已迁入 | 承接算法：全局光与遮蔽 |
 | `GI_TemporalFilter` | 188 | `gi/gi/temporal.ogxGiTemporalFilter` | 已迁入 | 承接算法：gi/gi/temporal |
 | `GI_SpatialFilter` | 325 | `gi/gi/spatial.ogxGiSpatialFilter` | 已迁入 | 承接算法：gi/gi/spatial |
 
@@ -334,7 +334,7 @@
 | `MultiScatteringPhases` | 12 | `fog/fog/density.ogxMultiScatteringPhases` | 已迁入 | 承接算法：fog/fog/density |
 | `FogDensity` | 34 | `fog/fog/density.ogxFogDensity` | 已迁入 | 承接算法：fog/fog/density |
 | `VolumetricFog` | 69 | `fog/volume.ogxVolumetricFog` | 已迁入 | 同名迁移：体积雾 |
-| `simpleScattering` | 275 | `atmosphere/atmosphere/scattering.ogxAtmosphereSky` | 已迁入 | 承接算法：atmosphere/atmosphere/scattering |
+| `simpleScattering` | 275 | `atmosphere/atmosphere.ogxAtmosphereSky` | 已迁入 | 承接算法：天空散射与日月星 |
 | `LandAtmosphericScattering` | 300 | `atmosphere/model.ogxLandAtmosphericScattering` | 已迁入 | 同名迁移：预计算大气查表 |
 
 `references/iterationT/shaders/Lib/IndividualFounctions/WaterWaves.glsl`
@@ -584,14 +584,14 @@
 | `curve` | 106 | `common/color/agx.ogxAgxContrast` | 已迁入 | 承接算法：common/color/agx |
 | `Tonemap_Uchimura_Modified` | 109 | `common/color/uchimura.ogxTonemapUchimuraModified` | 已迁入 | 承接算法：common/color/uchimura |
 | `Tonemap_Uchimura` | 132 | `common/color/uchimura.ogxTonemapUchimuraExp` | 已迁入 | 承接算法：common/color/uchimura |
-| `Tonemap_Xonk` | 166 | `common/color/curve.ogxTonemapXonk` | 已迁入 | 同名曲线：先抬 1.3 次幂，再除以自身加 0.333 |
+| `Tonemap_Xonk` | 166 | `common/color/curve.ogxTonemapPowerCurve` | 已迁入 | 同名曲线：先抬 1.3 次幂，再除以自身加 0.333 |
 | `Tonemap_Full_Reinhard` | 174 | `common/color/reinhard.ogxTonemapReinhardFull` | 已迁入 | 承接算法：common/color/reinhard |
 | `Full_Reinhard_Edit` | 182 | `common/color/reinhard.ogxTonemapReinhardEdit` | 已迁入 | 承接算法：common/color/reinhard |
 | `agxDefaultContrastApprox` | 228 | `common/color/agx.ogxAgxContrast` | 已迁入 | 承接算法：common/color/agx |
 | `agxLook` | 241 | `common/color/agx.ogxAgxLook` | 已迁入 | 承接算法：common/color/agx |
 | `ToneMap_AgX` | 255 | `common/color/agx.ogxToneMapAgx` | 已迁入 | 承接算法：common/color/agx |
 | `ToneMap_AgX_minimal` | 297 | `common/color/agx.ogxToneMapAgxMinimal` | 已迁入 | 承接算法：common/color/agx |
-| `ToneMap_AgX_minimal_merlin` | 337 | `common/color/agx.ogxToneMapAgxMerlin` | 已迁入 | 承接算法：common/color/agx |
+| `ToneMap_AgX_minimal_merlin` | 337 | `common/color/agx.ogxToneMapAgxCompact` | 已迁入 | 承接算法：common/color/agx |
 | `reinhard_jodie` | 386 | `common/color/reinhard.ogxTonemapReinhardJodie` | 已迁入 | 承接算法：common/color/reinhard |
 | `no_tonemapper` | 400 | `common/color.ogxTonemapNone` | 已迁入 | 承接算法：common/color |
 
@@ -657,15 +657,15 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `Iris_Lightningflash` | 8 | `fog/volume/light.ogxFogLightning` | 已迁入 | 承接算法：fog/volume/light |
+| `Iris_Lightningflash` | 8 | `fog/volume.ogxFogLightning` | 已迁入 | 承接算法：体积雾 |
 | `Iris_Lightningflash_VLcloud` | 31 | `cloud/volume.ogxCumulusLightning` | 已迁入 | 承接算法：体积云步进 |
-| `Iris_Lightningflash_VLfog` | 44 | `fog/volume/light.ogxFogLightning` | 已迁入 | 承接算法：fog/volume/light |
+| `Iris_Lightningflash_VLfog` | 44 | `fog/volume.ogxFogLightning` | 已迁入 | 承接算法：体积雾 |
 
 `references/Eclipse/shaders/lib/lpv_common.glsl`
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `GetLpvPosition` | 12 | `common/camera.ogxGetLpvPosition` | 已迁入 | 同名迁移：common/camera |
+| `GetLpvPosition` | 12 | — | MC 专用 | 函数体直接读取宿主符号：`cameraPosition` |
 
 `references/Eclipse/shaders/lib/lpv_render.glsl`
 
@@ -759,7 +759,7 @@
 | `rayTraceSpeculars` | 113 | — | MC 专用 | 函数体直接读取宿主符号：`colortex`、`depthtex` |
 | `toScreenSpace2` | 248 | `common/camera.ogxToScreenSpace2` | 已迁入 | 同名迁移：common/camera |
 | `GetVoxelBlock` | 262 | — | MC 专用 | 按坐标读取体素方块编号，依赖 Iris 自定义图像 |
-| `voxelIndex` | 266 | `voxel/voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
+| `voxelIndex` | 266 | `voxel/voxel/write.ogxGetVoxelIndex` | 已迁入 | 承接算法：voxel/voxel/write |
 | `voxelNormalIndex` | 270 | — | MC 专用 | 体素法线索引，依赖方块面表与影像编码 |
 | `decodeVec2_16` | 274 | `common/color.ogxDecodeVec2x16` | 已迁入 | 同一组常数把打包值拆成两个十六位分量，不依赖浮点位模式 |
 | `GetVoxelData` | 280 | — | MC 专用 | 读体素影像数据，依赖自定义图像布局 |
@@ -767,7 +767,7 @@
 | `getVoxelEmission` | 294 | — | MC 专用 | 从体素影像读取发光，依赖自定义图像与方块映射 |
 | `voxelEmission` | 300 | — | MC 专用 | 体素发光编码，依赖方块表 |
 | `CleanVoxelSample` | 308 | — | MC 专用 | 清洗体素采样，依赖自定义图像与材质掩码 |
-| `ComputeVoxelShadowMap` | 331 | `voxel/voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
+| `ComputeVoxelShadowMap` | 331 | `voxel/voxel/write.ogxPopulateShadowVoxelIndex` | 已迁入 | 承接算法：voxel/voxel/write |
 | `planeIntersect` | 441 | `common/math/shading.ogxRayPlaneIntersection` | 已迁入 | 承接算法：common/math/shading |
 | `AABBintersection` | 459 | `common/math/shading.ogxRayBoxIntersection` | 已迁入 | 承接算法：common/math/shading |
 | `AABBintersection2` | 488 | `common/math/shading.ogxRayBoxRange` | 已迁入 | 承接算法：common/math/shading |
@@ -775,8 +775,8 @@
 | `sortIntersectionOpaque` | 540 | — | MC 专用 | 按深度排序不透明交点，依赖体素影像布局 |
 | `fenceIntersection` | 552 | — | MC 专用 | 栅栏网格求交，读取体素方块编号 |
 | `fenceIntersection2` | 561 | — | MC 专用 | 栅栏网格求交的第二种写法，读取体素方块编号 |
-| `traceQuarterVoxel` | 578 | `voxel/voxel.ogxVoxelReflection` | 已迁入 | 承接算法：体素反射 |
-| `voxelReflection` | 616 | `voxel/voxel.ogxVoxelReflection` | 已迁入 | 同名迁移：体素反射 |
+| `traceQuarterVoxel` | 578 | `voxel/voxel/reflection.ogxVoxelReflection` | 已迁入 | 承接算法：voxel/voxel/reflection |
+| `voxelReflection` | 616 | `voxel/voxel/reflection.ogxVoxelReflection` | 已迁入 | 同名迁移：voxel/voxel/reflection |
 | `CleanPhotonicsSample` | 1079 | — | MC 专用 | 读取 photonics 缓冲的采样清洗，依赖 SSBO 布局 |
 | `ComputePhotonicsShadowMap` | 1102 | — | MC 专用 | 写入 photonics 阴影贴图，需要 Iris SSBO 与图像写入权限 |
 | `trace_wsr` | 1222 | — | MC 专用 | 加权水面追踪主循环，读取体素影像与位置缓冲，依赖 Iris 自定义图像 |
@@ -852,7 +852,7 @@
 | `clampNormal` | 72 | `common/math/scalar.ogxNormalize` | 已迁入 | 承接算法：common/math/scalar |
 | `srgbToLinear` | 77 | `common/color.ogxSrgbToLinear` | 已迁入 | 同名迁移：common/color |
 | `linearToSRGB` | 85 | `common/color.ogxLinearToSrgb` | 已迁入 | 同名迁移：common/color |
-| `blackbody` | 95 | `common/color/blackbody.ogxBlackbodyApprox` | 已迁入 | 承接算法：common/color/blackbody |
+| `blackbody` | 95 | `common/color.ogxBlackbodyApprox` | 已迁入 | 承接算法：common/color |
 | `calculateHardShadows` | 111 | — | MC 专用 | 硬阴影比较，直接采样 shadowtex |
 | `genUnitVector` | 117 | `common/math/sampling.ogxCosineHemisphere` | 已迁入 | 承接算法：common/math/sampling |
 | `cartToSphere` | 127 | `common/math/scalar.ogxCircleMap` | 已迁入 | 承接算法：common/math/scalar |
@@ -892,9 +892,9 @@
 
 | 函数 | 行 | 承接 | 状态 | 证据 |
 | --- | --- | --- | --- | --- |
-| `GetVoxelIndex` | 1 | `voxel/voxel.ogxGetVoxelIndex` | 已迁入 | 同名迁移：体素反射 |
-| `SetVoxelBlock` | 19 | `voxel/voxel.ogxVoxelWriteIndex` | 已迁入 | 承接算法：体素反射 |
-| `PopulateShadowVoxel` | 89 | `voxel/voxel.ogxPopulateShadowVoxel` | 已迁入 | 同名迁移：体素反射 |
+| `GetVoxelIndex` | 1 | `voxel/voxel/write.ogxGetVoxelIndex` | 已迁入 | 同名迁移：voxel/voxel/write |
+| `SetVoxelBlock` | 19 | `voxel/voxel/write.ogxSetVoxelBlock` | 已迁入 | 承接算法：voxel/voxel/write |
+| `PopulateShadowVoxel` | 89 | `voxel/voxel/write.ogxPopulateShadowVoxel` | 已迁入 | 同名迁移：voxel/voxel/write |
 
 `references/Eclipse/shaders/lib/waterBump.glsl`
 

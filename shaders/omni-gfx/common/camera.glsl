@@ -14,7 +14,7 @@ Omni 通用图形库相机变换模块：屏幕、视空间、世界空间、阴
 设计原因与取舍：
     参考实现直接读 gbufferProjection 等全局变量。库把每个矩阵、抖动与是否处理抖动的开关都显式传入，
     调用方必须自己给出数据来源；这样同一套公式能用于主世界、远景与测试场景，也方便审查矩阵布局。
-    所有函数只做坐标换算，不读取缓冲、不改写选项，因此不是宿主胶水。
+    所有函数只做几何换算：深度还原、投影、阴影坐标与远景微调；不读取缓冲、不改写选项，因此不是宿主胶水。
 */
 #ifndef OGX_CAMERA_INCLUDED
 #define OGX_CAMERA_INCLUDED
@@ -140,10 +140,13 @@ vec3 ogxViewPosFromScreenPosRawDistant(vec2 coord, float depth, mat4 dhProjectio
 }
 
 // 远景视空间位置投到屏幕，可选补抖动。
+// 远景屏幕坐标的原始公式提前声明：带抖动的版本在它之前调用。
+vec3 ogxScreenPosFromViewPosRawDistant(vec3 viewPos, mat4 dhProjection);
+
+// 远景屏幕坐标：带可选的抖动偏移。
 vec3 ogxScreenPosFromViewPosDistant(vec3 viewPos, vec2 taaJitter, bool useJitter, mat4 dhProjection)
 {
-    vec3 screenPos = vec3(dhProjection[0][0], dhProjection[1][1], dhProjection[2][2]) * viewPos + ogxMatrixTranslation(dhProjection); // 远景投影对角项与平移列。
-    screenPos = screenPos * (0.5 / -viewPos.z) + 0.5; // 透视除法。
+    vec3 screenPos = ogxScreenPosFromViewPosRawDistant(viewPos, dhProjection); // 主体公式只有一份。
     if (useJitter) screenPos.xy += taaJitter * 0.5; // 补回半个抖动像素。
     return screenPos;
 }
@@ -289,13 +292,6 @@ mat4 ogxDistantShadowProjectionTweak(mat4 projection, float farPlane, float dhFa
     return result; // 交回微调后的投影。
 }
 
-// 光传播体积坐标：世界位置减去体积原点，再落到体素格。
-vec3 ogxGetLpvPosition(vec3 worldPos, vec3 lpvOrigin, float voxelSize)
-{
-    return (worldPos - lpvOrigin) / voxelSize; // 换到体积格坐标。
-}
-
-
 // 快速深度线性化：Eclipse 的屏幕深度转米制距离。
 float ogxInvertLinearizeDepthFast(float z, float nearPlane, float farPlane)
 {
@@ -310,12 +306,6 @@ vec3 ogxToScreenSpace2(vec3 p, bool depthCheck, mat4 projectionInverse, mat4 dhP
     vec3 p3 = p * 2.0 - 1.0; // 零到一转负一到一。
     vec4 fragPosition = inverseDiag * p3.xyzz + matrix[3]; // 对角项乘坐标再加平移。
     return fragPosition.xyz / fragPosition.w; // 齐次除法。
-}
-
-// 光传播体积坐标：玩家相对位置加相机小数偏移，再平移到体积中心。
-vec3 ogxGetLpvPositionExplicit(vec3 playerPos, vec3 cameraOffset, float lpvSize)
-{
-    return playerPos + cameraOffset + vec3(lpvSize * 0.5); // 与参考实现的 `LpvSize3/2u` 相同。
 }
 
 #endif

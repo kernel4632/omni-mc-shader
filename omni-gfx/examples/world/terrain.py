@@ -3,6 +3,8 @@
 调用位置：
     `omni-gfx/examples/world/render.py` 启动时调用 `build_terrain` 与 `water_disc`；
     `omni-gfx/examples/world/vegetation.py` 用 `height_at`、`normal_at` 决定树、草与石块的位置。
+调用示例：`terrain = build_terrain()`；用 `height_at(x, z)` 放置植被。
+
 设计原因与取舍：
     旧的方块岛每次升级都绕不开“台阶”轮廓，远看仍像技术演示。
     这里改成连续高度场：同一套噪声同时决定湖盆、草甸与远山，网格按离相机的距离

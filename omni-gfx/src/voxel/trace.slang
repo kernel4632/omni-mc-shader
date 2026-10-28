@@ -253,4 +253,49 @@ float2 ogxVoxelSampleOffset(int samples, float totalSamples, float noise)
     return float2(cos(theta) * spiralShape, sin(theta) * spiralShape); // 螺旋点。
 }
 
+// 世界空间追踪：从表面沿反射方向在体素图里逐格前进，撞到实心方块就着色返回。
+// `originWorld` 是表面相机相对世界位置，`rayDirWorld` 是世界空间反射方向，`surfaceNormal` 是表面法线；
+// `voxelOffset` 是相机相对位置到体积坐标的平移，`side` 是每边单元数。
+// 输出参数 `hitWorldPos` 是命中点的相机相对世界位置，供调用方算反射雾段；未命中时它落回起点。
+// 返回值的 `rgb` 是反射颜色，`a` 是归一化总命中距离；`a` 为负表示没有命中，交给调用方走天空回退。
+
+/*
+实现说明：体素求交工具。
+一、射线任务：`OgxRayJob` 保存起点、方向与命中结果，构造时全部清零。
+二、包围盒：逐轴求入口与出口，取最晚入口与最早出口，命中时把位置推进到入口。
+三、栅栏：横杆加立柱，多次求交后取最近；双段栅栏是四根立柱的扩展。
+四、裁剪排序：先取较近交点，再用贴图 alpha 判断是否穿过去。
+五、四分之一体素：低分辨率掩码逐格前进，命中非空格就停。
+六、平面求交：只接受两格以内且仍在同一格的交点。
+七、螺旋采样：样本序号变成圆上的螺旋点，抖动让相邻像素错开。
+八、边界：求交只依赖整数格与几何参数，贴图由调用方传入。
+*/
+/*
+函数索引：
+一、`ogxRayJob`：构造射线任务，结果字段清零。
+二、`ogxVoxelAabbHit`：包围盒求交，返回结构体。
+三、`ogxSortIntersectionCutout`：裁剪命中排序，按贴图 alpha 决定是否穿过。
+四、`ogxSortIntersectionCutoutReference`：参考签名版本。
+五、`ogxSortIntersectionOpaque`：只保留较近的不透明交点。
+六、`ogxFenceAabbIntersect` 与 `ogxFenceAabbIntersect2`：栅栏横杆与立柱求交。
+七、`ogxQuarterVoxelTrace`：四分之一体素掩码步进。
+八、`ogxVoxelPlaneIntersect`：平面求交，只接受两格以内。
+九、`ogxVoxelAabbIntersect`：返回是否命中并推进位置。
+十、`ogxVoxelSampleOffset`：螺旋采样点。
+十一、边界：求交只依赖整数格与几何参数。
+十二、顺序：先取最近交点，再用贴图判断是否穿过。
+*/
+/*
+参数与边界：
+一、射线方向要归一化，参数距离才有统一含义。
+二、包围盒的上下界按分量排序。
+三、栅栏的横杆与立柱位置来自方块局部坐标。
+四、裁剪排序读取贴图 alpha，纹理坐标由调用方给出。
+五、四分之一体素的边长是体积边长的四分之一。
+六、平面求交只接受两格以内的交点。
+七、螺旋采样的总数必须大于零。
+八、所有纹理句柄显式传入，库不读取宿主槽位。
+九、求交只依赖整数格与几何参数。
+十、画面验证要看体素反射边缘与栅栏轮廓。
+*/
 #endif

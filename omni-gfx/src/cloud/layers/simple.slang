@@ -1,5 +1,5 @@
 /* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers.slang` 内联引入。
-可复制示例：`float4 t = ogxLayersGetVolumetricCloudsSimple(settings, dither, lightDir, offset, ...);`
+用法：调用下方 `ogxLayersGetVolumetricCloudsSimple`，参数顺序见函数签名。
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */

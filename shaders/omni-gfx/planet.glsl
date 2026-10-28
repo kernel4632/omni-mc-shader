@@ -7,7 +7,7 @@
 /*
 Omni 通用图形库行星模块：用解析射线画出整颗行星、光环与大气，不依赖任何宿主状态。
 调用位置：末地天空与末地反射；Minecraft 光影由 `/omni-gfx/planet.glsl` 引入，
-    `rendering/world/planet.glsl` 只保留时间与阴影强度的换算。
+    `shaders/effects/world/end_sky.glsl` 与 `shaders/effects/world/planet.glsl` 按阶段组合。
 可复制示例：`ogxPlanetEnd(color, eye, rayDir, lightDir, shadowVector, time, planetShadow, noiseTex);`
 设计原因与取舍：行星半径、相机高度、时间、阴影强度与噪声贴图全部由调用方传入，库只做纯计算；
     星场与吸积盘不在这里，行星本体只负责地表、环带与大气这三段。
@@ -21,6 +21,16 @@ Omni 通用图形库行星模块：用解析射线画出整颗行星、光环与
 #include "/omni-gfx/common/math.glsl"
 // 大气提供散射、密度剖面与天球映射。
 #include "/omni-gfx/atmosphere/atmosphere.glsl"
+// 行星曲率下沉：水平距离平方乘强度，模拟球面相对切面的高度亏损。
+// 为什么属于行星模块：它描述行星表面的弯曲，只被地形与实体的顶点阶段使用；
+// 放进通用数学会让所有模块都带一条没人用的公式。
+float ogxPlanetCurvatureDrop(vec2 horizontal, float amount)
+{
+    float curvature = length(horizontal) / 128.0; // 一百二十八米是参考实现的基准距离。
+    return curvature * curvature * amount; // 平方让近处几乎不弯，远处逐渐明显。
+}
+
+
 // 画一整颗行星：先与地表球求交，再叠光环与大气，最后把环带的遮挡乘回天空。
 // `eye` 是相机在行星坐标系里的位置，`rayDir` 是视线，`lightDir` 是光方向。
 // `shadowVector` 只用于米氏相位的观察方向，`time` 驱动行星与光环的缓慢摆动。

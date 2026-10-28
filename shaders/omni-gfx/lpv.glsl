@@ -6,7 +6,7 @@
 */
 /*
 Omni 通用图形库光传播体积模块：三维彩色间接光的取样、编码与边缘淡出。
-调用位置：任何把体素网格里的彩色间接光取回表面的程序；Minecraft 光影由 `shaders/rendering/lighting/lpv.glsl` 调用。
+调用位置：任何把体素网格里的彩色间接光取回表面的程序；Minecraft 光影由 `shaders/effects/shared/lpv.glsl` 调用。
 可复制示例：
     `vec4 texel = ogxLpvDecodeSample(stored, vec2(15.0, 24.0));` 解码存下的色相与亮度。
     `vec3 block = ogxLpvBlockLight(texel);` 取回彩色方块光。
@@ -22,6 +22,8 @@ Omni 通用图形库光传播体积模块：三维彩色间接光的取样、编
 
 // 光色与解码都要用颜色换算，直接引入颜色模块，它已经带上数学模块。
 #include "/omni-gfx/common/color.glsl"
+// 手持光提供方块光表拆包，参考签名的 LPV 雾入口在循环里采样主手与副手光。
+#include "/omni-gfx/heldlight.glsl"
 // 方块光的亮度系数：存下的颜色取值零到十五，除以十五得到零到一。
 const float OGX_LPV_BLOCK_BRIGHTNESS = 0.066666;
 
@@ -36,6 +38,13 @@ vec3 ogxLpvUvw(vec3 lpvPos, float side) { return lpvPos / side; }
 vec3 ogxLpvPosition(vec3 playerPos, vec3 cameraFract, float halfSide)
 {
     return playerPos + cameraFract + halfSide;
+}
+
+// 参考签名的体积坐标：玩家相对位置加相机偏移，再平移到体积中心。
+// 与上一个函数是同一件事，只是参考参数把半边长写成三轴同一个值，保留独立入口供严格对照。
+vec3 ogxLpvPositionExplicit(vec3 playerPos, vec3 cameraOffset, float lpvSize)
+{
+    return playerPos + cameraOffset + vec3(lpvSize * 0.5); // 与参考实现的 `LpvSize3/2u` 相同。
 }
 
 // 解码一个已经取到的体积样本：先按色相还原颜色，再按平方曲线放大亮度并归一到零到一。
@@ -100,6 +109,86 @@ float ogxLpvRangeFalloff(vec3 lpvPos, float side, float fadeLength)
 vec3 ogxLpvApply(vec3 blockLight, vec4 texel, float falloff, float strength)
 {
     return mix(blockLight, texel.rgb, ogxSaturate(falloff * strength));
+}
+
+// LPV 体积雾：沿视线指数步进，用三维密度图与 LPV 图累积照明。
+// 参考实现直接调 `cloudVol` 与 `SampleLpvLinear`；库用同样布局的三维纹理代替。
+vec4 ogxLpvFogMarch(vec3 origin, vec3 endPos, float dither, sampler3D densityTexture,
+    sampler3D lpvTexture, vec3 cameraOffset, float lpvSize, float fadeLength, float minDensity,
+    float mult, int sampleCount, float lpvBrightness, vec3 handLight, float torchAmount, bool vanillaMask)
+{
+    if (length(origin - endPos) < 0.001) return vec4(0.0, 0.0, 0.0, 1.0); // 没有长度就没有雾。
+    vec3 rayStart = endPos - origin - cameraOffset; // 相机相对射线。
+    float rayLength = length(rayStart); // 射线长度。
+    rayStart *= min(rayLength, min(256.0, 1e6)) / max(rayLength, 1e-6); // 参考实现的距离上限。
+    rayLength = length(rayStart);
+    vec4 color = vec4(0.0, 0.0, 0.0, 1.0); // 累积颜色与透过率。
+    const float expFactor = 11.0; // 指数步长。
+    for (int i = 0; i < sampleCount; i++) // 固定步数。
+    {
+        float d = (pow(expFactor, float(i) + dither) / expFactor - 1.0 / expFactor) / (1.0 - 1.0 / expFactor); // 步进比例。
+        float dd = pow(expFactor, float(i) + dither) * log(expFactor) / float(sampleCount) / (expFactor - 1.0); // 步长导数。
+        vec3 progress = cameraOffset + d * rayStart + origin; // 当前世界位置。
+        float density = max(textureLod(densityTexture, progress, 0.0).r / 1000.0, minDensity) * mult; // 密度。
+        float volumeCoeff = exp(-dd * density * rayLength); // 本段透过率。
+        vec3 lpvPos = (progress - origin) / max(lpvSize, 1.0); // 体积坐标。
+        vec3 cubicRadius = clamp(min(((lpvSize - 1.0) - lpvPos) / fadeLength, lpvPos / fadeLength), 0.0, 1.0); // 边缘。
+        float fade = cubicRadius.x * cubicRadius.y * cubicRadius.z; // 三轴淡出。
+        if (fade < 0.01) break; // 体积外停止。
+        vec3 sampleColor = textureLod(lpvTexture, lpvPos, 0.0).rgb; // LPV 光色。
+        if (vanillaMask) sampleColor *= 1.0; // 原版遮罩由调用方预先乘进纹理。
+        vec3 lighting = sampleColor * lpvBrightness * 25.0 * exp(-5.0 * (1.0 - ogxLuminance(sampleColor))); // 参考实现的亮度曲线。
+        lighting += handLight * torchAmount * lpvBrightness * 0.04; // 手持光。
+        color.rgb += (lighting - lighting * volumeCoeff) * color.a; // 累积散射。
+        color.a *= volumeCoeff; // 累积透过率。
+    }
+    return color; // 交回 LPV 雾。
+}
+
+// 严格参考签名的 LPV 雾入口：密度场、LPV 图与手持光表都作为显式资源。
+// 参考在循环里调用 cloudVol、GetLpvPosition、SampleLpvLinear 与 GetHandLight；
+// 这里把密度场换成三维纹理，LPV 采样用库里的精确实现，手持光走同一套字节拆包。
+vec4 ogxLpvFogMarchExact(vec3 origin, vec3 endPos, float dither,
+    sampler3D densityTexture, sampler3D lpvTexture, vec3 cameraOffset, float lpvSize, float fadeLength,
+    float minDensity, int vlSamples, int sampleCount, float lpvBrightness, float torchAmount,
+    float caveDetection, float farPlane, vec3 relativeEyePosition, usampler1D blockDataTexture,
+    int heldItemId, int heldItemId2, int frameCounter, vec2 blockSkyRange)
+{
+    if (length(origin - endPos) < 0.001) return vec4(0.0, 0.0, 0.0, 1.0); // 空段直接返回。
+    float mult = float(vlSamples) / float(sampleCount) * 1.15; // 参考实现的样本数换算。
+    float minimumDensity = minDensity; // 参考实现的最低密度，由调用方按选项给出。
+    vec3 lpvRayStart = endPos - origin - cameraOffset; // 相机相对射线。
+    float lpvRayLength = length(lpvRayStart); // 射线长度。
+    lpvRayStart *= min(lpvRayLength, min(256.0, farPlane)) / lpvRayLength; // 参考实现的距离上限。
+    lpvRayLength = length(lpvRayStart); // 截断后的长度。
+    vec4 color = vec4(0.0, 0.0, 0.0, 1.0); // 累积颜色与透过率。
+    const float expFactor = 11.0; // 指数步长。
+    for (int i = 0; i < sampleCount; i++) // 固定样本数。
+    {
+        float d = (pow(expFactor, float(i) + dither) / expFactor - 1.0 / expFactor) / (1.0 - 1.0 / expFactor); // 步进位置。
+        float dd = pow(expFactor, float(i) + dither) * log(expFactor) / float(sampleCount) / (expFactor - 1.0); // 步长导数。
+        vec3 rayProgress = cameraOffset + d * lpvRayStart + origin; // 当前世界位置。
+        float density = 0.0; // 这一步的雾密度。
+        float minimumDensityNow = minimumDensity; // 洞穴里抬高最低密度。
+        if (caveDetection < 0.9999) density = textureLod(densityTexture, rayProgress, 0.0).r * (1.0 - caveDetection); // 密度场换成显式纹理。
+        minimumDensityNow += caveDetection * minimumDensity; // 洞穴补偿。
+        density = max(density / 1000.0, minimumDensityNow) * mult; // 参考实现的密度换算。
+        float volumeCoeff = exp(-dd * density * lpvRayLength); // 本段透过率。
+        vec3 lpvPos = ogxLpvPositionExplicit(rayProgress, vec3(0.0), lpvSize); // 体积坐标。
+        vec3 cubicRadius = clamp(min(((lpvSize - 1.0) - lpvPos) / fadeLength, lpvPos / fadeLength), 0.0, 1.0); // 边缘淡出。
+        float lpvFade = cubicRadius.x * cubicRadius.y * cubicRadius.z; // 三轴乘积。
+        if (lpvFade < 0.01) break; // 走出体积就停。
+        vec3 sampleColor = ogxLpvSampleLinear(lpvPos, lpvTexture, lpvTexture, frameCounter, lpvSize, blockSkyRange).rgb; // LPV 光色。
+        vec3 lighting = sampleColor * lpvBrightness * 25.0
+            * exp(-5.0 * (1.0 - dot(sampleColor, vec3(0.21, 0.72, 0.07)))); // 参考亮度曲线与亮度权重。
+        float lightRange = 0.0; // 手持光范围。
+        vec3 handLight1 = ogxHandLightFromBlockData(heldItemId, rayProgress, lightRange, blockDataTexture, relativeEyePosition); // 主手。
+        vec3 handLight2 = ogxHandLightFromBlockData(heldItemId2, rayProgress, lightRange, blockDataTexture, relativeEyePosition); // 副手。
+        lighting += (handLight1 + handLight2) * torchAmount * lpvBrightness * 0.04; // 手持光叠加。
+        color.rgb += (lighting - lighting * volumeCoeff) * color.a; // 累积散射。
+        color.a *= volumeCoeff; // 累积透过率。
+    }
+    return color; // 交回 LPV 雾。
 }
 
 #endif

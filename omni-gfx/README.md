@@ -2,7 +2,11 @@
 
 Omni 的独立图形库。手写算法只维护 Slang 源，构建时生成 Minecraft 光影可直接 `#include` 的 GLSL 330，并用同一份源生成 SPIR-V 作为编译验证产物。
 
-当前有 48 个模块，覆盖数学、颜色、采样、噪声、相机、表面、水面、大气、云、雾、阴影、体素、全局光、反射、后期、抗锯齿、天气与末地。测试世界直接使用生成的 GLSL，不启动 Minecraft 也能出图、截图和记录帧时。函数级覆盖对照见 `docs/gfx-functions.md`。
+当前统计块由 `python omni-gfx/build.py stats` 生成，覆盖模块、源码、生成 GLSL 与对照数量；测试世界直接使用生成的 GLSL，不启动 Minecraft 也能出图、截图和记录帧时。函数级覆盖对照见 `docs/gfx-functions.md`。
+
+<!-- stats:begin -->
+当前统计：48 个模块、87 个 Slang 源文件、16830 行生成 GLSL；函数对照 505 个，已迁入 404、MC 专用 101、缺失 0；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
+<!-- stats:end -->
 
 最近一次 1280×720 固定机位：户外测试世界平均 23.0 毫秒（约 43.5 帧每秒），截图 `.dev/omni-gfx/world-realistic.png`，帧时 `.dev/omni-gfx/world-realistic.json`；光影验证场景最新一轮平均 15.76 毫秒（约 63.4 帧每秒），截图 `.dev/omni-gfx/world-lighting-v4.png`，帧时 `.dev/omni-gfx/perf-lighting-v4.json`。帧时会随本机同时运行的程序波动，详细记录在 `omni-gfx/docs/verification.md`。
 

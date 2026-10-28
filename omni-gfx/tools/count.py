@@ -1,6 +1,8 @@
 """统计 omni-gfx 的手写代码、生成代码与第三方代码行数。
 
 调用位置：`omni-gfx/build.py count`；计划里的代码量口径以这里为准。
+调用示例：在仓库根目录执行 `python omni-gfx/build.py count --json`。
+
 设计原因与取舍：
     手写量只统计核心源、构建工具和测试，生成文件与第三方代码分开列出，
     避免用生成物把行数冲高，也避免把下载的参考实现算成自己的工作量。
@@ -98,7 +100,7 @@ def collect() -> dict:
             report["generatedTotal"] += nonempty
         elif name == "第三方":
             report["thirdPartyTotal"] += nonempty
-    report["handwrittenBudget"] = 19900  # 手写核心上限；本轮按算法拆分子文件并给每个子文件补职责、调用位置与取舍说明，预算随文档一起上调，算法行数没有重复。
+    report["handwrittenBudget"] = 21000  # 手写核心上限；本轮为 Slang 源补齐 50% 中文说明与函数索引，算法行数没有重复，预算随文档一起上调。
     return report
 
 

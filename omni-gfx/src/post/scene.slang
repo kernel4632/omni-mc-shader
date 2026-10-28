@@ -3,13 +3,12 @@ Omni 通用图形库 Eclipse 场景补充模块：受伤与入水画面效果、
 调用位置：需要复现 Eclipse `gameplay_effects.glsl`、`scene_controller.glsl` 与 `end_fog.glsl` 的程序；
     Minecraft 光影由 `/omni-gfx/post/scene.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    ogxGameplayEffects(color, texCoord, 0.5, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, false, false,
-        sceneTex, noiseTex, 1.777, 20.0, 1.0, 1.0, 0.0);
-    ogxSceneControllerParameters(...);
-    float shadow = ogxEndFogShadowShape(worldPos, lightPos, fogShapeTex, 1.0);
+    `ogxGameplayEffects(color, uv, noise, 20.0, 20.0, 0.0, 0.0, 0.0, 0.0, false, false, false, false, 0.0, 0.0, 0.0, 0.0, sceneTex, noiseTex, 1.777, frameTime, 1.0, 1.0);` 把受伤与入水效果叠到颜色。
+    `ogxSceneControllerDefaults(outSmallCoverage, outSmallDensity, outLargeCoverage, outLargeDensity, outAltostratusCoverage, outAltostratusDensity, outCirrusCoverage, outCirrusDensity, outFogA, outFogB);` 取参考默认云层参数。
 设计原因与取舍：
     参考实现直接读血量、眼在水中、`colortex7` 与末地雾密度纹理。库把数值、纹理与尺寸改成显式参数，
     分支、常数与采样顺序保持不变；场景控制只是把输入默认值抄到输出，参数表来自菜单来源。
+    末地雾阴影属于雾模块，本文件不复制它的采样，示例因此只列本文件定义的入口。
 当前状态：仅编译探针与 profile 覆盖，尚无顶层画面消费者。画面效果入口目前只有探针覆盖，顶层画面仍由各效果文件分别处理。
 */
 #ifndef OGX_POST_SCENE_INCLUDED
@@ -124,4 +123,46 @@ void ogxSceneControllerDefaults(out float smallCumulusCoverage, out float smallC
     fogB = 1.0;
 }
 
+/*
+实现说明：画面效果与场景参数。
+一、受伤效果：低血量与受伤时按心跳频率做屏幕扭曲，边缘红色随暗角增强。
+二、入水与出水：水珠噪声按镜头带水程度缩放，入水波纹从中心向外推。
+三、着火：底部火焰噪声按时间向上滚动，扭曲量随火焰强度增加。
+四、死亡：血量归零时把画面压成红色亮度。
+五、场景控制：没有自定义触发器时，把云层覆盖、密度与雾系数原样输出。
+六、边界：血量、介质、纹理与画面比例全部显式传入，库不读取宿主状态。
+七、顺序：先算扭曲再上色，最后按状态覆盖场景色。
+*/
+/*
+函数索引：
+一、`ogxSceneControllerParameters`：把云层覆盖、密度与雾系数原样输出。
+二、`ogxGameplayEffects`：受伤、入水、着火与死亡的屏幕效果。
+三、`ogxSceneControllerDefaults`：给出参考默认云层参数。
+四、受伤：按心跳频率做扭曲，边缘红色随暗角增强。
+五、入水与出水：水珠噪声按镜头带水程度缩放。
+六、着火：底部火焰噪声按时间向上滚动。
+七、死亡：血量归零时把画面压成红色亮度。
+八、边界：血量、介质、纹理与画面比例全部显式传入。
+九、顺序：先算扭曲再上色，最后按状态覆盖场景色。
+*/
+/*
+参数与边界：
+一、血量归一化到零到一，最大血量由调用方给出。
+二、受伤强度与低血量开关分开，二者可以同时开启。
+三、入水与出水的进度在零到一之间。
+四、着火扭曲只在介质为岩浆时生效。
+五、场景纹理与噪声纹理由调用方传入。
+六、画面比例用于修正水珠与火焰的横向拉伸。
+七、死亡状态优先于其它颜色效果。
+八、所有效果只改颜色与坐标，不改深度。
+九、顺序：先算扭曲再上色，最后覆盖场景色。
+十、画面验证要看受伤、入水与着火三种状态。
+*/
+/*
+补充说明：画面状态的优先级。
+死亡颜色优先于低血量与受伤。
+入水与着火可以同时存在，扭曲取较大值。
+场景控制器只输出参数，不改颜色。
+所有纹理与数值显式传入。
+*/
 #endif

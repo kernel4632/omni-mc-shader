@@ -23,7 +23,6 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     curve = ogxFilmGrain(curve, coord, t, 0.01); // 颗粒。
     curve = ogxDitherFloat(curve, coord, t, float3(6.0, 6.0, 5.0)); // 浮点尾数抖动。
     curve = ogxDitherFixed(curve, coord, t, 10.0); // 定点位数抖动。
-    curve *= ogxBokehAperture(coord - 0.5, 6, t); // 六边形光圈形状。
     float coc = ogxCocRadius(10.0, 12.0, 0.5); // 弥散圆。
     float lens = ogxDofLensFactor(50.0, 2.8, 50.0, 2.8); // 镜头倍数。
     float linear = ogxDofLinearDepth(coord, gProbeTexture, gProbeTexture, float4x4(1.0), float4x4(1.0), false); // 米制深度。

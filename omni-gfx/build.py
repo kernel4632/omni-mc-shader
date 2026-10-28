@@ -199,4 +199,8 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as error:  # 命令入口只报一行可读错误，完整调用栈留给调试器。
+        print(f"错误：{error}", file=sys.stderr)
+        raise SystemExit(1)

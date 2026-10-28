@@ -2,6 +2,7 @@
 
 调用位置：`omni-gfx/tools/parity_strict.py`；修改参考包、库源码或解析规则后重新运行
 `python omni-gfx/build.py strict-parity`。本模块只读源码，不写任何文件。
+可复制示例：`parity_strict` 导入本模块解析参考函数与实现函数。
 
 它回答四个问题：
     1. 两个函数的返回类型是否同一种；

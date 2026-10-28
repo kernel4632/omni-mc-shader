@@ -8,7 +8,7 @@
 float3 ogxLayersGetLightningPosition(OgxLayersCloudSettings s, float minHeight, float maxHeight, float cumulonimbusScale,
     float3 cameraPos, Sampler2D noiseTexture)
 {
-    float angle = fract(sin(dot(float2(s.lightningBoltPosition.w), float2(12.9898, 78.233))) * 43758.5453) * 6.28318530718; // 随机角。
+    float angle = fract(sin(dot(float2(s.lightningBoltPosition.w), float2(12.9898, 78.233))) * 43758.5453) * OGX_TAU; // 随机角。
     float rMin = 7000.0; // 内半径。
     float rMax = 13000.0; // 外半径。
     float radius = sqrt(lerp(rMin * rMin, rMax * rMax, fract(sin(dot(float2(s.lightningBoltPosition.w + 1.0), float2(12.9898, 78.233))) * 43758.5453))); // 面积均匀的半径。
@@ -73,7 +73,7 @@ float3 ogxLayersLightningPositionBolt(float minHeight, float maxHeight,
     Sampler2D noiseTexture, float3 cameraWorldPos, float cloudMovement, float thunderStrength,
     float cumulonimbusStrength, float lightningTimer)
 {
-    float angle = fract(sin(dot(float2(lightningTimer, lightningTimer * 2.0), float2(12.9898, 78.233))) * 43758.5453) * 6.28318530718; // 时间哈希转角度。
+    float angle = fract(sin(dot(float2(lightningTimer, lightningTimer * 2.0), float2(12.9898, 78.233))) * 43758.5453) * OGX_TAU; // 时间哈希转角度。
     float rMin = 7000.0; // 最近落点半径。
     float rMax = 13000.0; // 最远落点半径。
     float radius = sqrt(lerp(rMin * rMin, rMax * rMax, fract(sin(dot(float2(lightningTimer + 1, (lightningTimer + 1) * 2.0), float2(12.9898, 78.233))) * 43758.5453))); // 在环形区域里取半径。

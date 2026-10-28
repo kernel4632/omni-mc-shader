@@ -7,7 +7,7 @@
 /*
 Omni 通用图形库体素追踪模块：在规则三维网格里沿射线逐格前进，撞到实心方格时用存下的颜色与光照着色。
 调用位置：任何有三维方块编号图与颜色图的程序；Minecraft 光影由 `/omni-gfx/voxel/voxel.glsl` 引入，
-    `rendering/reflection/voxel.glsl` 只保留选项换算与坐标平移。
+    `shaders/effects/reflection/voxel.glsl` 只保留选项换算与坐标平移。
 可复制示例：ogxVoxelReflection 返回反射颜色与归一化命中距离，并带回命中点。
 设计原因与取舍：
     网格偏移、边长、两张三维纹理、光色、太阳方向、追踪距离与强度全部由调用方传入，库不读取任何引擎状态。
@@ -72,71 +72,6 @@ bool ogxVoxelInside(ivec3 cell, int side)
     return cell.x >= 0 && cell.y >= 0 && cell.z >= 0 && cell.x < side && cell.y < side && cell.z < side; // 三个轴都要在零到边长之间。
 }
 
-// 世界空间追踪：从表面沿反射方向在体素图里逐格前进，撞到实心方块就着色返回。
-// `originWorld` 是表面相机相对世界位置，`rayDirWorld` 是世界空间反射方向，`surfaceNormal` 是表面法线；
-// `voxelOffset` 是相机相对位置到体积坐标的平移，`side` 是每边单元数。
-// 输出参数 `hitWorldPos` 是命中点的相机相对世界位置，供调用方算反射雾段；未命中时它落回起点。
-// 返回值的 `rgb` 是反射颜色，`a` 是归一化总命中距离；`a` 为负表示没有命中，交给调用方走天空回退。
-vec4 ogxVoxelReflection(vec3 originWorld, vec3 rayDirWorld, vec3 surfaceNormal, vec3 voxelOffset, int side,
-    usampler3D voxelIdTexture, sampler3D voxelColorTexture, vec3 torchColor, vec3 skyColor,
-    vec3 sunColor, vec3 sunDirection, float maxDistance, float strength, out vec3 hitWorldPos)
-{
-    hitWorldPos = originWorld; // 先给一个占位，命中时才被真正赋值。
-    if (dot(rayDirWorld, surfaceNormal) <= 0.0) return vec4(0.0, 0.0, 0.0, -1.0); // 射线朝表面内侧，追踪没有意义。
-    const int maxSteps = 320; // 每根射线最多走的格数，覆盖整条体积对角线还有余量。
-    const int ironBounces = 4; // 铁块镜面最多弹射几次，防止两面镜子互相反射把循环拖满。
-    float maxDist = min(maxDistance, float(side)); // 追踪距离不超过体积边长。
-    vec3 accumTint = vec3(1.0); // 半透明方块累积的染色，最后乘到后面的画面上。
-    float traveled = 0.0; // 已经走过的米数，跨镜面弹射累加，用来对总距离封顶。
-    vec3 posWorld = originWorld + surfaceNormal * 0.05; // 起点沿法线抬起一点，避开表面自身那一格。
-    vec3 dir = rayDirWorld; // 当前这段射线的方向，铁块弹射后会被改掉。
-    for (int bounce = 0; bounce <= ironBounces; bounce++) // 每多弹一次镜面就多跑一段直线步进。
-    {
-        vec3 gridPos = posWorld + voxelOffset; // 转成体素网格坐标，整数边界就是体素边界。
-        ivec3 cell = ivec3(floor(gridPos)); // 起点所在体素下标。
-        if (!ogxVoxelInside(cell, side)) return vec4(0.0, 0.0, 0.0, -1.0); // 起点不在体积内，无法追踪。
-        ivec3 stepDir = ivec3(sign(dir)); // 每轴前进方向，正负一或零。
-        vec3 invDir = 1.0 / dir; // 方向倒数，用来算跨边界的参数距离。
-        vec3 tDelta = abs(invDir); // 跨过一整格所需的参数距离。
-        vec3 tMax = vec3(1e30); // 到下一个边界的参数距离；方向为零的轴保持极大值，不会被先选中。
-        if (dir.x != 0.0) tMax.x = (float(cell.x) + max(sign(dir.x), 0.0) - gridPos.x) * invDir.x; // 横轴到边界的距离。
-        if (dir.y != 0.0) tMax.y = (float(cell.y) + max(sign(dir.y), 0.0) - gridPos.y) * invDir.y; // 纵轴到边界的距离。
-        if (dir.z != 0.0) tMax.z = (float(cell.z) + max(sign(dir.z), 0.0) - gridPos.z) * invDir.z; // 深度轴到边界的距离。
-        bool mirrored = false; // 这一段是否以击中铁块镜面结束。
-        for (int i = 0; i < maxSteps; i++)
-        {
-            float tMin = min(min(tMax.x, tMax.y), tMax.z); // 最近的一次跨格距离。
-            if (traveled + tMin > maxDist) return vec4(0.0, 0.0, 0.0, -1.0); // 总距离超出上限，没有命中。
-            vec3 faceNormal = vec3(0.0); // 本次进入体素的朝向；沿哪个轴走就从它的对面进入。
-            if (tMax.x <= tMin) { cell.x += stepDir.x; tMax.x += tDelta.x; faceNormal.x = -float(stepDir.x); } // 走横轴这一格。
-            else if (tMax.y <= tMin) { cell.y += stepDir.y; tMax.y += tDelta.y; faceNormal.y = -float(stepDir.y); } // 走纵轴这一格。
-            else { cell.z += stepDir.z; tMax.z += tDelta.z; faceNormal.z = -float(stepDir.z); } // 走深度轴这一格。
-            if (!ogxVoxelInside(cell, side)) return vec4(0.0, 0.0, 0.0, -1.0); // 走出体积，后面的格子没有编号。
-            uint voxelId = texelFetch(voxelIdTexture, cell, 0).r; // 读这一格的方块编号。
-            if (voxelId == 0u) continue; // 空气，继续走。
-            if (ogxVoxelIsPlant(voxelId)) continue; // 植物不挡光，继续走。
-            vec4 stored = texelFetch(voxelColorTexture, cell, 0); // 读这一格的颜色与光照。
-            vec3 albedo = ogxSrgbToLinear(stored.rgb); // 贴图色从 sRGB 换回线性，与场景单位一致。
-            if (ogxVoxelIsTranslucent(voxelId)) { accumTint *= ogxVoxelTranslucentTint(voxelId, albedo); continue; } // 水冰玻璃按彩色水染色后继续。
-            vec3 hitPoint = posWorld + dir * tMin; // 本次刚跨进来的边界点，就是命中面所在位置。
-            if (ogxVoxelIsIron(voxelId) && bounce < ironBounces) // 铁块镜面：弹开再追，铁块自己不上色。
-            {
-                traveled += tMin; // 把这一段长度计入总距离。
-                hitWorldPos = hitPoint; // 先记住镜面位置，后续万一没命中仍有合理取值。
-                posWorld = hitPoint + faceNormal * 0.01; // 起点抬离镜面，避免下一次步进又落回同一格。
-                dir = reflect(dir, faceNormal); // 按进入面法线弹射。
-                mirrored = true; // 标记本段以镜面结束，去跑下一段。
-                break; // 退出内层，外层用新的起点与方向重设步进状态。
-            }
-            hitWorldPos = hitPoint; // 命中点的相机相对世界位置，调用方用它算雾段。
-            vec3 shaded = ogxVoxelShade(albedo, faceNormal, stored.a, torchColor, skyColor, sunColor, sunDirection, strength) * accumTint; // 按体素面法线着色并乘上半透明染色。
-            return vec4(shaded, ogxSaturate((traveled + tMin) / maxDist)); // 归一化总命中距离放进 a，供反射滤波使用。
-        }
-        if (!mirrored) return vec4(0.0, 0.0, 0.0, -1.0); // 走到步数上限还没命中，交给调用方走天空回退。
-    }
-    return vec4(0.0, 0.0, 0.0, -1.0); // 镜面弹射次数用尽仍未命中，交给调用方走天空回退。
-}
-
 // 体素编号：从三维掩码直接取格，并按参考实现取两千以内的编号。
 // 体素块读取的提前声明：入口放在定义之前。
 uint ogxGetVoxelBlock(usampler3D voxelMask, ivec3 voxelPos);
@@ -150,26 +85,6 @@ uint ogxGetVoxelBlockReference(ivec3 voxelPos, usampler3D voxelMask)
 uint ogxGetVoxelBlock(usampler3D voxelMask, ivec3 voxelPos)
 {
     return texelFetch(voxelMask, voxelPos, 0).r % 2000u; // 参考实现的编号掩码。
-}
-
-// 体素写入格：把方块位置加上相机小数偏移，再落到以体积中心为原点的整数格。
-// `center` 是体积半边长，调用方按自己的网格尺寸给出，库不假设固定边长。
-ivec3 ogxVoxelWriteIndex(vec3 playerPos, vec3 cameraOffset, ivec3 center)
-{
-    return ivec3(floor(playerPos + cameraOffset)) + center; // 与 Eclipse `GetVoxelIndex` 的取整顺序一致。
-}
-
-// 体素写入是否在体积内：三个轴都必须在零到边长减一之间，越界写会被丢弃。
-bool ogxVoxelWriteInBounds(ivec3 voxelPos, int size)
-{
-    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0
-        && voxelPos.x < size && voxelPos.y < size && voxelPos.z < size; // 逐轴判断，避免夹紧后写错格。
-}
-
-// 写入格：把玩家相对位置加上相机小数偏移，再平移到体积中心；`side` 是每边格数。
-ivec3 ogxGetVoxelIndex(vec3 playerPos, vec3 cameraOffset, int side)
-{
-    return ivec3(floor(playerPos + cameraOffset)) + ivec3(side / 2); // 参考实现按体积半边长平移。
 }
 
 // 体素下标：三轴按行优先展开成一维下标，供六面数据数组使用。
@@ -233,26 +148,6 @@ void ogxVoxelEmission(inout vec3 lighting, vec3 albedo, float emission, float em
     }
 }
 
-// 阴影体素写入：判断这一笔是否该写入并算出格号；方块编号与实体枚举由调用方在边界决定。
-// `shouldWrite` 为假时不写；`voxelId` 为零时按空气处理；返回值是最终写入的编号。
-uint ogxPopulateShadowVoxelIndex(vec3 playerPos, vec3 cameraOffset, ivec3 midBlockOffset, int side,
-    bool shouldWrite, uint voxelId, float renderedItemId, float entityId, uint itemOffset, out ivec3 voxelPos)
-{
-    voxelPos = ogxGetVoxelIndex(playerPos + vec3(midBlockOffset) / 64.0, cameraOffset, side); // 中点偏移后算格号。
-    if (!shouldWrite) return 0u; // 不写入的绘制阶段直接返回。
-    if (voxelId == 0u) voxelId = 1u; // 参考实现把无编号地形当成实心方块。
-    if (renderedItemId > 100.0 && renderedItemId < 276.0) voxelId = uint(renderedItemId) + itemOffset; // 手持物品按偏移写入，避免与草互动。
-    else if (entityId > 0.0) voxelId = uint(entityId) + itemOffset; // 实体编号同样加偏移。
-    return voxelId; // 交回最终编号。
-}
-
-// Eclipse 自发光强度：把颜色转成 HSV，按饱和度与亮度估计发光，再压到一半。
-// 参考用全局 Albedo，库版本显式接收颜色；常数与参考一致。
-float ogxPhotonicsEmission(vec3 albedo)
-{
-    return ogxGetVoxelEmission(albedo); // 自发光曲线只在体素模块维护一份。
-}
-
 // 解码一个体素面的完整数据：脸表纹理的第 y 行是六个面，x 轴是一维体素下标。
 // 为什么把参考的 SSBO 换成二维纹理：参考的 `voxelData` 声明被注释掉，原文不能编译；
 // 这里把同一份 `[voxelIndex][normalIndex]` 数据装进只读纹理，取格语义保持不变。
@@ -278,9 +173,105 @@ void ogxGetVoxelFaceTexCoord(ivec3 voxelPos, inout vec2 texcoord, vec3 voxelNorm
     texcoord = ogxDecodeVec2_16(texelFetch(voxelDataTexture, ivec2(index, faceIndex), 0).x); // 只解第一个分量。
 }
 
-// 写入体素掩码：参考直接 imageStore，库把目标格与编号交给调用方显式接收。
-// 为什么用 out 参数：GLSL 330 没有三维可写图像，宿主的图像存储属于渲染器资源；
-// 这里保留参考的边界判断与写入值，调用方把结果刷进自己的图像或缓冲。
+// 世界空间追踪，具体实现在子文件。
+// 子文件：voxel/voxel/reflection.slang。
+/*
+体素反射子文件：从表面沿反射方向在三维编号图里逐格前进，撞到实心方块就着色返回。
+调用位置：由 `voxel/voxel.slang` 内联引入，宿主只引用主模块即可拿到追踪入口。
+可复制示例：`vec4 hit = ogxVoxelReflection(origin, dir, normal, offset, side, ids, colors, torch, sky, sun, sunDir, 64.0, 1.0, hitPos);`
+设计原因与取舍：
+    追踪要同时读编号图与颜色图，和写入端只做格号换算的职责不同，因此单独成文件；
+    半透明染色、铁块镜面弹射与距离封顶都留在这一份，避免主文件继续变长。
+*/
+
+// 世界空间追踪：从表面沿反射方向在体素图里逐格前进，撞到实心方块就着色返回。
+// 输出参数 `hitWorldPos` 是命中点的相机相对世界位置；返回值 `a` 为负表示没有命中。
+vec4 ogxVoxelReflection(vec3 originWorld, vec3 rayDirWorld, vec3 surfaceNormal, vec3 voxelOffset, int side,
+    usampler3D voxelIdTexture, sampler3D voxelColorTexture, vec3 torchColor, vec3 skyColor,
+    vec3 sunColor, vec3 sunDirection, float maxDistance, float strength, out vec3 hitWorldPos)
+{
+    hitWorldPos = originWorld; // 先给一个占位，命中时才被真正赋值。
+    if (dot(rayDirWorld, surfaceNormal) <= 0.0) return vec4(0.0, 0.0, 0.0, -1.0); // 射线朝表面内侧，追踪没有意义。
+    const int maxSteps = 320; // 每根射线最多走的格数，覆盖整条体积对角线还有余量。
+    const int ironBounces = 4; // 铁块镜面最多弹射几次，防止两面镜子互相反射把循环拖满。
+    float maxDist = min(maxDistance, float(side)); // 追踪距离不超过体积边长。
+    vec3 accumTint = vec3(1.0); // 半透明方块累积的染色，最后乘到后面的画面上。
+    float traveled = 0.0; // 已经走过的米数，跨镜面弹射累加，用来对总距离封顶。
+    vec3 posWorld = originWorld + surfaceNormal * 0.05; // 起点沿法线抬起一点，避开表面自身那一格。
+    vec3 dir = rayDirWorld; // 当前这段射线的方向，铁块弹射后会被改掉。
+    for (int bounce = 0; bounce <= ironBounces; bounce++) // 每多弹一次镜面就多跑一段直线步进。
+    {
+        vec3 gridPos = posWorld + voxelOffset; // 转成体素网格坐标，整数边界就是体素边界。
+        ivec3 cell = ivec3(floor(gridPos)); // 起点所在体素下标。
+        if (!ogxVoxelInside(cell, side)) return vec4(0.0, 0.0, 0.0, -1.0); // 起点不在体积内，无法追踪。
+        ivec3 stepDir = ivec3(sign(dir)); // 每轴前进方向，正负一或零。
+        vec3 invDir = 1.0 / dir; // 方向倒数，用来算跨边界的参数距离。
+        vec3 tDelta = abs(invDir); // 跨过一整格所需的参数距离。
+        vec3 tMax = vec3(1e30); // 到下一个边界的参数距离；方向为零的轴保持极大值，不会被先选中。
+        if (dir.x != 0.0) tMax.x = (float(cell.x) + max(sign(dir.x), 0.0) - gridPos.x) * invDir.x; // 横轴到边界的距离。
+        if (dir.y != 0.0) tMax.y = (float(cell.y) + max(sign(dir.y), 0.0) - gridPos.y) * invDir.y; // 纵轴到边界的距离。
+        if (dir.z != 0.0) tMax.z = (float(cell.z) + max(sign(dir.z), 0.0) - gridPos.z) * invDir.z; // 深度轴到边界的距离。
+        bool mirrored = false; // 这一段是否以击中铁块镜面结束。
+        for (int i = 0; i < maxSteps; i++)
+        {
+            float tMin = min(min(tMax.x, tMax.y), tMax.z); // 最近的一次跨格距离。
+            if (traveled + tMin > maxDist) return vec4(0.0, 0.0, 0.0, -1.0); // 总距离超出上限，没有命中。
+            vec3 faceNormal = vec3(0.0); // 本次进入体素的朝向；沿哪个轴走就从它的对面进入。
+            if (tMax.x <= tMin) { cell.x += stepDir.x; tMax.x += tDelta.x; faceNormal.x = -float(stepDir.x); } // 走横轴这一格。
+            else if (tMax.y <= tMin) { cell.y += stepDir.y; tMax.y += tDelta.y; faceNormal.y = -float(stepDir.y); } // 走纵轴这一格。
+            else { cell.z += stepDir.z; tMax.z += tDelta.z; faceNormal.z = -float(stepDir.z); } // 走深度轴这一格。
+            if (!ogxVoxelInside(cell, side)) return vec4(0.0, 0.0, 0.0, -1.0); // 走出体积，后面的格子没有编号。
+            uint voxelId = texelFetch(voxelIdTexture, cell, 0).r; // 读这一格的方块编号。
+            if (voxelId == 0u) continue; // 空气，继续走。
+            if (ogxVoxelIsPlant(voxelId)) continue; // 植物不挡光，继续走。
+            vec4 stored = texelFetch(voxelColorTexture, cell, 0); // 读这一格的颜色与光照。
+            vec3 albedo = ogxSrgbToLinear(stored.rgb); // 贴图色从 sRGB 换回线性，与场景单位一致。
+            if (ogxVoxelIsTranslucent(voxelId)) { accumTint *= ogxVoxelTranslucentTint(voxelId, albedo); continue; } // 水冰玻璃按彩色水染色后继续。
+            vec3 hitPoint = posWorld + dir * tMin; // 本次刚跨进来的边界点，就是命中面所在位置。
+            if (ogxVoxelIsIron(voxelId) && bounce < ironBounces) // 铁块镜面：弹开再追，铁块自己不上色。
+            {
+                traveled += tMin; // 把这一段长度计入总距离。
+                hitWorldPos = hitPoint; // 先记住镜面位置，后续万一没命中仍有合理取值。
+                posWorld = hitPoint + faceNormal * 0.01; // 起点抬离镜面，避免下一次步进又落回同一格。
+                dir = reflect(dir, faceNormal); // 按进入面法线弹射。
+                mirrored = true; // 标记本段以镜面结束，去跑下一段。
+                break; // 退出内层，外层用新的起点与方向重设步进状态。
+            }
+            hitWorldPos = hitPoint; // 命中点的相机相对世界位置，调用方用它算雾段。
+            vec3 shaded = ogxVoxelShade(albedo, faceNormal, stored.a, torchColor, skyColor, sunColor, sunDirection, strength) * accumTint; // 按体素面法线着色并乘上半透明染色。
+            return vec4(shaded, ogxSaturate((traveled + tMin) / maxDist)); // 归一化总命中距离放进 a，供反射滤波使用。
+        }
+        if (!mirrored) return vec4(0.0, 0.0, 0.0, -1.0); // 走到步数上限还没命中，交给调用方走天空回退。
+    }
+    return vec4(0.0, 0.0, 0.0, -1.0); // 镜面弹射次数用尽仍未命中，交给调用方走天空回退。
+}
+
+
+// 写入格、越界判断与阴影阶段编号，具体实现在子文件。
+// 子文件：voxel/voxel/write.slang。
+/*
+体素写入子文件：把阴影阶段与地形阶段的位置换成体素格号，越界丢弃，再交回最终编号。
+调用位置：由 `voxel/voxel.slang` 内联引入，写入端与生成探针共用同一份格号换算。
+可复制示例：`ivec3 cell = ogxGetVoxelIndex(playerPos, cameraOffset, side);`
+设计原因与取舍：
+    宿主的图像写入需要 Iris 自定义图像，库只计算格号与编号，不直接写显存；
+    这样同一套边界判断能服务 GLSL 330、SPIR-V 探针和未来的其它后端。
+    写入函数不依赖追踪类型，单独放在子文件后，主文件只保留材质与读取。
+*/
+
+// 体素写入是否在体积内：三个轴都必须在零到边长减一之间，越界写会被丢弃。
+bool ogxVoxelWriteInBounds(ivec3 voxelPos, int size)
+{
+    return voxelPos.x >= 0 && voxelPos.y >= 0 && voxelPos.z >= 0
+        && voxelPos.x < size && voxelPos.y < size && voxelPos.z < size; // 逐轴判断，避免夹紧后写错格。
+}
+
+// 写入格：把玩家相对位置加上相机小数偏移，再平移到体积中心；`side` 是每边格数。
+ivec3 ogxGetVoxelIndex(vec3 playerPos, vec3 cameraOffset, int side)
+{
+    return ivec3(floor(playerPos + cameraOffset)) + ivec3(side / 2); // 参考实现按体积半边长平移。
+}
+
 void ogxSetVoxelBlock(ivec3 voxelPos, uint blockId, int voxelSize,
     inout ivec3 writePos, inout uint writeId)
 {
@@ -293,9 +284,17 @@ void ogxSetVoxelBlock(ivec3 voxelPos, uint blockId, int voxelSize,
     writeId = blockId; // 记录写入的方块编号。
 }
 
-// 阴影体素写入：把参考的渲染阶段、实体编号与方块编号换成显式输入。
-// `terrainStage`、`entityStage`、`blockEntityStage` 由宿主按当前绘制阶段给出；
-// `writePos` 与 `writeId` 接收最终写入位置和编号，方便宿主刷新体素图。
+uint ogxPopulateShadowVoxelIndex(vec3 playerPos, vec3 cameraOffset, ivec3 midBlockOffset, int side,
+    bool shouldWrite, uint voxelId, float renderedItemId, float entityId, uint itemOffset, out ivec3 voxelPos)
+{
+    voxelPos = ogxGetVoxelIndex(playerPos + vec3(midBlockOffset) / 64.0, cameraOffset, side); // 中点偏移后算格号。
+    if (!shouldWrite) return 0u; // 不写入的绘制阶段直接返回。
+    if (voxelId == 0u) voxelId = 1u; // 参考实现把无编号地形当成实心方块。
+    if (renderedItemId > 100.0 && renderedItemId < 276.0) voxelId = uint(renderedItemId) + itemOffset; // 手持物品按偏移写入，避免与草互动。
+    else if (entityId > 0.0) voxelId = uint(entityId) + itemOffset; // 实体编号同样加偏移。
+    return voxelId; // 交回最终编号。
+}
+
 void ogxPopulateShadowVoxel(vec3 playerPos, vec3 eyeOffset, vec3 cameraFraction, vec3 midBlock,
     bool terrainStage, bool entityStage, bool blockEntityStage, float blockEntityId,
     float entityId, float currentRenderedItemId, float mcEntityX, int voxelSize,
@@ -339,5 +338,25 @@ void ogxPopulateShadowVoxel(vec3 playerPos, vec3 eyeOffset, vec3 cameraFraction,
     }
     if (voxelId > 0u) ogxSetVoxelBlock(voxelPos, voxelId, voxelSize, writePos, writeId); // 最终写入。
 }
+
+/*
+实现说明：体素写入的格号与边界。
+一、格号：玩家相对位置加相机小数偏移，再平移到体积中心。
+二、越界：三个轴都必须落在零到边长减一之间，越界写入直接丢弃。
+三、阴影阶段：按地形、实体与方块实体三个阶段决定是否写入，再按方块编号与实体编号生成最终编号。
+四、手持物品与船：按参考的编号偏移写入，避免和草与其它实体互相覆盖。
+五、输出：格号与编号通过输出参数交回，宿主负责真正写进图像或缓冲。
+六、边界：函数不读取阶段全局量，所有阶段标记由调用方传入。
+*/
+
+/*
+函数索引：
+一、`ogxVoxelWriteInBounds`：三个轴都在零到边长减一之间。
+二、`ogxGetVoxelIndex`：玩家相对位置加相机偏移，再平移到体积中心。
+三、`ogxSetVoxelBlock`：越界丢弃，合法时交回格号与编号。
+四、`ogxPopulateShadowVoxelIndex`：按绘制阶段与实体编号算写入值。
+五、`ogxPopulateShadowVoxel`：参考签名的完整写入入口。
+六、边界：函数不读取阶段全局量，所有阶段标记由调用方传入。
+*/
 
 #endif

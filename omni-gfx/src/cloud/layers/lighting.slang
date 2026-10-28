@@ -1,5 +1,5 @@
 /* 层状体积云的光照：相函数、朝光散射与单次散射合成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
-可复制示例：`ogxLayersGetCloudLighting(index, shape, faded, shadowMask, sunColor, moonColor, ...);`
+可复制示例：`float phase = ogxLayersPhaseCloud(0.5, 0.8, 0);`
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
@@ -137,3 +137,24 @@ float ogxLayersCloudScatteringSamples(int layerIndex, float3 rayPosition, float3
     }
     return shadow; // 交回云内遮挡量。
 }
+
+/*
+实现说明：层状云的相函数与光照。
+一、相函数：`ogxLayersPhaseCloud` 在两种前向集中度之间切换，`ogxLayersPhaseCloudHenyey` 走标准 Henyey-Greenstein。
+二、朝光散射：`ogxLayersGetCloudScattering` 沿太阳与月亮方向取样云密度，把遮挡换成透光比例。
+三、逐层光照：`ogxLayersGetCloudLighting` 按层号选择直射、间接与多次散射的权重，厚云内部靠慢衰减托起。
+四、采样顺序：先算太阳再算月亮，最后叠天空光；顺序与参考实现一致，严格对照据此核对采样次数。
+五、边界：层号超出五层时返回零，调用方不必自己夹紧。
+*/
+
+/*
+函数索引：
+一、`ogxLayersPhaseCloud`：两种前向集中度之间切换的云相函数。
+二、`ogxLayersGetCloudScattering`：沿太阳与月亮方向取样云密度。
+三、`ogxLayersGetCloudLighting`：按层号选择直射、间接与多次散射权重。
+四、`ogxLayersPhaseCloudHenyey`：标准 Henyey-Greenstein 相函数。
+五、`ogxLayersCloudScatteringSamples`：参考签名的采样入口。
+六、顺序：先太阳再月亮，最后天空光。
+七、边界：层号超出五层时返回零。
+八、常数：前向集中度与多次散射权重按参考精度保留。
+*/

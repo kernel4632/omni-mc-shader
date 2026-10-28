@@ -3,6 +3,8 @@
 调用位置：
     开发者在仓库根目录执行 `python omni-gfx/examples/world/prepare_textures.py`；
     产物写入 `omni-gfx/examples/world/assets/`，提交一次后测试世界不再联网。
+调用示例：在仓库根目录执行 `python omni-gfx/examples/world/prepare_textures.py`。
+
 设计原因与取舍：
     纯程序化材质很难同时具备“远看颜色自然、近看有颗粒”的两层细节。
     这里从 Poly Haven 取 CC0 扫描贴图，保留颜色、法线、粗糙度三张图；

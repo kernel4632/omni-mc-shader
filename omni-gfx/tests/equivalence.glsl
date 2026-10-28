@@ -69,7 +69,7 @@ vec4 oldValue(int testCase, vec2 uv, vec3 c, vec3 n, vec3 v, vec3 l)
     if (testCase == 11) return vec4(gfx_RayleighPhaseFunction(uv.x), gfx_MiePhaseFunction(0.6, uv.y), gfx_InterleavedGradientNoise(uv * 64.0), gfx_bayer2(uv * 32.0));  // 相函数与噪声。
     if (testCase == 12) return vec4(gfx_bayer4(uv * 32.0), gfx_bayer8(uv * 16.0), gfx_bayer64(uv * 8.0), gfx_pcurve(uv.x));  // 拜尔与径向曲线。
     if (testCase == 13) return vec4(gfx_omniRgbToHsv(c), gfx_hsv_to_rgb(gfx_omniRgbToHsv(c)).x);  // 颜色转色相。
-    if (testCase == 14) return vec4(gfx_hsv_to_rgb(gfx_omniRgbToHsv(c)).yz, gfx_planet_curvature_drop(uv, 1.0), gfx_black_bar(uv, 1.7, 2.35));  // 色相还原与曲率。
+    if (testCase == 14) return vec4(gfx_hsv_to_rgb(gfx_omniRgbToHsv(c)).yz, gfx_pcurve(uv.x), gfx_black_bar(uv, 1.7, 2.35));  // 色相还原、径向曲线与黑边。
     if (testCase == 15) return vec4(gfx_tangent_basis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0))[0].x, gfx_tangent_basis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0))[1].y, gfx_tangent_basis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0))[2].z, 0.0);  // 切线基三个方向。
     if (testCase == 16) return vec4(gfxWarpResult(uv, c), 1.0);  // 空间扭曲的辅助结果。
     if (testCase == 17) return vec4(gfx_LinearToGamma(c).x, gfx_GammaToLinear(c));  // 数学模块伽马。
@@ -101,7 +101,7 @@ vec4 newValue(int testCase, vec2 uv, vec3 c, vec3 n, vec3 v, vec3 l)
     if (testCase == 11) return vec4(ogxRayleighPhase(uv.x), ogxMiePhase(0.6, uv.y), ogxInterleavedGradientNoise(uv * 64.0), ogxBayer2(uv * 32.0));  // 相函数与噪声。
     if (testCase == 12) return vec4(ogxBayer4(uv * 32.0), ogxBayer8(uv * 16.0), ogxBayer64(uv * 8.0), ogxRadialCurve(uv.x));  // 拜尔与径向曲线。
     if (testCase == 13) return vec4(ogxRgbToHsv(c), ogxHsvToRgb(ogxRgbToHsv(c)).x);  // 颜色转色相。
-    if (testCase == 14) return vec4(ogxHsvToRgb(ogxRgbToHsv(c)).yz, ogxPlanetCurvatureDrop(uv, 1.0), ogxBlackBar(uv, 1.7, 2.35));  // 色相还原与曲率。
+    if (testCase == 14) return vec4(ogxHsvToRgb(ogxRgbToHsv(c)).yz, ogxRadialCurve(uv.x), ogxBlackBar(uv, 1.7, 2.35));  // 色相还原、径向曲线与黑边。
     if (testCase == 15) return vec4(ogxTangentBasis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0)).tangent.x, ogxTangentBasis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0)).bitangent.y, ogxTangentBasis(vec3(1.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0)).normal.z, 0.0);  // 切线基三个方向。
     if (testCase == 16) return vec4(ogxWarpResult(uv, c), 1.0);  // 空间扭曲的辅助结果。
     if (testCase == 17) return vec4(ogxLinearToGamma(c).x, ogxGammaToLinear(c));  // 数学模块伽马。

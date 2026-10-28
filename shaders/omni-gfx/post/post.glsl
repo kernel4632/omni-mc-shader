@@ -32,30 +32,12 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 // 泛光、调色与屏幕图案，具体实现在子文件。
 // 子文件：post/post/bloom.slang。
 /*
-后期子文件：泛光降采样与链拷贝、轴向高斯模糊、三次纹理放大、色调曲线与颗粒。
+后期子文件：泛光链拷贝、轴向高斯模糊、三次纹理放大、色调曲线与颗粒。
 调用位置：由 `post/post.slang` 内联，合成阶段的泛光与调色直接调用这些入口。
-可复制示例：`vec3 b = ogxBloomDownsample(source, coord, texel);`
+可复制示例：`vec3 b = ogxBloomChainCopy(chain, local, originSize);`
 设计原因与取舍：每级只做一次可复用的核，链的边界与混合由调用方决定；权重和与参考一致。
+    降采样入口放在主文件，子文件只保留需要多行展开的核。
 */
-// 泛光降采样：先做四点盒式取样，再转换到线性颜色。
-vec3 ogxBloomDownsample(sampler2D source, vec2 coord, vec2 texel)
-{
-    vec3 blur = ogxCurveToLinear3(textureLod(source, coord, 0.0).rgb) * 0.125; // 中心样本。
-    blur += ogxCurveToLinear3(textureLod(source, coord + vec2(texel.x, texel.y), 0.0).rgb) * 0.5; // 右下对角。
-    blur += ogxCurveToLinear3(textureLod(source, coord + vec2(texel.x, -texel.y), 0.0).rgb) * 0.5; // 右上对角。
-    blur += ogxCurveToLinear3(textureLod(source, coord + vec2(-texel.x, texel.y), 0.0).rgb) * 0.5; // 左下对角。
-    blur += ogxCurveToLinear3(textureLod(source, coord + vec2(-texel.x, -texel.y), 0.0).rgb) * 0.5; // 左上对角。
-    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(texel.x, 0.0), 0.0).rgb) * 0.25; // 右两像素。
-    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(0.0, texel.y), 0.0).rgb) * 0.25; // 上两像素。
-    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(-texel.x, 0.0), 0.0).rgb) * 0.25; // 左两像素。
-    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(0.0, -texel.y), 0.0).rgb) * 0.25; // 下两像素。
-    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(texel.x, texel.y), 0.0).rgb) * 0.125; // 远处右下。
-    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处右上。
-    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(-texel.x, texel.y), 0.0).rgb) * 0.125; // 远处左下。
-    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(-texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处左上。
-    return ogxLinearToCurve3(blur * 0.25); // 权重和为四，乘四分之一保持亮度。
-}
-
 // 泛光链某一级的原样拷贝：坐标夹在这级子图范围里，零号层级读取后换回线性。
 // 为什么单独成一个函数：链上第二级的边界判断由宿主决定，但“夹紧后读一次”是纯计算，
 // 原程序在每个方向上各写一遍，迁进库后只保留一份。
@@ -153,10 +135,6 @@ vec3 ogxFilmGrain(vec3 color, vec2 coord, float time, float strength)
 }
 
 // 弥散圆半径：按薄透镜公式估算一个点离对焦平面越远时散焦多大。
-float ogxCocRadius(float focus, float depth, float aperture)
-{
-    return abs(aperture * (depth - focus) / (depth * focus)); // 薄透镜近似。
-}
 
 // 浮点输出抖动：按目标格式的尾数位数，把三角噪声缩放到相邻两个可表示值之间。
 // 为什么按指数缩放：浮点数的间隔随数值变大，固定步长会在大值处看不见、小值处过重。
@@ -173,36 +151,19 @@ vec3 ogxDitherFixed(vec3 color, vec2 coord, float time, float bits)
     return color + ogxTriangleNoise(coord, time) * exp2(bits); // bits 用参考的负指数写法，例如 -8。
 }
 
-// 多边形光圈：把散焦偏移换成到多边形边的归一化距离，零在中心、一到边界。
-// 为什么用角度求半径：多边形每条边的半径随角度变化，直接取到边的距离比圆形核更接近真实光圈。
-float ogxBokehAperture(vec2 offset, int blades, float rotation)
-{
-    vec2 p = vec2(offset.x * cos(rotation) - offset.y * sin(rotation), offset.x * sin(rotation) + offset.y * cos(rotation)); // 先按光圈转角旋转。
-    float radius = length(p); // 到中心的距离。
-    if (radius < 1e-6) return 1.0; // 中心点始终在光圈内。
-    float angle = ogxAtan2(p) + OGX_PI; // 角度换到零到二圆周率。
-    float sector = OGX_PI * 2.0 / float(max(blades, 3)); // 每条边对应的圆心角。
-    float edge = cos(sector * 0.5) / max(cos(ogxMod(angle, sector) - sector * 0.5), 1e-4); // 该角度上正多边形的半径。
-    return ogxSaturate(radius / edge); // 归一到零到一，边界之外大于一。
-}
-
-// 景深镜头倍数：焦距平方乘口径倍数，焦距与光圈取基准值时正好为一。
-float ogxDofLensFactor(float focalLength, float aperture, float referenceFocal, float referenceAperture)
-{
-    float focalRatio = focalLength / referenceFocal; // 焦距相对基准的倍数，越长越大。
-    float apertureRatio = referenceAperture / aperture; // f 值越小口径越大，取倒数表示反比。
-    return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
-}
-
 
 // 景深、散景与光圈，具体实现在子文件。
 // 子文件：post/post/dof.slang。
 /*
 后期子文件：景深线性深度、弥散范围扩散、参考签名版与完整景深合成。
 调用位置：由 `post/post.slang` 内联，合成阶段的景深效果调用这里的入口。
-可复制示例：`vec4 c = ogxDepthOfField(coord, colorTex, depthTex, farDepthTex, invProj, farInvProj, true, ...);`
+可复制示例：`float coc = ogxCocRadius(10.0, 12.0, 4.0);`
 设计原因与取舍：深度图、矩阵与对焦参数显式传入，手部与远景的分支照参考保留。
 */
+
+// 弥散圆半径的提前声明：CocSpread 在文件前部调用它，定义放在文件末尾。
+float ogxCocRadius(float focus, float depth, float aperture);
+
 // 读一个坐标的米制深度；`useDh` 为真且近景没有几何时改读远景深度，再统一到近景尺度。
 // 为什么把下限夹在换米制之前：近处深度趋近于零时薄透镜公式会爆炸，先夹屏幕深度最稳。
 float ogxDofLinearDepth(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTexture, mat4 projectionInverse,
@@ -235,7 +196,7 @@ float ogxDofCocSpread(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTextu
     startRadius *= startRadius; // 平方，让搜索从中心附近开始。
     float spreadCoc = currCoc; // 弥散范围初值为当前点。
     float rSteps = 1.0 / float(steps); // 步数倒数。
-    float angle = noise.x * 6.28318530718; // 起始角由噪声给出，避免固定图案。
+    float angle = noise.x * OGX_TAU; // 起始角由噪声给出，避免固定图案。
     vec2 rot = vec2(cos(angle), sin(angle)); // 起始方向。
     vec2 golden = vec2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); // 黄金角旋转，和参考宏同值。
     for (int i = 0; i < steps; i++) // 螺旋逐点搜索。
@@ -285,7 +246,7 @@ float ogxDofCocSpreadReference(vec2 coord, sampler2D depthTexture, sampler2D dhD
     float spreadCoc = currCoc; // 弥散范围初值。
     float rSteps = 1.0 / float(steps); // 步数倒数。
     vec2 golden = vec2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); // 黄金角旋转。
-    float angle = noise.x * 6.28318530718; // 起始角。
+    float angle = noise.x * OGX_TAU; // 起始角。
     vec2 rot = vec2(cos(angle), sin(angle)); // 起始方向。
     for (int i = 0; i < steps; i++) // 十步螺旋搜索。
     {
@@ -343,7 +304,7 @@ vec4 ogxDofReference(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
     float rSteps = 1.0 / float(quality); // 步数倒数。
     float firstStepRadius = sqrt(rSteps); // 参考实现保留的首步半径声明。
     vec2 golden = vec2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); // 黄金角旋转。
-    float angle = noise.x * 6.28318530718; // 起始角。
+    float angle = noise.x * OGX_TAU; // 起始角。
     vec2 rot = vec2(cos(angle), sin(angle)); // 起始方向。
     for (int i = 0; i < quality; i++) // 十步螺旋采样。
     {
@@ -414,7 +375,7 @@ vec4 ogxDepthOfField(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
     float blendedDepth = 0.0; // 散焦后的深度累加。
     float selfDepth = currDepth * 1e-20; // 当前点自计入深度初值极小。
     float rSteps = 1.0 / float(quality); // 步数倒数。
-    float angle = noise.x * 6.28318530718; // 起始角。
+    float angle = noise.x * OGX_TAU; // 起始角。
     vec2 rot = vec2(cos(angle), sin(angle)); // 起始方向。
     vec2 golden = vec2(cos(OGX_GOLDEN_ANGLE), sin(OGX_GOLDEN_ANGLE)); // 黄金角旋转，和参考宏同值。
     for (int i = 0; i < quality; i++) // 螺旋采样。
@@ -479,6 +440,22 @@ vec4 ogxDepthOfField(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
     blendedDepth += selfDepth * (1.0 + selfWeights / selfSamples); // 下界把深度按同一套补偿。
     blendedDepth /= weights + selfSamples + selfWeights; // 归一化深度。
     return vec4(ogxLinearToCurve3(dof), ogxScreenDepthFromLinearDepth(blendedDepth, projectionInverse)); // 返回颜色与换回的屏幕深度。
+}
+
+// 弥散圆半径：按薄透镜公式估算一个点离对焦平面越远时散焦多大。
+// 近距离时深度趋近零会让分母爆炸，调用方传入的深度已经夹过下限。
+float ogxCocRadius(float focus, float depth, float aperture)
+{
+    return abs(aperture * (depth - focus) / (depth * focus)); // 薄透镜近似。
+}
+
+// 景深镜头倍数：焦距平方乘口径倍数，焦距与光圈取基准值时正好为一。
+// 焦距越长、f 值越小，弥散越大；两个比值相乘让参数能独立调整。
+float ogxDofLensFactor(float focalLength, float aperture, float referenceFocal, float referenceAperture)
+{
+    float focalRatio = focalLength / referenceFocal; // 焦距相对基准的倍数，越长越大。
+    float apertureRatio = referenceAperture / aperture; // f 值越小口径越大，取倒数表示反比。
+    return focalRatio * focalRatio * apertureRatio; // 焦距平方乘口径倍数，得到模糊倍数。
 }
 
 // 动态模糊、曝光分块与眩光，具体实现在子文件。
@@ -678,6 +655,25 @@ vec3 ogxDistantNoise(vec3 color, vec3 pos, float materialIDs, int leafId, float 
     float noise = fract(sin(dot(pos.xy + fract(sin(pos.z * 91.3458) * 47453.5453), vec2(12.9898, 78.233))) * 43758.5453); // 一维哈希。
     noise = (noise * 2.0 - 1.0) * weight; // 转成负一到一。
     return clamp(color - color * noise, 0.0, 1.0); // 按噪点压暗或提亮。
+}
+
+// 泛光降采样：先做四点盒式取样，再转换到线性颜色。
+vec3 ogxBloomDownsample(sampler2D source, vec2 coord, vec2 texel)
+{
+    vec3 blur = ogxCurveToLinear3(textureLod(source, coord, 0.0).rgb) * 0.125; // 中心样本。
+    blur += ogxCurveToLinear3(textureLod(source, coord + vec2(texel.x, texel.y), 0.0).rgb) * 0.5; // 右下对角。
+    blur += ogxCurveToLinear3(textureLod(source, coord + vec2(texel.x, -texel.y), 0.0).rgb) * 0.5; // 右上对角。
+    blur += ogxCurveToLinear3(textureLod(source, coord + vec2(-texel.x, texel.y), 0.0).rgb) * 0.5; // 左下对角。
+    blur += ogxCurveToLinear3(textureLod(source, coord + vec2(-texel.x, -texel.y), 0.0).rgb) * 0.5; // 左上对角。
+    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(texel.x, 0.0), 0.0).rgb) * 0.25; // 右两像素。
+    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(0.0, texel.y), 0.0).rgb) * 0.25; // 上两像素。
+    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(-texel.x, 0.0), 0.0).rgb) * 0.25; // 左两像素。
+    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(0.0, -texel.y), 0.0).rgb) * 0.25; // 下两像素。
+    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(texel.x, texel.y), 0.0).rgb) * 0.125; // 远处右下。
+    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处右上。
+    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(-texel.x, texel.y), 0.0).rgb) * 0.125; // 远处左下。
+    blur += ogxCurveToLinear3(textureLod(source, coord + 2.0 * vec2(-texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处左上。
+    return ogxLinearToCurve3(blur * 0.25); // 权重和为四，乘四分之一保持亮度。
 }
 
 #endif

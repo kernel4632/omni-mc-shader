@@ -105,7 +105,7 @@
       "target": "common/color/agx.ogxAgxConfigurable"
     },
     "AgXConfigurable1": {
-      "target": "common/color/agx.ogxAgxConfigurable1Mat3"
+      "target": "common/color/agx.ogxAgxCustomGamutMatrix3"
     },
     "BicubicBlurTexture": {
       "target": "common/math/filter.ogxBicubicBlurTexture"
@@ -114,7 +114,7 @@
       "target": "GetSmoothCloudShadow"
     },
     "CalculateCoCRadius": {
-      "target": "post/post/bloom.ogxCocRadius"
+      "target": "post/post/dof.ogxCocRadius"
     },
     "H": {
       "target": "atmosphere/atmosphere/planet.ogxChandrasekharH"
@@ -141,7 +141,7 @@
       "target": "FsrEasu"
     },
     "GTAOMultiBounce": {
-      "target": "gi/gi/ao.ogxAoMultiBounce"
+      "target": "gi/gi.ogxAoMultiBounce"
     },
     "ring": {
       "target": "post/post/effects.ogxGlareRing"
@@ -351,7 +351,7 @@
       "target": "common/math/sampling.ogxSequenceR2"
     },
     "hash_aurora": {
-      "target": "common/noise.ogxHashAurora"
+      "target": "common/noise.ogxHash11"
     },
     "mm2": {
       "target": "common/math/sampling.ogxRotate2Matrix"
@@ -390,7 +390,7 @@
       "target": "common/color/uchimura.ogxTonemapUchimuraExp"
     },
     "Tonemap_Xonk": {
-      "target": "common/color/curve.ogxTonemapXonk"
+      "target": "common/color/curve.ogxTonemapPowerCurve"
     },
     "Tonemap_Full_Reinhard": {
       "target": "common/color/reinhard.ogxTonemapReinhardFull"
@@ -402,7 +402,7 @@
       "target": "common/color/agx.ogxToneMapAgxMinimal"
     },
     "ToneMap_AgX_minimal_merlin": {
-      "target": "common/color/agx.ogxToneMapAgxMerlin"
+      "target": "common/color/agx.ogxToneMapAgxCompact"
     },
     "reinhard_jodie": {
       "target": "common/color/reinhard.ogxTonemapReinhardJodie"
@@ -414,7 +414,7 @@
       "target": "common/noise.ogxHash11"
     },
     "iqint2": {
-      "target": "common/noise.ogxIqint2"
+      "target": "common/noise.ogxIntegerHash3"
     },
     "hash": {
       "target": "common/noise.ogxHashUint3"
@@ -1209,7 +1209,7 @@
       }
     },
     "GetVoxelIndex": {
-      "target": "voxel/voxel.ogxGetVoxelIndex",
+      "target": "voxel/voxel/write.ogxGetVoxelIndex",
       "resources": {
         "cameraOffset": "value",
         "side": "value"
@@ -1712,7 +1712,7 @@
       "allowExtraConstants": true
     },
     "BloomDownSample": {
-      "target": "post/post/bloom.ogxBloomDownsample",
+      "target": "post/post.ogxBloomDownsample",
       "resources": {
         "texel": "value"
       }
@@ -2055,7 +2055,7 @@
       }
     },
     "getPhotonicsEmission": {
-      "target": "voxel/voxel.ogxPhotonicsEmission"
+      "target": "voxel/voxel.ogxGetVoxelEmission"
     },
     "applySceneControllerParameters": {
       "target": "post/scene.ogxSceneControllerDefaults"
@@ -2231,7 +2231,7 @@
       }
     },
     "SetVoxelBlock": {
-      "target": "voxel/voxel.ogxSetVoxelBlock",
+      "target": "voxel/voxel/write.ogxSetVoxelBlock",
       "resources": {
         "voxelSize": "value",
         "writePos": "value",
@@ -2242,7 +2242,7 @@
       }
     },
     "PopulateShadowVoxel": {
-      "target": "voxel/voxel.ogxPopulateShadowVoxel",
+      "target": "voxel/voxel/write.ogxPopulateShadowVoxel",
       "resources": {
         "eyeOffset": "value",
         "cameraFraction": "value",
@@ -2275,7 +2275,7 @@
       "allowExtraConstants": true
     },
     "raymarchWSR_LPV": {
-      "target": "reflection/wsr.ogxWsrLpvMarchExact",
+      "target": "lpv.ogxLpvFogMarchExact",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "IS_LPV_ENABLED": 1,
@@ -2612,7 +2612,7 @@
       "allowExtraConstants": true
     },
     "raymarchWSRfog": {
-      "target": "reflection/wsr.ogxWsrFogMarch",
+      "target": "fog/volume.ogxFogVolumeMarchReference",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "OVERWORLD_SHADER": 1,
@@ -2711,7 +2711,7 @@
       "allowExtraConstants": true
     },
     "WSRwaterVolumetrics": {
-      "target": "reflection/wsr.ogxWsrWaterVolume",
+      "target": "fog/volume/underwater.ogxUnderwaterVolumeReference",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "OVERWORLD_SHADER": 1,

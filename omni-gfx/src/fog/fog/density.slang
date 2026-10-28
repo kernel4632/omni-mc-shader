@@ -42,56 +42,8 @@ float ogxFogPowder(float density, float nu)
 }
 
 // 沿视线积分雾：返回预乘散射色与剩余透过率。
-float4 ogxFogMarch(OgxFog fog, float3 camera, float3 worldPosition, float3 sunDirection,
-                   float3 sunColor, float jitter, int steps)
-{
-    float3 delta = worldPosition - camera; // 相机到目标点的向量。
-    float distance = length(delta); // 视线长度，公里。
-    if (distance <= 1e-5) // 零长度不产生雾。
-    {
-        return float4(0.0, 0.0, 0.0, 1.0); // 完全透明。
-    }
-    float3 viewDirection = delta / distance; // 单位视线方向。
-    const int maxSteps = 24; // 固定循环上限。
-    int count = min(max(steps, 1), maxSteps); // 调用方可以降低质量。
-    float stepLength = distance / float(count); // 每步长度。
-    float distanceAlongRay = stepLength * ogxSaturate(jitter); // 抖动起点，减少层状条纹。
-    float transmittance = 1.0; // 初始完全透明。
-    float3 scattered = float3(0.0); // 累积散射光。
-    float nu = dot(viewDirection, sunDirection); // 视线与阳光夹角。
-    float phase = ogxFogPhase(nu); // 混合相位。
-    for (int i = 0; i < maxSteps; i++) // 逐步穿过雾层。
-    {
-        if (i >= count) // 超过质量设置就停止。
-        {
-            break; // 提前结束。
-        }
-        float3 position = camera + viewDirection * distanceAlongRay; // 当前采样点。
-        float density = ogxFogDensity(fog, position); // 当前密度。
-        if (density > 0.001) // 空区域跳过。
-        {
-            float height = exp(-max(position.y - fog.baseHeight, 0.0) / max(fog.heightFalloff, 1e-4)); // 高度包络。
-            float powder = ogxFogPowder(density, nu); // 薄雾的多次散射。
-            float3 sun = sunColor * fog.sunStrength * (phase * 2.0 + 0.15) * height * powder; // 阳光散射。
-            float3 ambient = fog.color * (0.30 + 0.70 * height); // 环境光。
-            float extinction = exp(-density * stepLength * 1.2); // 这一段的透过率。
-            scattered += (sun + ambient) * transmittance * (1.0 - extinction); // 按剩余透过率累加。
-            transmittance *= extinction; // 更新透过率。
-        }
-        distanceAlongRay += stepLength; // 前进一段。
-        if (transmittance < 0.02) // 几乎不透明就不再采样。
-        {
-            break; // 提前结束。
-        }
-    }
-    return float4(scattered, transmittance); // 返回预乘散射色与剩余透过率。
-}
 
 // 把雾应用到已经着色的颜色：先乘剩余透过率，再加散射色。
-float3 ogxFogApply(float3 color, float4 fog)
-{
-    return color * fog.a + fog.rgb; // 预乘散射色直接相加。
-}
 
 // 按比例淡出一层预乘雾：只缩放散射色，并把透过率朝一插值。
 // 为什么不能直接把四个分量一起乘小：透过率被乘小以后，颜色会被一起抹掉，
@@ -184,7 +136,6 @@ float ogxCloudFbm(float3 position, float3 shift, Sampler2D noiseTexture, float n
     }
     return accum + octShift; // 返回归一化后的噪声。
 }
-
 
 // 下界雾的单格密度：世界坐标折成三维格子，再查二维噪声图。
 float ogxNetherFogDensityAt(float3 pos, Sampler2D noiseTexture)

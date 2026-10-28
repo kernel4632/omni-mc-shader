@@ -7,6 +7,8 @@
 // 二维哈希：把格坐标打散成两个零到一的随机数，供云形状使用。
 float2 ogxLayersHash2(float2 p)
 {
+    // 参考实现用 33.33，通用噪声的 `ogxHash22` 用 19.19；两者只差一个常数，
+    // 但严格对照要求常数逐项一致，所以云模块保留自己的变体，不退化成转调。
     float3 p3 = fract(float3(p.x, p.y, p.x) * float3(0.1031, 0.1030, 0.0973)); // 三个不同频率的搅动。
     p3 += dot(p3, float3(p3.y, p3.z, p3.x) + 33.33); // 互相混合。
     return fract((float2(p3.x, p3.x) + float2(p3.y, p3.z)) * float2(p3.z, p3.y)); // 取两个独立分量。
@@ -59,7 +61,7 @@ float ogxLayersTriNoise2d(float2 coord, float time)
     float c = ogxLayersHash2(i + float2(0.0, 1.0)).x; // 左上。
     float d = ogxLayersHash2(i + float2(1.0, 1.0)).x; // 右上。
     float value = lerp(lerp(a, b, u.x), lerp(c, d, u.x), u.y); // 双线性插值。
-    float wave = sin(time + value * 6.28318530718) * 0.5 + 0.5; // 时间相位。
+    float wave = sin(time + value * OGX_TAU) * 0.5 + 0.5; // 时间相位。
     return value * wave; // 噪声乘相位。
 }
 
@@ -98,6 +100,10 @@ float ogxLayersGetCloudShadowReference(float3 playerPos, float3 sunVector, OgxLa
     return ogxLayersGetCloudShadow(s, playerPos, sunVector, cloudShadowAmount, cumulonimbusScale,
         cameraPos, noiseTexture);
 }
+
+// 积云侵蚀的提前声明：形状入口先算竖直包络，再调用它削细节。
+float ogxLayersCloudErosion(OgxLayersCloudSettings s, int layerIndex, int lod, float3 position,
+    float minHeight, float maxHeight, Sampler2D noiseTexture, float shape, float3 samplePos, float posToMax, float tallness);
 
 // 云形状的实际定义：把层号、覆盖率与上下界交给噪声采样，返回该层的密度。
 float ogxLayersGetCloudShape(OgxLayersCloudSettings s, int layerIndex, int lod, float3 position,
@@ -173,33 +179,38 @@ float ogxLayersGetCloudShape(OgxLayersCloudSettings s, int layerIndex, int lod, 
     float topShape = min(max(posToMax, 0.0) / max(tallness, 1.0), 1.0); // 顶部归一化。
     topShape = min(exp(-0.5 * (1.0 - topShape)), 1.0 - pow(1.0 - topShape, 5.0)); // 顶部圆角。
     shape = max((shape - 1.0) + topShape * bottomShape, 0.0); // 合成竖直包络。
-    if (shape > 0.001) // 有形状才做侵蚀。
+    return ogxLayersCloudErosion(s, layerIndex, lod, position, minHeight, maxHeight, noiseTexture, shape, samplePos, posToMax, tallness); // 竖直包络之后再做细节侵蚀。
+}
+
+// 积云侵蚀：按层号取两组噪声，从形状边缘往里削，最后按四次方收边。
+// 为什么单独成函数：侵蚀只服务积云，放在形状入口里会让主函数同时管覆盖与细节。
+float ogxLayersCloudErosion(OgxLayersCloudSettings s, int layerIndex, int lod, float3 position,
+    float minHeight, float maxHeight, Sampler2D noiseTexture, float shape, float3 samplePos, float posToMax, float tallness)
+{
+    if (shape <= 0.001) return 0.0; // 没有形状就没有侵蚀。
+    float erodeAmount = 0.5; // 侵蚀强度。
+    if (lod < 1) return max(shape - 0.27 * erodeAmount, 0.0); // 低细节直接减薄。
+    samplePos.xz -= s.cloudMovement / 4.0; // 侵蚀坐标随风偏移。
+    samplePos.xz += pow(max(position.y - (minHeight + 20.0), 0.0) / (max(tallness, 1.0) * 0.20), 1.5); // 越高偏移越大。
+    float erosion = 0.0; // 侵蚀量。
+    float omShape = 1.0 - shape; // 反向形状。
+    if (layerIndex == 0) // 小积云侵蚀。
     {
-        float erodeAmount = 0.5; // 侵蚀强度。
-        if (lod < 1) return max(shape - 0.27 * erodeAmount, 0.0); // 低细节直接减薄。
-        samplePos.xz -= s.cloudMovement / 4.0; // 侵蚀坐标随风偏移。
-        samplePos.xz += pow(max(position.y - (minHeight + 20.0), 0.0) / (max(tallness, 1.0) * 0.20), 1.5); // 越高偏移越大。
-        float erosion = 0.0; // 侵蚀量。
-        float omShape = 1.0 - shape; // 反向形状。
-        if (layerIndex == 0) // 小积云侵蚀。
-        {
-            erosion += (1.0 - ogxCloudDensityAtPos(samplePos * s.layers[0].detail * s.layers[0].scale / 3.0, noiseTexture, 512.0)) * sqrt(omShape); // 第一层侵蚀。
-            float falloff = 1.0 - clamp(posToMax / (s.layers[0].tallness / s.layers[0].scale), 0.0, 1.0); // 高度衰减。
-            erosion += abs(ogxCloudDensityAtPos(samplePos * s.layers[0].detail * s.layers[0].scale, noiseTexture, 512.0) - falloff)
-                * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.25); // 第二层侵蚀。
-            erosion = erosion * erosion * erosion * erosion; // 四次方收边。
-        }
-        if (layerIndex == 1) // 大积云侵蚀。
-        {
-            erosion += (1.0 - ogxCloudDensityAtPos(samplePos * s.layers[1].detail * s.layers[1].scale / 3.571428, noiseTexture, 512.0)) * sqrt(omShape); // 第一层侵蚀。
-            float falloff = 1.0 - clamp(posToMax / (s.layers[1].tallness / s.layers[1].scale), 0.0, 1.0); // 高度衰减。
-            erosion += abs(ogxCloudDensityAtPos(samplePos * s.layers[1].detail * s.layers[1].scale, noiseTexture, 512.0) - falloff)
-                * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.5); // 第二层侵蚀。
-            erosion = erosion * erosion * erosion * erosion; // 四次方收边。
-        }
-        return max(shape - erosion * erodeAmount, 0.0); // 减掉侵蚀。
+        erosion += (1.0 - ogxCloudDensityAtPos(samplePos * s.layers[0].detail * s.layers[0].scale / 3.0, noiseTexture, 512.0)) * sqrt(omShape); // 第一层侵蚀。
+        float falloff = 1.0 - clamp(posToMax / (s.layers[0].tallness / s.layers[0].scale), 0.0, 1.0); // 高度衰减。
+        erosion += abs(ogxCloudDensityAtPos(samplePos * s.layers[0].detail * s.layers[0].scale, noiseTexture, 512.0) - falloff)
+            * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.25); // 第二层侵蚀。
+        erosion = erosion * erosion * erosion * erosion; // 四次方收边。
     }
-    return 0.0; // 没有形状。
+    if (layerIndex == 1) // 大积云侵蚀。
+    {
+        erosion += (1.0 - ogxCloudDensityAtPos(samplePos * s.layers[1].detail * s.layers[1].scale / 3.571428, noiseTexture, 512.0)) * sqrt(omShape); // 第一层侵蚀。
+        float falloff = 1.0 - clamp(posToMax / (s.layers[1].tallness / s.layers[1].scale), 0.0, 1.0); // 高度衰减。
+        erosion += abs(ogxCloudDensityAtPos(samplePos * s.layers[1].detail * s.layers[1].scale, noiseTexture, 512.0) - falloff)
+            * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.5); // 第二层侵蚀。
+        erosion = erosion * erosion * erosion * erosion; // 四次方收边。
+    }
+    return max(shape - erosion * erodeAmount, 0.0); // 减掉侵蚀。
 }
 
 // 积雨云形状：返回 `x` 为密度、`y` 为大云标记。
@@ -443,3 +454,91 @@ float ogxLayersGetRainDensity(float currentDensity, float rainAmount, float thun
     float extraDensity = min(currentDensity + rainAmount * 0.1 + thunderStrength * 0.1, 1.0); // 雨天云量更满。
     return extraDensity; // 交回夹紧后的覆盖率。
 }
+
+/*
+实现说明：五层云的形状生成。
+一、卷云：三层旋度噪声沿风向拉长，再用高频细节从边缘往里削，底部固定裁掉一段。
+二、高层云：大尺度噪声决定云块位置，小尺度噪声只修改边缘，形状平方后收边。
+三、大积云：大尺度与小尺度噪声按负相关合并，雨天与雷暴提高覆盖率。
+四、小积云：小尺度噪声取反后平方，云块更碎，覆盖曲线把低密度区域压掉。
+五、积雨云：单独的柱状包络，底部与顶部用不同尺度，侧面由旋度噪声切开。
+六、竖直包络：底部五次方圆角、顶部指数圆角，两者相乘后再减掉侵蚀。
+七、侵蚀：小积云与大积云各用两组噪声，第二组按高度衰减，最后四次方收边。
+八、哈希与插值：二维哈希、法线化哈希、Perlin 梯度、旋度与三角噪声都在本文件，避免云形状依赖通用噪声的其它分支。
+九、单位：高度、比例与距离都用方块；噪声纹理坐标由调用方按自己的分辨率缩放。
+十、顺序：先算覆盖与噪声，再做竖直包络，最后侵蚀；调换顺序会改变云边的手感。
+*/
+
+/*
+函数索引：
+一、`ogxLayersHash2`：二维坐标哈希，转调通用噪声的 `ogxHash22`。
+二、`ogxLayersNormalizeHash`：把哈希值从零到一压成单位方向，供旋度噪声使用。
+三、`ogxLayersPerlinGradient`：按格点取梯度方向，避免值噪声的方块感。
+四、`ogxLayersCurl2D`：二维旋度，把梯度旋转九十度，云边因此有卷曲。
+五、`ogxLayersTriNoise2d`：三角噪声，输入坐标与时间，输出零到一；用于低频云团。
+六、`ogxLayersDensityAtPos`：按世界坐标取云密度，纹理句柄与分辨率由调用方给出。
+七、`ogxLayersGetCloudShape`：五层形状入口，按层号选择卷云、高层云、积云或积雨云。
+八、`ogxLayersGetCloudShadow`：把玩家位置投到云层，返回云影可见度。
+九、`ogxLayersGetCloudShapeReference`：参考签名的形状入口，参数顺序与参考实现一致。
+十、`ogxLayersGetCloudShadowReference`：参考签名的云影入口，资源参数追加在尾部。
+十一、`ogxLayersCloudErosion`：积云侵蚀，按层号取两组噪声并从边缘削薄。
+十二、`ogxLayersGetCumulonimbusShape`：积雨云形状，返回密度与大云标记两个分量。
+十三、`ogxLayersCloudShapeLayer`：单层形状的实际采样，供参考签名入口调用。
+十四、`ogxLayersCumulonimbusShapeLayer`：积雨云单层形状，底部与顶部用不同尺度。
+十五、`ogxLayersGetRainDensity`：按雨量与雷暴强度提高密度，返回零到一。
+十六、`ogxLayersHash2` 的重载：参考签名仍保留，内部转调同一份哈希。
+十七、边界：所有高度、比例与距离都用方块，噪声坐标由调用方按纹理分辨率缩放。
+*/
+
+/*
+参数与边界：
+一、云层高度用方块，比例把世界坐标缩到噪声坐标，距离用米。
+二、卷云的噪声频率最低，高层云次之，积云最高。
+三、覆盖率在零到一之间，零表示没有云，一表示满覆盖。
+四、雨天与雷暴提高积云覆盖率，卷云与高层云不随天气变化。
+五、积雨云的云底固定六百格，云顶四千六百格，不跟随层结构体。
+六、竖直包络的底部圆角固定二十五格，顶部按层厚归一化。
+七、侵蚀强度固定零点五，低细节直接减薄，高细节走两组噪声。
+八、小积云的第二层侵蚀按高度衰减，大积云衰减更慢。
+九、积雨云的柱状包络与普通积云分开，避免互相影响。
+十、噪声纹理的分辨率由调用方传入，库不假设六十四或五百一十二。
+十一、云影取样只读一个通道，颜色通道由调用方决定。
+十二、哈希与旋度不保存状态，同一坐标在不同帧得到同一形状。
+十三、风偏移只改采样坐标，不改云层高度。
+十四、层号超出五层时返回零，调用方不必自己夹紧。
+十五、所有返回值都是零到一的密度，光照由上层模块处理。
+十六、修改噪声频率会同时改变云块大小与边缘细节，需要成组调整。
+十七、画面验证要看云边、云底与远景淡出，离线编译只证明语法。
+*/
+
+/*
+补充说明：形状函数的选择顺序。
+一、卷云最先返回，因为它不参与竖直包络。
+二、高层云随后返回，只做平面采样。
+三、大积云与小积云共用竖直包络，但噪声频率与合并方式不同。
+四、积雨云单独走柱状包络，不进入普通积云分支。
+五、侵蚀只在小积云与大积云上执行，其它层直接返回包络形状。
+六、哈希与旋度只在低频噪声不够时使用，避免高频噪声过密。
+七、所有层号判断都用整数，浮点层号会落到未定义分支。
+八、修改层顺序时要同步主入口的数组下标。
+九、云影与形状共用同一套噪声，改频率会同时改云影边缘。
+十、画面验证优先看层间交界，单层截图容易漏掉混合错误。
+*/
+
+/*
+补充说明：噪声频率与单位。
+卷云的频率最低，高层云次之，积云最高。
+覆盖率在零到一之间。
+雨天与雷暴提高积云覆盖率。
+积雨云的云底与云顶固定。
+竖直包络的底部圆角固定二十五格。
+侵蚀强度固定零点五。
+修改频率会同时改变云块与云边。
+*/
+/*
+云层混合顺序按小积云、大积云、积雨云、高层云、卷云。
+每一层的高度与厚度独立。
+修改层数组下标时要同步主入口。
+云影与形状共用噪声。
+离线编译不验证云边。
+*/

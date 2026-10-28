@@ -5,6 +5,7 @@
     输入随像素变化，避免常量折叠把类型错误藏起来；模块不碰纹理，探针也就不需要绑定。
     编码与解码成对调用，任何一边改了签名都会在这里编译失败。
 */
+#include "sampler_alias.slang"
 #include "../../src/lpv.slang"
 
 [shader("fragment")]

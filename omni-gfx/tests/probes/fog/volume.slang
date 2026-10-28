@@ -9,6 +9,7 @@ Sampler2D probeShadow1; // 一号阴影深度。
 Sampler2D probeShadowColor; // 半透明阴影颜色。
 Sampler2D probeCloudShadow; // 云影贴图。
 
+#include "../sampler_alias.slang"
 #include "../../../src/fog/volume.slang"
 
 [shader("fragment")]

@@ -5,7 +5,7 @@
     "ACESFilm": "common/color/aces.ogxTonemapAcesFilm",
     "AgX": "common/color/agx.ogxAgx",
     "AgXConfigurable": "common/color/agx.ogxAgxConfigurable",
-    "AgXConfigurable1": "common/color/agx.ogxAgxConfigurable1",
+    "AgXConfigurable1": "common/color/agx.ogxAgxCustomGamutMatrix",
     "AgxDefaultContrastApprox": "common/color/agx.ogxAgxContrast",
     "agxDefaultContrastApprox": "common/color/agx.ogxAgxContrast",
     "agxLook": "common/color/agx.ogxAgxLook",
@@ -22,11 +22,11 @@
     "BilinearNoise": "cloud/planar.ogxBilinearNoise",
     "BlackBar": "common/color.ogxBlackBar",
     "Blackbody": "common/math/shading.ogxBlackbody",
-    "blackbody": "common/color/blackbody.ogxBlackbodyApprox",
+    "blackbody": "common/color.ogxBlackbodyApprox",
     "BlackHole_AccretionDisc_Reflection": "accretion.ogxAccretionDisc",
     "BlackHole_AccretionDisc_Stars": "accretion.ogxAccretionDisc",
     "BlockLighting": "surface.ogxBlockLight",
-    "BloomDownSample": "post/post/bloom.ogxBloomDownsample",
+    "BloomDownSample": "post/post.ogxBloomDownsample",
     "BlueNoise": "common/sampling.ogxBlueNoise",
     "BlueNoiseTemproal": "common/sampling.ogxBlueNoiseTemporal",
     "CalculateCameraVelocity": "gi/gi/temporal.ogxGiCameraVelocity",
@@ -77,7 +77,7 @@
     "GetVariance3x3": "antialias/antialias.ogxTaaVariance3x3",
     "GetWaterParallaxCoord": "water/waves.ogxWaterParallax",
     "GetWavesNormal": "water/waves.ogxWavesNormal",
-    "GTAOMultiBounce": "gi/gi/ao.ogxAoMultiBounce",
+    "GTAOMultiBounce": "gi/gi.ogxAoMultiBounce",
     "HaltonSeq2": "common/sampling.ogxHalton2",
     "HaltonSeq3": "common/sampling.ogxHalton3",
     "HableTonemap": "common/color/curve.ogxTonemapHable",
@@ -122,10 +122,10 @@
     "ScreenPos_From_ViewPos": "common/camera.ogxShadowScreenPos",
     "Sequences_R1": "common/math/sampling.ogxSequenceR1",
     "Sequences_R2": "common/math/sampling.ogxSequenceR2",
-    "SetVoxelBlock": "voxel/voxel.ogxVoxelWriteIndex",
+    "SetVoxelBlock": "voxel/voxel/write.ogxSetVoxelBlock",
     "ShadowScreenPos_From_WorldPos": "common/camera.ogxShadowScreenPos",
     "ShadowScreenPos_From_WorldPos_Distorted": "common/camera.ogxShadowScreenPosDistorted",
-    "simpleScattering": "atmosphere/atmosphere/scattering.ogxAtmosphereSky",
+    "simpleScattering": "atmosphere/atmosphere.ogxAtmosphereSky",
     "SpecularGGX": "common/math/shading.ogxSpecularGGX",
     "SpiralSample": "common/math/scalar.ogxSpiralSample",
     "StableStarField": "atmosphere/atmosphere/sun.ogxStarsStable",
@@ -133,7 +133,7 @@
     "TextureLighting": "surface.ogxTextureLighting",
     "ToneMap_AgX": "common/color/agx.ogxToneMapAgx",
     "ToneMap_AgX_minimal": "common/color/agx.ogxToneMapAgxMinimal",
-    "ToneMap_AgX_minimal_merlin": "common/color/agx.ogxToneMapAgxMerlin",
+    "ToneMap_AgX_minimal_merlin": "common/color/agx.ogxToneMapAgxCompact",
     "ToneMap_Hejl2015": "common/color/curve.ogxTonemapHejl",
     "Tonemap_Full_Reinhard": "common/color/reinhard.ogxTonemapReinhardFull",
     "Tonemap_Lottes": "common/color/curve.ogxTonemapLottes",
@@ -207,8 +207,8 @@
     "toLinear": "common/color.ogxSrgbToLinear",
     "unproject": "common/color/agx.ogxAgxUnproject",
     "volumetricsFromTex": "fog/volume/shadow.ogxFogCloudBicubic",
-    "voxelIndex": "voxel/voxel.ogxVoxelWriteIndex",
-    "traceQuarterVoxel": "voxel/voxel.ogxVoxelReflection",
+    "voxelIndex": "voxel/voxel/write.ogxGetVoxelIndex",
+    "traceQuarterVoxel": "voxel/voxel/reflection.ogxVoxelReflection",
     "getRotMat": "common/math/pattern.ogxRotateMatrix",
     "mat2_rotate_z": "common/math/pattern.ogxRotateMatrix",
     "linear_step": "common/math/scalar.ogxRemapSaturate",
@@ -236,7 +236,7 @@
     "raymarchCloudSimple": "cloud/cloud.ogxCloudMarch",
     "ApplySSRT": "reflection/reflection.ogxReflectionSceneColor",
     "CleanVoxelSample": "voxel/voxel.ogxVoxelShade",
-    "ComputeVoxelShadowMap": "voxel/voxel.ogxVoxelWriteIndex",
+    "ComputeVoxelShadowMap": "voxel/voxel/write.ogxPopulateShadowVoxelIndex",
     "CoordBase": "common/math/scalar.ogxCircleMap",
     "DH_invLinZ": "common/camera.ogxScreenDepthFromDistantScreenDepth",
     "invLinZ": "common/camera.ogxLinearDepthFromScreenDepth",
@@ -256,9 +256,9 @@
     "drawSun": "atmosphere/atmosphere/sun.ogxSunDisc",
     "drawMoon": "atmosphere/atmosphere/mapping.ogxMoonDiscDefault",
     "drawRealMoon": "atmosphere/atmosphere/mapping.ogxMoonDiscReal",
-    "Iris_Lightningflash": "fog/volume/light.ogxFogLightning",
+    "Iris_Lightningflash": "fog/volume.ogxFogLightning",
     "Iris_Lightningflash_VLcloud": "cloud/volume.ogxCumulusLightning",
-    "Iris_Lightningflash_VLfog": "fog/volume/light.ogxFogLightning",
+    "Iris_Lightningflash_VLfog": "fog/volume.ogxFogLightning",
     "equation_full_curve": "common/color/agx.ogxAgxEquationFullCurve",
     "equation_scale": "common/color/agx.ogxAgxEquationScale",
     "RotationToSlide": "common/color/agx.ogxAgxRotationToSlide",
@@ -279,7 +279,7 @@
       "evidence": "四邻域按深度差剔除后升采样；参考实现的固定步长换成分辨率倍数参数"
     },
     "Tonemap_Xonk": {
-      "target": "common/color/curve.ogxTonemapXonk",
+      "target": "common/color/curve.ogxTonemapPowerCurve",
       "evidence": "同名曲线：先抬 1.3 次幂，再除以自身加 0.333"
     },
     "decodeVec2_16": {
@@ -335,7 +335,7 @@
       "evidence": "同一 R2 低差异序列与同一组黄金比例常数"
     },
     "CalculateCoCRadius": {
-      "target": "post/post/bloom.ogxCocRadius",
+      "target": "post/post/dof.ogxCocRadius",
       "evidence": "同一薄透镜弥散圆公式，参数顺序一致"
     },
     "fp10Dither": {
@@ -393,7 +393,7 @@
     "CoCSpread": "post/post/dof.ogxDofCocSpread",
     "PlanetEnd2": "planet.ogxPlanetEnd",
     "Calculate3DNoise": "fog/fog/density.ogxEnd3dNoise",
-    "RSM": "gi/gi/ao.ogxGiRsm",
+    "RSM": "gi/gi.ogxGiRsm",
     "GI_SpatialFilter": "gi/gi/spatial.ogxGiSpatialFilter",
     "GroundTruthBasedAmbientOcclusion": "gi/gi/ao.ogxGroundTruthAo",
     "SampleDensity": "cloud/volume.ogxCumulusSampleDensity",
@@ -677,6 +677,14 @@
     "GetCloudShadow": {
       "status": "MC 专用",
       "evidence": "函数体直接读取宿主符号：lightningBoltPosition、sunElevation；云层高度来自编译期配置 CloudLayer0_height 等"
+    },
+    "VanillaFog": {
+      "status": "MC 专用",
+      "evidence": "原版雾叠加由宿主最终阶段直接处理，通用库不再保留无人调用的函数"
+    },
+    "SelectionBox": {
+      "status": "MC 专用",
+      "evidence": "选择框由宿主最终阶段直接按曝光值着色，通用库不再保留无人调用的函数"
     }
   },
   "modules": {

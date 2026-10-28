@@ -182,7 +182,6 @@ vec3 ogxSkyAtmosphereIntegral(vec3 background, vec3 viewVector, vec3 upVector, v
     float atmosphereRadiusSquared = atmosphereRadius * atmosphereRadius; // 大气顶半径平方。
     vec2 inverseScaleHeights = 1.0 / scaleHeights; // 标高倒数。
     vec2 scaledPlanetRadius = planetRadius * inverseScaleHeights; // 参考实现的缩放半径。
-
     float planetGround; // 行星地面在地平线附近的暗化。
     if (skyGround) // 使用与参考实现相同的云层参考高度暗化。
     {
@@ -195,9 +194,7 @@ vec3 ogxSkyAtmosphereIntegral(vec3 background, vec3 viewVector, vec3 upVector, v
         planetGround = pow(clamp(viewVector.y + 1.0, 0.0, 1.0), 2.0); // 没有云层时直接按视线高度压暗。
     }
     float groundDarkening = max(planetGround * 0.7 + 0.3, clamp(sunVector.y * 2.0, 0.0, 1.0)); // 地面与太阳高度的较大者。
-
     vec3 viewPos = (planetRadius + 1.0 + max(eyeAltitude - 300.0, 0.0)) * upVector; // 相机在大气里的位置。
-
     vec2 atmosphereHit = ogxRaySphereIntersection(viewPos, viewVector, atmosphereRadius); // 求大气顶交点。
     float atmosphereNear = atmosphereHit.x; // 到大气顶交点的近参数。
     float atmosphereFar = atmosphereHit.y; // 到大气顶交点的远参数。
@@ -207,39 +204,31 @@ vec3 ogxSkyAtmosphereIntegral(vec3 background, vec3 viewVector, vec3 upVector, v
         pid = vec2(0.0); // 没有行星交点。
         return vec3(0.0); // 天空是黑的。
     }
-
     vec2 planetHit = ogxRaySphereIntersection(viewPos, viewVector, planetRadius * 0.998); // 求行星交点。
     float planetNear = planetHit.x; // 行星交点的近参数。
     float planetFar = planetHit.y; // 行星交点的远参数。
     bool planetIntersected = planetFar > 0.0; // 是否撞到行星。
     pid = vec2(planetNear, planetFar); // 返回行星交点参数。
-
     vec2 stepRange = vec2((planetIntersected && planetNear < 0.0) ? planetFar : max(atmosphereNear, 0.0),
         (planetIntersected && planetNear > 0.0) ? planetNear : atmosphereFar); // 参考实现的可见段。
     float stepSize = (stepRange.y - stepRange.x) * (1.0 / float(iSteps)); // 每步长度。
     vec3 increment = viewVector * stepSize; // 每步位移。
     vec3 position = viewVector * stepRange.x + viewPos; // 起点。
     position += increment * (0.34 * noise); // 抖动起点。
-
     vec2 phaseSun = ogxSkyPhasePair(dot(viewVector, sunVector), 0.8); // 太阳相函数。
     vec2 phaseMoon = ogxSkyPhasePair(dot(viewVector, moonVector), 0.8); // 月亮相函数。
-
     if (customMoonRotation) // 自定义月亮轨道会算月食暗化。
     {
         float eclipseDarkness = smoothstep(0.005, 0.08, length(sunVector - moonVector)); // 日月距离。
         phaseSun *= mix(1.0, eclipseDarkness, smoothstep(-1.0, 0.175, viewVector.y)); // 低空暗化更强。
     }
-
     vec3 scatteringSun = vec3(0.0); // 太阳散射。
     vec3 scatteringMoon = vec3(0.0); // 月亮散射。
     vec3 scatteringAmbient = vec3(0.0); // 环境散射。
     transmittance = vec3(1.0); // 视线透过率从全通开始。
-
     float highSun = clamp(pow(sunVector.y + 0.6, 5.0), 0.0, 1.0) * 3.0; // 高空太阳让日出少一点蓝。
     float lowSun = clamp(((1.0 - abs(sunVector.y)) * 3.0) - highSun, 1.0, 2.0); // 低空太阳让日落更蓝。
-
     if (twilightForest) lowSun = 2.5; // 暮色森林固定值，与参考实现相同。
-
     for (int i = 0; i < iSteps; ++i, position += increment) // 逐段积分。
     {
         vec3 density = ogxSkyDensity(length(position), planetRadius, scaleHeights); // 三种介质密度。
@@ -249,12 +238,10 @@ vec3 ogxSkyAtmosphereIntegral(vec3 background, vec3 viewVector, vec3 upVector, v
         vec3 stepTransmittance = exp2(-stepOpticalDepth * rLOG2); // 本段透过率。
         vec3 stepTransmittedFraction = clamp((stepTransmittance - 1.0) / -stepOpticalDepth, 0.0, 1.0); // 本段可散射比例。
         vec3 stepScatteringVisible = transmittance * stepTransmittedFraction; // 可见散射。
-
         vec3 sunAirmass = ogxSkyAirmassRay(position, sunVector, float(jSteps), planetRadius, scaleHeights, atmosphereRadius); // 到太阳的三种介质路径。
         vec3 moonAirmass = ogxSkyAirmassRay(position, moonVector, float(jSteps), planetRadius, scaleHeights, atmosphereRadius); // 到月亮的三种介质路径。
         vec3 sunOpticalDepth = coefficientRayleigh * sunAirmass.x + coefficientMie * sunAirmass.y + coefficientOzone * sunAirmass.z; // 到太阳的光学厚度。
         vec3 moonOpticalDepth = coefficientRayleigh * moonAirmass.x + coefficientMie * moonAirmass.y + coefficientOzone * moonAirmass.z; // 到月亮的光学厚度。
-
         vec3 sunScattering = coefficientRayleigh * stepAirmass.x * phaseSun.x + coefficientMie * stepAirmass.y * phaseSun.y; // 太阳瑞利与米氏散射。
         vec3 moonScattering = coefficientRayleigh * stepAirmass.x * phaseMoon.x + coefficientMie * stepAirmass.y * phaseMoon.y; // 月亮瑞利与米氏散射。
         if (skyGround) // 参考实现的天空地面分支只影响太阳项。
@@ -269,7 +256,6 @@ vec3 ogxSkyAtmosphereIntegral(vec3 background, vec3 viewVector, vec3 upVector, v
         scatteringAmbient += (coefficientRayleigh * stepAirmass.x + coefficientMie * stepAirmass.y) * stepScatteringVisible * lowSun;
         transmittance *= stepTransmittance; // 累积透过率。
     }
-
     return scatteringAmbient * background + scatteringSun * sunColorBase + scatteringMoon * moonColorBase * 0.5; // 参考实现的合成。
 }
 

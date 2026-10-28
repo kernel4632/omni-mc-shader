@@ -4,6 +4,8 @@
     `omni-gfx/examples/world/render.py` 保存截图时调用 `write_rgb`；
     `omni-gfx/tools/prepare_textures.py` 下载 CC0 贴图后调用 `read_png` 与 `write_rgba`；
     并排对比脚本读取两张图片时调用 `read_png`。
+调用示例：`write_rgb(path, width, height, pixels)`。
+
 设计原因与取舍：
     测试世界只依赖标准库与 OpenGL，不把 Pillow 或 numpy 变成运行前提。
     解码只支持本项目实际用到的八位 RGB/RGBA、非隔行 PNG；遇到其他格式直接报错，

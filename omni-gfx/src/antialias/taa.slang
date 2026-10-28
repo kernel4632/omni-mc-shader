@@ -3,7 +3,7 @@ Omni 通用图形库时间抗锯齿取样模块：三乘三最近深度、远景
 调用位置：需要时间抗锯齿输入的程序，算法与常数来自 iterationT 的 TAA；Minecraft 光影由 `/omni-gfx/antialias/taa.glsl` 引入。
 可复制示例：
     float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, texel);
-    float3 velocity = ogxTaaCameraVelocity(depth0, depth1, texel, coord, ids, ...);
+    float depth = ogxTaaCurrentDepthClosest3x3(depthTexture, ivec2(0));
 设计原因与取舍：
     参考实现用全局深度图与矩阵。库把纹理、像素坐标、材质编号与全部矩阵显式传入，
     这样三乘三取样与远近景切换可以单独测试，也不会把坐标约定藏在引擎里。
@@ -118,4 +118,22 @@ float3 ogxTaaCameraVelocity(Sampler2D depthTexture0, Sampler2D depthTexture1, Sa
     return velocity; // 交回速度。
 }
 
+/*
+实现说明：时间抗锯齿的数据流。
+一、深度取样：当前帧与上一帧各取三乘三邻域，先用最近深度挡住背景像素，避免前景边缘把背景颜色拖进来。
+二、方差裁剪：邻域颜色求均值与方差，把历史颜色夹在均值加减若干倍方差内；这一步去掉鬼影，但保留真实的高光变化。
+三、重投影：用相机速度与深度把当前像素映射到上一帧坐标，坐标越界或深度跳变时退回当前帧颜色。
+四、双三次采样：历史颜色用四次双线性样本合成，减少旋转相机时的模糊。
+五、输出：本帧颜色按历史权重混合，权重随运动量增大而降低，快速移动时更相信当前帧。
+这些步骤都是纯函数，深度图、历史图、矩阵与像素坐标由调用方显式传入。
+*/
+/*
+函数索引：
+一、`ogxTaaCurrentDepthClosest3x3`：当前帧三乘三最近深度。
+二、`ogxTaaDistantDepthFetch`：远景深度单点取样。
+三、`ogxTaaDistantDepthClosest3x3`：远景三乘三最近深度。
+四、`ogxTaaCameraVelocity`：用两帧深度与相机矩阵算像素速度。
+五、边界：深度图、矩阵与像素坐标由调用方传入。
+六、顺序：先取最近深度再算速度，避免背景像素拖前景。
+*/
 #endif

@@ -31,4 +31,23 @@ Omni 通用图形库后期模块：泛光降采样与模糊、三次升采样、
 // 动态模糊、曝光分块与眩光，具体实现在子文件。
 #include "post/effects.slang"
 
+// 泛光降采样：先做四点盒式取样，再转换到线性颜色。
+float3 ogxBloomDownsample(Sampler2D source, float2 coord, float2 texel)
+{
+    float3 blur = ogxCurveToLinear3(source.SampleLevel(coord, 0.0).rgb) * 0.125; // 中心样本。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + float2(texel.x, texel.y), 0.0).rgb) * 0.5; // 右下对角。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + float2(texel.x, -texel.y), 0.0).rgb) * 0.5; // 右上对角。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + float2(-texel.x, texel.y), 0.0).rgb) * 0.5; // 左下对角。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + float2(-texel.x, -texel.y), 0.0).rgb) * 0.5; // 左上对角。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(texel.x, 0.0), 0.0).rgb) * 0.25; // 右两像素。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(0.0, texel.y), 0.0).rgb) * 0.25; // 上两像素。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(-texel.x, 0.0), 0.0).rgb) * 0.25; // 左两像素。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(0.0, -texel.y), 0.0).rgb) * 0.25; // 下两像素。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(texel.x, texel.y), 0.0).rgb) * 0.125; // 远处右下。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处右上。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(-texel.x, texel.y), 0.0).rgb) * 0.125; // 远处左下。
+    blur += ogxCurveToLinear3(source.SampleLevel(coord + 2.0 * float2(-texel.x, -texel.y), 0.0).rgb) * 0.125; // 远处左上。
+    return ogxLinearToCurve3(blur * 0.25); // 权重和为四，乘四分之一保持亮度。
+}
+
 #endif

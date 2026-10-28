@@ -1,7 +1,7 @@
 /*
 Omni 通用图形库表面模块：方块光曲线、材质法线、遮蔽换算与自发光。
 调用位置：任何需要把方块光等级、法线贴图和材质遮蔽变成光照输入，或按贴图色算自发光的程序；
-    Minecraft 光影由 `/omni-gfx/surface.glsl` 引入，`rendering/lighting/emissive.glsl`
+    Minecraft 光影由 `shaders/effects/shared/surface.glsl` 与 `shaders/effects/lighting/emissive.glsl` 引入。
     与地形材质代码只保留选项换算。
 可复制示例：
     float c = ogxCurveBlockLightSky(blockLight); // 天光等级曲线。
@@ -113,6 +113,13 @@ struct OgxPbrMaterial
     float scattering; // 次表面散射强度。
     float reflectionStrength; // 这份表面允许反射的强度。
 };
+
+// 水洼粗糙度：湿润阶段按锐度在干湿之间插值；只有材质解码使用这一条。
+// 为什么放在表面模块：水洼粗糙度是资源包材质的湿润处理，不属于通用编码。
+float ogxPuddleRoughness(float roughness, float wetRoughness, float wetnessStages, float sharpness)
+{
+    return lerp(roughness, wetRoughness, wetnessStages * sharpness); // 湿润阶段乘锐度作为混合比例。
+}
 
 // 从 labPBR 表面贴图解出材质：蓝色通道兼作孔隙率与散射，红绿通道是平滑度与金属度。
 // 参数全部显式传入，库不读取资源包格式选项；`baseTex` 会被吸水压暗，所以是输入输出参数。

@@ -1,6 +1,8 @@
 """生成并核对文档里的当前统计，避免 README、对照表与验证记录各写一套数字。
 
 调用位置：`python omni-gfx/build.py stats`；测试调用 `check()` 确认文档没有过期。
+调用示例：在仓库根目录执行 `python omni-gfx/build.py stats`。
+
 设计原因与取舍：
     模块数、源文件数、生成 GLSL 行数与函数对照都从真实文件重新计算，不手工抄写。
     历史验证章节保留当时的数字，只有带标记的“当前统计”块会随本轮结果更新。
@@ -17,7 +19,7 @@ LIB = Path(__file__).resolve().parent.parent
 ROOT = LIB.parent
 BEGIN = "<!-- stats:begin -->"
 END = "<!-- stats:end -->"
-TARGETS = (ROOT / "README.md", LIB / "docs" / "verification.md")
+TARGETS = (ROOT / "README.md", LIB / "README.md", LIB / "docs" / "verification.md")
 
 
 def _parity_counts() -> tuple[int, int, int, int]:

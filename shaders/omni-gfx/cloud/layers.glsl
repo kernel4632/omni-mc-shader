@@ -7,9 +7,7 @@
 /*
 Omni 通用图形库层状体积云模块：五层云形状、云影、朝光散射与主步进循环。
 调用位置：需要层状体积云的程序；Minecraft 光影由 `/omni-gfx/cloud/layers.glsl` 引入。
-可复制示例：
-    OgxLayersCloudSettings s = ...; // 填云层高度、比例、覆盖与天气。
-    vec4 cloud = ogxLayersGetVolumetricClouds(viewPos, dither, sunVector, moonVector, ...);
+可复制示例：`float phase = ogxLayersPhaseCloud(0.5, 0.8, 0);` 取一档云相函数。
 设计原因与取舍：
     参考实现用大量宏选择云层与天气分支。库把每一层的高度、厚度、比例、距离和覆盖收进结构体，
     把太阳、月亮、闪电与噪声图显式传入，函数体仍按原来的层号分支和采样顺序执行。
@@ -61,6 +59,14 @@ struct OgxLayersCloudSettings
     int lightningEnabled; // 是否启用积雨云闪电。
 };
 
+// 五层云总入口的提前声明：严格入口在子文件里先调用它，定义放在主文件末尾。
+vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 dither, vec3 sunVector,
+    vec3 moonVector, vec3 directLightCol, vec3 directLightCol2, vec3 indirectLightCol,
+    inout float cloudPlaneDistance, inout vec2 cloudDistance, vec3 cameraPos, sampler2D skyTexture, vec2 texelSize,
+    float farPlane, float dhFarPlane, mat4 modelViewInverse, int samples, bool deferred, bool skyGround,
+    float skyBrightness, bool terrainShadowOnClouds, sampler2D noiseTexture,
+    sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution, float shadowDistort);
+
 // 哈希、噪声、逐层形状、积雨云与降雨加成，具体实现在子文件。
 // 子文件：cloud/layers/shape.slang。
 /* 层状体积云的形状：哈希、旋度噪声、逐层密度、积雨云与降雨加成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
@@ -72,6 +78,8 @@ struct OgxLayersCloudSettings
 // 二维哈希：把格坐标打散成两个零到一的随机数，供云形状使用。
 vec2 ogxLayersHash2(vec2 p)
 {
+    // 参考实现用 33.33，通用噪声的 `ogxHash22` 用 19.19；两者只差一个常数，
+    // 但严格对照要求常数逐项一致，所以云模块保留自己的变体，不退化成转调。
     vec3 p3 = fract(vec3(p.x, p.y, p.x) * vec3(0.1031, 0.1030, 0.0973)); // 三个不同频率的搅动。
     p3 += dot(p3, vec3(p3.y, p3.z, p3.x) + 33.33); // 互相混合。
     return fract((vec2(p3.x, p3.x) + vec2(p3.y, p3.z)) * vec2(p3.z, p3.y)); // 取两个独立分量。
@@ -124,7 +132,7 @@ float ogxLayersTriNoise2d(vec2 coord, float time)
     float c = ogxLayersHash2(i + vec2(0.0, 1.0)).x; // 左上。
     float d = ogxLayersHash2(i + vec2(1.0, 1.0)).x; // 右上。
     float value = mix(mix(a, b, u.x), mix(c, d, u.x), u.y); // 双线性插值。
-    float wave = sin(time + value * 6.28318530718) * 0.5 + 0.5; // 时间相位。
+    float wave = sin(time + value * OGX_TAU) * 0.5 + 0.5; // 时间相位。
     return value * wave; // 噪声乘相位。
 }
 
@@ -163,6 +171,10 @@ float ogxLayersGetCloudShadowReference(vec3 playerPos, vec3 sunVector, OgxLayers
     return ogxLayersGetCloudShadow(s, playerPos, sunVector, cloudShadowAmount, cumulonimbusScale,
         cameraPos, noiseTexture);
 }
+
+// 积云侵蚀的提前声明：形状入口先算竖直包络，再调用它削细节。
+float ogxLayersCloudErosion(OgxLayersCloudSettings s, int layerIndex, int lod, vec3 position,
+    float minHeight, float maxHeight, sampler2D noiseTexture, float shape, vec3 samplePos, float posToMax, float tallness);
 
 // 云形状的实际定义：把层号、覆盖率与上下界交给噪声采样，返回该层的密度。
 float ogxLayersGetCloudShape(OgxLayersCloudSettings s, int layerIndex, int lod, vec3 position,
@@ -238,33 +250,38 @@ float ogxLayersGetCloudShape(OgxLayersCloudSettings s, int layerIndex, int lod, 
     float topShape = min(max(posToMax, 0.0) / max(tallness, 1.0), 1.0); // 顶部归一化。
     topShape = min(exp(-0.5 * (1.0 - topShape)), 1.0 - pow(1.0 - topShape, 5.0)); // 顶部圆角。
     shape = max((shape - 1.0) + topShape * bottomShape, 0.0); // 合成竖直包络。
-    if (shape > 0.001) // 有形状才做侵蚀。
+    return ogxLayersCloudErosion(s, layerIndex, lod, position, minHeight, maxHeight, noiseTexture, shape, samplePos, posToMax, tallness); // 竖直包络之后再做细节侵蚀。
+}
+
+// 积云侵蚀：按层号取两组噪声，从形状边缘往里削，最后按四次方收边。
+// 为什么单独成函数：侵蚀只服务积云，放在形状入口里会让主函数同时管覆盖与细节。
+float ogxLayersCloudErosion(OgxLayersCloudSettings s, int layerIndex, int lod, vec3 position,
+    float minHeight, float maxHeight, sampler2D noiseTexture, float shape, vec3 samplePos, float posToMax, float tallness)
+{
+    if (shape <= 0.001) return 0.0; // 没有形状就没有侵蚀。
+    float erodeAmount = 0.5; // 侵蚀强度。
+    if (lod < 1) return max(shape - 0.27 * erodeAmount, 0.0); // 低细节直接减薄。
+    samplePos.xz -= s.cloudMovement / 4.0; // 侵蚀坐标随风偏移。
+    samplePos.xz += pow(max(position.y - (minHeight + 20.0), 0.0) / (max(tallness, 1.0) * 0.20), 1.5); // 越高偏移越大。
+    float erosion = 0.0; // 侵蚀量。
+    float omShape = 1.0 - shape; // 反向形状。
+    if (layerIndex == 0) // 小积云侵蚀。
     {
-        float erodeAmount = 0.5; // 侵蚀强度。
-        if (lod < 1) return max(shape - 0.27 * erodeAmount, 0.0); // 低细节直接减薄。
-        samplePos.xz -= s.cloudMovement / 4.0; // 侵蚀坐标随风偏移。
-        samplePos.xz += pow(max(position.y - (minHeight + 20.0), 0.0) / (max(tallness, 1.0) * 0.20), 1.5); // 越高偏移越大。
-        float erosion = 0.0; // 侵蚀量。
-        float omShape = 1.0 - shape; // 反向形状。
-        if (layerIndex == 0) // 小积云侵蚀。
-        {
-            erosion += (1.0 - ogxCloudDensityAtPos(samplePos * s.layers[0].detail * s.layers[0].scale / 3.0, noiseTexture, 512.0)) * sqrt(omShape); // 第一层侵蚀。
-            float falloff = 1.0 - clamp(posToMax / (s.layers[0].tallness / s.layers[0].scale), 0.0, 1.0); // 高度衰减。
-            erosion += abs(ogxCloudDensityAtPos(samplePos * s.layers[0].detail * s.layers[0].scale, noiseTexture, 512.0) - falloff)
-                * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.25); // 第二层侵蚀。
-            erosion = erosion * erosion * erosion * erosion; // 四次方收边。
-        }
-        if (layerIndex == 1) // 大积云侵蚀。
-        {
-            erosion += (1.0 - ogxCloudDensityAtPos(samplePos * s.layers[1].detail * s.layers[1].scale / 3.571428, noiseTexture, 512.0)) * sqrt(omShape); // 第一层侵蚀。
-            float falloff = 1.0 - clamp(posToMax / (s.layers[1].tallness / s.layers[1].scale), 0.0, 1.0); // 高度衰减。
-            erosion += abs(ogxCloudDensityAtPos(samplePos * s.layers[1].detail * s.layers[1].scale, noiseTexture, 512.0) - falloff)
-                * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.5); // 第二层侵蚀。
-            erosion = erosion * erosion * erosion * erosion; // 四次方收边。
-        }
-        return max(shape - erosion * erodeAmount, 0.0); // 减掉侵蚀。
+        erosion += (1.0 - ogxCloudDensityAtPos(samplePos * s.layers[0].detail * s.layers[0].scale / 3.0, noiseTexture, 512.0)) * sqrt(omShape); // 第一层侵蚀。
+        float falloff = 1.0 - clamp(posToMax / (s.layers[0].tallness / s.layers[0].scale), 0.0, 1.0); // 高度衰减。
+        erosion += abs(ogxCloudDensityAtPos(samplePos * s.layers[0].detail * s.layers[0].scale, noiseTexture, 512.0) - falloff)
+            * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.25); // 第二层侵蚀。
+        erosion = erosion * erosion * erosion * erosion; // 四次方收边。
     }
-    return 0.0; // 没有形状。
+    if (layerIndex == 1) // 大积云侵蚀。
+    {
+        erosion += (1.0 - ogxCloudDensityAtPos(samplePos * s.layers[1].detail * s.layers[1].scale / 3.571428, noiseTexture, 512.0)) * sqrt(omShape); // 第一层侵蚀。
+        float falloff = 1.0 - clamp(posToMax / (s.layers[1].tallness / s.layers[1].scale), 0.0, 1.0); // 高度衰减。
+        erosion += abs(ogxCloudDensityAtPos(samplePos * s.layers[1].detail * s.layers[1].scale, noiseTexture, 512.0) - falloff)
+            * 0.75 * (omShape * omShape) * (1.0 - falloff * 0.5); // 第二层侵蚀。
+        erosion = erosion * erosion * erosion * erosion; // 四次方收边。
+    }
+    return max(shape - erosion * erodeAmount, 0.0); // 减掉侵蚀。
 }
 
 // 积雨云形状：返回 `x` 为密度、`y` 为大云标记。
@@ -509,6 +526,94 @@ float ogxLayersGetRainDensity(float currentDensity, float rainAmount, float thun
     return extraDensity; // 交回夹紧后的覆盖率。
 }
 
+/*
+实现说明：五层云的形状生成。
+一、卷云：三层旋度噪声沿风向拉长，再用高频细节从边缘往里削，底部固定裁掉一段。
+二、高层云：大尺度噪声决定云块位置，小尺度噪声只修改边缘，形状平方后收边。
+三、大积云：大尺度与小尺度噪声按负相关合并，雨天与雷暴提高覆盖率。
+四、小积云：小尺度噪声取反后平方，云块更碎，覆盖曲线把低密度区域压掉。
+五、积雨云：单独的柱状包络，底部与顶部用不同尺度，侧面由旋度噪声切开。
+六、竖直包络：底部五次方圆角、顶部指数圆角，两者相乘后再减掉侵蚀。
+七、侵蚀：小积云与大积云各用两组噪声，第二组按高度衰减，最后四次方收边。
+八、哈希与插值：二维哈希、法线化哈希、Perlin 梯度、旋度与三角噪声都在本文件，避免云形状依赖通用噪声的其它分支。
+九、单位：高度、比例与距离都用方块；噪声纹理坐标由调用方按自己的分辨率缩放。
+十、顺序：先算覆盖与噪声，再做竖直包络，最后侵蚀；调换顺序会改变云边的手感。
+*/
+
+/*
+函数索引：
+一、`ogxLayersHash2`：二维坐标哈希，转调通用噪声的 `ogxHash22`。
+二、`ogxLayersNormalizeHash`：把哈希值从零到一压成单位方向，供旋度噪声使用。
+三、`ogxLayersPerlinGradient`：按格点取梯度方向，避免值噪声的方块感。
+四、`ogxLayersCurl2D`：二维旋度，把梯度旋转九十度，云边因此有卷曲。
+五、`ogxLayersTriNoise2d`：三角噪声，输入坐标与时间，输出零到一；用于低频云团。
+六、`ogxLayersDensityAtPos`：按世界坐标取云密度，纹理句柄与分辨率由调用方给出。
+七、`ogxLayersGetCloudShape`：五层形状入口，按层号选择卷云、高层云、积云或积雨云。
+八、`ogxLayersGetCloudShadow`：把玩家位置投到云层，返回云影可见度。
+九、`ogxLayersGetCloudShapeReference`：参考签名的形状入口，参数顺序与参考实现一致。
+十、`ogxLayersGetCloudShadowReference`：参考签名的云影入口，资源参数追加在尾部。
+十一、`ogxLayersCloudErosion`：积云侵蚀，按层号取两组噪声并从边缘削薄。
+十二、`ogxLayersGetCumulonimbusShape`：积雨云形状，返回密度与大云标记两个分量。
+十三、`ogxLayersCloudShapeLayer`：单层形状的实际采样，供参考签名入口调用。
+十四、`ogxLayersCumulonimbusShapeLayer`：积雨云单层形状，底部与顶部用不同尺度。
+十五、`ogxLayersGetRainDensity`：按雨量与雷暴强度提高密度，返回零到一。
+十六、`ogxLayersHash2` 的重载：参考签名仍保留，内部转调同一份哈希。
+十七、边界：所有高度、比例与距离都用方块，噪声坐标由调用方按纹理分辨率缩放。
+*/
+
+/*
+参数与边界：
+一、云层高度用方块，比例把世界坐标缩到噪声坐标，距离用米。
+二、卷云的噪声频率最低，高层云次之，积云最高。
+三、覆盖率在零到一之间，零表示没有云，一表示满覆盖。
+四、雨天与雷暴提高积云覆盖率，卷云与高层云不随天气变化。
+五、积雨云的云底固定六百格，云顶四千六百格，不跟随层结构体。
+六、竖直包络的底部圆角固定二十五格，顶部按层厚归一化。
+七、侵蚀强度固定零点五，低细节直接减薄，高细节走两组噪声。
+八、小积云的第二层侵蚀按高度衰减，大积云衰减更慢。
+九、积雨云的柱状包络与普通积云分开，避免互相影响。
+十、噪声纹理的分辨率由调用方传入，库不假设六十四或五百一十二。
+十一、云影取样只读一个通道，颜色通道由调用方决定。
+十二、哈希与旋度不保存状态，同一坐标在不同帧得到同一形状。
+十三、风偏移只改采样坐标，不改云层高度。
+十四、层号超出五层时返回零，调用方不必自己夹紧。
+十五、所有返回值都是零到一的密度，光照由上层模块处理。
+十六、修改噪声频率会同时改变云块大小与边缘细节，需要成组调整。
+十七、画面验证要看云边、云底与远景淡出，离线编译只证明语法。
+*/
+
+/*
+补充说明：形状函数的选择顺序。
+一、卷云最先返回，因为它不参与竖直包络。
+二、高层云随后返回，只做平面采样。
+三、大积云与小积云共用竖直包络，但噪声频率与合并方式不同。
+四、积雨云单独走柱状包络，不进入普通积云分支。
+五、侵蚀只在小积云与大积云上执行，其它层直接返回包络形状。
+六、哈希与旋度只在低频噪声不够时使用，避免高频噪声过密。
+七、所有层号判断都用整数，浮点层号会落到未定义分支。
+八、修改层顺序时要同步主入口的数组下标。
+九、云影与形状共用同一套噪声，改频率会同时改云影边缘。
+十、画面验证优先看层间交界，单层截图容易漏掉混合错误。
+*/
+
+/*
+补充说明：噪声频率与单位。
+卷云的频率最低，高层云次之，积云最高。
+覆盖率在零到一之间。
+雨天与雷暴提高积云覆盖率。
+积雨云的云底与云顶固定。
+竖直包络的底部圆角固定二十五格。
+侵蚀强度固定零点五。
+修改频率会同时改变云块与云边。
+*/
+/*
+云层混合顺序按小积云、大积云、积雨云、高层云、卷云。
+每一层的高度与厚度独立。
+修改层数组下标时要同步主入口。
+云影与形状共用噪声。
+离线编译不验证云边。
+*/
+
 // 行星阴影、云影、闪电落点与步进起点，具体实现在子文件。
 // 子文件：cloud/layers/shadow.slang。
 /* 层状体积云的阴影：行星阴影、三层云影、闪电落点与步进起点；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
@@ -521,7 +626,7 @@ float ogxLayersGetRainDensity(float currentDensity, float rainAmount, float thun
 vec3 ogxLayersGetLightningPosition(OgxLayersCloudSettings s, float minHeight, float maxHeight, float cumulonimbusScale,
     vec3 cameraPos, sampler2D noiseTexture)
 {
-    float angle = fract(sin(dot(vec2(s.lightningBoltPosition.w), vec2(12.9898, 78.233))) * 43758.5453) * 6.28318530718; // 随机角。
+    float angle = fract(sin(dot(vec2(s.lightningBoltPosition.w), vec2(12.9898, 78.233))) * 43758.5453) * OGX_TAU; // 随机角。
     float rMin = 7000.0; // 内半径。
     float rMax = 13000.0; // 外半径。
     float radius = sqrt(mix(rMin * rMin, rMax * rMax, fract(sin(dot(vec2(s.lightningBoltPosition.w + 1.0), vec2(12.9898, 78.233))) * 43758.5453))); // 面积均匀的半径。
@@ -586,7 +691,7 @@ vec3 ogxLayersLightningPositionBolt(float minHeight, float maxHeight,
     sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float thunderStrength,
     float cumulonimbusStrength, float lightningTimer)
 {
-    float angle = fract(sin(dot(vec2(lightningTimer, lightningTimer * 2.0), vec2(12.9898, 78.233))) * 43758.5453) * 6.28318530718; // 时间哈希转角度。
+    float angle = fract(sin(dot(vec2(lightningTimer, lightningTimer * 2.0), vec2(12.9898, 78.233))) * 43758.5453) * OGX_TAU; // 时间哈希转角度。
     float rMin = 7000.0; // 最近落点半径。
     float rMax = 13000.0; // 最远落点半径。
     float radius = sqrt(mix(rMin * rMin, rMax * rMax, fract(sin(dot(vec2(lightningTimer + 1, (lightningTimer + 1) * 2.0), vec2(12.9898, 78.233))) * 43758.5453))); // 在环形区域里取半径。
@@ -637,7 +742,7 @@ float ogxLayersCloudShadowLayer(vec3 playerPos, vec3 sunVector,
 // 云相函数、散射与光照，具体实现在子文件。
 // 子文件：cloud/layers/lighting.slang。
 /* 层状体积云的光照：相函数、朝光散射与单次散射合成；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
-可复制示例：`ogxLayersGetCloudLighting(index, shape, faded, shadowMask, sunColor, moonColor, ...);`
+可复制示例：`float phase = ogxLayersPhaseCloud(0.5, 0.8, 0);`
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
@@ -776,29 +881,60 @@ float ogxLayersCloudScatteringSamples(int layerIndex, vec3 rayPosition, vec3 sun
     return shadow; // 交回云内遮挡量。
 }
 
+/*
+实现说明：层状云的相函数与光照。
+一、相函数：`ogxLayersPhaseCloud` 在两种前向集中度之间切换，`ogxLayersPhaseCloudHenyey` 走标准 Henyey-Greenstein。
+二、朝光散射：`ogxLayersGetCloudScattering` 沿太阳与月亮方向取样云密度，把遮挡换成透光比例。
+三、逐层光照：`ogxLayersGetCloudLighting` 按层号选择直射、间接与多次散射的权重，厚云内部靠慢衰减托起。
+四、采样顺序：先算太阳再算月亮，最后叠天空光；顺序与参考实现一致，严格对照据此核对采样次数。
+五、边界：层号超出五层时返回零，调用方不必自己夹紧。
+*/
+
+/*
+函数索引：
+一、`ogxLayersPhaseCloud`：两种前向集中度之间切换的云相函数。
+二、`ogxLayersGetCloudScattering`：沿太阳与月亮方向取样云密度。
+三、`ogxLayersGetCloudLighting`：按层号选择直射、间接与多次散射权重。
+四、`ogxLayersPhaseCloudHenyey`：标准 Henyey-Greenstein 相函数。
+五、`ogxLayersCloudScatteringSamples`：参考签名的采样入口。
+六、顺序：先太阳再月亮，最后天空光。
+七、边界：层号超出五层时返回零。
+八、常数：前向集中度与多次散射权重按参考精度保留。
+*/
+
 // 主体积云步进、低成本透过率与严格入口，具体实现在子文件。
 // 子文件：cloud/layers/ray.slang。
 /* 层状体积云的单层主步进：五层共用同一套循环与光照，按层号分支；由 `cloud/layers.slang` 内联引入，不单独生成 GLSL 或探针。
-可复制示例：`ogxCloudLayerMarch(settings, 1, samples, position, direction, dither, ...);`
+可复制示例：`vec4 clouds = ogxCloudLayerMarch(settings, 1, 32, rayPosition, rayDirection, dither, 500.0, 2500.0, sunVector, moonVector, sunScattering, moonScattering, skyScattering, 10000.0, skyColor, cloudDistance, 0.0, phases, 0.0, phases, cameraPos, true, false, noiseTexture, shadowTexture, shadowView, shadowProjection, 2048.0, 1.0);` 参数逐项与签名对应。
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
 
 // 单层云的步进：参考实现的主循环，逐层处理平面云与积云两条路径。
 // `cloudPlaneDistance` 的 `x` 是最近可见云的距离，`y` 是混合权重；由调用方按层合并。
-vec4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
-    float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,
-    vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,
-    inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,
-    vec4 phaseLevels2, vec3 cameraPos, bool terrainShadowOnClouds, bool deferred, sampler2D noiseTexture,
-    sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution, float shadowDistort)
+// 平面云分支的提前声明：主入口先分派，具体步进放在文件后半段。
+vec4 ogxCloudPlaneMarch(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,     vec4 phaseLevels2, vec3 cameraPos, bool terrainShadowOnClouds, bool deferred, sampler2D noiseTexture,     sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution, float shadowDistort, float distanceFactor, float densityThresholdCheck);
+// 积云分支的提前声明：与平面云共用同一组输入，额外带上可见阈值。
+vec4 ogxCloudCumulusMarch(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,     vec4 phaseLevels2, vec3 cameraPos, bool terrainShadowOnClouds, bool deferred, sampler2D noiseTexture,     sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution, float shadowDistort, float distanceFactor, float densityThresholdCheck);
+
+// 单层云入口：按层号分派到平面云或积云路径。
+vec4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,     vec4 phaseLevels2, vec3 cameraPos, bool terrainShadowOnClouds, bool deferred, sampler2D noiseTexture,     sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution, float shadowDistort)
 {
-    vec3 color = vec3(0.0); // 累积散射色。
-    float totalAbsorbance = 1.0; // 累积透过率。
     float distanceFactor = length(rayDirection); // 一步的世界长度。
     float densityThresholdCheck = 0.0; // 可见阈值。
     if (layerIndex == 0) densityThresholdCheck = 0.06; // 小积云。
     if (layerIndex == 1 || layerIndex == 2) densityThresholdCheck = 0.02; // 大积云与积雨云。
+    if (layerIndex == 3 || layerIndex == 4) densityThresholdCheck = 0.01; // 平面云。
+    densityThresholdCheck = mix(1e-5, densityThresholdCheck, dither); // 按抖动在极小与阈值之间插值。
+    if (layerIndex >= 3) return ogxCloudPlaneMarch(s, layerIndex, samples, rayPosition, rayDirection, dither, minHeight, maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance, sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort, distanceFactor, densityThresholdCheck); // 平面云只取一个样本。
+    return ogxCloudCumulusMarch(s, layerIndex, samples, rayPosition, rayDirection, dither, minHeight, maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance, sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2, cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection, shadowResolution, shadowDistort, distanceFactor, densityThresholdCheck); // 积云沿视线步进。
+}
+
+// 平面云路径：高层云与卷云只在视线穿过平面时取一个样本，不进入体积步进。
+vec4 ogxCloudPlaneMarch(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,     vec4 phaseLevels2, vec3 cameraPos, bool terrainShadowOnClouds, bool deferred, sampler2D noiseTexture,     sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution, float shadowDistort, float distanceFactor, float densityThresholdCheck)
+{
+    vec3 color = vec3(0.0); // 累积散射色。
+    float totalAbsorbance = 1.0; // 累积透过率。
     if (layerIndex == 3 || layerIndex == 4) densityThresholdCheck = 0.01; // 平面云。
     densityThresholdCheck = mix(1e-5, densityThresholdCheck, dither); // 按抖动在极小与阈值之间插值。
     if (layerIndex == 3 || layerIndex == 4) // 平面云路径。
@@ -836,6 +972,52 @@ vec4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, v
         }
         return vec4(color, totalAbsorbance); // 平面云只取一个样本。
     }
+}
+
+// 地形阴影：把当前云样本投到阴影图，返回三通道受光系数。
+// 为什么单独成函数：积云与平面云都需要同一套投影、边缘压缩和范围判断，复制会漂移。
+vec3 ogxCloudTerrainShadow(vec3 relativePos, bool enabled, sampler2D shadowTexture,
+    mat4 shadowView, mat4 shadowProjection, float shadowDistort)
+{
+    vec3 shadow = vec3(1.0); // 默认全亮。
+    if (!enabled) return shadow; // 关闭时不采样。
+    vec3 fragPosition = ogxMatrixMulPoint(shadowView, relativePos) + ogxMatrixTranslation(shadowView); // 阴影相机空间。
+    fragPosition = vec3(shadowProjection[0][0], shadowProjection[1][1], shadowProjection[2][2]) * fragPosition
+        + ogxMatrixTranslation(shadowProjection); // 阴影投影。
+    float distortFactor = shadowDistort > 0.0 ? 1.0 / (log(length(fragPosition.xy) * 0.61 + 1.0) * 1.8) : 1.0; // 参考实现的边缘压缩。
+    vec3 shadowPos = vec3(fragPosition.xy * distortFactor, fragPosition.z); // 压缩后的阴影坐标。
+    if (abs(shadowPos.x) >= 1.0 - 0.5 / 2048.0 || abs(shadowPos.y) >= 1.0 - 0.5 / 2048.0) return shadow; // 不在阴影图内。
+    shadowPos = shadowPos * vec3(0.5, 0.5, 0.5 / 6.0) + 0.5; // 转零到一。
+    return vec3(textureLod(shadowTexture, shadowPos.xy, 0.0).x); // 读阴影。
+}
+
+// 闪电照明：普通闪电按水平距离照亮云，积雨云闪电再按距离、密度、高度与时间淡出。
+// 单独成函数是为了让主步进只保留光照合成顺序，闪电的两套参数不挤在循环里。
+void ogxCloudLightningLighting(inout vec3 lighting, OgxLayersCloudSettings s, int layerIndex,
+    vec3 newPos, float density, float shapeWithDensity, float minHeight, float maxHeight,
+    vec3 rayPosition, vec3 lightningPos, float horizontalDist)
+{
+    if (horizontalDist < 7500.0 && s.lightningBoltPosition.w > 0.0) // 普通闪电照亮云。
+    {
+        float lightningIntensity = exp(-horizontalDist * 0.006) * density * s.lightningFlash; // 闪电强度。
+        lighting = mix(lighting, vec3(1.3, 1.5, 3.0), lightningIntensity); // 混向冷白。
+    }
+    if (s.lightningEnabled <= 0 || (layerIndex != 2 && s.thunderStrength <= 0.0)) return; // 没有积雨云闪电。
+    float lightningDist = length(newPos - lightningPos); // 到闪电位距离。
+    if (lightningDist >= 6000.0 || length(lightningPos) <= 0.0) return; // 不在照明范围内。
+    float lightningIntensity = smoothstep(6000.0, 50.0, lightningDist) * smoothstep(0.15, 1.0, shapeWithDensity) * s.lightningFlash; // 距离与密度权重。
+    lightningIntensity *= 1.0 - smoothstep(minHeight, 1.05 * maxHeight, rayPosition.y); // 高度淡出。
+    lightningIntensity *= smoothstep(17000.0, 14000.0, horizontalDist); // 水平淡出。
+    lightningIntensity *= s.lightningFade; // 时间淡出。
+    vec3 lightningStrength = s.cumulonimbusLightningColor * s.cumulonimbusLightningBrightness * 0.125; // 闪电颜色。
+    lighting = mix(lighting, lightningStrength, lightningIntensity); // 混向闪电。
+}
+
+// 积云路径：小积云、大积云与积雨云沿视线逐样本累积散射与透过率。
+vec4 ogxCloudCumulusMarch(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,     float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,     vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,     inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,     vec4 phaseLevels2, vec3 cameraPos, bool terrainShadowOnClouds, bool deferred, sampler2D noiseTexture,     sampler2D shadowTexture, mat4 shadowView, mat4 shadowProjection, float shadowResolution, float shadowDistort, float distanceFactor, float densityThresholdCheck)
+{
+    vec3 color = vec3(0.0); // 累积散射色。
+    float totalAbsorbance = 1.0; // 累积透过率。
     if (layerIndex < 3) // 积云路径。
     {
         vec3 newPos = rayPosition - cameraPos; // 相机相对位置。
@@ -876,20 +1058,7 @@ vec4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, v
                 }
                 if (shapeWithDensityFaded > 1e-5) // 有云才继续。
                 {
-                    vec3 shadow = vec3(1.0); // 地形阴影默认全亮。
-                    if (terrainShadowOnClouds) // 开启地形阴影时投到阴影图。
-                    {
-                        vec3 fragPosition = ogxMatrixMulPoint(shadowView, newPos) + ogxMatrixTranslation(shadowView); // 阴影相机空间。
-                        fragPosition = vec3(shadowProjection[0][0], shadowProjection[1][1], shadowProjection[2][2]) * fragPosition
-                            + ogxMatrixTranslation(shadowProjection); // 阴影投影。
-                        float distortFactor = shadowDistort > 0.0 ? 1.0 / (log(length(fragPosition.xy) * 0.61 + 1.0) * 1.8) : 1.0; // 参考实现的边缘压缩。
-                        vec3 shadowPos = vec3(fragPosition.xy * distortFactor, fragPosition.z); // 压缩后的阴影坐标。
-                        if (abs(shadowPos.x) < 1.0 - 0.5 / 2048.0 && abs(shadowPos.y) < 1.0 - 0.5 / 2048.0) // 在阴影图内。
-                        {
-                            shadowPos = shadowPos * vec3(0.5, 0.5, 0.5 / 6.0) + 0.5; // 转零到一。
-                            shadow = vec3(textureLod(shadowTexture, shadowPos.xy, 0.0).x); // 读阴影。
-                        }
-                    }
+                    vec3 shadow = ogxCloudTerrainShadow(newPos, terrainShadowOnClouds, shadowTexture, shadowView, shadowProjection, shadowDistort); // 地形阴影。
                     float skylightOcclusion = 1.0; // 参考在极光开启时每个样本重算上层遮挡。
                     // 极光关闭（AURORA_LOCATION=0）的参考变体只算一次；这里按默认开启分支实现，
                     // 保证严格对照的 7621 次采样与默认配置一致。
@@ -924,25 +1093,8 @@ vec4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, v
                         sunScattering * shadow, moonScattering * shadow, indirectShadowMask, skyScattering * skylightOcclusion, rayPosition,
                         backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2); // 光照。
                     float horizontalDist = length(newPos.xz - s.lightningBoltPosition.xz); // 普通闪电水平距离。
-                    if (horizontalDist < 7500.0 && s.lightningBoltPosition.w > 0.0) // 普通闪电照亮云。
-                    {
-                        float lightningIntensity = exp(-horizontalDist * 0.006) * density * s.lightningFlash; // 闪电强度。
-                        lighting = mix(lighting, vec3(1.3, 1.5, 3.0), lightningIntensity); // 混向冷白。
-                    }
-                    if (s.lightningEnabled > 0 && (layerIndex == 2 || s.thunderStrength > 0.0)) // 积雨云闪电。
-                    {
-                        float lightningDist = length(newPos - lightningPos); // 到闪电位距离。
-                        if (lightningDist < 6000.0 && length(lightningPos) > 0.0) // 在照明范围内。
-                        {
-                            float lightningIntensity = smoothstep(6000.0, 50.0, lightningDist) * smoothstep(0.15, 1.0, shapeWithDensity)
-                                * s.lightningFlash; // 距离与密度权重。
-                            lightningIntensity *= 1.0 - smoothstep(minHeight, 1.05 * maxHeight, rayPosition.y); // 高度淡出。
-                            lightningIntensity *= smoothstep(17000.0, 14000.0, horizontalDist); // 水平淡出。
-                            lightningIntensity *= s.lightningFade; // 时间淡出。
-                            vec3 lightningStrength = s.cumulonimbusLightningColor * s.cumulonimbusLightningBrightness * 0.125; // 闪电颜色。
-                            lighting = mix(lighting, lightningStrength, lightningIntensity); // 混向闪电。
-                        }
-                    }
+                    ogxCloudLightningLighting(lighting, s, layerIndex, newPos, density, shapeWithDensity,
+                        minHeight, maxHeight, rayPosition, lightningPos, horizontalDist); // 普通与积雨云闪电。
                     lighting += s.auroraLighting * min(max(rayHeightInCloud, 0.0) / max(tallness, 1.0), 1.0) * skylightOcclusion * skylightOcclusion; // 参考的极光按云内高度与天光遮挡叠加。
                     newPos.xz /= max(newPos.y, 0.0) * 0.0025 + 1.0; // 空气透视距离压缩。
                     float distancefog = exp2(s.distanceFogScale * length(newPos.xz)); // 距离雾。
@@ -958,18 +1110,501 @@ vec4 ogxCloudLayerMarch(OgxLayersCloudSettings s, int layerIndex, int samples, v
         }
         return vec4(color, totalAbsorbance); // 交回这一层的颜色与透过率。
     }
-    return vec4(color, totalAbsorbance); // 未知层号原样返回。
 }
 
-// 层状云合成提供五层顺序与相机高度混合。
-// 子文件：cloud/layers/compose.slang。
-/* 层状体积云的五层合成：按参考顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合；由 `cloud/layers.slang` 内联引入。
-可复制示例：`vec4 cloud = ogxLayersGetVolumetricClouds(settings, viewPos, dither, ...);`
+// 层状云低成本步进提供云影与远景透过率。
+// 子文件：cloud/layers/simple.slang。
+/* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers.slang` 内联引入。
+用法：调用下方 `ogxLayersGetVolumetricCloudsSimple`，参数顺序见函数签名。
 设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
 调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
 */
 
+// 云影步进：只算透过率，不算光照，供阴影程序低成本使用。
+float ogxCloudLayerMarchSimple(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition,
+    vec3 rayDirection, float dither, float minHeight, float maxHeight, vec3 startPos, vec3 cameraPos,
+    sampler2D noiseTexture)
+{
+    float totalAbsorbance = 1.0; // 初始完全透明。
+    float distanceFactor = length(rayDirection); // 一步长度。
+    float densityThresholdCheck = 0.0; // 可见阈值。
+    if (layerIndex == 0) densityThresholdCheck = 0.06; // 小积云。
+    if (layerIndex == 1 || layerIndex == 2) densityThresholdCheck = 0.02; // 大积云与积雨云。
+    if (layerIndex == 3) densityThresholdCheck = 0.01; // 高层云。
+    densityThresholdCheck = mix(1e-5, densityThresholdCheck, dither); // 按抖动插值。
+    if (layerIndex == 3) // 高层云单样本。
+    {
+        vec3 newPos = rayPosition - startPos; // 相对起点。
+        float density = s.layers[3].rainDensity * smoothstep(s.layers[3].distance, s.layers[3].distance * 0.5, length(newPos)); // 距离密度。
+        if (density == 0.0) return totalAbsorbance; // 距离外没有云。
+        bool ifAboveOrBelowPlane = max(mix(-1.0, 1.0, clamp(startPos.y - minHeight, 0.0, 1.0))
+            * normalize(rayDirection).y + 0.0001, 0.0) > 0.0; // 相机在平面哪一侧。
+        if (ifAboveOrBelowPlane) return totalAbsorbance; // 背向不步进。
+        float shape = ogxLayersGetCloudShape(s, layerIndex, 1, rayPosition, minHeight, maxHeight, noiseTexture); // 形状。
+        float shapeWithDensity = shape * density; // 密度。
+        if (shapeWithDensity > 1e-5) totalAbsorbance *= exp(-distanceFactor * shapeWithDensity); // 乘透过率。
+        return totalAbsorbance; // 交回透过率。
+    }
+    if (layerIndex < 3) // 积云。
+    {
+        float densityLarge = s.layers[1].rainDensity; // 大积云密度。
+        float density = 0.0; // 这一层密度。
+        if (layerIndex == 0) density = s.layers[0].rainDensity * smoothstep(s.layers[0].distance, s.layers[0].distance * 0.5, length(rayPosition - startPos)); // 小积云。
+        if (layerIndex == 1) density = s.layers[1].rainDensity * smoothstep(s.layers[1].distance, s.layers[1].distance * 0.5, length(rayPosition - startPos)); // 大积云。
+        if (layerIndex == 2) density = 0.8; // 积雨云。
+        if (density < 0.01) return totalAbsorbance; // 密度太低。
+        float tallness = maxHeight - minHeight; // 层厚。
+        for (int i = 0; i < samples; i++) // 主循环。
+        {
+            float rayHeightInCloud = rayPosition.y - minHeight; // 层内高度。
+            if (clamp(rayPosition.y - maxHeight, 0.0, 1.0) < 1.0 && clamp(rayHeightInCloud, 0.0, 1.0) > 0.0) // 包围盒。
+            {
+                float shape = 0.0; // 形状。
+                float isLarge = 1.0; // 大云权重。
+                if (layerIndex != 2) shape = ogxLayersGetCloudShape(s, layerIndex, 1, rayPosition, minHeight, maxHeight, noiseTexture); // 普通云。
+                else
+                {
+                    vec2 cumulonimbusCloud = ogxLayersGetCumulonimbusShape(s, 1, rayPosition, minHeight, maxHeight, 1.0, cameraPos, noiseTexture); // 积雨云。
+                    shape = cumulonimbusCloud.x;
+                    isLarge = 1.0 + 4.0 * cumulonimbusCloud.y; // 大云放大。
+                }
+                float shapeWithDensity = shape * density * isLarge; // 总密度。
+                float shapeWithDensityFaded = shape * density * pow(clamp(rayHeightInCloud / (max(tallness, 1.0) * 0.25), 0.0, 1.0), 2.0); // 高度淡出。
+                if (shapeWithDensityFaded > 1e-5) // 有云。
+                {
+                    totalAbsorbance *= exp(-distanceFactor * shapeWithDensityFaded); // 乘透过率。
+                    if (totalAbsorbance < 1e-5) break; // 完全不透明。
+                }
+            }
+            rayPosition += rayDirection; // 前进。
+        }
+    }
+    return totalAbsorbance; // 交回透过率。
+}
+
+// 云影总入口：返回四个透过率，供阴影程序按层重建云影。
+vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, vec3 lightDir, vec2 offset,
+    vec3 startPos, vec3 cameraPos, sampler2D noiseTexture)
+{
+    float totalAbsorbance = 1.0; // 总透过率。
+    float heightRelativeToClouds = clamp(1.0 - max(cameraPos.y - s.layers[0].height, 0.0) / 100.0, 0.0, 1.0); // 相机高度。
+    vec3 normPlayerPos = lightDir; // 光线方向。
+    normPlayerPos.y += 0.03 * heightRelativeToClouds; // 地面视角抬高一点。
+    int samples = 5; // 固定五步。
+    vec3 cloudDist = vec3(1.0); // 水平步长。
+    float cloudheight = 5.0; // 高层云厚度。
+    float minHeight = s.layers[3].height; // 高层云底。
+    float maxHeight = cloudheight + minHeight; // 高层云顶。
+    cloudDist.xz = vec2(255.0); // 平面云水平步长。
+    vec3 rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist)); // 单步。
+    vec3 rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
+    rayPosition.xz += offset; // 阴影偏移。
+    float altoStratusClouds = ogxCloudLayerMarchSimple(s, 3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
+        startPos, cameraPos, noiseTexture); // 高层云。
+    totalAbsorbance *= altoStratusClouds; // 更新透过率。
+    float largeCumulusClouds = 1.0; // 大积云透过率。
+    if (totalAbsorbance > 1e-5) // 还有光才继续。
+    {
+        cloudheight = s.layers[1].tallness; // 大积云厚度。
+        minHeight = s.layers[1].height; // 大积云底。
+        maxHeight = cloudheight + minHeight; // 大积云顶。
+        cloudDist.xz = vec2(255.0); // 水平步长。
+        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 分层步长。
+        rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
+        rayPosition.xz += offset; // 偏移。
+        largeCumulusClouds = ogxCloudLayerMarchSimple(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight,
+            maxHeight, startPos, cameraPos, noiseTexture); // 大积云。
+        totalAbsorbance *= largeCumulusClouds; // 更新透过率。
+    }
+    float smallCumulusClouds = 1.0; // 小积云透过率。
+    if (totalAbsorbance > 1e-5) // 还有光才继续。
+    {
+        cloudheight = s.layers[0].tallness / s.layers[0].scale; // 小积云厚度。
+        minHeight = s.layers[0].height; // 小积云底。
+        maxHeight = cloudheight + minHeight; // 小积云顶。
+        cloudDist.xz = vec2(255.0); // 水平步长。
+        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 分层步长。
+        rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
+        rayPosition.xz += offset; // 偏移。
+        smallCumulusClouds = ogxCloudLayerMarchSimple(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight,
+            maxHeight, startPos, cameraPos, noiseTexture); // 小积云。
+        totalAbsorbance *= smallCumulusClouds; // 更新透过率。
+    }
+    return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四个透过率。
+}
+
+// 层状云参考签名步进提供天气参数入口。
+// 子文件：cloud/layers/transmittance.slang。
+/* 层状体积云的参考签名低成本步进：天气与覆盖参数显式传入，不读设置结构体；由 `cloud/layers.slang` 内联引入。
+用法：调用下方 `ogxLayersCloudTransmittanceSimple`，参数顺序见函数签名。
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
+
+// 层状云低成本步进：只累计透过率，不做光照，供云影与远景使用。
+// 参考签名给层号、步数、位置与方向、抖动与上下界；噪声、天气与覆盖率显式追加。
+float ogxLayersCloudAbsorbanceSimple(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
+    float dither, float minHeight, float maxHeight, vec3 startPos,
+    sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float rainAmount,
+    float thunderStrength, float cumulonimbusStrength, float altostratusCoverage,
+    float largeCumulusCoverage, float smallCumulusCoverage,
+    float altostratusRain, float largeCumulusRain, float smallCumulusRain)
+{
+    float totalAbsorbance = 1.0; // 累积透过率。
+    float distanceFactor = length(rayDirection); // 每步长度。
+    float densityTresholdCheck = 0.0; // 密度阈值，按层选择。
+    if (layerIndex == 0) densityTresholdCheck = 0.06;
+    if (layerIndex == 1 || layerIndex == 2) densityTresholdCheck = 0.02;
+    if (layerIndex == 3) densityTresholdCheck = 0.01;
+    densityTresholdCheck = mix(1e-5, densityTresholdCheck, dither); // 用抖动在极小值与阈值之间插值。
+    if (layerIndex == 3) // 高层云只做一次平面近似。
+    {
+        vec3 newPos = rayPosition - startPos;
+        float density = altostratusRain;
+        density *= smoothstep(150000.0, 150000.0 * 0.5, length(newPos)); // 超出距离后淡出。
+        if (density == 0.0) return totalAbsorbance;
+        bool ifAboveOrBelowPlane = max(mix(-1.0, 1.0, clamp(startPos.y - minHeight, 0.0, 1.0)) * normalize(rayDirection).y + 0.0001, 0.0) > 0.0; // 相机在云层上方或下方时就跳过。
+        if (ifAboveOrBelowPlane) return totalAbsorbance;
+        float shape = ogxLayersCloudShapeLayer(layerIndex, 1, rayPosition, minHeight, maxHeight,
+            noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+            rainAmount, thunderStrength, cloudMovement);
+        float shapeWithDensity = shape * density;
+        if (shapeWithDensity > 1e-5)
+        {
+            float densityCoeff = exp(-distanceFactor * shapeWithDensity); // 单步吸收。
+            totalAbsorbance *= densityCoeff;
+        }
+        return totalAbsorbance;
+    }
+    if (layerIndex < 3) // 积云与积雨云按步数前进。
+    {
+        vec3 newPos = rayPosition - startPos;
+        float densityLarge = ogxLayersGetRainDensity(largeCumulusRain, rainAmount, thunderStrength);
+        float density = 0.0;
+        if (layerIndex == 0) density = ogxLayersGetRainDensity(smallCumulusRain, rainAmount, thunderStrength) * smoothstep(100000.0, 100000.0 * 0.5, length(newPos));
+        if (layerIndex == 1) density = ogxLayersGetRainDensity(largeCumulusRain, rainAmount, thunderStrength) * smoothstep(100000.0, 100000.0 * 0.5, length(newPos));
+        if (layerIndex == 2) density = 0.8;
+        if (density < 0.01) return totalAbsorbance;
+        float tallness = maxHeight - minHeight;
+        for (int i = 0; i < samples; i++)
+        {
+            newPos = rayPosition - startPos;
+            float rayHeightInCloud = rayPosition.y - minHeight;
+            if (clamp(rayPosition.y - maxHeight, 0.0, 1.0) < 1.0 && clamp(rayHeightInCloud, 0.0, 1.0) > 0.0) // 只处理云层内部的采样。
+            {
+                float shape = 0.0;
+                float isLarge = 1.0;
+                if (layerIndex != 2)
+                {
+                    shape = ogxLayersCloudShapeLayer(layerIndex, 1, rayPosition, minHeight, maxHeight,
+                        noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+                        rainAmount, thunderStrength, cloudMovement);
+                }
+                else
+                {
+                    vec2 cumulonimbusCloud = ogxLayersCumulonimbusShapeLayer(1, rayPosition, minHeight, maxHeight,
+                        noiseTexture, cameraWorldPos, cloudMovement, thunderStrength, cumulonimbusStrength);
+                    shape = cumulonimbusCloud.x;
+                    isLarge = 1.0 + 4.0 * cumulonimbusCloud.y;
+                }
+                float shapeWithDensity = shape * density * isLarge;
+                float shapeWithDensityFaded = shape * density * pow(clamp((rayHeightInCloud) / (max(tallness, 1.0) * 0.25), 0.0, 1.0), 2.0); // 底部淡出。
+                if (shapeWithDensityFaded > 1e-5)
+                {
+                    float densityCoeff = exp(-distanceFactor * shapeWithDensityFaded);
+                    totalAbsorbance *= densityCoeff;
+                    if (totalAbsorbance < 1e-5) break; // 已经全黑就提前结束。
+                }
+            }
+            rayPosition += rayDirection; // 前进一步。
+        }
+    }
+    return totalAbsorbance; // 交回透过率。
+}
+
+// 层状云影总入口的简单版：三层云各走一次低成本步进，乘成总透过率。
+// 参考签名是抖动、光照方向、偏移与起点；云噪声、天气、覆盖率与相机位置显式追加。
+vec4 ogxLayersCloudTransmittanceSimple(vec2 dither, vec3 lightDir, vec2 offset, vec3 startPos,
+    sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float rainAmount,
+    float thunderStrength, float cumulonimbusStrength, float altostratusCoverage,
+    float largeCumulusCoverage, float smallCumulusCoverage,
+    float altostratusRain, float largeCumulusRain, float smallCumulusRain)
+{
+    float totalAbsorbance = 1.0; // 总透过率。
+    float heightRelativeToClouds = clamp(1.0 - max(cameraWorldPos.y - 250.0, 0.0) / 100.0, 0.0, 1.0); // 相机离云底越近，抬高越少。
+    vec3 normPlayerPos = lightDir; // 光照方向。
+    normPlayerPos.y += 0.03 * heightRelativeToClouds; // 地面视角把光线抬高一点。
+    int samples = 5; // 每层固定五步。
+    vec3 cloudDist = vec3(1.0); // 水平步长。
+    vec3 rayDirection; // 步进方向。
+    vec3 rayPosition; // 步进起点。
+    float cloudheight; // 云层厚度。
+    float minHeight; // 云底。
+    float maxHeight; // 云顶。
+    float altoStratusClouds = 1.0; // 高层云透过率。
+    cloudheight = 5.0;
+    minHeight = 5000.0;
+    maxHeight = cloudheight + minHeight;
+    cloudDist.xz = vec2(255.0);
+    rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist)); // 单步长度。
+    rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 找到进入云层的起点。
+    rayPosition.xz += offset; // 阴影偏移。
+    altoStratusClouds = ogxLayersCloudAbsorbanceSimple(3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
+        noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
+        altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+        altostratusRain, largeCumulusRain, smallCumulusRain); // 高层云。
+    totalAbsorbance *= altoStratusClouds;
+    float largeCumulusClouds = 1.0; // 大积云透过率。
+    if (totalAbsorbance > 1e-5)
+    {
+        cloudheight = 280.0;
+        minHeight = 400.0;
+        maxHeight = cloudheight + minHeight;
+        cloudDist.xz = vec2(255.0);
+        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 按步数均分厚度。
+        rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight);
+        rayPosition.xz += offset;
+        largeCumulusClouds = ogxLayersCloudAbsorbanceSimple(1, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
+            noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
+            altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+            altostratusRain, largeCumulusRain, smallCumulusRain); // 大积云。
+        totalAbsorbance *= largeCumulusClouds;
+    }
+    float smallCumulusClouds = 1.0; // 小积云透过率。
+    if (totalAbsorbance > 1e-5)
+    {
+        cloudheight = 130.0 / 1.0;
+        minHeight = 250.0;
+        maxHeight = cloudheight + minHeight;
+        minHeight = 250.0 - 350.0; // 参考把小积云底向下扩了三百五十米。
+        maxHeight = cloudheight + minHeight;
+        cloudDist.xz = vec2(255.0);
+        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples));
+        rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight);
+        rayPosition.xz += offset;
+        smallCumulusClouds = ogxLayersCloudAbsorbanceSimple(0, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
+            noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
+            altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
+            altostratusRain, largeCumulusRain, smallCumulusRain); // 小积云。
+        totalAbsorbance *= smallCumulusClouds;
+    }
+    return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四层透过率。
+}
+
+/*
+维护说明：低成本透过率为什么这样分层。
+
+层号与用途：
+    零号是小积云，云底二百五十米，向下扩三百五十米，厚度一百三十米。
+    一号是大积云，云底四百米，厚度二百八十米。
+    二号是积雨云，密度固定零点八，形状走积雨云的塔状分支。
+    三号是高层云，只做一次平面近似，不进入步进循环。
+
+采样顺序：
+    总入口固定从高层云开始，再算大积云，最后算小积云。
+    顺序不能换：后面的层会把当前总透过率当作提前结束条件，
+    先算哪一层会改变一共执行多少次噪声采样，严格对照会直接报差异。
+
+提前结束：
+    每一层结束都把透过率乘进总透过率；低于十万分之一就跳过后面的层。
+    这是参考实现的短路，不是优化开关；关掉它会多做采样，画面也会略暗。
+
+抖动：
+    密度阈值用抖动系数在极小值与层阈值之间插值。
+    这样做是为了让相邻像素的可见边缘错开，避免云影出现规则的同心圆。
+
+距离淡出：
+    积云用 smoothstep 在一百公里到五十公里之间淡出。
+    淡出的是密度而不是透过率；先乘密度再做指数吸收，远处的云影才会逐渐变浅。
+
+相机高度：
+    小积云的云底曾被向下扩了三百五十米，这是参考的固定写法。
+    它让低空相机也能看到小积云投下的影子，不能按“云底应该更高”去改。
+
+单位：
+    minHeight、maxHeight、rayDirection 与 startPos 全部用方块。
+    cloudDist 只是构造步长时的水平尺度，不是真实距离，不能拿去和世界坐标比较。
+
+修改入口时先确认三件事：
+    一是层号与云底、云顶的对应关系没有变；
+    二是高层云仍然只走一次平面采样；
+    三是四层返回值顺序仍然是“小积云、大积云、高层云、总透过率”。
+*/
+
+/*
+实现说明：层状云的低成本透过率。
+一、单层吸收：`ogxLayersCloudAbsorbanceSimple` 只累计密度，不计算光照，供云影与远景使用。
+二、阈值：每层用不同的密度阈值，低于阈值直接跳过，避免为透明空气做采样。
+三、步进：沿视线按固定步数前进，步长由层厚与样本数决定，远处不额外加密。
+四、提前结束：总透过率低于十万分之一就停止，后面的层已经看不见。
+五、抖动：密度阈值用抖动系数在极小值与层阈值之间插值，让相邻像素的可见边缘错开。
+六、距离淡出：积云在一百公里到五十公里之间淡出密度，远处云影逐渐变浅。
+七、相机高度：小积云底部向下扩三百五十米，这是参考的固定写法，不能按几何直觉改。
+八、单位：高度、方向与起点都用方块；水平尺度只用于构造步长，不是真实距离。
+九、合成：四层返回值依次是小积云、大积云、高层云与总透过率，调用方按这个顺序混合。
+*/
+
+/*
+函数索引：
+一、`ogxLayersCloudAbsorbanceSimple`：单层吸收，沿视线累计密度，不计算光照。
+二、`ogxLayersCloudTransmittanceSimple`：四层合成，返回小积云、大积云、高层云与总透过率。
+三、阈值：每层用不同密度阈值，低密度直接跳过，避免为透明空气采样。
+四、步进：步长由层厚与样本数决定，远处不额外加密。
+五、提前结束：总透过率低于十万分之一就停止。
+六、抖动：密度阈值用抖动系数在极小值与层阈值之间插值。
+七、距离淡出：积云在一百公里到五十公里之间淡出密度。
+八、相机高度：小积云底部向下扩三百五十米，这是参考的固定写法。
+九、单位：高度、方向与起点都用方块；水平尺度只用于构造步长。
+十、合成顺序：先小积云再大积云，再高层云，最后乘总透过率。
+十一、边界：层号超出范围时返回全通，调用方不必自己夹紧。
+十二、用途：云影与远景只需要透过率，不需要逐样本光照；这份实现比主步进便宜。
+十三、常数：阈值、淡出距离与提前结束值都来自参考实现，不能按直觉改。
+十四、纹理：噪声句柄与分辨率由调用方传入，库不绑定纹理单元。
+十五、注意：修改步长会同时改变云影边缘与远景浓度，必须成组调整。
+十六、验证：离线编译只证明语法，画面需要在测试世界里对照云影边缘。
+*/
+
+/*
+参数与边界：
+一、层号零到四，超出范围时返回全通。
+二、样本数由调用方给出，越多越平滑也越慢。
+三、密度阈值按层号不同，低密度空气直接跳过。
+四、抖动系数在零到一之间，零表示不抖动。
+五、总透过率低于十万分之一时提前结束。
+六、积云的距离淡出从一百公里开始，到五十公里结束。
+七、小积云底部向下扩三百五十米，这是参考的固定写法。
+八、高层云与卷云只取一个平面样本，不进入体积步进。
+九、返回值依次是小积云、大积云、高层云与总透过率。
+十、水平尺度只用于构造步长，不是真实距离。
+十一、噪声纹理与分辨率由调用方传入。
+十二、修改步长会同时改变云影边缘与远景浓度。
+十三、画面验证要看云影边缘与远景云层，离线编译只证明语法。
+*/
+
+/*
+补充说明：透过率与云影的关系。
+一、透过率越小，云影越浓；两者的阈值必须一致。
+二、提前结束只影响性能，不改变可见结果。
+三、抖动只改阈值，不改步长。
+四、距离淡出只改密度，不改层高。
+五、高层云与卷云的平面样本不受步长影响。
+六、云影在远景处淡出，避免远处出现硬边。
+七、修改淡出距离要同时看近景与远景。
+八、画面验证要看云影边缘与地面亮度。
+九、离线编译不验证云影形状。
+*/
+
+/*
+补充说明：云影与透过率。
+透过率越小云影越浓。
+提前结束只影响性能。
+抖动只改阈值。
+距离淡出只改密度。
+平面样本不受步长影响。
+修改淡出距离要同时看近景与远景。
+画面验证看云影边缘。
+*/
+/*
+云影边缘要用测试世界截图核对。
+步长与阈值成组调整。
+层号越界返回全通。
+*/
+
+// 层状云严格入口提供参考默认常数。
+// 子文件：cloud/layers/exact.slang。
+/* 层状体积云的严格入口：按参考签名重排参数并填写参考默认常数；由 `cloud/layers.slang` 内联引入。
+用法：调用下方 `ogxLayersGetVolumetricCloudsExact`，参数顺序见函数签名。
+设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
+调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
+*/
+
+// 严格参考签名的单层云步进入口：参考参数在前，云设置、相机与阴影资源追加在后。
+// 主体仍由 `ogxCloudLayerMarch` 执行，入口只负责把显式参数重新排好。
+// 五层云的高度、厚度与距离按参考默认配置传入，避免把宿主菜单常数藏进结构体。
+vec4 ogxCloudLayerMarchExact(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
+    float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,
+    vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,
+    inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,
+    vec4 phaseLevels2, OgxLayersCloudSettings settings, vec3 cameraPos, bool terrainShadowOnClouds,
+    bool deferred, sampler2D noiseTexture, sampler2D shadowTexture, mat4 shadowView,
+    mat4 shadowProjection, float shadowResolution, float shadowDistort, vec4 layer0Size,
+    vec4 layer1Size, vec4 layer2Size, vec3 layer3Size, vec3 layer4Size, vec3 auroraRgb,
+    float auroraBrightness, float auroraAmount, vec3 customLightningRgb)
+{
+    settings.layers[0].height = layer0Size.x; // 小积云高度。
+    settings.layers[0].tallness = layer0Size.y; // 小积云厚度。
+    settings.layers[0].scale = layer0Size.z; // 小积云水平尺度。
+    settings.layers[0].distance = layer0Size.w; // 小积云可见距离。
+    settings.layers[1].height = layer1Size.x; // 大积云高度。
+    settings.layers[1].tallness = layer1Size.y; // 大积云厚度。
+    settings.layers[1].scale = layer1Size.z; // 大积云水平尺度。
+    settings.layers[1].distance = layer1Size.w; // 大积云可见距离。
+    settings.layers[2].height = layer2Size.x; // 高层云高度。
+    settings.layers[2].distance = layer2Size.y; // 高层云可见距离。
+    settings.layers[2].scale = layer2Size.z; // 高层云水平尺度。
+    settings.layers[3].height = layer3Size.x; // 卷云高度。
+    settings.layers[3].distance = layer3Size.y; // 卷云可见距离。
+    settings.layers[3].scale = layer3Size.z; // 卷云水平尺度。
+    settings.layers[4].height = layer4Size.x; // 额外云层高度。
+    settings.layers[4].distance = layer4Size.y; // 额外云层可见距离。
+    settings.layers[4].scale = layer4Size.z; // 额外云层水平尺度。
+    settings.auroraLighting = 0.015 * auroraBrightness * (sin(auroraRgb + 0.63) * 0.5 + 0.5) * auroraAmount
+        * smoothstep(0.0, -0.1, sunVector.y) * smoothstep(0.1, 0.0, moonVector.y); // 参考的极光光照。
+    settings.cumulonimbus = 1; // 参考默认 CUMULONIMBUS=1。
+    settings.cumulonimbusLightningBrightness = 100.0; // 参考默认 CUMULONIMBUS_LIGHTNING_BRIGHTNESS。
+    settings.cumulonimbusLightningColor = vec3(customLightningRgb.x, 1.05 * customLightningRgb.y,
+        1.22 * customLightningRgb.z); // 参考的积雨云闪电颜色。
+    return ogxCloudLayerMarch(settings, layerIndex, samples, rayPosition, rayDirection, dither, minHeight,
+        maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance,
+        sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2,
+        cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection,
+        shadowResolution, shadowDistort); // 转调同一份层步进。
+}
+
+// 严格参考签名的体积云总入口：参考参数在前，云层尺寸、极光与天空盒资源追加在后。
+// 云层尺寸和极光参数在这里写成常数，参考的首页天空盒查表也在这里完成，采样顺序与参考一致。
+vec4 ogxLayersGetVolumetricCloudsExact(vec3 viewPos, vec2 dither, vec3 sunVector, vec3 moonVector,
+    vec3 directLightCol, vec3 directLightCol2, vec3 indirectLightCol, inout float cloudPlaneDistance,
+    inout vec2 cloudDistance, OgxLayersCloudSettings settings, vec3 cameraPos, float farPlane,
+    float dhFarPlane, mat4 modelViewInverse, int samples, bool deferred, bool skyGround,
+    float skyBrightness, bool terrainShadowOnClouds, vec4 layer0Size, vec4 layer1Size, vec4 layer2Size,
+    vec3 layer3Size, vec3 layer4Size, vec3 auroraRgb, float auroraBrightness, float auroraAmount,
+    vec3 customLightningRgb, sampler2D noiseTexture, sampler2D shadowTexture, mat4 shadowView,
+    mat4 shadowProjection, float shadowResolution, float shadowDistort, sampler2D skyTexture, vec2 texelSize)
+{
+    settings.layers[0].height = layer0Size.x; // 小积云高度。
+    settings.layers[0].tallness = layer0Size.y; // 小积云厚度。
+    settings.layers[0].scale = layer0Size.z; // 小积云水平尺度。
+    settings.layers[0].distance = layer0Size.w; // 小积云可见距离。
+    settings.layers[1].height = layer1Size.x; // 大积云高度。
+    settings.layers[1].tallness = layer1Size.y; // 大积云厚度。
+    settings.layers[1].scale = layer1Size.z; // 大积云水平尺度。
+    settings.layers[1].distance = layer1Size.w; // 大积云可见距离。
+    settings.layers[2].height = layer2Size.x; // 高层云高度。
+    settings.layers[2].distance = layer2Size.y; // 高层云可见距离。
+    settings.layers[2].scale = layer2Size.z; // 高层云水平尺度。
+    settings.layers[3].height = layer3Size.x; // 卷云高度。
+    settings.layers[3].distance = layer3Size.y; // 卷云可见距离。
+    settings.layers[3].scale = layer3Size.z; // 卷云水平尺度。
+    settings.layers[4].height = layer4Size.x; // 额外云层高度。
+    settings.layers[4].distance = layer4Size.y; // 额外云层可见距离。
+    settings.layers[4].scale = layer4Size.z; // 额外云层水平尺度。
+    settings.auroraLighting = 0.015 * auroraBrightness * (sin(auroraRgb + 0.63) * 0.5 + 0.5) * auroraAmount
+        * smoothstep(0.0, -0.1, sunVector.y) * smoothstep(0.1, 0.0, moonVector.y); // 参考的极光光照。
+    settings.cumulonimbus = 1; // 参考默认 CUMULONIMBUS=1。
+    settings.cumulonimbusLightningBrightness = 100.0; // 参考默认 CUMULONIMBUS_LIGHTNING_BRIGHTNESS。
+    settings.cumulonimbusLightningColor = vec3(customLightningRgb.x, 1.05 * customLightningRgb.y,
+        1.22 * customLightningRgb.z); // 参考的积雨云闪电颜色。
+    return ogxLayersGetVolumetricClouds(settings, viewPos, dither, sunVector, moonVector, directLightCol,
+        directLightCol2, indirectLightCol, cloudPlaneDistance, cloudDistance, cameraPos, skyTexture, texelSize,
+        farPlane, dhFarPlane, modelViewInverse, samples, deferred, skyGround, skyBrightness,
+        terrainShadowOnClouds, noiseTexture, shadowTexture, shadowView, shadowProjection,
+        shadowResolution, shadowDistort); // 转调五层总入口。
+}
+
 // 五层体积云总入口：按参考实现的顺序步进小积云、大积云、积雨云、高层云与卷云，再按相机高度混合。
+// 为什么保留为单一入口：五层顺序、相机高度混合与距离合成共享同一份状态，拆开会让二十多个参数
+// 在子函数之间来回传递，反而更难核对参考顺序；其余超过一百行的函数已按算法拆分。
 // 天空色由本函数在步进起点处查天空盒，与参考 GetVolumetricClouds 的采样位置一致。
 vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 dither, vec3 sunVector,
     vec3 moonVector, vec3 directLightCol, vec3 directLightCol2, vec3 indirectLightCol,
@@ -1169,417 +1804,6 @@ vec4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, vec3 viewPos, vec2 d
     color = cloudColor.rgb; // 最终颜色。
     totalAbsorbance = cloudColor.a; // 最终透过率。
     return vec4(color, totalAbsorbance); // 交回云颜色与透过率。
-}
-
-// 层状云低成本步进提供云影与远景透过率。
-// 子文件：cloud/layers/simple.slang。
-/* 层状体积云的设置版低成本步进：只累计透过率，供云影与远景使用；由 `cloud/layers.slang` 内联引入。
-可复制示例：`vec4 t = ogxLayersGetVolumetricCloudsSimple(settings, dither, lightDir, offset, ...);`
-设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
-调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
-*/
-
-// 云影步进：只算透过率，不算光照，供阴影程序低成本使用。
-float ogxCloudLayerMarchSimple(OgxLayersCloudSettings s, int layerIndex, int samples, vec3 rayPosition,
-    vec3 rayDirection, float dither, float minHeight, float maxHeight, vec3 startPos, vec3 cameraPos,
-    sampler2D noiseTexture)
-{
-    float totalAbsorbance = 1.0; // 初始完全透明。
-    float distanceFactor = length(rayDirection); // 一步长度。
-    float densityThresholdCheck = 0.0; // 可见阈值。
-    if (layerIndex == 0) densityThresholdCheck = 0.06; // 小积云。
-    if (layerIndex == 1 || layerIndex == 2) densityThresholdCheck = 0.02; // 大积云与积雨云。
-    if (layerIndex == 3) densityThresholdCheck = 0.01; // 高层云。
-    densityThresholdCheck = mix(1e-5, densityThresholdCheck, dither); // 按抖动插值。
-    if (layerIndex == 3) // 高层云单样本。
-    {
-        vec3 newPos = rayPosition - startPos; // 相对起点。
-        float density = s.layers[3].rainDensity * smoothstep(s.layers[3].distance, s.layers[3].distance * 0.5, length(newPos)); // 距离密度。
-        if (density == 0.0) return totalAbsorbance; // 距离外没有云。
-        bool ifAboveOrBelowPlane = max(mix(-1.0, 1.0, clamp(startPos.y - minHeight, 0.0, 1.0))
-            * normalize(rayDirection).y + 0.0001, 0.0) > 0.0; // 相机在平面哪一侧。
-        if (ifAboveOrBelowPlane) return totalAbsorbance; // 背向不步进。
-        float shape = ogxLayersGetCloudShape(s, layerIndex, 1, rayPosition, minHeight, maxHeight, noiseTexture); // 形状。
-        float shapeWithDensity = shape * density; // 密度。
-        if (shapeWithDensity > 1e-5) totalAbsorbance *= exp(-distanceFactor * shapeWithDensity); // 乘透过率。
-        return totalAbsorbance; // 交回透过率。
-    }
-    if (layerIndex < 3) // 积云。
-    {
-        float densityLarge = s.layers[1].rainDensity; // 大积云密度。
-        float density = 0.0; // 这一层密度。
-        if (layerIndex == 0) density = s.layers[0].rainDensity * smoothstep(s.layers[0].distance, s.layers[0].distance * 0.5, length(rayPosition - startPos)); // 小积云。
-        if (layerIndex == 1) density = s.layers[1].rainDensity * smoothstep(s.layers[1].distance, s.layers[1].distance * 0.5, length(rayPosition - startPos)); // 大积云。
-        if (layerIndex == 2) density = 0.8; // 积雨云。
-        if (density < 0.01) return totalAbsorbance; // 密度太低。
-        float tallness = maxHeight - minHeight; // 层厚。
-        for (int i = 0; i < samples; i++) // 主循环。
-        {
-            float rayHeightInCloud = rayPosition.y - minHeight; // 层内高度。
-            if (clamp(rayPosition.y - maxHeight, 0.0, 1.0) < 1.0 && clamp(rayHeightInCloud, 0.0, 1.0) > 0.0) // 包围盒。
-            {
-                float shape = 0.0; // 形状。
-                float isLarge = 1.0; // 大云权重。
-                if (layerIndex != 2) shape = ogxLayersGetCloudShape(s, layerIndex, 1, rayPosition, minHeight, maxHeight, noiseTexture); // 普通云。
-                else
-                {
-                    vec2 cumulonimbusCloud = ogxLayersGetCumulonimbusShape(s, 1, rayPosition, minHeight, maxHeight, 1.0, cameraPos, noiseTexture); // 积雨云。
-                    shape = cumulonimbusCloud.x;
-                    isLarge = 1.0 + 4.0 * cumulonimbusCloud.y; // 大云放大。
-                }
-                float shapeWithDensity = shape * density * isLarge; // 总密度。
-                float shapeWithDensityFaded = shape * density * pow(clamp(rayHeightInCloud / (max(tallness, 1.0) * 0.25), 0.0, 1.0), 2.0); // 高度淡出。
-                if (shapeWithDensityFaded > 1e-5) // 有云。
-                {
-                    totalAbsorbance *= exp(-distanceFactor * shapeWithDensityFaded); // 乘透过率。
-                    if (totalAbsorbance < 1e-5) break; // 完全不透明。
-                }
-            }
-            rayPosition += rayDirection; // 前进。
-        }
-    }
-    return totalAbsorbance; // 交回透过率。
-}
-
-// 云影总入口：返回四个透过率，供阴影程序按层重建云影。
-vec4 ogxLayersGetVolumetricCloudsSimple(OgxLayersCloudSettings s, vec2 dither, vec3 lightDir, vec2 offset,
-    vec3 startPos, vec3 cameraPos, sampler2D noiseTexture)
-{
-    float totalAbsorbance = 1.0; // 总透过率。
-    float heightRelativeToClouds = clamp(1.0 - max(cameraPos.y - s.layers[0].height, 0.0) / 100.0, 0.0, 1.0); // 相机高度。
-    vec3 normPlayerPos = lightDir; // 光线方向。
-    normPlayerPos.y += 0.03 * heightRelativeToClouds; // 地面视角抬高一点。
-    int samples = 5; // 固定五步。
-    vec3 cloudDist = vec3(1.0); // 水平步长。
-    float cloudheight = 5.0; // 高层云厚度。
-    float minHeight = s.layers[3].height; // 高层云底。
-    float maxHeight = cloudheight + minHeight; // 高层云顶。
-    cloudDist.xz = vec2(255.0); // 平面云水平步长。
-    vec3 rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist)); // 单步。
-    vec3 rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
-    rayPosition.xz += offset; // 阴影偏移。
-    float altoStratusClouds = ogxCloudLayerMarchSimple(s, 3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight,
-        startPos, cameraPos, noiseTexture); // 高层云。
-    totalAbsorbance *= altoStratusClouds; // 更新透过率。
-    float largeCumulusClouds = 1.0; // 大积云透过率。
-    if (totalAbsorbance > 1e-5) // 还有光才继续。
-    {
-        cloudheight = s.layers[1].tallness; // 大积云厚度。
-        minHeight = s.layers[1].height; // 大积云底。
-        maxHeight = cloudheight + minHeight; // 大积云顶。
-        cloudDist.xz = vec2(255.0); // 水平步长。
-        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 分层步长。
-        rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
-        rayPosition.xz += offset; // 偏移。
-        largeCumulusClouds = ogxCloudLayerMarchSimple(s, 1, samples, rayPosition, rayDirection, dither.x, minHeight,
-            maxHeight, startPos, cameraPos, noiseTexture); // 大积云。
-        totalAbsorbance *= largeCumulusClouds; // 更新透过率。
-    }
-    float smallCumulusClouds = 1.0; // 小积云透过率。
-    if (totalAbsorbance > 1e-5) // 还有光才继续。
-    {
-        cloudheight = s.layers[0].tallness / s.layers[0].scale; // 小积云厚度。
-        minHeight = s.layers[0].height; // 小积云底。
-        maxHeight = cloudheight + minHeight; // 小积云顶。
-        cloudDist.xz = vec2(255.0); // 水平步长。
-        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 分层步长。
-        rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 起点。
-        rayPosition.xz += offset; // 偏移。
-        smallCumulusClouds = ogxCloudLayerMarchSimple(s, 0, samples, rayPosition, rayDirection, dither.x, minHeight,
-            maxHeight, startPos, cameraPos, noiseTexture); // 小积云。
-        totalAbsorbance *= smallCumulusClouds; // 更新透过率。
-    }
-    return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四个透过率。
-}
-
-// 层状云参考签名步进提供天气参数入口。
-// 子文件：cloud/layers/transmittance.slang。
-/* 层状体积云的参考签名低成本步进：天气与覆盖参数显式传入，不读设置结构体；由 `cloud/layers.slang` 内联引入。
-可复制示例：`vec4 t = ogxLayersCloudTransmittanceSimple(dither, lightDir, offset, startPos, ...);`
-设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
-调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
-*/
-
-// 层状云低成本步进：只累计透过率，不做光照，供云影与远景使用。
-// 参考签名给层号、步数、位置与方向、抖动与上下界；噪声、天气与覆盖率显式追加。
-float ogxLayersCloudAbsorbanceSimple(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
-    float dither, float minHeight, float maxHeight, vec3 startPos,
-    sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float rainAmount,
-    float thunderStrength, float cumulonimbusStrength, float altostratusCoverage,
-    float largeCumulusCoverage, float smallCumulusCoverage,
-    float altostratusRain, float largeCumulusRain, float smallCumulusRain)
-{
-    float totalAbsorbance = 1.0; // 累积透过率。
-    float distanceFactor = length(rayDirection); // 每步长度。
-    float densityTresholdCheck = 0.0; // 密度阈值，按层选择。
-    if (layerIndex == 0) densityTresholdCheck = 0.06;
-    if (layerIndex == 1 || layerIndex == 2) densityTresholdCheck = 0.02;
-    if (layerIndex == 3) densityTresholdCheck = 0.01;
-    densityTresholdCheck = mix(1e-5, densityTresholdCheck, dither); // 用抖动在极小值与阈值之间插值。
-    if (layerIndex == 3) // 高层云只做一次平面近似。
-    {
-        vec3 newPos = rayPosition - startPos;
-        float density = altostratusRain;
-        density *= smoothstep(150000.0, 150000.0 * 0.5, length(newPos)); // 超出距离后淡出。
-        if (density == 0.0) return totalAbsorbance;
-        bool ifAboveOrBelowPlane = max(mix(-1.0, 1.0, clamp(startPos.y - minHeight, 0.0, 1.0)) * normalize(rayDirection).y + 0.0001, 0.0) > 0.0; // 相机在云层上方或下方时就跳过。
-        if (ifAboveOrBelowPlane) return totalAbsorbance;
-        float shape = ogxLayersCloudShapeLayer(layerIndex, 1, rayPosition, minHeight, maxHeight,
-            noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
-            rainAmount, thunderStrength, cloudMovement);
-        float shapeWithDensity = shape * density;
-        if (shapeWithDensity > 1e-5)
-        {
-            float densityCoeff = exp(-distanceFactor * shapeWithDensity); // 单步吸收。
-            totalAbsorbance *= densityCoeff;
-        }
-        return totalAbsorbance;
-    }
-    if (layerIndex < 3) // 积云与积雨云按步数前进。
-    {
-        vec3 newPos = rayPosition - startPos;
-        float densityLarge = ogxLayersGetRainDensity(largeCumulusRain, rainAmount, thunderStrength);
-        float density = 0.0;
-        if (layerIndex == 0) density = ogxLayersGetRainDensity(smallCumulusRain, rainAmount, thunderStrength) * smoothstep(100000.0, 100000.0 * 0.5, length(newPos));
-        if (layerIndex == 1) density = ogxLayersGetRainDensity(largeCumulusRain, rainAmount, thunderStrength) * smoothstep(100000.0, 100000.0 * 0.5, length(newPos));
-        if (layerIndex == 2) density = 0.8;
-        if (density < 0.01) return totalAbsorbance;
-        float tallness = maxHeight - minHeight;
-        for (int i = 0; i < samples; i++)
-        {
-            newPos = rayPosition - startPos;
-            float rayHeightInCloud = rayPosition.y - minHeight;
-            if (clamp(rayPosition.y - maxHeight, 0.0, 1.0) < 1.0 && clamp(rayHeightInCloud, 0.0, 1.0) > 0.0) // 只处理云层内部的采样。
-            {
-                float shape = 0.0;
-                float isLarge = 1.0;
-                if (layerIndex != 2)
-                {
-                    shape = ogxLayersCloudShapeLayer(layerIndex, 1, rayPosition, minHeight, maxHeight,
-                        noiseTexture, altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
-                        rainAmount, thunderStrength, cloudMovement);
-                }
-                else
-                {
-                    vec2 cumulonimbusCloud = ogxLayersCumulonimbusShapeLayer(1, rayPosition, minHeight, maxHeight,
-                        noiseTexture, cameraWorldPos, cloudMovement, thunderStrength, cumulonimbusStrength);
-                    shape = cumulonimbusCloud.x;
-                    isLarge = 1.0 + 4.0 * cumulonimbusCloud.y;
-                }
-                float shapeWithDensity = shape * density * isLarge;
-                float shapeWithDensityFaded = shape * density * pow(clamp((rayHeightInCloud) / (max(tallness, 1.0) * 0.25), 0.0, 1.0), 2.0); // 底部淡出。
-                if (shapeWithDensityFaded > 1e-5)
-                {
-                    float densityCoeff = exp(-distanceFactor * shapeWithDensityFaded);
-                    totalAbsorbance *= densityCoeff;
-                    if (totalAbsorbance < 1e-5) break; // 已经全黑就提前结束。
-                }
-            }
-            rayPosition += rayDirection; // 前进一步。
-        }
-    }
-    return totalAbsorbance; // 交回透过率。
-}
-
-// 层状云影总入口的简单版：三层云各走一次低成本步进，乘成总透过率。
-// 参考签名是抖动、光照方向、偏移与起点；云噪声、天气、覆盖率与相机位置显式追加。
-vec4 ogxLayersCloudTransmittanceSimple(vec2 dither, vec3 lightDir, vec2 offset, vec3 startPos,
-    sampler2D noiseTexture, vec3 cameraWorldPos, float cloudMovement, float rainAmount,
-    float thunderStrength, float cumulonimbusStrength, float altostratusCoverage,
-    float largeCumulusCoverage, float smallCumulusCoverage,
-    float altostratusRain, float largeCumulusRain, float smallCumulusRain)
-{
-    float totalAbsorbance = 1.0; // 总透过率。
-    float heightRelativeToClouds = clamp(1.0 - max(cameraWorldPos.y - 250.0, 0.0) / 100.0, 0.0, 1.0); // 相机离云底越近，抬高越少。
-    vec3 normPlayerPos = lightDir; // 光照方向。
-    normPlayerPos.y += 0.03 * heightRelativeToClouds; // 地面视角把光线抬高一点。
-    int samples = 5; // 每层固定五步。
-    vec3 cloudDist = vec3(1.0); // 水平步长。
-    vec3 rayDirection; // 步进方向。
-    vec3 rayPosition; // 步进起点。
-    float cloudheight; // 云层厚度。
-    float minHeight; // 云底。
-    float maxHeight; // 云顶。
-    float altoStratusClouds = 1.0; // 高层云透过率。
-    cloudheight = 5.0;
-    minHeight = 5000.0;
-    maxHeight = cloudheight + minHeight;
-    cloudDist.xz = vec2(255.0);
-    rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist)); // 单步长度。
-    rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight); // 找到进入云层的起点。
-    rayPosition.xz += offset; // 阴影偏移。
-    altoStratusClouds = ogxLayersCloudAbsorbanceSimple(3, 1, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
-        noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
-        altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
-        altostratusRain, largeCumulusRain, smallCumulusRain); // 高层云。
-    totalAbsorbance *= altoStratusClouds;
-    float largeCumulusClouds = 1.0; // 大积云透过率。
-    if (totalAbsorbance > 1e-5)
-    {
-        cloudheight = 280.0;
-        minHeight = 400.0;
-        maxHeight = cloudheight + minHeight;
-        cloudDist.xz = vec2(255.0);
-        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples)); // 按步数均分厚度。
-        rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight);
-        rayPosition.xz += offset;
-        largeCumulusClouds = ogxLayersCloudAbsorbanceSimple(1, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
-            noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
-            altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
-            altostratusRain, largeCumulusRain, smallCumulusRain); // 大积云。
-        totalAbsorbance *= largeCumulusClouds;
-    }
-    float smallCumulusClouds = 1.0; // 小积云透过率。
-    if (totalAbsorbance > 1e-5)
-    {
-        cloudheight = 130.0 / 1.0;
-        minHeight = 250.0;
-        maxHeight = cloudheight + minHeight;
-        minHeight = 250.0 - 350.0; // 参考把小积云底向下扩了三百五十米。
-        maxHeight = cloudheight + minHeight;
-        cloudDist.xz = vec2(255.0);
-        rayDirection = normPlayerPos * (cloudheight / length(normPlayerPos / cloudDist) / float(samples));
-        rayPosition = ogxLayersGetRayOrigin(rayDirection, startPos, dither.y, minHeight, maxHeight);
-        rayPosition.xz += offset;
-        smallCumulusClouds = ogxLayersCloudAbsorbanceSimple(0, samples, rayPosition, rayDirection, dither.x, minHeight, maxHeight, startPos,
-            noiseTexture, cameraWorldPos, cloudMovement, rainAmount, thunderStrength, cumulonimbusStrength,
-            altostratusCoverage, largeCumulusCoverage, smallCumulusCoverage,
-            altostratusRain, largeCumulusRain, smallCumulusRain); // 小积云。
-        totalAbsorbance *= smallCumulusClouds;
-    }
-    return vec4(smallCumulusClouds, largeCumulusClouds, altoStratusClouds, totalAbsorbance); // 交回四层透过率。
-}
-
-/*
-维护说明：低成本透过率为什么这样分层。
-
-层号与用途：
-    零号是小积云，云底二百五十米，向下扩三百五十米，厚度一百三十米。
-    一号是大积云，云底四百米，厚度二百八十米。
-    二号是积雨云，密度固定零点八，形状走积雨云的塔状分支。
-    三号是高层云，只做一次平面近似，不进入步进循环。
-
-采样顺序：
-    总入口固定从高层云开始，再算大积云，最后算小积云。
-    顺序不能换：后面的层会把当前总透过率当作提前结束条件，
-    先算哪一层会改变一共执行多少次噪声采样，严格对照会直接报差异。
-
-提前结束：
-    每一层结束都把透过率乘进总透过率；低于十万分之一就跳过后面的层。
-    这是参考实现的短路，不是优化开关；关掉它会多做采样，画面也会略暗。
-
-抖动：
-    密度阈值用抖动系数在极小值与层阈值之间插值。
-    这样做是为了让相邻像素的可见边缘错开，避免云影出现规则的同心圆。
-
-距离淡出：
-    积云用 smoothstep 在一百公里到五十公里之间淡出。
-    淡出的是密度而不是透过率；先乘密度再做指数吸收，远处的云影才会逐渐变浅。
-
-相机高度：
-    小积云的云底曾被向下扩了三百五十米，这是参考的固定写法。
-    它让低空相机也能看到小积云投下的影子，不能按“云底应该更高”去改。
-
-单位：
-    minHeight、maxHeight、rayDirection 与 startPos 全部用方块。
-    cloudDist 只是构造步长时的水平尺度，不是真实距离，不能拿去和世界坐标比较。
-
-修改入口时先确认三件事：
-    一是层号与云底、云顶的对应关系没有变；
-    二是高层云仍然只走一次平面采样；
-    三是四层返回值顺序仍然是“小积云、大积云、高层云、总透过率”。
-*/
-
-// 层状云严格入口提供参考默认常数。
-// 子文件：cloud/layers/exact.slang。
-/* 层状体积云的严格入口：按参考签名重排参数并填写参考默认常数；由 `cloud/layers.slang` 内联引入。
-可复制示例：`vec4 cloud = ogxLayersGetVolumetricCloudsExact(viewPos, dither, ...);`
-设计原因与取舍：子文件只服务所属主模块，函数顺序与主文件引用顺序一致。
-调用位置：由所属主文件内联引入，不单独生成 GLSL 或探针。
-*/
-
-// 严格参考签名的单层云步进入口：参考参数在前，云设置、相机与阴影资源追加在后。
-// 主体仍由 `ogxCloudLayerMarch` 执行，入口只负责把显式参数重新排好。
-// 五层云的高度、厚度与距离按参考默认配置传入，避免把宿主菜单常数藏进结构体。
-vec4 ogxCloudLayerMarchExact(int layerIndex, int samples, vec3 rayPosition, vec3 rayDirection,
-    float dither, float minHeight, float maxHeight, vec3 sunVector, vec3 moonVector, vec3 sunScattering,
-    vec3 moonScattering, vec3 skyScattering, float referenceDistance, vec3 sampledSkyCol,
-    inout vec2 cloudPlaneDistance, float backScatterPhase, vec4 phaseLevels, float backScatterPhase2,
-    vec4 phaseLevels2, OgxLayersCloudSettings settings, vec3 cameraPos, bool terrainShadowOnClouds,
-    bool deferred, sampler2D noiseTexture, sampler2D shadowTexture, mat4 shadowView,
-    mat4 shadowProjection, float shadowResolution, float shadowDistort, vec4 layer0Size,
-    vec4 layer1Size, vec4 layer2Size, vec3 layer3Size, vec3 layer4Size, vec3 auroraRgb,
-    float auroraBrightness, float auroraAmount, vec3 customLightningRgb)
-{
-    settings.layers[0].height = layer0Size.x; // 小积云高度。
-    settings.layers[0].tallness = layer0Size.y; // 小积云厚度。
-    settings.layers[0].scale = layer0Size.z; // 小积云水平尺度。
-    settings.layers[0].distance = layer0Size.w; // 小积云可见距离。
-    settings.layers[1].height = layer1Size.x; // 大积云高度。
-    settings.layers[1].tallness = layer1Size.y; // 大积云厚度。
-    settings.layers[1].scale = layer1Size.z; // 大积云水平尺度。
-    settings.layers[1].distance = layer1Size.w; // 大积云可见距离。
-    settings.layers[2].height = layer2Size.x; // 高层云高度。
-    settings.layers[2].distance = layer2Size.y; // 高层云可见距离。
-    settings.layers[2].scale = layer2Size.z; // 高层云水平尺度。
-    settings.layers[3].height = layer3Size.x; // 卷云高度。
-    settings.layers[3].distance = layer3Size.y; // 卷云可见距离。
-    settings.layers[3].scale = layer3Size.z; // 卷云水平尺度。
-    settings.layers[4].height = layer4Size.x; // 额外云层高度。
-    settings.layers[4].distance = layer4Size.y; // 额外云层可见距离。
-    settings.layers[4].scale = layer4Size.z; // 额外云层水平尺度。
-    settings.auroraLighting = 0.015 * auroraBrightness * (sin(auroraRgb + 0.63) * 0.5 + 0.5) * auroraAmount
-        * smoothstep(0.0, -0.1, sunVector.y) * smoothstep(0.1, 0.0, moonVector.y); // 参考的极光光照。
-    settings.cumulonimbus = 1; // 参考默认 CUMULONIMBUS=1。
-    settings.cumulonimbusLightningBrightness = 100.0; // 参考默认 CUMULONIMBUS_LIGHTNING_BRIGHTNESS。
-    settings.cumulonimbusLightningColor = vec3(customLightningRgb.x, 1.05 * customLightningRgb.y,
-        1.22 * customLightningRgb.z); // 参考的积雨云闪电颜色。
-    return ogxCloudLayerMarch(settings, layerIndex, samples, rayPosition, rayDirection, dither, minHeight,
-        maxHeight, sunVector, moonVector, sunScattering, moonScattering, skyScattering, referenceDistance,
-        sampledSkyCol, cloudPlaneDistance, backScatterPhase, phaseLevels, backScatterPhase2, phaseLevels2,
-        cameraPos, terrainShadowOnClouds, deferred, noiseTexture, shadowTexture, shadowView, shadowProjection,
-        shadowResolution, shadowDistort); // 转调同一份层步进。
-}
-
-// 严格参考签名的体积云总入口：参考参数在前，云层尺寸、极光与天空盒资源追加在后。
-// 云层尺寸和极光参数在这里写成常数，参考的首页天空盒查表也在这里完成，采样顺序与参考一致。
-vec4 ogxLayersGetVolumetricCloudsExact(vec3 viewPos, vec2 dither, vec3 sunVector, vec3 moonVector,
-    vec3 directLightCol, vec3 directLightCol2, vec3 indirectLightCol, inout float cloudPlaneDistance,
-    inout vec2 cloudDistance, OgxLayersCloudSettings settings, vec3 cameraPos, float farPlane,
-    float dhFarPlane, mat4 modelViewInverse, int samples, bool deferred, bool skyGround,
-    float skyBrightness, bool terrainShadowOnClouds, vec4 layer0Size, vec4 layer1Size, vec4 layer2Size,
-    vec3 layer3Size, vec3 layer4Size, vec3 auroraRgb, float auroraBrightness, float auroraAmount,
-    vec3 customLightningRgb, sampler2D noiseTexture, sampler2D shadowTexture, mat4 shadowView,
-    mat4 shadowProjection, float shadowResolution, float shadowDistort, sampler2D skyTexture, vec2 texelSize)
-{
-    settings.layers[0].height = layer0Size.x; // 小积云高度。
-    settings.layers[0].tallness = layer0Size.y; // 小积云厚度。
-    settings.layers[0].scale = layer0Size.z; // 小积云水平尺度。
-    settings.layers[0].distance = layer0Size.w; // 小积云可见距离。
-    settings.layers[1].height = layer1Size.x; // 大积云高度。
-    settings.layers[1].tallness = layer1Size.y; // 大积云厚度。
-    settings.layers[1].scale = layer1Size.z; // 大积云水平尺度。
-    settings.layers[1].distance = layer1Size.w; // 大积云可见距离。
-    settings.layers[2].height = layer2Size.x; // 高层云高度。
-    settings.layers[2].distance = layer2Size.y; // 高层云可见距离。
-    settings.layers[2].scale = layer2Size.z; // 高层云水平尺度。
-    settings.layers[3].height = layer3Size.x; // 卷云高度。
-    settings.layers[3].distance = layer3Size.y; // 卷云可见距离。
-    settings.layers[3].scale = layer3Size.z; // 卷云水平尺度。
-    settings.layers[4].height = layer4Size.x; // 额外云层高度。
-    settings.layers[4].distance = layer4Size.y; // 额外云层可见距离。
-    settings.layers[4].scale = layer4Size.z; // 额外云层水平尺度。
-    settings.auroraLighting = 0.015 * auroraBrightness * (sin(auroraRgb + 0.63) * 0.5 + 0.5) * auroraAmount
-        * smoothstep(0.0, -0.1, sunVector.y) * smoothstep(0.1, 0.0, moonVector.y); // 参考的极光光照。
-    settings.cumulonimbus = 1; // 参考默认 CUMULONIMBUS=1。
-    settings.cumulonimbusLightningBrightness = 100.0; // 参考默认 CUMULONIMBUS_LIGHTNING_BRIGHTNESS。
-    settings.cumulonimbusLightningColor = vec3(customLightningRgb.x, 1.05 * customLightningRgb.y,
-        1.22 * customLightningRgb.z); // 参考的积雨云闪电颜色。
-    return ogxLayersGetVolumetricClouds(settings, viewPos, dither, sunVector, moonVector, directLightCol,
-        directLightCol2, indirectLightCol, cloudPlaneDistance, cloudDistance, cameraPos, skyTexture, texelSize,
-        farPlane, dhFarPlane, modelViewInverse, samples, deferred, skyGround, skyBrightness,
-        terrainShadowOnClouds, noiseTexture, shadowTexture, shadowView, shadowProjection,
-        shadowResolution, shadowDistort); // 转调五层总入口。
 }
 
 #endif

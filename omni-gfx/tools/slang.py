@@ -1,6 +1,8 @@
 """定位并调用 Slang 编译器，把探针编译成 SPIR-V。
 
 调用位置：`omni-gfx/build.py spirv`。
+调用示例：在仓库根目录执行 `python omni-gfx/build.py spirv --download`。
+
 设计原因与取舍：
     编译器是开发工具，下载到 `.dev/tools`，不进仓库；构建只用项目内路径，
     不依赖系统搜索顺序，换机器时行为一致。缺少编译器时给出明确获取方式，

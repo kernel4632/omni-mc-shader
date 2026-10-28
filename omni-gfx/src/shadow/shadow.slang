@@ -183,6 +183,26 @@ float ogxShadowSegmentOcclusion(float3 shadowStart, float3 shadowEnd, Sampler2D 
     return occluded * (segmentLength * rSteps); // 按样本比例折算成被遮挡的米数。
 }
 
+// 半影搜索半径：三乘三邻域取遮挡深度的均方根，再限制到参考范围。
+// 为什么用均方根：单个近遮挡物不应把整片半影撑大，均方根让多数样本决定尺度。
+float ogxPenumbraAverageDiff(float3 shadowScreenPos, Sampler2D shadowDepth0, float shadowMapResolution,
+    float zScale, float spread)
+{
+    float spreadLod = log2(shadowMapResolution / 512.0); // 高分辨率用更粗层级抑制噪点。
+    float avgDiff = 0.0; // 平方深度差累加。
+    for (int i = -1; i <= 1; i++) // 三乘三邻域估计遮挡物距离。
+    {
+        for (int j = -1; j <= 1; j++)
+        {
+            float2 lookupCoord = shadowScreenPos.xy + float2(i, j) * spread * 0.0039; // 邻域采样坐标。
+            float depthDiff = shadowScreenPos.z - shadowDepth0.SampleLevel(lookupCoord, spreadLod).x; // 接收点深度减去遮挡物深度。
+            depthDiff = clamp(depthDiff * zScale * 0.0035, 0.0, 0.025); // 归一化并限制范围。
+            avgDiff += depthDiff * depthDiff; // 平方累加，后面开根得到均方根。
+        }
+    }
+    return sqrt(avgDiff / 9.0); // 九个样本的均方根。
+}
+
 // 不透明表面阴影：可变半影、彩色半透明阴影与次表面散射，三者共用同一次阴影图采样。
 // 为什么先做透光散射：叶片、草这类薄片本身就透光，先算透光再把阳光按比例削弱，阴影才不会过硬。
 // 为什么阴影图外坐标直接放弃采样：半影采样会跑出阴影图边界，硬读边界会把边界压成一条黑线。
@@ -211,7 +231,7 @@ float3 ogxVariablePenumbraShadow(float3 worldPos, float3 worldNormal, float sunl
         float spread = (scatteringStrength * 0.12 + 0.05) / (distortFactor * shadowDistance) + basicBlur / shadowMapResolution; // 散射采样半径。
         float3 scatteringDensity = 15.0 / (scatteringStrength * albedo + 0.1); // 散射密度：底色越亮越容易透过。
         float rSteps = 1.0 / sssQuality; // 次数倒数，用来归一化半径与结果。
-        float angle = noise.x * 6.28318530718; // 初始角度取随机，避免所有像素从同一方向起步。
+        float angle = noise.x * OGX_TAU; // 初始角度取随机，避免所有像素从同一方向起步。
         float2 rot = float2(cos(angle), sin(angle)); // 当前旋转方向。
         float2 golden = ogxShadowGoldenRotation(); // 黄金角的正弦与余弦，循环外只算一次。
         float scatteringDepth = 0.0; // 累计散射深度。
@@ -247,27 +267,12 @@ float3 ogxVariablePenumbraShadow(float3 worldPos, float3 worldNormal, float sunl
             result = float3(0.0); // 从全暗开始累加可见样本。
             float spread = vpsSpread * 200.0 / (distortFactor * shadowDistance); // 半影搜索半径。
             float avgDiff = 0.0; // 遮挡物与接收点的平均深度差，用来放大半影。
-            if (variablePenumbra) // 可变半影：先估遮挡物距离再决定边缘宽度。
-            {
-                float spreadLod = log2(shadowMapResolution / 512.0); // 高分辨率用更粗层级抑制噪点。
-                for (int i = -1; i <= 1; i++) // 三乘三邻域估计遮挡物距离。
-                {
-                    for (int j = -1; j <= 1; j++)
-                    {
-                        float2 lookupCoord = shadowScreenPos.xy + float2(i, j) * spread * 0.0039; // 邻域采样坐标。
-                        float depthDiff = shadowScreenPos.z - shadowDepth0.SampleLevel(lookupCoord, spreadLod).x; // 接收点深度减去遮挡物深度。
-                        depthDiff = clamp(depthDiff * zScale * 0.0035, 0.0, 0.025); // 归一化并限制范围。
-                        avgDiff += depthDiff * depthDiff; // 平方累加，后面开根得到均方根。
-                    }
-                }
-                avgDiff /= 9.0; // 求九个样本的平均。
-                avgDiff = sqrt(avgDiff); // 开根得到平均深度差。
-            }
+            if (variablePenumbra) avgDiff = ogxPenumbraAverageDiff(shadowScreenPos, shadowDepth0, shadowMapResolution, zScale, spread); // 三乘三邻域估遮挡物距离。
             avgDiff = max(avgDiff, 0.015 * leaves + 0.01 * grass); // 叶片与草至少给一点半影，避免薄片边缘过硬。
             float sampleSpread = avgDiff * 0.2 * spread + basicBlur / shadowMapResolution; // 最终采样半径。
             shadowScreenPos.z -= (2e-6 + noise.y * 2e-6) * (dist + 0.03) * (1.0 - 0.9 * leaves) * shadowDistance; // 深度偏移随距离增大。
             float rSteps = 1.0 / vpsQuality; // 次数倒数。
-            float angle = noise.y * 6.28318530718; // 初始角度取随机。
+            float angle = noise.y * OGX_TAU; // 初始角度取随机。
             float2 rot = float2(cos(angle), sin(angle)); // 当前旋转方向。
             float2 golden = ogxShadowGoldenRotation(); // 黄金角的正弦与余弦，循环外只算一次。
             for (float i = 0.0; i < vpsQuality; i++) // 逐次采样阴影图求未遮挡比例。
@@ -349,7 +354,7 @@ float ogxPcssFilterRadius(float blockerDepth, float receiverDepth, float lightSi
 float ogxPcssVisibility(Sampler2D shadowMap, float3 shadowCoord, float texelSize,
     float searchRadiusTexels, float filterRadiusTexels, float bias, int searchSteps, int filterSteps, float dither)
 {
-    float2 rot = float2(cos(dither * 6.28318530718), sin(dither * 6.28318530718)); // 起始旋转角按抖动错开。
+    float2 rot = float2(cos(dither * OGX_TAU), sin(dither * OGX_TAU)); // 起始旋转角按抖动错开。
     float2 golden = ogxShadowGoldenRotation(); // 黄金角的正弦与余弦，两个循环共用。
     float blockerSum = 0.0; // 遮挡物深度累加。
     float blockerCount = 0.0; // 遮挡物样本数。

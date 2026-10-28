@@ -38,7 +38,7 @@ float3 ogxTonemapLottes(float3 color)
 
 // `Xonk` 曲线：先抬高三成伽马，再用一条有理式压肩部，暗部比 `Reinhard` 更亮。
 // 它是一条独立拟合，和 `ACES`、`AgX`、`Reinhard` 都不是同一条曲线，不能互相替代。
-float3 ogxTonemapXonk(float3 color)
+float3 ogxTonemapPowerCurve(float3 color)
 {
     color = pow(color, float3(1.3)); // 先抬伽马，暗部细节更容易看见。
     return color / (0.333 + color); // 有理式软肩，最亮处趋近于一。

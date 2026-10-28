@@ -3,6 +3,7 @@
 调用位置：`python omni-gfx/build.py profiles`；修改生成模块或 profile 定义后重新运行。
 产物：`omni-gfx/profiles/iterationt/profile.frag`、`omni-gfx/profiles/eclipse/profile.frag`
 与各自 `profile.json`。两个文件都包含全部库模块，只由 profile 宏与严格函数集合区分。
+可复制示例：在仓库根目录执行 `python omni-gfx/build.py profiles`。
 
 为什么用汇总文件而不是让 glslang 直接读 `#include`：
     glslang 默认不启用 include 扩展，不同版本的 `-I` 行为也不一致。这里用与
@@ -53,7 +54,7 @@ PROFILES = {
         "probe": (
             "vec3 ogxProfileTone(vec3 color)\n"
             "{\n"
-            "    return ogxToneMapAgx(color) + ogxToneMapAgxMerlin(color) + ogxTonemapReinhardJodie(color);\n"
+            "    return ogxToneMapAgx(color) + ogxToneMapAgxCompact(color) + ogxTonemapReinhardJodie(color);\n"
             "}\n\n"
             "vec3 ogxProfileSky()\n"
             "{\n"
