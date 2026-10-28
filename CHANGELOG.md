@@ -1,4 +1,11 @@
 # 更新记录
+## 0.16.0-dev.18
+
+修正更新记录中重复的 `0.16.0-dev.17` 章节。
+
+仅文档改动；代码与验证状态不变。
+
+
 ## 0.16.0-dev.17
 
 按 HOP 第五轮审计整改。
@@ -12,19 +19,6 @@
 - 严格对照的 15 条旧目标改到通用库真实实现，补齐 `frisvad` 与 `rand` 入口，并修复 G-buffer 重复采样、GTAO 弧积分常数、镜头 `atan2` 与各向异性静态分支。
 
 验证：`generate` 44 个生成模块、`spirv` 44/44、`check`、`strict-parity`（exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0）、`profiles`（14217/14216 行）、`test-gpu` 26/26、`audit` 623 个文件、`verify` 166 个测试、`compile` 280 组程序全部通过。游戏内画面未验证。
-
-## 0.16.0-dev.17
-
-按 HOP 第五轮审计整改并恢复严格覆盖。
-
-- 10 个无入口模块：6 个接入真实调用，4 个移出生成清单作为参考后端；`gi/diffuse` 改名 `gi/blocklight`。
-- `catalog` 改为沿函数调用图核对消费者；删除零调用转发名与重复 `frisvad`。
-- 新增死模块、填充注释、问号乱码、旧转发、profile 比例与文档乱码检查；新增 `docs/hop.md`。
-- `signature.py` 解析错误汇总上报；profile 与 parity 报告改用相对路径；SPIR-V README 改为事实。
-- strict 恢复到 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0。
-
-验证：`generate` 44 模块、`spirv` 44/44、`profiles`、`verify` 166 测试、`compile` 280 程序、`test-gpu` 26/26 全部通过。游戏内画面未验证。
-
 
 ## 0.16.0-dev.16
 
