@@ -484,3 +484,33 @@ CPU 太阳 (1.6685, 1.3350, 0.9813)  天空辐照度长度 0.1981
 ### 数量与未验证
 
 选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变。没有启动 Minecraft；游戏内画面、菜单切换、性能与其他显卡仍未验证。`verify` 的测试并发从 8 降到 4，是为了减少测试进程和编译探针抢 CPU，测试数量与检查范围没有减少。
+
+## 二十二、公开名字清零来源前缀（2026-10-28）
+
+本轮只改名字：154 个 `ogxItx*` / `ogxEclipse*` 函数、5 个 `*Eclipse` 后缀函数、3 个 `OgxEclipse*` 结构与 7 个含来源名的包含守卫，全部换成按效果与算法的名字；纯转发入口用 `Reference` 后缀说明“按参考签名转调”。`shadow/eclipse.slang` 改为 `shadow/map.slang`，因为文件内容是阴影边缘压缩、投影偏置与体素阴影图，不是某种来源的实现集合。算法、常数、分支与采样顺序不变。
+
+### 命令与结果
+
+| 命令 | 结果 |
+| --- | --- |
+| `python omni-gfx/build.py generate` | 48 个模块、49 个文件、GLSL 15531 行 |
+| `python omni-gfx/build.py spirv` | 48/48 个探针通过，编译器 2026.20 |
+| `python omni-gfx/build.py check` | 生成文件与源一致；测试世界 2 个、光影验证场景 2 个 GLSL 审计通过 |
+| `python omni-gfx/build.py strict-parity` | 505 个参考函数：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 |
+| `python omni-gfx/build.py profiles` | iterationt 15605 行、eclipse 15604 行，两份 profile 编译通过 |
+| `python build.py audit` | 524 个代码文件通过中文说明与实现审计 |
+| `python build.py verify` | 160 个测试、9 组编译探针与打包通过，约 5 秒 |
+| `python build.py compile` | 2 种配置、280 组唯一程序、0 错误 |
+| `python omni-gfx/build.py count` | 手写核心 18891 行，上限 18900 |
+
+### 函数体与完整性
+
+- 把改名前的 73 个源文件按同一张表替换后与当前文件逐字节比较，除改名外没有差异；顶层函数体前后各 779 个，缺失 0、新增 0、改动 0。
+- `src` 里 `ogxItx*` / `ogxEclipse*` 前缀标识符 0 个，`*Eclipse` / `*Itx` 后缀标识符 0 个，`OgxEclipse*` 结构与 `OGX_ITX_*` / `OGX_ECLIPSE_*` 守卫 0 个。
+- 48 个模块全部有生成 GLSL、SPIR-V 探针与制品；旧的 `shaders/omni-gfx/shadow/eclipse.glsl` 已删除，`shadow/map.glsl` 由源重新生成。
+- 严格对照只改目标路径与函数名，判定口径不变：exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0；`blackbody` 的宿主转发同步改到 `ogxBlackbodyApprox`，否则会退化成 approximate。
+
+### 数量与未验证
+
+选项 519 个、入口 269 个、唯一程序 280 组、测试 160 个不变；手写核心 18891 行。没有启动 Minecraft；游戏内画面、菜单切换、性能与其他显卡仍未验证。
+

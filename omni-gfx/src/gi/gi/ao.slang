@@ -260,7 +260,7 @@ float3 ogxGiRsm(float3 viewPos, float3 normal, OgxGiView view,
 // iterationT 的 RSM 入口：先取时间蓝噪声，再把同一帧参数交给反弹主循环。
 // 为什么单独一层：参考函数内部自己取蓝噪声，主循环把噪声当参数；严格对照需要把
 // 这次采样放回函数体内，采样顺序才对得上。
-float3 ogxItxRsm(float3 viewPos, float3 normal, OgxGiView view,
+float3 ogxRsmReference(float3 viewPos, float3 normal, OgxGiView view,
     Sampler2D shadowDepth0, Sampler2D shadowDepth1, Sampler2D shadowColor0, Sampler2D shadowColor1,
     float radius, int steps, float falloff, float shadowMapResolution, float shadowBias,
     Sampler2D noiseTexture, int2 texelCoord, int frame, bool useSolidShadow, bool leakFix, bool underwater)
@@ -274,7 +274,7 @@ float3 ogxItxRsm(float3 viewPos, float3 normal, OgxGiView view,
 // iterationT 的地平线遮蔽：每个切片向两侧各取若干深度样本，求最大地平角后积分。
 // 为什么单独一份：现有 `ogxGroundTruthAo` 用参数结构体控制循环，严格对照无法把
 // 切片数与每片步数折叠成参考的常数；这里把它们作为显式整数参数接收。
-float ogxItxGtao(float3 viewPos, float3 viewDir, float3 normal, float2 coord,
+float ogxGtaoSlices(float3 viewPos, float3 viewDir, float3 normal, float2 coord,
     Sampler2D depthTexture, float4x4 projectionInverse, float aspect, float projectionScale,
     Sampler2D noiseTexture, int2 texelCoord, int frame, float2 taaJitter,
     int quality, int sliceQuality, float falloffStart, float maxSampleRadius,

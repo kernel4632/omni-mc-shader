@@ -269,4 +269,4 @@ float ogxLuminanceRec601(float3 color) { return dot(color, float3(0.299, 0.587, 
 
 // Eclipse `curve(float3)`：软肩曲线 `1 - x/(1+x)`，与 iterationT 的宏 `curve` 不是同一条曲线。
 // 单独命名，避免和宿主层已有的 `curve` 宏展开冲突。
-float3 ogxEclipseCurve(float3 x) { return 1.0 - x / (1.0 + x); }
+float3 ogxSoftSaturate3(float3 x) { return 1.0 - x / (1.0 + x); }

@@ -80,7 +80,7 @@ float3 ogxGiSpatialFilter(float2 coord, float dist, float3 normal, float3 viewDi
 
 // iterationT 空间滤波入口：参考签名把距离、法线和视线方向放在前面，坐标与历史图由宿主提供。
 // 只是为了保持参考参数顺序，算式仍走同一份七乘七循环。
-float3 ogxItxGiSpatialFilter(float dist, float3 normal, float3 viewDir, float2 coord,
+float3 ogxGiSpatialFilterReference(float dist, float3 normal, float3 viewDir, float2 coord,
     OgxGiView view, Sampler2D historyTexture, float renderScale)
 {
     return ogxGiSpatialFilter(coord, dist, normal, viewDir, view, historyTexture, renderScale);

@@ -205,7 +205,7 @@ vec3 AdvancedColor(vec3 color){
 
 // 参考签名兼容层：HSV 转 RGB 与 Eclipse 黑体色。
 vec3 HsvToRgb(vec3 color){ return ogxHsvToRgb(color); }
-vec3 blackbody(float temperature){ return ogxBlackbodyEclipse(temperature); }
+vec3 blackbody(float temperature){ return ogxBlackbodyApprox(temperature); }
 
 // 参考签名兼容层：浮点与定点尾数抖动直接读帧时间，位宽照参考。
 vec3 fp10Dither(vec3 color, vec2 tc01){ return ogxDitherFloat(color, tc01, frameTimeCounter, vec3(6.0, 6.0, 5.0)); }

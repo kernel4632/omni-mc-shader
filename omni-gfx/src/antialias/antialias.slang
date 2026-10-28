@@ -292,7 +292,7 @@ float ogxSampleCurrDepthDhFetchClosest3x3(int2 coord, Sampler2D depthTexture)
 // iterationT 时间重投影：当前帧颜色、三乘三方差、历史颜色与历史深度按参考顺序混合。
 // 为什么单独一份：合并版 `ogxTaaReproject` 还带下界打包、微模糊等扩展，默认路径的
 // 采样顺序与参考不同；严格对照需要一条只走主世界参考分支的入口。
-float4 ogxItxTemporalReprojection(float2 coord, float3 velocity, float currDepthMin,
+float4 ogxTaaTemporalBlend(float2 coord, float3 velocity, float currDepthMin,
     Sampler2D currentTexture, Sampler2D historyTexture, float2 viewport, int2 texelCoord,
     float4x4 projectionInverse, float farPlane, float2 jitter, float blendWeight,
     float aggression, float depthThreshold, bool bicubicPrevious)

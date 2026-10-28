@@ -3,9 +3,9 @@ Omni 通用图形库 Eclipse 漫反射补充模块：手持光阴影、方块光
 调用位置：需要复现 Eclipse `diffuse_lighting.glsl` 的程序；Minecraft 光影由
     `/omni-gfx/gi/diffuse.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    float shadow = ogxEclipseSsrtHandlightShadows(viewPos, false, lightDir, noise, normal, false,
+    float shadow = ogxSsrtHandlightShadow(viewPos, false, lightDir, noise, normal, false,
         modelViewInverse, nearPlane, farPlane, 1.0, depthTex, projection, 10.0, 0.0015, 0.3);
-    vec3 flashlight = ogxEclipseCalculateFlashlight(texcoord, viewPos, normal, albedo,
+    vec3 flashlight = ogxFlashlight(texcoord, viewPos, normal, albedo,
         specularData, false, noiseTex, modelViewInverse, previousModelView, cameraWorldPos,
         previousCameraWorldPos, centerDepthSmooth, projectionInverse, 32.0, 1.0, 1.0, 2.0, 1.0, 0.9, 0.8);
 设计原因与取舍：
@@ -13,8 +13,8 @@ Omni 通用图形库 Eclipse 漫反射补充模块：手持光阴影、方块光
     手电颜色全部改成显式参数；分支、常数和采样顺序保持参考实现。
     手电的镜头脏污只接噪声纹理参数，不绑定 `noisetex`；这样独立测试与光影可以换纹理。
 */
-#ifndef OGX_ECLIPSE_DIFFUSE_INCLUDED
-#define OGX_ECLIPSE_DIFFUSE_INCLUDED
+#ifndef OGX_GI_DIFFUSE_INCLUDED
+#define OGX_GI_DIFFUSE_INCLUDED
 
 // 相机提供投影与裁剪空间换算；数学提供夹紧与线性深度。
 #include "../camera.slang"
@@ -22,7 +22,7 @@ Omni 通用图形库 Eclipse 漫反射补充模块：手持光阴影、方块光
 
 // 手持光屏幕空间阴影：沿光线方向在深度图里步进，撞到遮挡就压暗。
 // 参考固定十步；远近景各取一张深度图，两条分支都写在函数体里，采样次数与参考一致。
-float ogxEclipseSsrtHandlightShadows(float3 viewPos, bool depthCheck, float3 lightDir, float noise,
+float ogxSsrtHandlightShadow(float3 viewPos, bool depthCheck, float3 lightDir, float noise,
     float3 normals, bool hand, float4x4 modelViewInverse, float nearPlane, float farPlane,
     float renderScale, Sampler2D depthTexture, Sampler2D dhDepthTexture, float4x4 projection,
     float4x4 dhProjection, float dhVoxyNearPlane, float dhVoxyFarPlane, float texelSize, float strength)
@@ -72,7 +72,7 @@ float ogxEclipseSsrtHandlightShadows(float3 viewPos, bool depthCheck, float3 lig
 
 // 方块光合成：原版光照图曲线、LPV 体积、手持光与手电阴影一起决定最终方块光。
 // `lpvSample` 与 `handLight` 由调用方先算好，库只负责曲线与混合。
-float3 ogxEclipseDoBlockLightLighting(float3 lightColor, float lightmap, float3 lpvSample,
+float3 ogxBlockLightLighting(float3 lightColor, float lightmap, float3 lpvSample,
     float3 handLight, float3 lpvPos, float lpvSize, float fadeLength, float torchAmount,
     bool vanillaMask, bool useLpv)
 {
@@ -98,7 +98,7 @@ float3 ogxEclipseDoBlockLightLighting(float3 lightColor, float lightmap, float3 
 // 手电光：把屏幕位置换成手电筒锥，再按距离、圆斑与镜头脏污叠出光斑。
 // `specularData` 返回方向与强度，供高光阶段复用。
 // 参考签名是屏幕坐标、视空间位置、法线与底色；矩阵、相机位置、深度图与手电参数显式追加。
-float3 ogxEclipseCalculateFlashlight(float2 texcoord, float3 viewPos, float3 normal, float3 albedo,
+float3 ogxFlashlight(float2 texcoord, float3 viewPos, float3 normal, float3 albedo,
     out float4 specularData, bool hand, Sampler2D noiseTexture, float4x4 modelViewInverse,
     float4x4 previousModelView, float3 cameraWorldPos, float3 previousCameraWorldPos,
     float centerDepthSmooth, float4x4 projectionInverse, float range, float brightnessFalloff,
@@ -137,7 +137,7 @@ float3 ogxEclipseCalculateFlashlight(float2 texcoord, float3 viewPos, float3 nor
 }
 
 // 方块光体素版：LPV 采样与手持光由调用方传入，曲线和边缘淡出与参考实现相同。
-float3 ogxEclipseDoBlockLightLightingVoxel(float3 lightColor, float lightmap, float3 lpvSample,
+float3 ogxBlockLightLightingVoxel(float3 lightColor, float lightmap, float3 lpvSample,
     float3 handLight, float3 lpvPos, float lpvSize, float fadeLength, float torchAmount, bool vanillaMask)
 {
     lightmap = clamp(lightmap, 0.0, 1.0); // 夹紧光照。
@@ -159,7 +159,7 @@ float3 ogxEclipseDoBlockLightLightingVoxel(float3 lightColor, float lightmap, fl
 // 参考签名版的方块光体素曲线：只保留 `specular.glsl` 默认分支里的光照图曲线。
 // 为什么单独一份：增强版还会混入 LPV 与手持光，默认路径的常数集合会多出参考没有的值；
 // 严格对照需要一个只做参考算式的入口，调用方按需选择增强版或这一份。
-float3 ogxEclipseDoBlockLightLightingVoxelExact(float3 lightColor, float lightmap, float3 lpvSample,
+float3 ogxBlockLightLightingVoxelExact(float3 lightColor, float lightmap, float3 lpvSample,
     float3 handLight, float torchAmount)
 {
     lightmap = clamp(lightmap, 0.0, 1.0); // 参考实现先把光照图夹到合法范围。

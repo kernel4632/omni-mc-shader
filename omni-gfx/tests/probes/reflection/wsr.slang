@@ -10,6 +10,6 @@ Omni 通用图形库 reflection/wsr 模块编译探针：覆盖该效果的主�
 float4 probeMain(float4 position : SV_Position) : SV_Target
 {
     float t = position.x * 0.001 + 0.25; // 随像素变化的输入。
-    OgxEclipseRayJob job = ogxEclipseRayJob(float3(0.0), normalize(float3(t, 0.2, 1.0))); // 体素射线任务。
+    OgxRayJob job = ogxRayJob(float3(0.0), normalize(float3(t, 0.2, 1.0))); // 体素射线任务。
     return float4(job.direction, 1.0); // 有输出即可。
 }

@@ -54,7 +54,7 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `fog/fog.slang` | 高度衰减、噪声雾团、混合相位、粉末效应、沿视线积分、雾相位与末地雾阴影；实现在 `fog/fog/` 的两个子文件 | `math`、`noise` |
 | `fog/volume.slang` | 体积雾密度、光照吸收、步进、暴风、水下光柱与下界烟 | `fog`、`weather`、`shadow`、`water`、`color`、`sampling` |
 | `shadow/shadow.slang` | 阴影投影与边缘压缩、屏幕空间阴影、级联、PCSS、可变半影 | `math` |
-| `shadow/eclipse.slang` | Eclipse 阴影边缘压缩、投影偏差、硬阴影、轨道旋转与体素阴影图 | `math`、`voxel/trace` |
+| `shadow/map.slang` | 阴影边缘压缩、投影偏差、硬阴影、轨道旋转与体素阴影图 | `math`、`voxel/trace` |
 | `voxel/voxel.slang` | 三维逐格步进、半透明染色、植物穿透、铁块镜面弹射 | `math`、`color` |
 | `voxel/trace.slang` | 射线任务、包围盒、栅栏、裁剪排序、四分之一体素与螺旋采样 | `math`、`voxel` |
 | `gi/gi.slang` | 地平线遮蔽、反射阴影图反弹、历史重投影、时间与空间滤波、多弹射；实现在 `gi/gi/` 的三个子文件 | `math`、`shadow`、`sampling` |
@@ -62,8 +62,8 @@ GLSL 由 `tools/generate.py` 做固定、可审查的语法降级，不用 Slang
 | `gi/indirect.slang` | 余弦半球采样、切线基、屏幕空间 GI、双边上采样与 SSGI 合成 | `camera`、`math`、`reflection` |
 | `gi/ambientocclusion.slang` | Eclipse GTAO 弧段积分、最大水平角与多切片遮蔽 | `camera`、`math` |
 | `reflection/reflection.slang` | 可见法线采样、屏幕空间追踪、菲涅耳合并、九点小波降噪 | `math` |
-| `reflection/wsr.slang` | WSR 体素追踪、屏幕空间反射、LPV 雾、空气雾与水下体积 | `math`、`voxel/trace`、`shadow/eclipse`、`fog`、`water`、`weather/lightning`、`lpv`、`heldlight`、`gi/indirect` |
-| `reflection/photonics.slang` | Photonics 命中面着色、方块光、云影与半透明反射合成 | `math`、`voxel`、`shadow/eclipse`、`gi/diffuse`、`gi/indirect` |
+| `reflection/wsr.slang` | WSR 体素追踪、屏幕空间反射、LPV 雾、空气雾与水下体积 | `math`、`voxel/trace`、`shadow/map`、`fog`、`water`、`weather/lightning`、`lpv`、`heldlight`、`gi/indirect` |
+| `reflection/photonics.slang` | Photonics 命中面着色、方块光、云影与半透明反射合成 | `math`、`voxel`、`shadow/map`、`gi/diffuse`、`gi/indirect` |
 | `reflection/specular.slang` | GGX、可见法线采样、粗糙菲涅耳、反射可见度与高光合成 | `math`、`heldlight`、`atmosphere/sky`、`reflection/wsr` |
 | `post/post.slang` | 泛光核、三次升采样、亮度曲线、暗角、颗粒、景深、动态模糊、分块测光、远景噪点；实现在 `post/post/` 的三个子文件 | `math`、`noise`、`sampling`、`shadow` |
 | `post/exposure.slang` | 自动曝光分块统计、曝光值与泛光合并 | `math`、`shadow` |

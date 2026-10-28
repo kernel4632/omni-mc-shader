@@ -18,7 +18,7 @@ float4 probeMain(float4 position : SV_Position) : SV_Target
     float cirrusDensity; // 卷云密度。
     float fogA; // 均匀雾倍率。
     float fogB; // 云雨雾倍率。
-    ogxEclipseApplySceneControllerParameters(t, t, t, t, t, t, t, t, smallCoverage, smallDensity,
+    ogxSceneControllerParameters(t, t, t, t, t, t, t, t, smallCoverage, smallDensity,
         largeCoverage, largeDensity, altoCoverage, altoDensity, cirrusCoverage, cirrusDensity, fogA, fogB); // 场景控制参数。
     return float4(smallCoverage + largeDensity + cirrusCoverage + fogA, altoDensity, 1.0, 1.0); // 有输出即可。
 }

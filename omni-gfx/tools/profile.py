@@ -40,7 +40,7 @@ PROFILES = {
             "}\n\n"
             "vec3 ogxProfileSurface()\n"
             "{\n"
-            "    return ogxItxTextureLighting(vec3(0.5), 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,\n"
+            "    return ogxTextureLighting(vec3(0.5), 1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0,\n"
             "        0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, vec3(1.0), 0, true);\n"
             "}\n"
         ),
@@ -55,7 +55,7 @@ PROFILES = {
             "}\n\n"
             "vec3 ogxProfileSky()\n"
             "{\n"
-            "    return ogxEclipseSkyDensity(7000.0, 6731e3, vec2(8.0e3, 1.2e3));\n"
+            "    return ogxSkyDensity(7000.0, 6731e3, vec2(8.0e3, 1.2e3));\n"
             "}\n"
         ),
     },
@@ -66,7 +66,7 @@ MODULES = (
     "parallax", "planet", "accretion", "lpv", "gbuffer", "heldlight",
     "atmosphere/atmosphere", "atmosphere/model", "atmosphere/sky",
     "cloud/cloud", "cloud/volume", "cloud/layers", "cloud/planar",
-    "fog/fog", "fog/volume", "shadow/shadow", "shadow/eclipse",
+    "fog/fog", "fog/volume", "shadow/shadow", "shadow/map",
     "voxel/voxel", "voxel/trace",
     "gi/gi", "gi/diffuse", "gi/indirect", "gi/ambientocclusion",
     "reflection/reflection", "reflection/wsr", "reflection/photonics", "reflection/specular",

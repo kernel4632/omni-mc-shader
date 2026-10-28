@@ -37,7 +37,7 @@ Gerstner GetHandLight GetVolumetricClouds GetVolumetricFog Greenstein HG Halton 
 Lambert MATID Merlin NUBIS Nubis Perlin Photonics RSM Rec Reinhard Rom SSGI SSS SetCloudPos Shanks Uchimura
 WSR Worley XYZ albedo atlas background bits buffer cameraWorldPos centerDepthSmooth clip cloud color colortex
 compression curve depth dir flashlight focus frame gi held hit hits indirect jitter job lightmap look media
-mie modelViewInverse noise normal ogxEclipseApplyGameplayEffects ogxEclipseSsrtHandlightShadows ozone pixel
+mie modelViewInverse noise normal ogxGameplayEffects ogxSsrtHandlightShadow ozone pixel
 prevCameraPos prevModelView previousCameraWorldPos previousModelView projection rayleigh rotation sharp sky
 stars sun switch tile transmittance up velocity xy yzw
 """.split())

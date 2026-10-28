@@ -310,7 +310,7 @@ vec3 ogxGiRsm(vec3 viewPos, vec3 normal, OgxGiView view,
 // iterationT 的 RSM 入口：先取时间蓝噪声，再把同一帧参数交给反弹主循环。
 // 为什么单独一层：参考函数内部自己取蓝噪声，主循环把噪声当参数；严格对照需要把
 // 这次采样放回函数体内，采样顺序才对得上。
-vec3 ogxItxRsm(vec3 viewPos, vec3 normal, OgxGiView view,
+vec3 ogxRsmReference(vec3 viewPos, vec3 normal, OgxGiView view,
     sampler2D shadowDepth0, sampler2D shadowDepth1, sampler2D shadowColor0, sampler2D shadowColor1,
     float radius, int steps, float falloff, float shadowMapResolution, float shadowBias,
     sampler2D noiseTexture, ivec2 texelCoord, int frame, bool useSolidShadow, bool leakFix, bool underwater)
@@ -324,7 +324,7 @@ vec3 ogxItxRsm(vec3 viewPos, vec3 normal, OgxGiView view,
 // iterationT 的地平线遮蔽：每个切片向两侧各取若干深度样本，求最大地平角后积分。
 // 为什么单独一份：现有 `ogxGroundTruthAo` 用参数结构体控制循环，严格对照无法把
 // 切片数与每片步数折叠成参考的常数；这里把它们作为显式整数参数接收。
-float ogxItxGtao(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord,
+float ogxGtaoSlices(vec3 viewPos, vec3 viewDir, vec3 normal, vec2 coord,
     sampler2D depthTexture, mat4 projectionInverse, float aspect, float projectionScale,
     sampler2D noiseTexture, ivec2 texelCoord, int frame, vec2 taaJitter,
     int quality, int sliceQuality, float falloffStart, float maxSampleRadius,
@@ -650,7 +650,7 @@ vec3 ogxGiSpatialFilter(vec2 coord, float dist, vec3 normal, vec3 viewDir, OgxGi
 
 // iterationT 空间滤波入口：参考签名把距离、法线和视线方向放在前面，坐标与历史图由宿主提供。
 // 只是为了保持参考参数顺序，算式仍走同一份七乘七循环。
-vec3 ogxItxGiSpatialFilter(float dist, vec3 normal, vec3 viewDir, vec2 coord,
+vec3 ogxGiSpatialFilterReference(float dist, vec3 normal, vec3 viewDir, vec2 coord,
     OgxGiView view, sampler2D historyTexture, float renderScale)
 {
     return ogxGiSpatialFilter(coord, dist, normal, viewDir, view, historyTexture, renderScale);

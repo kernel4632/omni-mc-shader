@@ -345,7 +345,7 @@ float3 ogxUnderwaterFog(float3 startPos, float3 endPos, float3 worldDir, float g
 // 参考参数在前，相机、阴影矩阵与画质资源追加在后；不读取宿主全局量。
 // 为什么单独一份而不是转调通用入口：通用入口还包含团雾、暴风、闪电、群系与体积光，
 // 那些分支会引入参考默认路径没有的采样次数；严格对照要求采样顺序与常数逐项一致。
-void ogxItxVolumetricFogExact(inout float3 color, float3 startPos, float3 endPos, float3 worldDir,
+void ogxVolumetricFogExact(inout float3 color, float3 startPos, float3 endPos, float3 worldDir,
     float globalCloudShadow, float fogTimeFactor, out float transmittance, OgxFogMedia media,
     Sampler2D shadowDepth0, float farPlane, float densityOption, float baseDensityOption,
     float heightA, float heightB, float falloff, float sunAbsorption, int steps, int lightSteps,
@@ -427,7 +427,7 @@ void ogxItxVolumetricFogExact(inout float3 color, float3 startPos, float3 endPos
 
 // 严格参考签名的水下体积雾：范围、步数、阴影与焦散顺序照 iterationT 原程序。
 // 参考的相机、阴影矩阵、波法线图与水色全部由调用方给出，循环内不读宿主全局量。
-float3 ogxItxUnderwaterVolumetricFogExact(float3 startPos, float3 endPos, float3 worldDir,
+float3 ogxUnderwaterFogExact(float3 startPos, float3 endPos, float3 worldDir,
     float globalCloudShadow, float3 cameraOffset, float3 shadowLightVector, Sampler2D shadowDepth0,
     float4x4 shadowView, float4x4 shadowProjection,
     float shadowBias, Sampler2D waveNormalTexture, float2 pixelSize, float2 screenExtent,

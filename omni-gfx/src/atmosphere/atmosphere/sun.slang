@@ -8,7 +8,7 @@ float ogxSunDisc(float3 viewDirection, float3 sunDirection, float size, float ha
 }
 
 // iterationT 太阳圆盘：在圆盘遮罩上乘参考实现的暖白色，供原样对照。
-float3 ogxItxSunDisc(float3 worldDir, float3 sunDir)
+float3 ogxSunDiscFixed(float3 worldDir, float3 sunDir)
 {
     float d = dot(worldDir, sunDir); // 与太阳方向的夹角余弦。
     float size = 5e-5; // 太阳角半径。
@@ -168,7 +168,7 @@ float ogxStarPlane(float3 dir, out float3 starColor)
         float brightness = exp(-(d * d) / (2.0 * radius * radius)); // 高斯衰减，星心最亮。
         float r = ogxStarHash12(basePos.xy * 0.5); // 这颗星的随机亮度因子。
         color = r * (0.3 * sin(1.0 * (r * 5.0) + r) + 0.7) * brightness; // 亮度带一点随机起伏。
-        starColor = 2.0 * ogxBlackbodyEclipse(ogxStarTemperature(ogxStarHash12(center))); // 按格中心的散列取色温上色。
+        starColor = 2.0 * ogxBlackbodyApprox(ogxStarTemperature(ogxStarHash12(center))); // 按格中心的散列取色温上色。
     }
     return color * pow(abs(dir.z), 2); // 按该面朝向加权，面边界处平滑过渡。
 }

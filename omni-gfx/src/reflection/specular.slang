@@ -2,7 +2,7 @@
 Omni 通用图形库高光模块：GGX、可见法线采样、粗糙菲涅耳、反射可见度与高光合成。
 调用位置：Eclipse 风格高光与反射合成；由 `/omni-gfx/reflection/specular.glsl` 引入。
 可复制示例：
-    vec3 color = ogxEclipseSpecularReflections(viewPos, playerPos, nPos, lightVec, noise, flatN, n, 0.4, 0.02, albedo, diffuse, light, 1.0, false, false, background, sun, 1.0, 50.0, true, true, flash, 1.0, sceneTex, depthTex, proj, invProj, view, invView, prevProj, prevView, 0.05, 1000.0, delta, 1.0, texel); // 合成高光。
+    vec3 color = ogxSpecularReflections(viewPos, playerPos, nPos, lightVec, noise, flatN, n, 0.4, 0.02, albedo, diffuse, light, 1.0, false, false, background, sun, 1.0, 50.0, true, true, flash, 1.0, sceneTex, depthTex, proj, invProj, view, invView, prevProj, prevView, 0.05, 1000.0, delta, 1.0, texel); // 合成高光。
 设计原因与取舍：
     金属、介电与水面共用同一套菲涅耳与 GGX；背景天空、环境反射和太阳高光按参考顺序合成。
 */
@@ -15,14 +15,14 @@ Omni 通用图形库高光模块：GGX、可见法线采样、粗糙菲涅耳、
 #include "wsr.slang"
 
 // 法线夹紧：把背向视线的法线朝视线方向拉回，避免掠射高光发黑。
-float3 ogxEclipseClampNormal(float3 n, float3 v)
+float3 ogxClampReflectionNormal(float3 n, float3 v)
 {
     float nDotV = ogxSaturate(dot(n, -v)); // 法线与视线夹角余弦。
     return normalize(nDotV * v + n); // 参考实现的混合。
 }
 
 // Frisvad 切线基：由法线直接构造两个正交切向，避免叉乘退化。
-float3x3 ogxEclipseFrisvad(float3 n)
+float3x3 ogxFrisvadBasis(float3 n)
 {
     float3 f; // 第一切向。
     float3 r; // 第二切向。
@@ -42,7 +42,7 @@ float3x3 ogxEclipseFrisvad(float3 n)
 }
 
 // 可见法线 GGX 采样：把视线压到半球椭球，再采一个半程方向。
-float3 ogxEclipseSampleVndfGgx(float3 viewerDirection, float alpha, float2 xy)
+float3 ogxGgxVndfDirection(float3 viewerDirection, float alpha, float2 xy)
 {
     viewerDirection = normalize(float3(alpha * 0.5 * viewerDirection.xy, viewerDirection.z)); // 压到半球配置。
     const float tau = 6.2831853; // 参考实现的两倍圆周。
@@ -57,7 +57,7 @@ float3 ogxEclipseSampleVndfGgx(float3 viewerDirection, float alpha, float2 xy)
 }
 
 // Eclipse 的 GGX：粗糙度先取 2.5 次方，再算 D、F 与可见性。
-float3 ogxEclipseGgx(float3 n, float3 v, float3 l, float r, float3 f0, float3 metalAlbedoTint)
+float3 ogxGgxBrdf(float3 n, float3 v, float3 l, float r, float3 f0, float3 metalAlbedoTint)
 {
     r = max(pow(r, 2.5), 0.0001); // 粗糙度重整与下限。
     float3 h = normalize(l + v); // 半程方向。
@@ -74,7 +74,7 @@ float3 ogxEclipseGgx(float3 n, float3 v, float3 l, float r, float3 f0, float3 me
 }
 
 // Eclipse 的粗糙度菲涅耳：按粗糙度调整曲线与亮度。
-float ogxEclipseShlickFresnelRoughness(float xDotN, float roughness)
+float ogxFresnelSchlickRoughness(float xDotN, float roughness)
 {
     float shlickFresnel = clamp(1.0 + xDotN, 0.0, 1.0); // 基础菲涅耳。
     float curves = exp(-4.0 * pow(1.0 - roughness, 2.5)); // 曲线权重。
@@ -85,7 +85,7 @@ float ogxEclipseShlickFresnelRoughness(float xDotN, float roughness)
 }
 
 // 反射可见度：按 f0 与粗糙度判断高光是否值得显示，避免粗糙金属被反射糊满。
-float ogxEclipseGetReflectionVisibility(float f0, float roughness, float roughnessThreshold)
+float ogxReflectionVisibility(float f0, float roughness, float roughnessThreshold)
 {
     float thresholdValue = roughnessThreshold / 100.0; // 参考实现的百分比。
     float dialectrics = max(f0 * 255.0 - 26.0, 0.0) / 229.0; // 非金属比例。
@@ -105,7 +105,7 @@ float ogxEclipseGetReflectionVisibility(float f0, float roughness, float roughne
 }
 
 // 高光反射主函数：背景反射、环境反射、太阳 GGX 与手持光 GGX 的合成。
-float3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 NplayerPos, float3 lightVec,
+float3 ogxSpecularReflections(float3 viewPos, float3 playerPos, float3 NplayerPos, float3 lightVec,
     float2 noise, float3 flatNormal, float3 normal, float roughness, float f0, float3 albedo,
     float3 diffuseLighting, float3 lightColor, float lightmap, bool isHand, bool isMetalPass,
     float3 backgroundReflection, float3 sunlightColor, float sunSpecularMultiplier,
@@ -124,11 +124,11 @@ float3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Np
     roughness *= roughness;
     f0 = f0 == 0.0 ? 0.02 : f0; // 默认介电常数。
     bool isMetal = f0 > 229.5 / 255.0; // 金属判定。
-    float3x3 basis = ogxEclipseFrisvad(normal); // 切线基。
+    float3x3 basis = ogxFrisvadBasis(normal); // 切线基。
     float3 viewDir = ogxMatrix3MulPoint(basis, -NplayerPos); // 转到切线空间。
     float3 reflectedVector = reflect(NplayerPos, normal); // 理想反射。
     float VdotN = dot(-normalize(viewDir), float3(0.0, 0.0, 1.0)); // 视线与法线。
-    float shlickFresnel = ogxEclipseShlickFresnelRoughness(VdotN, roughness); // 粗糙菲涅耳。
+    float shlickFresnel = ogxFresnelSchlickRoughness(VdotN, roughness); // 粗糙菲涅耳。
     albedo = f0 == 1.0 ? sqrt(albedo) : albedo; // 金属用底色。
     float3 metalAlbedoTint = isMetal ? albedo : float3(1.0); // 金属染色。
     float3 hardCodedMetalsF0[8]; // 参考的八种金属反射率，逐项赋值避免 GLSL 330 的数组构造限制。
@@ -144,7 +144,7 @@ float3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Np
     float3 reflectance = isMetal ? hardCodedMetals : float3(f0); // 反射率。
     float3 F0 = (reflectance + (1.0 - reflectance) * shlickFresnel) * metalAlbedoTint; // 菲涅耳。
     float3 specular = diffuseLighting; // 高光结果。
-    float visibility = ogxEclipseGetReflectionVisibility(f0, roughness, roughnessThreshold); // 可见度。
+    float visibility = ogxReflectionVisibility(f0, roughness, roughnessThreshold); // 可见度。
     float backgroundReflectMask = lightmap; // 背景遮罩。
     float4 environmentReflection = float4(0.0); // 环境反射。
     float3 backgroundTint = float3(1.0); // 背景染色。
@@ -154,7 +154,7 @@ float3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Np
         if (backgroundEnabled) specular = lerp(darkened, backgroundReflection, backgroundReflectMask); // 背景反射。
         if (ssrEnabled) // 屏幕空间反射。
         {
-            environmentReflection = ogxEclipseGetEnvironmentReflections(reflectedVector, flatNormal, normal,
+            environmentReflection = ogxEnvironmentReflections(reflectedVector, flatNormal, normal,
                 playerPos, viewPos, noise, isHand, roughness, backgroundReflectMask, backgroundTint,
                 false, 1.0, sceneTexture, depthTexture, projection, projectionInverse, modelView, modelViewInverse,
                 previousProjection, previousModelView, nearPlane, farPlane, cameraDelta, renderScale,
@@ -167,13 +167,13 @@ float3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Np
     if (sunSpecularMultiplier > 0.0) // 太阳高光。
     {
         float3 lightSourceReflection = backgroundReflectMask * sunSpecularMultiplier * sunlightColor
-            * ogxEclipseGgx(normal, -NplayerPos, lightVec, roughness, reflectance, metalAlbedoTint); // GGX。
+            * ogxGgxBrdf(normal, -NplayerPos, lightVec, roughness, reflectance, metalAlbedoTint); // GGX。
         specular += lightSourceReflection * (1.0 - environmentReflection.a); // 环境反射占用后剩下的部分。
     }
     if (flashlightIntensity > 0.0) // 手电高光。
     {
         float3 flashLightReflection = flashlightColor * flashlightIntensity
-            * ogxEclipseGgx(normal, -normal, -normal, roughness, reflectance, metalAlbedoTint); // 参考实现的手电方向近似。
+            * ogxGgxBrdf(normal, -normal, -normal, roughness, reflectance, metalAlbedoTint); // 参考实现的手电方向近似。
         specular += flashLightReflection;
     }
     return specular; // 交回高光。
@@ -181,7 +181,7 @@ float3 ogxEclipseSpecularReflections(float3 viewPos, float3 playerPos, float3 Np
 
 // 严格参考签名的高光反射入口：背景天空、环境反射、太阳 GGX 与手电 GGX 的顺序照原程序。
 // 参考把天空图、屏幕图、深度图与相机矩阵当全局量；库把它们放在参数表尾部，算式不变。
-float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, float3 NplayerPos, float3 lightVec,
+float3 ogxSpecularReflectionsExact(float3 viewPos, float3 playerPos, float3 NplayerPos, float3 lightVec,
     float2 noise, float3 flatNormal, float3 normal, float roughness, float f0, float3 albedo,
     float3 diffuseLighting, float3 lightColor, float lightmap, bool isHand, bool isWater,
     inout float reflectanceForAlpha, float4 flashLightStuff, Sampler2D skyTexture, float2 pixelSize,
@@ -201,11 +201,11 @@ float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, floa
     roughness *= roughness;
     f0 = f0 == 0.0 ? 0.02 : f0; // 默认介电常数。
     bool isMetal = f0 > 229.5 / 255.0; // 金属判定。
-    float3x3 basis = ogxEclipseFrisvad(normal); // 切线基。
+    float3x3 basis = ogxFrisvadBasis(normal); // 切线基。
     float3 viewDir = float3(dot(basis[0], -NplayerPos), dot(basis[1], -NplayerPos), dot(basis[2], -NplayerPos)); // 转到切线空间。
     float3 reflectedVector = reflect(NplayerPos, normal); // 理想反射。
     float VdotN = dot(-normalize(viewDir), float3(0.0, 0.0, 1.0)); // 视线与法线。
-    float shlickFresnel = ogxEclipseShlickFresnelRoughness(VdotN, roughness); // 粗糙菲涅耳。
+    float shlickFresnel = ogxFresnelSchlickRoughness(VdotN, roughness); // 粗糙菲涅耳。
     albedo = f0 == 1.0 ? sqrt(albedo) : albedo; // 金属用底色。
     float3 metalAlbedoTint = isMetal ? albedo : float3(1.0); // 金属染色。
     float3 hardCodedMetalsF0[8]; // 参考实现的八种金属。
@@ -229,15 +229,15 @@ float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, floa
         reflectanceForAlpha = f0 + (1.0 - f0) * snellsWindow;
     }
     float3 specular = diffuseLighting; // 高光结果。
-    float visibility = ogxEclipseGetReflectionVisibility(f0, roughness, roughnessThreshold); // 可见度。
+    float visibility = ogxReflectionVisibility(f0, roughness, roughnessThreshold); // 可见度。
     float4 environmentReflection = float4(0.0); // 环境反射。
     float backgroundReflectMask = lightmap; // 背景遮罩从光照图开始。
     if (visibility < 1.0) // 只在需要时算反射。
     {
-        float3 backgroundReflection = ogxEclipseSkyCloudsFromTex(reflectedVector, skyTexture, pixelSize).rgb / 1200.0; // 天空图。
+        float3 backgroundReflection = ogxSkyCloudLookup(reflectedVector, skyTexture, pixelSize).rgb / 1200.0; // 天空图。
         if (eyeInWater == 1) backgroundReflection *= exp(-waterAbsorb * 15.0) * 2.0; // 水下吸收。
         float3 backgroundTint = float3(1.0); // 背景染色。
-        environmentReflection = ogxEclipseGetEnvironmentReflections(reflectedVector, flatNormal, normal, playerPos,
+        environmentReflection = ogxEnvironmentReflections(reflectedVector, flatNormal, normal, playerPos,
             viewPos, noise, isHand, roughness, backgroundReflectMask, backgroundTint, isWater, environmentQuality,
             sceneTexture, depthTexture, projection, projectionInverse, modelView, modelViewInverse,
             previousProjection, previousModelView, nearPlane, farPlane, cameraDelta, renderScale, texelSize, 0.0); // 屏幕空间反射。
@@ -249,10 +249,10 @@ float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, floa
         specular = lerp(specular, darkened, visibility); // 可见度回退。
     }
     float3 lightSourceReflection = backgroundReflectMask * sunSpecularMultiplier * lightColor
-        * ogxEclipseGgx(normal, -NplayerPos, lightVec, roughness, reflectance, metalAlbedoTint); // 太阳 GGX。
+        * ogxGgxBrdf(normal, -NplayerPos, lightVec, roughness, reflectance, metalAlbedoTint); // 太阳 GGX。
     specular += lightSourceReflection * (1.0 - environmentReflection.a);
     float3 flashLightReflection = flashLightColor * flashLightStuff.a
-        * ogxEclipseGgx(normal, -flashLightStuff.xyz, -flashLightStuff.xyz, roughness, reflectance, metalAlbedoTint); // 手电 GGX。
+        * ogxGgxBrdf(normal, -flashLightStuff.xyz, -flashLightStuff.xyz, roughness, reflectance, metalAlbedoTint); // 手电 GGX。
     specular += flashLightReflection;
     if (handHeldLights && !isHand && firstPersonCamera) // 手持光在反射里的高光。
     {
@@ -262,9 +262,9 @@ float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, floa
             float3 shiftedPlayerPos = ogxMatrix3MulPoint(float3x3(modelViewInverse), shiftedViewPos)
                 + ogxMatrixTranslation(modelViewInverse) + cameraDelta;
             float lightRange = 0.0;
-            float3 handLightCol = ogxEclipseGetHandLight(heldItemId, shiftedPlayerPos, lightRange,
+            float3 handLightCol = ogxHandLightFromBlockData(heldItemId, shiftedPlayerPos, lightRange,
                 blockDataTexture, float3(0.0));
-            if (lightRange > 0.0) specular += handLightCol * ogxEclipseGgx(normal, -shiftedPlayerPos, -shiftedPlayerPos,
+            if (lightRange > 0.0) specular += handLightCol * ogxGgxBrdf(normal, -shiftedPlayerPos, -shiftedPlayerPos,
                 roughness, reflectance, metalAlbedoTint);
         }
         if (heldItemId2 > 0) // 副手。
@@ -273,9 +273,9 @@ float3 ogxEclipseSpecularReflectionsExact(float3 viewPos, float3 playerPos, floa
             float3 shiftedPlayerPos = ogxMatrix3MulPoint(float3x3(modelViewInverse), shiftedViewPos)
                 + ogxMatrixTranslation(modelViewInverse) + cameraDelta;
             float lightRange = 0.0;
-            float3 handLightCol = ogxEclipseGetHandLight(heldItemId2, shiftedPlayerPos, lightRange,
+            float3 handLightCol = ogxHandLightFromBlockData(heldItemId2, shiftedPlayerPos, lightRange,
                 blockDataTexture, float3(0.0));
-            if (lightRange > 0.0) specular += handLightCol * ogxEclipseGgx(normal, -shiftedPlayerPos, -shiftedPlayerPos,
+            if (lightRange > 0.0) specular += handLightCol * ogxGgxBrdf(normal, -shiftedPlayerPos, -shiftedPlayerPos,
                 roughness, reflectance, metalAlbedoTint);
         }
     }

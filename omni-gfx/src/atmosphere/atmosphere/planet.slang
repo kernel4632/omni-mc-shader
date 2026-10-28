@@ -37,28 +37,28 @@ float ogxPlanetRingNoise(float position, Sampler2D noiseTexture)
 
 // Eclipse 的瑞利相函数：Elek 2009 的线性近似，已经除以四派做能量守恒。
 // Eclipse 天空的瑞利相函数：按视线与太阳夹角给出蓝光更强的散射比例。
-float ogxEclipseSkyRayleighPhase(float cosTheta)
+float ogxSkyRayleighPhase(float cosTheta)
 {
     return cosTheta * (0.1 * OGX_INV_PI) + 0.28 * OGX_INV_PI; // 参考实现把两个常数都乘 1/pi。
 }
 
 // Eclipse 的米氏相函数：用 g 的平方与 1.5 次幂，和 Henyey-Greenstein 不是同一公式。
 // Eclipse 天空的米氏相函数：用 g 控制太阳附近的前向散射强度。
-float ogxEclipseSkyMiePhase(float cosTheta, float g)
+float ogxSkyMiePhase(float cosTheta, float g)
 {
     float gg = g * g; // 先算 g 的平方。
     return (gg * -0.25 + 0.25) * OGX_INV_PI * pow(-(2.0 * g) * cosTheta + (gg + 1.0), -1.5); // 参考实现的负指数。
 }
 
 // Eclipse 的相函数对：第一分量瑞利，第二分量米氏。
-float2 ogxEclipseSkyPhase(float cosTheta, float g)
+float2 ogxSkyPhasePair(float cosTheta, float g)
 {
-    return float2(ogxEclipseSkyRayleighPhase(cosTheta), ogxEclipseSkyMiePhase(cosTheta, g));
+    return float2(ogxSkyRayleighPhase(cosTheta), ogxSkyMiePhase(cosTheta, g));
 }
 
 // Eclipse 的大气密度：瑞利与米氏共用一条指数，臭氧用两段指数围出峰值。
 // `planetRadius` 与 `scaleHeights` 由调用方给出，默认是 6731 公里与 8/1.2 公里。
-float3 ogxEclipseSkyDensity(float centerDistance, float planetRadius, float2 scaleHeights)
+float3 ogxSkyDensity(float centerDistance, float planetRadius, float2 scaleHeights)
 {
     float2 inverseScaleHeights = 1.0 / scaleHeights; // 标高倒数。
     float2 rayleighMie = exp(centerDistance * -inverseScaleHeights + planetRadius * inverseScaleHeights); // 瑞利与米氏。
@@ -68,7 +68,7 @@ float3 ogxEclipseSkyDensity(float centerDistance, float planetRadius, float2 sca
 }
 
 // Eclipse 的大气质量：沿视线固定步数积分密度，步长由射线长度决定。
-float3 ogxEclipseSkyAirmass(float3 position, float3 direction, float rayLength, float steps,
+float3 ogxSkyAirmass(float3 position, float3 direction, float rayLength, float steps,
     float planetRadius, float2 scaleHeights)
 {
     float stepSize = rayLength * (1.0 / steps); // 每步长度。
@@ -77,43 +77,43 @@ float3 ogxEclipseSkyAirmass(float3 position, float3 direction, float rayLength, 
     float3 airmass = float3(0.0); // 累积密度。
     for (int i = 0; i < steps; ++i, position += increment) // 固定步数。
     {
-        airmass += ogxEclipseSkyDensity(length(position), planetRadius, scaleHeights); // 逐点累积密度。
+        airmass += ogxSkyDensity(length(position), planetRadius, scaleHeights); // 逐点累积密度。
     }
     return airmass * stepSize; // 乘步长得到光学路径。
 }
 
 // Eclipse 的大气质量射线版：先求与大气顶层的交点，再调用固定步数版。
-float3 ogxEclipseSkyAirmassRay(float3 position, float3 direction, float steps,
+float3 ogxSkyAirmassRay(float3 position, float3 direction, float steps,
     float planetRadius, float2 scaleHeights, float atmosphereRadius)
 {
     float rayLength = dot(position, direction); // 投影长度。
     rayLength = rayLength * rayLength + atmosphereRadius * atmosphereRadius - dot(position, position); // 判别式。
     if (rayLength < 0.0) return float3(0.0); // 射线不碰大气。
     rayLength = sqrt(rayLength) - dot(position, direction); // 到交点的距离。
-    return ogxEclipseSkyAirmass(position, direction, rayLength, steps, planetRadius, scaleHeights); // 交给固定步数版。
+    return ogxSkyAirmass(position, direction, rayLength, steps, planetRadius, scaleHeights); // 交给固定步数版。
 }
 
 // Eclipse 的光学厚度：三种介质的消光系数乘各自的大气质量。
-float3 ogxEclipseSkyOpticalDepth(float3 position, float3 direction, float rayLength, float steps,
+float3 ogxSkyOpticalDepth(float3 position, float3 direction, float rayLength, float steps,
     float planetRadius, float2 scaleHeights,
     float3 coefficientRayleigh, float3 coefficientMie, float3 coefficientOzone)
 {
-    float3 airmass = ogxEclipseSkyAirmass(position, direction, rayLength, steps, planetRadius, scaleHeights); // 三种介质的路径。
+    float3 airmass = ogxSkyAirmass(position, direction, rayLength, steps, planetRadius, scaleHeights); // 三种介质的路径。
     return coefficientRayleigh * airmass.x + coefficientMie * airmass.y + coefficientOzone * airmass.z; // 按介质加权。
 }
 
 // Eclipse 的透过率：把光学厚度换成以二为底的指数，和参考实现的 `exp(-od/ln2)` 等价。
-float3 ogxEclipseSkyTransmittance(float3 position, float3 direction, float rayLength, float steps,
+float3 ogxSkyTransmittance(float3 position, float3 direction, float rayLength, float steps,
     float planetRadius, float2 scaleHeights,
     float3 coefficientRayleigh, float3 coefficientMie, float3 coefficientOzone)
 {
-    float3 depth = ogxEclipseSkyOpticalDepth(position, direction, rayLength, steps, planetRadius, scaleHeights,
+    float3 depth = ogxSkyOpticalDepth(position, direction, rayLength, steps, planetRadius, scaleHeights,
         coefficientRayleigh, coefficientMie, coefficientOzone); // 先算光学厚度。
     return exp2(-depth); // exp(-depth/ln2) 与 exp2(-depth) 等价。
 }
 
 // Eclipse 星场：用星盒三角投影得到星点，再按亮度与数量做指数强化。
-float ogxEclipseStars(float3 viewPos, float brightness, float amount, out float3 starColor)
+float ogxSkyStarField(float3 viewPos, float brightness, float amount, out float3 starColor)
 {
     float stars = max(1.0 - ogxStarBox(viewPos, starColor), 0.0); // 星盒投影。
     return 75.0 * brightness * exp(stars * -20.0 * (1.0 / max(amount, 1e-6))); // 参考实现的亮度曲线。

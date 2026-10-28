@@ -10,6 +10,6 @@ Omni 通用图形库 reflection/specular 模块编译探针：覆盖该效果的
 float4 probeMain(float4 position : SV_Position) : SV_Target
 {
     float t = position.x * 0.001 + 0.25; // 随像素变化的输入。
-    float visibility = ogxEclipseGetReflectionVisibility(t, t, 50.0); // 反射可见度。
+    float visibility = ogxReflectionVisibility(t, t, 50.0); // 反射可见度。
     return float4(visibility, t, 0.0, 1.0); // 有输出即可。
 }

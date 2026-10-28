@@ -32,7 +32,7 @@
 // --- Eclipse 抖动与采样兼容层：参考函数自己取像素坐标、时间与导数 ---
 #ifdef OMNI_FRAGMENT
 // 四乘四拜尔矩阵，参考直接读 gl_FragCoord。
-float bayerDither(){ return ogxEclipseBayerDither(gl_FragCoord.xy); }
+float bayerDither(){ return ogxBayer4Dither(gl_FragCoord.xy); }
 // 三角白噪声，参考直接读当前帧时间。
 float triangWhiteNoise(vec2 n){ return ogxTriangleNoise(n, frameTimeCounter); }
 #endif // 片元阶段结束。

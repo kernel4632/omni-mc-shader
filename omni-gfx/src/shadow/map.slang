@@ -1,25 +1,25 @@
 /*
-Omni 通用图形库Eclipse 阴影模块：边缘压缩、投影偏差、硬阴影、轨道旋转与体素阴影图。
-调用位置：方向光阴影、体素阴影与末地主岛光；由 `/omni-gfx/shadow/eclipse.glsl` 引入。
+Omni 通用图形库阴影贴图模块：边缘压缩、投影偏差、硬阴影、轨道旋转与体素阴影图。
+调用位置：方向光阴影、体素阴影与末地主岛光；由 `/omni-gfx/shadow/map.glsl` 引入，算法与常数来自 Eclipse 的阴影实现。
 可复制示例：
-    float shadow = ogxEclipseComputeVoxelShadowMap(direct, playerPos, 1.0, noise, normal, opaque, translucent, tint, view, proj, 128.0, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, false, m, p); // 计算体素阴影。
+    float shadow = ogxVoxelShadowMap(direct, playerPos, 1.0, noise, normal, opaque, translucent, tint, view, proj, 128.0, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, false, m, p); // 计算体素阴影。
 设计原因与取舍：
     阴影图坐标、压缩系数与样本数全部显式传入；末地主岛光用独立矩阵，普通路径和参考实现一样先压缩再采样。
 */
-#ifndef OGX_SHADOW_ECLIPSE_INCLUDED
-#define OGX_SHADOW_ECLIPSE_INCLUDED
+#ifndef OGX_SHADOW_MAP_INCLUDED
+#define OGX_SHADOW_MAP_INCLUDED
 
 #include "../math.slang"
 #include "../voxel/trace.slang"
 
 // Eclipse 阴影边缘压缩：按到阴影图中心的距离给一个放大系数。
-float ogxEclipseCalcDistort(float2 worldPos, float a, float b, float k)
+float ogxShadowDistortFactor(float2 worldPos, float a, float b, float k)
 {
     return 1.0 / (log(length(worldPos) * b + a) * k); // 参考实现对数的边缘压缩。
 }
 
 // Eclipse 阴影投影偏差：读入齐次阴影坐标，按同一压缩系数缩放横纵。
-float4 ogxEclipseBiasShadowProjection(float4 projectedShadowSpacePosition, float a, float b, float k)
+float4 ogxShadowProjectionBias(float4 projectedShadowSpacePosition, float a, float b, float k)
 {
     float distortFactor = log(length(projectedShadowSpacePosition.xy) * b + a) * k; // 与读取端一致。
     projectedShadowSpacePosition.xy /= distortFactor; // 压缩横纵。
@@ -27,14 +27,14 @@ float4 ogxEclipseBiasShadowProjection(float4 projectedShadowSpacePosition, float
 }
 
 // 硬阴影：阴影图深度比接收点更远时返回零，否则一。
-float ogxEclipseCalculateHardShadows(float shadowDepth, float3 shadowPosition, float bias)
+float ogxHardShadowVisibility(float shadowDepth, float3 shadowPosition, float bias)
 {
     if (shadowPosition.z >= 1.0) return 1.0; // 阴影图外保持全亮。
     return 1.0 - step(shadowDepth, shadowPosition.z - bias); // 参考实现的阶跃比较。
 }
 
 // 自定义旋转矩阵：绕倾斜轴旋转一天的时间角，供月亮轨道与阴影相机使用。
-float3x3 ogxEclipseCustomRotation(float rotationAngle, float timeOfDay)
+float3x3 ogxShadowCustomRotation(float rotationAngle, float timeOfDay)
 {
     float radiance = timeOfDay / 24000.0 * 6.28319; // 一天转一圈。
     float sunRotRad = radians(rotationAngle); // 倾斜角。
@@ -56,7 +56,7 @@ float3x3 ogxEclipseCustomRotation(float rotationAngle, float timeOfDay)
 }
 
 // 体素阴影投影偏差：参考实现的 `applyShadowBias`。
-float3 ogxEclipseApplyShadowBias(float3 projectedShadowPosition, float3 shadowNormal, float shadowDistance,
+float3 ogxShadowBiasProjected(float3 projectedShadowPosition, float3 shadowNormal, float shadowDistance,
     float shadowMapResolution)
 {
     float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个阴影纹素对应的方块比例。
@@ -66,7 +66,7 @@ float3 ogxEclipseApplyShadowBias(float3 projectedShadowPosition, float3 shadowNo
 }
 
 // 体素阴影主函数：参考实现的 `ComputeVoxelShadowMap`，用显式阴影图与矩阵。
-float ogxEclipseComputeVoxelShadowMap(inout float3 directLightColor, float3 playerPos, float maxDistFade,
+float ogxVoxelShadowMap(inout float3 directLightColor, float3 playerPos, float maxDistFade,
     float noise, float3 geoNormals, Sampler2D opaqueShadowMap, Sampler2D translucentShadowMap, Sampler2D shadowcolor0,
     float4x4 shadowView, float4x4 shadowProjection, float shadowDistance, float shadowMapResolution,
     float distortA, float distortB, float distortK, float d0k, int shadowSampleCount, bool basicFilter,
@@ -78,7 +78,7 @@ float ogxEclipseComputeVoxelShadowMap(inout float3 directLightColor, float3 play
     {
         projectedShadowPosition = ogxMatrix3MulPoint(float3x3(shadowView), playerPos) + ogxMatrixTranslation(shadowView); // 转到阴影相机。
         float3 shadowNormal = ogxMatrix3MulPoint(float3x3(shadowView), geoNormals); // 法线也转过去。
-        projectedShadowPosition = ogxEclipseApplyShadowBias(projectedShadowPosition, shadowNormal, shadowDistance, shadowMapResolution); // 推离表面。
+        projectedShadowPosition = ogxShadowBiasProjected(projectedShadowPosition, shadowNormal, shadowDistance, shadowMapResolution); // 推离表面。
         projectedShadowPosition = float3(shadowProjection[0][0], shadowProjection[1][1], shadowProjection[2][2]) * projectedShadowPosition
             + ogxMatrixTranslation(shadowProjection); // 乘投影。
         distortFactor = 1.0 / (log(length(projectedShadowPosition.xy) * distortB + distortA) * distortK); // 边缘压缩。
@@ -89,7 +89,7 @@ float ogxEclipseComputeVoxelShadowMap(inout float3 directLightColor, float3 play
     {
         float4 shadowPos = ogxMatrixMulPoint4(endShadowMatrix, float4(playerPos, 1.0)); // 末地阴影矩阵。
         float3 shadowNormal = ogxMatrix3MulPoint(float3x3(endShadowMatrix), geoNormals); // 法线。
-        shadowPos.xyz = float4(ogxEclipseApplyShadowBias(shadowPos.xyz, shadowNormal, shadowDistance, shadowMapResolution), 1.0).xyz; // 推离。
+        shadowPos.xyz = float4(ogxShadowBiasProjected(shadowPos.xyz, shadowNormal, shadowDistance, shadowMapResolution), 1.0).xyz; // 推离。
         shadowPos = ogxMatrixMulPoint4(endShadowPerspective, shadowPos); // 透视投影。
         projectedShadowPosition = shadowPos.xyz / shadowPos.w; // 齐次除法。
         distortFactor = 1.0; // 末地不做压缩。
@@ -103,7 +103,7 @@ float ogxEclipseComputeVoxelShadowMap(inout float3 directLightColor, float3 play
         if (basicFilter) // 只有开启滤波时才加螺旋偏移。
         {
             float rdMul = (endShader ? 52.0 : 2.4 * distortFactor) * d0k; // 参考实现的半径。
-            float2 offsetS = ogxEclipseCleanVoxelSample(i, float(samples - 1), noise) * rdMul; // 螺旋偏移。
+            float2 offsetS = ogxVoxelSampleOffset(i, float(samples - 1), noise) * rdMul; // 螺旋偏移。
             projectedShadowPosition.xy += offsetS; // 累加偏移。
         }
         if (coloredShadows) // 彩色半透明阴影。
@@ -134,13 +134,13 @@ float ogxEclipseComputeVoxelShadowMap(inout float3 directLightColor, float3 play
 
 // Photonics 阴影：和体素阴影相同的几何路径，但用 Photonics 采样曲线与固定样本数。
 // 光子学阴影图：把可见光源与遮挡写进阴影图，并返回直射光强度。
-float ogxEclipseComputePhotonicsShadowMap(inout float3 directLightColor, float3 playerPos, float maxDistFade,
+float ogxPhotonicsShadowMap(inout float3 directLightColor, float3 playerPos, float maxDistFade,
     float noise, float3 geoNormals, Sampler2D opaqueShadowMap, Sampler2D translucentShadowMap, Sampler2D shadowcolor0,
     float4x4 shadowView, float4x4 shadowProjection, float shadowDistance, float shadowMapResolution,
     float distortA, float distortB, float distortK, float d0k, int shadowSampleCount, bool basicFilter,
     bool coloredShadows, bool endShader)
 {
-    return ogxEclipseComputeVoxelShadowMap(directLightColor, playerPos, maxDistFade, noise, geoNormals,
+    return ogxVoxelShadowMap(directLightColor, playerPos, maxDistFade, noise, geoNormals,
         opaqueShadowMap, translucentShadowMap, shadowcolor0, shadowView, shadowProjection, shadowDistance, shadowMapResolution,
         distortA, distortB, distortK, d0k, shadowSampleCount, basicFilter, coloredShadows, endShader,
         float4x4(1.0), float4x4(1.0)); // 末地矩阵在这里不用，传入单位矩阵。

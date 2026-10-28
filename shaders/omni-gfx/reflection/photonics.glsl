@@ -8,7 +8,7 @@
 Omni 通用图形库Photonics 反射模块：命中面着色、方块光、云影与半透明反射合成。
 调用位置：Eclipse Photonics 风格的体素反射；由 `/omni-gfx/reflection/photonics.glsl` 引入。
 可复制示例：
-    vec4 color = ogxEclipsePhotonicsReflection(job, hits, count, dir, normal, noise, mask, tint, ids, colors, direct, ambient, indirect, 1.0, 0.0, 0.0, 0.0, 0.0, torch, lpv, hand, lpvPos, 64.0, 1.0, 2.0, true, 128.0, 1.0, 1.0, sun, opaque, translucent, tintTex, view, proj, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, 1.0, 1.0, true);
+    vec4 color = ogxPhotonicsReflection(job, hits, count, dir, normal, noise, mask, tint, ids, colors, direct, ambient, indirect, 1.0, 0.0, 0.0, 0.0, 0.0, torch, lpv, hand, lpvPos, 64.0, 1.0, 2.0, true, 128.0, 1.0, 1.0, sun, opaque, translucent, tintTex, view, proj, 2048.0, 0.9, 0.9, 1.0, 1.0, 8, true, false, 1.0, 1.0, true);
 设计原因与取舍：
     半透明命中逐层染色，不透明命中再合成；阴影、方块光与自发光全部走显式参数，采样顺序与参考实现相同。
 */
@@ -16,12 +16,12 @@ Omni 通用图形库Photonics 反射模块：命中面着色、方块光、云�
 #define OGX_REFLECTION_PHOTONICS_INCLUDED
 #include "/omni-gfx/math.glsl"
 #include "/omni-gfx/voxel/voxel.glsl"
-#include "/omni-gfx/shadow/eclipse.glsl"
+#include "/omni-gfx/shadow/map.glsl"
 #include "/omni-gfx/gi/diffuse.glsl"
 #include "/omni-gfx/gi/indirect.glsl"
 // Photonics 反射着色：间接光、方块光、阴影、云影与自发光一起决定命中面颜色。
 // 光子学反射着色：把体素命中、手光与阴影合成为反射颜色。
-void ogxEclipsePhotonicsReflectionShading(inout vec4 color, vec3 normal, vec3 worldPos, float noise,
+void ogxPhotonicsReflectionShading(inout vec4 color, vec3 normal, vec3 worldPos, float noise,
     vec3 directLightColor, vec3 ambientLightColor, int blockID, float skylightmap, vec3 torchColor,
     vec3 lpvSample, vec3 handLight, vec3 lpvPos, float lpvSize, float fadeLength, float torchAmount,
     bool vanillaMask, float shadowDistance, float ambientBrightness, float minLightAmount,
@@ -35,14 +35,14 @@ void ogxEclipsePhotonicsReflectionShading(inout vec4 color, vec3 normal, vec3 wo
     vec2 lightmap = vec2(0.0, skylightmap); // 光照图。
     if (abs(blockID - 197) <= 1 || blockID == 242) lightmap.x = 1.0; // 岩浆块与海晶灯。
     float skylight = mix(0.08 + 0.92 * (1.0 - lightmap.y), 1.0, skyDir); // 天空光。
-    vec3 indirectLighting = ogxEclipseDoIndirectLighting(ambientLightColor * skylight, vec3(1.0),
+    vec3 indirectLighting = ogxIndirectLighting(ambientLightColor * skylight, vec3(1.0),
         lightmap.y, ambientBrightness, minLightAmount, minLightAmountInside, nightVision); // 间接光。
     vec3 playerPosition = worldPos; // 相机相对位置。
-    indirectLighting += ogxEclipseDoBlockLightLightingVoxel(torchColor, lightmap.x, lpvSample, handLight,
+    indirectLighting += ogxBlockLightLightingVoxel(torchColor, lightmap.x, lpvSample, handLight,
         lpvPos, lpvSize, fadeLength, torchAmount, vanillaMask); // 方块光。
     float shadowMapFalloff = smoothstep(0.0, 1.0, min(max(1.0 - length(playerPosition) / (shadowDistance + 16.0), 0.0) * 5.0, 1.0)); // 阴影距离淡出。
     float sh = 1.0; // 阳光阴影。
-    if (!endShader) sh = ogxEclipseComputePhotonicsShadowMap(directLightColor, playerPosition, shadowMapFalloff,
+    if (!endShader) sh = ogxPhotonicsShadowMap(directLightColor, playerPosition, shadowMapFalloff,
         noise, normal, opaqueShadowMap, translucentShadowMap, shadowcolor0, shadowView, shadowProjection,
         shadowDistance, shadowMapResolution, distortA, distortB, distortK, d0k, shadowSampleCount,
         basicFilter, coloredShadows, false); // 主世界阴影。
@@ -72,7 +72,7 @@ void ogxEclipsePhotonicsReflectionShading(inout vec4 color, vec3 normal, vec3 wo
 
 // 严格参考签名的 Photonics 命中面着色：SSS 方块软化、矿石自发光与云影都照原分支保留。
 // 云影由场景阶段预先算好作为显式值传入，避免在反射着色里重复展开整棵云影调用树。
-void ogxEclipsePhotonicsReflectionShadingExact(inout vec4 color, vec3 normal, vec3 worldPos, float noise,
+void ogxPhotonicsReflectionShadingExact(inout vec4 color, vec3 normal, vec3 worldPos, float noise,
     vec3 directLightColor, vec3 ambientLightColor, int blockID, float skylightmap, vec3 torchColor,
     vec3 lpvSample, vec3 handLight, float torchAmount, float shadowDistance, float ambientBrightness,
     float minLightAmount, float minLightAmountInside, float nightVision, float eyeBrightness, float cloudShadow,
@@ -85,12 +85,12 @@ void ogxEclipsePhotonicsReflectionShadingExact(inout vec4 color, vec3 normal, ve
     vec2 lightmap = vec2(0.0, skylightmap); // 光照图。
     if (abs(blockID - 197) <= 1 || blockID == 242) lightmap.x = 1.0; // 岩浆块与海晶灯。
     float skylight = mix(0.08 + 0.92 * (1.0 - lightmap.y), 1.0, skyDir); // 天空光。
-    vec3 indirectLighting = ogxEclipseDoIndirectLighting(ambientLightColor * skylight, vec3(1.0),
+    vec3 indirectLighting = ogxIndirectLighting(ambientLightColor * skylight, vec3(1.0),
         lightmap.y, ambientBrightness, minLightAmount, minLightAmountInside, nightVision); // 间接光。
     vec3 playerPosition = worldPos; // 相机相对位置。
-    indirectLighting += ogxEclipseDoBlockLightLightingVoxelExact(torchColor, lightmap.x, lpvSample, handLight, torchAmount); // 方块光。
+    indirectLighting += ogxBlockLightLightingVoxelExact(torchColor, lightmap.x, lpvSample, handLight, torchAmount); // 方块光。
     float shadowMapFalloff = smoothstep(0.0, 1.0, min(max(1.0 - length(playerPosition) / (shadowDistance + 16.0), 0.0) * 5.0, 1.0)); // 阴影距离淡出。
-    float sh = ogxEclipseComputePhotonicsShadowMap(directLightColor, playerPosition, shadowMapFalloff, noise, normal,
+    float sh = ogxPhotonicsShadowMap(directLightColor, playerPosition, shadowMapFalloff, noise, normal,
         opaqueShadowMap, translucentShadowMap, shadowcolor0, shadowView, shadowProjection, shadowDistance,
         shadowMapResolution, distortA, distortB, distortK, d0k, shadowSampleCount, basicFilter, coloredShadows, false); // 阴影。
     float lightLeakFix = clamp(pow(eyeBrightness / 240.0 + lightmap.y, 2.0), 0.0, 1.0); // 漏光修正。
@@ -123,7 +123,7 @@ void ogxEclipsePhotonicsReflectionShadingExact(inout vec4 color, vec3 normal, ve
 }
 
 // Photonics 反射：先追踪体素，再给半透明与不透明命中着色，最后按雾吸收。
-vec4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHit translucentHits[10],
+vec4 ogxPhotonicsReflection(OgxRayJob job, OgxTranslucentHit translucentHits[10],
     uint translucentHitsCount, vec3 reflectedVector, vec3 flatNormal, vec2 noise,
     inout float backgroundReflectMask, inout vec3 backgroundTint,
     usampler3D voxelIds, sampler3D voxelColors, vec3 directLightColor, vec3 ambientLightColor,
@@ -143,7 +143,7 @@ vec4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHi
         for (uint i = 0u; i < translucentHitsCount; i++) // 逐层半透明。
         {
             vec4 sampleColor = translucentHits[i].hitColor; // 半透明颜色。
-            ogxEclipsePhotonicsReflectionShading(sampleColor, translucentHits[i].hitNormal,
+            ogxPhotonicsReflectionShading(sampleColor, translucentHits[i].hitNormal,
                 translucentHits[i].hitPos, noise.y, directLightColor, ambientLightColor,
                 translucentHits[i].hitId, translucentHits[i].skylight, torchColor, lpvSample, handLight,
                 lpvPos, lpvSize, fadeLength, torchAmount, vanillaMask, shadowDistance, ambientBrightness,
@@ -162,7 +162,7 @@ vec4 ogxEclipsePhotonicsReflection(OgxEclipseRayJob job, OgxEclipseTranslucentHi
     if (job.resultHit) // 不透明命中。
     {
         vec4 sampleColor = vec4(job.resultColor, 1.0); // 命中颜色。
-        ogxEclipsePhotonicsReflectionShading(sampleColor, job.resultNormal, job.resultPosition, noise.y,
+        ogxPhotonicsReflectionShading(sampleColor, job.resultNormal, job.resultPosition, noise.y,
             directLightColor, ambientLightColor, blockID, skylightmap, torchColor, lpvSample, handLight,
             lpvPos, lpvSize, fadeLength, torchAmount, vanillaMask, shadowDistance, ambientBrightness,
             minLightAmount, minLightAmountInside, nightVision, eyeBrightness, cloudShadow, sunVector,

@@ -1,4 +1,14 @@
 # 更新记录
+## 0.16.0-dev.12
+
+结构重构第六批：库内公开名字不再带来源前缀，全部按效果与算法命名。
+
+- 重命名：154 个 `ogxItx*` / `ogxEclipse*` 函数改成按效果与算法命名，例如 TAA 取样 `ogxTaaCurrentDepthFetch`、深度线性化 `ogxLinearizeDepth`、体素 AABB `ogxVoxelAabbIntersect`、极光 `ogxAuroraCurtain`、手光 `ogxHandLightFromBlockData`、双三次权重 `ogxBicubicSplineWeight0`。另有 5 个 `*Eclipse` 后缀函数（`ogxBlackbodyApprox`、`ogxFastAcosPoly` 等）、3 个 `OgxEclipse*` 结构与 7 个含来源名的包含守卫一并改名。
+- 结构：`shadow/eclipse.slang` 改为 `shadow/map.slang`，守卫改为 `OGX_SHADOW_MAP_INCLUDED`；其余守卫按同级文件统一成 `OGX_模块名_INCLUDED`。纯转发入口统一用 `Reference` 后缀，表示按参考签名转调，不保留旧名字或额外别名。
+- 不改算法：机器对比 `HEAD` 的 779 个顶层函数体，把旧名字映射到新名字后缺失 0、新增 0、改动 0；常数、分支与采样顺序逐项保留，`src` 里 `ogxItx*` / `ogxEclipse*` 与 `*Eclipse` / `*Itx` 标识符为 0。
+- 同步更新：生成器的模块表、SPIR-V 探针与探针文件、严格对照目标、人工对照表、生成 GLSL、两份 profile、架构与验证文档；旧 `shaders/omni-gfx/shadow/eclipse.glsl` 已删除。
+- 数量：48 个模块、519 个选项、269 个入口、280 组唯一程序、160 个测试不变；严格对照 exact 474、approximate 0、reference_broken 5、mc_glue 26、missing 0 不变；手写核心 18891 行，低于 18900 上限。
+- 验证：`generate` 48 个模块 49 个文件 15531 行；`spirv` 48/48；`check`、`strict-parity`、`profiles`（iterationt 15605 行、eclipse 15604 行）、`audit`（524 个代码文件）、`verify`（160 个测试，约 5 秒）、`compile`（2 种配置 280 组唯一程序 0 错误）通过。未启动 Minecraft，游戏内画面、菜单、性能与其他显卡仍未验证。
 ## 0.16.0-dev.11
 
 结构重构第五批：层状体积云改用效果名，模块、文件、函数与类型不再带来源名。

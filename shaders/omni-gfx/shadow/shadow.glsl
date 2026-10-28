@@ -48,7 +48,7 @@ void ogxApplyShadowBias(inout vec3 projectedShadowPosition, vec3 shadowNormal, f
 
 // Eclipse 的阴影偏差入口：参考签名保留 playerPos 但内部不使用，几何法线经阴影相机旋转后推坐标。
 // 为什么把矩阵显式传入：参考实现读 shadowModelView，库不绑定宿主矩阵。
-void ogxItxApplyShadowBias(inout vec3 projectedShadowPosition, vec3 playerPos, vec3 geoNormals,
+void ogxApplyShadowBiasMatrix(inout vec3 projectedShadowPosition, vec3 playerPos, vec3 geoNormals,
     mat3 shadowNormalMatrix, float shadowDistance, float shadowMapResolution)
 {
     float biasSize = (shadowDistance / shadowMapResolution * 2.0) * 2.0; // 一个阴影像素对应的世界尺度。

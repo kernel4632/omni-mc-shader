@@ -3,16 +3,16 @@ Omni 通用图形库 iterationT 末地补充模块：末地星空、行星 BRDF�
 调用位置：需要复现 iterationT `EndSky.glsl` 与 `NUBIS.glsl` 的末地程序；Minecraft 光影由
     `/omni-gfx/world/end.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    float3 stars = ogxItxEndStars(worldDir, sunVector, frameTime, 1, 1.0, 1.0);
-    float3 disc = ogxItxBlackHoleStars(color, rayDir, lightDir, 0.5, frameTime, true, true, sunVector, 1, noiseTex, 512.0);
-    float shadow = ogxItxCloudShadowTex(coord, altitude, wind, cameraXZ, sunVector, baseTex, 0.5, offset, 0.4, 0.7, 0.0, 512.0);
+    float3 stars = ogxEndStars(worldDir, sunVector, frameTime, 1, 1.0, 1.0);
+    float3 disc = ogxBlackHoleStars(color, rayDir, lightDir, 0.5, frameTime, true, true, sunVector, 1, noiseTex, 512.0);
+    float shadow = ogxCloudShadowTex(coord, altitude, wind, cameraXZ, sunVector, baseTex, 0.5, offset, 0.4, 0.7, 0.0, 512.0);
 设计原因与取舍：
     参考实现直接读 `frameTimeCounter`、`worldSunVector`、`STAR_TYPE` 与云噪声选项。库把时间、光方向、
     纹理和开关全部改成显式参数，公式、常数、循环次数和采样顺序保持不变。
     噪点纹理只作为参数传入，库不假设它绑定在哪个缓冲；这样末地星空能独立测试，也能在光影里换槽位。
 */
-#ifndef OGX_ITX_END_INCLUDED
-#define OGX_ITX_END_INCLUDED
+#ifndef OGX_WORLD_END_INCLUDED
+#define OGX_WORLD_END_INCLUDED
 
 // 数学提供旋转、黑体色与夹紧；雾提供三维噪声与分形云；云提供顶部曲线；行星提供曲面曲线。
 #include "../math.slang"
@@ -22,7 +22,7 @@ Omni 通用图形库 iterationT 末地补充模块：末地星空、行星 BRDF�
 
 // iterationT 末地星空：按天球格子取哈希星点，星色用黑体温度。
 // `starType` 为零时由调用方决定是否叠加；本函数只负责算出星点。
-float3 ogxItxEndStars(float3 worldDir, float3 worldSunVector, float time, int starType, float brightness, float amount)
+float3 ogxEndStars(float3 worldDir, float3 worldSunVector, float time, int starType, float brightness, float amount)
 {
     float angleY = time * 0.001; // 星空缓慢自转。
     float3x3 eyeRotationY = float3x3(cos(angleY), 0.0, sin(angleY),
@@ -53,7 +53,7 @@ float3 ogxItxEndStars(float3 worldDir, float3 worldSunVector, float time, int st
 
 // iterationT 行星 BRDF：用 Chandrasekhar H 函数与 Lambert 曲线近似行星表面。
 // iterationT 的次表面近似：按法线与光方向补透光，供末地植物使用。
-float3 ogxItxPpss(float3 albedo, float3 normal, float3 eyeDir, float3 lightDir, float s)
+float3 ogxPlanetShading(float3 albedo, float3 normal, float3 eyeDir, float3 lightDir, float s)
 {
     float NdotL = dot(normal, lightDir); // 光线与法线。
     float NdotV = dot(normal, eyeDir); // 视线与法线。
@@ -64,7 +64,7 @@ float3 ogxItxPpss(float3 albedo, float3 normal, float3 eyeDir, float3 lightDir, 
 
 // 黑洞吸积盘主函数：沿射线步进，累计盘面自发光与遮挡。
 // `detailAlongLongitude`、`doppler` 与 `starType` 对应参考实现的三个菜单开关。
-float3 ogxItxBlackHoleStars(float3 color, float3 rayDir, float3 lightDir, float noise, float time,
+float3 ogxBlackHoleStars(float3 color, float3 rayDir, float3 lightDir, float noise, float time,
     bool detailAlongLongitude, bool doppler, float3 worldSunVector, int starType,
     Sampler2D noiseTexture, float noiseResolution)
 {
@@ -132,13 +132,13 @@ float3 ogxItxBlackHoleStars(float3 color, float3 rayDir, float3 lightDir, float 
         result += col * bloomDisc * 0.1 * transmittance; // 叠加圆环。
     }
     result *= rSteps; // 步长归一化。
-    if (starType > 0) color += ogxItxEndStars(rayDir, worldSunVector, time, starType, 1.0, 1.0); // 参考实现的星空叠加。
+    if (starType > 0) color += ogxEndStars(rayDir, worldSunVector, time, starType, 1.0, 1.0); // 参考实现的星空叠加。
     color *= transmittance; // 盘面遮挡背景。
     return color + result; // 最终颜色。
 }
 
 // 黑洞吸积盘反射版：步数更少，细节权重与主函数不同。
-float3 ogxItxBlackHoleReflection(float3 color, float3 rayDir, float3 lightDir, float noise, float time,
+float3 ogxBlackHoleReflection(float3 color, float3 rayDir, float3 lightDir, float noise, float time,
     bool detailAlongLongitude, bool doppler, Sampler2D noiseTexture, float noiseResolution)
 {
     const float steps = 30.0; // 反射只走三十步。
@@ -209,12 +209,12 @@ float3 ogxItxBlackHoleReflection(float3 color, float3 rayDir, float3 lightDir, f
 }
 
 // 云影密度函数的提前声明：云影查表会先调用它，定义放在文件末尾。
-float3 ogxItxCloudShadowDensity(float4 cloudPos, Sampler3D baseNoise, float baseScale, float3 coverageOffset,
+float3 ogxCloudShadowDensity(float4 cloudPos, Sampler3D baseNoise, float baseScale, float3 coverageOffset,
     float clearCoverage, float rainCoverage, float wetness, float3 windDirection);
 
 // iterationT 云影查表：按太阳方向在云层高度取样两次，取较大密度后做指数衰减。
 // `baseNoise` 是云形状噪声；`coverage` 与 `wetness` 由调用方按菜单填写。
-float ogxItxCloudShadowTex(float2 coord, float2 cloudAltitude, float3 windDirection, float2 cameraXZ,
+float ogxCloudShadowTex(float2 coord, float2 cloudAltitude, float3 windDirection, float2 cameraXZ,
     float3 worldShadowVector, Sampler3D baseNoise, float baseScale, float3 coverageOffset,
     float clearCoverage, float rainCoverage, float wetness, float shadowRange)
 {
@@ -222,14 +222,14 @@ float ogxItxCloudShadowTex(float2 coord, float2 cloudAltitude, float3 windDirect
     float4 checkPos = float4(coord.x + cameraXZ.x, 0.0, coord.y + cameraXZ.y, 0.0); // 云影起点。
     float thickness = cloudAltitude.y - cloudAltitude.x; // 云层厚度。
     checkPos += float4(worldShadowVector * ((cloudAltitude.x + thickness * 0.25) / worldShadowVector.y), 0.25); // 沿太阳方向抬到云层。
-    float3 density = ogxItxCloudShadowDensity(checkPos, baseNoise, baseScale, coverageOffset, clearCoverage, rainCoverage, wetness, windDirection); // 第一次取样。
+    float3 density = ogxCloudShadowDensity(checkPos, baseNoise, baseScale, coverageOffset, clearCoverage, rainCoverage, wetness, windDirection); // 第一次取样。
     checkPos += float4(worldShadowVector * ((thickness * 0.25) / worldShadowVector.y), 0.25); // 再抬四分之一层。
-    density = max(density, ogxItxCloudShadowDensity(checkPos, baseNoise, baseScale, coverageOffset, clearCoverage, rainCoverage, wetness, windDirection)); // 第二次取样。
+    density = max(density, ogxCloudShadowDensity(checkPos, baseNoise, baseScale, coverageOffset, clearCoverage, rainCoverage, wetness, windDirection)); // 第二次取样。
     return exp2(-density.y * 20.0); // 参考实现的云影衰减。
 }
 
 // 云影密度：只算基础形状，不算细节层，和参考实现的 `sampleDetail=false` 一致。
-float3 ogxItxCloudShadowDensity(float4 cloudPos, Sampler3D baseNoise, float baseScale, float3 coverageOffset,
+float3 ogxCloudShadowDensity(float4 cloudPos, Sampler3D baseNoise, float baseScale, float3 coverageOffset,
     float clearCoverage, float rainCoverage, float wetness, float3 windDirection)
 {
     float4 baseSample = baseNoise.SampleLevel(cloudPos.xyz * baseScale + windDirection * 10.0, 0.0); // 基础噪声。

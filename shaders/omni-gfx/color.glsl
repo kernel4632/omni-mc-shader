@@ -297,7 +297,7 @@ float ogxLuminanceRec601(vec3 color) { return dot(color, vec3(0.299, 0.587, 0.11
 
 // Eclipse `curve(vec3)`：软肩曲线 `1 - x/(1+x)`，与 iterationT 的宏 `curve` 不是同一条曲线。
 // 单独命名，避免和宿主层已有的 `curve` 宏展开冲突。
-vec3 ogxEclipseCurve(vec3 x) { return 1.0 - x / (1.0 + x); }
+vec3 ogxSoftSaturate3(vec3 x) { return 1.0 - x / (1.0 + x); }
 
 // Eclipse，具体实现在子文件。
 // 子文件：color/agx.slang。
@@ -441,7 +441,7 @@ vec3 ogxTonemapUchimuraModified(vec3 x, float P, float a, float m, float l, floa
 }
 
 // Eclipse 黑体色：按温度拟合 RGB，再转线性；和普朗克轨迹版是两个不同近似。
-vec3 ogxBlackbodyEclipse(float temperature)
+vec3 ogxBlackbodyApprox(float temperature)
 {
     float t = pow(temperature, -1.5); // 高温项。
     float lt = log(temperature); // 对数项。

@@ -30,13 +30,13 @@ vec2 sphereToCart(vec3 dir){
 
 // 天空图集里的云层：经纬贴图坐标夹紧后加图集偏移。
 vec4 skyCloudsFromTex(vec3 pos, sampler2D sampler){
-	vec2 p = ogxEclipseSphereToCarte(pos);
+	vec2 p = ogxSkyLatLongCoord(pos);
 	vec2 uv = clamp(p, 0.0, 1.0) * pixelSize * 256.0 + vec2(18.5 + 257.0, 1.5) * pixelSize;
 	return texture(sampler, uv);
 }
 // 带粗糙度的云层查询：参考把粗糙度转成纵向压缩，再做一次 clamp。
 vec4 skyCloudsFromTexLOD(vec3 pos, sampler2D sampler, float roughness){
-	vec2 p = ogxEclipseSphereToCarte(pos);
+	vec2 p = ogxSkyLatLongCoord(pos);
 	roughness = 1.0 - pow(1.0 - roughness, 3.0);
 	float y = min(max(p.y - 0.5, 0.0) * 50.0, 1.0);
 	p = mix(p, (p - 0.5) * (1.0 - roughness) + 0.5, y);
@@ -47,29 +47,29 @@ vec4 skyCloudsFromTexLOD(vec3 pos, sampler2D sampler, float roughness){
 }
 // 模糊云层：参考第三个参数不使用，只为保持签名。
 vec4 skyCloudsFromTexBLUR(vec3 pos, sampler2D sampler, float roughness){
-	vec2 p = ogxEclipseSphereToCarte(pos);
+	vec2 p = ogxSkyLatLongCoord(pos);
 	vec2 scaleA = pixelSize * 256.0;
 	vec2 scaleB = vec2(18.5 + 257.0, 1.5) * pixelSize;
 	return texture(sampler, clamp(p, 0.0, 1.0) * scaleA + scaleB);
 }
 // 体积雾图：右下角子图加固定偏移，按调用方给的 LOD 细节层级取样。
 vec4 volumetricsFromTex(vec3 pos, sampler2D sampler, float lod){
-	vec2 p = clamp(ogxEclipseSphereToCarte(pos), 0.0, 1.0);
+	vec2 p = clamp(ogxSkyLatLongCoord(pos), 0.0, 1.0);
 	vec2 uv = p * pixelSize * 256.0 + vec2(256.0 - 256.0 * 0.12, 1.5) * pixelSize;
 	return textureLod(sampler, uv, lod);
 }
 // 天空底色图：夹到图集左上角的天空子图。
 vec3 skyFromTex(vec3 pos, sampler2D sampler){
-	vec2 p = ogxEclipseSphereToCarte(pos);
+	vec2 p = ogxSkyLatLongCoord(pos);
 	vec2 clampUV = vec2(1.0);
 	p = clamp(p * 2.0 - 1.0, -clampUV, clampUV) * 0.5 + 0.5;
 	return texture(sampler, p * pixelSize * 256.0 + vec2(18.5, 1.5) * pixelSize).rgb;
 }
 // 四次采样三次插值，返回四通道。
-vec4 texture_bicubic(sampler2D tex, vec2 uv){ return ogxEclipseBicubicTexture(tex, uv, pixelSize); }
+vec4 texture_bicubic(sampler2D tex, vec2 uv){ return ogxBicubicSplineTexture(tex, uv, pixelSize); }
 // 带抖动偏移的三次插值。
 vec4 texture_bicubic_offset(sampler2D tex, vec2 uv, float noise, float scale){
-	return ogxEclipseBicubicTextureOffset(tex, uv, noise, scale, pixelSize);
+	return ogxBicubicSplineTextureOffset(tex, uv, noise, scale, pixelSize);
 }
 
 #endif // Eclipse 天空纹理兼容层结束。

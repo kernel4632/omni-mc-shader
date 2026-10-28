@@ -9,9 +9,9 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
 调用位置：需要复现 Eclipse `indirect_lighting_effects.glsl` 的程序；Minecraft 光影由
     `/omni-gfx/gi/indirect.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    vec3 dir = ogxEclipseTangentToWorld(normal, ogxEclipseCosineHemisphereSample(xi));
-    vec3 hit = ogxEclipseRayTraceGi(rayDir, viewPos, dither, 5.0, nearPlane, farPlane, 1.0, depthTex, projection);
-    vec3 gi = ogxEclipseApplySsrt(indirect, blockLight, minimumLight, viewPos, normal, noise, lightmap,
+    vec3 dir = ogxTangentToWorld(normal, ogxCosineHemisphereDirection(xi));
+    vec3 hit = ogxGiRayTrace(rayDir, viewPos, dither, 5.0, nearPlane, farPlane, 1.0, depthTex, projection);
+    vec3 gi = ogxApplySsrt(indirect, blockLight, minimumLight, viewPos, normal, noise, lightmap,
         false, false, pixel, frame, 8, 32, 1.0, sceneTex, depthTex, modelView, prevModelView,
         modelViewInverse, prevProjection, cameraPos - prevCameraPos, texelSize);
 设计原因与取舍：
@@ -19,15 +19,15 @@ Omni 通用图形库 Eclipse 间接光模块：余弦半球采样、切线基、
     矩阵、纹理、射线数与开关全部改成显式参数；公式、循环顺序与分支条件保持参考实现。
     纹理只作为参数传入，库不绑定缓冲；调用方可以换分辨率、换历史缓冲，也可以独立测试。
 */
-#ifndef OGX_ECLIPSE_INDIRECT_INCLUDED
-#define OGX_ECLIPSE_INDIRECT_INCLUDED
+#ifndef OGX_GI_INDIRECT_INCLUDED
+#define OGX_GI_INDIRECT_INCLUDED
 
 // 相机提供投影与屏幕换算；数学提供夹紧与 R2 采样。
 #include "/omni-gfx/camera.glsl"
 #include "/omni-gfx/math.glsl"
 #include "/omni-gfx/reflection/reflection.glsl"
 // 余弦半球采样：把二维均匀随机数变成半球上的余弦分布方向。
-vec3 ogxEclipseCosineHemisphereSample(vec2 xi)
+vec3 ogxCosineHemisphereDirection(vec2 xi)
 {
     float theta = 2.0 * 3.14159265359 * xi.y; // 方位角。
     float r = sqrt(xi.x); // 半径。
@@ -37,7 +37,7 @@ vec3 ogxEclipseCosineHemisphereSample(vec2 xi)
 }
 
 // 切线空间转世界：用任意上向量构造一组正交基，再把半球方向转过去。
-vec3 ogxEclipseTangentToWorld(vec3 N, vec3 H)
+vec3 ogxTangentToWorld(vec3 N, vec3 H)
 {
     vec3 upVector = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0); // 避免叉乘退化。
     vec3 T = normalize(cross(upVector, N)); // 切向。
@@ -46,19 +46,19 @@ vec3 ogxEclipseTangentToWorld(vec3 N, vec3 H)
 }
 
 // Eclipse 线性深度：屏幕深度换米制距离。
-float ogxEclipseLinZ(float depth, float nearPlane, float farPlane)
+float ogxLinearizeDepth(float depth, float nearPlane, float farPlane)
 {
     return (2.0 * nearPlane) / (farPlane + nearPlane - depth * (farPlane - nearPlane)); // 参考实现的分式。
 }
 
 // Eclipse 线性深度反解：米制距离换屏幕深度。
-float ogxEclipseInvLinZ(float linearDepth, float nearPlane, float farPlane)
+float ogxLinearToScreenDepth(float linearDepth, float nearPlane, float farPlane)
 {
     return -((2.0 * nearPlane / linearDepth) - farPlane - nearPlane) / (farPlane - nearPlane); // 参考实现的反解。
 }
 
 // Eclipse R2 采样：低差异序列，给每个像素不同的射线相位。
-vec2 ogxEclipseR2Samples(int n)
+vec2 ogxR2Sequence(int n)
 {
     vec2 alpha = vec2(0.75487765, 0.56984026); // 参考实现的常数。
     return fract(alpha * float(n)); // 取小数。
@@ -73,7 +73,7 @@ vec2 texelFetchSize(sampler2D tex)
 // 取得纹理的像素尺寸：库需要显式尺寸，避免依赖宿主 `texelSize`。
 // 屏幕空间 GI 追踪：从视空间位置沿方向步进，撞到深度图里的表面就返回命中点。
 // `quarterRes` 为真时读取四分之一分辨率深度缓冲的 alpha 通道。
-vec3 ogxEclipseRayTraceGi(vec3 dir, vec3 position, float dither, float quality,
+vec3 ogxGiRayTrace(vec3 dir, vec3 position, float dither, float quality,
     float nearPlane, float farPlane, float renderScale, sampler2D depthTexture, bool quarterRes,
     mat4 projection)
 {
@@ -88,16 +88,16 @@ vec3 ogxEclipseRayTraceGi(vec3 dir, vec3 position, float dither, float quality,
     clipPosition.xy *= renderScale; // 渲染缩放。
     stepv.xy *= renderScale; // 步长同样缩放。
     vec3 spos = clipPosition + stepv * dither; // 起点加抖动。
-    float minZ = spos.z - biasAmount / ogxEclipseLinZ(spos.z, nearPlane, farPlane); // 深度下界。
+    float minZ = spos.z - biasAmount / ogxLinearizeDepth(spos.z, nearPlane, farPlane); // 深度下界。
     float maxZ = spos.z; // 深度上界。
     for (int i = 0; i <= int(quality); i++) // 固定步数。
     {
         float sampleDepth; // 读深度；分支写成块，严格对照才能按四分之一分辨率开关裁掉另一条。
         if (quarterRes) { sampleDepth = sqrt(texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture) / 4.0), 0).a / 65000.0); }
-        else { sampleDepth = ogxEclipseLinZ(texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture)), 0).r, nearPlane, farPlane); }
-        float sp = ogxEclipseInvLinZ(sampleDepth, nearPlane, farPlane); // 反解屏幕深度。
+        else { sampleDepth = ogxLinearizeDepth(texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture)), 0).r, nearPlane, farPlane); }
+        float sp = ogxLinearToScreenDepth(sampleDepth, nearPlane, farPlane); // 反解屏幕深度。
         if ((sp < max(minZ, maxZ) && sp > min(minZ, maxZ))) return vec3(spos.xy / renderScale, sp); // 命中。
-        minZ = maxZ - biasAmount / ogxEclipseLinZ(spos.z, nearPlane, farPlane); // 推进下界。
+        minZ = maxZ - biasAmount / ogxLinearizeDepth(spos.z, nearPlane, farPlane); // 推进下界。
         maxZ += stepv.z; // 推进上界。
         spos += stepv; // 前进一步。
     }
@@ -105,7 +105,7 @@ vec3 ogxEclipseRayTraceGi(vec3 dir, vec3 position, float dither, float quality,
 }
 
 // Eclipse 备用屏幕空间追踪：按屏幕距离决定步长，步数由参考实现的射线步数上限控制。
-vec3 ogxEclipseRtAlternate(vec3 dir, vec3 position, float noise, float stepSizes, bool hand,
+vec3 ogxGiRayMarch(vec3 dir, vec3 position, float noise, float stepSizes, bool hand,
     inout float curve, int raySteps, float nearPlane, float farPlane, float renderScale,
     vec2 viewSize, vec2 texelSize, vec2 taaOffset, sampler2D depthTexture, bool quarterRes,
     mat4 projection, mat4 modelViewInverse)
@@ -130,7 +130,7 @@ vec3 ogxEclipseRtAlternate(vec3 dir, vec3 position, float noise, float stepSizes
     stepv.xy *= renderScale; // 步长缩放。
     vec3 spos = clipPosition + stepv * noise; // 起点加抖动。
     spos.xy += taaOffset * texelSize * 0.5 * renderScale; // 时间抗锯齿偏移。
-    float minZ = spos.z - biasAmount / ogxEclipseLinZ(spos.z, nearPlane, farPlane); // 深度下界。
+    float minZ = spos.z - biasAmount / ogxLinearizeDepth(spos.z, nearPlane, farPlane); // 深度下界。
     float maxZ = spos.z; // 深度上界。
     curve = 0.0; // 命中前曲线为零。
     for (int i = 0; i < iterations; i++) // 逐级步进。
@@ -138,10 +138,10 @@ vec3 ogxEclipseRtAlternate(vec3 dir, vec3 position, float noise, float stepSizes
         spos.xy = clamp(spos.xy, screenEdges, 1.0 - screenEdges); // 夹到屏幕内。
         if (spos.x < 0.0 || spos.y < 0.0 || spos.z < 0.0 || spos.x > 1.0 || spos.y > 1.0 || spos.z > 1.0) return vec3(1.1); // 离开屏幕。
         float sp; // 读深度；分支写成块，严格对照才能按四分之一分辨率开关裁掉另一条。
-        if (quarterRes) { sp = ogxEclipseInvLinZ(sqrt(texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture) / 4.0), 0).a / 65000.0), nearPlane, farPlane); }
+        if (quarterRes) { sp = ogxLinearToScreenDepth(sqrt(texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture) / 4.0), 0).a / 65000.0), nearPlane, farPlane); }
         else { sp = texelFetch(depthTexture, ivec2(spos.xy / texelFetchSize(depthTexture)), 0).r; }
-        float currZ = ogxEclipseLinZ(spos.z, nearPlane, farPlane); // 当前米制深度。
-        float nextZ = ogxEclipseLinZ(sp, nearPlane, farPlane); // 采样米制深度。
+        float currZ = ogxLinearizeDepth(spos.z, nearPlane, farPlane); // 当前米制深度。
+        float nextZ = ogxLinearizeDepth(sp, nearPlane, farPlane); // 采样米制深度。
         if (nextZ < currZ && (sp <= max(minZ, maxZ) && sp >= min(minZ, maxZ))) return vec3(spos.xy / renderScale, sp); // 命中。
         minZ = maxZ - biasAmount / currZ; // 推进下界。
         maxZ += stepv.z; // 推进上界。
@@ -152,7 +152,7 @@ vec3 ogxEclipseRtAlternate(vec3 dir, vec3 position, float noise, float stepSizes
 }
 
 // 双边上采样 SSAO：四邻域按深度差加权，避免把远景遮蔽糊到近景。
-vec4 ogxEclipseBilateralUpscaleSsao(sampler2D source, sampler2D sourceDepth, ivec2 pixel,
+vec4 ogxBilateralUpscaleSsao(sampler2D source, sampler2D sourceDepth, ivec2 pixel,
     int upscale, float referenceDepth, float depthThreshold, bool packedDepth, float nearPlane, float farPlane)
 {
     ivec2 scaling = ivec2(1); // 参考实现的缩放。
@@ -167,7 +167,7 @@ vec4 ogxEclipseBilateralUpscaleSsao(sampler2D source, sampler2D sourceDepth, ive
         ivec2 radius = offsets[i]; // 当前偏移。
         float offsetDepth; // 读深度；分支写成块，严格对照才能按打包深度开关裁掉另一条。
         if (packedDepth) { offsetDepth = sqrt(texelFetch(sourceDepth, posDepth + radius * scaling + pos * scaling, 0).a / 65000.0); }
-        else { offsetDepth = ogxEclipseLinZ(texelFetch(sourceDepth, posDepth + radius * scaling + pos * scaling, 0).r, nearPlane, farPlane); }
+        else { offsetDepth = ogxLinearizeDepth(texelFetch(sourceDepth, posDepth + radius * scaling + pos * scaling, 0).r, nearPlane, farPlane); }
         float edges = abs(offsetDepth - referenceDepth) < depthThreshold ? 1.0 : 1e-5; // 深度边缘权重。
         result += texelFetch(source, posColor + radius + pos, 0) * edges; // 颜色加权。
         sum += edges; // 权重累加。
@@ -177,16 +177,16 @@ vec4 ogxEclipseBilateralUpscaleSsao(sampler2D source, sampler2D sourceDepth, ive
 
 // Eclipse 双边上采样入口：参考签名把像素坐标写成 vec2，内部仍按整数像素取四邻域。
 // 只是为了保持参考参数顺序，算式走同一份四邻域深度加权。
-vec4 ogxItxBilateralUpscaleSsao(sampler2D source, sampler2D sourceDepth, vec2 coord,
+vec4 ogxBilateralUpscaleSsaoReference(sampler2D source, sampler2D sourceDepth, vec2 coord,
     float referenceDepth, int upscale, float depthThreshold, float nearPlane, float farPlane)
 {
-    return ogxEclipseBilateralUpscaleSsao(source, sourceDepth, ivec2(coord), upscale, referenceDepth,
+    return ogxBilateralUpscaleSsao(source, sourceDepth, ivec2(coord), upscale, referenceDepth,
         depthThreshold, false, nearPlane, farPlane);
 }
 
 // SSGI 合成：多根余弦半球射线，命中时读历史场景色，未命中时保留天空贡献。
 // 把屏幕空间追踪结果混进间接光，按最小光色与遮挡权重取舍。
-vec3 ogxEclipseApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
+vec3 ogxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
     vec3 viewPos, vec3 normal, vec3 noise, float lightmap, bool isGrass, bool isLod,
     ivec2 pixelCoord, int frameCounter, int rayCount, int raySteps, float giStrength,
     sampler2D sceneTexture, sampler2D depthTexture, vec2 texelSize,
@@ -207,11 +207,11 @@ vec3 ogxEclipseApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 mini
     for (int i = 0; i < nrays; i++) // 逐射线。
     {
         int seed = (frameCounter % 40000) * nrays + i; // 参考实现的帧序列。
-        vec2 ij = fract(ogxEclipseR2Samples(seed) + noise.xy); // 采样点。
-        vec3 rayDir = ogxEclipseTangentToWorld(normal, normalize(ogxEclipseCosineHemisphereSample(ij))); // 世界方向。
+        vec2 ij = fract(ogxR2Sequence(seed) + noise.xy); // 采样点。
+        vec3 rayDir = ogxTangentToWorld(normal, normalize(ogxCosineHemisphereDirection(ij))); // 世界方向。
         vec3 rayHit = highQuality
-            ? ogxEclipseRayTraceGi(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos, noise.z, 5.0 * float(raySteps), nearPlane, farPlane, 1.0, depthTexture, quarterRes, projection)
-            : ogxEclipseRtAlternate(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos, noise.z, float(raySteps), isLod, curve, raySteps, nearPlane, farPlane, 1.0, viewSize, texelSize, vec2(0.0), depthTexture, quarterRes, projection, modelViewInverse); // 低质量版。
+            ? ogxGiRayTrace(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos, noise.z, 5.0 * float(raySteps), nearPlane, farPlane, 1.0, depthTexture, quarterRes, projection)
+            : ogxGiRayMarch(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos, noise.z, float(raySteps), isLod, curve, raySteps, nearPlane, farPlane, 1.0, viewSize, texelSize, vec2(0.0), depthTexture, quarterRes, projection, modelViewInverse); // 低质量版。
         curve = 1.0 - pow(1.0 - pow(1.0 - curve, 2.0), 5.0); // 参考实现的曲线重整。
         skycontribution = unchangedIndirect * (max(rayDir.y, pow(1.0 - lightmap, 2.0)) * 0.95 + 0.05) * 1.25; // 天空权重。
         radiance += skycontribution; // 累积天空。
@@ -238,7 +238,7 @@ vec3 ogxEclipseApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 mini
 // Eclipse 的 SSGI 合成主循环：只走参考实现的低质量追踪分支，四根余弦半球射线。
 // 为什么单独一份：增强版还带高质量追踪、历史场景色与手部排除；参考默认路径只调用
 // `RT_alternate`，采样次数因此是四根射线各一次深度读取。
-vec3 ogxItxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
+vec3 ogxApplySsrtReference(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumLightColor,
     vec3 viewPos, vec3 normal, vec3 noise, float lightmap, bool isGrass, bool isLod,
     ivec2 pixelCoord, int frameCounter, int rayCount, int raySteps, vec2 viewSize, vec2 texelSize,
     sampler2D depthTexture, mat4 modelView, mat4 modelViewInverse, mat4 projection,
@@ -255,9 +255,9 @@ vec3 ogxItxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumL
     for (int i = 0; i < nrays; i++) // 逐射线。
     {
         int seed = (frameCounter % 40000) * nrays + i; // 参考实现的帧序列。
-        vec2 ij = fract(ogxEclipseR2Samples(seed) + noise.xy); // 采样点。
-        vec3 rayDir = ogxEclipseTangentToWorld(normal, normalize(ogxEclipseCosineHemisphereSample(ij))); // 世界方向。
-        vec3 rayHit = ogxEclipseRtAlternate(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos,
+        vec2 ij = fract(ogxR2Sequence(seed) + noise.xy); // 采样点。
+        vec3 rayDir = ogxTangentToWorld(normal, normalize(ogxCosineHemisphereDirection(ij))); // 世界方向。
+        vec3 rayHit = ogxGiRayMarch(ogxMatrix3MulPoint(mat3(modelView), rayDir), viewPos,
             noise.z, float(raySteps), isLod, curve, raySteps, nearPlane, farPlane, 1.0, viewSize, texelSize,
             vec2(0.0), depthTexture, true, projection, modelViewInverse); // 参考的低质量追踪。
         curve = 1.0 - pow(1.0 - pow(1.0 - curve, 2.0), 5.0); // 曲线重整。
@@ -276,7 +276,7 @@ vec3 ogxItxApplySsrt(vec3 unchangedIndirect, vec3 blockLightColor, vec3 minimumL
 }
 
 // 间接光：Eclipse 的 `doIndirectLighting`，把光照图曲线乘到环境光上。
-vec3 ogxEclipseDoIndirectLighting(vec3 lightColor, vec3 minimumLightColor, float lightmap,
+vec3 ogxIndirectLighting(vec3 lightColor, vec3 minimumLightColor, float lightmap,
     float ambientBrightness, float minLightAmount, float minLightAmountInside, float nightVision)
 {
     float lightmapCurve = (pow(lightmap, 15.0) * 2.0 + lightmap * lightmap) / 3.0; // 参考实现的曲线。

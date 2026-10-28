@@ -141,7 +141,7 @@ vec4 ogxVoxelReflection(vec3 originWorld, vec3 rayDirWorld, vec3 surfaceNormal, 
 uint ogxGetVoxelBlock(usampler3D voxelMask, ivec3 voxelPos);
 
 // Eclipse 体素块读取入口：参考签名只给坐标，三维体素图作为显式资源传入。
-uint ogxItxGetVoxelBlock(ivec3 voxelPos, usampler3D voxelMask)
+uint ogxGetVoxelBlockReference(ivec3 voxelPos, usampler3D voxelMask)
 {
     return ogxGetVoxelBlock(voxelMask, voxelPos); // 转调同一个三维取像素。
 }
@@ -247,7 +247,7 @@ uint ogxPopulateShadowVoxelIndex(vec3 playerPos, vec3 cameraOffset, ivec3 midBlo
 
 // Eclipse 自发光强度：把颜色转成 HSV，按饱和度与亮度估计发光，再压到一半。
 // 参考用全局 Albedo，库版本显式接收颜色；常数与参考一致。
-float ogxEclipseGetPhotonicsEmission(vec3 albedo)
+float ogxPhotonicsEmission(vec3 albedo)
 {
     vec3 hsv = ogxRgbToHsv(albedo); // 发光只跟色相饱和度与亮度有关。
     float emissive = smoothstep(0.05, 0.15, hsv.y) * pow(hsv.z, 3.5); // 低饱和颜色不算发光。
@@ -257,7 +257,7 @@ float ogxEclipseGetPhotonicsEmission(vec3 albedo)
 // 解码一个体素面的完整数据：脸表纹理的第 y 行是六个面，x 轴是一维体素下标。
 // 为什么把参考的 SSBO 换成二维纹理：参考的 `voxelData` 声明被注释掉，原文不能编译；
 // 这里把同一份 `[voxelIndex][normalIndex]` 数据装进只读纹理，取格语义保持不变。
-void ogxEclipseGetVoxelData(ivec3 voxelPos, inout vec2 texcoord, inout vec3 tintColor,
+void ogxGetVoxelData(ivec3 voxelPos, inout vec2 texcoord, inout vec3 tintColor,
     vec3 voxelNormal, inout vec2 lightmap, sampler2D voxelDataTexture, int voxelSize)
 {
     int index = ogxVoxelIndex(voxelPos, voxelSize); // 三轴展开成一维格号。
@@ -271,7 +271,7 @@ void ogxEclipseGetVoxelData(ivec3 voxelPos, inout vec2 texcoord, inout vec3 tint
 }
 
 // 只读体素贴图坐标：反射裁剪只需要第一个分量的十六位解包。
-void ogxEclipseGetTexCoord(ivec3 voxelPos, inout vec2 texcoord, vec3 voxelNormal,
+void ogxGetVoxelFaceTexCoord(ivec3 voxelPos, inout vec2 texcoord, vec3 voxelNormal,
     sampler2D voxelDataTexture, int voxelSize)
 {
     int index = ogxVoxelIndex(voxelPos, voxelSize); // 与完整解码共用同一套格号。
@@ -282,7 +282,7 @@ void ogxEclipseGetTexCoord(ivec3 voxelPos, inout vec2 texcoord, vec3 voxelNormal
 // 写入体素掩码：参考直接 imageStore，库把目标格与编号交给调用方显式接收。
 // 为什么用 out 参数：GLSL 330 没有三维可写图像，宿主的图像存储属于渲染器资源；
 // 这里保留参考的边界判断与写入值，调用方把结果刷进自己的图像或缓冲。
-void ogxEclipseSetVoxelBlock(ivec3 voxelPos, uint blockId, int voxelSize,
+void ogxSetVoxelBlock(ivec3 voxelPos, uint blockId, int voxelSize,
     inout ivec3 writePos, inout uint writeId)
 {
     // 为什么要逐分量比较：Slang 的向量 `!=` 返回布尔向量，不能直接当条件；
@@ -297,7 +297,7 @@ void ogxEclipseSetVoxelBlock(ivec3 voxelPos, uint blockId, int voxelSize,
 // 阴影体素写入：把参考的渲染阶段、实体编号与方块编号换成显式输入。
 // `terrainStage`、`entityStage`、`blockEntityStage` 由宿主按当前绘制阶段给出；
 // `writePos` 与 `writeId` 接收最终写入位置和编号，方便宿主刷新体素图。
-void ogxEclipsePopulateShadowVoxel(vec3 playerPos, vec3 eyeOffset, vec3 cameraFraction, vec3 midBlock,
+void ogxPopulateShadowVoxel(vec3 playerPos, vec3 eyeOffset, vec3 cameraFraction, vec3 midBlock,
     bool terrainStage, bool entityStage, bool blockEntityStage, float blockEntityId,
     float entityId, float currentRenderedItemId, float mcEntityX, int voxelSize,
     bool lpvEntityLights, bool waterInteraction, inout ivec3 writePos, inout uint writeId)
@@ -338,7 +338,7 @@ void ogxEclipsePopulateShadowVoxel(vec3 playerPos, vec3 eyeOffset, vec3 cameraFr
     {
         if (entityId == 1612.0 || entityId == 1613.0) voxelId = uint(entityId) + 2000u; // 船与小船加入体素。
     }
-    if (voxelId > 0u) ogxEclipseSetVoxelBlock(voxelPos, voxelId, voxelSize, writePos, writeId); // 最终写入。
+    if (voxelId > 0u) ogxSetVoxelBlock(voxelPos, voxelId, voxelSize, writePos, writeId); // 最终写入。
 }
 
 #endif

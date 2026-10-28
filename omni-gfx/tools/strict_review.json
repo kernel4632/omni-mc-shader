@@ -357,10 +357,10 @@
       "target": "math/filter.ogxRotate2Matrix"
     },
     "tri": {
-      "target": "math/filter.ogxEclipseTri"
+      "target": "math/filter.ogxTriangleGradient"
     },
     "tri2": {
-      "target": "math/filter.ogxEclipseTri2"
+      "target": "math/filter.ogxTriangleGradient2d"
     },
     "rotate": {
       "target": "math/basics.ogxRotate2"
@@ -426,7 +426,7 @@
       "target": "fog/fog/end.ogxEndVortexLightPhase"
     },
     "phaseEND": {
-      "target": "fog/fog/end.ogxEndFogPhaseEclipse"
+      "target": "fog/fog/end.ogxEndFogPhaseAnisotropic"
     },
     "RgbToHsv": {
       "target": "math/pattern.ogxRgbToHsv"
@@ -435,10 +435,10 @@
       "target": "math/filter.ogxR2Sample"
     },
     "cosineHemisphereSample": {
-      "target": "gi/indirect.ogxEclipseCosineHemisphereSample"
+      "target": "gi/indirect.ogxCosineHemisphereDirection"
     },
     "TangentToWorld": {
-      "target": "gi/indirect.ogxEclipseTangentToWorld"
+      "target": "gi/indirect.ogxTangentToWorld"
     },
     "SpiralSample": {
       "target": "math/basics.ogxSpiralSample"
@@ -459,7 +459,7 @@
       "target": "math/basics.ogxNormalize"
     },
     "fast_acos": {
-      "target": "math/filter.ogxFastAcosEclipse"
+      "target": "math/filter.ogxFastAcosPoly"
     },
     "project": {
       "target": "camera.ogxProject"
@@ -468,7 +468,7 @@
       "target": "camera.ogxProjectAndDivide"
     },
     "integrate_arc": {
-      "target": "gi/ambientocclusion.ogxEclipseIntegrateArc"
+      "target": "gi/ambientocclusion.ogxGtaoArcIntegral"
     },
     "hash12": {
       "target": "noise.ogxHash12"
@@ -477,19 +477,19 @@
       "target": "noise.ogxHash22"
     },
     "sky_rayleighPhase": {
-      "target": "atmosphere/atmosphere/planet.ogxEclipseSkyRayleighPhase"
+      "target": "atmosphere/atmosphere/planet.ogxSkyRayleighPhase"
     },
     "sky_miePhase": {
-      "target": "atmosphere/atmosphere/planet.ogxEclipseSkyMiePhase"
+      "target": "atmosphere/atmosphere/planet.ogxSkyMiePhase"
     },
     "sky_phase": {
-      "target": "atmosphere/atmosphere/planet.ogxEclipseSkyPhase"
+      "target": "atmosphere/atmosphere/planet.ogxSkyPhasePair"
     },
     "drawSun": {
-      "target": "atmosphere/sky.ogxEclipseDrawSun"
+      "target": "atmosphere/sky.ogxSkySunDisc"
     },
     "sphereMap": {
-      "target": "atmosphere/sky.ogxEclipseSphereMap"
+      "target": "atmosphere/sky.ogxSkyDomeMap"
     },
     "w0": {
       "target": "math/filter.ogxCubicWeight0"
@@ -516,25 +516,25 @@
       "target": "math/filter.ogxCubicOffsetHigh"
     },
     "sphereToCarte": {
-      "target": "atmosphere/sky.ogxEclipseSphereToCarte"
+      "target": "atmosphere/sky.ogxSkyLatLongCoord"
     },
     "CoordBase": {
-      "target": "reflection/specular.ogxEclipseFrisvad"
+      "target": "reflection/specular.ogxFrisvadBasis"
     },
     "fma2": {
       "target": "math/basics.ogxFma2#2"
     },
     "SampleVNDFGGX": {
-      "target": "reflection/specular.ogxEclipseSampleVndfGgx"
+      "target": "reflection/specular.ogxGgxVndfDirection"
     },
     "GGX": {
-      "target": "reflection/specular.ogxEclipseGgx"
+      "target": "reflection/specular.ogxGgxBrdf"
     },
     "shlickFresnelRoughness": {
-      "target": "reflection/specular.ogxEclipseShlickFresnelRoughness"
+      "target": "reflection/specular.ogxFresnelSchlickRoughness"
     },
     "CleanPhotonicsSample": {
-      "target": "voxel/trace.ogxEclipseCleanVoxelSample"
+      "target": "voxel/trace.ogxVoxelSampleOffset"
     },
     "hash13": {
       "target": "atmosphere/atmosphere/sun.ogxStarHash13"
@@ -561,10 +561,10 @@
       "target": "math/basics.ogxCircleMapL"
     },
     "clampNormal": {
-      "target": "reflection/specular.ogxEclipseClampNormal"
+      "target": "reflection/specular.ogxClampReflectionNormal"
     },
     "calculateHardShadows": {
-      "target": "shadow/eclipse.ogxEclipseCalculateHardShadows"
+      "target": "shadow/map.ogxHardShadowVisibility"
     },
     "genUnitVector": {
       "target": "math/filter.ogxGenUnitVector"
@@ -582,7 +582,7 @@
       "target": "math/filter.ogxHaltonSeq2"
     },
     "customRotation": {
-      "target": "shadow/eclipse.ogxEclipseCustomRotation"
+      "target": "shadow/map.ogxShadowCustomRotation"
     },
     "hash2": {
       "target": "cloud/layers/shape.ogxLayersHash2"
@@ -899,7 +899,7 @@
       "target": "color/tonemap.ogxTonemapLottes"
     },
     "curve": {
-      "target": "color/tonemap.ogxEclipseCurve"
+      "target": "color/tonemap.ogxSoftSaturate3"
     },
     "Tonemap_Uchimura_Modified": {
       "target": "color/agx.ogxTonemapUchimuraModified"
@@ -953,7 +953,7 @@
       "target": "math/filter.ogxRayleighPhaseElek"
     },
     "fogPhase": {
-      "target": "fog/fog/end.ogxEclipseFogPhase"
+      "target": "fog/fog/end.ogxEndLightFalloff"
     },
     "rcp_length": {
       "target": "math/basics.ogxSafeInvLength"
@@ -1125,7 +1125,7 @@
       "target": "math/basics.ogxSquare"
     },
     "BiasShadowProjection": {
-      "target": "shadow/eclipse.ogxEclipseBiasShadowProjection",
+      "target": "shadow/map.ogxShadowProjectionBias",
       "resources": {
         "a": "value",
         "b": "value",
@@ -1136,7 +1136,7 @@
       }
     },
     "calcDistort": {
-      "target": "shadow/eclipse.ogxEclipseCalcDistort",
+      "target": "shadow/map.ogxShadowDistortFactor",
       "resources": {
         "a": "value",
         "b": "value",
@@ -1154,21 +1154,21 @@
       }
     },
     "Iris_Lightningflash_VLcloud": {
-      "target": "weather/lightning.ogxEclipseLightningCloud",
+      "target": "weather/lightning.ogxLightningCloud",
       "resources": {
         "boltPosition": "value",
         "lightningEffect": "value"
       }
     },
     "Iris_Lightningflash_VLfog": {
-      "target": "weather/lightning.ogxEclipseLightningFog",
+      "target": "weather/lightning.ogxLightningFog",
       "resources": {
         "boltPosition": "value",
         "lightningEffect": "value"
       }
     },
     "applyGameplayEffects": {
-      "target": "post/scene.ogxEclipseApplyGameplayEffects",
+      "target": "post/scene.ogxGameplayEffects",
       "resources": {
         "currentHealth": "value",
         "maxHealth": "value",
@@ -1200,7 +1200,7 @@
       "allowExtraConstants": true
     },
     "doBlockLightLightingVoxel": {
-      "target": "gi/diffuse.ogxEclipseDoBlockLightLightingVoxelExact",
+      "target": "gi/diffuse.ogxBlockLightLightingVoxelExact",
       "resources": {
         "torchAmount": "value"
       },
@@ -1225,7 +1225,7 @@
       "target": "VariablePenumbraShadow"
     },
     "TemporalReprojection": {
-      "target": "antialias/antialias.ogxItxTemporalReprojection",
+      "target": "antialias/antialias.ogxTaaTemporalBlend",
       "resources": {
         "currentTexture": "texture",
         "historyTexture": "texture",
@@ -1250,7 +1250,7 @@
       "target": "shaders/rendering/clarity/taa.glsl:TaaCameraVelocity"
     },
     "CoCSpread": {
-      "target": "post/post/dof.ogxItxDofCocSpread",
+      "target": "post/post/dof.ogxDofCocSpreadReference",
       "resources": {
         "coord": "value",
         "depthTexture": "texture",
@@ -1280,7 +1280,7 @@
       }
     },
     "DepthOfField": {
-      "target": "post/post/dof.ogxItxDof",
+      "target": "post/post/dof.ogxDofReference",
       "resources": {
         "coord": "value",
         "colorTexture": "texture",
@@ -1315,7 +1315,7 @@
       "target": "MotionBlur"
     },
     "GroundTruthBasedAmbientOcclusion": {
-      "target": "gi/gi/ao.ogxItxGtao",
+      "target": "gi/gi/ao.ogxGtaoSlices",
       "resources": {
         "coord": "value",
         "depthTexture": "texture",
@@ -1343,7 +1343,7 @@
       }
     },
     "rayTrace_GI": {
-      "target": "gi/indirect.ogxEclipseRayTraceGi",
+      "target": "gi/indirect.ogxGiRayTrace",
       "resources": {
         "nearPlane": "value",
         "farPlane": "value",
@@ -1358,7 +1358,7 @@
       }
     },
     "RT_alternate": {
-      "target": "gi/indirect.ogxEclipseRtAlternate",
+      "target": "gi/indirect.ogxGiRayMarch",
       "resources": {
         "raySteps": "value",
         "nearPlane": "value",
@@ -1380,7 +1380,7 @@
       }
     },
     "ApplySSRT": {
-      "target": "gi/indirect.ogxItxApplySsrt",
+      "target": "gi/indirect.ogxApplySsrtReference",
       "resources": {
         "pixelCoord": "value",
         "frameCounter": "value",
@@ -1401,7 +1401,7 @@
       }
     },
     "rayTraceSpeculars": {
-      "target": "reflection/wsr.ogxEclipseRayTraceSpeculars",
+      "target": "reflection/wsr.ogxReflectionRayTrace",
       "resources": {
         "nearPlane": "value",
         "farPlane": "value",
@@ -1417,7 +1417,7 @@
       }
     },
     "getEnvironmentReflections": {
-      "target": "reflection/wsr.ogxEclipseGetEnvironmentReflections",
+      "target": "reflection/wsr.ogxEnvironmentReflections",
       "resources": {
         "quality": "value",
         "sceneTexture": "texture",
@@ -1441,7 +1441,7 @@
       }
     },
     "getReflectionVisibility": {
-      "target": "reflection/specular.ogxEclipseGetReflectionVisibility",
+      "target": "reflection/specular.ogxReflectionVisibility",
       "resources": {
         "roughnessThreshold": "value"
       },
@@ -1457,7 +1457,7 @@
       }
     },
     "LightSourceColors": {
-      "target": "weather/lightning.ogxEclipseLightSourceColors",
+      "target": "weather/lightning.ogxLightSourceColors",
       "resources": {
         "vortexColor": "value",
         "lightningColor": "value",
@@ -1486,7 +1486,7 @@
       }
     },
     "LightSourceLighting": {
-      "target": "fog/fog/end.ogxItxLightSourceLighting",
+      "target": "fog/fog/end.ogxEndVortexLightingReference",
       "resources": {
         "noiseTexture": "texture",
         "time": "value",
@@ -1498,7 +1498,7 @@
       "allowExtraConstants": true
     },
     "GetEndFogShadow": {
-      "target": "fog/fog/end.ogxItxGetEndFogShadow",
+      "target": "fog/fog/end.ogxEndFogShadowNoise",
       "resources": {
         "noiseTexture": "texture",
         "time": "value",
@@ -1512,7 +1512,7 @@
       "allowExtraConstants": true
     },
     "LightSourcePosition": {
-      "target": "weather/lightning.ogxItxLightSourcePosition",
+      "target": "weather/lightning.ogxLightSourcePositionReference",
       "resources": {
         "randomTexture": "texture",
         "randomTexel": "value",
@@ -1528,7 +1528,7 @@
       }
     },
     "ambient_occlusion": {
-      "target": "gi/ambientocclusion.ogxEclipseAmbientOcclusion",
+      "target": "gi/ambientocclusion.ogxGtaoHorizon",
       "resources": {
         "slices": "value",
         "radius": "value",
@@ -1553,7 +1553,7 @@
       }
     },
     "calculate_maximum_horizon_angle": {
-      "target": "gi/ambientocclusion.ogxEclipseMaxHorizonAngle",
+      "target": "gi/ambientocclusion.ogxGtaoMaxHorizonAngle",
       "resources": {
         "radius": "value",
         "steps": "value",
@@ -1578,14 +1578,14 @@
       "target": "GI_TemporalFilter"
     },
     "Iris_Lightningflash": {
-      "target": "weather/lightning.ogxItxIrisLightningflash",
+      "target": "weather/lightning.ogxLightningFlashReference",
       "resources": {
         "boltPosition": "value",
         "lightningEffect": "value"
       }
     },
     "ComputePhotonicsShadowMap": {
-      "target": "shadow/eclipse.ogxEclipseComputePhotonicsShadowMap",
+      "target": "shadow/map.ogxPhotonicsShadowMap",
       "resources": {
         "opaqueShadowMap": "texture",
         "translucentShadowMap": "texture",
@@ -1618,7 +1618,7 @@
       "allowExtraConstants": true
     },
     "SampleLpvLinear": {
-      "target": "lpv.ogxItxSampleLpvLinear",
+      "target": "lpv.ogxLpvSampleLinear",
       "resources": {
         "lpv1": "texture",
         "lpv2": "texture",
@@ -1634,7 +1634,7 @@
       }
     },
     "BilateralUpscale_SSAO": {
-      "target": "gi/indirect.ogxItxBilateralUpscaleSsao",
+      "target": "gi/indirect.ogxBilateralUpscaleSsaoReference",
       "resources": {
         "upscale": "value",
         "depthThreshold": "value",
@@ -1648,7 +1648,7 @@
       "allowExtraConstants": true
     },
     "applyShadowBias": {
-      "target": "shadow/shadow.ogxItxApplyShadowBias",
+      "target": "shadow/shadow.ogxApplyShadowBiasMatrix",
       "resources": {
         "shadowNormalMatrix": "matrix",
         "shadowDistance": "value",
@@ -1660,7 +1660,7 @@
       }
     },
     "calculateAtmosphere": {
-      "target": "atmosphere/sky.ogxItxCalculateAtmosphere",
+      "target": "atmosphere/sky.ogxSkyAtmosphereIntegralReference",
       "resources": {
         "eyeAltitude": "value",
         "cameraY": "value",
@@ -1751,25 +1751,25 @@
       "target": "voxel/voxel.ogxVoxelNormalIndex"
     },
     "CleanVoxelSample": {
-      "target": "voxel/trace.ogxEclipseCleanVoxelSample"
+      "target": "voxel/trace.ogxVoxelSampleOffset"
     },
     "planeIntersect": {
-      "target": "voxel/trace.ogxEclipsePlaneIntersect"
+      "target": "voxel/trace.ogxVoxelPlaneIntersect"
     },
     "AABBintersection": {
-      "target": "voxel/trace.ogxEclipseAabbIntersection"
+      "target": "voxel/trace.ogxVoxelAabbIntersect"
     },
     "fenceIntersection": {
-      "target": "voxel/trace.ogxEclipseFenceIntersection"
+      "target": "voxel/trace.ogxFenceAabbIntersect"
     },
     "fenceIntersection2": {
-      "target": "voxel/trace.ogxEclipseFenceIntersection2"
+      "target": "voxel/trace.ogxFenceAabbIntersect2"
     },
     "AABBintersection2": {
-      "target": "voxel/trace.ogxEclipseAabbIntersection2"
+      "target": "voxel/trace.ogxVoxelAabbHit"
     },
     "sortIntersectionOpaque": {
-      "target": "voxel/trace.ogxEclipseSortIntersectionOpaque"
+      "target": "voxel/trace.ogxSortIntersectionOpaque"
     },
     "swapperlinZ2": {
       "target": "camera.ogxSwapperlinZ2"
@@ -1831,7 +1831,7 @@
       }
     },
     "FidelityFX_FSR1": {
-      "target": "upscale.ogxItxFsr1",
+      "target": "upscale.ogxFsr1Reference",
       "resources": {
         "upscaledTex": "texture",
         "sharpness": "value",
@@ -1888,7 +1888,7 @@
       "allowExtraConstants": true
     },
     "RSM": {
-      "target": "gi/gi/ao.ogxItxRsm",
+      "target": "gi/gi/ao.ogxRsmReference",
       "resources": {
         "view": "struct",
         "shadowDepth0": "texture",
@@ -1918,7 +1918,7 @@
       }
     },
     "GI_SpatialFilter": {
-      "target": "gi/gi/spatial.ogxItxGiSpatialFilter",
+      "target": "gi/gi/spatial.ogxGiSpatialFilterReference",
       "resources": {
         "coord": "value",
         "view": "struct",
@@ -2055,13 +2055,13 @@
       }
     },
     "getPhotonicsEmission": {
-      "target": "voxel/voxel.ogxEclipseGetPhotonicsEmission"
+      "target": "voxel/voxel.ogxPhotonicsEmission"
     },
     "applySceneControllerParameters": {
-      "target": "post/scene.ogxEclipseApplySceneControllerDefaults"
+      "target": "post/scene.ogxSceneControllerDefaults"
     },
     "traceQuarterVoxel": {
-      "target": "voxel/trace.ogxEclipseTraceQuarterVoxel",
+      "target": "voxel/trace.ogxQuarterVoxelTrace",
       "resources": {
         "quarterVoxelMask": "texture",
         "side": "value"
@@ -2074,14 +2074,14 @@
       }
     },
     "GetVoxelBlock": {
-      "target": "voxel/voxel.ogxItxGetVoxelBlock",
+      "target": "voxel/voxel.ogxGetVoxelBlockReference",
       "resources": {
         "voxelMask": "texture"
       },
       "allowExtraConstants": true
     },
     "calculateFlashlight": {
-      "target": "gi/diffuse.ogxEclipseCalculateFlashlight",
+      "target": "gi/diffuse.ogxFlashlight",
       "resources": {
         "noiseTexture": "texture",
         "modelViewInverse": "matrix",
@@ -2106,7 +2106,7 @@
       }
     },
     "SSRT_Handlight_Shadows": {
-      "target": "gi/diffuse.ogxEclipseSsrtHandlightShadows",
+      "target": "gi/diffuse.ogxSsrtHandlightShadow",
       "resources": {
         "modelViewInverse": "matrix",
         "nearPlane": "value",
@@ -2126,7 +2126,7 @@
       }
     },
     "SampleDensity": {
-      "target": "cloud/volume.ogxItxCloudSampleDensity",
+      "target": "cloud/volume.ogxCumulusDensityExplicit",
       "resources": {
         "baseNoise": "texture",
         "detailNoise": "texture",
@@ -2149,7 +2149,7 @@
       }
     },
     "CloudLighting": {
-      "target": "cloud/volume.ogxItxCloudLighting",
+      "target": "cloud/volume.ogxCumulusLightingExplicit",
       "resources": {
         "baseNoise": "texture",
         "detailNoise": "texture",
@@ -2175,7 +2175,7 @@
       }
     },
     "ComputeVoxelShadowMap": {
-      "target": "shadow/eclipse.ogxEclipseComputeVoxelShadowMap",
+      "target": "shadow/map.ogxVoxelShadowMap",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "IS_LPV_ENABLED": 1,
@@ -2217,7 +2217,7 @@
       "allowExtraConstants": true
     },
     "voxelReflection": {
-      "target": "reflection/wsr.ogxEclipseVoxelReflectionExact",
+      "target": "reflection/wsr.ogxVoxelReflectionColorExact",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1
       },
@@ -2231,7 +2231,7 @@
       }
     },
     "SetVoxelBlock": {
-      "target": "voxel/voxel.ogxEclipseSetVoxelBlock",
+      "target": "voxel/voxel.ogxSetVoxelBlock",
       "resources": {
         "voxelSize": "value",
         "writePos": "value",
@@ -2242,7 +2242,7 @@
       }
     },
     "PopulateShadowVoxel": {
-      "target": "voxel/voxel.ogxEclipsePopulateShadowVoxel",
+      "target": "voxel/voxel.ogxPopulateShadowVoxel",
       "resources": {
         "eyeOffset": "value",
         "cameraFraction": "value",
@@ -2267,7 +2267,7 @@
       }
     },
     "GetHandLight": {
-      "target": "heldlight.ogxEclipseGetHandLight",
+      "target": "heldlight.ogxHandLightFromBlockData",
       "resources": {
         "blockDataTexture": "texture",
         "relativeEyePosition": "value"
@@ -2275,7 +2275,7 @@
       "allowExtraConstants": true
     },
     "raymarchWSR_LPV": {
-      "target": "reflection/wsr.ogxEclipseRaymarchWsrLpvExact",
+      "target": "reflection/wsr.ogxWsrLpvMarchExact",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "IS_LPV_ENABLED": 1,
@@ -2331,7 +2331,7 @@
       "allowExtraConstants": true
     },
     "photonicsReflectionShading": {
-      "target": "reflection/photonics.ogxEclipsePhotonicsReflectionShadingExact",
+      "target": "reflection/photonics.ogxPhotonicsReflectionShadingExact",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "IS_LPV_ENABLED": 1,
@@ -2398,7 +2398,7 @@
       }
     },
     "specularReflections": {
-      "target": "reflection/specular.ogxEclipseSpecularReflectionsExact",
+      "target": "reflection/specular.ogxSpecularReflectionsExact",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "IS_LPV_ENABLED": 1,
@@ -2459,7 +2459,7 @@
       "allowExtraConstants": true
     },
     "UnderwaterVolumetricFog": {
-      "target": "fog/volume.ogxItxUnderwaterVolumetricFogExact",
+      "target": "fog/volume.ogxUnderwaterFogExact",
       "resources": {
         "cameraOffset": "value",
         "shadowLightVector": "value",
@@ -2495,7 +2495,7 @@
       "allowExtraConstants": true
     },
     "VolumetricFog": {
-      "target": "fog/volume.ogxItxVolumetricFogExact",
+      "target": "fog/volume.ogxVolumetricFogExact",
       "resources": {
         "media": "struct",
         "shadowDepth0": "texture",
@@ -2535,7 +2535,7 @@
       "allowExtraConstants": true
     },
     "GetVolumetricFog": {
-      "target": "fog/fog/end.ogxEclipseGetVolumetricFogEndExact",
+      "target": "fog/fog/end.ogxEndVolumetricFogExact",
       "refDefines": {
         "OVERWORLD_SHADER": 0,
         "END_SHADER": 1,
@@ -2612,7 +2612,7 @@
       "allowExtraConstants": true
     },
     "raymarchWSRfog": {
-      "target": "reflection/wsr.ogxEclipseRaymarchWsrFog",
+      "target": "reflection/wsr.ogxWsrFogMarch",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "OVERWORLD_SHADER": 1,
@@ -2711,7 +2711,7 @@
       "allowExtraConstants": true
     },
     "WSRwaterVolumetrics": {
-      "target": "reflection/wsr.ogxEclipseWsrWaterVolumetrics",
+      "target": "reflection/wsr.ogxWsrWaterVolume",
       "refDefines": {
         "VOXEL_REFLECTIONS": 1,
         "OVERWORLD_SHADER": 1,
@@ -3074,23 +3074,23 @@
   "approximate": {},
   "referenceBroken": {
     "trace_wsr": {
-      "target": "reflection/wsr.ogxEclipseTraceWsr",
-      "evidence": "上游 Eclipse-Shader@26cfc431a9066a87040272fa0ae016ab88c06b9d 的 photonics/photonics.glsl 也是 0 字节（Git 空对象 e69de29b），唯一新增该文件的提交 dac7baa8 同样为空；ph_intersects_world、ph_get_world_index 等来自闭源 ARR 的 Photonics 模组，上游没有可恢复源码。实现按可执行语义用三维体素纹理给出 ogxEclipseTraceWsr。证据见 docs/eclipse-upstream.md。"
+      "target": "reflection/wsr.ogxWsrTrace",
+      "evidence": "上游 Eclipse-Shader@26cfc431a9066a87040272fa0ae016ab88c06b9d 的 photonics/photonics.glsl 也是 0 字节（Git 空对象 e69de29b），唯一新增该文件的提交 dac7baa8 同样为空；ph_intersects_world、ph_get_world_index 等来自闭源 ARR 的 Photonics 模组，上游没有可恢复源码。实现按可执行语义用三维体素纹理给出 ogxWsrTrace。证据见 docs/eclipse-upstream.md。"
     },
     "photonicsReflection": {
-      "target": "reflection/photonics.ogxEclipsePhotonicsReflection",
-      "evidence": "上游 Eclipse-Shader@26cfc431a9066a87040272fa0ae016ab88c06b9d 的 photonics.glsl 为 0 字节（Git 空对象 e69de29b），RayJob 与 translucentHit 字段由闭源 ARR 的 Photonics 模组注入，仓库内没有声明。实现见 ogxEclipsePhotonicsReflection。证据见 docs/eclipse-upstream.md。"
+      "target": "reflection/photonics.ogxPhotonicsReflection",
+      "evidence": "上游 Eclipse-Shader@26cfc431a9066a87040272fa0ae016ab88c06b9d 的 photonics.glsl 为 0 字节（Git 空对象 e69de29b），RayJob 与 translucentHit 字段由闭源 ARR 的 Photonics 模组注入，仓库内没有声明。实现见 ogxPhotonicsReflection。证据见 docs/eclipse-upstream.md。"
     },
     "sortIntersectionCutout": {
-      "target": "voxel/trace.ogxEclipseSortIntersectionCutout",
+      "target": "voxel/trace.ogxSortIntersectionCutout",
       "evidence": "参考调用 GetTexCoord；上游同提交的 lib/voxel_common.glsl 第 5-7、12-14 行也把 voxelData 声明注释掉，更早的 de987d9a 版本没有该声明，GetVoxelData/GetTexCoord 外层还要求从未定义的 adjnjawudiuwad。上游没有可恢复定义，调用图不能编译。实现用显式体素面纹理。证据见 docs/eclipse-upstream.md。"
     },
     "GetVoxelData": {
-      "target": "voxel/voxel.ogxEclipseGetVoxelData",
+      "target": "voxel/voxel.ogxGetVoxelData",
       "evidence": "voxelData 的唯一声明在上游 Eclipse-Shader@26cfc431a9066a87040272fa0ae016ab88c06b9d 的 lib/voxel_common.glsl:5-7、12-14 同样被注释，de987d9a 及更早版本没有声明；外层守卫里的 adjnjawudiuwad 从未定义。上游不可恢复，参考正文编译时报未声明标识符。实现把同一 [voxelIndex][normalIndex] 布局装进二维只读纹理。证据见 docs/eclipse-upstream.md。"
     },
     "GetTexCoord": {
-      "target": "voxel/voxel.ogxEclipseGetTexCoord",
+      "target": "voxel/voxel.ogxGetVoxelFaceTexCoord",
       "evidence": "与 GetVoxelData 同一原因：上游同提交的 voxel_common.glsl 中 voxelData 声明仍被注释，仓库从未提供启用版本。实现从显式二维体素面纹理解包贴图坐标。证据见 docs/eclipse-upstream.md。"
     }
   }

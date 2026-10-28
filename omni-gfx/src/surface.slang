@@ -147,7 +147,7 @@ OgxPbrMaterial ogxPbrMaterialFromTex(inout float3 baseTex, float4 specTex, float
 
 // Eclipse 方块光曲线：先把等级转成亮斑，再在平方曲线与固定高值之间混合。
 // 为什么亮斑单独算：原版光照图在最高几档突然变亮，直接平方会让灯下反而没有层次。
-float3 ogxBlockLightCurveEclipse(float3 lightColor, float lightmap)
+float3 ogxBlockLightCurveSoft(float3 lightColor, float lightmap)
 {
     lightmap = clamp(lightmap, 0.0, 1.0); // 输入先夹到合法范围。
     float brightspot = min(max(lightmap - 0.7, 0.0) * 3.3333, 1.0); // 只取最高三成作为亮斑。
@@ -204,7 +204,7 @@ float3 ogxDoIndirectLighting(float3 lightColor, float3 minimumLightColor, float 
 
 // iterationT 的纹理自发光：硬编码方块光权重逐项固定，资源包模式与硬编码模式分开。
 // 参数 `mode`：0 只硬编码，1 只资源包，2 两者取较大；`overworld` 为假时整体乘十。
-float3 ogxItxTextureLighting(float3 albedo, float lightmap, float emissive, float glowstone,
+float3 ogxTextureLighting(float3 albedo, float lightmap, float emissive, float glowstone,
     float torch, float fire, float lava, float redstoneTorch, float oxidizedBulb, float soulFire,
     float amethyst, float endPortal, float litHigh, float litMedium, float litLow, float particleLit,
     float redstone, float emissiveBrightness, float textureBrightness, float torchBrightness,
@@ -276,7 +276,7 @@ void ogxApplyMaterialOverride(inout OgxPbrMaterial material, float water, float 
 // iterationT 的 labPBR 材质解码：与 `ogxPbrMaterialFromTex` 相同，但不叠加 Omni 的水洼粗糙度。
 // 为什么单独保留：参考实现的每一行常数都是画面合同的一部分，水洼混合属于额外功能，
 // 不能悄悄改变参考路径的粗糙度。
-OgxPbrMaterial ogxItxMaterialFromTex(inout float3 baseTex, float4 specTex, float wet,
+OgxPbrMaterial ogxMaterialFromTexDefault(inout float3 baseTex, float4 specTex, float wet,
     bool usePorosity, int pbrFormat, float defaultPorosity, float porosityAbsorption,
     bool roughnessClamp, float emissivenessGamma, float sssStrength, float sssOffset)
 {

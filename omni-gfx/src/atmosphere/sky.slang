@@ -1,11 +1,11 @@
 /*
-Omni 通用图形库 Eclipse 天空模块：太阳与月亮圆盘、球面投影、三次纹理采样、天空盒查表、大气积分与极光。
-调用位置：需要复现 Eclipse `sky_gradient.glsl`、`ROBOBO_sky.glsl` 与 `aurora.glsl` 的天空程序；
+Omni 通用图形库天空合成模块：太阳与月亮圆盘、球面投影、三次纹理采样、天空盒查表、大气积分与极光。
+调用位置：需要合成解析天空的程序；算法与常数来自 Eclipse 的 `sky_gradient.glsl`、`ROBOBO_sky.glsl` 与 `aurora.glsl`，
     Minecraft 光影由 `/omni-gfx/atmosphere/sky.glsl` 引入，当前只由严格 profile 与独立测试消费。
 可复制示例：
-    float3 sun = ogxEclipseDrawSun(dot(viewDir, sunDir), sunlightColor);
-    float2 uv = ogxEclipseSphereMap(screenUv);
-    float3 sky = ogxEclipseCalculateAtmosphere(background, viewDir, up, sunDir, moonDir,
+    float3 sun = ogxSkySunDisc(dot(viewDir, sunDir), sunlightColor);
+    float2 uv = ogxSkyDomeMap(screenUv);
+    float3 sky = ogxSkyAtmosphereIntegral(background, viewDir, up, sunDir, moonDir,
         eyeAltitude, cameraY, sunColor, moonColor, 32, noise, 6000.0, true, true, false,
         rayleigh, mie, ozone, pid, transmittance);
 设计原因与取舍：
@@ -14,22 +14,22 @@ Omni 通用图形库 Eclipse 天空模块：太阳与月亮圆盘、球面投影
     这样同一套天空可以用于独立测试世界、严格 profile 与 Minecraft，而库本身不读取宿主状态。
     纹理函数只接收采样器与尺寸，不绑定缓冲编号；调用方决定把哪张图放在哪个槽位。
 */
-#ifndef OGX_ECLIPSE_SKY_INCLUDED
-#define OGX_ECLIPSE_SKY_INCLUDED
+#ifndef OGX_ATMOSPHERE_SKY_INCLUDED
+#define OGX_ATMOSPHERE_SKY_INCLUDED
 
 // 数学提供圆周率、夹紧与黑体色；大气提供射线求交与相函数。
 #include "../math.slang"
 #include "atmosphere.slang"
 
 // Eclipse 太阳圆盘：按视方向与太阳方向的余弦算柔边，再乘太阳颜色与固定亮度。
-float3 ogxEclipseDrawSun(float cosY, float3 sunlight)
+float3 ogxSkySunDisc(float cosY, float3 sunlight)
 {
     return sunlight / 0.0008821203 * pow(smoothstep(cos(0.0093084168595 * 3.2), cos(0.0093084168595 * 2.2), cosY), 3.0) * 0.62; // 常数与参考实现逐项相同。
 }
 
 // Eclipse 球面屏幕映射：把正方形屏幕的每一个点投到球面经纬度。
 // 圆外返回零：调用方读到的贴图坐标落在左上角，不会越界采样。
-float2 ogxEclipseSphereMap(float2 uv)
+float2 ogxSkyDomeMap(float2 uv)
 {
     float2 position = 2.0 * uv - 1.0; // 屏幕坐标转负一到一。
     float radius = dot(position, position); // 到中心的距离平方。
@@ -44,7 +44,7 @@ float2 ogxEclipseSphereMap(float2 uv)
 
 // Eclipse 默认月亮：一个很小的软圆盘，并压暗它后面的星星。
 // `occludeStars` 是输入输出参数：月亮越亮，返回时星星遮罩越小。
-float3 ogxEclipseDrawMoon(float3 playerPos, float3 worldSunVec, float3 color, inout float occludeStars)
+float3 ogxSkyMoonDisc(float3 playerPos, float3 worldSunVec, float3 color, inout float occludeStars)
 {
     float shape = min(max(dot(worldSunVec, playerPos) - 0.9994, 0.0) / (1.0 - 0.9994), 1.0); // 月亮圆盘的软边。
     occludeStars *= max(1.0 - shape * 5.0, 0.0); // 圆盘附近遮住星星。
@@ -52,7 +52,7 @@ float3 ogxEclipseDrawMoon(float3 playerPos, float3 worldSunVec, float3 color, in
 }
 
 // Eclipse 真实月亮：尺寸可调，边缘比默认月亮更软，星星遮挡更强。
-float3 ogxEclipseDrawRealMoon(float3 playerPos, float3 worldSunVec, float3 color, inout float occludeStars, float size)
+float3 ogxSkyMoonDiscSized(float3 playerPos, float3 worldSunVec, float3 color, inout float occludeStars, float size)
 {
     float shape = min(max(dot(worldSunVec, playerPos) - size, 0.0) / (1.0 - size), 1.0); // 圆盘软边。
     shape = pow(shape, 0.15); // 参考实现的幂次让边缘更宽。
@@ -62,46 +62,46 @@ float3 ogxEclipseDrawRealMoon(float3 playerPos, float3 worldSunVec, float3 color
 
 // 三次卷积权重：Catmull-Rom 核的四个分段，供双三次采样复用。
 // 三次卷积权重零号：离采样点最近的一侧。
-float ogxEclipseBicubicW0(float a) { return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0); }
+float ogxBicubicSplineWeight0(float a) { return (1.0 / 6.0) * (a * (a * (-a + 3.0) - 3.0) + 1.0); }
 // 三次卷积权重一号：与零号配对，组成左半核。
-float ogxEclipseBicubicW1(float a) { return (1.0 / 6.0) * (a * a * (3.0 * a - 6.0) + 4.0); }
+float ogxBicubicSplineWeight1(float a) { return (1.0 / 6.0) * (a * a * (3.0 * a - 6.0) + 4.0); }
 // 三次卷积权重二号：右半核的第一项。
-float ogxEclipseBicubicW2(float a) { return (1.0 / 6.0) * (a * (a * (-3.0 * a + 3.0) + 3.0) + 1.0); }
+float ogxBicubicSplineWeight2(float a) { return (1.0 / 6.0) * (a * (a * (-3.0 * a + 3.0) + 3.0) + 1.0); }
 // 三次卷积权重三号：离采样点最远的一侧。
-float ogxEclipseBicubicW3(float a) { return (1.0 / 6.0) * (a * a * a); }
+float ogxBicubicSplineWeight3(float a) { return (1.0 / 6.0) * (a * a * a); }
 // 左半核归一化：把零号与一号权重合在一起。
-float ogxEclipseBicubicG0(float a) { return ogxEclipseBicubicW0(a) + ogxEclipseBicubicW1(a); }
+float ogxBicubicSplineWeightSum0(float a) { return ogxBicubicSplineWeight0(a) + ogxBicubicSplineWeight1(a); }
 // 右半核归一化：把二号与三号权重合在一起。
-float ogxEclipseBicubicG1(float a) { return ogxEclipseBicubicW2(a) + ogxEclipseBicubicW3(a); }
+float ogxBicubicSplineWeightSum1(float a) { return ogxBicubicSplineWeight2(a) + ogxBicubicSplineWeight3(a); }
 // 左半核的偏移量：让采样点落在正确的纹素中心。
-float ogxEclipseBicubicH0(float a) { return -1.0 + ogxEclipseBicubicW1(a) / (ogxEclipseBicubicW0(a) + ogxEclipseBicubicW1(a)); }
+float ogxBicubicSplineOffset0(float a) { return -1.0 + ogxBicubicSplineWeight1(a) / (ogxBicubicSplineWeight0(a) + ogxBicubicSplineWeight1(a)); }
 // 右半核的偏移量：与左半核一起完成三次插值。
-float ogxEclipseBicubicH1(float a) { return 1.0 + ogxEclipseBicubicW3(a) / (ogxEclipseBicubicW2(a) + ogxEclipseBicubicW3(a)); }
+float ogxBicubicSplineOffset1(float a) { return 1.0 + ogxBicubicSplineWeight3(a) / (ogxBicubicSplineWeight2(a) + ogxBicubicSplineWeight3(a)); }
 
 // Eclipse 双三次纹理采样：四个角各取一次双线性，再按卷积权重合成。
 // `pixelSize` 是一像素的贴图坐标；参考实现把同样的值同时用作像素和倒数。
-float4 ogxEclipseBicubicTexture(Sampler2D tex, float2 uv, float2 pixelSize)
+float4 ogxBicubicSplineTexture(Sampler2D tex, float2 uv, float2 pixelSize)
 {
     float4 texelSize = float4(pixelSize, 1.0 / pixelSize); // 与参考实现的局部变量同名同含义。
     uv = uv * texelSize.zw; // 换到像素坐标。
     float2 iuv = floor(uv); // 整数部分。
     float2 fuv = fract(uv); // 小数部分。
-    float g0x = ogxEclipseBicubicG0(fuv.x); // 横轴左权重。
-    float g1x = ogxEclipseBicubicG1(fuv.x); // 横轴右权重。
-    float h0x = ogxEclipseBicubicH0(fuv.x); // 横轴左偏移。
-    float h1x = ogxEclipseBicubicH1(fuv.x); // 横轴右偏移。
-    float h0y = ogxEclipseBicubicH0(fuv.y); // 纵轴上偏移。
-    float h1y = ogxEclipseBicubicH1(fuv.y); // 纵轴下偏移。
+    float g0x = ogxBicubicSplineWeightSum0(fuv.x); // 横轴左权重。
+    float g1x = ogxBicubicSplineWeightSum1(fuv.x); // 横轴右权重。
+    float h0x = ogxBicubicSplineOffset0(fuv.x); // 横轴左偏移。
+    float h1x = ogxBicubicSplineOffset1(fuv.x); // 横轴右偏移。
+    float h0y = ogxBicubicSplineOffset0(fuv.y); // 纵轴上偏移。
+    float h1y = ogxBicubicSplineOffset1(fuv.y); // 纵轴下偏移。
     float2 p0 = (float2(iuv.x + h0x, iuv.y + h0y) - 0.5) * texelSize.xy; // 左上样本。
     float2 p1 = (float2(iuv.x + h1x, iuv.y + h0y) - 0.5) * texelSize.xy; // 右上样本。
     float2 p2 = (float2(iuv.x + h0x, iuv.y + h1y) - 0.5) * texelSize.xy; // 左下样本。
     float2 p3 = (float2(iuv.x + h1x, iuv.y + h1y) - 0.5) * texelSize.xy; // 右下样本。
-    return ogxEclipseBicubicG0(fuv.y) * (g0x * tex.SampleLevel(p0, 0.0) + g1x * tex.SampleLevel(p1, 0.0))
-         + ogxEclipseBicubicG1(fuv.y) * (g0x * tex.SampleLevel(p2, 0.0) + g1x * tex.SampleLevel(p3, 0.0)); // 参考实现的合成顺序。
+    return ogxBicubicSplineWeightSum0(fuv.y) * (g0x * tex.SampleLevel(p0, 0.0) + g1x * tex.SampleLevel(p1, 0.0))
+         + ogxBicubicSplineWeightSum1(fuv.y) * (g0x * tex.SampleLevel(p2, 0.0) + g1x * tex.SampleLevel(p3, 0.0)); // 参考实现的合成顺序。
 }
 
 // 带圆形噪声偏移的双三次采样：用于体积云或天空盒旋转采样。
-float4 ogxEclipseBicubicTextureOffset(Sampler2D tex, float2 uv, float noise, float scale, float2 pixelSize)
+float4 ogxBicubicSplineTextureOffset(Sampler2D tex, float2 uv, float noise, float scale, float2 pixelSize)
 {
     float offsets = noise * (2.0 * OGX_PI); // 噪声转角度。
     float2 circleOffsets = float2(sin(offsets), cos(offsets)) * scale; // 单位圆偏移。
@@ -109,48 +109,48 @@ float4 ogxEclipseBicubicTextureOffset(Sampler2D tex, float2 uv, float noise, flo
     uv = (uv + texelSize.xy) * texelSize.zw; // 先加一像素再换到像素坐标。
     float2 iuv = floor(uv + circleOffsets); // 整数部分加偏移。
     float2 fuv = fract(uv + circleOffsets); // 小数部分加偏移。
-    float g0x = ogxEclipseBicubicG0(fuv.x); // 横轴左权重。
-    float g1x = ogxEclipseBicubicG1(fuv.x); // 横轴右权重。
-    float h0x = ogxEclipseBicubicH0(fuv.x); // 横轴左偏移。
-    float h1x = ogxEclipseBicubicH1(fuv.x); // 横轴右偏移。
-    float h0y = ogxEclipseBicubicH0(fuv.y); // 纵轴上偏移。
-    float h1y = ogxEclipseBicubicH1(fuv.y); // 纵轴下偏移。
+    float g0x = ogxBicubicSplineWeightSum0(fuv.x); // 横轴左权重。
+    float g1x = ogxBicubicSplineWeightSum1(fuv.x); // 横轴右权重。
+    float h0x = ogxBicubicSplineOffset0(fuv.x); // 横轴左偏移。
+    float h1x = ogxBicubicSplineOffset1(fuv.x); // 横轴右偏移。
+    float h0y = ogxBicubicSplineOffset0(fuv.y); // 纵轴上偏移。
+    float h1y = ogxBicubicSplineOffset1(fuv.y); // 纵轴下偏移。
     float2 p0 = (float2(iuv.x + h0x, iuv.y + h0y) - 0.5) * texelSize.xy; // 左上样本。
     float2 p1 = (float2(iuv.x + h1x, iuv.y + h0y) - 0.5) * texelSize.xy; // 右上样本。
     float2 p2 = (float2(iuv.x + h0x, iuv.y + h1y) - 0.5) * texelSize.xy; // 左下样本。
     float2 p3 = (float2(iuv.x + h1x, iuv.y + h1y) - 0.5) * texelSize.xy; // 右下样本。
-    return ogxEclipseBicubicG0(fuv.y) * (g0x * tex.SampleLevel(p0, 0.0) + g1x * tex.SampleLevel(p1, 0.0))
-         + ogxEclipseBicubicG1(fuv.y) * (g0x * tex.SampleLevel(p2, 0.0) + g1x * tex.SampleLevel(p3, 0.0)); // 与不带偏移版相同的合成顺序。
+    return ogxBicubicSplineWeightSum0(fuv.y) * (g0x * tex.SampleLevel(p0, 0.0) + g1x * tex.SampleLevel(p1, 0.0))
+         + ogxBicubicSplineWeightSum1(fuv.y) * (g0x * tex.SampleLevel(p2, 0.0) + g1x * tex.SampleLevel(p3, 0.0)); // 与不带偏移版相同的合成顺序。
 }
 
 // Eclipse 球面方向转等距柱状坐标：经度用负方向，纬度用高度角。
-float2 ogxEclipseSphereToCarte(float3 dir)
+float2 ogxSkyLatLongCoord(float3 dir)
 {
     float lonlat = clamp(atan2(-dir.x, -dir.z), -OGX_PI, OGX_PI); // 经度。
     return float2(lonlat * (0.5 / OGX_PI) + 0.5, asin(dir.y) * (1.0 / OGX_PI) + 0.5); // 映射到零到一。
 }
 
 // Eclipse 天空盒查表：先转经纬度，再压到天空盒左上角的一块 256 像素区域。
-float3 ogxEclipseSkyFromTex(float3 pos, Sampler2D tex, float2 pixelSize)
+float3 ogxSkyGradientLookup(float3 pos, Sampler2D tex, float2 pixelSize)
 {
-    float2 p = ogxEclipseSphereToCarte(pos); // 球面坐标。
+    float2 p = ogxSkyLatLongCoord(pos); // 球面坐标。
     float2 clampUV = float2(1.0); // 允许的最大范围。
     p = clamp(p * 2.0 - 1.0, -clampUV, clampUV) * 0.5 + 0.5; // 压缩到合法范围。
     return tex.SampleLevel(p * pixelSize * 256.0 + float2(18.5, 1.5) * pixelSize, 0.0).rgb; // 固定偏移与缩放。
 }
 
 // Eclipse 云层查表：从天空盒右侧的云图取颜色。
-float4 ogxEclipseSkyCloudsFromTex(float3 pos, Sampler2D tex, float2 pixelSize)
+float4 ogxSkyCloudLookup(float3 pos, Sampler2D tex, float2 pixelSize)
 {
-    float2 p = ogxEclipseSphereToCarte(pos); // 球面坐标。
+    float2 p = ogxSkyLatLongCoord(pos); // 球面坐标。
     float2 uv = clamp(p, 0.0, 1.0) * pixelSize * 256.0 + float2(18.5 + 257.0, 1.5) * pixelSize; // 云图偏移。
     return tex.SampleLevel(uv, 0.0); // 双线性采样。
 }
 
 // Eclipse 模糊云层查表：接口保留 `scaler`，参考实现当前没有使用它。
-float4 ogxEclipseSkyCloudsFromTexBlur(float3 pos, Sampler2D tex, float2 pixelSize, float scaler)
+float4 ogxSkyCloudLookupBlur(float3 pos, Sampler2D tex, float2 pixelSize, float scaler)
 {
-    float2 p = ogxEclipseSphereToCarte(pos); // 球面坐标。
+    float2 p = ogxSkyLatLongCoord(pos); // 球面坐标。
     float2 scaleA = pixelSize * 256.0; // 天空盒区域缩放。
     float2 scaleB = float2(18.5 + 257.0, 1.5) * pixelSize; // 云图偏移。
     float2 uv = clamp(p, 0.0, 1.0) * scaleA + scaleB; // 与参考实现相同的采样位置。
@@ -158,9 +158,9 @@ float4 ogxEclipseSkyCloudsFromTexBlur(float3 pos, Sampler2D tex, float2 pixelSiz
 }
 
 // Eclipse 带粗糙度的云层查表：越粗糙，天顶附近的云越向中心压缩。
-float4 ogxEclipseSkyCloudsFromTexLod(float3 pos, Sampler2D tex, float2 pixelSize, float roughness)
+float4 ogxSkyCloudLookupRough(float3 pos, Sampler2D tex, float2 pixelSize, float roughness)
 {
-    float2 p = ogxEclipseSphereToCarte(pos); // 球面坐标。
+    float2 p = ogxSkyLatLongCoord(pos); // 球面坐标。
     roughness = 1.0 - pow(1.0 - roughness, 3.0); // 参考实现的粗糙度重整。
     float y = min(max(p.y - 0.5, 0.0) * 50.0, 1.0); // 只在天顶附近生效。
     p = lerp(p, (p - 0.5) * (1.0 - roughness) + 0.5, y); // 向中心压缩。
@@ -171,9 +171,9 @@ float4 ogxEclipseSkyCloudsFromTexLod(float3 pos, Sampler2D tex, float2 pixelSize
 }
 
 // Eclipse 体积雾查表：从天空盒中间偏右的区域取体积雾颜色。
-float4 ogxEclipseVolumetricsFromTex(float3 pos, Sampler2D tex, float2 pixelSize, float lod)
+float4 ogxSkyVolumeLookup(float3 pos, Sampler2D tex, float2 pixelSize, float lod)
 {
-    float2 p = ogxEclipseSphereToCarte(pos); // 球面坐标。
+    float2 p = ogxSkyLatLongCoord(pos); // 球面坐标。
     p = clamp(p, 0.0, 1.0); // 夹到合法范围。
     float2 uv = p * pixelSize * 256.0 + float2(256.0 - 256.0 * 0.12, 1.5) * pixelSize; // 体积雾区域偏移。
     return tex.SampleLevel(uv, lod); // 按粗糙度取层级。
@@ -181,7 +181,7 @@ float4 ogxEclipseVolumetricsFromTex(float3 pos, Sampler2D tex, float2 pixelSize,
 
 // Eclipse 大气积分：沿视线固定步数积分瑞利、米氏与臭氧，输出日月散射与透过率。
 // `pid` 返回行星交点参数，`transmittance` 返回视线透过率；两个输出都与参考实现相同。
-float3 ogxEclipseCalculateAtmosphere(float3 background, float3 viewVector, float3 upVector, float3 sunVector,
+float3 ogxSkyAtmosphereIntegral(float3 background, float3 viewVector, float3 upVector, float3 sunVector,
     float3 moonVector, float eyeAltitude, float cameraY, float3 sunColorBase, float3 moonColorBase,
     float3 coefficientRayleigh, float3 coefficientMie, float3 coefficientOzone,
     int iSteps, float noise, float groundReferenceHeight, bool skyGround, bool customMoonRotation,
@@ -232,8 +232,8 @@ float3 ogxEclipseCalculateAtmosphere(float3 background, float3 viewVector, float
     float3 position = viewVector * stepRange.x + viewPos; // 起点。
     position += increment * (0.34 * noise); // 抖动起点。
 
-    float2 phaseSun = ogxEclipseSkyPhase(dot(viewVector, sunVector), 0.8); // 太阳相函数。
-    float2 phaseMoon = ogxEclipseSkyPhase(dot(viewVector, moonVector), 0.8); // 月亮相函数。
+    float2 phaseSun = ogxSkyPhasePair(dot(viewVector, sunVector), 0.8); // 太阳相函数。
+    float2 phaseMoon = ogxSkyPhasePair(dot(viewVector, moonVector), 0.8); // 月亮相函数。
 
     if (customMoonRotation) // 自定义月亮轨道会算月食暗化。
     {
@@ -253,7 +253,7 @@ float3 ogxEclipseCalculateAtmosphere(float3 background, float3 viewVector, float
 
     for (int i = 0; i < iSteps; ++i, position += increment) // 逐段积分。
     {
-        float3 density = ogxEclipseSkyDensity(length(position), planetRadius, scaleHeights); // 三种介质密度。
+        float3 density = ogxSkyDensity(length(position), planetRadius, scaleHeights); // 三种介质密度。
         if (density.y > 1e35) break; // 数值爆掉时提前停止。
         float3 stepAirmass = density * stepSize; // 本段光学路径。
         float3 stepOpticalDepth = coefficientRayleigh * stepAirmass.x + coefficientMie * stepAirmass.y + coefficientOzone * stepAirmass.z; // 本段光学厚度。
@@ -261,8 +261,8 @@ float3 ogxEclipseCalculateAtmosphere(float3 background, float3 viewVector, float
         float3 stepTransmittedFraction = clamp((stepTransmittance - 1.0) / -stepOpticalDepth, 0.0, 1.0); // 本段可散射比例。
         float3 stepScatteringVisible = transmittance * stepTransmittedFraction; // 可见散射。
 
-        float3 sunAirmass = ogxEclipseSkyAirmassRay(position, sunVector, float(jSteps), planetRadius, scaleHeights, atmosphereRadius); // 到太阳的三种介质路径。
-        float3 moonAirmass = ogxEclipseSkyAirmassRay(position, moonVector, float(jSteps), planetRadius, scaleHeights, atmosphereRadius); // 到月亮的三种介质路径。
+        float3 sunAirmass = ogxSkyAirmassRay(position, sunVector, float(jSteps), planetRadius, scaleHeights, atmosphereRadius); // 到太阳的三种介质路径。
+        float3 moonAirmass = ogxSkyAirmassRay(position, moonVector, float(jSteps), planetRadius, scaleHeights, atmosphereRadius); // 到月亮的三种介质路径。
         float3 sunOpticalDepth = coefficientRayleigh * sunAirmass.x + coefficientMie * sunAirmass.y + coefficientOzone * sunAirmass.z; // 到太阳的光学厚度。
         float3 moonOpticalDepth = coefficientRayleigh * moonAirmass.x + coefficientMie * moonAirmass.y + coefficientOzone * moonAirmass.z; // 到月亮的光学厚度。
 
@@ -285,7 +285,7 @@ float3 ogxEclipseCalculateAtmosphere(float3 background, float3 viewVector, float
 }
 
 // Eclipse 极光哈希：一维输入打散成零到一。
-float ogxEclipseAuroraHash(float p)
+float ogxAuroraCurtainHash(float p)
 {
     p = fract(p * 0.1031); // 先压到小数。
     p *= p + 33.33; // 二次项。
@@ -294,7 +294,7 @@ float ogxEclipseAuroraHash(float p)
 }
 
 // 极光二维旋转矩阵。
-float2x2 ogxEclipseAuroraRotation(float angle)
+float2x2 ogxAuroraRotation(float angle)
 {
     float c = cos(angle); // 余弦。
     float s = sin(angle); // 正弦。
@@ -302,53 +302,53 @@ float2x2 ogxEclipseAuroraRotation(float angle)
 }
 
 // 三角波：把任意输入压到零点零一到零点四九之间。
-float ogxEclipseAuroraTri(float x)
+float ogxAuroraTriangle(float x)
 {
     return clamp(abs(fract(x) - 0.5), 0.01, 0.49); // 参考实现的范围。
 }
 
 // 二维三角波对：第二分量是第一分量与纵轴再次组合。
-float2 ogxEclipseAuroraTri2(float2 p)
+float2 ogxAuroraTriangle2d(float2 p)
 {
-    float triX = ogxEclipseAuroraTri(p.x); // 横向三角波。
-    float triY = ogxEclipseAuroraTri(p.y); // 纵向三角波。
-    return float2(triX + triY, ogxEclipseAuroraTri(triX + p.y)); // 参考实现的组合。
+    float triX = ogxAuroraTriangle(p.x); // 横向三角波。
+    float triY = ogxAuroraTriangle(p.y); // 纵向三角波。
+    return float2(triX + triY, ogxAuroraTriangle(triX + p.y)); // 参考实现的组合。
 }
 
 // 行向量乘矩阵：GLSL 的 `p *= m` 是行向量约定，和常见的矩阵乘向量相反。
-float2 ogxEclipseAuroraRowMul(float2 p, float2x2 m)
+float2 ogxAuroraRowMultiply(float2 p, float2x2 m)
 {
     return float2(m[0].x * p.x + m[1].x * p.y, m[0].y * p.x + m[1].y * p.y); // 按列展开，避免转置错误。
 }
 
 // 极光分形噪声：三层三角波，逐层缩放与旋转。
-float ogxEclipseAuroraTriNoise2d(float2 p, float time)
+float ogxAuroraTriangleNoise(float2 p, float time)
 {
     float z = 1.8; // 第一层缩放。
     float z2 = 2.5; // 第二层缩放。
     float rz = 0.0; // 累加结果。
-    p = ogxEclipseAuroraRowMul(p, ogxEclipseAuroraRotation(p.x * 0.06)); // 初始旋转。
+    p = ogxAuroraRowMultiply(p, ogxAuroraRotation(p.x * 0.06)); // 初始旋转。
     float2 bp = p; // 备份坐标。
-    float2x2 rotation = ogxEclipseAuroraRotation(time * 0.06); // 时间旋转。
+    float2x2 rotation = ogxAuroraRotation(time * 0.06); // 时间旋转。
     float2x2 m2 = float2x2(0.95534, 0.29552, -0.29552, 0.95534); // 参考实现的固定旋转。
     for (int i = 0; i < 3; i++) // 三层。
     {
-        float2 dg = ogxEclipseAuroraTri2(bp * 1.75) * 0.75; // 三角波偏移。
-        dg = ogxEclipseAuroraRowMul(dg, rotation); // 旋转偏移。
+        float2 dg = ogxAuroraTriangle2d(bp * 1.75) * 0.75; // 三角波偏移。
+        dg = ogxAuroraRowMultiply(dg, rotation); // 旋转偏移。
         p -= dg / z2; // 坐标扰动。
         bp *= 1.3; // 频率放大。
         z2 *= 0.45; // 下一层缩放。
         z *= 0.42; // 权重衰减。
         p *= 1.21 + (rz - 1.0) * 0.02; // 参考实现的比例。
-        rz += ogxEclipseAuroraTri(p.x + ogxEclipseAuroraTri(p.y)) * z; // 累加一层。
-        p = ogxEclipseAuroraRowMul(p, float2x2(-0.95534, -0.29552, 0.29552, -0.95534)); // 参考实现的 `p *= -m2`。
+        rz += ogxAuroraTriangle(p.x + ogxAuroraTriangle(p.y)) * z; // 累加一层。
+        p = ogxAuroraRowMultiply(p, float2x2(-0.95534, -0.29552, 0.29552, -0.95534)); // 参考实现的 `p *= -m2`。
     }
     return clamp(1.0 / pow(rz * 29.0, 1.6), 0.0, 0.55); // 参考实现的收尾。
 }
 
 // Eclipse 极光主体：沿视线取样，用三角噪声生成幕帘与颜色。
 // `moonY`/`sunY` 决定月亮与太阳对极光的压制，`lut` 选择是否使用六倍步长。
-float3 ogxEclipseAurora(float3 dir, int samples, float noise, float moonY, float sunY, float time,
+float3 ogxAuroraCurtain(float3 dir, int samples, float noise, float moonY, float sunY, float time,
     float3 background, float amount, float brightness, float3 auroraColor, bool moonLight, bool lut)
 {
     float3 col = float3(0.0); // 幕帘累加。
@@ -363,7 +363,7 @@ float3 ogxEclipseAurora(float3 dir, int samples, float noise, float moonY, float
         float of = hash * smoothstep(0.0, 12.0, mI); // 抖动。
         float pt = (0.8 + pow(mI, 1.4) * 0.0016) / fade - of; // 采样半径。
         float3 bpos = pt * dir; // 采样位置。
-        float rzt = ogxEclipseAuroraTriNoise2d(bpos.zx, time); // 三角噪声。
+        float rzt = ogxAuroraTriangleNoise(bpos.zx, time); // 三角噪声。
         float3 col2 = (sin(auroraColor + mI * 0.063) * 0.5 + 0.5) * rzt; // 当前层颜色。
         avgCol = lerp(avgCol, col2, 0.1); // 参考实现的滑动平均。
         col += avgCol * exp2(-mI * 0.05 - 2.5); // 高度衰减。
@@ -376,7 +376,7 @@ float3 ogxEclipseAurora(float3 dir, int samples, float noise, float moonY, float
 
 // Eclipse 实时大气入口：参考签名把两个输出放在第 6、7 位，库的主函数放在末尾。
 // 这里按参考顺序转发，调用方不需要知道库内部的重排。
-float3 ogxItxCalculateAtmosphere(float3 background, float3 viewVector, float3 upVector,
+float3 ogxSkyAtmosphereIntegralReference(float3 background, float3 viewVector, float3 upVector,
     float3 sunVector, float3 moonVector, out float2 pid, out float3 transmittance,
     int iSteps, float noise, float eyeAltitude, float cameraY, float3 sunColorBase,
     float3 moonColorBase, float3 coefficientRayleigh, float3 coefficientMie,
@@ -384,7 +384,7 @@ float3 ogxItxCalculateAtmosphere(float3 background, float3 viewVector, float3 up
     bool customMoonRotation, bool twilightForest, float planetRadius, float atmosphereRadius,
     float2 scaleHeights)
 {
-    return ogxEclipseCalculateAtmosphere(background, viewVector, upVector, sunVector, moonVector,
+    return ogxSkyAtmosphereIntegral(background, viewVector, upVector, sunVector, moonVector,
         eyeAltitude, cameraY, sunColorBase, moonColorBase, coefficientRayleigh, coefficientMie,
         coefficientOzone, iSteps, noise, groundReferenceHeight, skyGround, customMoonRotation,
         twilightForest, pid, transmittance, planetRadius, atmosphereRadius, scaleHeights);

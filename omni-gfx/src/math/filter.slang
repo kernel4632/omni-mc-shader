@@ -152,21 +152,21 @@ float2 ogxSequenceR2(float n)
 }
 
 // Eclipse 的三角波：先减半再取绝对值，夹在 0.01 到 0.49 之间避免端点。
-float ogxEclipseTri(float x)
+float ogxTriangleGradient(float x)
 {
     return clamp(abs(fract(x) - 0.5), 0.01, 0.49); // 参考实现的夹紧范围。
 }
 
 // Eclipse 的二维三角波：先分别算两个方向，再用第一个结果扰动第二个输入。
-float2 ogxEclipseTri2(float2 p)
+float2 ogxTriangleGradient2d(float2 p)
 {
-    float triX = ogxEclipseTri(p.x); // 第一方向。
-    float triY = ogxEclipseTri(p.y); // 第二方向。
-    return float2(triX + triY, ogxEclipseTri(triX + p.y)); // 参考实现的组合方式。
+    float triX = ogxTriangleGradient(p.x); // 第一方向。
+    float triY = ogxTriangleGradient(p.y); // 第二方向。
+    return float2(triX + triY, ogxTriangleGradient(triX + p.y)); // 参考实现的组合方式。
 }
 
 // Eclipse 的快速反余弦：三系数多项式加根号修正，和库默认的三次近似不同。
-float ogxFastAcosEclipse(float x)
+float ogxFastAcosPoly(float x)
 {
     const float c0 = 1.57018; // 零点值。
     const float c1 = -0.201877; // 一次项。
@@ -188,7 +188,7 @@ float ogxRayleighPhaseElek(float cosTheta)
 
 // Eclipse 的 4×4 Bayer 抖动：按像素坐标查表，返回零到一之间的阈值。
 // 为什么不用递归拜尔函数：递归构造出的是另一张矩阵，和参考的 16 项表不同。
-float ogxEclipseBayerDither(float2 pixel)
+float ogxBayer4Dither(float2 pixel)
 {
     float bayer[16]; // 参考实现的 4×4 表。
     bayer[0] = 0.0/16.0;

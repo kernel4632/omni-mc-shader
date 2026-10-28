@@ -138,7 +138,7 @@ float3 ogxTonemapUchimuraModified(float3 x, float P, float a, float m, float l, 
 }
 
 // Eclipse 黑体色：按温度拟合 RGB，再转线性；和普朗克轨迹版是两个不同近似。
-float3 ogxBlackbodyEclipse(float temperature)
+float3 ogxBlackbodyApprox(float temperature)
 {
     float t = pow(temperature, -1.5); // 高温项。
     float lt = log(temperature); // 对数项。

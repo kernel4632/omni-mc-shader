@@ -3,22 +3,22 @@ Omni 通用图形库 Eclipse 场景补充模块：受伤与入水画面效果、
 调用位置：需要复现 Eclipse `gameplay_effects.glsl`、`scene_controller.glsl` 与 `end_fog.glsl` 的程序；
     Minecraft 光影由 `/omni-gfx/post/scene.glsl` 引入，当前由严格 profile 与独立测试消费。
 可复制示例：
-    ogxEclipseApplyGameplayEffects(color, texCoord, 0.5, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, false, false,
+    ogxGameplayEffects(color, texCoord, 0.5, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, false, false,
         sceneTex, noiseTex, 1.777, 20.0, 1.0, 1.0, 0.0);
-    ogxEclipseApplySceneControllerParameters(...);
-    float shadow = ogxEclipseGetEndFogShadow(worldPos, lightPos, fogShapeTex, 1.0);
+    ogxSceneControllerParameters(...);
+    float shadow = ogxEndFogShadowShape(worldPos, lightPos, fogShapeTex, 1.0);
 设计原因与取舍：
     参考实现直接读血量、眼在水中、`colortex7` 与末地雾密度纹理。库把数值、纹理与尺寸改成显式参数，
     分支、常数与采样顺序保持不变；场景控制只是把输入默认值抄到输出，参数表来自菜单来源。
 */
-#ifndef OGX_ECLIPSE_SCENE_INCLUDED
-#define OGX_ECLIPSE_SCENE_INCLUDED
+#ifndef OGX_POST_SCENE_INCLUDED
+#define OGX_POST_SCENE_INCLUDED
 
 // 数学提供夹紧与取模；颜色提供亮度权重。
 #include "../math.slang"
 
 // 场景控制参数：没有自定义触发器时，把所有天气与云层参数原样输出。
-void ogxEclipseApplySceneControllerParameters(float smallCumulusCoverage, float smallCumulusDensity,
+void ogxSceneControllerParameters(float smallCumulusCoverage, float smallCumulusDensity,
     float largeCumulusCoverage, float largeCumulusDensity, float altostratusCoverage,
     float altostratusDensity, float cirrusCoverage, float cirrusDensity,
     out float outSmallCoverage, out float outSmallDensity, out float outLargeCoverage,
@@ -39,7 +39,7 @@ void ogxEclipseApplySceneControllerParameters(float smallCumulusCoverage, float 
 
 // 受伤、入水与着火画面效果：先算屏幕扭曲，再按血量与伤害上色。
 // 开关用布尔参数表示，避免库读取菜单宏；未开启的分支保持零贡献。
-void ogxEclipseApplyGameplayEffects(inout float3 color, float2 texcoord, float noise,
+void ogxGameplayEffects(inout float3 color, float2 texcoord, float noise,
     float currentHealth, float maxHealth, float oneHeart, float threeHeart,
     float criticalDamage, float minorDamage, bool lowHealthEffect, bool damageTakenEffect,
     bool waterOnCamera, bool fireDistort, float exitWater, float enterWater, float exitLava,
@@ -106,7 +106,7 @@ void ogxEclipseApplyGameplayEffects(inout float3 color, float2 texcoord, float n
 
 // 场景控制器的默认参数：把云层覆盖与密度写进输出，雾系数固定为一。
 // 参考签名只有十个输出；库版本不再接收额外输入，直接给出参考默认值。
-void ogxEclipseApplySceneControllerDefaults(out float smallCumulusCoverage, out float smallCumulusDensity,
+void ogxSceneControllerDefaults(out float smallCumulusCoverage, out float smallCumulusDensity,
     out float largeCumulusCoverage, out float largeCumulusDensity, out float altostratusCoverage,
     out float altostratusDensity, out float cirrusCoverage, out float cirrusDensity,
     out float fogA, out float fogB)

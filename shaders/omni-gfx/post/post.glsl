@@ -251,7 +251,7 @@ float ogxDofCocSpread(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTextu
 // iterationT 的弥散圆扩散：先取时间蓝噪声，再读当前深度与对焦距离，最后做十步螺旋搜索。
 // 为什么单独一份：`ogxDofCocSpread` 把对焦距离与噪声都当参数，严格对照需要把
 // 参考实现内部的那两次采样和固定统计像素显式接回来。
-float ogxItxDofCocSpread(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTexture,
+float ogxDofCocSpreadReference(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTexture,
     sampler2D focusTexture, sampler2D noiseTexture, mat4 projectionInverse,
     mat4 dhProjectionInverse, ivec2 screenExtent, ivec2 texelCoord, int frame,
     int focusMode, float focalPoint, bool useDh, float blur, float projectionScale,
@@ -302,7 +302,7 @@ float ogxItxDofCocSpread(vec2 coord, sampler2D depthTexture, sampler2D dhDepthTe
 // iterationT 的景深主循环：先取蓝噪声、当前深度与对焦距离，再按十步螺旋混合前景与背景。
 // 为什么单独一份：合并版支持猫眼、色散与下界深度打包，默认路径的采样顺序和参考不同；
 // 严格对照只走参考的主世界分支。
-vec4 ogxItxDof(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
+vec4 ogxDofReference(vec2 coord, sampler2D colorTexture, sampler2D depthTexture,
     sampler2D dhDepthTexture, sampler2D focusTexture, sampler2D noiseTexture,
     mat4 projectionInverse, mat4 dhProjectionInverse, ivec2 screenExtent,
     ivec2 texelCoord, int frame, int focusMode, float focalPoint, bool useDh, float blur,

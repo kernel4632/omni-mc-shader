@@ -2,7 +2,7 @@
   "package": "Eclipse",
   "macro": "OGX_PROFILE_ECLIPSE",
   "shader": "omni-gfx/profiles/eclipse/profile.frag",
-  "sha256": "583c89968a83f3150ee84016cc313e8cf81e7f3c46e5c9a36c4bf299db99838d",
+  "sha256": "4ed69c69d2a07aa9835557fd10c3ce29fbf7bd7be8698b36cc9ef2119aad450c",
   "lines": 15604,
   "compiled": true,
   "compiler": "glslang.exe",

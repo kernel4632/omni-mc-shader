@@ -9,7 +9,7 @@ Eclipse 间接光模块编译探针：调用余弦半球采样、切线空间转
 float4 probeMain(float4 position : SV_Position) : SV_Target
 {
     float t = position.x * 0.001 + 0.25; // 随像素变化的输入。
-    float3 local = ogxEclipseCosineHemisphereSample(float2(t, 1.0 - t)); // 余弦半球采样。
-    float3 world = ogxEclipseTangentToWorld(normalize(float3(t, 0.4, 0.9)), local); // 切线空间转世界。
+    float3 local = ogxCosineHemisphereDirection(float2(t, 1.0 - t)); // 余弦半球采样。
+    float3 world = ogxTangentToWorld(normalize(float3(t, 0.4, 0.9)), local); // 切线空间转世界。
     return float4(world, 1.0); // 有输出即可。
 }

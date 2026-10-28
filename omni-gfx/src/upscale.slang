@@ -150,7 +150,7 @@ float3 ogxCas(Sampler2D colorTex, float3 sampleE, int2 texelCoord, float sharpne
 float3 ogxFsr1(Sampler2D upscaledTex, int2 texelCoord, float sharpness, bool denoise);
 
 // Eclipse FSR1 入口：参考签名只给像素坐标，源纹理与锐化参数由宿主提供。
-float3 ogxItxFsr1(int2 texelCoord, Sampler2D upscaledTex, float sharpness, bool denoise)
+float3 ogxFsr1Reference(int2 texelCoord, Sampler2D upscaledTex, float sharpness, bool denoise)
 {
     return ogxFsr1(upscaledTex, texelCoord, sharpness, denoise);
 }

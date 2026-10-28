@@ -8,7 +8,7 @@
 Omni 通用图形库全局光环境光遮蔽模块：Eclipse GTAO 的弧段积分、最大水平角与多切片遮蔽。
 调用位置：屏幕空间环境光遮蔽与间接光；由 `/omni-gfx/gi/ambientocclusion.glsl` 引入。
 可复制示例：
-    float ao = ogxEclipseAmbientOcclusion(screenPos, viewPos, normal, dither, 4, 1.0, 8, 0.2, pixelSize, viewSize, 1.0, 0.0, 1.5708, depthTex, proj, invProj); // 计算环境光遮蔽。
+    float ao = ogxGtaoHorizon(screenPos, viewPos, normal, dither, 4, 1.0, 8, 0.2, pixelSize, viewSize, 1.0, 0.0, 1.5708, depthTex, proj, invProj); // 计算环境光遮蔽。
 设计原因与取舍：
     沿切片搜索最近遮挡，切片数与步数由调用方给出；深度图、矩阵与手部深度显式传入，公式与参考实现逐项相同。
 */
@@ -18,14 +18,14 @@ Omni 通用图形库全局光环境光遮蔽模块：Eclipse GTAO 的弧段积�
 #include "/omni-gfx/math.glsl"
 // GTAO 的弧段积分：两个水平角之间覆盖的余弦积分。
 // 在单位圆上积分一段弧的贡献，供天空环境光近似。
-float ogxEclipseIntegrateArc(vec2 h, float n, float cosN)
+float ogxGtaoArcIntegral(vec2 h, float n, float cosN)
 {
     vec2 tmp = cosN + 2.0 * h * sin(n) - cos(2.0 * h - n); // 参考实现的积分核。
     return 0.25 * (tmp.x + tmp.y); // 两个方向取平均。
 }
 
 // 单个切片的最大水平角：沿切片方向在深度图里找最高遮挡。
-float ogxEclipseMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPos, vec3 viewPos, float dither,
+float ogxGtaoMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPos, vec3 viewPos, float dither,
     float radius, int steps, vec3 viewPixelSize, vec2 viewRes, float renderScale, float handDepth,
     float falloffStart, sampler2D depthTexture, mat4 projection, mat4 projectionInverse)
 {
@@ -53,12 +53,12 @@ float ogxEclipseMaxHorizonAngle(vec3 viewSliceDir, vec3 viewerDir, vec3 screenPo
         maxCosTheta = max(cosTheta, maxCosTheta); // 取最大。
         rayPos += rayStep;
     }
-    return ogxFastAcosEclipse(clamp(maxCosTheta, -1.0, 1.0)); // 反余弦得到角度。
+    return ogxFastAcosPoly(clamp(maxCosTheta, -1.0, 1.0)); // 反余弦得到角度。
 }
 
 // GTAO 环境光遮蔽：沿多个切片各取两个最大水平角，再积分成遮蔽。
 // Eclipse 地平线遮蔽：沿多个方向搜索最近遮挡，返回零到一的可见度。
-float ogxEclipseAmbientOcclusion(vec3 screenPos, vec3 viewPos, vec3 viewNormal, vec2 dither, int slices,
+float ogxGtaoHorizon(vec3 screenPos, vec3 viewPos, vec3 viewNormal, vec2 dither, int slices,
     float radius, int horizonSteps, float falloffStart, vec3 viewPixelSize, vec2 viewRes, float renderScale,
     float handDepth, float halfPi, sampler2D depthTexture, mat4 projection, mat4 projectionInverse)
 {
@@ -79,14 +79,14 @@ float ogxEclipseAmbientOcclusion(vec3 screenPos, vec3 viewPos, vec3 viewNormal, 
         float norm = inversesqrt(lenSq); // 倒数。
         float signGamma = sign(dot(orthoDir, projectedNormal)); // 法线在切片哪一侧。
         float cosGamma = ogxSaturate(dot(projectedNormal, viewerDir) * norm); // 法线与视线夹角余弦。
-        float gamma = signGamma * ogxFastAcosEclipse(cosGamma); // 夹角。
+        float gamma = signGamma * ogxFastAcosPoly(cosGamma); // 夹角。
         vec2 maxHorizonAngles; // 两个方向的最大水平角。
-        maxHorizonAngles.x = ogxEclipseMaxHorizonAngle(-viewSliceDir, viewerDir, screenPos, viewPos, dither.y, radius,
+        maxHorizonAngles.x = ogxGtaoMaxHorizonAngle(-viewSliceDir, viewerDir, screenPos, viewPos, dither.y, radius,
             horizonSteps, viewPixelSize, viewRes, renderScale, handDepth, falloffStart, depthTexture, projection, projectionInverse); // 负方向。
-        maxHorizonAngles.y = ogxEclipseMaxHorizonAngle(viewSliceDir, viewerDir, screenPos, viewPos, dither.y, radius,
+        maxHorizonAngles.y = ogxGtaoMaxHorizonAngle(viewSliceDir, viewerDir, screenPos, viewPos, dither.y, radius,
             horizonSteps, viewPixelSize, viewRes, renderScale, handDepth, falloffStart, depthTexture, projection, projectionInverse); // 正方向。
         maxHorizonAngles = gamma + clamp(vec2(-1.0, 1.0) * maxHorizonAngles - gamma, -halfPi, halfPi); // 限制在半球内。
-        ao += ogxEclipseIntegrateArc(maxHorizonAngles, gamma, cosGamma) * lenSq * norm; // 积分这一段。
+        ao += ogxGtaoArcIntegral(maxHorizonAngles, gamma, cosGamma) * lenSq * norm; // 积分这一段。
     }
     ao *= 1.0 / float(slices); // 取平均。
     return ao * (ao * 0.5 + 0.5); // 参考实现的对比度重整。

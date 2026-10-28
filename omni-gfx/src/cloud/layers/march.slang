@@ -209,7 +209,7 @@ float4 ogxLayersGetVolumetricClouds(OgxLayersCloudSettings s, float3 viewPos, fl
     cloudDist.xz = lerp(float2(255.0), float2(5.5), cloudMix); // 层内 5.5，层外 255。
     float3 rayDirection = normPlayerPos.xyz * (cloudheight / length(normPlayerPos.xyz / min(cloudDist, float3(0.05 * lViewPosM))) / float(samples)); // 一层走完的步长。
     float3 rayPosition = ogxLayersGetRayOrigin(rayDirection, cameraPos, dither.y, minHeight, maxHeight); // 起点压到云层平面。
-    float3 sampledSkyCol = ogxEclipseSkyFromTex(normalize(rayPosition - cameraPos), skyTexture, texelSize) / 1200.0; // 参考在第一步后查天空盒。
+    float3 sampledSkyCol = ogxSkyGradientLookup(normalize(rayPosition - cameraPos), skyTexture, texelSize) / 1200.0; // 参考在第一步后查天空盒。
     if (skyGround) // 参考 SKY_GROUND 分支：地面视角把天空色混向间接光。
     {
         if (s.cumulonimbus > 1.0) heightRelativeToClouds = clamp(1.0 - max(cameraPos.y - 6000.0, 0.0) / 100.0, 0.0, 1.0); // 积雨云开启时改用六千米基准。

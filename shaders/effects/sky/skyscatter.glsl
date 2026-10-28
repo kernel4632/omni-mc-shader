@@ -39,18 +39,18 @@ const vec2 OMNI_ECLIPSE_SCALE_HEIGHTS = vec2(8.0e3, 1.2e3);
 const float OMNI_ECLIPSE_ATMOSPHERE_RADIUS = OMNI_ECLIPSE_PLANET_RADIUS + 1.0e5;
 
 vec3 sky_density(float centerDistance){
-	return ogxEclipseSkyDensity(centerDistance, OMNI_ECLIPSE_PLANET_RADIUS, OMNI_ECLIPSE_SCALE_HEIGHTS);
+	return ogxSkyDensity(centerDistance, OMNI_ECLIPSE_PLANET_RADIUS, OMNI_ECLIPSE_SCALE_HEIGHTS);
 }
 vec3 sky_airmass(vec3 position, vec3 direction, float rayLength, float steps){
-	return ogxEclipseSkyAirmass(position, direction, rayLength, steps, OMNI_ECLIPSE_PLANET_RADIUS, OMNI_ECLIPSE_SCALE_HEIGHTS);
+	return ogxSkyAirmass(position, direction, rayLength, steps, OMNI_ECLIPSE_PLANET_RADIUS, OMNI_ECLIPSE_SCALE_HEIGHTS);
 }
 vec3 sky_opticalDepth(vec3 position, vec3 direction, float rayLength, float steps){
-	return ogxEclipseSkyOpticalDepth(position, direction, rayLength, steps, OMNI_ECLIPSE_PLANET_RADIUS,
+	return ogxSkyOpticalDepth(position, direction, rayLength, steps, OMNI_ECLIPSE_PLANET_RADIUS,
 		OMNI_ECLIPSE_SCALE_HEIGHTS, vec3(5.8e-6, 1.35e-5, 3.31e-5), vec3(3.0e-6),
 		vec3(1.807e-7, 1.316e-7, 7.883e-9));
 }
 vec3 sky_transmittance(vec3 position, vec3 direction, float steps){
-	vec3 airmass = ogxEclipseSkyAirmassRay(position, direction, steps, OMNI_ECLIPSE_PLANET_RADIUS,
+	vec3 airmass = ogxSkyAirmassRay(position, direction, steps, OMNI_ECLIPSE_PLANET_RADIUS,
 		OMNI_ECLIPSE_SCALE_HEIGHTS, OMNI_ECLIPSE_ATMOSPHERE_RADIUS);
 	vec3 depth = vec3(5.8e-6, 1.35e-5, 3.31e-5) * airmass.x + vec3(3.0e-6) * airmass.y
 		+ vec3(1.807e-7, 1.316e-7, 7.883e-9) * airmass.z;
@@ -58,7 +58,7 @@ vec3 sky_transmittance(vec3 position, vec3 direction, float steps){
 }
 
 // 参考签名兼容层：Eclipse 极光的三乘三层三角噪声，时间由宿主补齐。
-float triNoise2d(vec2 p){ return ogxEclipseAuroraTriNoise2d(p, frameTimeCounter); }
+float triNoise2d(vec2 p){ return ogxAuroraTriangleNoise(p, frameTimeCounter); }
 
 // 参考签名兼容层：Eclipse 的极光主体直接读月亮/太阳高度与极光颜色。
 // 这里把参考的五个参数原样保留，颜色与亮度取 Eclipse 默认值。

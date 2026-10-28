@@ -199,7 +199,7 @@ void ogxTorchSpecularHighlight(inout float3 color, float3 viewPos, float3 viewDi
 // Eclipse 手持光：从方块光表的一维图里读颜色与范围，再按距离三次方衰减。
 // 参考用 `imgBlockData` 的 imageLoad 与内置的 unpackUnorm4x8；库把方块光表作为
 // 一维只读纹理传入，并按同样的字节顺序手工拆包，避免依赖 GLSL 4.0 的打包函数。
-float3 ogxEclipseGetHandLight(int itemId, float3 playerPos, inout float lightRange,
+float3 ogxHandLightFromBlockData(int itemId, float3 playerPos, inout float lightRange,
     Usampler1D blockDataTexture, float3 relativeEyePosition)
 {
     float3 lightFinal = float3(0.0); // 默认没有手持光。

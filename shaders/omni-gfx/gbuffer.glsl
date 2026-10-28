@@ -203,7 +203,7 @@ OgxGbufferData ogxGetGbufferData(sampler2D gbuffer0, sampler2D gbuffer3, sampler
     if (pbr) // 开启 labPBR 才解码材质。
     {
         vec4 specTex = vec4(ogxUnpack2x8(g5.r), ogxUnpack2x8(g5.g)); // 红绿通道拆成四字节材质图。
-        data.material = ogxItxMaterialFromTex(data.albedo, specTex, g5a.x, usePorosity, pbrFormat,
+        data.material = ogxMaterialFromTexDefault(data.albedo, specTex, g5a.x, usePorosity, pbrFormat,
             defaultPorosity, porosityAbsorption, roughnessClamp, emissivenessGamma, sssStrength, sssOffset); // 复用同一套材质解码。
         if (mcBefore11605) data.material.reflectionStrength *= float(data.depthW >= 0.7); // 旧版本远景才允许反射。
     }

@@ -44,8 +44,8 @@ TYPE_ALIASES = {
     "sampler2d": "sampler2d", "sampler3d": "sampler3d", "samplercube": "samplercube",
     "sampler2dshadow": "sampler2dshadow", "sampler2darray": "sampler2darray",
     # 库里的结构体带 Ogx 前缀，参考包直接用短名；类型身份相同，字段由人工核对。
-    "ogxeclipserayhit": "rayhit", "ogxeclipserayjob": "rayjob",
-    "ogxeclipsetranslucenthit": "translucenthit",
+    "ogxrayhit": "rayhit", "ogxrayjob": "rayjob",
+    "ogxtranslucenthit": "translucenthit",
     "ogxmaterialmask": "materialmask", "ogxgiview": "giview",
 }
 

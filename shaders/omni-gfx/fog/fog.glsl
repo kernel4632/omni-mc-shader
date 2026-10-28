@@ -276,7 +276,7 @@ float ogxEndVortexLightPhase(vec3 pos);
 
 // iterationT 末地光源照明：沿光源方向取三层雾形状，按相位与吸收合成。
 // 为什么单独一份：参考签名不带雾形状纹理，严格对照需要显式接收三维雾。
-vec3 ogxItxLightSourceLighting(vec3 startPos, vec3 lightPos, float dither, float density,
+vec3 ogxEndVortexLightingReference(vec3 startPos, vec3 lightPos, float dither, float density,
     vec3 lightColor, float vortexBounds, sampler2D noiseTexture, float time, float noiseResolution)
 {
     float phase = ogxEndVortexLightPhase(lightPos); // 参考实现的光源相位。
@@ -293,7 +293,7 @@ vec3 ogxItxLightSourceLighting(vec3 startPos, vec3 lightPos, float dither, float
 }
 
 // iterationT 末地雾影：三层采样后按指数衰减，返回零到一的可见度。
-float ogxItxGetEndFogShadow(vec3 worldPos, vec3 lightPos, sampler2D noiseTexture,
+float ogxEndFogShadowNoise(vec3 worldPos, vec3 lightPos, sampler2D noiseTexture,
     float time, float noiseResolution, float endStormDensity)
 {
     float shadow = 0.0; // 三层雾密度累加。
@@ -417,7 +417,7 @@ vec4 ogxEndVortexFog(vec3 cameraPos, vec3 worldDir, float viewDist, float dither
 
 // 末地体积涡旋雾：按 Eclipse `end_fog.glsl` 的 GetVolumetricFog 逐行移植。
 // 参考参数在前，相机、随机缓冲、噪声与风暴资源追加在后；默认分支不读宿主全局量。
-vec4 ogxEclipseGetVolumetricFogEndExact(vec3 viewPosition, float dither, float dither2,
+vec4 ogxEndVolumetricFogExact(vec3 viewPosition, float dither, float dither2,
     mat4 modelViewInverse, vec3 cameraWorldPos, vec3 ambientColor, vec3 vortexColor, vec3 lightningColor,
     vec3 orbColor, float orbMult, bool theOrb, float vortexBoundRange, vec3 manualLightPos,
     sampler2D randomTexture, sampler2D noiseTexture, float noiseResolution, float endStormDensity,
@@ -540,7 +540,7 @@ void ogxBiomeFogDensity(vec4 weights, inout float uniformDensity, inout float cl
 
 // Eclipse 的群系雾密度：把沼泽、丛林、黑森林、苍白花园、沙暴、雪暴六类分开加权。
 // 参考实现先算总权重，再分别写密度两个分量；沙暴高度密度为零，雪暴固定 0.01。
-void ogxBiomeFogDensityEclipse(inout vec4 uniformDensity, inout vec4 cloudyDensity,
+void ogxBiomeFogDensityReference(inout vec4 uniformDensity, inout vec4 cloudyDensity,
     float paleGarden, float jungles, float swamps, float darkForests, float sandStorm, float snowStorm,
     float swampUniform, float jungleUniform, float darkForestUniform, float paleGardenUniform,
     float swampCloudy, float jungleCloudy, float darkForestCloudy, float paleGardenCloudy, float maxDistance)
@@ -556,7 +556,7 @@ void ogxBiomeFogDensityEclipse(inout vec4 uniformDensity, inout vec4 cloudyDensi
 }
 
 // Eclipse 末地雾的相函数：与云相函数同形，但常数用 3.14 而不是 pi，保留参考精度。
-float ogxEndFogPhaseEclipse(float x, float g)
+float ogxEndFogPhaseAnisotropic(float x, float g)
 {
     float gg = g * g; // g 的平方。
     return (gg * -0.25 + 0.25) * pow(-2.0 * (g * x) + (gg + 1.0), -1.5) / 3.14; // 参考实现直接写 3.14。
@@ -596,7 +596,7 @@ vec3 ogxSelectionBox(vec3 color, vec3 albedo, bool isSelection, float exposureEn
 }
 
 // 雾相位：Eclipse 的指数相位，光线越正对越亮。
-float ogxEclipseFogPhase(float lightPoint)
+float ogxEndLightFalloff(float lightPoint)
 {
     float linear = clamp(-lightPoint * 0.5 + 0.5, 0.001, 1.0); // 线性项。
     float linear2 = 1.0 - clamp(lightPoint, 0.0, 1.0); // 参考保留这一项，当前返回值没有用到它。
@@ -606,7 +606,7 @@ float ogxEclipseFogPhase(float lightPoint)
 }
 
 // 末地雾阴影：沿光源方向取三个密度样本，再按指数衰减成阴影。
-float ogxEclipseGetEndFogShadow(vec3 worldPos, vec3 lightPos, sampler3D fogShape, float endStormDensity)
+float ogxEndFogShadowShape(vec3 worldPos, vec3 lightPos, sampler3D fogShape, float endStormDensity)
 {
     float shadow = 0.0; // 密度累加。
     for (int i = 0; i < 3; i++) // 三个样本。

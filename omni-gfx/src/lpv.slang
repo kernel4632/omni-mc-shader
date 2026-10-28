@@ -47,7 +47,7 @@ float4 ogxLpvDecodeSample(float4 texel, float2 blockSkyRange)
 
 // Eclipse 的 LPV 线性取样入口：按帧号奇偶从两张三维纹理中取一张，再走同一份解码。
 // 为什么显式传入两张纹理：参考实现读 texLpv1/texLpv2，库不绑定宿主纹理槽位。
-float4 ogxItxSampleLpvLinear(float3 lpvPos, Sampler3D lpv1, Sampler3D lpv2,
+float4 ogxLpvSampleLinear(float3 lpvPos, Sampler3D lpv1, Sampler3D lpv2,
     int frameCounter, float lpvSize, float2 blockSkyRange)
 {
     float3 texcoord = lpvPos / lpvSize; // 归一化到体积坐标。

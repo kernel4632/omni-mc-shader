@@ -8,6 +8,6 @@ Omni 通用图形库 weather/lightning 模块编译探针：覆盖该效果的�
 float4 probeMain(float4 position : SV_Position) : SV_Target
 {
     float t = position.x * 0.001 + 0.25; // 随像素变化的输入。
-    float3 light = ogxEclipseLightSourceColors(t, 1.0, float3(1.0), float3(0.5), float3(0.2), 1.0, false); // 末地光源颜色。
+    float3 light = ogxLightSourceColors(t, 1.0, float3(1.0), float3(0.5), float3(0.2), 1.0, false); // 末地光源颜色。
     return float4(light, 1.0); // 有输出即可。
 }
