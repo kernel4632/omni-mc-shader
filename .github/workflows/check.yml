@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: '3.12' # 保持安全解压等标准库接口一致。
       - name: 缓存编译工具与结果
-        uses: actions/cache@v4 # 同一源码与工具再次运行时跳过重复编译。
+        uses: actions/cache@v6 # 同一源码与工具再次运行时跳过重复编译。
         with:
           path: | # 工具按锁定哈希缓存；编译结果按源码内容缓存。
             .dev/tools
