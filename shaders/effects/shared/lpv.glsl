@@ -209,8 +209,8 @@ vec3 omniLpvApply(vec3 blockLight, vec3 playerPos, vec3 worldNormal){
 #if defined OMNI_LPV_FOG_LIGHT && (OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD || defined OMNI_LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER)
 uniform usampler1D omniLpvBlocksTex; // 方块光表按整数采样器读，与计算阶段写的图像 `omniLpvBlocks` 是同一张纹理。
 // 把打包在低字里的光色与范围拆出来：按字节顺序还原四个零到一分量，避免依赖打包扩展。
-vec4 omniLpvUnpackColorRange(uint packed){
-	return vec4(float(packed & 0xFFu), float((packed >> 8u) & 0xFFu), float((packed >> 16u) & 0xFFu), float(packed >> 24u)) / 255.0;
+vec4 omniLpvUnpackColorRange(uint packedValue){
+	return vec4(float(packedValue & 0xFFu), float((packedValue >> 8u) & 0xFFu), float((packedValue >> 16u) & 0xFFu), float(packedValue >> 24u)) / 255.0;
 }
 // 求一个手持物品在某点留下的光：读光表得到颜色与范围，再按离玩家的距离三次方衰减，返回零到一的颜色。
 // 为什么按距离三次方：照 Eclipse，光源范围外直接归零，越靠近玩家越亮。

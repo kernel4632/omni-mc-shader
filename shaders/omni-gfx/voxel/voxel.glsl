@@ -57,9 +57,9 @@ vec3 ogxVoxelTranslucentTint(uint id, vec3 albedo)
 vec3 ogxVoxelShade(vec3 albedo, vec3 voxelNormal, float packedLight, vec3 torchColor, vec3 skyColor,
     vec3 sunColor, vec3 sunDirection, float strength)
 {
-    float packed = floor(packedLight * 255.0 + 0.5); // 还原成整数位的打包光照。
-    float blockLevel = floor(packed / 16.0) / 15.0; // 高四位是方块光等级。
-    float skyLevel = ogxMod(packed, 16.0) / 15.0; // 低四位是天光等级。
+    float packedValue = floor(packedLight * 255.0 + 0.5); // 还原成整数位的打包光照。
+    float blockLevel = floor(packedValue / 16.0) / 15.0; // 高四位是方块光等级。
+    float skyLevel = ogxMod(packedValue, 16.0) / 15.0; // 低四位是天光等级。
     vec3 indirect = torchColor * blockLevel + skyColor * skyLevel; // 方块光与天光一起给环境亮度。
     vec3 direct = sunColor * ogxSaturate(dot(voxelNormal, sunDirection)); // 直射按体素面朝太阳的余弦。
     return albedo * (indirect + direct) * strength; // 底色乘光照与玩家强度。

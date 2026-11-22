@@ -1,4 +1,15 @@
 # 更新记录
+## 0.16.0-dev.20
+
+修复 Iris 加载时报 `deferred.fsh` 语法错误、随后禁用光影的问题。
+
+- 根因：`omni-gfx/src/voxel/voxel.slang` 把局部变量命名为 `packed`，该词在 Iris/ANGLE 的 GLSL 编译器里是保留字；改为 `packedValue`。
+- 同步修正 `shaders/effects/shared/lpv.glsl` 的 `packed` 参数名，避免同类错误。
+- 重新生成 GLSL；全量 280 组程序编译通过。
+
+验证：`generate`、`compile`、`verify` 通过。之前游戏内日志显示 `deferred.fsh: 0(3401) syntax error`，本次修复后需要重新选择光影验证。
+
+
 ## 0.16.0-dev.19
 
 修正 `docs/hop-audit.md` 第五轮结果段的问号乱码，恢复可读中文。

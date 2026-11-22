@@ -321,9 +321,9 @@
     {
       "module": "voxel/voxel",
       "source": "omni-gfx/src/voxel/voxel.slang",
-      "sourceSha256": "8a47d2ddc997c6b3610d2693d33057d6d183e046b16d288797ce36bee6732e2b",
+      "sourceSha256": "c09edbfe9bcdf2ba00ed29842c7ebe512db71230ae756eee05dbac25a8510675",
       "shader": "shaders/omni-gfx/voxel/voxel.glsl",
-      "glslSha256": "4646a752c523cba57d4f81c8e7338d634fc6041dfa1c43db8d86a23741e92569",
+      "glslSha256": "5459527fb10ae715c6a99963e5581c7c30d3a800385f2342638205fce287b104",
       "glslLines": 356,
       "parts": [
         {
