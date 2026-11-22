@@ -1,4 +1,20 @@
 # 更新记录
+## 0.16.0-dev.22
+
+按"读全部代码、推导而非测试"的要求做了一轮全库静态审查，修复三类只在游戏内转译器暴露的问题，并新增静态符号扫描工具。
+
+- 新增 `tools/symbols.py`：从每个入口展开引用树与全部条件分支，静态报告"使用先于声明"；全库扫描归零。
+- 修复折射雾真实缺陷：`effects/shared/water/refraction.glsl` 在雾主体之前被引入，玩家开启折射雾选项时 `VolumetricFog`、`LandAtmosphericScattering` 会以"调用在定义前"编译失败；已补函数原型。
+- 修复四处整型参数传给浮点内置函数（与已修的 `log2(int)` 同类，离线编译器接受、游戏内报重载歧义）：
+  - `omni-gfx/src/weather/weather.slang`：四季权重第二份重复代码的 `clamp(yearLoop, 0, ...)` 改浮点边界；
+  - `omni-gfx/src/atmosphere/atmosphere/sun.slang`：`pow(abs(dir.z), 2)` 改 `2.0`；
+  - `omni-gfx/src/cloud/layers/shape.slang`：三处积雨云形状 `clamp(..., 0, 1)` 改浮点边界；
+  - `shaders/effects/shared/dailyweather.glsl`：`mod(worldDay, 1000)` 改 `mod(float(worldDay), 1000.0)`。
+- 保留字与未定义标识符两类全库扫描干净，无新增问题。
+
+验证：`generate`、`compile`（280 组）、`verify` 通过；`tools/symbols.py` 全库扫描零报告。游戏内仍需选择新包确认。
+
+
 ## 0.16.0-dev.21
 
 修复 Iris 加载 Omni-fixed 后 `composite5.fsh` 报 `log2(int)` 歧义的问题。

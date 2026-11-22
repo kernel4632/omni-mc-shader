@@ -113,7 +113,7 @@ const vec2 OMNI_WEATHER_FOG[10] = vec2[](
 // 返回零到九的行号，供表取值；`worldDay` 从加载器来，跨天自增。
 int omniWeatherDayIndex(){
 	#if OMNI_DAILY_WEATHER_RANDOM // 随机模式：用哈希在十天里跳着取。
-		return int(clamp(omniWeatherHash(float(mod(worldDay, 1000))) * 10.0, 0.0, 9.0)); // 先压缩天数范围再哈希取整，结果落在十天之内。
+		return int(clamp(omniWeatherHash(mod(float(worldDay), 1000.0)) * 10.0, 0.0, 9.0)); // 先压缩天数范围再哈希取整，结果落在十天之内。
 	#else // 顺序模式：按天数对轮换周期取余。
 		return int(mod(worldDay, OMNI_DAILY_WEATHER_CYCLE)); // 走完一遍从头开始。
 	#endif

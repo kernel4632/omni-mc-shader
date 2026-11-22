@@ -376,7 +376,7 @@ float ogxLayersCloudShapeLayer(int layerIndex, int lod, float3 position, float m
             break;
         }
     }
-    shape = min(min(shape, clamp(posToMax, 0, 1)), 1.0 - clamp(minHeight - position.y, 0, 1)); // 上下边界夹紧。
+    shape = min(min(shape, clamp(posToMax, 0.0, 1.0)), 1.0 - clamp(minHeight - position.y, 0.0, 1.0)); // 上下边界夹紧。
     float bottomShape = 1.0 - pow(1.0 - min(max(position.y - minHeight, 0.0) / 25.0, 1.0), 5.0); // 底部圆角。
     float topShape = min(max(posToMax, 0.0) / max(tallness, 1.0), 1.0); // 顶部收口。
     topShape = min(exp(-0.5 * (1.0 - topShape)), 1.0 - pow(1.0 - topShape, 5.0));
@@ -457,7 +457,7 @@ float2 ogxLayersCumulonimbusShapeLayer(int lod, float3 position, float minHeight
 	
 	shape2 = min(max(1.1 - smallCloud,0.0)/sqrt(1.1),1.0)  * smoothstep(5000.0, 7000.0, length(position - cameraWorldPos));
 
-	shape2 = min(min(shape2, clamp(smallMaxHeight - position.y,0,1)), 1.0 - clamp(minHeight - position.y,0,1));
+	shape2 = min(min(shape2, clamp(smallMaxHeight - position.y, 0.0, 1.0)), 1.0 - clamp(minHeight - position.y,0,1));
 
 	float smallTopShape = min(max(posToMaxSmall,0.0) / max(smallTallness,1.0),1.0);
 	smallTopShape = min(exp(23 * (1.0-smallTopShape)), 	1.0-pow(1.0-smallTopShape,9.0));
@@ -465,7 +465,7 @@ float2 ogxLayersCumulonimbusShapeLayer(int lod, float3 position, float minHeight
 	shape2 = max((shape2 - 1.0) + smallTopShape * bottomShape, 0.0);
 	}
 
-	shape = min(min(shape, clamp(posToMax,0,1)), 1.0 - clamp(minHeight - position.y,0,1));
+	shape = min(min(shape, clamp(posToMax, 0.0, 1.0)), 1.0 - clamp(minHeight - position.y,0,1));
 
 	float topShape = min(max(posToMax,0.0) / max(tallness,1.0),1.0);
 	topShape = min(exp(-1.0 * (1.0-topShape)), 	1.0-pow(1.0-topShape,5.0));

@@ -189,7 +189,7 @@
       "source": "omni-gfx/src/atmosphere/atmosphere.slang",
       "sourceSha256": "efe62baab3df7eb266f03473b10d860d97fa205bbe9fd1a24ac919df327e4ebe",
       "shader": "shaders/omni-gfx/atmosphere/atmosphere.glsl",
-      "glslSha256": "d10a0153710cc4abfa4804b2b34fc64d27d418c8fc0f064004b730d1f4f1dc5f",
+      "glslSha256": "a0283f2b94aac463d5ad61888b750899c786519f4aa65818ac25dea8971ce250",
       "glslLines": 767,
       "parts": [
         {
@@ -198,7 +198,7 @@
         },
         {
           "source": "omni-gfx/src/atmosphere/atmosphere/sun.slang",
-          "sha256": "f0d3fcd7caf2af89800785bc1e26c9cd8d98cfcab3bc8a1f625c0c26cdcc5d7d"
+          "sha256": "24001a1b085116618026d9eadc4f5f08a2ddaae28c01a4257c23d458fb0df46f"
         },
         {
           "source": "omni-gfx/src/atmosphere/atmosphere/mapping.slang",
@@ -481,9 +481,9 @@
     {
       "module": "weather/weather",
       "source": "omni-gfx/src/weather/weather.slang",
-      "sourceSha256": "6c82766bc380f6f17dac5fd18db98b42be6d98defad9944d03a7aa977eeb95ca",
+      "sourceSha256": "e413c38b615ac3d11baa3b9c8a28f94cdfd2f0e1786fccc40cf4955838d8f710",
       "shader": "shaders/omni-gfx/weather/weather.glsl",
-      "glslSha256": "7cefe5ca8d2bff57384695b76a24c3f5bd9447336807208dbcd939fb810e2ed4",
+      "glslSha256": "58e01526f22216001836839543e5b5bc8be3321bb73d4f99ce06e8086a661016",
       "glslLines": 243
     },
     {

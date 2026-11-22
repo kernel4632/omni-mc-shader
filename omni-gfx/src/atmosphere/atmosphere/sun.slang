@@ -176,7 +176,7 @@ float ogxStarPlane(float3 dir, out float3 starColor)
         color = r * (0.3 * sin(1.0 * (r * 5.0) + r) + 0.7) * brightness; // 亮度带一点随机起伏。
         starColor = 2.0 * ogxBlackbodyApprox(ogxStarTemperature(ogxStarHash12(center))); // 按格中心的散列取色温上色。
     }
-    return color * pow(abs(dir.z), 2); // 按该面朝向加权，面边界处平滑过渡。
+    return color * pow(abs(dir.z), 2.0); // 按该面朝向加权，面边界处平滑过渡。
 }
 
 // 星盒：把方向分别当立方体三轴投影，叠出完整六面星场。

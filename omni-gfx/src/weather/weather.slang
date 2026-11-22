@@ -206,10 +206,10 @@ void ogxYearCycleColorSeason(inout float3 finalColor, float3 glcolor, bool isLea
     springCol *= glcolor;
     int seasonLength = 24;
     float yearLoop = ogxMod(worldDay + 0.0 * float(seasonLength), float(seasonLength) * 4.0);
-    float summerTime = clamp(yearLoop, 0, float(seasonLength)) / float(seasonLength);
-    float autumnTime = clamp(yearLoop - float(seasonLength), 0, float(seasonLength)) / float(seasonLength);
-    float winterTime = clamp(yearLoop - float(seasonLength) * 2.0, 0, float(seasonLength)) / float(seasonLength);
-    float springTime = clamp(yearLoop - float(seasonLength) * 3.0, 0, float(seasonLength)) / float(seasonLength);
+    float summerTime = clamp(yearLoop, 0.0, float(seasonLength)) / float(seasonLength);
+    float autumnTime = clamp(yearLoop - float(seasonLength), 0.0, float(seasonLength)) / float(seasonLength);
+    float winterTime = clamp(yearLoop - float(seasonLength) * 2.0, 0.0, float(seasonLength)) / float(seasonLength);
+    float springTime = clamp(yearLoop - float(seasonLength) * 3.0, 0.0, float(seasonLength)) / float(seasonLength);
     float3 summerToFall = lerp(summerCol, autumnCol, summerTime);
     float3 fallToWinter = lerp(summerToFall, winterCol, autumnTime);
     float3 winterToSpring = lerp(fallToWinter, springCol, winterTime);

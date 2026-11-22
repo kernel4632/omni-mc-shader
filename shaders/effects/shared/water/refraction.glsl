@@ -16,6 +16,10 @@
 设计原因与取舍：折射与吸收都属“透过水看东西”，共用水的距离与颜色，放一起方便对照；
     折射会按体积雾与远景选项决定是否采样，保留 iterationT 的条件。
 */
+// 雾函数原型：本文件可能在雾主体 `effects/shared/fog.glsl` 之前被引入（水面先于雾），
+// 开启折射雾选项时下方会调用这两个函数；原型让调用在定义前也合法，不开选项时被预处理丢弃。
+void VolumetricFog(inout vec3 color, vec3 startPos, vec3 endPos, vec3 worldDir, float globalCloudShadow, float fogTimeFactor, out float transmittance);
+void LandAtmosphericScattering(inout vec3 color, in float dist, vec3 startPos, vec3 endPos, vec3 worldDir, bool isSky);
 // 折射屏幕坐标：水面先取波法线，再交给通用库算偏移；玻璃直接按折射方向投影。
 // 为什么把波法线采样留在本文件：它要读噪声贴图与选项，通用库只接收算好的方向。
 vec2 RefractionScreenCoord(MaterialMask mask, vec3 normal, vec3 worldPos, vec3 viewPos, float waterDist, float opaqueDist, vec2 screenInput){
