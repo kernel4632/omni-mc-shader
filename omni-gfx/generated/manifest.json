@@ -423,9 +423,9 @@
     {
       "module": "post/exposure",
       "source": "omni-gfx/src/post/exposure.slang",
-      "sourceSha256": "f883648c94eca26d065dee75f1222f7153700b844973927d80c48836f46ddcf4",
+      "sourceSha256": "517befae085003d4b47857e391095899704f38ec5bb7b4c5e72432b841546488",
       "shader": "shaders/omni-gfx/post/exposure.glsl",
-      "glslSha256": "9b83405a52afb243d247fb7c32b527d9ee0b6af677bfb1325bcda1d3d5b99a26",
+      "glslSha256": "aecc231b4db7360e1e62e39937fccfb0f54e898aa06ec790c6ed63d388363a4f",
       "glslLines": 176
     },
     {

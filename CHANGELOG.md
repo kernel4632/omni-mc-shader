@@ -1,4 +1,15 @@
 # 更新记录
+## 0.16.0-dev.21
+
+修复 Iris 加载 Omni-fixed 后 `composite5.fsh` 报 `log2(int)` 歧义的问题。
+
+- 根因：曝光分块统计把 `min(viewWidth, viewHeight)` 的整数直接传给 `log2`，ANGLE 编译器无法在 float 重载间选择。
+- 改为 `log2(float(min(...)))`，重新生成 GLSL。
+- 全量 280 组程序编译通过。
+
+验证：`generate`、`compile`、`verify` 通过。游戏内仍需重新选择光影确认。
+
+
 ## 0.16.0-dev.20
 
 修复 Iris 加载时报 `deferred.fsh` 语法错误、随后禁用光影的问题。

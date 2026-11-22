@@ -21,7 +21,7 @@ float ogxGetExposureTiles(Sampler2D exposureTexture, int viewWidth, int viewHeig
     float2 pixelSize, float mainOutputFactor, float exposureOutputFactor, int aeMode, int dimension,
     bool aeClamp, bool caveMode, int luminanceWeightMode, float luminanceWeightStrength)
 {
-    float averageLod = floor(log2(min(viewWidth, viewHeight))); // 按较短边选层级。
+    float averageLod = floor(log2(float(min(viewWidth, viewHeight)))); // 按较短边选层级。
     float avg = ogxLuminance(ogxCurveToLinear3(exposureTexture.SampleLevel(float2(0.65, 0.65), averageLod).rgb)) * (mainOutputFactor / 128.0); // 整幅画面的平均亮度。
     int lod = 6; // 六十四像素一格的层级。
     float tileScale = exp2(float(lod)); // 一格对应的像素数。
